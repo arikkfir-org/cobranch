@@ -187,8 +187,8 @@ There is no branch scope: merge requirements and `repo.bypass` decide who change
 or a repository, is a scope for `secrets.manage` and `secrets.read` only.
 
 - **Who may receive one.** At the installation, users only. At an organization or repository, its members and its own
-  principals, and [Anonymous](#visibility) too. Jobs receive only `secrets.read` (**Proposed**); their declarations and
-  the ceiling decide the rest.
+  principals, and [Anonymous](#visibility) too. Jobs receive only `secrets.read`; their declarations and the ceiling
+  decide the rest.
 - **Permissions apply where they fit.** A role granted on a repository gives only its repository permissions.
 - **Additive only.** **Agreed:** no deny rules. To give someone less on one repository, give less at the organization
   and more where needed.
@@ -232,11 +232,12 @@ No API returns a value: only a job run or an agent task receives it.
   ([architecture](architecture.md#settings-secrets-and-models)).
 - **Who receives one.** `secrets.read`, granted on the organization, a repository or one secret. An agent holds the
   credentials of tools beyond DevHub this way, such as mail, Slack or its model provider.
-- **Jobs.** **Proposed:** `secrets.read` is the one grant a job can receive. A run gets the secrets its `/devhub.yaml`
-  names, if its job holds `secrets.read` on them.
-- **The assigner cap.** **Proposed:** an agent's task receives the agent's secrets whoever assigned it, since few people
-  who assign tasks hold `secrets.read` themselves. The risk: an assigner could coax a value out of the agent, so a
-  secret goes only to agents trusted with it.
+- **Jobs.** **Agreed** (review, 2026-10-27): `secrets.read` is the one grant a job can receive. A run gets the secrets
+  its `/devhub.yaml` names, if its job holds `secrets.read` on them. Phase 2's pinned job security narrows which secrets
+  a branch's jobs may read.
+- **The assigner cap.** **Agreed** (review, 2026-10-27): an agent's task receives the agent's secrets whoever assigned
+  it, since few people who assign tasks hold `secrets.read` themselves. The risk: an assigner could coax a value out of
+  the agent, so a secret goes only to agents trusted with it.
 
 ## Permissions
 
@@ -359,8 +360,8 @@ and their consents add tables in their own slice.
 | Anonymous is the one built-in principal, a row of its own kind, and can hold any repository role at a repository or its organization; Signed-in users is gone | Review, 2026-10-27: Internal means the organization's own users | Changed |
 | Jobs for tips pushed from outside the organization run only where the repository allows it; off by default | Otherwise an anonymous push runs its code with the job's secrets | Agreed |
 | Secrets live in organization and repository settings; `secrets.read` on the organization, a repository or one secret decides who receives them | Review, 2026-10-27: how agents hold outside credentials | Agreed |
-| A job can receive `secrets.read`, its one grant | Otherwise no job could receive a secret | Proposed |
-| An agent's task receives the agent's secrets whoever assigned it | Few assigners hold `secrets.read`; the risk is an assigner coaxing a value out | Proposed |
+| A job can receive `secrets.read`, its one grant | Review, 2026-10-27: jobs need outside credentials; phase 2 narrows which | Agreed |
+| An agent's task receives the agent's secrets whoever assigned it | Review, 2026-10-27: few assigners hold `secrets.read`; the risk is an assigner coaxing a value out | Agreed |
 | Each organization chooses its identity providers; Google only in phase 1 | Decided on 2026-10-27; an organization keeps its members on providers it trusts | Agreed |
 | An OAuth app belongs to the organization that registers it | Decided on 2026-10-27; an organization answers for every app that reaches its data | Agreed |
 | Credentials' lifetimes default as listed, each an installation setting | Decided on 2026-10-27; machines get short tokens, people longer sessions | Agreed |
@@ -371,8 +372,6 @@ The nine built-in roles and the 25 permissions are agreed too; the review added 
 
 ## Open questions
 
-None: the review on 2026-10-27 settled the last three (member provisioning, agents' outside credentials and phase 2
-jobs, under [Decisions](#decisions)). Two proposals there still wait for a nod: jobs receiving `secrets.read`, and
-agents' secrets outside the assigner cap.
+None: the review on 2026-10-27 settled every question and proposal on this page, under [Decisions](#decisions).
 
 DevHub is a Kfirs project, created by Arik Kfir.

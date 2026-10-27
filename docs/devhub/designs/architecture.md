@@ -86,7 +86,7 @@ The `devhub` image runs `devhub <workload>`: `auth-server`, `graphql-server`, `r
 | Admin server | Deployment | 1 | None | No token |
 | Git server | Deployment | 2 | Ephemeral volume, the pack cache | No token |
 | Push worker | Deployment | 2 | None | No token |
-| Controller | Deployment | 2 | None | Create job namespaces and their policies; create, watch and delete pods and Secrets in them and in the agents namespace |
+| Controller | Deployment | 2 | None | Create job namespaces and their policies; create, watch and delete pods and Secrets in them |
 | Maintenance | CronJob, hourly | 1 | Ephemeral volume, for repacking | No token |
 | Migration | Job, per upgrade | 1 | None | No token |
 | PostgreSQL | StatefulSet, optional | 1 | Persistent volume | No token |
@@ -114,15 +114,16 @@ Any hosts and prefixes work, as long as every host sits under one parent domain,
 
 ### Job isolation
 
-**Agreed** (review, 2026-10-27): each organization's jobs run in a namespace of their own. Its NetworkPolicies admit no
-ingress at all, and allow egress to the internet and to cluster DNS only, never to the cluster's pods or Services.
+**Agreed** (review, 2026-10-27): each organization's jobs, and for now its agents' pods, run in a namespace of their
+own. Its NetworkPolicies admit no ingress at all, and allow egress to the internet and to cluster DNS only, never to the
+cluster's pods or Services.
 
-**A job reaches the internet and nothing else in the cluster**
+**A job or agent reaches the internet and nothing else in the cluster**
 
-![A job reaches the internet and nothing else in the cluster](architecture/isolation.svg)
+![A job or agent reaches the internet and nothing else in the cluster](architecture/isolation.svg)
 
-The controller creates the namespace and its policies with the organization’s first job, and binds the chart’s role that
-lets the REST and GraphQL servers read its pods’ logs.
+The controller creates the namespace and its policies with the organization’s first job or agent task, and binds the
+chart’s role that lets the REST and GraphQL servers read its pods’ logs.
 
 ### Dependencies
 
@@ -338,17 +339,16 @@ jobs and agents need from outside, secrets and models.
 
 ![A secret is written once, kept encrypted, and reaches only the runs allowed to use it](architecture/secrets.svg)
 
-Agents receive secrets today; jobs receiving them through `secrets.read` is still
-[Proposed](principals-and-permissions.md#secrets).
+A grant can name one secret and reach only it, as a cloud’s IAM policy set on one resource does.
 
 - **Secrets** live in an organization's settings or a repository's: an ID, a name and a value encrypted with the chart's
   secrets key, which nobody reads back once written. `secrets.manage` adds, replaces and deletes them there.
 - **`secrets.read` decides who receives one,** granted on the organization, a repository or one secret
-  ([secrets](principals-and-permissions.md#secrets)). An agent task receives the secrets its agent may read.
-  **Proposed:** a job run, the secrets its `/devhub.yaml` names and its job may read.
-- **Until phase 2 pins job security,** a branch's job of the same name would receive the same secrets, so a secret is
-  only as safe as the people who may push to its repository. Jobs for tips pushed from outside the organization stay off
-  unless the repository allows them ([visibility](principals-and-permissions.md#visibility)).
+  ([secrets](principals-and-permissions.md#secrets)). An agent task receives the secrets its agent may read, whoever
+  assigned it; a job run, the secrets its `/devhub.yaml` names and its job may read.
+- **Until phase 2 pins job security,** a branch's job of the same name receives the same secrets, so a secret is only as
+  safe as the people who may push to its repository. Jobs for tips pushed from outside the organization stay off unless
+  the repository allows them ([visibility](principals-and-permissions.md#visibility)).
 - **Rotating the secrets key** is a maintenance task that re-encrypts every value.
 
 **Each agent runs on the model its admin picks; the organization holds the providers’ credentials**
@@ -510,7 +510,7 @@ design, and settled the open questions.
 | The Auth, GraphQL, REST and Admin servers are workloads of their own, routed by the operator under one parent domain | The operator routes, scales and exposes each surface on its own | Changed |
 | A `devhub migrate` Job runs SQL and Go migrations compatible with the previous release, before the servers roll out; pods never migrate | No race to migrate at startup, and the old release keeps working | Changed |
 | REST is the SDKs' surface, GraphQL the Console's, a separate Admin API the Back-office's | Each where its tooling is strongest; admin permissions at any scope | Changed |
-| Each organization's jobs run in a namespace of their own: no ingress, egress to the internet and DNS only | A job reaches nothing in the cluster that another organization uses | Agreed |
+| Each organization's jobs and, for now, agent pods run in a namespace of their own: no ingress, egress to the internet and DNS only | A job or agent reaches nothing in the cluster that another organization uses | Agreed |
 | Cron triggers come from the default branch's `/devhub.yaml` only | A branch cannot schedule work | Agreed |
 | Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/devhub.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
 | An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |
@@ -525,7 +525,6 @@ design, and settled the open questions.
 
 ## Open questions
 
-- [ ] **Agent isolation.** Do agent pods move into their organization's job namespace, under the same network policy?
 - [ ] **Path rules.** Do settings changes need path rules, and may a rule refuse pushes as well as require approvals?
 
 DevHub is a Kfirs project, created by Arik Kfir.
