@@ -103,7 +103,7 @@ grants applied, check Docs failed for want of its roles.
 
 | Question | Status | Where it stands |
 | --- | --- | --- |
-| Module path | Open | A vanity path, as Octomaton's `octomaton.dev`, waits for a domain |
-| CI for the rest | Open | The web apps, the chart and the SDKs bring their own CI steps; [ENG-195](https://linear.app/arikkfir/issue/ENG-195) installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster |
+| Module path | Decided | The GitHub path for now, decided on 2026-10-27; a vanity path, as Octomaton's `octomaton.dev`, waits for a domain |
+| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci` or join its steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is a task of its own, since its dockerd runs privileged |
 
 DevHub is a Kfirs project, created by Arik Kfir.
