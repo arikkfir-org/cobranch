@@ -11,7 +11,7 @@ after PostgreSQL has committed it. Everything else in this document follows from
 ## Scope
 
 This is the technical design for DevHub's foundations ([ENG-193](https://linear.app/arikkfir/issue/ENG-193)). It turns
-the Architecture section of the [DevHub design](https://claude.ai/artifact/ToveH8gtEXkiJcN8KDtxaa) into the workloads
+the Architecture section of the [DevHub design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy) into the workloads
 and how they talk, the data they keep, the push path, the API conventions, blob storage and the stack.
 
 Each of these gets its own design and only attaches here: [principals and permissions](principals-and-permissions.md)

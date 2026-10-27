@@ -7,7 +7,7 @@
 
 ## Context and goal
 
-DevHub is a product of its own, not part of the Kfirs hub: anyone installs it on their own Kubernetes cluster with one Helm chart (the [DevHub design](https://claude.ai/artifact/ToveH8gtEXkiJcN8KDtxaa), and its [technical architecture](architecture.md)). Its source still needs a home where its work is reviewed, built and documented, and the hub already provides one to every repository of the organization: pull requests through a merge queue, CI through Octomaton, an AI review, Linear's check, and a docs site. The goal of [ENG-192](https://linear.app/arikkfir/issue/ENG-192) is a repository that gets all of that from its first pull request, with a layout that every later slice fills in rather than reshapes.
+DevHub is a product of its own, not part of the Kfirs hub: anyone installs it on their own Kubernetes cluster with one Helm chart (the [DevHub design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy), and its [technical architecture](architecture.md)). Its source still needs a home where its work is reviewed, built and documented, and the hub already provides one to every repository of the organization: pull requests through a merge queue, CI through Octomaton, an AI review, Linear's check, and a docs site. The goal of [ENG-192](https://linear.app/arikkfir/issue/ENG-192) is a repository that gets all of that from its first pull request, with a layout that every later slice fills in rather than reshapes.
 
 ```mermaid
 flowchart LR

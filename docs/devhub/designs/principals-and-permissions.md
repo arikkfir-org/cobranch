@@ -13,7 +13,7 @@ ambient, not even for jobs, agents or administrators.
 
 This is the identity and access design ([ENG-196](https://linear.app/arikkfir/issue/ENG-196)): the kinds of principal,
 how each one signs in or gets a token, the built-in permissions, the built-in and custom roles, and how grants are
-scoped and checked. It builds on the [DevHub design](https://claude.ai/artifact/ToveH8gtEXkiJcN8KDtxaa) and on the
+scoped and checked. It builds on the [DevHub design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy) and on the
 [technical architecture](architecture.md), whose credentials, events and tables it fills in. Sign-in, sign-up and
 organizations are built in [ENG-197](https://linear.app/arikkfir/issue/ENG-197).
 
