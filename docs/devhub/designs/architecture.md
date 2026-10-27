@@ -334,9 +334,9 @@ jobs and agents need from outside, secrets and models.
 - **In effect, and pending.** The Console shows the settings in effect, from the default branch's `/devhub.yaml`, and
   the pending changes: every other branch whose `/devhub.yaml` differs, each with its diff, however many there are. The
   push worker records each tip's file, so listing them is one query.
-- **A settings change merges like any branch.** **Proposed:** merge requirements gain path rules, which apply only when
-  a branch changes matching paths, such as `/devhub.yaml`. A path rule can require approval from named principals or
-  groups, and refuse pushes that touch its paths from anyone else.
+- **A settings change merges like any branch.** **Agreed** (review, 2026-10-27): merge requirements gain path rules,
+  which apply only when a branch changes matching paths, such as `/devhub.yaml`. A path rule can require approval from
+  named principals or groups, and refuse pushes that touch its paths from anyone else.
 
 **A secret is written once, kept encrypted, and reaches only the runs allowed to use it**
 
@@ -518,7 +518,7 @@ design, and settled the open questions.
 | Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/devhub.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
 | An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |
 | The Console shows the settings in effect and every pending change | A settings change is a branch like any other | Agreed |
-| Path rules: merge requirements for changes to paths such as `/devhub.yaml` | Settings changes may need stricter approval | Proposed |
+| Path rules: merge requirements for changes to paths such as `/devhub.yaml`, which can also refuse pushes there | Settings changes need stricter approval | Agreed |
 | UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Agreed |
 | The stack above | Octomaton's proven pieces, contracts first | Agreed |
 | Settings take effect from the default branch's `/devhub.yaml`; clients cannot push under `devhub/` | A branch's own settings count only once merged | Agreed |
@@ -528,6 +528,6 @@ design, and settled the open questions.
 
 ## Open questions
 
-- [ ] **Path rules.** Do settings changes need path rules, and may a rule refuse pushes as well as require approvals?
+None: the review on 2026-10-27 settled every question and proposal on this page, under [Decisions](#decisions).
 
 DevHub is a Kfirs project, created by Arik Kfir.
