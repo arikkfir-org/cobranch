@@ -34,9 +34,11 @@ flowchart LR
 
 | Path | Holds |
 | --- | --- |
-| `cmd/devhub/` | The one binary, with a subcommand per workload. Today only `version`, which prints the version the binary was built as |
-| `internal/` | The Go packages, in three layers: `services/` (the domain), `adapters/` (transports, storage, outside systems) and `system/` (configuration, telemetry, build information). Today only `system/buildinfo` |
-| `web/`, `api/`, `db/migrations/`, `sdk/`, `chart/devhub/` | Planned: the web apps, the API contracts, the migrations, the SDKs and the Helm chart, each with the slice that first needs it |
+| `cmd/devhub/` | The one binary, with a subcommand per workload: today `api-server`, and `version`, which prints the version the binary was built as |
+| `internal/` | The Go packages, in three layers: `services/` (the domain), `adapters/` (transports, storage, outside systems) and `system/` (configuration, telemetry, build information). Today the API server's adapters (`server`, `rest`, `graphql`, `postgres`, `blob`) and `system/` (`buildinfo`, `config`, `telemetry`); no domain yet |
+| `api/` | The API contracts, which the REST and GraphQL stubs are generated from: `openapi.yaml` and `graphql/` |
+| `db/migrations/` | PostgreSQL's schema, as goose migrations embedded in the binary |
+| `web/`, `sdk/`, `chart/devhub/` | Planned: the web apps, the SDKs and the Helm chart, each with the slice that first needs it |
 | `docs/devhub/` | DevHub's pages on the docs site, `devhub/`: its designs in `designs/` |
 | `.octomaton.yaml`, `.tekton/` | CI |
 | `.golangci.yml` | The linters every Go change passes |
@@ -72,12 +74,12 @@ The organization's pipelines, read from `tooling`, run beside it: check `Docs`, 
 | Public, under the MIT License | The owner's choice: DevHub is a product anyone may install, and its source is open with it | Internal until a license was chosen |
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token, which only a private or internal repository needs |
 | golangci-lint from the first commit | The house rules' linters hold from the first line of code, instead of a cleanup once the code base exists | Adding them later |
-| No persistent Go cache yet | A skeleton with no dependencies builds in seconds; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches, worth it once builds are slow |
+| No persistent Go cache yet | A cold run takes about eight minutes since Go Cloud's SDKs came in, which the foundations' few pull requests can afford; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
 
 ## Security and failure modes
 
 - Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/` as the tenant's ServiceAccount `pipeline`, which holds no Google Cloud role, and with no GitHub token. Octomaton ignores forks, so a stranger's pull request runs nothing.
-- Until `ci-devhub` exists, Octomaton refuses every pipeline on the repository and its pull requests can't pass the required checks; until `infra`'s grants apply, check `Docs` fails for want of its roles.
+- Without CI tenant `ci-devhub`, Octomaton refuses every pipeline on the repository and its pull requests can't pass the required checks; without `infra`'s docs grants, check `Docs` and `docs-publish` fail for want of their roles.
 - A missing check blocks the merge queue, never merges unchecked; the admin bypass remains the owner's.
 
 ## Rollout
