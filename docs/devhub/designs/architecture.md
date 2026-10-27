@@ -246,6 +246,11 @@ when `devhub/settings` merges, through the same merge requirements as any other 
 branches unless the pusher holds [`repo.bypass`](principals-and-permissions.md#permissions). Otherwise a direct push
 would skip every requirement.
 
+**Agreed** (review, 2026-10-27): a [path rule](#settings-secrets-and-models) that restricts pushes refuses a push, into
+any branch, that adds commits changing its paths, unless the rule names the pusher or one of their groups. The rule's
+list decides alone, so `repo.bypass` does not lift it. Its approvals are a merge requirement like any other, checked by
+the Ready branches the push must merge.
+
 ### Failure modes
 
 | Failure | The client sees | Afterwards | Recovery |
@@ -486,7 +491,8 @@ internal/system/              configuration, telemetry, build information
 api/openapi.yaml              the REST contract
 api/admin.yaml                the Admin API's contract
 api/graphql/                  the GraphQL schema
-db/migrations/                numbered SQL migrations
+db/migrations/                numbered SQL and Go migrations
+db/seeds/                     seed data for previews, Go, run only when the chart turns seeding on
 web/console/  web/back-office/  web/ui/
 sdk/go/  sdk/python/  sdk/typescript/
 chart/devhub/                 the Helm chart

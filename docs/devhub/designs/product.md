@@ -100,8 +100,9 @@ threaded chat whose messages can point at a file and line range, which is how re
 
 ![A branch’s status is computed; the first rule that matches wins](product/branch-status.svg)
 
-Merge requirements are a policy of the branch: the commit annotations it requires and, optionally, linear history, which
-is off by default.
+Merge requirements are a policy of the branch: the commit annotations it requires, optionally linear history, which is
+off by default, and [path rules](architecture.md#settings-secrets-and-models), which apply only to branches that change
+their paths.
 
 **Merging is explicit: whoever moves the base is the merging principal**
 
