@@ -1,0 +1,15 @@
+# DevHub's CI, run by Octomaton (https://github.com/arikkfir-org/octomaton/blob/main/README.md, the schema).
+apiVersion: octomaton.dev/v1
+pipelines:
+  # Lint, vet, test and build every pull request and every merge queue group.
+  - name: ci
+    displayName: Continuous Integration
+    pipelineRun: .tekton/ci.yaml
+    on:
+      # Every pull request, whatever its base, so a stacked one is checked before it reaches main.
+      pull_request: {}
+      merge_group: {}
+    params:
+      repo-url: "{{ .Repository.CloneURL }}"
+      revision: "{{ .Revision }}"
+    timeout: 30m

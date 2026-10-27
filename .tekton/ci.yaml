@@ -1,0 +1,42 @@
+# DevHub's CI: lint, vet, test (with the race detector) and build, in task ci (ci.task.yaml). A plain Tekton
+# PipelineRun; Octomaton sets the params.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: devhub-ci-
+spec:
+  # Reserved once for all of the task's steps (step-level requests would add up as if the steps ran at once). The
+  # skeleton's lint and race tests fit in 512Mi; size them again from real runs as the code grows.
+  taskRunSpecs:
+    - pipelineTaskName: ci
+      computeResources:
+        requests:
+          cpu: 500m
+          memory: 512Mi
+        limits:
+          memory: 1Gi
+  workspaces:
+    - name: source
+      emptyDir: {}
+  pipelineSpec:
+    params:
+      - name: repo-url
+        type: string
+        description: Git URL of the repository.
+      - name: revision
+        type: string
+        description: Commit to test.
+    workspaces:
+      - name: source
+    tasks:
+      - name: ci
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: ci # .tekton/ci.task.yaml
