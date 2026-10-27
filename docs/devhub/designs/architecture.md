@@ -42,7 +42,8 @@ Seven constraints from the [product design](product.md#principles) decide most o
 ## Components
 
 Seven workloads, plus the job and agent pods the controller creates. Only the Git server reads Git objects, only the
-push worker moves refs, and only the controller talks to the Kubernetes API.
+push worker moves refs, and only the controller makes and watches pods; the API server's one Kubernetes call reads a
+running job's logs.
 
 **All state lives in PostgreSQL and one bucket**
 

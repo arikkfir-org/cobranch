@@ -59,7 +59,7 @@ DevHub is opinionated: it picks one way to do each thing and makes that way comp
 
 ## Model
 
-Ten kinds of object make up an installation, and every actor among them is a principal.
+Eleven kinds of object make up an installation, and every actor among them is a principal.
 
 **Organizations own repositories and issues; everything else hangs off a branch or a commit**
 

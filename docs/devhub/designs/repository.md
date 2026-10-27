@@ -50,11 +50,10 @@ Every image is pinned to a version. The clone is anonymous: the repository is pu
 
 ## Checks
 
-`Docs` composes `docs/devhub/` with the other repositories' layers and fails on a broken link (the hub's docs site
-composition design, in the `docs` repository). `Linear` and the AI review are tooling's: [check
-Linear](https://github.com/arikkfir-org/tooling/blob/main/docs/tooling/designs/linear-check.md) and the [pull request
-reviewer](https://github.com/arikkfir-org/tooling/blob/main/docs/tooling/designs/pr-reviewer.md). The ruleset is infra's
-[root github](https://github.com/arikkfir-org/infra/blob/main/docs/infra/terraform/github.md).
+`Docs` composes `docs/devhub/` with the other repositories' layers and fails on a broken link (the [docs site
+composition](../../hub/designs/docs-site-composition.md)). `Linear` and the AI review are tooling's: [check
+Linear](../../tooling/designs/linear-check.md) and the [pull request reviewer](../../tooling/designs/pr-reviewer.md).
+The ruleset is infra's [root github](../../infra/terraform/github.md).
 
 **Three required checks admit a pull request to the merge queue**
 
