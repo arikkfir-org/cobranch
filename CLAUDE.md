@@ -14,10 +14,13 @@
   the chart's metadata, a license); keep it wherever it already does.
 - Kubernetes-native and cloud-agnostic: blob storage only through Go Cloud (`gocloud.dev/blob`), PostgreSQL deployed by
   the chart or supplied externally, and the domain, ingress and autoscaling left to the operator.
-- The designs in `docs/devhub/designs/` are the source of truth: the technical architecture (`architecture.md`),
-  principals and permissions (`principals-and-permissions.md`), the design system (`design-system.md`) and this
-  repository (`repository.md`). A new design is drafted as an artifact for discussion, then published there once
-  agreed; every change keeps the designs it touches true, in the same pull request.
+- The designs are cross-linked pages, diagram-first: sequence, flow, component and boundary diagrams carry each
+  design, and prose keeps what a picture can't say (why, rejected options, risks). The
+  [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy) links every one: the technical architecture, principals and
+  permissions, this repository, the Helm chart and the design system. They are the source of truth while DevHub's shape
+  settles; `docs/devhub/designs/` holds snapshots of them, synced again once it does. A new design is drafted as a page
+  beside them and linked from the product design. A change keeps the design pages it touches true, and corrects a
+  snapshot it contradicts in the same pull request.
 
 ## Work
 
@@ -53,8 +56,8 @@
 
 ## Docs
 
-- DevHub's pages are in `docs/devhub/`, published to the docs site under `devhub/`: designs in `designs/`. A change
-  keeps those it touches true, in the same pull request.
+- DevHub's pages are in `docs/devhub/`, published to the docs site under `devhub/`: snapshots of the designs in
+  `designs/`. A change keeps those it touches true, in the same pull request.
 - Pages at `https://docs.dev.kfirs.com/<path>` (every repository's `docs/`) are behind the hub's sign-in. Read one with
   `curl -fsS https://storage.googleapis.com/arikkfir-docs/.layers/<repository>/<path>`, where `<repository>` is the
   path's first segment when it names a repository (`devhub/designs/repository.md` is `devhub`'s) and `docs` otherwise

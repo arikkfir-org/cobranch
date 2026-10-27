@@ -1,5 +1,9 @@
 # The DevHub design system
 
+> **Snapshot.** This design lives in its [design system page](https://claude.ai/artifact/K6oZu5M6kiXuEBiqFNgPcW),
+> linked with DevHub's other designs; this file is a snapshot of it, with its diagrams, as of 2026-10-27, and synced
+> again once DevHub's shape settles.
+
 **Decision**: DevHub's interface puts clarity first and simplicity second. It is drawn in ink (near-black on white,
 inverted in dark mode), uses colour only where colour means something, and says every status with an icon, a word and a
 tone. The source is the Figma file [DevHub](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/DevHub). This page
@@ -37,6 +41,15 @@ Six rules decide every screen; when a design breaks one, the design changes, not
    wrote uses Inter.
 
 ![The Foundations page: principles, colour, type, spacing, radii and elevation](design-system/foundations.png)
+
+## How it fits together
+
+**Two layers of colour, components from tokens only, screens from instances only**
+
+![Two layers of colour, components from tokens only, screens from instances only](design-system/layers.svg)
+
+A token changes in Figma first, then in `tokens.css`, in the same pull request. A fix to a component reaches every
+screen.
 
 ## Colour
 
@@ -143,6 +156,10 @@ a change to a token moves every screen.
 48 px top bar (breadcrumb, "Ask an agent", notifications). Content has 32 px margins; detail pages add a 320 px side
 column for properties, and the branch view docks its 400 px chat on the right. Screens are designed at 1440 × 900.
 
+**The app shell: sidebar, top bar, content and a side column**
+
+![The app shell: sidebar, top bar, content and a side column](design-system/shell.svg)
+
 ## Iconography
 
 Icons come from [Lucide](https://lucide.dev) (ISC licence), drawn at 16 px with a 1.5 px stroke and round joins, so they
@@ -229,6 +246,12 @@ its branch, so the branch reads Blocked (danger) while the review itself reads C
 branch always says why in the first line of its view, then lists each merge requirement with its own icon, so nobody
 has to open the annotations to find the cause.
 
+**A review that requests changes blocks its branch, and the branch says why**
+
+![A review that requests changes blocks its branch, and the branch says why](design-system/blocked.svg)
+
+How a branch's status is computed is the [product design's](product.md#branches).
+
 ## Principals and avatars
 
 Every actor in DevHub is a principal, and its avatar's shape and colour say what kind it is before its name is read.
@@ -302,6 +325,19 @@ primitives keep their own prefixes (`var(--space-16)`, `var(--radius-lg)`, `var(
 dark applies with `data-theme="dark"` on the root element, or with the system's dark preference unless
 `data-theme="light"`. The console imports these tokens rather than hard-coding a value, and a token changes in Figma
 first, then here, in the same pull request.
+
+**From a Figma variable to a CSS custom property to the Console**
+
+![From a Figma variable to a CSS custom property to the Console](design-system/code.svg)
+
+```css
+.card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-16);
+}
+```
 
 ## Decisions
 
