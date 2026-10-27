@@ -32,7 +32,8 @@ Seven constraints from the [product design](product.md#principles) decide most o
 - **Stateless workloads.** Any pod can be killed at any time. State lives only in PostgreSQL and blob storage; a pod's
   disk is a cache.
 - **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Agreed:** no message broker, no
-  Redis, no search cluster in the foundations.
+  Redis, no search cluster in the foundations; phase 2's semantic search keeps its embeddings in PostgreSQL with
+  pgvector ([phase 2](product.md#phase-2)).
 - **Synchronous pushes.** When `git push` returns, the commits, branches and their status are in PostgreSQL and on
   screen.
 - **Many organizations per installation.** Every row an organization owns carries its ID, and every query is scoped by
@@ -515,7 +516,7 @@ design, and settled the open questions.
 | Settings take effect from the default branch's `/devhub.yaml`; clients cannot push under `devhub/` | A branch's own settings count only once merged | Agreed |
 | Each agent task runs in its own pod, its transcript appended to PostgreSQL as it goes | A restarted pod resumes where it stopped | Agreed |
 | The AI reviewer reads the default branch's `/devbot.yaml` | A branch cannot rewrite its own reviewer's instructions | Agreed |
-| Later: push limits and the Git server's cache placement. Phase 2: Git LFS and all search. The operator's: backup and restore | Not needed for the foundations | Deferred |
+| Later: push limits and the Git server's cache placement. Phase 2: Git LFS and all search, semantic search on pgvector embeddings included. The operator's: backup and restore | Not needed for the foundations | Deferred |
 
 ## Open questions
 

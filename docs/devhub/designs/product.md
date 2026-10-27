@@ -181,7 +181,7 @@ its default-branch trust boundary and its organization pipelines are the model f
 | Issues | Linked to branches by branch name, or by hand |
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
-| Phase 2 | Slack, Git LFS, search, and members provisioned from an identity provider |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack and members provisioned from an identity provider |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -196,5 +196,16 @@ project](https://linear.app/arikkfir/project/devhub-56ee907dd1af).
 **The foundations, in order, as of 2026-10-27**
 
 ![The foundations, in order, as of 2026-10-27](product/roadmap.svg)
+
+### Phase 2
+
+Planned after the foundations, each with a design of its own when its turn comes:
+
+- **Pinned job security.** The default branch limits what a branch's jobs may override ([jobs](#jobs)).
+- **Search,** full-text and semantic: embeddings of code, issues, branches and chats kept in PostgreSQL with pgvector,
+  so people and agents find related work by meaning, with no search cluster to run.
+- **Git LFS.**
+- **Slack,** with several use cases still to design.
+- **Members provisioned from an identity provider** (SCIM), so an organization imports and removes its people there.
 
 DevHub is a Kfirs project, created by Arik Kfir.
