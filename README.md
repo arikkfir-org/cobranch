@@ -8,7 +8,7 @@ DevHub is a Kfirs project, created by Arik Kfir, and is released under the [MIT 
 
 ## Status
 
-Foundations. Nothing installs yet: the first installable slice is the Helm chart's skeleton ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)). The work is tracked in Linear's [DevHub project](https://linear.app/arikkfir/project/devhub-56ee907dd1af), and the designs are in [`docs/devhub/designs/`](docs/devhub/designs/), published to the hub's docs site under `devhub/designs/`, behind its sign-in: the [technical architecture](https://docs.dev.kfirs.com/devhub/designs/architecture.md) is the place to start.
+Foundations. Nothing installs yet: the first installable slice is the Helm chart's skeleton ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)). The work is tracked in Linear's [DevHub project](https://linear.app/arikkfir/project/devhub-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/devhub/designs/`](docs/devhub/designs/) holds snapshots of them, published to the hub's docs site under `devhub/designs/`, behind its sign-in.
 
 ## Layout
 
