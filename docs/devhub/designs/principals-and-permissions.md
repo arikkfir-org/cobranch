@@ -1,7 +1,7 @@
 # DevHub principals and permissions
 
-**Status**: agreed on 2026-10-27. This page is the design's source from now on; it was drafted as a [Claude
-Doc](https://claude.ai/artifact/6F4vZHXJzynCH1rogzGEEr).
+**Status**: agreed on 2026-10-27, except the choices still marked **Proposed**. This page is the design's source from
+now on; it was drafted as a [Claude Doc](https://claude.ai/artifact/6F4vZHXJzynCH1rogzGEEr).
 
 Every actor in DevHub is a principal, and a principal can do something only because a grant says so: a role, which
 bundles built-in permissions, given to the principal at the installation, an organization or a repository. Nothing is
@@ -15,7 +15,8 @@ scoped and checked. It builds on the [DevHub design](https://claude.ai/artifact/
 [technical architecture](architecture.md), whose credentials, events and tables it fills in. Sign-in, sign-up and
 organizations are built in [ENG-197](https://linear.app/arikkfir/issue/ENG-197).
 
-Choices the product design did not make are marked **Agreed** and collected at the end.
+Choices the product design did not make are marked **Agreed**, or **Proposed** while still open, and collected at the
+end.
 
 ## Principal kinds
 
@@ -47,15 +48,21 @@ ties them to their commits, but never decides who they are.
 
 ### Sign-in and sign-up
 
-- **Identities.** The installation configures its identity providers (OpenID Connect, plus GitHub's OAuth). An identity
-  is the provider and its stable subject, never the email, because emails change hands.
+- **Identities.** The installation configures its identity providers: Google only in phase 1, then other OpenID Connect
+  providers and GitHub's OAuth. An identity is the provider and its stable subject, never the email, because emails
+  change hands.
 - **Sign-up.** The first sign-in with an unknown identity creates a user, records the identity, and records the
   provider's email when the provider marks it verified. The installation decides who may sign up: anyone, which is the
   default because sign-up is self-serve, or only emails on listed domains, or only invited emails.
 - **Linked identities.** A signed-in user can link more identities and then sign in with any of them. DevHub never
   merges two users because their emails match.
-- **Sessions.** A session is a server-side row the user, or an installation admin, can revoke. Its idle and absolute
-  lifetimes are installation settings.
+- **Sessions.** A session is a server-side row the user, or an installation admin, can revoke. It records the identity
+  the user signed in with, and its idle and absolute lifetimes are installation settings, listed under Lifetimes.
+- **Organizations' providers.** Decided on 2026-10-27: each organization lists which of the installation's identity
+  providers its members may use, all of them until it narrows the list. The list is an organization setting, kept in the
+  database. A member's grants in the organization count only while they are signed in with an identity from one of those
+  providers, and a personal token counts as the identity of the session that created it. The Console then asks the
+  member to sign in with an allowed provider, linking one first if they have none.
 - **The first administrators.** **Agreed:** the chart's values name the first installation admins by email, and their
   first sign-in with that email verified grants them the Installation admin role. Nobody becomes an administrator by
   being first.
@@ -164,9 +171,10 @@ may use, a subset of the user's own, and it must expire; the installation sets t
 
 ### OAuth apps
 
-In a later slice, DevHub becomes an OAuth authorization server. An organization registers an app, which acts either as
-itself with client credentials and its own grants, or for a user who consents, through the authorization code flow with
-PKCE.
+In a later slice, DevHub becomes an OAuth authorization server. Decided on 2026-10-27: each organization registers its
+own apps, and an app belongs to that organization alone. It acts either as itself, with client credentials and its own
+grants there, or for one of the organization's members who consents, through the authorization code flow with PKCE, and
+never inside another organization. A tool that several organizations use is registered by each of them.
 
 ### Workload identities
 
@@ -195,6 +203,12 @@ repository, so their grants can never reach outside it.
 - **Who may receive one.** At installation scope, users only. At organization or repository scope, the organization's
   members and its own principals: groups, agents, API keys, OAuth apps and workload identities. Jobs receive no grants;
   their declarations and the ceiling decide.
+- **Visibility.** **Proposed:** a repository is *Private*, *Internal* or *Public*, and starts Private. Internal grants
+  Reader on it to *Signed-in users*, a built-in principal that every user of the installation belongs to; Public grants
+  Reader to *Anyone*, which also covers callers with no credential. These two are the one exception to grants staying
+  inside an organization, and they only ever hold Reader on a repository. Changing a repository's visibility takes
+  `org.grants.manage`. An installation can turn Public off, and an organization can cap its repositories at Internal or
+  Private.
 - **Permissions apply where they fit.** Each permission belongs to a scope. A role granted on a repository gives only
   its repository permissions, and the API warns when a role's wider permissions would have no effect.
 - **Additive only.** **Agreed:** there are no deny rules, so a narrower grant never takes away a wider one. To give
@@ -268,11 +282,12 @@ Whoever creates a repository becomes its Maintainer.
 One authorizer in the service layer answers every check, for REST, GraphQL, Git and the workers alike, so no surface can
 be more permissive than another.
 
-1. The credential resolves to its principal, and to the permissions it is limited to when it lists any. An expired or
-   revoked credential, or a suspended principal, stops here with `401`.
+1. The credential resolves to its principal, and to the permissions it is limited to when it lists any; a request
+   without one resolves to *Anyone*. An expired or revoked credential, or a suspended principal, stops here with `401`.
 2. The object resolves to its scopes: its repository, that repository's organization, the installation.
-3. The authorizer loads the principal's grants at those scopes, plus its groups' grants, and expands their roles into
-   permissions.
+3. The authorizer loads the principal's grants at those scopes, plus its groups' grants and those of *Anyone* and, for a
+   user, *Signed-in users*, and expands their roles into permissions. A user's grants in an organization count only when
+   they signed in with a provider it allows.
 4. It applies the cap of the principal's kind: the assigner's permissions for an agent's task, the job ceiling for a
    job, the consent and the user's permissions for an OAuth app, and the token's own list for any token.
 5. The check passes if the permission is left. Otherwise the answer is `404` when the principal cannot see the object,
@@ -295,6 +310,23 @@ Every change to grants, roles, memberships, principals or credentials, every cla
 Back-office entry into an organization is an event in the architecture's `events` table, naming the actor and, when
 there is one, whom it acted for. `org.audit.read` reads them as the organization's audit trail.
 
+## Lifetimes
+
+Decided on 2026-10-27: sensible defaults for now. Each lifetime is an installation setting, and these are its defaults.
+The hourly maintenance job drops what has expired.
+
+| Credential | Lifetime |
+| --- | --- |
+| Session | 7 days without use, and 30 days in all; then the user signs in again |
+| Personal token | Chosen at creation: 30 days by default, at most 1 year |
+| API key secret | Chosen at creation: 1 year by default, or none |
+| Job run token | As long as the run, and at most 24 hours |
+| Job's OpenID Connect token, for outside systems | 10 minutes |
+| Agent task token | 1 hour, renewed by the controller while the task runs |
+| Exchanged workload identity token | 1 hour |
+| Invitation, join request | 7 days |
+| SSH key, signing key | None; its user removes it |
+
 ## Data model
 
 These tables fill in the architecture's identity area. Every row an organization owns carries its `org_id`, as
@@ -305,8 +337,8 @@ everywhere else in DevHub.
 | `principals` | `id` | Kind, display name, state (active, suspended, login-less, claimed), organization (none for users), repository and job name (jobs), creator (agents), claiming user (claimed login-less users) |
 | `identities` | `provider`, `subject` | The user, the provider's email and whether it is verified, last sign-in |
 | `principal_emails` | `email` | The principal holding it, when it was verified |
-| `sessions` | `id` | User, created, last seen, expiry, revoked |
-| `credentials` | `id`; `hash` unique | Principal, kind (personal token, API key secret, run token), the permissions and scopes it is limited to, expiry, last use, revoked |
+| `sessions` | `id` | User, the identity it signed in with, created, last seen, expiry, revoked |
+| `credentials` | `id`; `hash` unique | Principal, kind (personal token, API key secret, run token), the permissions and scopes it is limited to, the identity a personal token was created under, expiry, last use, revoked |
 | `ssh_keys` | `fingerprint` | Principal, public key, last use |
 | `signing_keys` | `fingerprint` | Principal, kind (GPG or SSH), public key, revoked |
 | `memberships` | `org_id`, `user_id` | When the user joined; their membership role is a grant |
@@ -321,8 +353,8 @@ copies into PostgreSQL. OAuth apps and their consents add tables in their own sl
 
 ## Decisions
 
-Fifteen choices here went beyond the product design. The decisions of 2026-10-27 changed two of them, and the rest were
-agreed the same day.
+Nineteen choices here went beyond the product design. The decisions of 2026-10-27 changed two of them and made three
+more, and the rest were agreed the same day, except repository visibility, which is still proposed.
 
 | Proposal | Why | Decision |
 | --- | --- | --- |
@@ -341,18 +373,17 @@ agreed the same day.
 | A verified email claims a login-less user; a background task rewrites its references | The commits become the person's without a long transaction | Agreed |
 | The AI reviewer is a built-in agent of every organization, holding the Automation role there | It reads, annotates, reviews and posts on every repository, and nothing more | Agreed |
 | Commits signed with a GPG or SSH key of the principal holding the committer's verified email show as Verified; a branch can require them | Authorship can be proven, not only claimed | Agreed |
+| Repositories are Private, Internal or Public: Reader grants to the built-in principals Signed-in users and Anyone | Decided on 2026-10-27 that repositories can be read more widely; as grants, visibility goes through the same authorizer as every other access | Proposed |
+| Each organization chooses which of the installation's identity providers its members use; phase 1 supports Google only | Decided on 2026-10-27; an organization keeps its members on the providers it trusts | Agreed |
+| An OAuth app belongs to the organization that registers it and acts only inside it | Decided on 2026-10-27; an organization answers for every app that reaches its data | Agreed |
+| Credentials' lifetimes default as listed under Lifetimes, each an installation setting | Decided on 2026-10-27: sensible defaults for now; machines get short tokens, people longer sessions | Agreed |
 
 The nine built-in roles and the 23 permissions above are agreed too.
 
 ## Open questions
 
-- [ ] **Wider read access.** The APIs serve authenticated principals only. Do repositories ever need to be readable by
-      every signed-in user of the installation, or by anyone?
-- [ ] **Organization sign-in.** Should an organization be able to require its own identity provider, or provision
-      members from it (SCIM)?
+- [ ] **Member provisioning.** Should an organization be able to provision and remove its members from its identity
+      provider (SCIM)?
 - [ ] **Agents' outside credentials.** How an agent holds the credentials of the tools it uses beyond DevHub, such as
       mail or Slack. The agents design answers this.
-- [ ] **OAuth apps' reach.** Are OAuth apps registered by one organization only, or installation-wide so several
-      organizations can install one?
-- [ ] **Lifetimes.** The defaults for sessions, personal tokens and run tokens.
 - [ ] **Phase 2 jobs.** How the default branch's pinned job security works with the job ceiling.

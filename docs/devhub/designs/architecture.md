@@ -112,7 +112,8 @@ needs no CORS. The Back-office gets a second host. The chart can render these ro
 - **PostgreSQL 16 or later.** The chart's StatefulSet, or an external server named by a connection URL in a Secret.
 - **One bucket.** A Go Cloud URL (`s3://`, `gs://`, `azblob://`, or `file://` on a volume for a single-node install).
   Credentials come from the cloud's workload identity or a Secret.
-- **Identity providers.** OpenID Connect providers, and GitHub's OAuth, configured in the chart's values.
+- **Identity providers.** Google in phase 1, then other OpenID Connect providers and GitHub's OAuth, configured in the
+  chart's values. Each organization chooses which of them its members may use.
 - **Generated secrets.** Signing keys for sessions and tokens, and the internal call secret. The chart creates them on
   install when absent and never rotates them on upgrade.
 
@@ -260,10 +261,10 @@ every requirement.
 
 ### A fetch
 
-A clone or fetch authenticates, checks read permission, reads the refs and the pack list in one snapshot, makes sure the
-pod's cache holds those packs, and runs `git upload-pack` on a throwaway repository. A compaction that commits during
-the fetch does not disturb it: its new pack holds every object of the packs it replaced, and those stay in the bucket
-for a day.
+A clone or fetch authenticates, unless it reads a public repository anonymously, checks read permission, reads the refs
+and the pack list in one snapshot, makes sure the pod's cache holds those packs, and runs `git upload-pack` on a
+throwaway repository. A compaction that commits during the fetch does not disturb it: its new pack holds every object of
+the packs it replaced, and those stay in the bucket for a day.
 
 ## Events and background work
 
@@ -303,7 +304,8 @@ so a broker can replace them later without the services changing.
 ## API conventions
 
 REST and GraphQL are two thin transports over one Go service layer, which owns validation and authorization, so the two
-can never disagree about who may do what. Both serve authenticated principals only.
+can never disagree about who may do what. Both serve authenticated principals, and callers without a credential only to
+read public repositories.
 
 ### Shape
 
