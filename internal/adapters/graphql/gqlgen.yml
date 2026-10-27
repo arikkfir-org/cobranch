@@ -1,0 +1,18 @@
+# gqlgen's settings: generated.go and models_gen.go from api/graphql/, resolved by the methods gqlgen keeps in
+# schema.resolvers.go, on resolver.go's Resolver.
+schema:
+  - ../../../api/graphql/*.graphqls
+exec:
+  filename: generated.go
+  package: graphql
+model:
+  filename: models_gen.go
+  package: graphql
+resolver:
+  layout: follow-schema
+  dir: .
+  package: graphql
+  filename_template: "{name}.resolvers.go"
+  type: Resolver
+omit_gqlgen_version_in_file_notice: true
+skip_mod_tidy: true

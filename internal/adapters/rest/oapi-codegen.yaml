@@ -1,0 +1,7 @@
+# oapi-codegen's settings for rest.gen.go: the models and a strict server on the standard library's routing.
+package: rest
+output: rest.gen.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true

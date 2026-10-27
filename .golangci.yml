@@ -55,6 +55,12 @@ linters:
         - name: var-naming
     sloglint:
       context: all
+  exclusions:
+    rules:
+      # gqlgen writes the resolvers' signatures, ctx included, and keeps only their bodies.
+      - path: \.resolvers\.go$
+        linters: [revive]
+        text: unused-parameter
 formatters:
   enable:
     - gofmt
