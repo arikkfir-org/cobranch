@@ -1,7 +1,9 @@
 # DevHub technical architecture
 
-**Status**: agreed on 2026-10-27. This page is the design's source from now on; it was drafted as a [Claude
-Doc](https://claude.ai/artifact/7gyNg9dFQXRJtMaFHjYqDj).
+> **Snapshot.** This design lives in its [architecture page](https://claude.ai/artifact/L6NYy7k4ep31FEPAxQiPjv),
+> linked with DevHub's other designs; this file is a snapshot of 2026-10-27, synced again once DevHub's shape settles.
+
+**Status**: agreed on 2026-10-27.
 
 DevHub runs as a handful of Go workloads over two stores, PostgreSQL and one blob bucket, and a Git push returns only
 after PostgreSQL has committed it. Everything else in this document follows from those two choices.

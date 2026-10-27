@@ -1,7 +1,9 @@
 # DevHub principals and permissions
 
-**Status**: agreed on 2026-10-27, except the choices still marked **Proposed**. This page is the design's source from
-now on; it was drafted as a [Claude Doc](https://claude.ai/artifact/6F4vZHXJzynCH1rogzGEEr).
+> **Snapshot.** This design lives in its [principals and permissions page](https://claude.ai/artifact/J8TVehKS9N6qGSsgjBH7hw),
+> linked with DevHub's other designs; this file is a snapshot of 2026-10-27, synced again once DevHub's shape settles.
+
+**Status**: agreed on 2026-10-27, except the choices still marked **Proposed**.
 
 Every actor in DevHub is a principal, and a principal can do something only because a grant says so: a role, which
 bundles built-in permissions, given to the principal at the installation, an organization or a repository. Nothing is

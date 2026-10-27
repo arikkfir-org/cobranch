@@ -1,5 +1,8 @@
 # The DevHub design system
 
+> **Snapshot.** This design lives in its [design system page](https://claude.ai/artifact/K6oZu5M6kiXuEBiqFNgPcW),
+> linked with DevHub's other designs; this file is a snapshot of 2026-10-27, synced again once DevHub's shape settles.
+
 **Decision**: DevHub's interface puts clarity first and simplicity second. It is drawn in ink (near-black on white,
 inverted in dark mode), uses colour only where colour means something, and says every status with an icon, a word and a
 tone. The source is the Figma file [DevHub](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/DevHub). This page

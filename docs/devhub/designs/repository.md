@@ -1,5 +1,8 @@
 # The DevHub repository
 
+> **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu),
+> linked with DevHub's other designs; this file is a snapshot of 2026-10-27, synced again once DevHub's shape settles.
+
 **Decision**: DevHub lives in one repository, `arikkfir-org/devhub`: one Go module, one binary, the web apps, the Helm chart, the SDKs and the design documents side by side, so a change to DevHub is one pull request however many parts it touches. It is a repository of the organization like any other: `infra` manages it with the organization's settings and ruleset, `delivery` gives it a CI tenant, Octomaton runs its CI, and its `docs/` reaches the hub's docs site. It is public, under the MIT License.
 
 ## Context and goal
