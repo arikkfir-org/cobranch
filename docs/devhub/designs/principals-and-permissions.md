@@ -4,12 +4,13 @@
 > page](https://claude.ai/artifact/J8TVehKS9N6qGSsgjBH7hw), linked with DevHub's other designs; this file is generated
 > from it, with its diagrams, as of 2026-10-27, and synced again once DevHub's shape settles.
 
-**Status**: Agreed 2026-10-27 · [ENG-196](https://linear.app/arikkfir/issue/ENG-196) · Repository visibility still
-proposed · Fills in the [architecture](architecture.md#authentication) · Built by
-[ENG-197](https://linear.app/arikkfir/issue/ENG-197)
+**Status**: Agreed 2026-10-27 · [ENG-196](https://linear.app/arikkfir/issue/ENG-196) ·
+[ENG-203](https://linear.app/arikkfir/issue/ENG-203) · Revised after review, 2026-10-27 · Fills in the
+[architecture](architecture.md#authentication) · Built by [ENG-197](https://linear.app/arikkfir/issue/ENG-197)
 
 Every actor in DevHub is a principal, and a principal can do something only because a grant says so: a role given at the
-installation, an organization or a repository. Nothing is ambient, not even for jobs, agents or administrators.
+installation, an organization, a repository or one secret. Nothing is ambient, not even for jobs, agents or
+administrators.
 
 ## Scope
 
@@ -24,7 +25,7 @@ Choices the product design did not make are marked **Agreed**, or **Proposed** w
 
 ## Principal kinds
 
-Seven kinds of principal cover every actor.
+Seven kinds of principal cover every actor, and an eighth, Anonymous, is built in.
 
 **Users live at the installation; every other principal lives inside one organization**
 
@@ -42,6 +43,7 @@ organization reaches outside it.
 | API key | A principal manager of the organization | Its secret, as a bearer token |
 | OAuth app | A principal manager of the organization, in a later slice | Client credentials, or a member's consent |
 | Workload identity | A principal manager of the organization | An outside platform's OpenID Connect token, exchanged |
+| Anonymous | Built in: one row, made by the first migration | Nothing: every caller, with a credential or without, holds its grants |
 
 > **Agreed:** credentials are not principals. A session, an SSH key or a personal token proves who a user is and acts as
 > that user. An API key is a principal of its own, with its own grants, so a script never borrows a person's access.
@@ -106,8 +108,9 @@ the installation’s key.
 Membership says that a user belongs to an organization; grants say what they may do there. Joining gives one grant, the
 membership role, and nothing else.
 
-- **Membership role.** **Agreed:** Member by default, which reads every repository; an organization can make Guest its
-  default and grant repositories one by one.
+- **Membership role.** Member by default. **Changed** (review, 2026-10-27): Member no longer reads every repository, so
+  a new one stays [private](#visibility); an organization that wants every member to read everything makes a custom role
+  with Reader its membership role. Guest is the narrower default.
 - **Owners.** The creator is the first Owner, and the last Owner cannot leave, be removed or be demoted.
 - **People from elsewhere** join the organization, usually as Guests, and get grants on the repositories they need.
   Grants never cross organizations.
@@ -131,7 +134,8 @@ causes records both.
 
 **Decided:** a user with `agents.create` creates an agent and grants it roles within their own permissions; the
 organization owns it, and `org.principals.manage` manages it. **Agreed:** the AI reviewer is a built-in agent of every
-organization, holding Automation there. Its tools and outside credentials belong to the agents design.
+organization, holding Automation there. Its outside credentials are [secrets](#secrets) it may read; its tools belong to
+the agents design.
 
 **A task runs as the agent, and never beyond what its assigner can do**
 
@@ -179,13 +183,12 @@ A grant is one principal, one role and one scope, and it applies at its scope an
 
 ![A grant reaches its scope and everything inside it](principals-and-permissions/scopes.svg)
 
-There is no branch scope: merge requirements and `repo.bypass` decide who changes a branch.
+There is no branch scope: merge requirements and `repo.bypass` decide who changes a branch. A secret, in an organization
+or a repository, is a scope for `secrets.manage` and `secrets.read` only.
 
 - **Who may receive one.** At the installation, users only. At an organization or repository, its members and its own
-  principals. Jobs receive none: their declarations and the ceiling decide.
-- **Visibility.** **Proposed:** a repository is *Private* (the default), *Internal* or *Public*. Internal grants Reader
-  to *Signed-in users*, Public to *Anyone*, the one exception to grants staying inside an organization. Changing it
-  takes `org.grants.manage`; an installation can turn Public off, and an organization can cap its repositories.
+  principals, and [Anonymous](#visibility) too. Jobs receive only `secrets.read`; their declarations and the ceiling
+  decide the rest.
 - **Permissions apply where they fit.** A role granted on a repository gives only its repository permissions.
 - **Additive only.** **Agreed:** no deny rules. To give someone less on one repository, give less at the organization
   and more where needed.
@@ -193,19 +196,61 @@ There is no branch scope: merge requirements and `repo.bypass` decide who change
   that scope; defining a custom role, the same.
 - **Administrators do not see content.** **Agreed:** an installation admin who must look inside an organization makes
   themselves its Owner from the Back-office, and that lands in the organization's audit trail.
+- **Administration at any scope.** **Agreed:** the Admin API checks these same permissions wherever they are granted, so
+  a principal can administer one organization without the installation ([API](architecture.md#api-conventions)).
+
+### Visibility
+
+**Agreed** (review, 2026-10-27): visibility is a label DevHub infers from grants, never a setting of its own.
+
+- **Private** by default. A new repository's creator becomes its Maintainer, with every repository permission, and
+  nobody else but the organization's Owners can reach it. The inference never counts the Owners, who reach everything.
+- **Internal** once another of the organization's users, besides its creator and the Owners, holds a grant that reaches
+  it.
+- **Public** once *Anonymous*, the built-in principal that stands for every caller, holds any role on the repository or
+  its organization. Anonymous can hold any repository role, even one with `repo.push` or `repo.merge`, the one exception
+  to grants staying inside an organization. An installation can forbid grants to Anonymous, and an organization can
+  refuse them.
+- **Jobs for outside pushes.** A repository setting, off by default, decides whether jobs run for branch tips pushed
+  from outside the organization, by Anonymous or by a user who is not a member. While it is off, such a branch's jobs
+  wait for a member with `jobs.run` to start them.
+
+## Secrets
+
+**Agreed** (review, 2026-10-27): a secret is an outside credential an organization or a repository keeps in its
+settings, and a grant decides which agents and jobs receive it.
+
+**A grant decides which agents and jobs receive a secret**
+
+![A grant decides which agents and jobs receive a secret](principals-and-permissions/secrets.svg)
+
+A grant on the organization reaches every secret in it, its repositories’ included; on a repository, that repository’s.
+No API returns a value: only a job run or an agent task receives it.
+
+- **Where they live.** An organization's settings hold secrets its repositories share; a repository's hold its own.
+  `secrets.manage` adds, replaces and deletes them there. A value is encrypted and never read back
+  ([architecture](architecture.md#settings-secrets-and-models)).
+- **Who receives one.** `secrets.read`, granted on the organization, a repository or one secret. An agent holds the
+  credentials of tools beyond DevHub this way, such as mail, Slack or its model provider.
+- **Jobs.** **Agreed** (review, 2026-10-27): `secrets.read` is the one grant a job can receive. A run gets the secrets
+  its `/devhub.yaml` names, if its job holds `secrets.read` on them. Phase 2's pinned job security narrows which secrets
+  a branch's jobs may read.
+- **The assigner cap.** **Agreed** (review, 2026-10-27): an agent's task receives the agent's secrets whoever assigned
+  it, since few people who assign tasks hold `secrets.read` themselves. The risk: an assigner could coax a value out of
+  the agent, so a secret goes only to agents trusted with it.
 
 ## Permissions
 
-**Twenty-three permissions, each at one scope**
+**Twenty-five permissions, each at one scope**
 
-![Twenty-three permissions, each at one scope](principals-and-permissions/permissions.svg)
+![Twenty-five permissions, each at one scope](principals-and-permissions/permissions.svg)
 
-Names are `<object>.<action>`. A release may add permissions but never renames one; issues, delivery, secrets and agents
-add theirs in their own designs.
+Names are `<object>.<action>`. A release may add permissions but never renames one; issues, delivery and agents add
+theirs in their own designs.
 
 | Permission | Allows |
 | --- | --- |
-| `installation.manage` | Change installation settings and identity providers; use the Back-office |
+| `installation.manage` | Change installation settings and identity providers; use the Admin API and the Back-office |
 | `installation.users.manage` | See every user; suspend and restore users; revoke their sessions |
 | `orgs.create` | Create organizations |
 | `org.read` | See the organization, its members, groups and principals |
@@ -228,6 +273,8 @@ add theirs in their own designs.
 | `messages.post` | Post in branch chats, and edit or delete one's own messages |
 | `messages.moderate` | Delete others' messages; resolve others' threads |
 | `jobs.run` | Start manual jobs; re-run and cancel runs |
+| `secrets.manage` | Add, replace and delete secrets in the organization's or a repository's settings |
+| `secrets.read` | Receive a secret's value in one's job runs and agent tasks; no API returns a value |
 
 ## Roles
 
@@ -235,8 +282,9 @@ add theirs in their own designs.
 
 ![Nine built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
 
-Whoever creates a repository becomes its Maintainer. Built-in roles are fixed; an organization defines custom roles from
-the same permissions.
+Whoever creates a repository becomes its Maintainer, with every repository permission; nobody else but the
+organization’s Owners can reach it until someone grants more. Built-in roles are fixed; an organization defines custom
+roles from the same permissions.
 
 - **Custom roles** have a name, a description and any permissions their definer holds, and are granted at an
   organization or on a repository like built-in ones. Editing one changes every grant of it on the next check; one that
@@ -299,28 +347,31 @@ and their consents add tables in their own slice.
 | One principal per job name, capped by a job ceiling in the default branch's `/devhub.yaml` | Settings live in `/devhub.yaml`; a branch's own copy counts once merged | Changed |
 | Job runs can get DevHub-signed OpenID Connect tokens | Jobs reach clouds without stored secrets | Agreed |
 | Grants only add; there are no deny rules | One rule to reason about; checks never conflict | Agreed |
-| Three scopes and no branch scope | Merge requirements already govern branches | Agreed |
+| Three scopes and no branch scope; a secret is a scope for secret permissions only | Merge requirements already govern branches; a grant can name one secret | Changed |
 | Grants never cross organizations; outside people join as Guests | An organization sees everyone who can reach it | Agreed |
 | Groups hold users and agents and do not nest | A check never walks a tree | Agreed |
 | Installation admins see no organization content; entering one makes them Owner, audited | Operators run the installation, not the organizations | Agreed |
 | The chart's values name the first installation admins | Nobody becomes an administrator by being first | Agreed |
-| New members default to Member, which reads every repository | Teams start open inside; Guest is one setting away | Agreed |
+| New members default to Member, which reads only the repositories it is granted | Review, 2026-10-27: a new repository is private to its creator | Changed |
 | A verified email claims a login-less user; a background task rewrites its references | The commits become the person's without a long transaction | Agreed |
 | The AI reviewer is a built-in agent holding Automation in every organization | It reads, annotates, reviews and posts, and nothing more | Agreed |
 | Commits signed by a key of the committer's verified email show as Verified; a branch can require them | Authorship can be proven, not only claimed | Agreed |
-| Repositories are Private, Internal or Public, through Reader grants to Signed-in users and Anyone | Decided on 2026-10-27 that repositories can be read more widely; visibility goes through the same authorizer | Proposed |
+| Visibility is inferred from grants, never counting the Owners: Private, Internal once a user besides its creator can reach a repository, Public once Anonymous can | Review, 2026-10-27: one model for access, no setting to drift from it | Agreed |
+| Anonymous is the one built-in principal, a row of its own kind, and can hold any repository role at a repository or its organization; Signed-in users is gone | Review, 2026-10-27: Internal means the organization's own users | Changed |
+| Jobs for tips pushed from outside the organization run only where the repository allows it; off by default | Otherwise an anonymous push runs its code with the job's secrets | Agreed |
+| Secrets live in organization and repository settings; `secrets.read` on the organization, a repository or one secret decides who receives them | Review, 2026-10-27: how agents hold outside credentials | Agreed |
+| A job can receive `secrets.read`, its one grant | Review, 2026-10-27: jobs need outside credentials; phase 2 narrows which | Agreed |
+| An agent's task receives the agent's secrets whoever assigned it | Review, 2026-10-27: few assigners hold `secrets.read`; the risk is an assigner coaxing a value out | Agreed |
 | Each organization chooses its identity providers; Google only in phase 1 | Decided on 2026-10-27; an organization keeps its members on providers it trusts | Agreed |
 | An OAuth app belongs to the organization that registers it | Decided on 2026-10-27; an organization answers for every app that reaches its data | Agreed |
 | Credentials' lifetimes default as listed, each an installation setting | Decided on 2026-10-27; machines get short tokens, people longer sessions | Agreed |
+| Organizations provision their members from their identity provider (SCIM) | Review, 2026-10-27: yes, in phase 2 | Planned |
+| How phase 2's pinned job security meets the job ceiling | Belongs to phase 2's jobs design | Deferred |
 
-The nine built-in roles and the 23 permissions are agreed too.
+The nine built-in roles and the 25 permissions are agreed too; the review added the two secret permissions.
 
 ## Open questions
 
-- [ ] **Member provisioning.** Should an organization provision and remove its members from its identity provider
-  (SCIM)?
-- [ ] **Agents' outside credentials.** How an agent holds the credentials of tools beyond DevHub, such as mail or Slack.
-  The agents design answers this.
-- [ ] **Phase 2 jobs.** How the default branch's pinned job security works with the job ceiling.
+None: the review on 2026-10-27 settled every question and proposal on this page, under [Decisions](#decisions).
 
 DevHub is a Kfirs project, created by Arik Kfir.

@@ -4,7 +4,8 @@
 > with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced again
 > once DevHub's shape settles.
 
-**Status**: Agreed 2026-10-27 · [ENG-193](https://linear.app/arikkfir/issue/ENG-193) · Builds on the [product
+**Status**: Agreed 2026-10-27 · [ENG-193](https://linear.app/arikkfir/issue/ENG-193) ·
+[ENG-203](https://linear.app/arikkfir/issue/ENG-203) · Revised after review, 2026-10-27 · Builds on the [product
 design](product.md#architecture) · Detailed by the [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)
 
 DevHub runs as a handful of Go workloads over two stores, PostgreSQL and one bucket, and a Git push returns only after
@@ -31,19 +32,20 @@ Seven constraints from the [product design](product.md#principles) decide most o
 - **Stateless workloads.** Any pod can be killed at any time. State lives only in PostgreSQL and blob storage; a pod's
   disk is a cache.
 - **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Agreed:** no message broker, no
-  Redis, no search cluster in the foundations.
+  Redis, no search cluster in the foundations; phase 2's semantic search keeps its embeddings in PostgreSQL with
+  pgvector ([phase 2](product.md#phase-2)).
 - **Synchronous pushes.** When `git push` returns, the commits, branches and their status are in PostgreSQL and on
   screen.
 - **Many organizations per installation.** Every row an organization owns carries its ID, and every query is scoped by
   it.
-- **One permission model.** REST, GraphQL and Git check the same grants through the same code.
+- **One permission model.** REST, GraphQL, the Admin API and Git check the same grants through the same code.
 - **Agents use the front door.** Agents, jobs and AI review call the same APIs as people, as principals of their own.
 
 ## Components
 
-Seven workloads, plus the job and agent pods the controller creates. Only the Git server reads Git objects, only the
-push worker moves refs, and only the controller makes and watches pods; the API server's one Kubernetes call reads a
-running job's logs.
+Ten workloads, plus the job and agent pods the controller creates and a migration Job per upgrade. Only the Git server
+reads Git objects, only the push worker moves refs, and only the controller makes and watches pods; the REST and GraphQL
+servers' one Kubernetes call reads a running job's logs.
 
 **All state lives in PostgreSQL and one bucket**
 
@@ -52,30 +54,41 @@ running job's logs.
 The **controller** is a workload the product design did not list: the push worker must stay fast, so the slow, retried
 and outward-facing work (pods, webhooks, model calls) gets a workload of its own.
 
-**Internal calls** (API server to Git server, Git server to push worker) are plain HTTP with JSON on a port the chart
-never exposes, authenticated with a secret the chart generates. Every workload is the same Go binary, so both ends of a
-call share one Go type for its body.
+**Four API workloads.** **Changed** (review, 2026-10-27): the API server is now the Auth, GraphQL, REST and Admin
+servers, so the operator routes, scales and exposes each on its own ([Routes](#routes)). They share one service layer
+and check the same grants. The [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)'s first slice
+([ENG-195](https://linear.app/arikkfir/issue/ENG-195)) brings the GraphQL and REST servers; the Auth server arrives with
+sign-in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197)), and the Admin server with the Back-office.
+
+**Internal calls** (the GraphQL and REST servers to the Git server, the Git server to the push worker) are plain HTTP
+with JSON on a port the chart never exposes, authenticated with a secret the chart generates. Every workload is the same
+Go binary, so both ends of a call share one Go type for its body.
 
 ## Deployment
 
-The chart runs six Deployments, one CronJob and optionally PostgreSQL. The [Helm chart
+The chart runs nine Deployments, one CronJob, a migration Job per upgrade and optionally PostgreSQL. The [Helm chart
 design](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8#installs) details what its first slice installs.
 
 **Four images, all at the chart’s app version, run every workload**
 
 ![Four images, all at the chart’s app version, run every workload](architecture/images.svg)
 
-The `devhub` image runs `devhub <workload>`: `api-server`, `git-server`, `push-worker`, `controller` or `maintenance`.
+The `devhub` image runs `devhub <workload>`: `auth-server`, `graphql-server`, `rest-server`, `admin-server`,
+`git-server`, `push-worker`, `controller`, `maintenance` or `migrate`.
 
 | Workload | Kind | Replicas | Disk | Kubernetes access |
 | --- | --- | --- | --- | --- |
 | Console | Deployment | 2 | None | No token |
 | Back-office | Deployment | 1 | None | No token |
-| API server | Deployment | 2 | None | Read `pods/log` in the jobs namespace |
+| Auth server | Deployment | 2 | None | No token |
+| GraphQL server | Deployment | 2 | None | Read `pods/log` in the job namespaces |
+| REST server | Deployment | 2 | None | Read `pods/log` in the job namespaces |
+| Admin server | Deployment | 1 | None | No token |
 | Git server | Deployment | 2 | Ephemeral volume, the pack cache | No token |
 | Push worker | Deployment | 2 | None | No token |
-| Controller | Deployment | 2 | None | Create, watch and delete pods and Secrets in the jobs and agents namespaces |
+| Controller | Deployment | 2 | None | Create job namespaces and their policies; create, watch and delete pods and Secrets in them |
 | Maintenance | CronJob, hourly | 1 | Ephemeral volume, for repacking | No token |
+| Migration | Job, per upgrade | 1 | None | No token |
 | PostgreSQL | StatefulSet, optional | 1 | Persistent volume | No token |
 
 No workload elects a leader. Replicas share work by claiming rows in PostgreSQL (`FOR UPDATE SKIP LOCKED`), so a dead
@@ -84,12 +97,33 @@ rolls out by surging; the chart sets no autoscaler.
 
 ### Routes
 
-One host serves the Console, the API and Git over HTTPS, so the session cookie is first-party and the API needs no CORS.
-The chart can render the routes as an Ingress or a Gateway API `HTTPRoute`, off by default.
+**Changed** (review, 2026-10-27): every surface is a workload with a Service of its own, and the operator routes hosts
+and paths to them with the cluster's ingress or Gateway API. The chart takes each surface's public URL as a value, for
+redirects, CORS and links, and can render the routes as `HTTPRoute`s, off by default.
 
-**One host splits by path; the Back-office gets a host of its own**
+**The operator routes hosts and paths to each workload’s Service**
 
-![One host splits by path; the Back-office gets a host of its own](architecture/routes.svg)
+![The operator routes hosts and paths to each workload’s Service](architecture/routes.svg)
+
+Any hosts and prefixes work, as long as every host sits under one parent domain, which the session cookie names.
+
+- **One parent domain.** The Auth server sets the session cookie for the parent domain of every DevHub host, so it
+  reaches every API; the APIs answer CORS for the Console's and the Back-office's origins only.
+- **Each workload serves from `/`.** A route that adds a path prefix strips it (an `HTTPRoute` `URLRewrite`).
+- **The Admin server and the Back-office can stay internal,** on a gateway only operators reach.
+
+### Job isolation
+
+**Agreed** (review, 2026-10-27): each organization's jobs, and for now its agents' pods, run in a namespace of their
+own. Its NetworkPolicies admit no ingress at all, and allow egress to the internet and to cluster DNS only, never to the
+cluster's pods or Services.
+
+**A job or agent reaches the internet and nothing else in the cluster**
+
+![A job or agent reaches the internet and nothing else in the cluster](architecture/isolation.svg)
+
+The controller creates the namespace and its policies with the organization’s first job or agent task, and binds the
+chart’s role that lets the REST and GraphQL servers read its pods’ logs.
 
 ### Dependencies
 
@@ -102,13 +136,25 @@ generated.
 
 ### Upgrades
 
-Migrations expand before they contract, so pods of the old and the new version run side by side through a rolling
-upgrade. The [Helm chart's startup](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8#startup) shows the same lock from
-the chart's side.
+**Changed** (review, 2026-10-27): a `devhub migrate` Job runs before the servers roll out, and pods never migrate. It
+applies SQL and Go migrations in one numbered sequence (goose runs both), and every release's migrations are compatible
+with the release before it: they keep everything its pods read, so those pods keep working while the new ones roll out,
+and rolling back one release needs no down migration. The [Helm
+chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job runs first, under Helm and Argo CD alike.
 
-**One new API server migrates; every other pod works on the expanded schema**
+**A migration Job runs before the new pods; old pods keep working**
 
-![One new API server migrates; every other pod works on the expanded schema](architecture/upgrades.svg)
+![A migration Job runs before the new pods; old pods keep working](architecture/upgrades.svg)
+
+- **Pods wait for their schema.** A pod starts once the schema is at least its version, and stays unready until then.
+- **Removals wait a release.** A release adds columns and tables first, and stops reading old ones; a later release
+  drops what neither it nor the release before it reads. So a rollback goes back one release at most.
+- **Long backfills are tasks.** A data migration too long for the Job runs afterwards as a controller task, in batches
+  that resume, and the code reads both shapes until it finishes.
+- **One migrator at a time.** The Job takes an advisory lock, so two upgrades started together migrate in turn.
+- **Seed data for previews.** A second set, `db/seeds/` (Go only, with its own version table), runs in the same Job
+  after the schema's migrations, only when the chart turns seeding on, as preview installations do ([Helm
+  chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)).
 
 ## Data model
 
@@ -140,6 +186,7 @@ background work](#events-and-background-work).
 - **Settings live in Git.** Repository and branch settings, merge requirements included, come from the default branch's
   `/devhub.yaml`; PostgreSQL keeps a parsed copy, replaced by the push that changes the file. Organization settings live
   in PostgreSQL only.
+- **Secrets are rows,** encrypted, each with the repositories that may use it ([below](#settings-secrets-and-models)).
 - **Unknown authors get principals.** A commit author or committer whose email nobody holds becomes a login-less user,
   which a user who later verifies that email [claims](principals-and-permissions.md#emails-and-login-less-users).
 - **Scoping is the data layer's job.** **Agreed:** every query function takes its organization; row-level security is a
@@ -199,6 +246,11 @@ when `devhub/settings` merges, through the same merge requirements as any other 
 branches unless the pusher holds [`repo.bypass`](principals-and-permissions.md#permissions). Otherwise a direct push
 would skip every requirement.
 
+**Agreed** (review, 2026-10-27): a [path rule](#settings-secrets-and-models) that restricts pushes refuses a push, into
+any branch, that adds commits changing its paths, unless the rule names the pusher or one of their groups. The rule's
+list decides alone, so `repo.bypass` does not lift it. Its approvals are a merge requirement like any other, checked by
+the Ready branches the push must merge.
+
 ### Failure modes
 
 | Failure | The client sees | Afterwards | Recovery |
@@ -250,27 +302,93 @@ job and the minute, so a schedule fires once however many replicas run.
 The AI reviewer is a built-in agent of every organization, configured by each repository’s `/devbot.yaml`; the
 controller gives it a review task on every push.
 
-- **Live updates.** A client that reconnects passes the last event ID it saw, and the API server replays from `events`.
+- **Live updates.** A client that reconnects passes the last event ID it saw, and the GraphQL server replays from
+  `events`.
 - **Maintenance.** The hourly CronJob compacts packs, deletes unreferenced blobs, applies log retention, and drops
   expired sessions and tokens.
 - **Day-one events** (2026-10-27): `branch.created`, `branch.pushed`, `branch.merged`, `branch.deleted`, `tag.pushed`,
   `review.submitted` and `annotation.changed`. Jobs also take cron and manual triggers.
 
-One PostgreSQL carries this far past a first installation's load. The event and task stores are interfaces in the code,
-so a broker can replace them later without the services changing.
+### Why no broker
+
+**Agreed, and kept after review** (2026-10-27): a broker such as NATS would not make events safer, and the controller
+can still scale to zero.
+
+**Nothing is lost while the controller is down: its tasks wait as rows**
+
+![Nothing is lost while the controller is down: its tasks wait as rows](architecture/events-down.svg)
+
+A broker would not make this safer: DevHub would commit to PostgreSQL and then publish, and would need the same outbox
+to survive a crash between the two.
+
+- **Nothing is lost.** A change, its event and its tasks commit together, so no reaction is lost and none fires for a
+  change that rolled back. `NOTIFY` only wakes a listener sooner; a workload that was down claims the waiting rows when
+  it starts, and a task whose claimant died is claimed again when its lease expires.
+- **Scale to zero.** The controller can scale to zero on the operator's autoscaler: KEDA's PostgreSQL trigger counts
+  open tasks, as its NATS trigger would count pending messages. Workloads that serve requests need an HTTP scaler either
+  way, and the push worker stays up, since every push waits for it.
+- **What it costs.** `NOTIFY` can serialize commits on one lock, so at thousands of writes a second DevHub would batch
+  its notifications. One PostgreSQL carries this far past a first installation's load, and the event and task stores are
+  interfaces, so NATS JetStream can replace them without the services changing.
+
+## Settings, secrets and models
+
+**Agreed** (review, 2026-10-27): repository settings stay code and organization settings stay data, and both hold what
+jobs and agents need from outside, secrets and models.
+
+- **In effect, and pending.** The Console shows the settings in effect, from the default branch's `/devhub.yaml`, and
+  the pending changes: every other branch whose `/devhub.yaml` differs, each with its diff, however many there are. The
+  push worker records each tip's file, so listing them is one query.
+- **A settings change merges like any branch.** **Agreed** (review, 2026-10-27): merge requirements gain path rules,
+  which apply only when a branch changes matching paths, such as `/devhub.yaml`. A path rule can require approval from
+  named principals or groups, and refuse pushes that touch its paths from anyone else.
+
+**A secret is written once, kept encrypted, and reaches only the runs allowed to use it**
+
+![A secret is written once, kept encrypted, and reaches only the runs allowed to use it](architecture/secrets.svg)
+
+A grant can name one secret and reach only it, as a cloud’s IAM policy set on one resource does.
+
+- **Secrets** live in an organization's settings or a repository's: an ID, a name and a value encrypted with the chart's
+  secrets key, which nobody reads back once written. `secrets.manage` adds, replaces and deletes them there.
+- **`secrets.read` decides who receives one,** granted on the organization, a repository or one secret
+  ([secrets](principals-and-permissions.md#secrets)). An agent task receives the secrets its agent may read, whoever
+  assigned it; a job run, the secrets its `/devhub.yaml` names and its job may read.
+- **Until phase 2 pins job security,** a branch's job of the same name receives the same secrets, so a secret is only as
+  safe as the people who may push to its repository. Jobs for tips pushed from outside the organization stay off unless
+  the repository allows them ([visibility](principals-and-permissions.md#visibility)).
+- **Rotating the secrets key** is a maintenance task that re-encrypts every value.
+
+**Each agent runs on the model its admin picks; the organization holds the providers’ credentials**
+
+![Each agent runs on the model its admin picks; the organization holds the providers’ credentials](architecture/models.svg)
+
+An example. Any provider the organization has credentials for can serve any of its agents, and an admin can switch an
+agent’s model at any time.
+
+- **Model providers:** Anthropic (Claude), Google (Gemini), xAI (Grok), OpenAI (GPT) and DeepSeek. An organization adds
+  a provider by its credentials, kept as an organization secret that its agents may read.
+- **An admin picks each agent's provider and model** (`org.principals.manage`), so one organization runs several agents
+  on different models, the AI reviewer included. The agent harness reaches every provider through one interface, with an
+  adapter each.
 
 ## API conventions
 
-Both transports serve authenticated principals, and callers without a credential only to read public repositories.
+Three APIs serve authenticated principals, and callers without a credential only to read public repositories; the Auth
+server signs them in. **Changed** (review, 2026-10-27): each is a workload of its own ([Components](#components)).
 
-**REST and GraphQL are two thin transports over one service layer**
+**Three APIs are thin transports over one service layer**
 
-![REST and GraphQL are two thin transports over one service layer](architecture/api.svg)
+![Three APIs are thin transports over one service layer](architecture/api.svg)
 
-- **REST** lives under `/api/v1/`, with paths that follow ownership
-  (`/api/v1/orgs/{org}/repos/{repo}/branches/{branch}`). **Agreed:** REST is the SDKs' surface, generated from the
-  checked-in document with the Go server stubs.
+The Auth server stands beside them: it signs people in and issues tokens, and serves no data.
+
 - **GraphQL** is the Console's surface: `node(id:)`, connections, and live updates as subscriptions.
+- **REST** lives under `/v1/`, with paths that follow ownership (`/v1/orgs/{org}/repos/{repo}/branches/{branch}`).
+  **Agreed:** REST is the SDKs' surface, generated from the checked-in document with the Go server stubs.
+- **Admin** is the Back-office's surface: a REST API under `/v1/` from a document of its own. **Agreed** (review): each
+  operation checks an ordinary permission, granted at the installation, an organization or a repository, so a principal
+  can administer one organization without the installation ([scopes](principals-and-permissions.md#scopes-and-grants)).
 - **One shape for an object.** camelCase JSON fields, RFC 3339 timestamps in UTC, and the data model's typed IDs, so an
   object reads the same in either.
 
@@ -283,8 +401,9 @@ the credentials each caller presents.
 
 ![Every credential resolves to one principal, whose grants decide](architecture/credentials.svg)
 
-The session cookie is `HttpOnly`, `Secure` and `SameSite=Lax`, set by `/auth/` after sign-in at an identity provider.
-Cookie sessions can only send mutations as JSON bodies, which a cross-site form cannot produce.
+The session cookie is `HttpOnly`, `Secure` and `SameSite=Lax`, set by the Auth server after sign-in at an identity
+provider, for the parent domain of DevHub’s hosts. The APIs answer CORS for the Console’s and the Back-office’s origins
+only, and cookie sessions can only send mutations as JSON bodies, which a cross-site form cannot produce.
 
 ### Errors
 
@@ -319,9 +438,9 @@ keys and decides who may read them. Keys are built from IDs, never names, so a r
 | --- | --- | --- | --- |
 | `git/<repo-id>/` | Packs and their indexes | Git server; maintenance | Until superseded or never listed, then a day |
 | `logs/<repo-id>/<run-id>/` | A finished run's logs, one object per step | Controller | The operator's retention, 90 days by default |
-| `uploads/<org-id>/<upload-id>` | Attachments to messages, reviews and issues; avatars | API server | While something refers to them |
-| `artifacts/<repo-id>/<run-id>/` | Files a job run publishes | Job pods, through the API server | Set by the CI design |
-| `agents/<org-id>/<task-id>/` | Large tool outputs and files of an agent task | Agent pods, through the API server | As long as the task |
+| `uploads/<org-id>/<upload-id>` | Attachments to messages, reviews and issues; avatars | REST and GraphQL servers | While something refers to them |
+| `artifacts/<repo-id>/<run-id>/` | Files a job run publishes | Job pods, through the REST server | Set by the CI design |
+| `agents/<org-id>/<task-id>/` | Large tool outputs and files of an agent task | Agent pods, through the REST server | As long as the task |
 
 **Every read of a stored file passes a permission check first**
 
@@ -348,10 +467,11 @@ code is generated from them.
 | HTTP | The standard library's `net/http` routing | No framework to outlive |
 | REST | OpenAPI 3.1 written first; `oapi-codegen` | The document is the contract and the SDKs' source |
 | GraphQL | Schema written first; `gqlgen` | Typed resolvers from the schema |
-| PostgreSQL | `pgx`; `sqlc` from SQL queries; `goose` migrations in the binary | SQL stays SQL, checked at build time |
+| PostgreSQL | `pgx`; `sqlc` from SQL queries; `goose` SQL and Go migrations, run by `devhub migrate` | SQL stays SQL, checked at build time |
 | Git | The `git` CLI in the image; `golang.org/x/crypto/ssh` | Wire compatibility and Git's own speed |
 | Blob storage | `gocloud.dev/blob` | One API over every cloud's buckets and a directory |
 | Kubernetes | `client-go`, in the controller and for log reads | The only two places that touch the cluster |
+| Models | One interface in the agent harness, an adapter per provider | Each agent runs on its own provider and model |
 | Sign-in | `go-oidc` with `golang.org/x/oauth2` | Standard OpenID Connect |
 | Configuration | Environment variables, read with `envconfig` | As Octomaton does |
 | Telemetry | `log/slog` JSON on stdout; OpenTelemetry over OTLP | No cloud's monitoring built in |
@@ -363,13 +483,16 @@ code is generated from them.
 
 ```
 go.mod                        one module: github.com/arikkfir-org/devhub
-cmd/devhub/                   the binary: api-server, git-server, push-worker, controller, maintenance, agent
+cmd/devhub/                   the binary: auth-server, graphql-server, rest-server, admin-server, git-server,
+                              push-worker, controller, maintenance, migrate, agent
 internal/services/            domain logic: organizations, repositories, branches, annotations, events
 internal/adapters/            postgres, blob, git, kube, rest, graphql, oidc
 internal/system/              configuration, telemetry, build information
 api/openapi.yaml              the REST contract
+api/admin.yaml                the Admin API's contract
 api/graphql/                  the GraphQL schema
-db/migrations/                numbered SQL migrations
+db/migrations/                numbered SQL and Go migrations
+db/seeds/                     seed data for previews, Go, run only when the chart turns seeding on
 web/console/  web/back-office/  web/ui/
 sdk/go/  sdk/python/  sdk/typescript/
 chart/devhub/                 the Helm chart
@@ -379,47 +502,38 @@ docs/devhub/                  the designs, once synced from these pages
 
 ## Decisions
 
-Sixteen choices went beyond the product design. The decisions of 2026-10-27 changed two and added three that follow from
-them; the rest were agreed the same day.
+Choices beyond the product design, as of the owner's review on 2026-10-27: it changed three, kept the broker-less
+design, and settled the open questions.
 
 | Choice | Why | Decision |
 | --- | --- | --- |
-| PostgreSQL and one bucket are the only stateful dependencies; `NOTIFY` and a task table stand in for a broker | One less system for every operator | Agreed |
+| PostgreSQL and one bucket are the only stateful dependencies; `NOTIFY` and a task table stand in for a broker | One less system for every operator; a change and its reactions commit together | Agreed |
 | A repository is immutable packs in the bucket plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless | Agreed |
 | The `git` CLI speaks the protocol, driven by Go | Every client works, at Git's own speed | Agreed |
 | A controller workload takes all asynchronous work | Keeps the push worker fast | Agreed |
 | Every push is atomic: all refs or none | A pre-receive hook decides for the whole push anyway | Agreed |
 | A push into a protected branch must merge Ready branches, unless the pusher may bypass | Otherwise a direct push skips every requirement | Agreed |
-| Merge requirements are branch settings in the default branch's `/devhub.yaml` | Repository and branch settings live in `/devhub.yaml` | Changed |
-| Day-one events: the four, plus `tag.pushed`, `review.submitted` and `annotation.changed` | Decided on 2026-10-27 | Changed |
+| Merge requirements are branch settings in the default branch's `/devhub.yaml` | Repository and branch settings live in `/devhub.yaml` | Agreed |
+| Day-one events: the four, plus `tag.pushed`, `review.submitted` and `annotation.changed` | Decided on 2026-10-27 | Agreed |
 | One Go binary for every workload; internal calls are HTTP with JSON | One version everywhere, one type per call | Agreed |
-| REST is the SDKs' surface, GraphQL the Console's | Each where its tooling is strongest | Agreed |
-| One host for the Console, the API and Git over HTTPS; the Back-office on its own | First-party cookies, no CORS, an operator UI that can stay internal | Agreed |
+| The Auth, GraphQL, REST and Admin servers are workloads of their own, routed by the operator under one parent domain | The operator routes, scales and exposes each surface on its own | Changed |
+| A `devhub migrate` Job runs SQL and Go migrations compatible with the previous release, before the servers roll out; pods never migrate | No race to migrate at startup, and the old release keeps working | Changed |
+| REST is the SDKs' surface, GraphQL the Console's, a separate Admin API the Back-office's | Each where its tooling is strongest; admin permissions at any scope | Changed |
+| Each organization's jobs and, for now, agent pods run in a namespace of their own: no ingress, egress to the internet and DNS only | A job or agent reaches nothing in the cluster that another organization uses | Agreed |
+| Cron triggers come from the default branch's `/devhub.yaml` only | A branch cannot schedule work | Agreed |
+| Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/devhub.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
+| An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |
+| The Console shows the settings in effect and every pending change | A settings change is a branch like any other | Agreed |
+| Path rules: merge requirements for changes to paths such as `/devhub.yaml`, which can also refuse pushes there | Settings changes need stricter approval | Agreed |
 | UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Agreed |
 | The stack above | Octomaton's proven pieces, contracts first | Agreed |
 | Settings take effect from the default branch's `/devhub.yaml`; clients cannot push under `devhub/` | A branch's own settings count only once merged | Agreed |
 | Each agent task runs in its own pod, its transcript appended to PostgreSQL as it goes | A restarted pod resumes where it stopped | Agreed |
 | The AI reviewer reads the default branch's `/devbot.yaml` | A branch cannot rewrite its own reviewer's instructions | Agreed |
+| Later: push limits and the Git server's cache placement. Phase 2: Git LFS and all search, semantic search on pgvector embeddings included. The operator's: backup and restore | Not needed for the foundations | Deferred |
 
 ## Open questions
 
-- [ ] **Cache placement.** When should a repository's requests go to the same Git server pods, to cut repeated pack
-  downloads? Not needed in the foundations.
-- [ ] **Large repositories.** What limits apply to a push's size, and does DevHub support Git LFS, with its objects in
-  the bucket?
-- [ ] **Cron definitions.** Are cron triggers read from the default branch's `/devhub.yaml` only, or every branch's? The
-  CI design answers this.
-- [ ] **Job isolation.** One namespace for every organization's jobs, or one each, and with what network policy? The CI
-  design answers this too.
-- [ ] **Back-office API.** The same API under installation-scope grants, or a separate admin API? [Principals and
-  permissions](principals-and-permissions.md#scopes-and-grants) defines the scopes.
-- [ ] **Backup and restore.** PostgreSQL and the bucket must be restored to matching points. A backup command, or bucket
-  versioning?
-- [ ] **Search.** Is PostgreSQL's full-text search enough for issues and messages at first, and when does code search
-  arrive?
-- [ ] **Settings approval.** Should a change to `/devhub.yaml` need approval from named principals, beyond the default
-  branch's merge requirements?
-- [ ] **Model providers.** Which model providers agents and the AI reviewer use, and how the installation gives them
-  credentials.
+None: the review on 2026-10-27 settled every question and proposal on this page, under [Decisions](#decisions).
 
 DevHub is a Kfirs project, created by Arik Kfir.
