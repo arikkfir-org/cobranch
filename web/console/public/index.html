@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DevHub</title>
+  <!-- The Console's placeholder, until its first screen: the design system's colours (docs/devhub/designs/design-system),
+       and the version the REST API answers, at the URL config.json names. -->
+  <style>
+    :root {
+      color-scheme: light;
+      --color-bg-canvas: #ffffff;
+      --color-bg-sunken: #f8f9fa;
+      --color-fg-default: #1a1d20;
+      --color-fg-muted: #6b737b;
+      --color-border-default: #e4e7ea;
+      --color-status-success-fg: #0e6a3f;
+      --color-status-success-bg: #ecfdf3;
+      --color-status-success-border: #a6f0c4;
+      --color-status-warning-fg: #8c500b;
+      --color-status-warning-bg: #fff8eb;
+      --color-status-warning-border: #fdd98a;
+      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --color-bg-canvas: #131517;
+        --color-bg-sunken: #0c0d0f;
+        --color-fg-default: #f8f9fa;
+        --color-fg-muted: #b4bcc2;
+        --color-border-default: #2e3338;
+        --color-status-success-fg: #6cdda0;
+        --color-status-success-bg: #062a1b;
+        --color-status-success-border: #105335;
+        --color-status-warning-fg: #fcc04d;
+        --color-status-warning-bg: #361c05;
+        --color-status-warning-border: #723f0f;
+      }
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      background: var(--color-bg-canvas);
+      color: var(--color-fg-default);
+      font: 14px/20px var(--font-sans);
+    }
+    main {
+      width: min(420px, calc(100vw - 32px));
+      display: grid;
+      gap: 16px;
+      padding: 32px;
+      border: 1px solid var(--color-border-default);
+      border-radius: 12px;
+      background: var(--color-bg-sunken);
+      box-sizing: border-box;
+    }
+    h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
+    p { margin: 0; color: var(--color-fg-muted); }
+    code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    .status {
+      justify-self: start;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--color-status-warning-border);
+      background: var(--color-status-warning-bg);
+      color: var(--color-status-warning-fg);
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 500;
+    }
+    .status[data-state="ready"] {
+      border-color: var(--color-status-success-border);
+      background: var(--color-status-success-bg);
+      color: var(--color-status-success-fg);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>DevHub</h1>
+    <span class="status" id="status" data-state="checking">Checking the REST API…</span>
+    <p id="version">This installation's version shows here once its REST API answers.</p>
+    <p>The Console's screens arrive with the next releases.</p>
+  </main>
+  <script>
+    // Relative to the page, wherever the operator mounts the Console: its route strips any prefix.
+    const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
+    fetch(base + "config.json")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then(({ restUrl }) => fetch((restUrl || "") + "/v1/version", { headers: { Accept: "application/json" } }))
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then(({ version }) => {
+        const status = document.getElementById("status");
+        status.dataset.state = "ready";
+        status.textContent = "REST API ready";
+        const line = document.getElementById("version");
+        line.textContent = "This installation runs DevHub ";
+        const code = document.createElement("code");
+        code.textContent = version;
+        line.append(code, ".");
+      })
+      .catch(() => {
+        document.getElementById("status").textContent = "REST API unreachable";
+      });
+  </script>
+</body>
+</html>

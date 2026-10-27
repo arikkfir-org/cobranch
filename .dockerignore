@@ -1,0 +1,7 @@
+# Image devhub's build reads only the Go module.
+*
+!go.mod
+!go.sum
+!cmd/
+!db/
+!internal/
