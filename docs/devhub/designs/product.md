@@ -169,9 +169,9 @@ its default-branch trust boundary and its organization pipelines are the model f
 | Agent runtime | A long-running pod per agent, from DevHub's agent image, whose harness saves the transcript as it goes; simple first |
 | AI review | A built-in agent, configured by the repository's `/devbot.yaml` |
 | Settings | Repository and branch settings in `/devhub.yaml`, Console edits through `devhub/settings`, in effect on merge; organization settings in the database; the Console shows the settings in effect and every pending change |
-| Secrets | Kept encrypted in organization and repository settings, named by ID in `/devhub.yaml`, and received only by agents and jobs granted `secrets.read` |
+| Secrets | Kept encrypted in organization and repository settings, named by ID in `/devhub.yaml`, and received only by agents granted `secrets.read`; jobs receiving them the same way is still [proposed](principals-and-permissions.md#secrets) |
 | Models | Each agent runs on the provider and model its admin picks: Anthropic, Google, xAI, OpenAI or DeepSeek |
-| Repository visibility | Inferred from grants: private to its creator by default, Internal once more members can reach it, Public once Anonymous can |
+| Repository visibility | Inferred from grants, never counting the Owners: private to its creator by default, Internal once another member can reach it, Public once Anonymous can |
 | Job override policy | Phase 1 allows adding or overriding any job; phase 2 pins job security |
 | Branch events | Create, push, merge, delete, tag, review submitted, annotated |
 | Where jobs run | Pod specs in DevHub's own cluster; webhooks for anything elsewhere |

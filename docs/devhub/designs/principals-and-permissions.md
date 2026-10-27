@@ -25,7 +25,7 @@ Choices the product design did not make are marked **Agreed**, or **Proposed** w
 
 ## Principal kinds
 
-Seven kinds of principal cover every actor.
+Seven kinds of principal cover every actor, and an eighth, Anonymous, is built in.
 
 **Users live at the installation; every other principal lives inside one organization**
 
@@ -43,6 +43,7 @@ organization reaches outside it.
 | API key | A principal manager of the organization | Its secret, as a bearer token |
 | OAuth app | A principal manager of the organization, in a later slice | Client credentials, or a member's consent |
 | Workload identity | A principal manager of the organization | An outside platform's OpenID Connect token, exchanged |
+| Anonymous | Built in: one row, made by the first migration | Nothing: every caller, with a credential or without, holds its grants |
 
 > **Agreed:** credentials are not principals. A session, an SSH key or a personal token proves who a user is and acts as
 > that user. An API key is a principal of its own, with its own grants, so a script never borrows a person's access.
@@ -186,8 +187,8 @@ There is no branch scope: merge requirements and `repo.bypass` decide who change
 or a repository, is a scope for `secrets.manage` and `secrets.read` only.
 
 - **Who may receive one.** At the installation, users only. At an organization or repository, its members and its own
-  principals, and on a repository [Anonymous](#visibility) too. Jobs receive only `secrets.read` (**Proposed**); their
-  declarations and the ceiling decide the rest.
+  principals, and [Anonymous](#visibility) too. Jobs receive only `secrets.read` (**Proposed**); their declarations and
+  the ceiling decide the rest.
 - **Permissions apply where they fit.** A role granted on a repository gives only its repository permissions.
 - **Additive only.** **Agreed:** no deny rules. To give someone less on one repository, give less at the organization
   and more where needed.
@@ -203,8 +204,9 @@ or a repository, is a scope for `secrets.manage` and `secrets.read` only.
 **Agreed** (review, 2026-10-27): visibility is a label DevHub infers from grants, never a setting of its own.
 
 - **Private** by default. A new repository's creator becomes its Maintainer, with every repository permission, and
-  nobody else but the organization's Owners can reach it.
-- **Internal** once more of the organization's users hold grants that reach it.
+  nobody else but the organization's Owners can reach it. The inference never counts the Owners, who reach everything.
+- **Internal** once another of the organization's users, besides its creator and the Owners, holds a grant that reaches
+  it.
 - **Public** once *Anonymous*, the built-in principal that stands for every caller, holds any role on the repository or
   its organization. Anonymous can hold any repository role, even one with `repo.push` or `repo.merge`, the one exception
   to grants staying inside an organization. An installation can forbid grants to Anonymous, and an organization can
@@ -353,8 +355,8 @@ and their consents add tables in their own slice.
 | A verified email claims a login-less user; a background task rewrites its references | The commits become the person's without a long transaction | Agreed |
 | The AI reviewer is a built-in agent holding Automation in every organization | It reads, annotates, reviews and posts, and nothing more | Agreed |
 | Commits signed by a key of the committer's verified email show as Verified; a branch can require them | Authorship can be proven, not only claimed | Agreed |
-| Visibility is inferred from grants: Private, Internal once more of the organization's users can reach a repository, Public once Anonymous can | Review, 2026-10-27: one model for access, no setting to drift from it | Agreed |
-| Anonymous is the one built-in principal and can hold any repository role; Signed-in users is gone | Review, 2026-10-27: Internal means the organization's own users | Changed |
+| Visibility is inferred from grants, never counting the Owners: Private, Internal once a user besides its creator can reach a repository, Public once Anonymous can | Review, 2026-10-27: one model for access, no setting to drift from it | Agreed |
+| Anonymous is the one built-in principal, a row of its own kind, and can hold any repository role at a repository or its organization; Signed-in users is gone | Review, 2026-10-27: Internal means the organization's own users | Changed |
 | Jobs for tips pushed from outside the organization run only where the repository allows it; off by default | Otherwise an anonymous push runs its code with the job's secrets | Agreed |
 | Secrets live in organization and repository settings; `secrets.read` on the organization, a repository or one secret decides who receives them | Review, 2026-10-27: how agents hold outside credentials | Agreed |
 | A job can receive `secrets.read`, its one grant | Otherwise no job could receive a secret | Proposed |

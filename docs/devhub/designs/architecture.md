@@ -136,8 +136,9 @@ generated.
 ### Upgrades
 
 **Changed** (review, 2026-10-27): a `devhub migrate` Job runs before the servers roll out, and pods never migrate. It
-applies SQL and Go migrations in one numbered sequence (goose runs both), and every migration is forward-compatible: it
-only expands the schema, so the previous release's pods keep working, and a rollback needs no down migration. The [Helm
+applies SQL and Go migrations in one numbered sequence (goose runs both), and every release's migrations are compatible
+with the release before it: they keep everything its pods read, so those pods keep working while the new ones roll out,
+and rolling back one release needs no down migration. The [Helm
 chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job runs first, under Helm and Argo CD alike.
 
 **A migration Job runs before the new pods; old pods keep working**
@@ -145,7 +146,8 @@ chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job ru
 ![A migration Job runs before the new pods; old pods keep working](architecture/upgrades.svg)
 
 - **Pods wait for their schema.** A pod starts once the schema is at least its version, and stays unready until then.
-- **Contracting waits a release.** A column or table is dropped only in the release after nothing reads it.
+- **Removals wait a release.** A release adds columns and tables first, and stops reading old ones; a later release
+  drops what neither it nor the release before it reads. So a rollback goes back one release at most.
 - **Long backfills are tasks.** A data migration too long for the Job runs afterwards as a controller task, in batches
   that resume, and the code reads both shapes until it finishes.
 - **One migrator at a time.** The Job takes an advisory lock, so two upgrades started together migrate in turn.
@@ -336,14 +338,17 @@ jobs and agents need from outside, secrets and models.
 
 ![A secret is written once, kept encrypted, and reaches only the runs allowed to use it](architecture/secrets.svg)
 
+Agents receive secrets today; jobs receiving them through `secrets.read` is still
+[Proposed](principals-and-permissions.md#secrets).
+
 - **Secrets** live in an organization's settings or a repository's: an ID, a name and a value encrypted with the chart's
   secrets key, which nobody reads back once written. `secrets.manage` adds, replaces and deletes them there.
 - **`secrets.read` decides who receives one,** granted on the organization, a repository or one secret
-  ([secrets](principals-and-permissions.md#secrets)). A job run receives only the secrets its `/devhub.yaml` names and
-  its job may read; an agent task, those its agent may read.
-- **Until phase 2 pins job security,** a branch's job of the same name receives the same secrets, so a secret is only as
-  safe as the people who may push to its repository. Jobs for tips pushed from outside the organization stay off unless
-  the repository allows them ([visibility](principals-and-permissions.md#visibility)).
+  ([secrets](principals-and-permissions.md#secrets)). An agent task receives the secrets its agent may read.
+  **Proposed:** a job run, the secrets its `/devhub.yaml` names and its job may read.
+- **Until phase 2 pins job security,** a branch's job of the same name would receive the same secrets, so a secret is
+  only as safe as the people who may push to its repository. Jobs for tips pushed from outside the organization stay off
+  unless the repository allows them ([visibility](principals-and-permissions.md#visibility)).
 - **Rotating the secrets key** is a maintenance task that re-encrypts every value.
 
 **Each agent runs on the model its admin picks; the organization holds the providers’ credentials**
@@ -503,7 +508,7 @@ design, and settled the open questions.
 | Day-one events: the four, plus `tag.pushed`, `review.submitted` and `annotation.changed` | Decided on 2026-10-27 | Agreed |
 | One Go binary for every workload; internal calls are HTTP with JSON | One version everywhere, one type per call | Agreed |
 | The Auth, GraphQL, REST and Admin servers are workloads of their own, routed by the operator under one parent domain | The operator routes, scales and exposes each surface on its own | Changed |
-| A `devhub migrate` Job runs SQL and Go migrations, expand-only, before the servers roll out; pods never migrate | No race to migrate at startup, and the old release keeps working | Changed |
+| A `devhub migrate` Job runs SQL and Go migrations compatible with the previous release, before the servers roll out; pods never migrate | No race to migrate at startup, and the old release keeps working | Changed |
 | REST is the SDKs' surface, GraphQL the Console's, a separate Admin API the Back-office's | Each where its tooling is strongest; admin permissions at any scope | Changed |
 | Each organization's jobs run in a namespace of their own: no ingress, egress to the internet and DNS only | A job reaches nothing in the cluster that another organization uses | Agreed |
 | Cron triggers come from the default branch's `/devhub.yaml` only | A branch cannot schedule work | Agreed |
