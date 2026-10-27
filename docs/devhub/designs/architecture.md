@@ -152,6 +152,9 @@ chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job ru
 - **Long backfills are tasks.** A data migration too long for the Job runs afterwards as a controller task, in batches
   that resume, and the code reads both shapes until it finishes.
 - **One migrator at a time.** The Job takes an advisory lock, so two upgrades started together migrate in turn.
+- **Seed data for previews.** A second set, `db/seeds/` (Go only, with its own version table), runs in the same Job
+  after the schema's migrations, only when the chart turns seeding on, as preview installations do ([Helm
+  chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)).
 
 ## Data model
 
