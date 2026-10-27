@@ -1,11 +1,15 @@
 package rest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/arikkfir-org/devhub/internal/adapters/server"
 )
 
 func TestNewHandler(t *testing.T) {
@@ -83,6 +87,49 @@ func TestErrorHandlers(t *testing.T) {
 			}
 			if rec.Code != tt.wantStatus || p.Status != tt.wantStatus || p.Code != tt.wantCode || detail != tt.wantDetail {
 				t.Errorf("got %d %+v (detail %q), want %d, code %q, detail %q", rec.Code, p, detail, tt.wantStatus, tt.wantCode, tt.wantDetail)
+			}
+		})
+	}
+}
+
+func TestInternalErrorLogsRequestID(t *testing.T) {
+	tests := []struct {
+		name     string
+		callerID string
+	}{
+		{name: "the caller's ID", callerID: "req-42"},
+		{name: "an ID the server made"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var logs bytes.Buffer
+			defer slog.SetDefault(slog.Default())
+			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+			fail := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { internalError(w, r, errorString("boom")) })
+			h := server.Handler(server.Routes{REST: fail, GraphQL: http.NotFoundHandler()}, nil)
+			req := httptest.NewRequest("GET", "/api/v1/version", nil)
+			if tt.callerID != "" {
+				req.Header.Set(server.RequestIDHeader, tt.callerID)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			id := rec.Header().Get(server.RequestIDHeader)
+			if id == "" || (tt.callerID != "" && id != tt.callerID) {
+				t.Fatalf("%s = %q, want the caller's %q or a new one", server.RequestIDHeader, id, tt.callerID)
+			}
+			var p Problem
+			if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
+				t.Fatal(err)
+			}
+			var logged struct {
+				RequestID string `json:"requestId"`
+			}
+			if err := json.Unmarshal(logs.Bytes(), &logged); err != nil {
+				t.Fatalf("log %q: %v", logs.String(), err)
+			}
+			if p.RequestId != id || logged.RequestID != id {
+				t.Errorf("problem's requestId = %q, log's = %q, want %q", p.RequestId, logged.RequestID, id)
 			}
 		})
 	}

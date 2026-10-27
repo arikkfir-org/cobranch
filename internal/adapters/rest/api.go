@@ -46,7 +46,8 @@ func badRequest(w http.ResponseWriter, r *http.Request, err error) {
 
 // internalError hides err from the caller, who gets the request's ID to report instead.
 func internalError(w http.ResponseWriter, r *http.Request, err error) {
-	slog.ErrorContext(r.Context(), "A REST operation failed", "path", r.URL.Path, "error", err)
+	slog.ErrorContext(r.Context(), "A REST operation failed",
+		"path", r.URL.Path, "requestId", server.RequestID(r.Context()), "error", err)
 	writeProblem(w, r, http.StatusInternalServerError, "internal", "")
 }
 
