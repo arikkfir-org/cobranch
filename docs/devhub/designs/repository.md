@@ -50,13 +50,14 @@ Pipeline `ci` (check `Continuous Integration`) runs on every pull request, whate
 | Step | Image | Runs |
 | --- | --- | --- |
 | `clone` | `alpine/git` | Fetches the commit, anonymously: the repository is public |
+| `generated` | `golang` | `go generate ./...`, and fails if that changed the checkout: the stubs match `api/` |
 | `lint` | `golangci/golangci-lint` | `golangci-lint run ./...`: golangci-lint's standard linters and the house rules' (errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`), and gofmt |
 | `vet` | `golang` | `go vet ./...` |
-| `test` | `golang` | `go test -race -count=1 ./...` |
+| `test` | `golang` | `go test -race -count=1 ./...`, against the PostgreSQL 18 sidecar |
 | `build` | `golang` | `go build -trimpath ./cmd/...`, static |
 | `version` | `golang` | `devhub version`, the binary just built |
 
-Every image is pinned to a version. The steps share Go's build, module and lint caches in an `emptyDir`, so `test` reuses what `vet` compiled; nothing is cached between runs yet. The task requests 500m of CPU and 512Mi of memory, with a 1Gi limit: the skeleton's lint and race tests run within 512Mi.
+Every image is pinned to a version. The steps share Go's build, module and lint caches in an `emptyDir`, so `test` reuses what `vet` compiled; nothing is cached between runs yet. The task requests 1 CPU and 1.5Gi of memory, with a 3Gi limit: with Go Cloud's drivers (the AWS, Azure and Google Cloud SDKs), lint peaks near 1.5Gi and the compiles near 1Gi on a cold cache, at `GOMAXPROCS=4`, which the steps set so their memory doesn't grow with the node's CPUs. A PostgreSQL sidecar (100m, 128Mi, limited to 512Mi) serves the tests that need a database: each makes its own there, and with `CI` set a test fails rather than skip when it can't reach one.
 
 The organization's pipelines, read from `tooling`, run beside it: check `Docs`, which composes `docs/devhub/` with the other repositories' layers and fails on broken links, and `docs-publish` on every push to `main` ([docs site composition](../../hub/designs/docs-site-composition.md)); check `Linear` ([check Linear](../../tooling/designs/linear-check.md)); and the AI review, on request ([pull request reviewer](../../tooling/designs/pr-reviewer.md)). The `Default branch` ruleset requires `Continuous Integration`, `Docs` and `Linear` from Octomaton before a pull request enters the merge queue ([root github](../../infra/terraform/github.md)).
 

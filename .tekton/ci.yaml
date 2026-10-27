@@ -5,16 +5,17 @@ kind: PipelineRun
 metadata:
   generateName: devhub-ci-
 spec:
-  # Reserved once for all of the task's steps (step-level requests would add up as if the steps ran at once). The
-  # skeleton's lint and race tests fit in 512Mi; size them again from real runs as the code grows.
+  # Reserved once for all of the task's steps (step-level requests would add up as if the steps ran at once). With
+  # Go Cloud's drivers (the AWS, Azure and Google Cloud SDKs), lint peaks near 1.5Gi and the compiles near 1Gi on a cold
+  # cache, measured at GOMAXPROCS=4 (ci.task.yaml); size them again from real runs as the code grows.
   taskRunSpecs:
     - pipelineTaskName: ci
       computeResources:
         requests:
-          cpu: 500m
-          memory: 512Mi
+          cpu: "1"
+          memory: 1536Mi
         limits:
-          memory: 1Gi
+          memory: 3Gi
   workspaces:
     - name: source
       emptyDir: {}

@@ -1,5 +1,6 @@
-# The task of .tekton/ci.yaml: check out the commit, then lint, vet, test (with the race detector) and build it, and run
-# the binary it built. Octomaton inlines it into the PipelineRun.
+# The task of .tekton/ci.yaml: check out the commit, check its generated code, then lint, vet, test (with the race
+# detector, against a PostgreSQL sidecar) and build it, and run the binary it built. Octomaton inlines it into the
+# PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -28,9 +29,31 @@ spec:
         value: local
       - name: GOFLAGS
         value: -mod=readonly
+      # Compiles and lint run this many at once, whatever the node's CPUs: their memory, which ci.yaml reserves, grows
+      # with it.
+      - name: GOMAXPROCS
+        value: "4"
     volumeMounts:
       - name: go-cache
         mountPath: /go-cache
+  sidecars:
+    # The tests' database server: each test that needs one makes its own database there (postgrestest). The steps start
+    # once it accepts connections.
+    - name: postgres
+      image: docker.io/library/postgres:18.6-alpine
+      env:
+        - name: POSTGRES_HOST_AUTH_METHOD
+          value: trust
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          memory: 512Mi
+      readinessProbe:
+        exec:
+          command: [pg_isready, --host=127.0.0.1, --username=postgres]
+        periodSeconds: 2
   steps:
     - name: clone
       image: docker.io/alpine/git:2.54.0
@@ -46,6 +69,9 @@ spec:
         git fetch --quiet --depth=1 "$REPO_URL" "$REVISION"
         git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
         git log -1 --format='Checked out %H: %s'
+    - name: generated
+      image: docker.io/library/golang:1.27.1
+      command: [sh, .tekton/scripts/generated.sh]
     - name: lint
       image: docker.io/golangci/golangci-lint:v2.15.0
       command: [golangci-lint, run, ./...]
@@ -54,6 +80,12 @@ spec:
       command: [go, vet, ./...]
     - name: test
       image: docker.io/library/golang:1.27.1
+      env:
+        - name: DEVHUB_TEST_DATABASE_URL
+          value: postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
+        # A test that needs the database fails without it, rather than skip.
+        - name: CI
+          value: "true"
       command: [go, test, -race, -count=1, ./...]
     - name: build
       image: docker.io/library/golang:1.27.1
