@@ -1,8 +1,7 @@
 # DevHub principals and permissions
 
-**Status**: draft. Every row of [Decisions to confirm](#decisions-to-confirm) still marked Proposed awaits agreement.
-The draft under discussion is a [Claude Doc](https://claude.ai/artifact/6F4vZHXJzynCH1rogzGEEr); this page follows it
-until the design is final.
+**Status**: agreed on 2026-10-27. This page is the design's source from now on; it was drafted as a [Claude
+Doc](https://claude.ai/artifact/6F4vZHXJzynCH1rogzGEEr).
 
 Every actor in DevHub is a principal, and a principal can do something only because a grant says so: a role, which
 bundles built-in permissions, given to the principal at the installation, an organization or a repository. Nothing is
@@ -16,7 +15,7 @@ scoped and checked. It builds on the [DevHub design](https://claude.ai/artifact/
 [technical architecture](architecture.md), whose credentials, events and tables it fills in. Sign-in, sign-up and
 organizations are built in [ENG-197](https://linear.app/arikkfir/issue/ENG-197).
 
-Choices the product design did not make are marked **Proposed**, or **Agreed** once agreed, and collected at the end.
+Choices the product design did not make are marked **Agreed** and collected at the end.
 
 ## Principal kinds
 
@@ -57,7 +56,7 @@ ties them to their commits, but never decides who they are.
   merges two users because their emails match.
 - **Sessions.** A session is a server-side row the user, or an installation admin, can revoke. Its idle and absolute
   lifetimes are installation settings.
-- **The first administrators.** **Proposed:** the chart's values name the first installation admins by email, and their
+- **The first administrators.** **Agreed:** the chart's values name the first installation admins by email, and their
   first sign-in with that email verified grants them the Installation admin role. Nobody becomes an administrator by
   being first.
 
@@ -80,7 +79,16 @@ deleted, its members who belong nowhere else return to that first choice.
   records who claimed it, reads show the claiming user at once, and a background task then rewrites its commits and
   other references to the claiming user. A verified email can never be claimed again.
 - **Authorship is a label.** Anyone can write any email into a commit, so a commit's author principal says who the
-  commit claims wrote it. What DevHub trusts is the pusher, who authenticated. Verifying signed commits is a later step.
+  commit claims wrote it. What DevHub trusts is the pusher, who authenticated. A signature can prove more, as the next
+  item shows.
+- **Verified commits.** **Agreed:** users register signing keys, GPG keys or SSH keys marked for signing, the two kinds
+  Git signs with. The pre-receive hook adds each new commit's signature to the push's manifest, and the push worker
+  checks it in the push's transaction. A commit is *Verified* when the signature is valid and made by a key of the
+  principal holding the committer's email, verified; *Unverified* when it is signed but the signature fails, the key is
+  unknown, or its owner does not hold that email; and *Unsigned* otherwise. The Console shows the result beside the
+  commit, a branch can require verified commits in `/devhub.yaml` like linear history, and commits DevHub writes itself,
+  such as merges and settings, are signed with the installation's key. The result is recorded when a commit is first
+  pushed and kept, so removing a key later does not change history.
 
 ## Organizations and groups
 
@@ -88,14 +96,14 @@ Membership says that a user belongs to an organization; grants say what they may
 grant, their membership role, and nothing else.
 
 - **Membership role.** Every member holds one role at organization scope, chosen when they are invited or approved.
-  **Proposed:** the organization's default is Member, which reads every repository; an organization can make Guest its
+  **Agreed:** the organization's default is Member, which reads every repository; an organization can make Guest its
   default and grant repositories one by one.
 - **Owners.** The user who creates an organization becomes its Owner. An organization always keeps at least one Owner:
   the last one cannot leave, be removed or be demoted.
 - **People from elsewhere.** Grants never cross organizations. A person who needs one repository of another organization
   joins it, usually as a Guest, and gets a grant on that repository; their own organizations are untouched.
 - **Groups.** A group is a principal of one organization whose members are that organization's users and agents. A grant
-  to a group reaches every member. **Proposed:** groups do not nest, so a check never walks a tree.
+  to a group reaches every member. **Agreed:** groups do not nest, so a check never walks a tree.
 - **Leaving.** A user who leaves loses every grant they held in the organization, directly or through its groups. Agents
   they created stay, since the organization owns them, as do its API keys and workload identities. Tasks they assigned
   stop, since a task never does more than its assigner.
@@ -120,13 +128,13 @@ never do more than whoever stands behind it.
 grants it roles within their own permissions; the agent stays when its creator leaves, and `org.principals.manage`
 manages it like any other principal of the organization.
 
-**Proposed:** a task runs as the agent but never does more than the principal who assigned it can do at that moment, and
+**Agreed:** a task runs as the agent but never does more than the principal who assigned it can do at that moment, and
 assigning one takes `agents.assign`. Otherwise anyone allowed to assign tasks could reach, through the agent, whatever
 the agent may do. Tasks DevHub starts on its own, such as a review on every push, have no assigner and run on the
 agent's grants alone.
 
 Each task runs in its own long-running agent pod with a short-lived token, revoked when the task ends or is stopped. In
-branch chats an agent posts as itself. **Proposed:** the AI reviewer is a built-in agent created with every organization
+branch chats an agent posts as itself. **Agreed:** the AI reviewer is a built-in agent created with every organization
 and granted the Automation role there, so it can read, annotate, review and post on every repository. Agents' tools and
 outside credentials belong to the agents design.
 
@@ -135,13 +143,13 @@ outside credentials belong to the agents design.
 Each job name in a repository is one principal, created when a commit first declares it and kept across runs, so
 annotations and audit read "job `ci` of this repository". `/devhub.yaml` declares the permissions a job needs.
 
-**Proposed:** a repository's job ceiling caps every job's permissions. It is a repository setting, so it lives in the
+**Agreed:** a repository's job ceiling caps every job's permissions. It is a repository setting, so it lives in the
 default branch's `/devhub.yaml` like the others, and defaults to the built-in Automation role. A branch may rewrite its
 own `/devhub.yaml` in phase 1, but its ceiling takes effect only once it merges into the default branch, through that
 branch's merge requirements.
 
 The controller mints a token for each run, bound to the run, its commit and its branch, and valid only while the run
-lasts. **Proposed:** each run can also get an OpenID Connect ID token signed by DevHub, whose claims name the
+lasts. **Agreed:** each run can also get an OpenID Connect ID token signed by DevHub, whose claims name the
 organization, repository, branch, commit, job and event. Clouds and other systems can trust it through their own
 workload identity federation, so a job reaches them without a stored secret.
 
@@ -189,15 +197,15 @@ repository, so their grants can never reach outside it.
   their declarations and the ceiling decide.
 - **Permissions apply where they fit.** Each permission belongs to a scope. A role granted on a repository gives only
   its repository permissions, and the API warns when a role's wider permissions would have no effect.
-- **Additive only.** **Proposed:** there are no deny rules, so a narrower grant never takes away a wider one. To give
+- **Additive only.** **Agreed:** there are no deny rules, so a narrower grant never takes away a wider one. To give
   someone less on one repository, give them less at the organization and more on the repositories they need.
-- **No branch scope.** **Proposed:** who may change a branch is a matter of its merge requirements and the `repo.bypass`
+- **No branch scope.** **Agreed:** who may change a branch is a matter of its merge requirements and the `repo.bypass`
   permission, not of grants on the branch.
 - **Nobody grants more than they hold.** Granting a role at a scope takes `org.grants.manage` there and every permission
   of that role there. The same rule applies to defining or changing a custom role.
-- **Administrators do not see content.** **Proposed:** the Installation admin role holds only installation permissions.
-  An installation admin who must look inside an organization makes themselves its Owner from the Back-office, and that
-  act lands in the organization's audit trail, visible to its Owners.
+- **Administrators do not see content.** **Agreed:** the Installation admin role holds only installation permissions. An
+  installation admin who must look inside an organization makes themselves its Owner from the Back-office, and that act
+  lands in the organization's audit trail, visible to its Owners.
 
 ## Permissions
 
@@ -232,7 +240,7 @@ permissions but never renames one; issues, delivery, secrets and agents add thei
 
 ## Roles
 
-A role is a named set of permissions. **Proposed:** nine built-in roles cover the usual cases, each repository role
+A role is a named set of permissions. **Agreed:** nine built-in roles cover the usual cases, each repository role
 includes the one before it, and an organization defines custom roles from the same permissions for everything else.
 
 | Role | Granted at | Holds |
@@ -280,7 +288,7 @@ Where the checks happen:
   worker checks merge requirements and `repo.bypass` inside the push's transaction.
 - **Runs.** A job or agent calling back with its run token goes through the same authorizer as anyone else.
 
-**Proposed:** grants are read once per request and never cached across requests, so a revoked grant stops working on the
+**Agreed:** grants are read once per request and never cached across requests, so a revoked grant stops working on the
 very next request. A cache can come later, if checks ever show up in latency.
 
 Every change to grants, roles, memberships, principals or credentials, every claim, every bypassed requirement and every
@@ -300,6 +308,7 @@ everywhere else in DevHub.
 | `sessions` | `id` | User, created, last seen, expiry, revoked |
 | `credentials` | `id`; `hash` unique | Principal, kind (personal token, API key secret, run token), the permissions and scopes it is limited to, expiry, last use, revoked |
 | `ssh_keys` | `fingerprint` | Principal, public key, last use |
+| `signing_keys` | `fingerprint` | Principal, kind (GPG or SSH), public key, revoked |
 | `memberships` | `org_id`, `user_id` | When the user joined; their membership role is a grant |
 | `join_requests`, `invitations` | `id` | Who asked or was invited, for which role, the state, who decided, expiry |
 | `group_members` | `group_id`, `member_id` | Which users and agents a group holds |
@@ -310,29 +319,30 @@ everywhere else in DevHub.
 The job ceiling, like every repository setting, comes from the default branch's `/devhub.yaml`, which the architecture
 copies into PostgreSQL. OAuth apps and their consents add tables in their own slice.
 
-## Decisions to confirm
+## Decisions
 
-Fourteen choices here go beyond the product design; the decisions of 2026-10-27 changed two of them. The design is final
-once none is left proposed.
+Fifteen choices here went beyond the product design. The decisions of 2026-10-27 changed two of them, and the rest were
+agreed the same day.
 
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | Credentials are not principals: sessions, SSH keys and personal tokens act as their user, while an API key is a principal of its own | Scripts never borrow a person's access | Agreed |
 | Agents are created by users and owned by the organization | Decided on 2026-10-27; an agent outlives its creator's membership | Changed |
-| An agent's task never does more than its assigner can, and assigning takes `agents.assign` | Otherwise assigning a task to a stronger agent escalates access | Proposed |
+| An agent's task never does more than its assigner can, and assigning takes `agents.assign` | Otherwise assigning a task to a stronger agent escalates access | Agreed |
 | One principal per job name; its declared permissions are capped by a job ceiling, a setting in the default branch's `/devhub.yaml` | Settings live in `/devhub.yaml`, as decided; a branch's own copy counts only once merged | Changed |
-| Job runs can get DevHub-signed OpenID Connect tokens for outside systems | Jobs reach clouds without stored secrets | Proposed |
-| Grants only add; there are no deny rules | One rule to reason about, and checks that never conflict | Proposed |
-| Three scopes and no branch scope; branches answer to merge requirements and `repo.bypass` | Requirements already govern branches | Proposed |
-| Grants never cross organizations; outside people join as Guests | An organization sees everyone who can reach it among its members | Proposed |
-| Groups hold users and agents and do not nest | A check never walks a tree | Proposed |
-| Installation admins see no organization content; entering one makes them Owner, in its audit trail | Operators run the installation, not the organizations | Proposed |
-| The chart's values name the first installation admins | Nobody becomes an administrator by being first | Proposed |
-| Organizations default new members to Member, which reads every repository | Teams start open inside; Guest is one setting away | Proposed |
+| Job runs can get DevHub-signed OpenID Connect tokens for outside systems | Jobs reach clouds without stored secrets | Agreed |
+| Grants only add; there are no deny rules | One rule to reason about, and checks that never conflict | Agreed |
+| Three scopes and no branch scope; branches answer to merge requirements and `repo.bypass` | Requirements already govern branches | Agreed |
+| Grants never cross organizations; outside people join as Guests | An organization sees everyone who can reach it among its members | Agreed |
+| Groups hold users and agents and do not nest | A check never walks a tree | Agreed |
+| Installation admins see no organization content; entering one makes them Owner, in its audit trail | Operators run the installation, not the organizations | Agreed |
+| The chart's values name the first installation admins | Nobody becomes an administrator by being first | Agreed |
+| Organizations default new members to Member, which reads every repository | Teams start open inside; Guest is one setting away | Agreed |
 | A verified email claims a login-less user; a background task rewrites its references | The commits become the person's without a long transaction | Agreed |
-| The AI reviewer is a built-in agent of every organization, holding the Automation role there | It reads, annotates, reviews and posts on every repository, and nothing more | Proposed |
+| The AI reviewer is a built-in agent of every organization, holding the Automation role there | It reads, annotates, reviews and posts on every repository, and nothing more | Agreed |
+| Commits signed with a GPG or SSH key of the principal holding the committer's verified email show as Verified; a branch can require them | Authorship can be proven, not only claimed | Agreed |
 
-The nine built-in roles and the 23 permissions above are proposals too, best changed in their tables directly.
+The nine built-in roles and the 23 permissions above are agreed too.
 
 ## Open questions
 
@@ -340,7 +350,6 @@ The nine built-in roles and the 23 permissions above are proposals too, best cha
       every signed-in user of the installation, or by anyone?
 - [ ] **Organization sign-in.** Should an organization be able to require its own identity provider, or provision
       members from it (SCIM)?
-- [ ] **Signed commits.** When does DevHub verify commit signatures, so that authorship stops being only a label?
 - [ ] **Agents' outside credentials.** How an agent holds the credentials of the tools it uses beyond DevHub, such as
       mail or Slack. The agents design answers this.
 - [ ] **OAuth apps' reach.** Are OAuth apps registered by one organization only, or installation-wide so several

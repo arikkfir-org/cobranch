@@ -1,8 +1,7 @@
 # DevHub technical architecture
 
-**Status**: draft. Every row of [Decisions to confirm](#decisions-to-confirm) still marked Proposed awaits agreement.
-The draft under discussion is a [Claude Doc](https://claude.ai/artifact/7gyNg9dFQXRJtMaFHjYqDj); this page follows it
-until the design is final.
+**Status**: agreed on 2026-10-27. This page is the design's source from now on; it was drafted as a [Claude
+Doc](https://claude.ai/artifact/7gyNg9dFQXRJtMaFHjYqDj).
 
 DevHub runs as a handful of Go workloads over two stores, PostgreSQL and one blob bucket, and a Git push returns only
 after PostgreSQL has committed it. Everything else in this document follows from those two choices.
@@ -15,8 +14,7 @@ and how they talk, the data they keep, the push path, the API conventions, blob 
 
 Each of these gets its own design and only attaches here: [principals and permissions](principals-and-permissions.md)
 ([ENG-196](https://linear.app/arikkfir/issue/ENG-196)), jobs and CI, delivery, agents and AI review, issues, and Slack.
-Choices this document makes that the product design did not are marked **Proposed** and collected at the end for
-agreement.
+Choices this document makes that the product design did not are marked **Agreed** and collected at the end.
 
 ## Constraints
 
@@ -26,7 +24,7 @@ Seven constraints from the product design decide most of the architecture.
   operator brings the domain, ingress, TLS and autoscaling.
 - **Stateless workloads.** Any pod can be killed at any time. State lives only in PostgreSQL and in blob storage; a
   pod's disk is a cache.
-- **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Proposed:** no message broker, no
+- **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Agreed:** no message broker, no
   Redis, no search cluster in the foundations.
 - **Synchronous pushes.** When `git push` returns, the commits, branches and their status are already in PostgreSQL and
   on screen.
@@ -54,7 +52,7 @@ creates pods, and every workload keeps its state in PostgreSQL and the bucket, s
 | API server | REST, GraphQL with subscriptions, sign-in and sessions; serves uploads and job logs. Runs the database migrations on start. | PostgreSQL, blob storage, identity providers, Git server (content reads, merges). |
 | Git server | Git over HTTPS and SSH; an internal API for trees, files, diffs and merges; a disk cache of packs. | PostgreSQL (refs, grants), blob storage (packs), push worker. |
 | Push worker | Applies each push to PostgreSQL in one transaction while the Git client waits. | PostgreSQL. |
-| Controller (**Proposed**) | All asynchronous work: delivers events to jobs, webhooks and agents, the AI reviewer included; creates job and agent pods, records job results, and restarts agent pods that die; fires cron events. | PostgreSQL, blob storage, Kubernetes API, outbound webhooks. |
+| Controller | All asynchronous work: delivers events to jobs, webhooks and agents, the AI reviewer included; creates job and agent pods, records job results, and restarts agent pods that die; fires cron events. | PostgreSQL, blob storage, Kubernetes API, outbound webhooks. |
 | Maintenance CronJob | Hourly: compacts packs, deletes unreferenced blobs, applies log retention. | PostgreSQL, blob storage. |
 | Job pods | A job's pod-spec action, in a namespace of their own. | API server and Git server, with the run's own short-lived token. |
 | Agent pods | One long-running pod per agent task. The `devhub agent` harness runs the agent loop with its built-in tools and saves the transcript as it goes, so a restarted pod resumes where it stopped. | API server and Git server, with the task's short-lived token; the model provider. |
@@ -133,7 +131,7 @@ PostgreSQL holds every fact DevHub shows, Git refs included; blob storage holds 
 serve every organization, and every row an organization owns carries its `org_id`, even where a join could find it, so
 scoping a query never needs a join.
 
-**Proposed:** primary keys are UUIDv7, which sort by creation time. The API shows them with a type prefix (`org_…`,
+**Agreed:** primary keys are UUIDv7, which sort by creation time. The API shows them with a type prefix (`org_…`,
 `repo_…`, `br_…`), which is also how GraphQL's `node(id:)` knows the type. Organizations and repositories also have
 slugs for URLs; a rename keeps the old slug as a redirect.
 
@@ -148,7 +146,7 @@ slugs for URLs; a rename keeps the old slug as a redirect.
 | Git | `refs` | `repo_id`, `name` | Every Git ref and its SHA: the only source of truth for refs. |
 | Git | `packs` | `repo_id`, `name` | The repository's packs in blob storage: size, object count, active or superseded. |
 | Git | `pushes` | `id` | Who pushed, over which transport, the ref updates, received and committed times. |
-| Git | `commits` | `repo_id`, `sha` | Parents, tree, author and committer (name, email, time and principal), message, first pusher and push. |
+| Git | `commits` | `repo_id`, `sha` | Parents, tree, author and committer (name, email, time and principal), message, signature result (Verified, Unverified or Unsigned), first pusher and push. |
 | Branches | `branches` | `id`; `repo_id`, `name` unique while live | Base, head, computed status and its reason, ahead and behind counts, merged time, merging principal. Kept after deletion. |
 | Branches | `merge_requirements` | `branch_id` | What merging into each branch needs (required annotations, optionally from a named principal, and linear history), copied from the default branch's `/devhub.yaml`. |
 | Branches | `annotations` | `id`; `repo_id`, `sha`, `name` unique | Status (pending, in progress, failed, successful), summary, link, creating and last updating principal. |
@@ -174,12 +172,12 @@ A few rules hold across the model:
 - **Unknown authors get principals.** The push worker looks a commit's author and committer up by email; one not found
   becomes a new user principal with no identity and an unverified email. A user who later verifies that email takes it
   over; [ENG-196](https://linear.app/arikkfir/issue/ENG-196) designs how.
-- **Scoping is the data layer's job.** **Proposed:** every query function takes the organization it works in, and
+- **Scoping is the data layer's job.** **Agreed:** every query function takes the organization it works in, and
   PostgreSQL row-level security is a later hardening, not a foundation.
 
 ## Git storage and the push path
 
-**Proposed:** a repository is a set of immutable packs in blob storage plus its refs in PostgreSQL, and a Git server pod
+**Agreed:** a repository is a set of immutable packs in blob storage plus its refs in PostgreSQL, and a Git server pod
 only caches packs. A push is accepted by a pre-receive hook that does not exit until the push worker has committed the
 push to PostgreSQL.
 
@@ -213,22 +211,22 @@ from the tasks the transaction queued.
 2. `git receive-pack` writes the pack into Git's quarantine directory and indexes it with `--fix-thin`, so the pack is
    complete on its own.
 3. The pre-receive hook, which is the Git server's own binary, builds the push's manifest from the quarantine: the ref
-   updates; the new commits and their metadata; each updated branch tip's `/devhub.yaml`; and the graph facts DevHub
-   cannot compute without the objects (which branches now contain their base, which are merged into an updated base,
-   ahead and behind counts).
+   updates; the new commits, their metadata and signatures; each updated branch tip's `/devhub.yaml`; and the graph
+   facts DevHub cannot compute without the objects (which branches now contain their base, which are merged into an
+   updated base, ahead and behind counts).
 4. The hook uploads the quarantined pack to blob storage.
 5. The hook sends the manifest and a push ID to the push worker and waits.
 6. The push worker applies it in one transaction: it moves every ref with a compare-and-swap on its old SHA, lists the
-   pack, inserts the commits and the push, maps authors to principals, creates or moves branches, recomputes their
-   status, creates a pending annotation for each job the new tips declare, marks merged branches Merged with the pusher
-   as the merging principal, applies the new settings when the default branch's `/devhub.yaml` changed, appends events
-   and tasks, and `NOTIFY`s.
+   pack, inserts the commits and the push, checks the commits' signatures, maps authors to principals, creates or moves
+   branches, recomputes their status, creates a pending annotation for each job the new tips declare, marks merged
+   branches Merged with the pusher as the merging principal, applies the new settings when the default branch's
+   `/devhub.yaml` changed, appends events and tasks, and `NOTIFY`s.
 7. The push worker answers, the hook exits zero, `receive-pack` reports success, and the client returns. The API server
    heard the `NOTIFY` when the transaction committed, so open Consoles are already updating.
 
-**Proposed:** every push is atomic, all refs or none, as `git push --atomic` is. A pre-receive hook decides for the
-whole push anyway, and one transaction matches it. While a large push is indexed, the hook writes progress to the client
-as `remote:` lines.
+**Agreed:** every push is atomic, all refs or none, as `git push --atomic` is. A pre-receive hook decides for the whole
+push anyway, and one transaction matches it. While a large push is indexed, the hook writes progress to the client as
+`remote:` lines.
 
 Only what the screen must show is synchronous. Jobs, AI review, webhooks, delivery and notifications start from the
 tasks the transaction queued, after the client has returned.
@@ -241,9 +239,9 @@ ever moves a ref.
 Settings take that road as well. Repository and branch settings live in the default branch's `/devhub.yaml`, so a change
 made in the Console becomes a commit on the reserved branch `devhub/settings`, which the Git server writes for the
 principal who made the change. The change takes effect when that branch merges, through the same merge requirements as
-any other branch. **Proposed:** clients cannot push refs under `devhub/`; only DevHub writes them.
+any other branch. **Agreed:** clients cannot push refs under `devhub/`; only DevHub writes them.
 
-**Proposed:** a push into a branch that has merge requirements is accepted only when it merges Ready branches, meaning
+**Agreed:** a push into a branch that has merge requirements is accepted only when it merges Ready branches, meaning
 every new commit other than a merge commit is in a Ready branch based on it. A bypass permission
 ([ENG-196](https://linear.app/arikkfir/issue/ENG-196)) lifts the check. Without this rule, a direct push would skip
 every requirement.
@@ -311,7 +309,7 @@ can never disagree about who may do what. Both serve authenticated principals on
 
 - **REST** lives under `/api/v1/`, with paths that follow ownership
   (`/api/v1/orgs/{org}/repos/{repo}/branches/{branch}`). It is described by an OpenAPI 3.1 document written first and
-  checked in, from which the Go server stubs and the Go, Python and TypeScript SDKs are generated. **Proposed:** REST is
+  checked in, from which the Go server stubs and the Go, Python and TypeScript SDKs are generated. **Agreed:** REST is
   the SDKs' surface.
 - **GraphQL** is one schema at `/graphql`, also written first, and is the Console's surface. It follows the Relay
   conventions (`node(id:)`, connections) and carries live updates as subscriptions over WebSocket.
@@ -339,7 +337,7 @@ Cookie sessions can only send mutations as JSON bodies, which a cross-site form 
 ### Pagination
 
 Every list is paged by cursor. REST takes `first` and `after` and answers `{"items": […], "nextCursor": "…"}`; GraphQL
-returns Relay connections with the same cursors. **Proposed:** pages default to 50 items and stop at 100. A cursor is
+returns Relay connections with the same cursors. **Agreed:** pages default to 50 items and stop at 100. A cursor is
 opaque, encodes the sort key and the ID, and stays valid while rows are inserted. There are no offsets, and a total
 count appears only where it is cheap.
 
@@ -376,7 +374,7 @@ keys and decides who may read them. Keys are built from IDs, never names, so a r
 | Prefix | Holds | Written by | Kept |
 | --- | --- | --- | --- |
 | `git/<repo-id>/` | Packs and their indexes | Git server on push; maintenance on compaction | Until superseded or never listed, then one more day |
-| `logs/<repo-id>/<run-id>/` | A finished job run's logs, one object per step | Controller | For the retention the operator sets; **Proposed** default 90 days |
+| `logs/<repo-id>/<run-id>/` | A finished job run's logs, one object per step | Controller | For the retention the operator sets, 90 days by default |
 | `uploads/<org-id>/<upload-id>` | Files attached to messages, reviews and issues; avatars | API server | While something refers to them |
 | `artifacts/<repo-id>/<run-id>/` | Files a job run publishes | Job pods, through the API server | Set by the CI design |
 | `agents/<org-id>/<task-id>/` | Large tool outputs and files an agent task produces; its transcript stays in PostgreSQL | Agent pods, through the API server | As long as the task is kept |
@@ -390,7 +388,7 @@ keys and decides who may read them. Keys are built from IDs, never names, so a r
 
 ## Stack and repository layout
 
-**Proposed:** Go for every service and TypeScript with React for both web apps, in one monorepo that builds one server
+**Agreed:** Go for every service and TypeScript with React for both web apps, in one monorepo that builds one server
 image and two web images. The contracts (OpenAPI, GraphQL schema, SQL) are written first and the code is generated from
 them.
 
@@ -435,29 +433,29 @@ docs/devhub/                  these designs, published to the docs site under de
 .octomaton.yaml  .tekton/     DevHub's own CI, on Octomaton until DevHub can build itself
 ```
 
-## Decisions to confirm
+## Decisions
 
-Sixteen choices here go beyond the product design. The decisions of 2026-10-27 changed two of them and added three that
-follow from them. The design is final once none is left proposed.
+Sixteen choices here went beyond the product design. The decisions of 2026-10-27 changed two of them and added three
+that follow from them, and the rest were agreed the same day.
 
 | Proposal | Why | Decision |
 | --- | --- | --- |
-| PostgreSQL and one bucket are the only stateful dependencies; `NOTIFY` and a task table stand in for a broker | One less system for every operator to run | Proposed |
-| A repository is immutable packs in the bucket plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless, as the product design asks | Proposed |
-| The `git` CLI speaks the protocol, driven by Go | Every client works, at Git's own speed | Proposed |
-| A controller workload takes all asynchronous work | Keeps the push worker fast | Proposed |
-| Every push is atomic: all refs or none | A pre-receive hook decides for the whole push anyway | Proposed |
-| A push into a branch with requirements must merge Ready branches, unless the pusher may bypass | Otherwise a direct push skips every requirement | Proposed |
+| PostgreSQL and one bucket are the only stateful dependencies; `NOTIFY` and a task table stand in for a broker | One less system for every operator to run | Agreed |
+| A repository is immutable packs in the bucket plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless, as the product design asks | Agreed |
+| The `git` CLI speaks the protocol, driven by Go | Every client works, at Git's own speed | Agreed |
+| A controller workload takes all asynchronous work | Keeps the push worker fast | Agreed |
+| Every push is atomic: all refs or none | A pre-receive hook decides for the whole push anyway | Agreed |
+| A push into a branch with requirements must merge Ready branches, unless the pusher may bypass | Otherwise a direct push skips every requirement | Agreed |
 | Merge requirements are branch settings in the default branch's `/devhub.yaml` | Decided on 2026-10-27: repository and branch settings live in `/devhub.yaml` | Changed |
 | Day-one events: the four, plus `tag.pushed`, `review.submitted` and `annotation.changed` | Decided on 2026-10-27 | Changed |
-| One Go binary for every workload; internal calls are HTTP with JSON | One version everywhere, one type per call | Proposed |
-| REST is the SDKs' surface, GraphQL the Console's | Each where its tooling is strongest | Proposed |
-| One host for the Console, the API and Git over HTTPS; the Back-office on its own | First-party cookies, no CORS, an operator UI that can stay internal | Proposed |
-| UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Proposed |
-| The stack in the table above | Octomaton's proven pieces, contracts first | Proposed |
-| Settings take effect from the default branch's `/devhub.yaml`, copied into PostgreSQL by the push that changes it; clients cannot push under `devhub/` | A branch's own settings take effect only once merged, and `devhub/settings` stays DevHub's | Proposed |
-| Each agent task runs in its own pod, and its transcript is appended to PostgreSQL as it goes | A restarted pod resumes where it stopped, with no volume to keep | Proposed |
-| The AI reviewer reads the default branch's `/devbot.yaml` | A branch cannot rewrite its own reviewer's instructions | Proposed |
+| One Go binary for every workload; internal calls are HTTP with JSON | One version everywhere, one type per call | Agreed |
+| REST is the SDKs' surface, GraphQL the Console's | Each where its tooling is strongest | Agreed |
+| One host for the Console, the API and Git over HTTPS; the Back-office on its own | First-party cookies, no CORS, an operator UI that can stay internal | Agreed |
+| UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Agreed |
+| The stack in the table above | Octomaton's proven pieces, contracts first | Agreed |
+| Settings take effect from the default branch's `/devhub.yaml`, copied into PostgreSQL by the push that changes it; clients cannot push under `devhub/` | A branch's own settings take effect only once merged, and `devhub/settings` stays DevHub's | Agreed |
+| Each agent task runs in its own pod, and its transcript is appended to PostgreSQL as it goes | A restarted pod resumes where it stopped, with no volume to keep | Agreed |
+| The AI reviewer reads the default branch's `/devbot.yaml` | A branch cannot rewrite its own reviewer's instructions | Agreed |
 
 ## Open questions
 
@@ -465,8 +463,6 @@ follow from them. The design is final once none is left proposed.
       downloads? Not needed in the foundations.
 - [ ] **Large repositories.** What limits apply to a push's size, and does DevHub support Git LFS, with its objects in
       the bucket?
-- [ ] **Claiming a login-less principal.** How a user who verifies an email takes over its commits.
-      [ENG-196](https://linear.app/arikkfir/issue/ENG-196) answers this.
 - [ ] **Cron definitions.** Are cron triggers read from the default branch's `/devhub.yaml` only, or from every
       branch's? The CI design answers this.
 - [ ] **Job isolation.** Do every organization's jobs share one namespace, or does each organization get its own, and
