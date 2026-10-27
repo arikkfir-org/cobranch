@@ -18,11 +18,13 @@ One repository holds every part of DevHub, laid out as the [technical architectu
 | --- | --- |
 | `cmd/devhub/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, maintenance, agent), so every workload runs the same build at one version; today `rest-server`, `graphql-server`, `migrate` and `version` |
 | `internal/` | The Go packages: `services/` (the domain), `adapters/` (transports, storage, outside systems) and `system/` (configuration, telemetry, build information) |
-| `web/console/`, `web/back-office/`, `web/ui/` | _Planned_: the Console, the Back-office and their shared components, built to static files that Caddy serves |
+| `web/console/` | The Console, which Caddy serves as static files (image `devhub-console`); a placeholder page until its first screen |
+| `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `devhub migrate` applies them before the servers roll out |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
-| `chart/devhub/` | _Planned_: the Helm chart that installs DevHub |
+| `chart/devhub/` | The Helm chart that installs DevHub |
+| `Dockerfile` | Image `devhub`: the binary, with `git` |
 | `docs/devhub/` | The design documents, published to the docs site under `devhub/` |
 | `.octomaton.yaml`, `.tekton/` | CI, run by [Octomaton](https://github.com/arikkfir-org/octomaton) |
 
@@ -57,6 +59,29 @@ wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOI
 ([Observability](https://docs.dev.kfirs.com/devhub/designs/architecture.md#observability)).
 
 CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
+
+## Installing
+
+Images are not published yet: build them, push them where your cluster pulls from, and install the chart with a
+bucket. It runs its own PostgreSQL unless you give it yours, and a Job migrates the database before the servers roll
+out (`chart/devhub/values.yaml` lists every value):
+
+```bash
+docker build --build-arg VERSION=dev -t registry.example.com/devhub:dev .
+docker build -t registry.example.com/devhub-console:dev web/console
+docker push registry.example.com/devhub:dev && docker push registry.example.com/devhub-console:dev
+
+helm install devhub chart/devhub --namespace devhub --create-namespace \
+  --set images.devhub.repository=registry.example.com/devhub --set images.devhub.tag=dev \
+  --set images.console.repository=registry.example.com/devhub-console --set images.console.tag=dev \
+  --set blob.url='gs://my-devhub-bucket'
+helm test devhub --namespace devhub
+```
+
+Every workload serves as if it were alone, so you choose where each one lives: a host each, or paths on one host
+(`https://devhub.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
+`urls.rest` and `urls.graphql` with `httpRoute.enabled` for an HTTPRoute each. Logs go to stdout as JSON; to see
+traces, set `telemetry.traces.endpoint` to your OpenTelemetry Collector's or a vendor's OTLP endpoint.
 
 ## Contributing
 

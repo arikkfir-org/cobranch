@@ -1,0 +1,8 @@
+# Not part of the chart's package.
+.DS_Store
+*.swp
+*.bak
+*.tmp
+.idea/
+.vscode/
+ci/
