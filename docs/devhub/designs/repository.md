@@ -33,23 +33,35 @@ the planned paths; the README keeps the full table as the layout grows.
 
 ## Continuous integration
 
-Pipeline `ci` reports check `Continuous Integration`. `generated` fails when `go generate` changes the checkout, so the
+Pipeline `ci` runs two tasks side by side, each in a pod of its own, and reports check `Continuous Integration`, which
+fails when either does. Task `ci` tests the Go module. `generated` fails when `go generate` changes the checkout, so the
 REST and GraphQL stubs match `api/`. `lint` runs golangci-lint's standard linters, the house rules' (errcheck,
 wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt. `test` runs
 against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach it. Go Cloud's
 drivers bring the AWS, Azure and Google Cloud SDKs: on a cold cache lint peaks near 1.5Gi, hence the task's size.
 
-**Pipeline ci runs seven steps in one pod, beside a PostgreSQL sidecar**
+**Task ci runs seven steps in one pod, beside a PostgreSQL sidecar**
 
-![Pipeline ci runs seven steps in one pod, beside a PostgreSQL sidecar](repository/ci.svg)
+![Task ci runs seven steps in one pod, beside a PostgreSQL sidecar](repository/ci.svg)
 
 Every image is pinned to a version, and the steps set `GOMAXPROCS=4`, so their memory doesn’t grow with the node’s CPUs.
 The clone is anonymous: the repository is public, so the run holds no token.
 
-> **Coming with [ENG-195](https://linear.app/arikkfir/issue/ENG-195)'s chart.** A second task, `chart`, runs beside
-> `ci`: a dockerd sidecar builds the images `devhub` and `devhub-console`, kind creates a cluster, and the
-> [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) is installed, tested, upgraded and tested again. Both tasks
-> share a clone StepAction.
+Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
+throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
+lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
+`devhub` and `devhub-console` in the daemon, tagged with the commit, and `cluster` creates the cluster there and loads
+them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the migrate Job and every pod,
+and `test` runs the chart's tests: both servers answer with the build's version, and the Console serves its page and the
+REST API's URL. `upgrade` rolls every pod, and fails if the generated database password changed or its migrate Job
+applied anything; `retest` tests again. Both tasks clone the commit with one StepAction.
+
+**Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
+
+![Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps](repository/chart.svg)
+
+Every image is pinned to a version. The cluster’s pods count against the daemon’s resources, not the steps’, and nothing
+outlives the run: the clone is anonymous, and the task holds no token and no cloud role.
 
 ## Checks
 
@@ -75,6 +87,7 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | Public, under the MIT License | DevHub is a product anyone may install, and its source is open with it | Internal until a license was chosen |
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token |
 | golangci-lint from the first commit | The house rules' linters hold from the first line, instead of a cleanup later | Adding them later |
+| The chart installed on kind in every run | Each pull request proves the install and the upgrade end to end, on a cluster nobody else uses, and a failure shows the pods' events and logs | A namespace on a shared cluster, which would need its credentials and outlive a failed run |
 | No persistent Go cache yet | A cold run takes about eight minutes since Go Cloud's SDKs came in, which the foundations' few pull requests can afford; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
 
 ## Security and failure modes
@@ -82,6 +95,8 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 - Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/` as the tenant's ServiceAccount `pipeline`,
   which holds no Google Cloud role, and with no GitHub token. Octomaton ignores forks, so a stranger's pull request runs
   nothing.
+- Task `chart`'s Docker daemon runs privileged, which `ci-devhub` admits; it listens only on a socket its steps share,
+  and its run holds no token either.
 - Without CI tenant `ci-devhub`, Octomaton refuses every pipeline on the repository, and its pull requests can't pass
   the required checks; without infra's docs grants, check `Docs` and `docs-publish` fail for want of their roles.
 - A missing check blocks the merge queue and never merges unchecked; the admin bypass remains the owner's.
@@ -104,6 +119,6 @@ grants applied, check Docs failed for want of its roles.
 | Question | Status | Where it stands |
 | --- | --- | --- |
 | Module path | Decided | The GitHub path for now, decided on 2026-10-27; a vanity path, as Octomaton's `octomaton.dev`, waits for a domain |
-| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci` or join its steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is a task of its own, since its dockerd runs privileged |
+| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci` or join its steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is task `chart`, of its own since its daemon runs privileged |
 
 DevHub is a Kfirs project, created by Arik Kfir.

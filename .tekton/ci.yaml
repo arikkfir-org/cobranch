@@ -1,5 +1,6 @@
-# DevHub's CI: lint, vet, test (with the race detector) and build, in task ci (ci.task.yaml). A plain Tekton
-# PipelineRun; Octomaton sets the params.
+# DevHub's CI, two tasks side by side: ci lints, vets, tests (with the race detector) and builds the Go module
+# (ci.task.yaml); chart builds the images and installs, tests and upgrades the chart on a throwaway kind cluster
+# (chart.task.yaml). A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -16,6 +17,15 @@ spec:
           memory: 1536Mi
         limits:
           memory: 3Gi
+    # The steps only drive the Docker daemon and the cluster, which its sidecar holds, with resources of its own;
+    # building kind is their peak.
+    - pipelineTaskName: chart
+      computeResources:
+        requests:
+          cpu: 500m
+          memory: 1Gi
+        limits:
+          memory: 2Gi
   workspaces:
     - name: source
       emptyDir: {}
@@ -41,3 +51,14 @@ spec:
             workspace: source
         taskRef:
           name: ci # .tekton/ci.task.yaml
+      - name: chart
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: chart # .tekton/chart.task.yaml
