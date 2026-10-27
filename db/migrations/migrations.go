@@ -1,13 +1,23 @@
-// Package migrations holds DevHub's PostgreSQL schema migrations, numbered SQL files that goose applies in order. The
-// API server applies them on start (internal/adapters/postgres).
+// Package migrations holds DevHub's PostgreSQL schema migrations, which goose applies in order: numbered SQL files,
+// and Go for what SQL can't say. The migrate Job applies them before the servers roll out (internal/adapters/postgres),
+// and a server turns ready only once the schema is at the highest version they number.
 //
-// Migrations expand before they contract: pods of the old and the new version run side by side through a rolling
-// upgrade, so a column is dropped only a release after nothing reads it.
+// Each release's migrations keep the previous release's pods working, since both run side by side through a rolling
+// upgrade: a column is dropped only once neither the new release nor the one before it reads it, so a rollback goes
+// back one release at most. A long backfill runs later, as a task of the controller's.
 package migrations
 
-import "embed"
+import (
+	"embed"
 
-// FS holds the migrations, at its root.
+	"github.com/pressly/goose/v3"
+)
+
+// FS holds the SQL migrations, at its root.
 //
 //go:embed *.sql
 var FS embed.FS
+
+// Go holds the migrations written in Go, each made with goose.NewGoMigration and numbered among the SQL files. None
+// yet.
+var Go []*goose.Migration

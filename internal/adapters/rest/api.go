@@ -1,4 +1,4 @@
-// Package rest serves DevHub's REST API under /api/v1/, through the server oapi-codegen generates from
+// Package rest serves DevHub's REST API under /v1/, through the server oapi-codegen generates from
 // api/openapi.yaml (rest.gen.go). Errors are problem details (RFC 9457) with a stable code and the request's ID.
 package rest
 
@@ -12,7 +12,7 @@ import (
 )
 
 // BaseURL is where the API's paths start, as api/openapi.yaml's server says.
-const BaseURL = "/api/v1"
+const BaseURL = "/v1"
 
 // api implements api/openapi.yaml's operations.
 type api struct {
@@ -25,8 +25,8 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 	return GetVersion200JSONResponse{Version: a.version}, nil
 }
 
-// NewHandler serves the API under BaseURL, for a server built as version. Every other path under /api/ answers 404,
-// and a request the API can't read 400, both as problem details.
+// NewHandler serves the API under BaseURL, for a server built as version. Every other path answers 404, and a request
+// the API can't read 400, both as problem details.
 func NewHandler(version string) http.Handler {
 	strict := NewStrictHandlerWithOptions(api{version: version}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
@@ -34,7 +34,7 @@ func NewHandler(version string) http.Handler {
 	})
 	mux := http.NewServeMux()
 	HandlerWithOptions(strict, StdHTTPServerOptions{BaseURL: BaseURL, BaseRouter: mux, ErrorHandlerFunc: badRequest})
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, "route.not_found", "No operation has this method and path.")
 	})
 	return mux

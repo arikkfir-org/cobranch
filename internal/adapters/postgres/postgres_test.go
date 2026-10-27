@@ -2,8 +2,11 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
 	"io/fs"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 
 	"github.com/arikkfir-org/devhub/db/migrations"
 	"github.com/arikkfir-org/devhub/internal/adapters/postgres/postgrestest"
@@ -54,67 +58,149 @@ func TestConnect(t *testing.T) {
 	}
 }
 
-func TestSchemaMigrate(t *testing.T) {
+// newSchema returns the schema that sqlFiles and goMigrations bring pool's database to, closed when the test ends.
+func newSchema(t *testing.T, pool *pgxpool.Pool, sqlFiles fs.FS, goMigrations ...*goose.Migration) *Schema {
+	t.Helper()
+	s, err := NewSchema(pool, sqlFiles, goMigrations...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := s.Close(); err != nil {
+			t.Error(err)
+		}
+	})
+	return s
+}
+
+// tableA and columnB are two SQL migrations: a table, then a column of it.
+var (
+	tableA  = fstest.MapFS{"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE a (id int);\n")}}
+	columnB = fstest.MapFS{
+		"00001_a.sql": tableA["00001_a.sql"],
+		"00002_b.sql": {Data: []byte("-- +goose Up\nALTER TABLE a ADD COLUMN b text;\n")},
+	}
+)
+
+// insertA is a Go migration, version 3, that writes a row into table a.
+func insertA() *goose.Migration {
+	return goose.NewGoMigration(3, &goose.GoFunc{RunTx: func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO a (id, b) VALUES (1, 'from Go')"); err != nil {
+			return fmt.Errorf("writing a row: %w", err)
+		}
+		return nil
+	}}, nil)
+}
+
+func TestNewSchema(t *testing.T) {
 	tests := []struct {
-		name        string
-		migrations  fstest.MapFS
-		servers     int
-		wantVersion int64
-		wantErr     bool
+		name         string
+		sqlFiles     fs.FS
+		goMigrations []*goose.Migration
+		wantVersion  int64
+		wantErr      bool
 	}{
-		{name: "DevHub's migrations", servers: 1, wantVersion: 1},
-		{name: "two servers at once", servers: 2, wantVersion: 1},
+		{name: "DevHub's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 1},
+		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
+		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
+		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
 		{
-			name: "a table, then a column",
-			migrations: fstest.MapFS{
-				"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE a (id int);\n")},
-				"00002_b.sql": {Data: []byte("-- +goose Up\nALTER TABLE a ADD COLUMN b text;\n")},
-			},
-			servers:     2,
-			wantVersion: 2,
-		},
-		{
-			name:       "a broken migration",
-			migrations: fstest.MapFS{"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE;\n")}},
-			servers:    1,
-			wantErr:    true,
+			name:         "Go numbered as SQL is",
+			sqlFiles:     columnB,
+			goMigrations: []*goose.Migration{goose.NewGoMigration(2, nil, nil)},
+			wantErr:      true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := testDatabase(t)
-			var fsys fs.FS = migrations.FS
-			if tt.migrations != nil {
-				fsys = tt.migrations
+			s, err := NewSchema(unreachableDatabase(t), tt.sqlFiles, tt.goMigrations...)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NewSchema() error = %v, want error %t", err, tt.wantErr)
 			}
-			for i, err := range migrateAtOnce(pool, fsys, tt.servers) {
-				if (err != nil) != tt.wantErr {
-					t.Fatalf("server %d: Migrate() error = %v, want error %t", i, err, tt.wantErr)
-				}
-			}
-			if tt.wantErr {
+			if err != nil {
 				return
 			}
-			var version int64
-			err := pool.QueryRow(context.Background(), "SELECT max(version_id) FROM goose_db_version").Scan(&version)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if version != tt.wantVersion {
-				t.Errorf("schema version = %d, want %d", version, tt.wantVersion)
+			defer func() { _ = s.Close() }()
+			if got := s.Version(); got != tt.wantVersion {
+				t.Errorf("Version() = %d, want %d", got, tt.wantVersion)
 			}
 		})
 	}
 }
 
-// migrateAtOnce migrates pool's database with fsys from servers schemas at once, and returns each one's error, or the
-// error its Check reports after a Migrate that succeeded.
-func migrateAtOnce(pool *pgxpool.Pool, fsys fs.FS, servers int) []error {
-	errs := make([]error, servers)
+func TestSchemaMigrate(t *testing.T) {
+	tests := []struct {
+		name         string
+		sqlFiles     fs.FS
+		goMigrations []*goose.Migration
+		jobs         int
+		wantVersion  int64
+		wantRow      bool
+		wantErr      bool
+	}{
+		{name: "DevHub's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 1},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 1},
+		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
+		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
+		{
+			name:     "a broken migration",
+			sqlFiles: fstest.MapFS{"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE;\n")}},
+			jobs:     1,
+			wantErr:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := testDatabase(t)
+			errs := migrateAtOnce(t, pool, tt.jobs, tt.sqlFiles, tt.goMigrations...)
+			if failed := slices.ContainsFunc(errs, func(err error) bool { return err != nil }); failed != tt.wantErr {
+				t.Fatalf("Migrate() errors = %v, want errors %t", errs, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			if version := schemaVersion(t, pool); version != tt.wantVersion {
+				t.Errorf("schema version = %d, want %d", version, tt.wantVersion)
+			}
+			if tt.wantRow && rowsFromGo(t, pool) != 1 {
+				t.Error("the Go migration's row is missing")
+			}
+		})
+	}
+}
+
+// rowsFromGo counts the rows insertA wrote to pool's database.
+func rowsFromGo(t *testing.T, pool *pgxpool.Pool) int {
+	t.Helper()
+	var rows int
+	if err := pool.QueryRow(context.Background(), "SELECT count(*) FROM a WHERE b = 'from Go'").Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	return rows
+}
+
+// schemaVersion returns the highest migration pool's database records.
+func schemaVersion(t *testing.T, pool *pgxpool.Pool) int64 {
+	t.Helper()
+	var version int64
+	if err := pool.QueryRow(context.Background(), "SELECT max(version_id) FROM goose_db_version").Scan(&version); err != nil {
+		t.Fatal(err)
+	}
+	return version
+}
+
+// migrateAtOnce migrates pool's database from jobs schemas at once, and returns each one's error, or the error its
+// Check reports after a Migrate that succeeded.
+func migrateAtOnce(t *testing.T, pool *pgxpool.Pool, jobs int, sqlFiles fs.FS, goMigrations ...*goose.Migration) []error {
+	t.Helper()
+	schemas := make([]*Schema, jobs)
+	for i := range jobs {
+		schemas[i] = newSchema(t, pool, sqlFiles, goMigrations...)
+	}
+	errs := make([]error, jobs)
 	var wg sync.WaitGroup
-	for i := range servers {
+	for i, s := range schemas {
 		wg.Go(func() {
-			s := NewSchema(pool, fsys)
 			if errs[i] = s.Migrate(context.Background()); errs[i] == nil {
 				errs[i] = s.Check(context.Background())
 			}
@@ -122,6 +208,74 @@ func migrateAtOnce(pool *pgxpool.Pool, fsys fs.FS, servers int) []error {
 	}
 	wg.Wait()
 	return errs
+}
+
+func TestSchemaCheck(t *testing.T) {
+	tests := []struct {
+		name     string
+		reach    bool
+		migrated fs.FS // the migrations the database has had, if any
+		needs    fs.FS // the migrations of the build that checks
+		wantErr  bool
+	}{
+		{name: "a database never migrated", reach: true, needs: tableA, wantErr: true},
+		{name: "a schema behind the build", reach: true, migrated: tableA, needs: columnB, wantErr: true},
+		{name: "a schema at the build's version", reach: true, migrated: columnB, needs: columnB},
+		{name: "a schema ahead of the build, mid-upgrade", reach: true, migrated: columnB, needs: tableA},
+		{name: "a database that never answers", needs: tableA, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := migratedDatabase(t, tt.reach, tt.migrated)
+			s := newSchema(t, pool, tt.needs)
+			if err := s.Check(context.Background()); (err != nil) != tt.wantErr {
+				t.Errorf("Check() = %v, want error %t", err, tt.wantErr)
+			}
+			if tt.reach && tt.migrated == nil && schemaTableExists(t, pool) {
+				t.Error("Check() created the migrations' table; it must only read")
+			}
+		})
+	}
+}
+
+// migratedDatabase returns a database that sqlFiles have brought up to date, or, when they are nil, never migrated: one
+// of its own if reach, or else one that never answers.
+func migratedDatabase(t *testing.T, reach bool, sqlFiles fs.FS) *pgxpool.Pool {
+	t.Helper()
+	if !reach {
+		return unreachableDatabase(t)
+	}
+	pool := testDatabase(t)
+	if sqlFiles != nil {
+		if err := newSchema(t, pool, sqlFiles).Migrate(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return pool
+}
+
+// schemaTableExists reports whether pool's database has goose's table.
+func schemaTableExists(t *testing.T, pool *pgxpool.Pool) bool {
+	t.Helper()
+	var exists bool
+	if err := pool.QueryRow(context.Background(), "SELECT to_regclass('goose_db_version') IS NOT NULL").Scan(&exists); err != nil {
+		t.Fatal(err)
+	}
+	return exists
+}
+
+func TestSchemaCheckOnceMigrated(t *testing.T) {
+	pool := testDatabase(t)
+	s := newSchema(t, pool, columnB)
+	if err := s.Check(context.Background()); err == nil {
+		t.Fatal("Check() = nil before the migrate Job ran")
+	}
+	if err := newSchema(t, pool, columnB).Migrate(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Check(context.Background()); err != nil {
+		t.Errorf("Check() = %v once the migrate Job ran", err)
+	}
 }
 
 func TestSchemaMigrateUntilDone(t *testing.T) {
@@ -141,16 +295,13 @@ func TestSchemaMigrateUntilDone(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			s := NewSchema(pool, migrations.FS)
+			s := newSchema(t, pool, migrations.FS, migrations.Go...)
 			err := s.MigrateUntilDone(ctx, 10*time.Millisecond)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("MigrateUntilDone() error = %v, want error %t", err, tt.wantErr)
 			}
 			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
 				t.Errorf("MigrateUntilDone() error = %v, want the context's", err)
-			}
-			if checkErr := s.Check(ctx); (checkErr != nil) != tt.wantErr {
-				t.Errorf("Check() = %v after MigrateUntilDone() = %v", checkErr, err)
 			}
 		})
 	}

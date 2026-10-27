@@ -22,10 +22,10 @@ func TestNewHandler(t *testing.T) {
 		wantVersion string
 		wantCode    string
 	}{
-		{name: "version", method: "GET", path: "/api/v1/version", wantStatus: 200, wantType: "application/json", wantVersion: "v1.2.3"},
-		{name: "an unknown operation", method: "GET", path: "/api/v1/nothing", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
-		{name: "an unknown version of the API", method: "GET", path: "/api/v9/version", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
-		{name: "a method the operation lacks", method: "DELETE", path: "/api/v1/version", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
+		{name: "version", method: "GET", path: "/v1/version", wantStatus: 200, wantType: "application/json", wantVersion: "v1.2.3"},
+		{name: "an unknown operation", method: "GET", path: "/v1/nothing", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
+		{name: "an unknown version of the API", method: "GET", path: "/v9/version", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
+		{name: "a method the operation lacks", method: "DELETE", path: "/v1/version", wantStatus: 404, wantType: "application/problem+json", wantCode: "route.not_found"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestErrorHandlers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest("GET", "/api/v1/version", nil).WithContext(context.Background())
+			req := httptest.NewRequest("GET", "/v1/version", nil).WithContext(context.Background())
 			tt.handle(rec, req, errorString("bad input"))
 			var p Problem
 			if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil {
@@ -106,8 +106,8 @@ func TestInternalErrorLogsRequestID(t *testing.T) {
 			defer slog.SetDefault(slog.Default())
 			slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
 			fail := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { internalError(w, r, errorString("boom")) })
-			h := server.Handler(server.Routes{REST: fail, GraphQL: http.NotFoundHandler()}, nil)
-			req := httptest.NewRequest("GET", "/api/v1/version", nil)
+			h := server.Handler("/", fail, nil)
+			req := httptest.NewRequest("GET", "/v1/version", nil)
 			if tt.callerID != "" {
 				req.Header.Set(server.RequestIDHeader, tt.callerID)
 			}

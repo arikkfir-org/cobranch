@@ -26,7 +26,7 @@ func TestSetup(t *testing.T) {
 			defer slog.SetDefault(slog.Default())
 			setLevel(t, tt.level)
 			var out bytes.Buffer
-			err := Setup(&out, "api-server", "v1.2.3")
+			err := Setup(&out, "rest-server", "v1.2.3")
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("Setup() error = %v, want error %t", err, tt.wantErr)
 			}
@@ -68,7 +68,7 @@ func checkRecords(t *testing.T, out []byte, want int) {
 		if err := json.Unmarshal(line, &record); err != nil {
 			t.Fatalf("record %q is not JSON: %v", line, err)
 		}
-		if record["workload"] != "api-server" || record["version"] != "v1.2.3" {
+		if record["workload"] != "rest-server" || record["version"] != "v1.2.3" {
 			t.Errorf("record %q lacks the workload and version", line)
 		}
 	}

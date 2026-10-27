@@ -1,5 +1,5 @@
-// Package server serves the API server's HTTP routes on one port: its health, the REST API and GraphQL. Every response
-// names its request's ID.
+// Package server serves one of DevHub's APIs on a port of its own, beside the health endpoints every server answers.
+// Every response names its request's ID.
 package server
 
 import (
@@ -12,22 +12,13 @@ import (
 	"time"
 )
 
-// Routes are the API server's handlers.
-type Routes struct {
-	// REST serves every path under /api/.
-	REST http.Handler
-	// GraphQL serves /graphql.
-	GraphQL http.Handler
-}
-
-// Handler routes requests to routes, and answers /healthz while the process runs and /readyz while every one of checks
-// passes.
-func Handler(routes Routes, checks map[string]Check) http.Handler {
+// Handler serves api at pattern, a path or a subtree of them, and answers /healthz while the process runs and /readyz
+// while every one of checks passes.
+func Handler(pattern string, api http.Handler, checks map[string]Check) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.Handle("GET /readyz", readyz(checks))
-	mux.Handle("/api/", routes.REST)
-	mux.Handle("/graphql", routes.GraphQL)
+	mux.Handle(pattern, api)
 	return withRequestID(mux)
 }
 

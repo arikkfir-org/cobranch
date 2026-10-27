@@ -16,11 +16,11 @@ One repository holds every part of DevHub, laid out as the [technical architectu
 
 | Path | What it holds |
 | --- | --- |
-| `cmd/devhub/` | The one binary: a subcommand per workload (API server, Git server, push worker, controller, maintenance, agent), so every workload runs the same build at one version |
+| `cmd/devhub/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, maintenance, agent), so every workload runs the same build at one version; today `rest-server`, `graphql-server`, `migrate` and `version` |
 | `internal/` | The Go packages: `services/` (the domain), `adapters/` (transports, storage, outside systems) and `system/` (configuration, telemetry, build information) |
 | `web/console/`, `web/back-office/`, `web/ui/` | _Planned_: the Console, the Back-office and their shared components, built to static files that Caddy serves |
-| `api/` | The REST contract (`openapi.yaml`) and the GraphQL schema (`graphql/`), from which `go generate ./...` writes the API server's stubs |
-| `db/migrations/` | PostgreSQL's migrations, embedded in the binary; the API server applies them on start |
+| `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
+| `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `devhub migrate` applies them before the servers roll out |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
 | `chart/devhub/` | _Planned_: the Helm chart that installs DevHub |
 | `docs/devhub/` | The design documents, published to the docs site under `devhub/` |
@@ -42,11 +42,14 @@ go build -o bin/ ./cmd/...             # bin/devhub
 bin/devhub version
 ```
 
-The API server reads `DEVHUB_` variables, and needs a bucket and a database:
+The workloads read `DEVHUB_` variables. `migrate` brings a database's schema to the build's version and exits; each
+server needs a bucket and the database, and turns ready once the schema is at that version:
 
 ```bash
-DEVHUB_BLOB_URL='file:///tmp/devhub-blobs?create_dir=true' DEVHUB_DATABASE_URL="$DEVHUB_TEST_DATABASE_URL" \
-  bin/devhub api-server                # :8080: /healthz, /readyz, /api/v1/version, /graphql
+export DEVHUB_BLOB_URL='file:///tmp/devhub-blobs?create_dir=true' DEVHUB_DATABASE_URL="$DEVHUB_TEST_DATABASE_URL"
+bin/devhub migrate
+bin/devhub rest-server                                     # :8080: /healthz, /readyz, /v1/version
+DEVHUB_HTTP_ADDR=:8081 bin/devhub graphql-server           # :8081: /healthz, /readyz, /graphql
 ```
 
 CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).

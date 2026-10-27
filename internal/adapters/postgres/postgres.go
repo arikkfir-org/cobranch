@@ -1,8 +1,9 @@
-// Package postgres connects DevHub to PostgreSQL, the store of every fact it shows, and keeps its schema migrated.
+// Package postgres connects DevHub to PostgreSQL, the store of every fact it shows, and migrates its schema.
 package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
@@ -19,6 +21,9 @@ import (
 )
 
 var tracer = otel.Tracer("github.com/arikkfir-org/devhub/internal/adapters/postgres")
+
+// undefinedTable is PostgreSQL's error code for a table that does not exist.
+const undefinedTable = "42P01"
 
 // Connect returns a pool of connections to the database at url, or, when url is empty, to the one libpq's variables
 // name (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE). It connects lazily, so a database that is not up
@@ -46,49 +51,70 @@ func Ping(pool *pgxpool.Pool) func(context.Context) error {
 	}
 }
 
-// Schema migrates the database and reports whether it has.
+// Schema is the database's schema, which this build's migrations bring to its version: the highest they number.
 type Schema struct {
-	pool       *pgxpool.Pool
-	migrations fs.FS
-	migrated   atomic.Bool
+	pool     *pgxpool.Pool
+	provider *goose.Provider
+	// version is the schema's version this build needs.
+	version int64
+	// current is true once the database's schema reached version; it never goes back.
+	current atomic.Bool
 }
 
-// NewSchema returns the schema of the database pool connects to, which migrations, numbered SQL files at their root,
-// bring up to date.
-func NewSchema(pool *pgxpool.Pool, migrations fs.FS) *Schema {
-	return &Schema{pool: pool, migrations: migrations}
+// NewSchema returns the schema of the database pool connects to, as migrations bring it up to date: numbered SQL files
+// at the root of sqlFiles, and goMigrations for what SQL can't say, numbered among them. Close releases it.
+func NewSchema(pool *pgxpool.Pool, sqlFiles fs.FS, goMigrations ...*goose.Migration) (*Schema, error) {
+	locker, err := lock.NewPostgresSessionLocker()
+	if err != nil {
+		return nil, fmt.Errorf("creating the migrations' lock: %w", err)
+	}
+	db := stdlib.OpenDBFromPool(pool) // closing it leaves the pool open
+	provider, err := goose.NewProvider(goose.DialectPostgres, db, sqlFiles,
+		goose.WithSessionLocker(locker),
+		goose.WithGoMigrations(goMigrations...),
+		goose.WithDisableGlobalRegistry(true),
+	)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("loading the migrations: %w", err), db.Close())
+	}
+	sources := provider.ListSources() // never empty: NewProvider refuses no migrations
+	return &Schema{pool: pool, provider: provider, version: sources[len(sources)-1].Version}, nil
 }
 
-// Migrate applies every migration the database lacks, under a PostgreSQL advisory lock: of several servers starting
-// together, one migrates and the others wait for it, then find nothing left to do. Each migration runs in a
-// transaction of its own.
+// Close releases the schema's handle on the pool, which stays open.
+func (s *Schema) Close() error {
+	if err := s.provider.Close(); err != nil {
+		return fmt.Errorf("closing the migrations' database handle: %w", err)
+	}
+	return nil
+}
+
+// Version is the schema's version this build needs.
+func (s *Schema) Version() int64 {
+	return s.version
+}
+
+// Migrate applies every migration the database lacks, under a PostgreSQL advisory lock: of several migrating at once,
+// one migrates and the others wait for it, then find nothing left to do. Each migration runs in a transaction of its
+// own.
 func (s *Schema) Migrate(ctx context.Context) error {
 	ctx, span := tracer.Start(ctx, "postgres.Schema.Migrate")
 	defer span.End()
-	locker, err := lock.NewPostgresSessionLocker()
-	if err != nil {
-		return fmt.Errorf("creating the migrations' lock: %w", err)
-	}
-	db := stdlib.OpenDBFromPool(s.pool)
-	defer func() { _ = db.Close() }() // closes only this handle; the pool stays open
-	provider, err := goose.NewProvider(goose.DialectPostgres, db, s.migrations, goose.WithSessionLocker(locker))
-	if err != nil {
-		return fmt.Errorf("loading the migrations: %w", err)
-	}
-	results, err := provider.Up(ctx)
+	results, err := s.provider.Up(ctx)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		return fmt.Errorf("migrating the database: %w", err)
 	}
 	for _, r := range results {
-		slog.InfoContext(ctx, "Applied a migration", "migration", r.Source.Path, "duration", r.Duration.String())
+		slog.InfoContext(ctx, "Applied a migration",
+			"schemaVersion", r.Source.Version, "migration", r.Source.Path, "duration", r.Duration.String())
 	}
-	s.migrated.Store(true)
+	s.current.Store(true)
 	return nil
 }
 
 // MigrateUntilDone calls Migrate until it succeeds or ctx ends, waiting between attempts from first up to a minute, so
-// a server that starts before its database waits for it rather than exiting.
+// a migration that starts before its database waits for it rather than exiting.
 func (s *Schema) MigrateUntilDone(ctx context.Context, first time.Duration) error {
 	wait := first
 	for {
@@ -106,10 +132,35 @@ func (s *Schema) MigrateUntilDone(ctx context.Context, first time.Duration) erro
 	}
 }
 
-// Check reports an error until the schema is migrated, for readiness.
-func (s *Schema) Check(context.Context) error {
-	if !s.migrated.Load() {
-		return errors.New("the database's schema is not migrated yet")
+// Check reports an error until the database's schema is at least the version this build needs, for readiness: the
+// servers wait for the migrate Job rather than migrate. It reads the version without the migrations' lock, so a Job
+// that holds it doesn't hold the probes too.
+func (s *Schema) Check(ctx context.Context) error {
+	if s.current.Load() {
+		return nil
 	}
+	current, err := s.currentVersion(ctx)
+	if err != nil {
+		return err
+	}
+	if current < s.version {
+		return fmt.Errorf("the database's schema is at version %d, and this build needs %d: devhub migrate has not run",
+			current, s.version)
+	}
+	s.current.Store(true)
 	return nil
+}
+
+// currentVersion returns the highest migration the database records, or 0 before the first.
+func (s *Schema) currentVersion(ctx context.Context) (int64, error) {
+	var version sql.NullInt64
+	err := s.pool.QueryRow(ctx, "SELECT max(version_id) FROM "+goose.DefaultTablename).Scan(&version)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == undefinedTable {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("reading the schema's version: %w", err)
+	}
+	return version.Int64, nil
 }
