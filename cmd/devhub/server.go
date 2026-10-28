@@ -31,8 +31,8 @@ type api struct {
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
 	restServer = api{workload: "rest-server", pattern: "/", handler: rest.NewHandler}
-	// graphqlServer serves GraphQL at /graphql.
-	graphqlServer = api{workload: "graphql-server", pattern: "/graphql", handler: graphql.NewHandler}
+	// graphqlServer serves GraphQL at the root path alone, so the operator gives it a host of its own.
+	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", handler: graphql.NewHandler}
 )
 
 // runServer serves a and the health endpoints until ctx ends. The server answers its probes from the start and turns

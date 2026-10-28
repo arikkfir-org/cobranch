@@ -63,14 +63,15 @@ func TestRunServer(t *testing.T) {
 			api:  restServer,
 			requests: append([]request{
 				{method: "GET", path: "/v1/version", wantStatus: 200, wantBody: `{"version":"` + version + `"}` + "\n"},
-				{method: "POST", path: "/graphql", body: `{"query":"{ version }"}`, wantStatus: 404, wantBody: `"code":"route.not_found"`},
+				{method: "POST", path: "/", body: `{"query":"{ version }"}`, wantStatus: 404, wantBody: `"code":"route.not_found"`},
 			}, health...),
 		},
 		{
 			name: "GraphQL",
 			api:  graphqlServer,
 			requests: append([]request{
-				{method: "POST", path: "/graphql", body: `{"query":"{ version }"}`, wantStatus: 200, wantBody: `{"data":{"version":"` + version + `"}}`},
+				{method: "POST", path: "/", body: `{"query":"{ version }"}`, wantStatus: 200, wantBody: `{"data":{"version":"` + version + `"}}`},
+				{method: "POST", path: "/graphql", body: `{"query":"{ version }"}`, wantStatus: 404},
 				{method: "GET", path: "/v1/version", wantStatus: 404},
 			}, health...),
 		},

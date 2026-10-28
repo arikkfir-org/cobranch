@@ -15,10 +15,10 @@ func TestNewHandler(t *testing.T) {
 		wantStatus int
 		wantBody   string
 	}{
-		{name: "version by POST", method: "POST", target: "/graphql", body: `{"query":"{ version }"}`, wantStatus: 200, wantBody: `{"data":{"version":"v1.2.3"}}`},
-		{name: "version by GET", method: "GET", target: "/graphql?query=%7B%20version%20%7D", wantStatus: 200, wantBody: `{"data":{"version":"v1.2.3"}}`},
-		{name: "introspection", method: "POST", target: "/graphql", body: `{"query":"{ __type(name: \"Query\") { name } }"}`, wantStatus: 200, wantBody: `{"data":{"__type":{"name":"Query"}}}`},
-		{name: "an unknown field", method: "POST", target: "/graphql", body: `{"query":"{ secrets }"}`, wantStatus: 422},
+		{name: "version by POST", method: "POST", target: "/", body: `{"query":"{ version }"}`, wantStatus: 200, wantBody: `{"data":{"version":"v1.2.3"}}`},
+		{name: "version by GET", method: "GET", target: "/?query=%7B%20version%20%7D", wantStatus: 200, wantBody: `{"data":{"version":"v1.2.3"}}`},
+		{name: "introspection", method: "POST", target: "/", body: `{"query":"{ __type(name: \"Query\") { name } }"}`, wantStatus: 200, wantBody: `{"data":{"__type":{"name":"Query"}}}`},
+		{name: "an unknown field", method: "POST", target: "/", body: `{"query":"{ secrets }"}`, wantStatus: 422},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

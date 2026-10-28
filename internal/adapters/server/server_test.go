@@ -32,15 +32,15 @@ func TestHandler(t *testing.T) {
 		wantBody   string
 		wantID     string
 	}{
-		{name: "liveness", pattern: "/graphql", method: "GET", path: "/healthz", wantStatus: 200, wantBody: "ok\n"},
-		{name: "liveness while a check fails", pattern: "/graphql", method: "GET", path: "/healthz", checks: map[string]Check{"database": fail}, wantStatus: 200, wantBody: "ok\n"},
-		{name: "ready", pattern: "/graphql", method: "GET", path: "/readyz", checks: map[string]Check{"database": pass, "bucket": pass}, wantStatus: 200, wantBody: "ready\n"},
-		{name: "not ready", pattern: "/graphql", method: "GET", path: "/readyz", checks: map[string]Check{"schema": fail, "database": pass, "bucket": fail}, wantStatus: 503, wantBody: "not ready: bucket, schema\n"},
+		{name: "liveness", pattern: "/{$}", method: "GET", path: "/healthz", wantStatus: 200, wantBody: "ok\n"},
+		{name: "liveness while a check fails", pattern: "/{$}", method: "GET", path: "/healthz", checks: map[string]Check{"database": fail}, wantStatus: 200, wantBody: "ok\n"},
+		{name: "ready", pattern: "/{$}", method: "GET", path: "/readyz", checks: map[string]Check{"database": pass, "bucket": pass}, wantStatus: 200, wantBody: "ready\n"},
+		{name: "not ready", pattern: "/{$}", method: "GET", path: "/readyz", checks: map[string]Check{"schema": fail, "database": pass, "bucket": fail}, wantStatus: 503, wantBody: "not ready: bucket, schema\n"},
 		{name: "an API at every other path", pattern: "/", method: "GET", path: "/v1/version", requestID: "abc-1", wantStatus: 200, wantBody: "api abc-1", wantID: "abc-1"},
 		{name: "health beside an API at every other path", pattern: "/", method: "GET", path: "/healthz", wantStatus: 200, wantBody: "ok\n"},
-		{name: "an API at one path", pattern: "/graphql", method: "POST", path: "/graphql", requestID: "abc.2", wantStatus: 200, wantBody: "api abc.2", wantID: "abc.2"},
-		{name: "a path beside an API at one path", pattern: "/graphql", method: "GET", path: "/metrics", wantStatus: 404},
-		{name: "liveness by POST", pattern: "/graphql", method: "POST", path: "/healthz", wantStatus: 405},
+		{name: "an API at the root alone", pattern: "/{$}", method: "POST", path: "/", requestID: "abc.2", wantStatus: 200, wantBody: "api abc.2", wantID: "abc.2"},
+		{name: "a path beside an API at the root alone", pattern: "/{$}", method: "GET", path: "/metrics", wantStatus: 404},
+		{name: "liveness by POST", pattern: "/{$}", method: "POST", path: "/healthz", wantStatus: 405},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

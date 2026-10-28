@@ -1,5 +1,5 @@
-// Package graphql serves DevHub's GraphQL API at /graphql, the Console's surface, through the executor gqlgen
-// generates from api/graphql/ (generated.go).
+// Package graphql serves DevHub's GraphQL API, the Console's surface, through the executor gqlgen generates from
+// api/graphql/ (generated.go).
 package graphql
 
 import (

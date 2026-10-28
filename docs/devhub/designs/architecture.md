@@ -109,7 +109,9 @@ Any hosts and prefixes work, as long as every host sits under one parent domain,
 
 - **One parent domain.** The Auth server sets the session cookie for the parent domain of every DevHub host, so it
   reaches every API; the APIs answer CORS for the Console's and the Back-office's origins only.
-- **Each workload serves from `/`.** A route that adds a path prefix strips it (an `HTTPRoute` `URLRewrite`).
+- **Each workload serves from `/`.** **Changed** (devhub#1 review, 2026-10-28): GraphQL answers at `/` itself, so it
+  takes a host of its own, and the REST and Admin servers' paths start with their version, `/v1/`, never `/api/`. A
+  route that adds a path prefix strips it (an `HTTPRoute` `URLRewrite`).
 - **The Admin server and the Back-office can stay internal,** on a gateway only operators reach.
 
 ### Job isolation
@@ -383,7 +385,7 @@ server signs them in. **Changed** (review, 2026-10-27): each is a workload of it
 
 The Auth server stands beside them: it signs people in and issues tokens, and serves no data.
 
-- **GraphQL** is the Console's surface: `node(id:)`, connections, and live updates as subscriptions.
+- **GraphQL** is the Console's surface, at `/`: `node(id:)`, connections, and live updates as subscriptions.
 - **REST** lives under `/v1/`, with paths that follow ownership (`/v1/orgs/{org}/repos/{repo}/branches/{branch}`).
   **Agreed:** REST is the SDKs' surface, generated from the checked-in document with the Go server stubs.
 - **Admin** is the Back-office's surface: a REST API under `/v1/` from a document of its own. **Agreed** (review): each

@@ -49,7 +49,7 @@ server needs a bucket and the database, and turns ready once the schema is at th
 export DEVHUB_BLOB_URL='file:///tmp/devhub-blobs?create_dir=true' DEVHUB_DATABASE_URL="$DEVHUB_TEST_DATABASE_URL"
 bin/devhub migrate
 bin/devhub rest-server                                     # :8080: /healthz, /readyz, /v1/version
-DEVHUB_HTTP_ADDR=:8081 bin/devhub graphql-server           # :8081: /healthz, /readyz, /graphql
+DEVHUB_HTTP_ADDR=:8081 bin/devhub graphql-server           # :8081: /healthz, /readyz, GraphQL at /
 ```
 
 CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
