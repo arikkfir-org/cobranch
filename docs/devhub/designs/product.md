@@ -4,8 +4,8 @@
 > linked with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced
 > again once DevHub's shape settles.
 
-**Status**: Decided 2026-10-27 · No questions open at this level · Source: [discussion
-#5](https://github.com/orgs/arikkfir-org/discussions/5)
+**Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
+[discussion #5](https://github.com/orgs/arikkfir-org/discussions/5)
 
 An all-in-one, opinionated development platform for individuals and teams, with AI central to the development process
 from every angle. It hosts the code, runs the jobs, delivers the result and holds the conversation around each change,
@@ -75,6 +75,11 @@ The [architecture’s data model](architecture.md#data-model) turns these object
 
 Clients cannot push under the reserved `devhub/` prefix; only DevHub writes there.
 
+The Console shows the settings in effect and every pending change: each branch whose `/devhub.yaml` differs from the
+default branch's, with its diff ([architecture](architecture.md#settings-secrets-and-models)). Organization and
+repository settings also hold secrets, which `/devhub.yaml` names by ID and grants hand to the agents and jobs that use
+them ([secrets](principals-and-permissions.md#secrets)).
+
 ### Jobs
 
 Jobs are inspired by Octomaton's `.octomaton.yaml`.
@@ -95,8 +100,9 @@ threaded chat whose messages can point at a file and line range, which is how re
 
 ![A branch’s status is computed; the first rule that matches wins](product/branch-status.svg)
 
-Merge requirements are a policy of the branch: the commit annotations it requires and, optionally, linear history, which
-is off by default.
+Merge requirements are a policy of the branch: the commit annotations it requires, optionally linear history, which is
+off by default, and [path rules](architecture.md#settings-secrets-and-models), which apply only to branches that change
+their paths.
 
 **Merging is explicit: whoever moves the base is the merging principal**
 
@@ -113,6 +119,11 @@ worker](architecture.md#merges-and-settings-take-the-same-road).
 
 Tasks are such as “implement issue X”, “review branch Y” or “research change Z into an issue”. The agent’s harness saves
 its transcript as it goes, so a restarted pod resumes where it stopped.
+
+An admin picks each agent's model from the providers the organization holds credentials for: Anthropic's Claude,
+Google's Gemini, xAI's Grok, OpenAI's GPT and DeepSeek. One organization can run its reviewer on one model, a
+refactoring agent on another and an agent for small tasks on a third
+([models](architecture.md#settings-secrets-and-models)).
 
 ### Delivery
 
@@ -158,16 +169,20 @@ its default-branch trust boundary and its organization pipelines are the model f
 | Agents | Principals created by users and owned by the organization, working on assigned tasks with a toolset in DevHub and beyond |
 | Agent runtime | A long-running pod per agent, from DevHub's agent image, whose harness saves the transcript as it goes; simple first |
 | AI review | A built-in agent, configured by the repository's `/devbot.yaml` |
-| Settings | Repository and branch settings in `/devhub.yaml`, Console edits through `devhub/settings`, in effect on merge; organization settings in the database |
+| Settings | Repository and branch settings in `/devhub.yaml`, Console edits through `devhub/settings`, in effect on merge; organization settings in the database; the Console shows the settings in effect and every pending change |
+| Secrets | Kept encrypted in organization and repository settings, named by ID in `/devhub.yaml`, and received only by agents and jobs granted `secrets.read` ([secrets](principals-and-permissions.md#secrets)) |
+| Models | Each agent runs on the provider and model its admin picks: Anthropic, Google, xAI, OpenAI or DeepSeek |
+| Repository visibility | Inferred from grants, never counting the Owners: private to its creator by default, Internal once another member can reach it, Public once Anonymous can |
 | Job override policy | Phase 1 allows adding or overriding any job; phase 2 pins job security |
 | Branch events | Create, push, merge, delete, tag, review submitted, annotated |
 | Where jobs run | Pod specs in DevHub's own cluster; webhooks for anything elsewhere |
-| Git serving | A workload of its own beside the API server; exposing SSH is the operator's |
+| APIs | Auth, GraphQL, REST and Admin servers, each a workload the operator routes |
+| Git serving | A workload of its own beside the APIs; exposing SSH is the operator's |
 | Delivery | GitOps roots, an environment per branch, target clusters by branch pattern in `/devhub.yaml` |
 | Issues | Linked to branches by branch name, or by hand |
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
-| Slack | Phase 2 |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack and members provisioned from an identity provider |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -182,5 +197,17 @@ project](https://linear.app/arikkfir/project/devhub-56ee907dd1af).
 **The foundations, in order, as of 2026-10-27**
 
 ![The foundations, in order, as of 2026-10-27](product/roadmap.svg)
+
+### Phase 2
+
+Planned after the foundations, each with a design of its own when its turn comes:
+
+- **Pinned job security.** The default branch limits what a branch's jobs may override and which secrets they may read
+  ([jobs](#jobs)).
+- **Search,** full-text and semantic: embeddings of code, issues, branches and chats kept in PostgreSQL with pgvector,
+  so people and agents find related work by meaning, with no search cluster to run.
+- **Git LFS.**
+- **Slack,** with several use cases still to design.
+- **Members provisioned from an identity provider** (SCIM), so an organization imports and removes its people there.
 
 DevHub is a Kfirs project, created by Arik Kfir.
