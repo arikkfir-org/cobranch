@@ -33,20 +33,23 @@ the planned paths; the README keeps the full table as the layout grows.
 
 ## Continuous integration
 
-Pipeline `ci` reports check `Continuous Integration`. `lint` runs golangci-lint's standard linters, the house rules'
-(errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt.
+Pipeline `ci` reports check `Continuous Integration`. `generated` fails when `go generate` changes the checkout, so the
+REST and GraphQL stubs match `api/`. `lint` runs golangci-lint's standard linters, the house rules' (errcheck,
+wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt. `test` runs
+against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach it. Go Cloud's
+drivers bring the AWS, Azure and Google Cloud SDKs: on a cold cache lint peaks near 1.5Gi, hence the task's size.
 
-**Pipeline ci runs six steps in one pod, sharing Go’s caches**
+**Pipeline ci runs seven steps in one pod, beside a PostgreSQL sidecar**
 
-![Pipeline ci runs six steps in one pod, sharing Go’s caches](repository/ci.svg)
+![Pipeline ci runs seven steps in one pod, beside a PostgreSQL sidecar](repository/ci.svg)
 
-Every image is pinned to a version. The clone is anonymous: the repository is public, so the run holds no token.
+Every image is pinned to a version, and the steps set `GOMAXPROCS=4`, so their memory doesn’t grow with the node’s CPUs.
+The clone is anonymous: the repository is public, so the run holds no token.
 
-> **Coming with [ENG-195](https://linear.app/arikkfir/issue/ENG-195).** Task `ci` gains a `generated` step
-> (`go generate` must leave the checkout unchanged) and a PostgreSQL 18 sidecar for the tests, and requests 1 CPU and
-> 1.5Gi of memory with a 3Gi limit. A second task, `chart`, runs beside it: a dockerd sidecar builds the images `devhub`
-> and `devhub-console`, kind creates a cluster, and the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) is
-> installed, tested, upgraded and tested again. Both tasks share a clone StepAction.
+> **Coming with [ENG-195](https://linear.app/arikkfir/issue/ENG-195)'s chart.** A second task, `chart`, runs beside
+> `ci`: a dockerd sidecar builds the images `devhub` and `devhub-console`, kind creates a cluster, and the
+> [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) is installed, tested, upgraded and tested again. Both tasks
+> share a clone StepAction.
 
 ## Checks
 
@@ -72,15 +75,15 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | Public, under the MIT License | DevHub is a product anyone may install, and its source is open with it | Internal until a license was chosen |
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token |
 | golangci-lint from the first commit | The house rules' linters hold from the first line, instead of a cleanup later | Adding them later |
-| No persistent Go cache yet | A skeleton with no dependencies builds in seconds; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches, worth it once builds are slow |
+| No persistent Go cache yet | A cold run takes about eight minutes since Go Cloud's SDKs came in, which the foundations' few pull requests can afford; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
 
 ## Security and failure modes
 
 - Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/` as the tenant's ServiceAccount `pipeline`,
   which holds no Google Cloud role, and with no GitHub token. Octomaton ignores forks, so a stranger's pull request runs
   nothing.
-- Until `ci-devhub` exists, Octomaton refuses every pipeline on the repository, and its pull requests can't pass the
-  required checks; until infra's grants apply, check `Docs` fails for want of its roles.
+- Without CI tenant `ci-devhub`, Octomaton refuses every pipeline on the repository, and its pull requests can't pass
+  the required checks; without infra's docs grants, check `Docs` and `docs-publish` fail for want of their roles.
 - A missing check blocks the merge queue and never merges unchecked; the admin bypass remains the owner's.
 
 ## Rollout
@@ -89,8 +92,8 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 
 ![Rolled out in three steps, each repository doing its part](repository/rollout.svg)
 
-Until `ci-devhub` exists, Octomaton refuses every pipeline on the repository; until infra’s grants apply, check Docs
-fails for want of its roles.
+Both are merged: before `ci-devhub` existed, Octomaton refused every pipeline on the repository, and before infra’s
+grants applied, check Docs failed for want of its roles.
 
 [arikkfir-org/infra#90](https://github.com/arikkfir-org/infra/pull/90) and
 [arikkfir-org/delivery#86](https://github.com/arikkfir-org/delivery/pull/86) carry steps 2 and 3. The next push to
@@ -100,7 +103,7 @@ fails for want of its roles.
 
 | Question | Status | Where it stands |
 | --- | --- | --- |
-| Module path | Open | A vanity path, as Octomaton's `octomaton.dev`, waits for a domain |
-| CI for the rest | Open | The web apps, the chart and the SDKs bring their own CI steps; [ENG-195](https://linear.app/arikkfir/issue/ENG-195) installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster |
+| Module path | Decided | The GitHub path for now, decided on 2026-10-27; a vanity path, as Octomaton's `octomaton.dev`, waits for a domain |
+| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci` or join its steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is a task of its own, since its dockerd runs privileged |
 
 DevHub is a Kfirs project, created by Arik Kfir.

@@ -105,11 +105,15 @@ redirects, CORS and links, and can render the routes as `HTTPRoute`s, off by def
 
 ![The operator routes hosts and paths to each workload’s Service](architecture/routes.svg)
 
-Any hosts and prefixes work, as long as every host sits under one parent domain, which the session cookie names.
+Each workload serves as if it were alone; any hosts and prefixes work, as long as every host sits under one parent
+domain, which the session cookie names.
 
 - **One parent domain.** The Auth server sets the session cookie for the parent domain of every DevHub host, so it
   reaches every API; the APIs answer CORS for the Console's and the Back-office's origins only.
-- **Each workload serves from `/`.** A route that adds a path prefix strips it (an `HTTPRoute` `URLRewrite`).
+- **Each workload serves as if it were alone.** **Changed** (devhub#1 review, 2026-10-28): the Console and GraphQL
+  answer at `/`, and the REST and Admin servers' paths start with their version, `/v1/`, never `/api/`. A host of its
+  own or a path on a shared host is the operator's choice: a route that adds a prefix strips it (an `HTTPRoute`
+  `URLRewrite`), and the pages use relative URLs, so they work under any prefix.
 - **The Admin server and the Back-office can stay internal,** on a gateway only operators reach.
 
 ### Job isolation
@@ -383,7 +387,7 @@ server signs them in. **Changed** (review, 2026-10-27): each is a workload of it
 
 The Auth server stands beside them: it signs people in and issues tokens, and serves no data.
 
-- **GraphQL** is the Console's surface: `node(id:)`, connections, and live updates as subscriptions.
+- **GraphQL** is the Console's surface, at `/`: `node(id:)`, connections, and live updates as subscriptions.
 - **REST** lives under `/v1/`, with paths that follow ownership (`/v1/orgs/{org}/repos/{repo}/branches/{branch}`).
   **Agreed:** REST is the SDKs' surface, generated from the checked-in document with the Go server stubs.
 - **Admin** is the Back-office's surface: a REST API under `/v1/` from a document of its own. **Agreed** (review): each
@@ -451,6 +455,47 @@ keys and decides who may read them. Keys are built from IDs, never names, so a r
 - **Deletion follows ownership.** Deleting a repository or an organization queues a task that deletes its prefixes.
 - **Encryption at rest is the bucket's,** configured by the operator.
 
+## Observability
+
+**Proposed** (devhub#1 review, 2026-10-28): every workload logs to stdout and traces each request with OpenTelemetry,
+and the operator decides where both go. DevHub calls no monitoring service of its own.
+
+**One trace follows a change from the click to the job it starts**
+
+![One trace follows a change from the click to the job it starts](architecture/traces.svg)
+
+The probes are not traced. Webhooks carry `traceparent` too, so a receiver that speaks Trace Context joins the trace.
+
+- **Logs.** `log/slog`: JSON, one object per line, inside a Kubernetes pod, for the cluster's log collector; text
+  elsewhere, for a person; `DEVHUB_LOG_FORMAT` overrides either. Every record names its workload and version and, inside
+  a request, its trace and span (`traceId`, `spanId`).
+- **Traces.** W3C Trace Context carries one trace across every hop: the Console's calls, the internal calls between
+  workloads, and the tasks in PostgreSQL, whose rows keep the `traceparent` of the transaction that queued them. Each
+  workload is a service named after itself, in namespace `devhub`.
+- **Request IDs.** Every response names its request's ID (`X-Request-Id`): the caller's, when it sends one, and
+  otherwise the trace ID, so the ID in an error report finds both the logs and the trace. Each span records it as
+  `http.request.id`.
+
+**The operator decides where logs and traces go**
+
+![The operator decides where logs and traces go](architecture/telemetry.svg)
+
+With no OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT`, no span leaves the pod; trace IDs still name every request in
+the logs.
+
+OpenTelemetry's own variables, unchanged, say where traces go, and the chart sets them from its values:
+`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS` for a vendor's key, `OTEL_TRACES_SAMPLER` and its argument,
+and `OTEL_RESOURCE_ATTRIBUTES`. DevHub exports over OTLP with HTTP and protobuf, which every backend below takes.
+
+| To see traces in | Point the endpoint at |
+| --- | --- |
+| Any backend, with sampling and fan-out | An OpenTelemetry Collector in the cluster: the setup the chart documents |
+| Google Cloud Trace | A Collector that signs its calls with the cluster's Google credentials: Google's exporter, or OTLP to the Telemetry API with the `googleclientauth` extension. Headers alone can't carry Google's short-lived tokens |
+| Sentry | The project's OTLP endpoint, its key in `OTEL_EXPORTER_OTLP_HEADERS` from a Secret |
+| Jaeger, Grafana Tempo, Honeycomb, Datadog | Their OTLP endpoint, directly or through a Collector |
+
+Metrics follow the same way, as OpenTelemetry metrics over OTLP, with the first workload that needs one.
+
 ## Stack and layout
 
 **Agreed:** Go for every service and TypeScript with React for both web apps, in one monorepo
@@ -474,7 +519,7 @@ code is generated from them.
 | Models | One interface in the agent harness, an adapter per provider | Each agent runs on its own provider and model |
 | Sign-in | `go-oidc` with `golang.org/x/oauth2` | Standard OpenID Connect |
 | Configuration | Environment variables, read with `envconfig` | As Octomaton does |
-| Telemetry | `log/slog` JSON on stdout; OpenTelemetry over OTLP | No cloud's monitoring built in |
+| Telemetry | `log/slog` on stdout, JSON in a cluster; OpenTelemetry traces over OTLP, W3C Trace Context ([observability](#observability)) | No cloud's monitoring built in |
 | Web apps | TypeScript, React and Vite, static files that Caddy serves | No Node.js at run time |
 | Web data | GraphQL Code Generator types, through urql | Typed queries; subscriptions for live updates |
 | Web components | Headless primitives styled with the [design system's](design-system.md) CSS variables | Settled with [ENG-194](https://linear.app/arikkfir/issue/ENG-194) |
@@ -523,6 +568,7 @@ design, and settled the open questions.
 | Cron triggers come from the default branch's `/devhub.yaml` only | A branch cannot schedule work | Agreed |
 | Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/devhub.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
 | An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |
+| Logs on stdout, JSON in a cluster; one OpenTelemetry trace across every workload, exported over OTLP wherever the operator says; the request ID is the trace ID unless the caller sent one | Any log stack and any trace backend, with no vendor's code in DevHub | Proposed |
 | The Console shows the settings in effect and every pending change | A settings change is a branch like any other | Agreed |
 | Path rules: merge requirements for changes to paths such as `/devhub.yaml`, which can also refuse pushes there | Settings changes need stricter approval | Agreed |
 | UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Agreed |
