@@ -105,13 +105,15 @@ redirects, CORS and links, and can render the routes as `HTTPRoute`s, off by def
 
 ![The operator routes hosts and paths to each workload’s Service](architecture/routes.svg)
 
-Any hosts and prefixes work, as long as every host sits under one parent domain, which the session cookie names.
+Each workload serves as if it were alone; any hosts and prefixes work, as long as every host sits under one parent
+domain, which the session cookie names.
 
 - **One parent domain.** The Auth server sets the session cookie for the parent domain of every DevHub host, so it
   reaches every API; the APIs answer CORS for the Console's and the Back-office's origins only.
-- **Each workload serves from `/`.** **Changed** (devhub#1 review, 2026-10-28): GraphQL answers at `/` itself, so it
-  takes a host of its own, and the REST and Admin servers' paths start with their version, `/v1/`, never `/api/`. A
-  route that adds a path prefix strips it (an `HTTPRoute` `URLRewrite`).
+- **Each workload serves as if it were alone.** **Changed** (devhub#1 review, 2026-10-28): the Console and GraphQL
+  answer at `/`, and the REST and Admin servers' paths start with their version, `/v1/`, never `/api/`. A host of its
+  own or a path on a shared host is the operator's choice: a route that adds a prefix strips it (an `HTTPRoute`
+  `URLRewrite`), and the pages use relative URLs, so they work under any prefix.
 - **The Admin server and the Back-office can stay internal,** on a gateway only operators reach.
 
 ### Job isolation
