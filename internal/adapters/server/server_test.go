@@ -9,6 +9,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
 // echo answers with its name and the request's ID.
@@ -147,4 +153,70 @@ func TestServe(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHandlerTraces(t *testing.T) {
+	const callerTrace = "4bf92f3577b34da6a3ce929d0e0e4736"
+	tests := []struct {
+		name        string
+		path        string
+		traceparent string
+		requestID   string
+		wantSpans   int
+		wantID      string // empty: the span's trace ID
+	}{
+		{name: "a new trace", path: "/v1/version", wantSpans: 1},
+		{name: "the caller's trace", path: "/v1/version", traceparent: "00-" + callerTrace + "-00f067aa0ba902b7-01", wantSpans: 1, wantID: callerTrace},
+		{name: "the caller's request ID", path: "/v1/version", traceparent: "00-" + callerTrace + "-00f067aa0ba902b7-01", requestID: "abc-1", wantSpans: 1, wantID: "abc-1"},
+		{name: "a probe", path: "/healthz"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			recorder := tracetest.NewSpanRecorder()
+			otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
+			otel.SetTextMapPropagator(propagation.TraceContext{})
+			h := Handler("/", echo("api"), nil)
+			req := httptest.NewRequest("GET", tt.path, nil)
+			if tt.traceparent != "" {
+				req.Header.Set("traceparent", tt.traceparent)
+			}
+			if tt.requestID != "" {
+				req.Header.Set(RequestIDHeader, tt.requestID)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+
+			spans := recorder.Ended()
+			if len(spans) != tt.wantSpans {
+				t.Fatalf("recorded %d spans, want %d", len(spans), tt.wantSpans)
+			}
+			if tt.wantSpans == 1 {
+				checkRequestID(t, rec, spans[0], tt.wantID)
+			}
+		})
+	}
+}
+
+// checkRequestID checks that rec and span name the request ID want, or span's trace ID when want is empty.
+func checkRequestID(t *testing.T, rec *httptest.ResponseRecorder, span sdktrace.ReadOnlySpan, want string) {
+	t.Helper()
+	if want == "" {
+		want = span.SpanContext().TraceID().String()
+	}
+	if got := rec.Header().Get(RequestIDHeader); got != want {
+		t.Errorf("%s = %q, want %q", RequestIDHeader, got, want)
+	}
+	if got := attributeOf(span, "http.request.id"); got != want {
+		t.Errorf("the span's http.request.id = %q, want %q", got, want)
+	}
+}
+
+// attributeOf returns span's attribute key, or "" when it has none.
+func attributeOf(span sdktrace.ReadOnlySpan, key attribute.Key) string {
+	for _, kv := range span.Attributes() {
+		if kv.Key == key {
+			return kv.Value.String()
+		}
+	}
+	return ""
 }

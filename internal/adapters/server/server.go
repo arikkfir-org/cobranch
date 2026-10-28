@@ -1,5 +1,5 @@
 // Package server serves one of DevHub's APIs on a port of its own, beside the health endpoints every server answers.
-// Every response names its request's ID.
+// Every API request gets a span of its trace, and every response names its request's ID.
 package server
 
 import (
@@ -10,16 +10,24 @@ import (
 	"net"
 	"net/http"
 	"time"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 // Handler serves api at pattern, a path or a subtree of them, and answers /healthz while the process runs and /readyz
-// while every one of checks passes.
+// while every one of checks passes. It continues the caller's trace, or starts one, for every request but the probes.
 func Handler(pattern string, api http.Handler, checks map[string]Check) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.Handle("GET /readyz", readyz(checks))
 	mux.Handle(pattern, api)
-	return withRequestID(mux)
+	return otelhttp.NewHandler(withRequestID(mux), "server", otelhttp.WithFilter(notProbe))
+}
+
+// notProbe reports whether r asks for something other than the server's health, which the kubelet asks every few
+// seconds and no trace needs.
+func notProbe(r *http.Request) bool {
+	return r.URL.Path != "/healthz" && r.URL.Path != "/readyz"
 }
 
 // Listen listens for TCP connections on addr.

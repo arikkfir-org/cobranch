@@ -18,10 +18,11 @@ func TestAllowOrigin(t *testing.T) {
 		wantStatus  int
 		wantAllowed string
 		wantMethods string
+		wantHeaders string
 		wantHandled bool
 	}{
 		{name: "the Console's call", allowed: console, method: "GET", origin: console, wantStatus: 200, wantAllowed: console, wantHandled: true},
-		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST"},
+		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate"},
 		{name: "another origin's call", allowed: console, method: "GET", origin: "https://evil.example.com", wantStatus: 200, wantHandled: true},
 		{name: "another origin's preflight", allowed: console, method: "OPTIONS", origin: "https://evil.example.com", preflight: "POST", wantStatus: 200, wantHandled: true},
 		{name: "a call from no page", allowed: console, method: "GET", wantStatus: 200, wantHandled: true},
@@ -51,6 +52,9 @@ func TestAllowOrigin(t *testing.T) {
 			}
 			if got := rec.Header().Get("Access-Control-Allow-Methods"); got != tt.wantMethods {
 				t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, tt.wantMethods)
+			}
+			if got := rec.Header().Get("Access-Control-Allow-Headers"); got != tt.wantHeaders {
+				t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, tt.wantHeaders)
 			}
 		})
 	}

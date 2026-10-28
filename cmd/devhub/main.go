@@ -6,14 +6,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/arikkfir-org/devhub/internal/system/buildinfo"
 )
 
 const usage = "usage: devhub version | migrate | rest-server | graphql-server"
+
+// telemetryFlushTimeout bounds how long a workload waits, as it exits, for its last spans to be exported.
+const telemetryFlushTimeout = 5 * time.Second
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -50,4 +55,14 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// flushTelemetry exports the spans still buffered, giving up after telemetryFlushTimeout even when ctx, which a
+// shutdown ends, has ended. A failure is only logged: the workload's own outcome stands.
+func flushTelemetry(ctx context.Context, flush func(context.Context) error) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), telemetryFlushTimeout)
+	defer cancel()
+	if err := flush(ctx); err != nil {
+		slog.WarnContext(ctx, "Exporting the last spans failed", "error", err)
+	}
 }

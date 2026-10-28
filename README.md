@@ -52,6 +52,10 @@ bin/devhub rest-server                                     # :8080: /healthz, /r
 DEVHUB_HTTP_ADDR=:8081 bin/devhub graphql-server           # :8081: /healthz, /readyz, GraphQL at /
 ```
 
+They log text here and JSON in a pod (`DEVHUB_LOG_FORMAT` picks one, `DEVHUB_LOG_LEVEL` the level), and send traces
+wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
+([Observability](docs/devhub/designs/architecture.md#observability)).
+
 CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
 
 ## Contributing

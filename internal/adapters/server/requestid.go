@@ -5,6 +5,9 @@ import (
 	"crypto/rand"
 	"net/http"
 	"regexp"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // RequestIDHeader names a request's ID, on the request when the caller chose it and on every response.
@@ -21,15 +24,26 @@ func RequestID(ctx context.Context) string {
 	return id
 }
 
-// withRequestID gives every request an ID, the caller's when it sent a sane one, puts it in the request's context and
-// names it in the response.
+// withRequestID gives every request an ID, puts it in the request's context and its span, and names it in the response.
+// The ID is the caller's when it sent a sane one, and otherwise the request's trace ID, so that one ID finds the
+// request's logs and its trace.
 func withRequestID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		span := trace.SpanFromContext(r.Context())
 		id := r.Header.Get(RequestIDHeader)
 		if !callerRequestID.MatchString(id) {
-			id = rand.Text()
+			id = traceID(span)
 		}
+		span.SetAttributes(attribute.String("http.request.id", id))
 		w.Header().Set(RequestIDHeader, id)
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), requestIDKey{}, id)))
 	})
+}
+
+// traceID returns span's trace ID, or a random ID outside a trace.
+func traceID(span trace.Span) string {
+	if sc := span.SpanContext(); sc.HasTraceID() {
+		return sc.TraceID().String()
+	}
+	return rand.Text()
 }

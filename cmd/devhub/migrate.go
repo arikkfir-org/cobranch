@@ -20,9 +20,11 @@ const firstMigrationRetry = time.Second
 // runMigrate brings the database's schema to the version this build needs and exits, waiting for a database that
 // doesn't answer yet until ctx ends. The chart runs it as a Job before the servers roll out.
 func runMigrate(ctx context.Context, logs io.Writer) error {
-	if err := telemetry.Setup(logs, "migrate", buildinfo.Version()); err != nil {
+	flush, err := telemetry.Setup(ctx, logs, "migrate", buildinfo.Version())
+	if err != nil {
 		return fmt.Errorf("setting up telemetry: %w", err)
 	}
+	defer flushTelemetry(ctx, flush)
 	cfg, err := config.LoadMigrate()
 	if err != nil {
 		return fmt.Errorf("configuring: %w", err)

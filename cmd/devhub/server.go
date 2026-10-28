@@ -39,9 +39,11 @@ var (
 // ready once its stores answer and the migrate Job has brought the schema to the version this build needs.
 func runServer(ctx context.Context, logs io.Writer, a api) error {
 	version := buildinfo.Version()
-	if err := telemetry.Setup(logs, a.workload, version); err != nil {
+	flush, err := telemetry.Setup(ctx, logs, a.workload, version)
+	if err != nil {
 		return fmt.Errorf("setting up telemetry: %w", err)
 	}
+	defer flushTelemetry(ctx, flush)
 	cfg, err := config.LoadServer()
 	if err != nil {
 		return fmt.Errorf("configuring: %w", err)
