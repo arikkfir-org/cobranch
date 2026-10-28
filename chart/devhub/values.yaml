@@ -87,6 +87,20 @@ graphqlServer:
   affinity: {}
   podAnnotations: {}
 
+# The Console: its static files and config.json, served by Caddy.
+console:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
 # The Job that migrates the database before the servers of a new version roll out.
 migrate:
   # How long it may wait for the database and migrate, after which it fails.

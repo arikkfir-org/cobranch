@@ -34,7 +34,8 @@ upgrade)
     --set-string "console.podAnnotations.ci/rolled=$now" --set-string "migrate.podAnnotations.ci/rolled=$now"
   [ "$(password)" = "$before" ] || { echo "The upgrade changed the database's password" >&2; exit 1; }
   jobs=$(kubectl -n "$ns" get jobs -l app.kubernetes.io/component=migrate -o name)
-  [ "$(echo "$jobs" | wc -l)" -eq 1 ] || { echo "The upgrade left these migrate Jobs: $jobs" >&2; exit 1; }
+  # Helm deletes the Job the previous release named, and its new one is the only one left.
+  [ -n "$jobs" ] && [ "$(echo "$jobs" | wc -l)" -eq 1 ] || { echo "The upgrade left these migrate Jobs: ${jobs:-none}" >&2; exit 1; }
   if kubectl -n "$ns" logs "$jobs" | grep 'Applied a migration'; then
     echo "The upgrade's migrate Job applied a migration again" >&2
     exit 1

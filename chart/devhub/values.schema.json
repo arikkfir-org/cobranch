@@ -194,6 +194,10 @@
     "restServer": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
       "properties": {
         "replicas": {
           "type": "integer",
@@ -225,6 +229,10 @@
     "graphqlServer": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
       "properties": {
         "replicas": {
           "type": "integer",
@@ -256,6 +264,10 @@
     "migrate": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "activeDeadlineSeconds",
+        "resources"
+      ],
       "properties": {
         "activeDeadlineSeconds": {
           "type": "integer",
@@ -287,6 +299,10 @@
     "console": {
       "type": "object",
       "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
       "properties": {
         "replicas": {
           "type": "integer",
@@ -441,6 +457,10 @@
     }
   },
   "required": [
-    "blob"
+    "blob",
+    "restServer",
+    "graphqlServer",
+    "console",
+    "migrate"
   ]
 }
