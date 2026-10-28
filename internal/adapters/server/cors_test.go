@@ -19,10 +19,11 @@ func TestAllowOrigin(t *testing.T) {
 		wantAllowed string
 		wantMethods string
 		wantHeaders string
+		wantCreds   string
 		wantHandled bool
 	}{
-		{name: "the Console's call", allowed: console, method: "GET", origin: console, wantStatus: 200, wantAllowed: console, wantHandled: true},
-		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate"},
+		{name: "the Console's call", allowed: console, method: "GET", origin: console, wantStatus: 200, wantAllowed: console, wantCreds: "true", wantHandled: true},
+		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
 		{name: "another origin's call", allowed: console, method: "GET", origin: "https://evil.example.com", wantStatus: 200, wantHandled: true},
 		{name: "another origin's preflight", allowed: console, method: "OPTIONS", origin: "https://evil.example.com", preflight: "POST", wantStatus: 200, wantHandled: true},
 		{name: "a call from no page", allowed: console, method: "GET", wantStatus: 200, wantHandled: true},
@@ -47,14 +48,15 @@ func TestAllowOrigin(t *testing.T) {
 			if rec.Code != tt.wantStatus || handled != tt.wantHandled {
 				t.Errorf("status = %d, handled %t, want %d and %t", rec.Code, handled, tt.wantStatus, tt.wantHandled)
 			}
-			if got := rec.Header().Get("Access-Control-Allow-Origin"); got != tt.wantAllowed {
-				t.Errorf("Access-Control-Allow-Origin = %q, want %q", got, tt.wantAllowed)
-			}
-			if got := rec.Header().Get("Access-Control-Allow-Methods"); got != tt.wantMethods {
-				t.Errorf("Access-Control-Allow-Methods = %q, want %q", got, tt.wantMethods)
-			}
-			if got := rec.Header().Get("Access-Control-Allow-Headers"); got != tt.wantHeaders {
-				t.Errorf("Access-Control-Allow-Headers = %q, want %q", got, tt.wantHeaders)
+			for header, want := range map[string]string{
+				"Access-Control-Allow-Origin":      tt.wantAllowed,
+				"Access-Control-Allow-Methods":     tt.wantMethods,
+				"Access-Control-Allow-Headers":     tt.wantHeaders,
+				"Access-Control-Allow-Credentials": tt.wantCreds,
+			} {
+				if got := rec.Header().Get(header); got != want {
+					t.Errorf("%s = %q, want %q", header, got, want)
+				}
 			}
 		})
 	}

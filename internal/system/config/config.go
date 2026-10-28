@@ -34,8 +34,12 @@ type Server struct {
 // Origin is a web origin, a scheme and a host, read from a URL.
 type Origin string
 
-// Decode reads the origin of value, an absolute http or https URL.
+// Decode reads the origin of value, an absolute http or https URL. An empty value is no origin.
 func (o *Origin) Decode(value string) error {
+	if value == "" {
+		*o = ""
+		return nil
+	}
 	u, err := url.Parse(value)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return fmt.Errorf("%q is not an absolute http or https URL", value)

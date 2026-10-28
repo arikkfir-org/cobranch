@@ -2,9 +2,9 @@ package server
 
 import "net/http"
 
-// AllowOrigin lets pages from origin call h from their own (CORS): it answers their preflight requests and names
-// origin on its answers to them. Every other origin gets h's answers alone, which a browser keeps from its page. An
-// empty origin returns h.
+// AllowOrigin lets pages from origin call h from their own (CORS), with the session cookie: it answers their preflight
+// requests and names origin on its answers to them. Every other origin gets h's answers alone, which a browser keeps
+// from its page. An empty origin returns h.
 func AllowOrigin(origin string, h http.Handler) http.Handler {
 	if origin == "" {
 		return h
@@ -16,6 +16,7 @@ func AllowOrigin(origin string, h http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Expose-Headers", RequestIDHeader)
 		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST")

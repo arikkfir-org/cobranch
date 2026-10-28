@@ -6,8 +6,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
+	"net"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -113,14 +116,15 @@ func (s *Schema) Migrate(ctx context.Context) error {
 	return nil
 }
 
-// MigrateUntilDone calls Migrate until it succeeds or ctx ends, waiting between attempts from first up to a minute, so
-// a migration that starts before its database waits for it rather than exiting.
+// MigrateUntilDone calls Migrate until it succeeds, fails for good, or ctx ends, waiting between attempts from first up
+// to a minute, so a migration that starts before its database waits for it rather than exiting. A failure that the
+// next attempt would repeat, such as a broken migration or a missing privilege, returns at once.
 func (s *Schema) MigrateUntilDone(ctx context.Context, first time.Duration) error {
 	wait := first
 	for {
 		err := s.Migrate(ctx)
-		if err == nil {
-			return nil
+		if err == nil || !notReady(err) {
+			return err
 		}
 		slog.WarnContext(ctx, "Could not migrate the database; trying again", "error", err, "in", wait)
 		select {
@@ -130,6 +134,20 @@ func (s *Schema) MigrateUntilDone(ctx context.Context, first time.Duration) erro
 		}
 		wait = min(2*wait, time.Minute)
 	}
+}
+
+// notReady reports whether err means the database isn't ready yet: it can't be reached, drops the connection, is
+// starting, shutting down or out of connections.
+func notReady(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		// Connection exceptions, insufficient resources and operator intervention (such as cannot_connect_now).
+		return strings.HasPrefix(pgErr.Code, "08") || strings.HasPrefix(pgErr.Code, "53") ||
+			strings.HasPrefix(pgErr.Code, "57P")
+	}
+	var connectErr *pgconn.ConnectError
+	var netErr net.Error
+	return errors.As(err, &connectErr) || errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 // Check reports an error until the database's schema is at least the version this build needs, for readiness: the

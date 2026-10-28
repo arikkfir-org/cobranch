@@ -35,6 +35,7 @@ func TestLoadServer(t *testing.T) {
 				ConsoleOrigin:   "https://console.example.com",
 			},
 		},
+		{name: "the Console set empty", env: map[string]string{"DEVHUB_BLOB_URL": "file:///blob", "DEVHUB_CONSOLE_URL": ""}, want: Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}},
 		{name: "the Console without a scheme", env: map[string]string{"DEVHUB_BLOB_URL": "file:///blob", "DEVHUB_CONSOLE_URL": "console"}, wantErr: true},
 		{name: "no bucket", env: map[string]string{}, wantErr: true},
 		{
@@ -72,6 +73,7 @@ func TestOriginDecode(t *testing.T) {
 		{name: "a URL with a path", value: "https://console.example.com/home", want: "https://console.example.com"},
 		{name: "a host in capitals", value: "https://Console.Example.com", want: "https://console.example.com"},
 		{name: "a port", value: "http://localhost:8080/", want: "http://localhost:8080"},
+		{name: "empty", value: "", want: ""},
 		{name: "no scheme", value: "console.example.com", wantErr: true},
 		{name: "another scheme", value: "ftp://console.example.com", wantErr: true},
 		{name: "no host", value: "https:///home", wantErr: true},

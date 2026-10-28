@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -13,6 +16,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 
@@ -279,13 +283,18 @@ func TestSchemaCheckOnceMigrated(t *testing.T) {
 }
 
 func TestSchemaMigrateUntilDone(t *testing.T) {
+	broken := fstest.MapFS{"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE;\n")}}
 	tests := []struct {
-		name    string
-		reach   bool
-		wantErr bool
+		name         string
+		reach        bool
+		sqlFiles     fs.FS
+		goMigrations []*goose.Migration
+		wantErr      bool
+		wantDeadline bool
 	}{
-		{name: "a database that answers", reach: true},
-		{name: "a database that never answers", reach: false, wantErr: true},
+		{name: "a database that answers", reach: true, sqlFiles: migrations.FS, goMigrations: migrations.Go},
+		{name: "a database that never answers", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantErr: true, wantDeadline: true},
+		{name: "a broken migration", reach: true, sqlFiles: broken, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -295,13 +304,37 @@ func TestSchemaMigrateUntilDone(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
-			s := newSchema(t, pool, migrations.FS, migrations.Go...)
+			s := newSchema(t, pool, tt.sqlFiles, tt.goMigrations...)
 			err := s.MigrateUntilDone(ctx, 10*time.Millisecond)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("MigrateUntilDone() error = %v, want error %t", err, tt.wantErr)
 			}
-			if err != nil && !errors.Is(err, context.DeadlineExceeded) {
-				t.Errorf("MigrateUntilDone() error = %v, want the context's", err)
+			if gotDeadline := errors.Is(err, context.DeadlineExceeded); gotDeadline != tt.wantDeadline {
+				t.Errorf("MigrateUntilDone() error = %v, want the context's %t", err, tt.wantDeadline)
+			}
+		})
+	}
+}
+
+func TestNotReady(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "refused", err: &pgconn.ConnectError{}, want: true},
+		{name: "a network timeout", err: fmt.Errorf("migrating: %w", &net.OpError{Op: "dial", Err: os.ErrDeadlineExceeded}), want: true},
+		{name: "a dropped connection", err: fmt.Errorf("reading: %w", io.ErrUnexpectedEOF), want: true},
+		{name: "starting up", err: &pgconn.PgError{Code: "57P03"}, want: true},
+		{name: "too many connections", err: &pgconn.PgError{Code: "53300"}, want: true},
+		{name: "a syntax error", err: &pgconn.PgError{Code: "42601"}},
+		{name: "a missing privilege", err: &pgconn.PgError{Code: "42501"}},
+		{name: "migrations out of order", err: errors.New("found 1 missing (out-of-order) migration")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := notReady(tt.err); got != tt.want {
+				t.Errorf("notReady(%v) = %t, want %t", tt.err, got, tt.want)
 			}
 		})
 	}
