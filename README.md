@@ -8,7 +8,7 @@ DevHub is a Kfirs project, created by Arik Kfir, and is released under the [MIT 
 
 ## Status
 
-Foundations. Nothing installs yet: the first installable slice is the Helm chart's skeleton ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)). The work is tracked in Linear's [DevHub project](https://linear.app/arikkfir/project/devhub-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/devhub/designs/`](docs/devhub/designs/) holds snapshots of them, published to the hub's docs site under `devhub/designs/`, behind its sign-in.
+Foundations. The Helm chart installs DevHub's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), and pipeline `main` publishes the images of `main`'s newest commit ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). The work is tracked in Linear's [DevHub project](https://linear.app/arikkfir/project/devhub-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/devhub/designs/`](docs/devhub/designs/) holds snapshots of them, published to the hub's docs site under `devhub/designs/`, behind its sign-in.
 
 ## Layout
 
@@ -58,24 +58,32 @@ They log text here and JSON in a pod (`DEVHUB_LOG_FORMAT` picks one, `DEVHUB_LOG
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
 ([Observability](https://docs.dev.kfirs.com/devhub/designs/architecture.md#observability)).
 
-CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
+CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, and pipeline `main` publishes both images of `main`'s newest commit. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
 
 ## Installing
 
-Images are not published yet: build them, push them where your cluster pulls from, and install the chart with a
-bucket. It runs its own PostgreSQL unless you give it yours, and a Job migrates the database before the servers roll
-out (`chart/devhub/values.yaml` lists every value):
+Pipeline `main` publishes images `devhub` and `devhub-console` of `main`'s newest commit to
+`me-west1-docker.pkg.dev/arikkfir/devhub`, tagged with the commit's first seven characters: an older commit may have
+none, since a push that a newer one overtakes while it waits is never built. Versions, and the chart itself, come with
+releases. Install the chart from a checkout of `main` with a bucket. It runs its own PostgreSQL unless you give it
+yours, and a Job migrates the database before the servers roll out (`chart/devhub/values.yaml` lists every value):
+
+```bash
+registry=me-west1-docker.pkg.dev/arikkfir/devhub tag=$(git rev-parse HEAD | cut -c1-7)
+helm install devhub chart/devhub --namespace devhub --create-namespace \
+  --set images.devhub.repository=$registry/devhub --set-string images.devhub.tag=$tag \
+  --set images.console.repository=$registry/devhub-console --set-string images.console.tag=$tag \
+  --set blob.url='gs://my-devhub-bucket'
+helm test devhub --namespace devhub
+```
+
+For a commit of your own, build both images, push them where your cluster pulls from, and install with those
+repositories and tag `dev`:
 
 ```bash
 docker build --build-arg VERSION=dev -t registry.example.com/devhub:dev .
 docker build -t registry.example.com/devhub-console:dev web/console
 docker push registry.example.com/devhub:dev && docker push registry.example.com/devhub-console:dev
-
-helm install devhub chart/devhub --namespace devhub --create-namespace \
-  --set images.devhub.repository=registry.example.com/devhub --set images.devhub.tag=dev \
-  --set images.console.repository=registry.example.com/devhub-console --set images.console.tag=dev \
-  --set blob.url='gs://my-devhub-bucket'
-helm test devhub --namespace devhub
 ```
 
 Every workload serves as if it were alone, so you choose where each one lives: a host each, or paths on one host

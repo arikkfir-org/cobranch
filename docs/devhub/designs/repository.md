@@ -63,6 +63,21 @@ applied anything; `retest` tests again. Both tasks clone the commit with one Ste
 Every image is pinned to a version. The cluster’s pods count against the daemon’s resources, not the steps’, and nothing
 outlives the run: the clone is anonymous, and the task holds no token and no cloud role.
 
+Pipeline `main` runs on pushes to `main`. It builds both images in a Docker daemon, as task `chart` does, and pushes
+them to DevHub's public repository on Artifact Registry, tagged with the commit's first seven characters, which the
+binary reports as its version too. An installation that follows `main` runs the images of the commit it is at, so only
+the newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
+commit always gets its images. Versions and the chart's own publishing follow with the rest of
+[ENG-207](https://linear.app/arikkfir/issue/ENG-207).
+
+**Pipeline main publishes both images of main’s newest commit, tagged with its short SHA**
+
+![Pipeline main publishes both images of main’s newest commit, tagged with its short SHA](repository/main.svg)
+
+The repository, its address and its grants are infra’s ([Artifact
+Registry](../../infra/terraform/gcp.md#artifact-registry)); ServiceAccount `ci-devhub-release` and the branches it may
+run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
+
 ## Checks
 
 `Docs` composes `docs/devhub/` with the other repositories' layers and fails on a broken link (the [docs site
