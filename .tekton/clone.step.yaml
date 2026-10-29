@@ -1,0 +1,25 @@
+# Checks out the commit into the step's working directory, the task's source workspace, anonymously: the repository is
+# public. Tasks ci and chart share it; Octomaton inlines it into each step that references it by name.
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: clone
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  image: docker.io/alpine/git:2.54.0
+  env:
+    - name: REPO_URL
+      value: $(params.repo-url)
+    - name: REVISION
+      value: $(params.revision)
+  script: |
+    #!/bin/sh
+    set -eu
+    git init --quiet .
+    git fetch --quiet --depth=1 "$REPO_URL" "$REVISION"
+    git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
+    git log -1 --format='Checked out %H: %s'

@@ -1,6 +1,6 @@
-# The task of .tekton/ci.yaml: check out the commit, check its generated code, then lint, vet, test (with the race
-# detector, against a PostgreSQL sidecar) and build it, and run the binary it built. Octomaton inlines it into the
-# PipelineRun.
+# Task ci of .tekton/ci.yaml: check out the commit, check its generated code, then lint, vet, test (with the race
+# detector, against a PostgreSQL sidecar) and build it, and run the binary it built. Octomaton inlines it, and the
+# step it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -56,19 +56,12 @@ spec:
         periodSeconds: 2
   steps:
     - name: clone
-      image: docker.io/alpine/git:2.54.0
-      env:
-        - name: REPO_URL
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
           value: $(params.repo-url)
-        - name: REVISION
+        - name: revision
           value: $(params.revision)
-      script: |
-        #!/bin/sh
-        set -eu
-        git init --quiet .
-        git fetch --quiet --depth=1 "$REPO_URL" "$REVISION"
-        git -c advice.detachedHead=false checkout --quiet FETCH_HEAD
-        git log -1 --format='Checked out %H: %s'
     - name: generated
       image: docker.io/library/golang:1.27.1
       command: [sh, .tekton/scripts/generated.sh]

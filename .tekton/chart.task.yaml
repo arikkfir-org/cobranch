@@ -1,0 +1,108 @@
+# Task chart of .tekton/ci.yaml: build both images and install the chart on a throwaway kind cluster, in a privileged
+# Docker daemon beside the steps; test the release, upgrade it, and test it again. Octomaton inlines it, and the step
+# it references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: chart
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  volumes:
+    - name: docker-socket
+      emptyDir: {}
+    - name: docker-data
+      emptyDir: {}
+    - name: go-cache
+      emptyDir: {}
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      # The images' tag and the version the binary reports: the commit.
+      - name: VERSION
+        value: $(params.revision)
+      - name: DOCKER_HOST
+        value: unix:///run/docker/docker.sock
+      - name: KUBECONFIG
+        value: $(workspaces.source.path)/.ci/kubeconfig
+    volumeMounts:
+      - name: docker-socket
+        mountPath: /run/docker
+  sidecars:
+    # Builds the images and runs the cluster, so the cluster's pods count against its resources. It listens only on a
+    # socket the steps share, never on the pod's network.
+    - name: dockerd
+      image: docker.io/library/docker:29.9.2-dind@sha256:9e79b879b177fbd72c34376a3dd3d91747da5db49e1f560f76aea59561471977
+      args: [dockerd, --host=unix:///run/docker/docker.sock, --registry-mirror=https://mirror.gcr.io]
+      securityContext:
+        privileged: true
+      computeResources:
+        requests:
+          cpu: "2"
+          memory: 4Gi
+        limits:
+          memory: 8Gi
+      readinessProbe:
+        exec:
+          command: [docker, --host=unix:///run/docker/docker.sock, info]
+        periodSeconds: 2
+      volumeMounts:
+        - name: docker-socket
+          mountPath: /run/docker
+        - name: docker-data
+          mountPath: /var/lib/docker
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+    - name: lint
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/chart-lint.sh]
+    # From its Go module, which the checksum database vouches for.
+    - name: kind
+      image: docker.io/library/golang:1.27.1
+      env:
+        - name: GOBIN
+          value: $(workspaces.source.path)/.ci/bin
+        - name: GOCACHE
+          value: /go-cache/build
+        - name: GOMODCACHE
+          value: /go-cache/mod
+        - name: GOTOOLCHAIN
+          value: local
+        - name: GOMAXPROCS
+          value: "4"
+        - name: CGO_ENABLED
+          value: "0"
+      volumeMounts:
+        - name: go-cache
+          mountPath: /go-cache
+      command: [go, install, sigs.k8s.io/kind@v0.33.0]
+    - name: images
+      image: docker.io/library/docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
+      command: [sh, .tekton/scripts/chart-images.sh]
+    - name: cluster
+      image: docker.io/library/docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
+      command: [sh, .tekton/scripts/chart-cluster.sh]
+    - name: install
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/chart-install.sh, install]
+    - name: test
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [helm, test, devhub, --namespace=devhub, --logs, --timeout=3m]
+    # Rolls every pod; the generated password stays, and no migration runs again.
+    - name: upgrade
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/chart-install.sh, upgrade]
+    - name: retest
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [helm, test, devhub, --namespace=devhub, --logs, --timeout=3m]

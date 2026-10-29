@@ -1,0 +1,466 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DevHub's chart values",
+  "type": "object",
+  "additionalProperties": false,
+  "definitions": {
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The image's repository, without a tag."
+        },
+        "tag": {
+          "type": "string",
+          "description": "Empty means the chart's appVersion."
+        },
+        "pullPolicy": {
+          "type": "string",
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      },
+      "required": [
+        "repository"
+      ]
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requests": {
+          "type": "object"
+        },
+        "limits": {
+          "type": "object"
+        },
+        "claims": {
+          "type": "array"
+        }
+      }
+    }
+  },
+  "properties": {
+    "images": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "devhub": {
+          "$ref": "#/definitions/image"
+        },
+        "console": {
+          "$ref": "#/definitions/image"
+        }
+      },
+      "required": [
+        "devhub",
+        "console"
+      ]
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    "urls": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "console": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Console's public URL: a host, and a path the route strips if any. Such as https://devhub.example.com."
+        },
+        "rest": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The REST API's public URL, under which it answers /v1/: a host, and a path the route strips if any. Such as https://api.devhub.example.com or https://devhub.example.com/api."
+        },
+        "graphql": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The GraphQL API's public URL: a host, and a path the route strips if any. Such as https://graphql.devhub.example.com or https://devhub.example.com/graphql."
+        }
+      }
+    },
+    "blob": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "type": "string",
+          "pattern": "^(s3|gs|azblob|file)://.+",
+          "description": "The bucket's Go Cloud URL: s3://, gs://, azblob:// or file://."
+        },
+        "envFromSecret": {
+          "type": "string"
+        },
+        "volume": {
+          "type": "object"
+        },
+        "mountPath": {
+          "type": "string",
+          "pattern": "^/"
+        }
+      },
+      "required": [
+        "url"
+      ]
+    },
+    "serviceAccount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "logLevel": {
+          "type": "string",
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "traces": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "pattern": "^(https?://.+)?$"
+            },
+            "headersSecret": {
+              "type": "string"
+            },
+            "headersKey": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sampleRatio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "env": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^OTEL_[A-Z0-9_]+$",
+            "not": {
+              "enum": [
+                "OTEL_EXPORTER_OTLP_ENDPOINT",
+                "OTEL_EXPORTER_OTLP_HEADERS",
+                "OTEL_SERVICE_NAME",
+                "OTEL_TRACES_SAMPLER",
+                "OTEL_TRACES_SAMPLER_ARG"
+              ]
+            }
+          },
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "restServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "graphqlServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "migrate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "activeDeadlineSeconds",
+        "resources"
+      ],
+      "properties": {
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 60
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "image": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repository": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The image's repository, without a tag."
+            },
+            "tag": {
+              "type": "string",
+              "description": "The image's tag."
+            },
+            "pullPolicy": {
+              "type": "string",
+              "enum": [
+                "Always",
+                "IfNotPresent",
+                "Never"
+              ]
+            }
+          },
+          "required": [
+            "repository"
+          ]
+        },
+        "auth": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "database": {
+              "type": "string",
+              "minLength": 1
+            },
+            "username": {
+              "type": "string",
+              "minLength": 1
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "secretKey": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "size": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?(Ki|Mi|Gi|Ti|Pi|Ei|k|M|G|T|P|E)?$"
+            },
+            "storageClassName": {
+              "type": "string"
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "externalDatabase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "urlKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "httpRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "parentRefs": {
+          "type": "array"
+        }
+      }
+    },
+    "global": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "blob",
+    "restServer",
+    "graphqlServer",
+    "console",
+    "migrate"
+  ]
+}
