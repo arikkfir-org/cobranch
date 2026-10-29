@@ -7,6 +7,9 @@ metadata:
   name: {{ $name }}
   labels:
     {{- include "devhub.labels" $component | nindent 4 }}
+  annotations:
+    # Argo CD rolls the Console out with the servers whose API it calls, once the migrate Job is done.
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: {{ $values.replicas }}
   selector:
