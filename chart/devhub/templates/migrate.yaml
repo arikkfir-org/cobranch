@@ -4,7 +4,7 @@
 # Migrates the database to this version's schema. A Job's pod template can't change, so a new one runs whenever it
 # would: its name ends with a hash of its spec, which names the image's version. Helm creates it with the release, and
 # the servers wait unready until the schema is theirs; Argo CD runs it a wave after PostgreSQL and a wave before the
-# servers.
+# servers and the Console.
 apiVersion: batch/v1
 kind: Job
 metadata:
