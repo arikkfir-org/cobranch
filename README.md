@@ -71,8 +71,8 @@ yours, and a Job migrates the database before the servers roll out (`chart/devhu
 ```bash
 registry=me-west1-docker.pkg.dev/arikkfir/devhub tag=$(git rev-parse HEAD | cut -c1-7)
 helm install devhub chart/devhub --namespace devhub --create-namespace \
-  --set images.devhub.repository=$registry/devhub --set images.devhub.tag=$tag \
-  --set images.console.repository=$registry/devhub-console --set images.console.tag=$tag \
+  --set images.devhub.repository=$registry/devhub --set-string images.devhub.tag=$tag \
+  --set images.console.repository=$registry/devhub-console --set-string images.console.tag=$tag \
   --set blob.url='gs://my-devhub-bucket'
 helm test devhub --namespace devhub
 ```
