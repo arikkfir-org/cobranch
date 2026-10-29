@@ -1,0 +1,66 @@
+# Task main of .tekton/main.yaml (its pipeline task publish): build images devhub and devhub-console in a Docker
+# daemon beside the steps, and push them to Artifact Registry, tagged with the commit's short SHA. Octomaton inlines
+# it, and the step it references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: main
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  volumes:
+    - name: docker-socket
+      emptyDir: {}
+    - name: docker-data
+      emptyDir: {}
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: REVISION
+        value: $(params.revision)
+      - name: REGISTRY
+        value: me-west1-docker.pkg.dev/arikkfir/devhub
+      - name: DOCKER_HOST
+        value: unix:///run/docker/docker.sock
+    volumeMounts:
+      - name: docker-socket
+        mountPath: /run/docker
+  sidecars:
+    # Builds and pushes the images. It listens only on a socket the steps share, never on the pod's network.
+    - name: dockerd
+      image: docker.io/library/docker:29.9.2-dind@sha256:9e79b879b177fbd72c34376a3dd3d91747da5db49e1f560f76aea59561471977
+      args: [dockerd, --host=unix:///run/docker/docker.sock, --registry-mirror=https://mirror.gcr.io]
+      securityContext:
+        privileged: true
+      # The Go build of image devhub is the peak.
+      computeResources:
+        requests:
+          cpu: "2"
+          memory: 3Gi
+        limits:
+          memory: 6Gi
+      readinessProbe:
+        exec:
+          command: [docker, --host=unix:///run/docker/docker.sock, info]
+        periodSeconds: 2
+      volumeMounts:
+        - name: docker-socket
+          mountPath: /run/docker
+        - name: docker-data
+          mountPath: /var/lib/docker
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+    - name: publish
+      image: docker.io/library/docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
+      command: [sh, .tekton/scripts/publish.sh]

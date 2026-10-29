@@ -1,0 +1,48 @@
+# DevHub's build of main: build images devhub and devhub-console of a commit and push them to Artifact Registry,
+# tagged with the commit's short SHA (main.task.yaml). The pod pushes as ServiceAccount ci-devhub-release, through
+# Workload Identity: the one ServiceAccount allowed to push, which only main may use (octomaton.dev/branches). A plain
+# Tekton PipelineRun; Octomaton sets the params.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: devhub-main-
+spec:
+  taskRunTemplate:
+    serviceAccountName: ci-devhub-release
+  # The steps only drive the Docker daemon, which its sidecar holds, with resources of its own.
+  taskRunSpecs:
+    - pipelineTaskName: publish
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+  workspaces:
+    - name: source
+      emptyDir: {}
+  pipelineSpec:
+    params:
+      - name: repo-url
+        type: string
+        description: Git URL of the repository.
+      - name: revision
+        type: string
+        description: Commit to publish.
+    workspaces:
+      - name: source
+    tasks:
+      - name: publish
+        # A lost node (an upgrade or a repair) kills the build. An installation runs the images of every commit of
+        # main, so try again: pushing the same tags twice is harmless.
+        retries: 2
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: main # .tekton/main.task.yaml
