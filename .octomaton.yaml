@@ -14,8 +14,8 @@ pipelines:
       revision: "{{ .Revision }}"
     timeout: 30m
 
-  # Publish both images of every push to main, tagged with the commit's short SHA (also the version the binary
-  # reports), for an installation that runs main. Never give it a paths filter: every commit of main has images.
+  # Publish both images of main's newest commit, tagged with its short SHA (also the version the binary reports), for
+  # an installation that follows main. Never give it a paths filter: main's newest commit must always have its images.
   - name: main
     pipelineRun: .tekton/main.yaml
     on:
@@ -25,7 +25,8 @@ pipelines:
       repo-url: "{{ .Repository.CloneURL }}"
       revision: "{{ .Revision }}"
     timeout: 30m
-    # An installation runs the images of whatever commit main is at: only the newest waiting push needs building.
+    # An installation runs the images of whatever commit main is at: only the newest waiting push needs building, so a
+    # push that a newer one overtakes while it waits publishes nothing.
     concurrency:
       group: main
       policy: latest

@@ -33,8 +33,8 @@ spec:
       - name: source
     tasks:
       - name: publish
-        # A lost node (an upgrade or a repair) kills the build. An installation runs the images of every commit of
-        # main, so try again: pushing the same tags twice is harmless.
+        # A lost node (an upgrade or a repair) kills the build. An installation runs the images of the commit main is
+        # at, so try again: pushing the same tags twice is harmless.
         retries: 2
         params:
           - name: repo-url
