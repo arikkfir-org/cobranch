@@ -83,7 +83,7 @@ INSERT INTO roles (id, scope, name, description, permissions, built_in) VALUES
     ('00000000-0000-7000-8000-000000000102', 'installation', 'Installation user', 'Creates organizations.',
      '{orgs.create}', true),
     ('00000000-0000-7000-8000-000000000201', 'organization', 'Owner', 'Everything in the organization.',
-     '{org.read,org.manage,org.members.manage,org.roles.manage,org.api_keys.manage,repos.create,agents.create,agents.assign,repo.read,repo.push,repo.merge,repo.manage,repo.bypass,annotations.write,annotations.delete_any,reviews.submit,messages.post,messages.moderate,jobs.run}', true),
+     '{org.read,org.manage,org.members.manage,org.grants.manage,org.principals.manage,org.audit.read,agents.create,agents.assign,repos.create,repo.read,repo.push,repo.merge,repo.bypass,repo.manage,annotations.write,annotations.delete_any,reviews.submit,messages.post,messages.moderate,jobs.run,secrets.manage,secrets.read}', true),
     ('00000000-0000-7000-8000-000000000202', 'organization', 'Member', 'Sees the organization, creates repositories and agents.',
      '{org.read,repos.create,agents.create,agents.assign}', true),
     ('00000000-0000-7000-8000-000000000203', 'organization', 'Guest', 'Sees the organization alone; repositories by their own grants.',
@@ -92,8 +92,8 @@ INSERT INTO roles (id, scope, name, description, permissions, built_in) VALUES
      '{repo.read}', true),
     ('00000000-0000-7000-8000-000000000302', 'repository', 'Developer', 'Pushes, merges, reviews, posts and runs jobs.',
      '{repo.read,repo.push,repo.merge,annotations.write,reviews.submit,messages.post,jobs.run}', true),
-    ('00000000-0000-7000-8000-000000000303', 'repository', 'Maintainer', 'A developer who also manages the repository, bypasses its rules and moderates.',
-     '{repo.read,repo.push,repo.merge,repo.manage,repo.bypass,annotations.write,annotations.delete_any,reviews.submit,messages.post,messages.moderate,jobs.run}', true),
+    ('00000000-0000-7000-8000-000000000303', 'repository', 'Maintainer', 'A developer who also manages the repository and its secrets, bypasses its rules and moderates.',
+     '{repo.read,repo.push,repo.merge,repo.bypass,repo.manage,annotations.write,annotations.delete_any,reviews.submit,messages.post,messages.moderate,jobs.run,secrets.manage,secrets.read}', true),
     ('00000000-0000-7000-8000-000000000304', 'repository', 'Automation', 'Reads, annotates, reviews and posts, as a job does.',
      '{repo.read,annotations.write,reviews.submit,messages.post}', true);
 

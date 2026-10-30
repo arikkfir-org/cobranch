@@ -148,8 +148,11 @@
     </section>
   </main>
   <script>
-    // Relative to the page, wherever the operator mounts the Console: its route strips any prefix.
-    const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
+    // The Console's root, wherever the operator mounts it (its route strips the prefix): the page's path without its
+    // one sub-route, /sign-in, which the Auth server sends a failed sign-in back to. config.json lives at the root.
+    const base = location.pathname.replace(/\/sign-in\/?$/, "/").replace(/\/?$/, "/");
+    // Where a sign-in returns to: a path of the Console's URL, so without the mount prefix; its home, the one page.
+    const back = "/";
     const byId = (id) => document.getElementById(id);
     // What a failed sign-in's error code means, by the code the Auth server sent us back with.
     const errors = {
@@ -204,8 +207,6 @@
         byId("not-set-up").hidden = false;
         return;
       }
-      // Back to the page the person asked for once signed in, as a path of this Console.
-      const back = location.pathname.replace(/\/sign-in$/, "") || "/";
       return getJSON(authUrl + "/providers", { headers: { Accept: "application/json" } }).then(({ providers, seeded }) => {
         byId("not-set-up").hidden = providers.length > 0 || seeded.length > 0;
         for (const p of providers) {

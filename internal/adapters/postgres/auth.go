@@ -228,7 +228,10 @@ func (s *AuthStore) Session(ctx context.Context, tokenHash []byte) (auth.Session
 
 // emails lists the emails user id holds.
 func (s *AuthStore) emails(ctx context.Context, id uuid.UUID) ([]auth.Email, error) {
-	rows, _ := s.pool.Query(ctx, "SELECT email, verified FROM principal_emails WHERE principal_id = $1 ORDER BY created_at", id)
+	rows, err := s.pool.Query(ctx, "SELECT email, verified FROM principal_emails WHERE principal_id = $1 ORDER BY created_at", id)
+	if err != nil {
+		return nil, fmt.Errorf("listing the user's emails: %w", err)
+	}
 	emails, err := pgx.CollectRows(rows, pgx.RowToStructByPos[auth.Email])
 	if err != nil {
 		return nil, fmt.Errorf("listing the user's emails: %w", err)
@@ -283,8 +286,11 @@ func (s *AuthStore) Revoke(ctx context.Context, userID, id uuid.UUID, now time.T
 
 // SeededUsers lists the demo data's users: those with an identity of auth.SeedIssuer, by display name.
 func (s *AuthStore) SeededUsers(ctx context.Context) ([]auth.Seeded, error) {
-	rows, _ := s.pool.Query(ctx, `SELECT i.subject, p.display_name, i.email
+	rows, err := s.pool.Query(ctx, `SELECT i.subject, p.display_name, i.email
 		FROM principals p JOIN identities i ON i.principal_id = p.id WHERE i.issuer = $1 ORDER BY p.display_name`, auth.SeedIssuer)
+	if err != nil {
+		return nil, fmt.Errorf("listing the seeded users: %w", err)
+	}
 	users, err := pgx.CollectRows(rows, pgx.RowToStructByPos[auth.Seeded])
 	if err != nil {
 		return nil, fmt.Errorf("listing the seeded users: %w", err)

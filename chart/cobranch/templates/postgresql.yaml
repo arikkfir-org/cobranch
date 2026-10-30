@@ -164,7 +164,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/component
                 operator: In
-                values: [rest-server, graphql-server, migrate]
+                values: [rest-server, graphql-server, auth-server, migrate, maintenance]
       ports:
         - port: postgresql
 {{- end }}

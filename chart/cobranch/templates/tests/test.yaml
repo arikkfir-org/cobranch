@@ -37,7 +37,9 @@ spec:
           console=http://{{ $fullname }}-console
           auth=http://{{ $fullname }}-auth-server
           wget -qO- "$rest/readyz"; echo
+          {{- if .Values.urls.auth }}
           wget -qO- "$auth/readyz"; echo
+          {{- end }}
           # The version the binary was built as: a release's images are main's, retagged, so they report its commit.
           version=$(wget -qO- "$rest/v1/version" | tee /dev/stderr | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
           [ -n "$version" ]
@@ -48,7 +50,7 @@ spec:
           wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}","authUrl":"{{ .Values.urls.auth | trimSuffix "/" }}"'
           # Anonymous gets 401 from /v1/me, as a problem.
           wget -qO- --server-response "$rest/v1/me" 2>&1 | grep -q 'HTTP/1.1 401'
-          {{- if .Values.seed.enabled }}
+          {{- if and .Values.seed.enabled .Values.urls.auth }}
           # The sign-in page lists the demo users, a seeded sign-in sets the session cookie, and the cookie signs in.
           wget -qO- "$auth/providers" | tee /dev/stderr | grep -q '"subject":"owner"'
           cookie=$(wget -qO- --server-response --max-redirect=0 "$auth/sign-in?user=owner" 2>&1 | sed -n 's/^ *Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p')

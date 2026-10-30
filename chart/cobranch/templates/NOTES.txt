@@ -6,10 +6,14 @@ WARNING: seed.enabled is on. The migrate Job adds Cobranch's demo data to this i
 sign-in page signs anyone in as one of its users. It is for previews of Cobranch's own pull requests only: never leave
 it on for a real installation.
 {{- end }}
-{{- if not .Values.auth.providers }}
+{{- if not .Values.urls.auth }}
+
+Nobody can sign in yet: urls.auth is empty, so the Auth server isn't deployed and the Console says sign-in isn't set up.
+Set it to the Auth server's public URL, then list your identity providers in auth.providers.
+{{- else if not .Values.auth.providers }}
 
 Nobody can sign in yet: auth.providers lists no identity provider, so the Console says sign-in isn't set up. Register a
-client at your provider with {{ .Values.urls.auth | default "urls.auth" }}/callback as its redirect URI, and list it.
+client at your provider with {{ .Values.urls.auth }}/callback as its redirect URI, and list it.
 {{- end }}
 {{- if .Values.httpRoute.enabled }}
 
