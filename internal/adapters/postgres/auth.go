@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -11,30 +12,38 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
 )
 
 // uniqueViolation is PostgreSQL's error code for a row that a unique constraint refuses.
 const uniqueViolation = "23505"
 
-// AuthStore keeps sign-in's rows (db/migrations/00002_sign_in.sql): auth.Store on PostgreSQL.
+// AuthStore keeps sign-in's rows (db/migrations/00002_sign_in.sql): auth.Store on PostgreSQL, through the queries sqlc
+// generates from db/queries.
 type AuthStore struct {
 	pool *pgxpool.Pool
+	q    *queries.Queries
 }
 
 // NewAuthStore returns sign-in's store on pool's database.
 func NewAuthStore(pool *pgxpool.Pool) *AuthStore {
-	return &AuthStore{pool: pool}
+	return &AuthStore{pool: pool, q: queries.New(pool)}
 }
 
 var _ auth.Store = (*AuthStore)(nil)
 
 // CreateFlow records a sign-in that began.
 func (s *AuthStore) CreateFlow(ctx context.Context, f auth.Flow) error {
-	_, err := s.pool.Exec(ctx, `INSERT INTO sign_in_flows
-		(state_hash, browser_hash, provider_id, nonce, pkce_verifier, return_path, expires_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		f.StateHash, f.BrowserHash, f.ProviderID, f.Nonce, f.PKCEVerifier, f.ReturnPath, f.ExpiresAt)
+	err := s.q.CreateFlow(ctx, queries.CreateFlowParams{
+		StateHash:    f.StateHash,
+		BrowserHash:  f.BrowserHash,
+		ProviderID:   f.ProviderID,
+		Nonce:        f.Nonce,
+		PkceVerifier: f.PKCEVerifier,
+		ReturnPath:   f.ReturnPath,
+		ExpiresAt:    f.ExpiresAt,
+	})
 	if err != nil {
 		return fmt.Errorf("inserting the sign-in flow: %w", err)
 	}
@@ -43,79 +52,77 @@ func (s *AuthStore) CreateFlow(ctx context.Context, f auth.Flow) error {
 
 // TakeFlow deletes the flow stateHash names and returns it, so each is finished once.
 func (s *AuthStore) TakeFlow(ctx context.Context, stateHash []byte) (auth.Flow, error) {
-	var f auth.Flow
-	err := s.pool.QueryRow(ctx, `DELETE FROM sign_in_flows WHERE state_hash = $1
-		RETURNING state_hash, browser_hash, provider_id, nonce, pkce_verifier, return_path, expires_at`, stateHash).
-		Scan(&f.StateHash, &f.BrowserHash, &f.ProviderID, &f.Nonce, &f.PKCEVerifier, &f.ReturnPath, &f.ExpiresAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return auth.Flow{}, auth.ErrNotFound
-	}
+	f, err := s.q.TakeFlow(ctx, stateHash)
 	if err != nil {
-		return auth.Flow{}, fmt.Errorf("taking the sign-in flow: %w", err)
+		return auth.Flow{}, wrap("taking the sign-in flow", err)
 	}
-	return f, nil
+	return auth.Flow{
+		StateHash:    f.StateHash,
+		BrowserHash:  f.BrowserHash,
+		ProviderID:   f.ProviderID,
+		Nonce:        f.Nonce,
+		PKCEVerifier: f.PkceVerifier,
+		ReturnPath:   f.ReturnPath,
+		ExpiresAt:    f.ExpiresAt,
+	}, nil
 }
 
-const identityColumns = "issuer, subject, principal_id, email, email_verified, name, last_sign_in_at"
-
-func scanIdentity(row pgx.Row) (auth.Identity, error) {
-	var i auth.Identity
-	err := row.Scan(&i.Issuer, &i.Subject, &i.UserID, &i.Email, &i.EmailVerified, &i.Name, &i.LastSignInAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return auth.Identity{}, auth.ErrNotFound
+// identity is the domain's view of an identities row.
+func identity(i queries.Identity) auth.Identity {
+	return auth.Identity{
+		Issuer:        i.Issuer,
+		Subject:       i.Subject,
+		UserID:        i.PrincipalID,
+		Email:         i.Email,
+		EmailVerified: i.EmailVerified,
+		Name:          i.Name,
+		LastSignInAt:  i.LastSignInAt,
 	}
-	if err != nil {
-		return auth.Identity{}, fmt.Errorf("reading the identity: %w", err)
-	}
-	return i, nil
 }
 
 // Identity finds who issuer and subject signed in as.
 func (s *AuthStore) Identity(ctx context.Context, issuer, subject string) (auth.Identity, error) {
-	return scanIdentity(s.pool.QueryRow(ctx,
-		"SELECT "+identityColumns+" FROM identities WHERE issuer = $1 AND subject = $2", issuer, subject))
+	i, err := s.q.Identity(ctx, issuer, subject)
+	if err != nil {
+		return auth.Identity{}, wrap("reading the identity", err)
+	}
+	return identity(i), nil
 }
 
 // EmailHolder finds the user who holds email, verified, and the issuer of one of their identities.
 func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, string, error) {
-	var id uuid.UUID
-	var issuer string
-	err := s.pool.QueryRow(ctx, `SELECT e.principal_id, coalesce((SELECT i.issuer FROM identities i
-		WHERE i.principal_id = e.principal_id ORDER BY i.last_sign_in_at DESC LIMIT 1), '')
-		FROM principal_emails e WHERE e.email = $1 AND e.verified`, email).Scan(&id, &issuer)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return uuid.Nil, "", auth.ErrNotFound
-	}
+	h, err := s.q.EmailHolder(ctx, email)
 	if err != nil {
-		return uuid.Nil, "", fmt.Errorf("finding the email's holder: %w", err)
+		return uuid.Nil, "", wrap("finding the email's holder", err)
 	}
-	return id, issuer, nil
+	return h.PrincipalID, h.Issuer, nil
 }
 
 // SignUp creates a user, their identity, their verified email if any, their installation grants and the event.
 func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
-	return s.transact(ctx, "signing up", func(tx pgx.Tx) error {
+	return s.transact(ctx, "signing up", func(q *queries.Queries) error {
 		p, i := up.Principal, up.Identity
-		if _, err := tx.Exec(ctx, "INSERT INTO principals (id, kind, display_name, created_at) VALUES ($1, $2, $3, $4)",
-			p.ID, p.Kind, p.DisplayName, i.LastSignInAt); err != nil {
+		if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{
+			ID: p.ID, Kind: string(p.Kind), DisplayName: p.DisplayName, CreatedAt: i.LastSignInAt,
+		}); err != nil {
 			return fmt.Errorf("inserting the user: %w", err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO identities (`+identityColumns+`, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $7)`,
-			i.Issuer, i.Subject, p.ID, i.Email, i.EmailVerified, i.Name, i.LastSignInAt); err != nil {
+		if err := q.InsertIdentity(ctx, queries.InsertIdentityParams{
+			Issuer: i.Issuer, Subject: i.Subject, PrincipalID: p.ID, Email: i.Email, EmailVerified: i.EmailVerified,
+			Name: i.Name, SignedInAt: i.LastSignInAt,
+		}); err != nil {
 			return fmt.Errorf("inserting the identity: %w", err)
 		}
 		if i.EmailVerified && i.Email != "" {
-			if _, err := tx.Exec(ctx, "INSERT INTO principal_emails (email, principal_id, verified) VALUES ($1, $2, true)",
-				i.Email, p.ID); err != nil {
+			if err := q.InsertEmail(ctx, i.Email, p.ID, true); err != nil {
 				return fmt.Errorf("inserting the email: %w", err)
 			}
 		}
-		if err := event(ctx, tx, p.ID, "user.signed_up", p.ID, map[string]any{"issuer": i.Issuer}); err != nil {
+		if err := event(ctx, q, p.ID, "user.signed_up", p.ID, map[string]any{"issuer": i.Issuer}); err != nil {
 			return err
 		}
 		for _, g := range up.Grants {
-			if err := grant(ctx, tx, p.ID, g); err != nil {
+			if err := grant(ctx, q, p.ID, g); err != nil {
 				return err
 			}
 		}
@@ -126,123 +133,130 @@ func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 // SignIn records the identity's latest claims and sign-in, sets Installation admin from the installation's list,
 // and creates the session and its event.
 func (s *AuthStore) SignIn(ctx context.Context, i auth.Identity, admin bool, session auth.Session) error {
-	return s.transact(ctx, "signing in", func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `UPDATE identities SET email = $3, email_verified = $4, name = $5, last_sign_in_at = $6
-			WHERE issuer = $1 AND subject = $2`, i.Issuer, i.Subject, i.Email, i.EmailVerified, i.Name, i.LastSignInAt)
+	return s.transact(ctx, "signing in", func(q *queries.Queries) error {
+		updated, err := q.UpdateIdentity(ctx, queries.UpdateIdentityParams{
+			Issuer: i.Issuer, Subject: i.Subject, Email: i.Email, EmailVerified: i.EmailVerified, Name: i.Name,
+			SignedInAt: i.LastSignInAt,
+		})
 		if err != nil {
 			return fmt.Errorf("updating the identity: %w", err)
 		}
-		if tag.RowsAffected() == 0 {
+		if updated == 0 {
 			return auth.ErrNotFound
 		}
-		if err := setAdmin(ctx, tx, i.UserID, admin); err != nil {
+		if err := setAdmin(ctx, q, i.UserID, admin); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO sessions (id, token_hash, principal_id, issuer, subject, created_at,
-			last_seen_at, idle_expires_at, expires_at, user_agent, ip) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-			session.ID, session.TokenHash, session.UserID, session.Issuer, session.Subject, session.CreatedAt,
-			session.LastSeenAt, session.IdleExpiresAt, session.ExpiresAt, session.UserAgent, session.IP); err != nil {
+		if err := q.InsertSession(ctx, queries.InsertSessionParams{
+			ID:            session.ID,
+			TokenHash:     session.TokenHash,
+			PrincipalID:   session.UserID,
+			Issuer:        session.Issuer,
+			Subject:       session.Subject,
+			CreatedAt:     session.CreatedAt,
+			LastSeenAt:    session.LastSeenAt,
+			IdleExpiresAt: session.IdleExpiresAt,
+			ExpiresAt:     session.ExpiresAt,
+			UserAgent:     session.UserAgent,
+			IP:            session.IP,
+		}); err != nil {
 			return fmt.Errorf("inserting the session: %w", err)
 		}
-		return event(ctx, tx, i.UserID, "user.signed_in", session.ID, map[string]any{"issuer": i.Issuer})
+		return event(ctx, q, i.UserID, "user.signed_in", session.ID, map[string]any{"issuer": i.Issuer})
 	})
 }
 
 // setAdmin gives userID Installation admin from the installation's list, or takes back the grant that list gave,
 // never one somebody made.
-func setAdmin(ctx context.Context, tx pgx.Tx, userID uuid.UUID, admin bool) error {
+func setAdmin(ctx context.Context, q *queries.Queries, userID uuid.UUID, admin bool) error {
 	if admin {
-		return grant(ctx, tx, userID, auth.Grant{RoleID: auth.RoleInstallationAdmin, Source: auth.SourceAdmins})
+		return grant(ctx, q, userID, auth.Grant{RoleID: auth.RoleInstallationAdmin, Source: auth.SourceAdmins})
 	}
-	tag, err := tx.Exec(ctx, "DELETE FROM grants WHERE principal_id = $1 AND role_id = $2 AND source = $3",
-		userID, auth.RoleInstallationAdmin, auth.SourceAdmins)
+	deleted, err := q.DeleteGrant(ctx, userID, auth.RoleInstallationAdmin, string(auth.SourceAdmins))
 	if err != nil {
 		return fmt.Errorf("taking the admin grant back: %w", err)
 	}
-	if tag.RowsAffected() > 0 {
-		return event(ctx, tx, userID, "grant.removed", userID,
+	if deleted > 0 {
+		return event(ctx, q, userID, "grant.removed", userID,
 			map[string]any{"role": auth.RoleInstallationAdmin, "source": auth.SourceAdmins})
 	}
 	return nil
 }
 
 // grant gives principalID g at the installation, once: a grant it already has is kept as it is.
-func grant(ctx context.Context, tx pgx.Tx, principalID uuid.UUID, g auth.Grant) error {
-	tag, err := tx.Exec(ctx, `INSERT INTO grants (principal_id, role_id, scope, source) VALUES ($1, $2, 'installation', $3)
-		ON CONFLICT DO NOTHING`, principalID, g.RoleID, g.Source)
+func grant(ctx context.Context, q *queries.Queries, principalID uuid.UUID, g auth.Grant) error {
+	inserted, err := q.InsertInstallationGrant(ctx, principalID, g.RoleID, string(g.Source))
 	if err != nil {
 		return fmt.Errorf("inserting the grant: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if inserted == 0 {
 		return nil
 	}
-	return event(ctx, tx, principalID, "grant.made", principalID, map[string]any{"role": g.RoleID, "source": g.Source})
+	return event(ctx, q, principalID, "grant.made", principalID, map[string]any{"role": g.RoleID, "source": g.Source})
 }
 
 // event appends to the audit log.
-func event(ctx context.Context, tx pgx.Tx, actorID uuid.UUID, kind string, subjectID uuid.UUID, details map[string]any) error {
+func event(ctx context.Context, q *queries.Queries, actorID uuid.UUID, kind string, subjectID uuid.UUID, details map[string]any) error {
 	if details == nil {
 		details = map[string]any{}
 	}
-	if _, err := tx.Exec(ctx, "INSERT INTO events (actor_id, kind, subject_id, details) VALUES ($1, $2, $3, $4)",
-		actorID, kind, subjectID, details); err != nil {
+	encoded, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("encoding the event's details: %w", err)
+	}
+	if err := q.InsertEvent(ctx, queries.InsertEventParams{
+		ActorID: actorID, Kind: kind, SubjectID: &subjectID, Details: encoded,
+	}); err != nil {
 		return fmt.Errorf("recording the event: %w", err)
 	}
 	return nil
 }
 
-const sessionColumns = `s.id, s.token_hash, s.principal_id, s.issuer, s.subject, s.created_at, s.last_seen_at,
-	s.idle_expires_at, s.expires_at, coalesce(s.revoked_at, '0001-01-01'), s.user_agent, s.ip`
-
-func scanSession(row pgx.Row, dest ...any) (auth.Session, error) {
-	var s auth.Session
-	err := row.Scan(append([]any{&s.ID, &s.TokenHash, &s.UserID, &s.Issuer, &s.Subject, &s.CreatedAt, &s.LastSeenAt,
-		&s.IdleExpiresAt, &s.ExpiresAt, &s.RevokedAt, &s.UserAgent, &s.IP}, dest...)...)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return auth.Session{}, auth.ErrNotFound
+// sessionOf is the domain's view of a sessions row.
+func sessionOf(m queries.Session) auth.Session {
+	s := auth.Session{
+		ID:            m.ID,
+		TokenHash:     m.TokenHash,
+		UserID:        m.PrincipalID,
+		Issuer:        m.Issuer,
+		Subject:       m.Subject,
+		CreatedAt:     m.CreatedAt,
+		LastSeenAt:    m.LastSeenAt,
+		IdleExpiresAt: m.IdleExpiresAt,
+		ExpiresAt:     m.ExpiresAt,
+		UserAgent:     m.UserAgent,
+		IP:            m.IP,
 	}
-	if err != nil {
-		return auth.Session{}, fmt.Errorf("reading the session: %w", err)
+	if m.RevokedAt != nil {
+		s.RevokedAt = *m.RevokedAt
 	}
-	if s.RevokedAt.Year() == 1 {
-		s.RevokedAt = time.Time{}
-	}
-	return s, nil
+	return s
 }
 
 // Session finds a session by its token's hash, with its user.
 func (s *AuthStore) Session(ctx context.Context, tokenHash []byte) (auth.Session, auth.User, error) {
-	var u auth.User
-	session, err := scanSession(s.pool.QueryRow(ctx, `SELECT `+sessionColumns+`,
-		p.id, p.kind, p.display_name, p.suspended, p.created_at
-		FROM sessions s JOIN principals p ON p.id = s.principal_id WHERE s.token_hash = $1`, tokenHash),
-		&u.ID, &u.Kind, &u.DisplayName, &u.Suspended, &u.CreatedAt)
+	row, err := s.q.SessionByToken(ctx, tokenHash)
 	if err != nil {
-		return auth.Session{}, auth.User{}, err
+		return auth.Session{}, auth.User{}, wrap("reading the session", err)
 	}
-	if u.Emails, err = s.emails(ctx, u.ID); err != nil {
-		return auth.Session{}, auth.User{}, err
+	p := row.Principal
+	u := auth.User{
+		Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
+		CreatedAt: p.CreatedAt,
 	}
-	return session, u, nil
-}
-
-// emails lists the emails user id holds.
-func (s *AuthStore) emails(ctx context.Context, id uuid.UUID) ([]auth.Email, error) {
-	rows, err := s.pool.Query(ctx, "SELECT email, verified FROM principal_emails WHERE principal_id = $1 ORDER BY created_at", id)
+	emails, err := s.q.Emails(ctx, u.ID)
 	if err != nil {
-		return nil, fmt.Errorf("listing the user's emails: %w", err)
+		return auth.Session{}, auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
 	}
-	emails, err := pgx.CollectRows(rows, pgx.RowToStructByPos[auth.Email])
-	if err != nil {
-		return nil, fmt.Errorf("listing the user's emails: %w", err)
+	for _, e := range emails {
+		u.Emails = append(u.Emails, auth.Email{Email: e.Email, Verified: e.Verified})
 	}
-	return emails, nil
+	return sessionOf(row.Session), u, nil
 }
 
 // Touch records that session id was used at seen.
 func (s *AuthStore) Touch(ctx context.Context, id uuid.UUID, seen time.Time) error {
-	if _, err := s.pool.Exec(ctx, "UPDATE sessions SET last_seen_at = $2, idle_expires_at = $3 WHERE id = $1",
-		id, seen, seen.Add(auth.SessionIdle)); err != nil {
+	if err := s.q.TouchSession(ctx, seen, seen.Add(auth.SessionIdle), id); err != nil {
 		return fmt.Errorf("marking the session used: %w", err)
 	}
 	return nil
@@ -250,50 +264,40 @@ func (s *AuthStore) Touch(ctx context.Context, id uuid.UUID, seen time.Time) err
 
 // Sessions lists a user's sessions that are not revoked, newest first.
 func (s *AuthStore) Sessions(ctx context.Context, userID uuid.UUID) ([]auth.Session, error) {
-	rows, err := s.pool.Query(ctx, "SELECT "+sessionColumns+" FROM sessions s WHERE s.principal_id = $1 AND s.revoked_at IS NULL ORDER BY s.created_at DESC", userID)
+	rows, err := s.q.Sessions(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the sessions: %w", err)
 	}
-	defer rows.Close()
 	var sessions []auth.Session
-	for rows.Next() {
-		session, err := scanSession(rows)
-		if err != nil {
-			return nil, err
-		}
-		sessions = append(sessions, session)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("listing the sessions: %w", err)
+	for _, m := range rows {
+		sessions = append(sessions, sessionOf(m))
 	}
 	return sessions, nil
 }
 
 // Revoke revokes session id of user userID at now.
 func (s *AuthStore) Revoke(ctx context.Context, userID, id uuid.UUID, now time.Time) error {
-	return s.transact(ctx, "revoking the session", func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, "UPDATE sessions SET revoked_at = $3 WHERE id = $1 AND principal_id = $2 AND revoked_at IS NULL",
-			id, userID, now)
+	return s.transact(ctx, "revoking the session", func(q *queries.Queries) error {
+		revoked, err := q.RevokeSession(ctx, now, id, userID)
 		if err != nil {
 			return fmt.Errorf("updating the session: %w", err)
 		}
-		if tag.RowsAffected() == 0 {
+		if revoked == 0 {
 			return auth.ErrNotFound
 		}
-		return event(ctx, tx, userID, "session.revoked", id, nil)
+		return event(ctx, q, userID, "session.revoked", id, nil)
 	})
 }
 
 // SeededUsers lists the demo data's users: those with an identity of auth.SeedIssuer, by display name.
 func (s *AuthStore) SeededUsers(ctx context.Context) ([]auth.Seeded, error) {
-	rows, err := s.pool.Query(ctx, `SELECT i.subject, p.display_name, i.email
-		FROM principals p JOIN identities i ON i.principal_id = p.id WHERE i.issuer = $1 ORDER BY p.display_name`, auth.SeedIssuer)
+	rows, err := s.q.SeededUsers(ctx, auth.SeedIssuer)
 	if err != nil {
 		return nil, fmt.Errorf("listing the seeded users: %w", err)
 	}
-	users, err := pgx.CollectRows(rows, pgx.RowToStructByPos[auth.Seeded])
-	if err != nil {
-		return nil, fmt.Errorf("listing the seeded users: %w", err)
+	var users []auth.Seeded
+	for _, r := range rows {
+		users = append(users, auth.Seeded{Subject: r.Subject, DisplayName: r.DisplayName, Email: r.Email})
 	}
 	return users, nil
 }
@@ -305,27 +309,32 @@ func (s *AuthStore) SeededUser(ctx context.Context, subject string) (auth.Identi
 
 // DeleteExpired deletes the flows and sessions that expired before now.
 func (s *AuthStore) DeleteExpired(ctx context.Context, now time.Time) (flows, sessions int64, err error) {
-	tag, err := s.pool.Exec(ctx, "DELETE FROM sign_in_flows WHERE expires_at < $1", now)
-	if err != nil {
+	if flows, err = s.q.DeleteExpiredFlows(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired sign-in flows: %w", err)
 	}
-	flows = tag.RowsAffected()
-	tag, err = s.pool.Exec(ctx, "DELETE FROM sessions WHERE LEAST(idle_expires_at, expires_at) < $1 OR revoked_at < $1", now)
-	if err != nil {
+	if sessions, err = s.q.DeleteExpiredSessions(ctx, now); err != nil {
 		return 0, 0, fmt.Errorf("deleting expired sessions: %w", err)
 	}
-	return flows, tag.RowsAffected(), nil
+	return flows, sessions, nil
 }
 
-// transact runs fn in a transaction, committed when it returns nil and rolled back otherwise; a unique constraint it
-// hits is a row that is already there.
-func (s *AuthStore) transact(ctx context.Context, what string, fn func(tx pgx.Tx) error) error {
+// wrap returns auth.ErrNotFound for a query that found no row, and err in what's context otherwise.
+func wrap(what string, err error) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return auth.ErrNotFound
+	}
+	return fmt.Errorf("%s: %w", what, err)
+}
+
+// transact runs fn with the queries in a transaction, committed when it returns nil and rolled back otherwise; a
+// unique constraint it hits is a row that is already there.
+func (s *AuthStore) transact(ctx context.Context, what string, fn func(q *queries.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("%s: beginning the transaction: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
-	if err := fn(tx); err != nil {
+	if err := fn(s.q.WithTx(tx)); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
 			return fmt.Errorf("%s: a row is already there (%s): %w", what, pgErr.ConstraintName, err)

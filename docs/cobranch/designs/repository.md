@@ -28,9 +28,10 @@ with a layout that later slices fill in rather than reshape.
 
 ![One repository, one module, one binary; each part arrives with the slice that needs it](repository/layout.svg)
 
-One Go module at the root, `cobranch.dev`, a vanity path that the hub's `go-import` serves. The
-[architecture](architecture.md#stack-and-layout) agreed the planned paths; the README keeps the full table as the layout
-grows.
+One Go module at the root, `cobranch.dev`, a vanity path that the hub's `go-import` serves. SQL stays SQL: sqlc writes
+the stores' queries from `db/queries/` and the seeds' from theirs, checked against the schema in `db/migrations/`, so no
+Go file writes a query. The [architecture](architecture.md#stack-and-layout) agreed the planned paths; the README keeps
+the full table as the layout grows.
 
 ## Continuous integration
 

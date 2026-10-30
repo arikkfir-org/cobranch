@@ -53,6 +53,11 @@
   services never import adapters, and the linter's `depguard` fails the build otherwise.
 - Configure with environment variables through `github.com/kelseyhightower/envconfig`; no configuration files, and
   flags only for what a one-off command acts on.
+- SQL lives in `.sql` files and is generated, never written in Go: the schema in `db/migrations/` (goose), the stores'
+  queries in `db/queries/` and the seeds' in `db/seeds/queries.sql`, from which sqlc (`sqlc.yaml`, run by
+  `go generate ./...`) writes `internal/adapters/postgres/queries` on pgx and `db/seeds/queries` on database/sql. A
+  store converts between the generated rows and the domain's types and writes no SQL of its own; the one exception is
+  the schema version's read of goose's table, whose name sqlc doesn't know.
 - `golangci-lint` runs the house rules' linters (`.golangci.yml`); fix what it reports rather than silence it.
 
 ## Tests
