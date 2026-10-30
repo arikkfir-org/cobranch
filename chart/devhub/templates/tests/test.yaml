@@ -34,15 +34,16 @@ spec:
           rest=http://{{ $fullname }}-rest-server
           graphql=http://{{ $fullname }}-graphql-server
           console=http://{{ $fullname }}-console
-          version='"version":"{{ .Values.images.devhub.tag | default .Chart.AppVersion }}"'
           wget -qO- "$rest/readyz"; echo
-          wget -qO- "$rest/v1/version" | tee /dev/stderr | grep -q "$version"
+          # The version the binary was built as: a release's images are main's, retagged, so they report its commit.
+          version=$(wget -qO- "$rest/v1/version" | tee /dev/stderr | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
+          [ -n "$version" ]
           wget -qO- "$graphql/readyz"; echo
-          wget -qO- --header 'Content-Type: application/json' --post-data '{"query":"{ version }"}' "$graphql/" | grep -q "$version"
+          wget -qO- --header 'Content-Type: application/json' --post-data '{"query":"{ version }"}' "$graphql/" | grep -q "\"version\":\"$version\""
           wget -qO- "$console/healthz"; echo
           wget -qO- "$console/" | grep -q '<h1>DevHub</h1>'
           wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}"'
-          echo "DevHub {{ .Values.images.devhub.tag | default .Chart.AppVersion }} answers"
+          echo "DevHub {{ .Values.images.devhub.tag | default .Chart.AppVersion }} answers, built as $version"
       resources:
         requests:
           cpu: 10m

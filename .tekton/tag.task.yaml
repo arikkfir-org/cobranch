@@ -1,0 +1,49 @@
+# Task tag of .tekton/tag.yaml (its pipeline task tag): check that the tag is a version and its commit is on main, add
+# the version to the commit's images, then publish the commit's chart at it. Every script comes from a checkout of
+# main, never of the tagged commit, whose files are only data here: a tag can name any commit. Octomaton inlines it,
+# and the step it references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: tag
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+    - name: tag
+      type: string
+  workspaces:
+    - name: source
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: REPO_URL
+        value: $(params.repo-url)
+      # The tagged commit; not REVISION, which the clone step sets to main.
+      - name: COMMIT
+        value: $(params.revision)
+      - name: TAG
+        value: $(params.tag)
+      - name: REGISTRY
+        value: me-west1-docker.pkg.dev/arikkfir/devhub
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: main
+    # Pushing a tag takes write access, merging into main a review: a version is the latter's.
+    - name: check
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/tag-check.sh]
+    - name: images
+      image: gcr.io/google.com/cloudsdktool/google-cloud-cli:587.0.0-slim@sha256:be4876b4311056bf3ce236a14a7dea1288e70b7cfea2454ea15e4165c819921f
+      command: [sh, .tekton/scripts/tag-images.sh]
+    # After the images, so a published chart never names an image that isn't there.
+    - name: chart
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/tag-chart.sh]

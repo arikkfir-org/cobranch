@@ -1,0 +1,50 @@
+# DevHub's version: a v* tag (v1.2.3, created by publishing a GitHub release) adds 1.2.3 to the images of the tagged
+# commit, which .tekton/main.yaml published under its short SHA, and publishes the chart at 1.2.3, its app version the
+# same (tag.task.yaml). Nothing is rebuilt, so a version runs the very images main published. The pod pushes as
+# ServiceAccount ci-devhub-release, through Workload Identity, which only main and v* tags may use
+# (octomaton.dev/branches, octomaton.dev/tags). A plain Tekton PipelineRun; Octomaton sets the params.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: devhub-tag-
+spec:
+  taskRunTemplate:
+    serviceAccountName: ci-devhub-release
+  taskRunSpecs:
+    - pipelineTaskName: tag
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          memory: 512Mi
+  workspaces:
+    - name: source
+      emptyDir: {}
+  pipelineSpec:
+    params:
+      - name: repo-url
+        type: string
+        description: Git URL of the repository.
+      - name: revision
+        type: string
+        description: The tagged commit.
+      - name: tag
+        type: string
+        description: The version tag pushed (v1.2.3).
+    workspaces:
+      - name: source
+    tasks:
+      - name: tag
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+          - name: tag
+            value: $(params.tag)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: tag # .tekton/tag.task.yaml

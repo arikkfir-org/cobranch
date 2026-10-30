@@ -9,7 +9,9 @@
   hand from GKE, Argo CD, Tekton, Keycloak and Octomaton: DevHub's precursor, and later its first installation. Describe
   DevHub as the product; name the hub only as context or as a migration target. Nothing of the product (its code, chart,
   defaults, examples or docs about installing it) assumes the hub, Google Cloud or any other cloud. Only this
-  repository's own CI and docs publishing run on the hub.
+  repository's own CI, its releases and its docs publishing run on the hub: the images and the chart are published to
+  a public Artifact Registry repository, which the chart's image defaults name and every installation pulls from as
+  anyone, wherever it runs.
 - DevHub is a Kfirs project, created by Arik Kfir. The credit may appear anywhere (the README, the product's footer,
   the chart's metadata, a license); keep it wherever it already does.
 - Kubernetes-native and cloud-agnostic: blob storage only through Go Cloud (`gocloud.dev/blob`), PostgreSQL deployed by
