@@ -1,35 +1,36 @@
 #!/bin/sh
-# Installs chart/devhub on the throwaway cluster as release devhub, or upgrades it there rolling every workload, and
+# Installs chart/cobranch on the throwaway cluster as release cobranch, or upgrades it there rolling every workload, and
 # waits for the migrate Job to finish and every pod to be ready. An upgrade must keep the generated database password,
 # and its migrate Job find nothing left to apply.
 set -eu
 action=$1
-ns=devhub
+ns=cobranch
 # On failure, what the pods were doing.
 diagnose() {
   status=$?
   [ "$status" -ne 0 ] || return 0
   kubectl -n "$ns" get pods -o wide
   kubectl -n "$ns" get events --sort-by=.lastTimestamp | tail -30
-  kubectl -n "$ns" logs --all-containers --prefix --tail=30 -l app.kubernetes.io/instance=devhub
+  kubectl -n "$ns" logs --all-containers --prefix --tail=30 -l app.kubernetes.io/instance=cobranch
   return "$status"
 }
 trap diagnose EXIT
 set -- --namespace "$ns" --wait --wait-for-jobs --timeout 5m \
-  --set images.devhub.repository=devhub --set-string "images.devhub.tag=$VERSION" --set images.devhub.pullPolicy=Never \
-  --set images.console.repository=devhub-console --set-string "images.console.tag=$VERSION" \
+  --set images.cobranch.repository=cobranch --set-string "images.cobranch.tag=$VERSION" \
+  --set images.cobranch.pullPolicy=Never \
+  --set images.console.repository=cobranch-console --set-string "images.console.tag=$VERSION" \
   --set images.console.pullPolicy=Never --set postgresql.image.pullPolicy=Never \
-  --set blob.url=file:///var/lib/devhub/blobs --set-json 'blob.volume={"emptyDir":{}}' \
-  --set urls.console=https://devhub.test --set urls.rest=https://devhub.test/api
-password() { kubectl -n "$ns" get secret devhub-postgresql -o jsonpath='{.data.password}'; }
+  --set blob.url=file:///var/lib/cobranch/blobs --set-json 'blob.volume={"emptyDir":{}}' \
+  --set urls.console=https://cobranch.test --set urls.rest=https://cobranch.test/api
+password() { kubectl -n "$ns" get secret cobranch-postgresql -o jsonpath='{.data.password}'; }
 case "$action" in
 install)
-  helm install devhub chart/devhub --create-namespace "$@"
+  helm install cobranch chart/cobranch --create-namespace "$@"
   ;;
 upgrade)
   before=$(password)
   now=$(date +%s)
-  helm upgrade devhub chart/devhub "$@" \
+  helm upgrade cobranch chart/cobranch "$@" \
     --set-string "restServer.podAnnotations.ci/rolled=$now" --set-string "graphqlServer.podAnnotations.ci/rolled=$now" \
     --set-string "console.podAnnotations.ci/rolled=$now" --set-string "migrate.podAnnotations.ci/rolled=$now"
   [ "$(password)" = "$before" ] || { echo "The upgrade changed the database's password" >&2; exit 1; }

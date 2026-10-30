@@ -140,11 +140,11 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
-	{Name: "../../../api/graphql/schema.graphqls", Input: `# DevHub's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
-# Console's surface (https://docs.dev.kfirs.com/devhub/designs/architecture.md, "API conventions").
+	{Name: "../../../api/graphql/schema.graphqls", Input: `# Cobranch's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
+# Console's surface (https://docs.dev.kfirs.com/cobranch/designs/architecture.md, "API conventions").
 
 type Query {
-  "The version of DevHub that serves this installation: a release version or a commit's short SHA."
+  "The version of Cobranch that serves this installation: a release version or a commit's short SHA."
   version: String!
 }
 `, BuiltIn: false},

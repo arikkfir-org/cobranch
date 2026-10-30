@@ -1,15 +1,15 @@
-# DevHub's version: a v* tag (v1.2.3, created by publishing a GitHub release) adds 1.2.3 to the images of the tagged
+# Cobranch's version: a v* tag (v1.2.3, created by publishing a GitHub release) adds 1.2.3 to the images of the tagged
 # commit, which .tekton/main.yaml published under its short SHA, and publishes the chart at 1.2.3, its app version the
 # same (tag.task.yaml). Nothing is rebuilt, so a version runs the very images main published. The pod pushes as
-# ServiceAccount ci-devhub-release, through Workload Identity, which only main and v* tags may use
+# ServiceAccount ci-cobranch-release, through Workload Identity, which only main and v* tags may use
 # (octomaton.dev/branches, octomaton.dev/tags). A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: devhub-tag-
+  generateName: cobranch-tag-
 spec:
   taskRunTemplate:
-    serviceAccountName: ci-devhub-release
+    serviceAccountName: ci-cobranch-release
   taskRunSpecs:
     - pipelineTaskName: tag
       computeResources:

@@ -1,5 +1,5 @@
-// Package telemetry sets up DevHub's logs and traces. Logs are JSON, one object per line, inside a Kubernetes pod,
-// for whatever collects the cluster's logs, and text elsewhere, for a person. Traces follow a request across DevHub's
+// Package telemetry sets up Cobranch's logs and traces. Logs are JSON, one object per line, inside a Kubernetes pod,
+// for whatever collects the cluster's logs, and text elsewhere, for a person. Traces follow a request across Cobranch's
 // workloads with W3C Trace Context, and go over OTLP wherever the operator points OpenTelemetry's own OTEL_ variables,
 // or nowhere. Either way, every log record written inside a request names its trace and span.
 package telemetry
@@ -21,11 +21,11 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/arikkfir-org/devhub/internal/system/config"
+	"cobranch.dev/internal/system/config"
 )
 
 // Config is read from the environment by Setup, under the configuration's prefix whatever the workload:
-// DEVHUB_LOG_LEVEL and DEVHUB_LOG_FORMAT. Traces take OpenTelemetry's standard variables instead (Exporting).
+// COBRANCH_LOG_LEVEL and COBRANCH_LOG_FORMAT. Traces take OpenTelemetry's standard variables instead (Exporting).
 type Config struct {
 	// LogLevel is the lowest level logged: debug, info, warn or error.
 	LogLevel slog.Level `envconfig:"LOG_LEVEL" default:"info"`
@@ -40,7 +40,7 @@ type Config struct {
 func Setup(ctx context.Context, out io.Writer, workload, version string) (func(context.Context) error, error) {
 	var c Config
 	if err := envconfig.Process(config.Prefix, &c); err != nil {
-		return nil, fmt.Errorf("reading the telemetry's configuration from the DEVHUB_ variables: %w", err)
+		return nil, fmt.Errorf("reading the telemetry's configuration from the COBRANCH_ variables: %w", err)
 	}
 	handler, err := logHandler(out, c)
 	if err != nil {
@@ -76,7 +76,7 @@ func logHandler(out io.Writer, c Config) (slog.Handler, error) {
 	case "text":
 		return slog.NewTextHandler(out, opts), nil
 	default:
-		return nil, fmt.Errorf("DEVHUB_LOG_FORMAT is %q: it must be json, text or empty", c.LogFormat)
+		return nil, fmt.Errorf("COBRANCH_LOG_FORMAT is %q: it must be json, text or empty", c.LogFormat)
 	}
 }
 
@@ -89,7 +89,7 @@ func InCluster() bool {
 // none: requests still get trace IDs, which name them in logs and pass on to the workloads they call.
 func tracerProvider(ctx context.Context, workload, version string) (*sdktrace.TracerProvider, error) {
 	res, err := resource.New(ctx,
-		resource.WithAttributes(semconv.ServiceNamespace("devhub"), semconv.ServiceName(workload),
+		resource.WithAttributes(semconv.ServiceNamespace("cobranch"), semconv.ServiceName(workload),
 			semconv.ServiceVersion(version)),
 		resource.WithFromEnv(), // OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES win
 		resource.WithTelemetrySDK())

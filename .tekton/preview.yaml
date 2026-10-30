@@ -1,15 +1,15 @@
-# DevHub's previews' images: build images devhub and devhub-console of a pull request's head commit and push them to
-# Artifact Registry repository devhub-previews, tagged with the commit's short SHA (publish.task.yaml), which only the
-# pull requests' previews pull (https://docs.dev.kfirs.com/delivery/designs/devhub-previews.md). The pod pushes as
-# ServiceAccount ci-devhub-preview, through Workload Identity: any branch may use it, and it writes devhub-previews
+# Cobranch's previews' images: build images cobranch and cobranch-console of a pull request's head commit and push them
+# to Artifact Registry repository cobranch-previews, tagged with the commit's short SHA (publish.task.yaml), which only
+# the pull requests' previews pull (https://docs.dev.kfirs.com/delivery/designs/devhub-previews.md). The pod pushes as
+# ServiceAccount ci-cobranch-preview, through Workload Identity: any branch may use it, and it writes cobranch-previews
 # alone, never main's or the versions' repository. A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: devhub-preview-
+  generateName: cobranch-preview-
 spec:
   taskRunTemplate:
-    serviceAccountName: ci-devhub-preview
+    serviceAccountName: ci-cobranch-preview
   # The steps only drive the Docker daemon, which its sidecar holds, with resources of its own.
   taskRunSpecs:
     - pipelineTaskName: publish
@@ -43,7 +43,7 @@ spec:
           - name: revision
             value: $(params.revision)
           - name: registry
-            value: me-west1-docker.pkg.dev/arikkfir/devhub-previews
+            value: me-west1-docker.pkg.dev/arikkfir/cobranch-previews
         workspaces:
           - name: source
             workspace: source

@@ -1,10 +1,10 @@
-# DevHub's CI, two tasks side by side: ci lints, vets, tests (with the race detector) and builds the Go module
+# Cobranch's CI, two tasks side by side: ci lints, vets, tests (with the race detector) and builds the Go module
 # (ci.task.yaml); chart builds the images and installs, tests and upgrades the chart on a throwaway kind cluster
 # (chart.task.yaml). A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: devhub-ci-
+  generateName: cobranch-ci-
 spec:
   # Reserved once for all of the task's steps (step-level requests would add up as if the steps ran at once). With
   # Go Cloud's drivers (the AWS, Azure and Google Cloud SDKs), lint peaks near 1.5Gi and the compiles near 1Gi on a cold

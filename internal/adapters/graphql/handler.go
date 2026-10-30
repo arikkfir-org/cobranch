@@ -1,4 +1,4 @@
-// Package graphql serves DevHub's GraphQL API, the Console's surface, through the executor gqlgen generates from
+// Package graphql serves Cobranch's GraphQL API, the Console's surface, through the executor gqlgen generates from
 // api/graphql/ (generated.go).
 package graphql
 

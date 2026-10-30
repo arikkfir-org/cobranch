@@ -1,0 +1,2 @@
+{{- include "cobranch.checkDatabase" . }}
+{{- include "cobranch.server" (dict "root" . "component" "graphql-server" "values" .Values.graphqlServer) }}

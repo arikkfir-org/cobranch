@@ -1,4 +1,4 @@
-// Package postgres connects DevHub to PostgreSQL, the store of every fact it shows, and migrates its schema.
+// Package postgres connects Cobranch to PostgreSQL, the store of every fact it shows, and migrates its schema.
 package postgres
 
 import (
@@ -23,14 +23,14 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
-var tracer = otel.Tracer("github.com/arikkfir-org/devhub/internal/adapters/postgres")
+var tracer = otel.Tracer("cobranch.dev/internal/adapters/postgres")
 
 // undefinedTable is PostgreSQL's error code for a table that does not exist.
 const undefinedTable = "42P01"
 
 // SeedTable records the seeds a database has, apart from the schema's migrations in goose's own table, so an
 // installation that never seeds keeps every one of its schema's versions.
-const SeedTable = "devhub_seed_version"
+const SeedTable = "cobranch_seed_version"
 
 // Connect returns a pool of connections to the database at url, or, when url is empty, to the one libpq's variables
 // name (PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE, PGSSLMODE). It connects lazily, so a database that is not up
@@ -182,7 +182,7 @@ func (s *Schema) Check(ctx context.Context) error {
 		return err
 	}
 	if current < s.version {
-		return fmt.Errorf("the database's schema is at version %d, and this build needs %d: devhub migrate has not run",
+		return fmt.Errorf("the database's schema is at version %d, and this build needs %d: cobranch migrate has not run",
 			current, s.version)
 	}
 	s.current.Store(true)

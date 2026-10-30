@@ -19,7 +19,7 @@ linters:
         services:
           files: ["**/internal/services/**"]
           deny:
-            - pkg: github.com/arikkfir-org/devhub/internal/adapters
+            - pkg: cobranch.dev/internal/adapters
               desc: services reach the outside only through their ports, which adapters implement
     funlen:
       lines: 60

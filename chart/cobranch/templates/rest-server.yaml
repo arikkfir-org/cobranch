@@ -1,0 +1,2 @@
+{{- include "cobranch.checkDatabase" . }}
+{{- include "cobranch.server" (dict "root" . "component" "rest-server" "values" .Values.restServer) }}

@@ -1,6 +1,6 @@
-# Image devhub-console: Caddy serving the Console's static files. Built from this directory:
+# Image cobranch-console: Caddy serving the Console's static files. Built from this directory:
 #
-#   docker build -t devhub-console:v1.2.3 web/console
+#   docker build -t cobranch-console:v1.2.3 web/console
 FROM docker.io/library/caddy:2.11.7-alpine@sha256:eb4d35b7452d1ab6171fbdbe8d9275b2301dad6dad92115d91e19fb9b24d510f AS caddy
 # Caddy's binary carries the capability to bind low ports, and a pod that drops every capability can't run a binary
 # that carries one. The Console listens on 8080 and needs none.

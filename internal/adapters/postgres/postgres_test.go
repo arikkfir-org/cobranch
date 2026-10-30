@@ -20,9 +20,9 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pressly/goose/v3"
 
-	"github.com/arikkfir-org/devhub/db/migrations"
-	"github.com/arikkfir-org/devhub/db/seeds"
-	"github.com/arikkfir-org/devhub/internal/adapters/postgres/postgrestest"
+	"cobranch.dev/db/migrations"
+	"cobranch.dev/db/seeds"
+	"cobranch.dev/internal/adapters/postgres/postgrestest"
 )
 
 // testDatabase returns a pool connected to a new, empty database, dropped when the test ends.
@@ -42,9 +42,9 @@ func TestConnect(t *testing.T) {
 		url     string
 		wantErr bool
 	}{
-		{name: "URL", url: "postgres://devhub:secret@db:5432/devhub"},
+		{name: "URL", url: "postgres://cobranch:secret@db:5432/cobranch"},
 		{name: "libpq's variables", url: ""},
-		{name: "not a URL", url: "postgres://devhub:secret@db:port/devhub", wantErr: true},
+		{name: "not a URL", url: "postgres://cobranch:secret@db:port/cobranch", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "DevHub's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 1},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 1},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,7 +143,7 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "DevHub's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 1},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 1},
 		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 1},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
@@ -366,7 +366,7 @@ func TestPing(t *testing.T) {
 // unreachableDatabase returns a pool connected to a database that never answers.
 func unreachableDatabase(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	pool, err := Connect(context.Background(), "postgres://devhub@127.0.0.1:1/devhub?connect_timeout=1")
+	pool, err := Connect(context.Background(), "postgres://cobranch@127.0.0.1:1/cobranch?connect_timeout=1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestNewSeeds(t *testing.T) {
 		wantVersion int64
 		wantErr     bool
 	}{
-		{name: "DevHub's seeds", seeds: seeds.Go, wantVersion: int64(len(seeds.Go))},
+		{name: "Cobranch's seeds", seeds: seeds.Go, wantVersion: int64(len(seeds.Go))},
 		{name: "two seeds", seeds: []*goose.Migration{seedA(1, 1), seedA(2, 2)}, wantVersion: 2},
 		{name: "no seeds", wantErr: true},
 	}
@@ -420,7 +420,7 @@ func TestSeedsMigrate(t *testing.T) {
 		wantRows      int
 		wantSeedTable int64
 	}{
-		{name: "DevHub's seeds", runs: [][]*goose.Migration{seeds.Go}, wantSeedTable: int64(len(seeds.Go))},
+		{name: "Cobranch's seeds", runs: [][]*goose.Migration{seeds.Go}, wantSeedTable: int64(len(seeds.Go))},
 		{name: "one build", runs: [][]*goose.Migration{{seedA(1, 1), seedA(2, 2)}}, wantRows: 2, wantSeedTable: 2},
 		{name: "the same build again", runs: [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1)}}, wantRows: 1, wantSeedTable: 1},
 		{

@@ -14,7 +14,7 @@ import (
 
 // ServerEnv names the variable that holds the test server's URL. CI sets it; without it, tests that need a database
 // are skipped, except in CI, where they fail.
-const ServerEnv = "DEVHUB_TEST_DATABASE_URL"
+const ServerEnv = "COBRANCH_TEST_DATABASE_URL"
 
 // Database creates an empty database on the server ServerEnv names, drops it when the test ends, and returns its URL.
 func Database(t testing.TB) string {

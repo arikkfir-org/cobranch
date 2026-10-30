@@ -1,10 +1,10 @@
 #!/bin/sh
-# Adds TAG's version (v1.2.3 is 1.2.3, the chart's version) to images devhub and devhub-console of COMMIT, which
+# Adds TAG's version (v1.2.3 is 1.2.3, the chart's version) to images cobranch and cobranch-console of COMMIT, which
 # pipeline main published under its short SHA; nothing is rebuilt. gcloud authenticates as the pod's Workload Identity.
 set -eu
 sha=$(printf '%s' "$COMMIT" | cut -c1-7)
 version=${TAG#v}
-for image in devhub devhub-console; do
+for image in cobranch cobranch-console; do
   tries=0
   # The commit's images may still be building when its tag arrives. Only "not found" means that: any other error
   # (permission, auth, network) ends the run at once.

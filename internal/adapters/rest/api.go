@@ -1,4 +1,4 @@
-// Package rest serves DevHub's REST API under /v1/, through the server oapi-codegen generates from
+// Package rest serves Cobranch's REST API under /v1/, through the server oapi-codegen generates from
 // api/openapi.yaml (rest.gen.go). Errors are problem details (RFC 9457) with a stable code and the request's ID.
 package rest
 
@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/arikkfir-org/devhub/internal/adapters/server"
+	"cobranch.dev/internal/adapters/server"
 )
 
 // BaseURL is where the API's paths start, as api/openapi.yaml's server says.

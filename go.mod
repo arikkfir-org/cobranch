@@ -1,4 +1,4 @@
-module github.com/arikkfir-org/devhub
+module cobranch.dev
 
 go 1.27.0
 

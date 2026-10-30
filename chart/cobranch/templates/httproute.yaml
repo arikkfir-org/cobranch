@@ -1,0 +1,47 @@
+{{- if .Values.httpRoute.enabled }}
+{{- $fullname := include "cobranch.fullname" . }}
+{{- $routes := dict "console" .Values.urls.console "rest-server" .Values.urls.rest "graphql-server" .Values.urls.graphql }}
+{{- if not (or .Values.urls.console .Values.urls.rest .Values.urls.graphql) }}
+{{- fail "httpRoute.enabled needs a workload's URL in urls: the routes take their hosts and paths from them" }}
+{{- end }}
+{{- range $component, $url := $routes }}
+{{- if $url }}
+{{- $parsed := urlParse $url }}
+{{- $prefix := $parsed.path | trimSuffix "/" }}
+---
+# {{ $component }} at {{ $url }}.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullname }}-{{ $component }}
+  labels:
+    {{- include "cobranch.labels" (dict "root" $ "component" $component) | nindent 4 }}
+  {{- with $.Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- required "httpRoute.parentRefs names the Gateway to attach to" $.Values.httpRoute.parentRefs | toYaml | nindent 4 }}
+  hostnames:
+    - {{ $parsed.hostname | quote }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ $prefix | default "/" | quote }}
+      {{- if $prefix }}
+      # The workload serves as if it were alone: it never sees the prefix.
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      {{- end }}
+      backendRefs:
+        - name: {{ $fullname }}-{{ $component }}
+          port: 80
+{{- end }}
+{{- end }}
+{{- end }}

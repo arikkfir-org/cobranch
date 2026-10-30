@@ -27,7 +27,7 @@ spec:
       - name: TAG
         value: $(params.tag)
       - name: REGISTRY
-        value: me-west1-docker.pkg.dev/arikkfir/devhub
+        value: me-west1-docker.pkg.dev/arikkfir/cobranch
   steps:
     - name: clone
       ref: {name: clone} # clone.step.yaml

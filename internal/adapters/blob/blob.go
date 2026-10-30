@@ -1,4 +1,4 @@
-// Package blob opens DevHub's one bucket, which holds every large or binary object, through Go Cloud's blob package,
+// Package blob opens Cobranch's one bucket, which holds every large or binary object, through Go Cloud's blob package,
 // so the same code runs on any cloud's buckets or on a local directory.
 package blob
 
