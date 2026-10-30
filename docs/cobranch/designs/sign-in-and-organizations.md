@@ -260,7 +260,11 @@ Sign-in and sign-out are the Auth server's. Every other operation is in both Gra
 | Create, rotate or delete an API key | `org.principals.manage`; its roles add the grant rules |
 
 Every change is an event in the [architecture](architecture.md#events-and-background-work)'s `events` table from this
-slice on; reading them as the audit trail comes later.
+slice on; reading them as the audit trail comes later. Beneath the events, every row an audited table gains, loses or
+changes is a row of `audit_log`, written by trigger `audit()` with the principal the transaction acts for, which the
+store names in a session variable local to the transaction (`cobranch.principal_id`); a row with no principal is
+Cobranch's own doing, as a migration, a seed or maintenance is. An update keeps the whole row before and only the
+columns that changed; a session's token hash and its mere use never reach the log.
 
 ## The Console
 

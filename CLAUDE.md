@@ -58,6 +58,10 @@
   `go generate ./...`) writes `internal/adapters/postgres/queries` on pgx and `db/seeds/queries` on database/sql. A
   store converts between the generated rows and the domain's types and writes no SQL of its own; the one exception is
   the schema version's read of goose's table, whose name sqlc doesn't know.
+- Every write runs in a store transaction that names the principal it acts for (`transact`'s actor, session variable
+  `cobranch.principal_id`, local to the transaction), and every table whose rows people change carries trigger
+  `audit()` (`db/migrations/00003_audit.sql`), which writes `audit_log`: a new table gets the trigger in its migration,
+  with the columns to keep out of the log (a token's hash) as the trigger's arguments.
 - `golangci-lint` runs the house rules' linters (`.golangci.yml`); fix what it reports rather than silence it.
 
 ## Tests

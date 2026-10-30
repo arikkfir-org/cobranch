@@ -8,28 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
-
-type Event struct {
-	ID        uuid.UUID
-	Seq       pgtype.Int8
-	At        time.Time
-	ActorID   uuid.UUID
-	Kind      string
-	SubjectID *uuid.UUID
-	Details   []byte
-}
-
-type Grant struct {
-	ID          uuid.UUID
-	PrincipalID uuid.UUID
-	RoleID      uuid.UUID
-	Scope       string
-	ScopeID     *uuid.UUID
-	Source      string
-	CreatedAt   time.Time
-}
 
 type Identity struct {
 	Issuer        string
@@ -48,22 +27,6 @@ type Principal struct {
 	DisplayName string
 	Suspended   bool
 	CreatedAt   time.Time
-}
-
-type PrincipalEmail struct {
-	Email       string
-	PrincipalID uuid.UUID
-	Verified    bool
-	CreatedAt   time.Time
-}
-
-type Role struct {
-	ID          uuid.UUID
-	Scope       string
-	Name        string
-	Description string
-	Permissions []string
-	BuiltIn     bool
 }
 
 type Session struct {
