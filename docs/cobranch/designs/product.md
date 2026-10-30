@@ -13,13 +13,27 @@ so a team needs nothing else to ship software.
 
 ## Purpose
 
-Cobranch is a product, not an installation: anyone installs it on their own Kubernetes cluster with a Helm chart and gets
-a working hub, with sign-in, organizations, Git hosting, CI, GitOps delivery, APIs and SDKs. It is a Kfirs project,
+Cobranch is a product, not an installation: anyone installs it on their own Kubernetes cluster with a Helm chart and
+gets a working hub, with sign-in, organizations, Git hosting, CI, GitOps delivery, APIs and SDKs. It is a Kfirs project,
 created by Arik Kfir.
 
 The Kfirs hub (`infra`, `delivery`, `octomaton`, `tooling`) is not Cobranch. It is one hub assembled by hand, the
-precursor that showed which capabilities a hub needs; Cobranch packages those lessons as one product, and the Kfirs hub is
-later recreated on it ([below](#relation-to-the-kfirs-hub)).
+precursor that showed which capabilities a hub needs; Cobranch packages those lessons as one product, and the Kfirs hub
+is later recreated on it ([below](#relation-to-the-kfirs-hub)).
+
+### Two faces
+
+**Two faces: the open-source product, and our own installation of it, sold as a service**
+
+![Two faces: the open-source product, and our own installation of it, sold as a service](product/faces.svg)
+
+Nothing in the product assumes cobranch.app, as nothing assumes the hub: it is one more installation, run by us.
+
+Cobranch has two faces. **cobranch.dev** is the open-source product this design describes: anyone downloads it and runs
+it as their own installation. **cobranch.app** is our own installation of it, sold as a paid self-serve service, the way
+github.com and gitlab.com are. Running cobranch.app (plans, billing, its installation) is work of its own, after the
+product's foundations; the product never assumes it. Cobranch was called DevHub until
+[ENG-221](https://linear.app/arikkfir/issue/ENG-221) renamed it.
 
 ## The designs
 
@@ -29,6 +43,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | --- | --- | --- |
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
+| [Sign-in and organizations](https://claude.ai/artifact/RYmKGqZNHvvTuWw3b2HR9R) | Sign-in, sign-up, organizations, their members and API keys. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -77,8 +92,8 @@ Clients cannot push under the reserved `cobranch/` prefix; only Cobranch writes 
 
 The Console shows the settings in effect and every pending change: each branch whose `/cobranch.yaml` differs from the
 default branch's, with its diff ([architecture](architecture.md#settings-secrets-and-models)). Organization and
-repository settings also hold secrets, which `/cobranch.yaml` names by ID and grants hand to the agents and jobs that use
-them ([secrets](principals-and-permissions.md#secrets)).
+repository settings also hold secrets, which `/cobranch.yaml` names by ID and grants hand to the agents and jobs that
+use them ([secrets](principals-and-permissions.md#secrets)).
 
 ### Jobs
 
@@ -159,8 +174,8 @@ Console already shows it.
 
 ![Each hand-assembled part of the Kfirs hub becomes a built-in part of Cobranch](product/hub.svg)
 
-Recreating the Kfirs hub on Cobranch is the first real installation, not the product itself. Octomaton’s run definitions,
-its default-branch trust boundary and its organization pipelines are the model for Cobranch jobs.
+Recreating the Kfirs hub on Cobranch is the first real installation, not the product itself. Octomaton’s run
+definitions, its default-branch trust boundary and its organization pipelines are the model for Cobranch jobs.
 
 ## Decisions
 

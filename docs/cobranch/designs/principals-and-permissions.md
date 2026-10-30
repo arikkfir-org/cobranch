@@ -2,14 +2,14 @@
 
 > **Snapshot.** This design lives in its [principals and permissions
 > page](https://claude.ai/artifact/J8TVehKS9N6qGSsgjBH7hw), linked with Cobranch's other designs; this file is generated
-> from it, with its diagrams, as of 2026-10-27, and synced again once Cobranch's shape settles.
+> from it, with its diagrams, as of 2026-10-30, and synced again once Cobranch's shape settles.
 
 **Status**: Agreed 2026-10-27 · [ENG-196](https://linear.app/arikkfir/issue/ENG-196) ·
 [ENG-203](https://linear.app/arikkfir/issue/ENG-203) · Revised after review, 2026-10-27 · Fills in the
 [architecture](architecture.md#authentication) · Built by [ENG-197](https://linear.app/arikkfir/issue/ENG-197)
 
-Every actor in Cobranch is a principal, and a principal can do something only because a grant says so: a role given at the
-installation, an organization, a repository or one secret. Nothing is ambient, not even for jobs, agents or
+Every actor in Cobranch is a principal, and a principal can do something only because a grant says so: a role given at
+the installation, an organization, a repository or one secret. Nothing is ambient, not even for jobs, agents or
 administrators.
 
 ## Scope
@@ -100,8 +100,8 @@ commit's signature.
 ![A commit is Verified only when a key of its committer signed it](principals-and-permissions/verified.svg)
 
 The push worker checks each signature in the push’s transaction and keeps the result, so removing a key later never
-changes history. A branch can require Verified commits in `/cobranch.yaml`; commits Cobranch writes itself are signed with
-the installation’s key.
+changes history. A branch can require Verified commits in `/cobranch.yaml`; commits Cobranch writes itself are signed
+with the installation’s key.
 
 ## Organizations and groups
 
@@ -144,8 +144,8 @@ the agents design.
 ### Jobs
 
 Each job name in a repository is one principal, kept across runs, so audit reads "job `ci` of this repository".
-**Agreed:** the job ceiling, a setting in the default branch's `/cobranch.yaml`, caps what any job declares, and defaults
-to Automation. A branch's own `/cobranch.yaml` counts only once it merges.
+**Agreed:** the job ceiling, a setting in the default branch's `/cobranch.yaml`, caps what any job declares, and
+defaults to Automation. A branch's own `/cobranch.yaml` counts only once it merges.
 
 **A job run reaches Cobranch with its run token, and other clouds with an ID token**
 
@@ -162,9 +162,9 @@ one.
 
 ### OAuth apps
 
-In a later slice Cobranch becomes an OAuth authorization server. Decided on 2026-10-27: an app belongs to the organization
-that registers it and acts only there, as itself with client credentials, or for a consenting member through the
-authorization code flow with PKCE.
+In a later slice Cobranch becomes an OAuth authorization server. Decided on 2026-10-27: an app belongs to the
+organization that registers it and acts only there, as itself with client credentials, or for a consenting member
+through the authorization code flow with PKCE.
 
 ### Workload identities
 
@@ -233,8 +233,8 @@ No API returns a value: only a job run or an agent task receives it.
 - **Who receives one.** `secrets.read`, granted on the organization, a repository or one secret. An agent holds the
   credentials of tools beyond Cobranch this way, such as mail, Slack or its model provider.
 - **Jobs.** **Agreed** (review, 2026-10-27): `secrets.read` is the one grant a job can receive. A run gets the secrets
-  its `/cobranch.yaml` names, if its job holds `secrets.read` on them. Phase 2's pinned job security narrows which secrets
-  a branch's jobs may read.
+  its `/cobranch.yaml` names, if its job holds `secrets.read` on them. Phase 2's pinned job security narrows which
+  secrets a branch's jobs may read.
 - **The assigner cap.** **Agreed** (review, 2026-10-27): an agent's task receives the agent's secrets whoever assigned
   it, since few people who assign tasks hold `secrets.read` themselves. The risk: an assigner could coax a value out of
   the agent, so a secret goes only to agents trusted with it.

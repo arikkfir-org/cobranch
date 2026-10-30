@@ -7,13 +7,13 @@
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
 stack](architecture.md#stack-and-layout) · Public, MIT
 
-Cobranch lives in one repository, `arikkfir-org/cobranch`: one Go module, one binary, the web apps, the Helm chart, the SDKs
-and the designs side by side, so a change to Cobranch is one pull request however many parts it touches.
+Cobranch lives in one repository, `arikkfir-org/cobranch`: one Go module, one binary, the web apps, the Helm chart, the
+SDKs and the designs side by side, so a change to Cobranch is one pull request however many parts it touches.
 
 ## Context
 
-Cobranch is a product of its own, not part of the Kfirs hub ([the product](product.md#purpose)). Its source still needs a
-home where its work is reviewed, built and documented, and the hub gives one to every repository of the organization:
+Cobranch is a product of its own, not part of the Kfirs hub ([the product](product.md#purpose)). Its source still needs
+a home where its work is reviewed, built and documented, and the hub gives one to every repository of the organization:
 pull requests through a merge queue, CI through Octomaton, an AI review, Linear's check and a docs site. The goal of
 [ENG-192](https://linear.app/arikkfir/issue/ENG-192) is a repository that gets all of that from its first pull request,
 with a layout that later slices fill in rather than reshape.
@@ -51,11 +51,11 @@ The clone is anonymous: the repository is public, so the run holds no token.
 Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
 throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
 lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
-`cobranch` and `cobranch-console` in the daemon, tagged with the commit, and `cluster` creates the cluster there and loads
-them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the migrate Job and every pod,
-and `test` runs the chart's tests: both servers answer with the build's version, and the Console serves its page and the
-REST API's URL. `upgrade` rolls every pod, and fails if the generated database password changed or its migrate Job
-applied anything; `retest` tests again. Both tasks clone the commit with one StepAction.
+`cobranch` and `cobranch-console` in the daemon, tagged with the commit, and `cluster` creates the cluster there and
+loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the migrate Job and every
+pod, and `test` runs the chart's tests: both servers answer with the build's version, and the Console serves its page
+and the REST API's URL. `upgrade` rolls every pod, and fails if the generated database password changed or its migrate
+Job applied anything; `retest` tests again. Both tasks clone the commit with one StepAction.
 
 **Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
 
@@ -90,12 +90,13 @@ supersedes the build of the one before; it is no required check, since the pull 
 
 Any branch may run as `ci-cobranch-preview`, which writes `cobranch-previews` alone, never `main`’s or the versions’
 repository. The repository is infra’s ([Artifact Registry](../../infra/terraform/gcp.md#artifact-registry)); the
-ServiceAccount and the preview itself are delivery’s ([Cobranch’s previews](../../delivery/designs/cobranch-previews.md)).
+ServiceAccount and the preview itself are delivery’s ([Cobranch’s
+previews](../../delivery/designs/cobranch-previews.md)).
 
 ## Releases
 
-A version is a [GitHub release](https://github.com/arikkfir-org/cobranch/releases), as Octomaton's are: tag `v1.2.3` on a
-commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the chart's guide at the tag,
+A version is a [GitHub release](https://github.com/arikkfir-org/cobranch/releases), as Octomaton's are: tag `v1.2.3` on
+a commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the chart's guide at the tag,
 `https://github.com/arikkfir-org/cobranch/blob/v1.2.3/chart/cobranch/README.md`. Publishing the release creates the tag,
 which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a tag that isn't `vX.Y.Z`, a commit that
 isn't on `main` and one whose chart doesn't default to the images published here, waits up to 15 minutes for `main`'s
