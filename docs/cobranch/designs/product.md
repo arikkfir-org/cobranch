@@ -1,7 +1,7 @@
 # The Cobranch product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced
+> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced
 > again once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -29,7 +29,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | --- | --- | --- |
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
-| [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | In progress |
+| [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
 
@@ -192,11 +192,12 @@ reconciliation are worked out in the subsystem designs.
 
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
-project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af).
+project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), one issue per slice, each building on the one
+before it; the Back-office needs only organizations, and moving the domains' nameservers into Terraform blocks nothing.
 
-**The foundations, in order, as of 2026-10-27**
+**The roadmap, in order, as of 2026-10-30**
 
-![The foundations, in order, as of 2026-10-27](product/roadmap.svg)
+![The roadmap, in order, as of 2026-10-30](product/roadmap.svg)
 
 ### Phase 2
 
