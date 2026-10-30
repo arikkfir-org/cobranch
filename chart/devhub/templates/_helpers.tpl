@@ -184,6 +184,11 @@ template:
         env:
           {{- include "devhub.telemetryEnv" . | nindent 10 }}
           {{- include "devhub.databaseEnv" . | nindent 10 }}
+          {{- if .Values.seed.enabled }}
+          # Demo data, for previews only.
+          - name: DEVHUB_SEED
+            value: "true"
+          {{- end }}
         resources:
           {{- toYaml $values.resources | nindent 10 }}
         securityContext:

@@ -14,6 +14,18 @@ pipelines:
       revision: "{{ .Revision }}"
     timeout: 30m
 
+  # Publish both images of every pull request's head commit, tagged with its short SHA, for its preview: delivery's
+  # ApplicationSet devhub-pull-requests installs the chart at that commit with them. Not a required check: a preview
+  # waits for its images, and the pull request's own checks are ci's. Each push supersedes the build of the one before.
+  - name: preview
+    pipelineRun: .tekton/preview.yaml
+    on:
+      pull_request: {}
+    params:
+      repo-url: "{{ .Repository.CloneURL }}"
+      revision: "{{ .Revision }}"
+    timeout: 30m
+
   # Publish both images of main's newest commit, tagged with its short SHA (also the version the binary reports), for
   # an installation that follows main. Never give it a paths filter: main's newest commit must always have its images.
   - name: main

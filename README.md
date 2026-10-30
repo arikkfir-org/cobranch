@@ -22,6 +22,7 @@ One repository holds every part of DevHub, laid out as the [technical architectu
 | `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `devhub migrate` applies them before the servers roll out |
+| `db/seeds/` | Demo data, in Go, in every build; `devhub migrate` adds it after the schema only with `DEVHUB_SEED` (the chart's `seed.enabled`), as previews do |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
 | `chart/devhub/` | The Helm chart that installs DevHub |
 | `Dockerfile` | Image `devhub`: the binary, with `git` |
@@ -58,7 +59,7 @@ They log text here and JSON in a pod (`DEVHUB_LOG_FORMAT` picks one, `DEVHUB_LOG
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
 ([Observability](https://docs.dev.kfirs.com/devhub/designs/architecture.md#observability)).
 
-CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, and pipeline `tag` each version's images and chart. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
+CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for the preview of its own that the hub installs, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
 
 ## Installing
 

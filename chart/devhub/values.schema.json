@@ -296,6 +296,17 @@
         }
       }
     },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Demo data for previews of DevHub's own pull requests: never turn it on for a real installation.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "The migrate Job adds DevHub's demo data (db/seeds) after migrating the schema."
+        }
+      }
+    },
     "console": {
       "type": "object",
       "additionalProperties": false,

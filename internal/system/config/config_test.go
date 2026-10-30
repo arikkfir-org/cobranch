@@ -100,10 +100,13 @@ func TestLoadMigrate(t *testing.T) {
 	}{
 		{name: "libpq's variables", env: map[string]string{}, want: Migrate{}},
 		{name: "a URL", env: map[string]string{"DEVHUB_DATABASE_URL": "postgres://db/devhub"}, want: Migrate{DatabaseURL: "postgres://db/devhub"}},
+		{name: "seeds", env: map[string]string{"DEVHUB_SEED": "true"}, want: Migrate{Seed: true}},
+		{name: "no seeds", env: map[string]string{"DEVHUB_SEED": "false"}, want: Migrate{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			unsetenv(t, "DEVHUB_DATABASE_URL")
+			unsetenv(t, "DEVHUB_SEED")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}

@@ -21,6 +21,7 @@ import (
 	"github.com/pressly/goose/v3"
 
 	"github.com/arikkfir-org/devhub/db/migrations"
+	"github.com/arikkfir-org/devhub/db/seeds"
 	"github.com/arikkfir-org/devhub/internal/adapters/postgres/postgrestest"
 )
 
@@ -371,4 +372,102 @@ func unreachableDatabase(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(pool.Close)
 	return pool
+}
+
+// seedA is a seed that writes row id into table a, which columnB creates.
+func seedA(version, id int64) *goose.Migration {
+	return goose.NewGoMigration(version, &goose.GoFunc{RunTx: func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO a (id, b) VALUES ($1, 'seeded')", id); err != nil {
+			return fmt.Errorf("writing a row: %w", err)
+		}
+		return nil
+	}}, nil)
+}
+
+func TestNewSeeds(t *testing.T) {
+	tests := []struct {
+		name        string
+		seeds       []*goose.Migration
+		wantVersion int64
+		wantErr     bool
+	}{
+		{name: "DevHub's seeds", seeds: seeds.Go, wantVersion: int64(len(seeds.Go))},
+		{name: "two seeds", seeds: []*goose.Migration{seedA(1, 1), seedA(2, 2)}, wantVersion: 2},
+		{name: "no seeds", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, err := NewSeeds(unreachableDatabase(t), tt.seeds...)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("NewSeeds() error = %v, want error %t", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			defer func() { _ = s.Close() }()
+			if got := s.Version(); got != tt.wantVersion {
+				t.Errorf("Version() = %d, want %d", got, tt.wantVersion)
+			}
+		})
+	}
+}
+
+func TestSeedsMigrate(t *testing.T) {
+	tests := []struct {
+		name string
+		// runs are the seeds of each build that seeds the database, in order: a preview upgraded in place.
+		runs          [][]*goose.Migration
+		wantRows      int
+		wantSeedTable int64
+	}{
+		{name: "DevHub's seeds", runs: [][]*goose.Migration{seeds.Go}, wantSeedTable: int64(len(seeds.Go))},
+		{name: "one build", runs: [][]*goose.Migration{{seedA(1, 1), seedA(2, 2)}}, wantRows: 2, wantSeedTable: 2},
+		{name: "the same build again", runs: [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1)}}, wantRows: 1, wantSeedTable: 1},
+		{
+			name:          "a newer build, only the new seed",
+			runs:          [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1), seedA(2, 2)}},
+			wantRows:      2,
+			wantSeedTable: 2,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := migratedDatabase(t, true, columnB)
+			for _, run := range tt.runs {
+				seed(t, pool, run)
+			}
+			if rows := countRows(t, pool, "SELECT count(*) FROM a WHERE b = 'seeded'"); rows != tt.wantRows {
+				t.Errorf("seeded rows = %d, want %d", rows, tt.wantRows)
+			}
+			if version := countRows(t, pool, "SELECT max(version_id) FROM "+SeedTable); int64(version) != tt.wantSeedTable {
+				t.Errorf("%s = %d, want %d", SeedTable, version, tt.wantSeedTable)
+			}
+			if version := schemaVersion(t, pool); version != 2 {
+				t.Errorf("schema version = %d after seeding, want columnB's 2", version)
+			}
+		})
+	}
+}
+
+// seed applies seeds to pool's database, as the migrate Job of a build that holds them does.
+func seed(t *testing.T, pool *pgxpool.Pool, seeds []*goose.Migration) {
+	t.Helper()
+	s, err := NewSeeds(pool, seeds...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	if err := s.Migrate(context.Background()); err != nil {
+		t.Fatalf("Migrate() = %v", err)
+	}
+}
+
+// countRows returns the one integer query answers on pool's database.
+func countRows(t *testing.T, pool *pgxpool.Pool, query string) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(), query).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	return n
 }

@@ -1,7 +1,7 @@
 # The DevHub repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced again
+> with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced again
 > once DevHub's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
@@ -77,6 +77,20 @@ The repository, its address and its grants are infra’s ([Artifact
 Registry](../../infra/terraform/gcp.md#artifact-registry)); ServiceAccount `ci-devhub-release` and the branches it may
 run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
 
+Pipeline `preview` runs on every pull request, as `ci` does, with the same task as `main`: it builds both images of the
+head commit and pushes them to repository `devhub-previews`, tagged the same way, for the pull request's preview. The
+hub installs that preview from the chart at the head commit, with those images and DevHub's demo data (`db/seeds/`,
+`seed.enabled`), at a host of its own ([DevHub's previews](../../delivery/designs/devhub-previews.md)). A newer push
+supersedes the build of the one before; it is no required check, since the pull request's own checks are `ci`'s.
+
+**Pipeline preview publishes both images of every pull request’s head commit, for its preview**
+
+![Pipeline preview publishes both images of every pull request’s head commit, for its preview](repository/preview.svg)
+
+Any branch may run as `ci-devhub-preview`, which writes `devhub-previews` alone, never `main`’s or the versions’
+repository. The repository is infra’s ([Artifact Registry](../../infra/terraform/gcp.md#artifact-registry)); the
+ServiceAccount and the preview itself are delivery’s ([DevHub’s previews](../../delivery/designs/devhub-previews.md)).
+
 ## Releases
 
 A version is a [GitHub release](https://github.com/arikkfir-org/devhub/releases), as Octomaton's are: tag `v1.2.3` on a
@@ -141,6 +155,9 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 - Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/` as the tenant's ServiceAccount `pipeline`,
   which holds no Google Cloud role, and with no GitHub token. Octomaton ignores forks, so a stranger's pull request runs
   nothing.
+- Pipeline `preview` runs any branch's pull request as `ci-devhub-preview`, which may write only repository
+  `devhub-previews`: what it pushes runs only in that pull request's preview, never in an installation that follows
+  `main` or a version, and never in Fin's previews.
 - Task `chart`'s Docker daemon runs privileged, which `ci-devhub` admits; it listens only on a socket its steps share,
   and its run holds no token either.
 - Without CI tenant `ci-devhub`, Octomaton refuses every pipeline on the repository, and its pull requests can't pass
