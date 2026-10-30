@@ -28,7 +28,7 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 | `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `cobranch migrate` applies them before the servers roll out. Trigger `audit()` on the audited tables writes `audit_log` with the principal each transaction acts for |
-| `db/queries/` | The stores' SQL, from which `go generate ./...` writes `internal/adapters/postgres/queries` with [sqlc](https://sqlc.dev) (`sqlc.yaml`), checked against the schema; no Go file writes a query |
+| `db/queries/` | The stores' SQL, from which `go generate ./...` writes `internal/adapters/postgres/queries` with [sqlc](https://sqlc.dev) (`sqlc.yaml`), checked against the schema; no Go file writes a query but the schema version's read of goose's table |
 | `db/seeds/` | Demo data, in Go over queries sqlc writes from its `queries.sql`, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as a demo installation does |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
 | `chart/cobranch/` | The Helm chart that installs Cobranch |
