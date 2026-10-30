@@ -1,7 +1,45 @@
 # Cobranch's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
 # Console's surface (https://docs.dev.kfirs.com/cobranch/designs/architecture.md, "API conventions").
 
+"An instant, as RFC 3339."
+scalar Time
+
 type Query {
   "The version of Cobranch that serves this installation: a release version or a commit's short SHA."
   version: String!
+  "Who the request's credential signs in, or null for Anonymous."
+  viewer: User
+}
+
+type Mutation {
+  "Revokes one of the viewer's sessions; the next request with its cookie fails. False when the viewer has no such session."
+  revokeSession(id: ID!): Boolean!
+}
+
+"A person: a principal of kind user."
+type User {
+  id: ID!
+  displayName: String!
+  "The emails the user holds; the sign-up's verified one today, several later."
+  emails: [Email!]!
+  "The user's live sessions, newest first."
+  sessions: [Session!]!
+}
+
+type Email {
+  email: String!
+  verified: Boolean!
+}
+
+"A signed-in browser."
+type Session {
+  id: ID!
+  createdAt: Time!
+  lastSeenAt: Time!
+  "When the session ends however it is used."
+  expiresAt: Time!
+  userAgent: String!
+  ip: String!
+  "Whether this is the session the request itself came with."
+  current: Boolean!
 }

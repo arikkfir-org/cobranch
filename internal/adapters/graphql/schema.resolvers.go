@@ -7,14 +7,63 @@ package graphql
 
 import (
 	"context"
+	"errors"
+	"log/slog"
+
+	"github.com/google/uuid"
+
+	"cobranch.dev/internal/services/auth"
 )
+
+// RevokeSession is the resolver for the revokeSession field.
+func (r *mutationResolver) RevokeSession(ctx context.Context, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	sessionID, err := uuid.Parse(id)
+	if err != nil {
+		return false, nil
+	}
+	err = r.Sessions.Revoke(ctx, v.User.ID, sessionID)
+	switch {
+	case errors.Is(err, auth.ErrNotFound):
+		return false, nil
+	case err != nil:
+		slog.ErrorContext(ctx, "Revoking a session failed", "error", err)
+		return false, errors.New("the session could not be revoked")
+	}
+	return true, nil
+}
 
 // Version is the resolver for the version field.
 func (r *queryResolver) Version(ctx context.Context) (string, error) {
 	return r.Resolver.Version, nil
 }
 
+// Viewer is the resolver for the viewer field.
+func (r *queryResolver) Viewer(ctx context.Context) (*User, error) {
+	v, ok := auth.Viewer(ctx)
+	if !ok {
+		return nil, nil
+	}
+	u := user(v.User)
+	sessions, err := r.sessions(ctx, v)
+	if err != nil {
+		slog.ErrorContext(ctx, "Listing the viewer's sessions failed", "error", err)
+		return nil, err
+	}
+	u.Sessions = sessions
+	return u, nil
+}
+
+// Mutation returns MutationResolver implementation.
+func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
-type queryResolver struct{ *Resolver }
+type (
+	mutationResolver struct{ *Resolver }
+	queryResolver    struct{ *Resolver }
+)

@@ -10,10 +10,11 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler/transport"
 )
 
-// NewHandler serves queries over GET and POST, for a server built as version. Subscriptions over WebSocket come with
-// live updates.
-func NewHandler(version string) http.Handler {
-	srv := handler.New(NewExecutableSchema(Config{Resolvers: &Resolver{Version: version}}))
+// NewHandler serves queries over GET and POST, for a server built as version, with sessions for the viewer's.
+// Subscriptions over WebSocket come with live updates. A mutation runs over POST alone: GET's transport refuses it, so a
+// cross-site navigation changes nothing.
+func NewHandler(version string, sessions Sessions) http.Handler {
+	srv := handler.New(NewExecutableSchema(Config{Resolvers: &Resolver{Version: version, Sessions: sessions}}))
 	srv.AddTransport(transport.GET{})
 	srv.AddTransport(transport.POST{})
 	srv.Use(extension.Introspection{})

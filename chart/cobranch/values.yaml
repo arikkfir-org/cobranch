@@ -24,6 +24,37 @@ urls:
   rest: ""
   # Such as https://graphql.cobranch.example.com, or https://cobranch.example.com/graphql.
   graphql: ""
+  # The Auth server, which signs people in: such as https://auth.cobranch.example.com, or
+  # https://cobranch.example.com/auth. Each identity provider's redirect URI is this URL plus /callback. Without it,
+  # nobody can sign in.
+  auth: ""
+
+# Sign-in (https://docs.dev.kfirs.com/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
+# says that sign-in isn't set up yet.
+auth:
+  # The identity providers, any OpenID Connect provider each: its id (lowercase letters, digits and dashes; it names
+  # the provider in URLs and the database, so keep it), the name the sign-in page shows, its issuer URL or a preset
+  # (google) that fills the issuer in, the client you registered there with urls.auth plus /callback as its redirect
+  # URI, and the Secret of yours that holds the client's secret.
+  #   - id: google
+  #     name: Google
+  #     preset: google
+  #     clientId: 1234.apps.googleusercontent.com
+  #     clientSecret:
+  #       secretName: cobranch-google
+  #       key: client-secret
+  providers: []
+  # Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation to a verified
+  # email). A first administrator's email may always sign up.
+  signUp: anyone
+  signUpDomains: []
+  # The first administrators' emails: a verified sign-in with one grants Installation admin, and an email that leaves
+  # the list loses that grant at its next sign-in. Grants made in the Back-office are never touched.
+  admins: []
+
+organizations:
+  # Every new user may create organizations (Installation user). Off, only the administrators grant it.
+  selfServe: true
 
 # The bucket, which only the servers reach: Go Cloud names it by URL (s3://, gs://, azblob:// or file://).
 blob:
@@ -59,6 +90,20 @@ telemetry:
   # More of OpenTelemetry's variables, such as OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production. Each
   # workload names itself as the service.
   env: {}
+
+# The Auth server: the only workload that talks to the identity providers and sets the session cookie.
+authServer:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
 
 # The REST API's server.
 restServer:
@@ -117,10 +162,24 @@ migrate:
   affinity: {}
   podAnnotations: {}
 
+# The CronJob that deletes what expired: sign-in flows and sessions, hourly.
+maintenance:
+  schedule: "0 * * * *"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
 # Cobranch's demo data (db/seeds): users, organizations, repositories and the rest, for previews of Cobranch's own pull
-# requests. Never turn it on for a real installation.
+# requests. Never turn it on for a real installation: with it on, the sign-in page signs anyone in as a demo user.
 seed:
-  # The migrate Job adds the demo data it lacks after migrating the schema.
+  # The migrate Job adds the demo data it lacks after migrating the schema, and the Auth server signs in as its users.
   enabled: false
 
 # The bundled PostgreSQL: one replica of the official image, on a persistent volume. Turn it off to bring your own

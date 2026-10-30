@@ -1,7 +1,7 @@
 {{- if .Values.httpRoute.enabled }}
 {{- $fullname := include "cobranch.fullname" . }}
-{{- $routes := dict "console" .Values.urls.console "rest-server" .Values.urls.rest "graphql-server" .Values.urls.graphql }}
-{{- if not (or .Values.urls.console .Values.urls.rest .Values.urls.graphql) }}
+{{- $routes := dict "console" .Values.urls.console "rest-server" .Values.urls.rest "graphql-server" .Values.urls.graphql "auth-server" .Values.urls.auth }}
+{{- if not (or .Values.urls.console .Values.urls.rest .Values.urls.graphql .Values.urls.auth) }}
 {{- fail "httpRoute.enabled needs a workload's URL in urls: the routes take their hosts and paths from them" }}
 {{- end }}
 {{- range $component, $url := $routes }}

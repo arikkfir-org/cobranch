@@ -194,3 +194,48 @@ template:
         securityContext:
           {{- include "cobranch.containerSecurityContext" . | nindent 10 }}
 {{- end -}}
+{{/* The workloads' public URLs, which every server reads: where the Console's pages find each API, and together the
+hosts the session cookie is set for. */}}
+{{- define "cobranch.urlsEnv" -}}
+{{- range $name, $url := dict "CONSOLE" .Values.urls.console "REST" .Values.urls.rest "GRAPHQL" .Values.urls.graphql "AUTH" .Values.urls.auth }}
+{{- if $url }}
+- name: COBRANCH_{{ $name }}_URL
+  value: {{ $url | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
+{{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets) and the
+policies. */}}
+{{- define "cobranch.authEnv" -}}
+{{- $providers := list }}
+{{- range .Values.auth.providers }}
+{{- $providers = append $providers (dict "id" .id "name" (.name | default .id) "issuer" (.issuer | default "") "preset" (.preset | default "") "clientId" .clientId) }}
+{{- end }}
+- name: COBRANCH_AUTH_PROVIDERS
+  value: {{ $providers | toJson | quote }}
+{{- range .Values.auth.providers }}
+- name: COBRANCH_AUTH_CLIENT_SECRET_{{ .id | upper | replace "-" "_" }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ required (printf "auth.providers[%s].clientSecret.secretName names the Secret that holds the client's secret" .id) .clientSecret.secretName }}
+      key: {{ .clientSecret.key | default "client-secret" }}
+{{- end }}
+- name: COBRANCH_AUTH_SIGN_UP
+  value: {{ .Values.auth.signUp | quote }}
+{{- with .Values.auth.signUpDomains }}
+- name: COBRANCH_AUTH_SIGN_UP_DOMAINS
+  value: {{ join "," . | quote }}
+{{- end }}
+{{- with .Values.auth.admins }}
+- name: COBRANCH_AUTH_ADMINS
+  value: {{ join "," . | quote }}
+{{- end }}
+- name: COBRANCH_ORGANIZATIONS_SELF_SERVE
+  value: {{ .Values.organizations.selfServe | quote }}
+{{- if .Values.seed.enabled }}
+# Demo data, for previews only: the sign-in page signs in as its users.
+- name: COBRANCH_SEED
+  value: "true"
+{{- end }}
+{{- end -}}

@@ -43,7 +43,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | --- | --- | --- |
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
-| [Sign-in and organizations](https://claude.ai/artifact/RYmKGqZNHvvTuWw3b2HR9R) | Sign-in, sign-up, organizations, their members and API keys. | Proposed |
+| [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |

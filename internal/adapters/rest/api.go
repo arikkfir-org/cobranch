@@ -18,6 +18,8 @@ const BaseURL = "/v1"
 type api struct {
 	// version is the version the server was built as.
 	version string
+	// sessions is sign-in's service, for the viewer's sessions.
+	sessions Sessions
 }
 
 // GetVersion answers the version the server was built as.
@@ -25,10 +27,10 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 	return GetVersion200JSONResponse{Version: a.version}, nil
 }
 
-// NewHandler serves the API under BaseURL, for a server built as version. Every other path answers 404, and a request
-// the API can't read 400, both as problem details.
-func NewHandler(version string) http.Handler {
-	strict := NewStrictHandlerWithOptions(api{version: version}, nil, StrictHTTPServerOptions{
+// NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's. Every
+// other path answers 404, and a request the API can't read 400, both as problem details.
+func NewHandler(version string, sessions Sessions) http.Handler {
+	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,
 	})
@@ -54,16 +56,7 @@ func internalError(w http.ResponseWriter, r *http.Request, err error) {
 // writeProblem answers status with problem details: code is the stable error code, detail what went wrong, if
 // anything more than the status says.
 func writeProblem(w http.ResponseWriter, r *http.Request, status int, code, detail string) {
-	p := Problem{
-		Type:      "about:blank",
-		Title:     http.StatusText(status),
-		Status:    status,
-		Code:      code,
-		RequestId: server.RequestID(r.Context()),
-	}
-	if detail != "" {
-		p.Detail = &detail
-	}
+	p := problem(r.Context(), status, code, detail)
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(p) // the caller is gone; nothing to tell

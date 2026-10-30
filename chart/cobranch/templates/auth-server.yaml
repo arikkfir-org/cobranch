@@ -1,0 +1,5 @@
+{{- include "cobranch.checkDatabase" . }}
+{{- if and .Values.auth.providers (not .Values.urls.auth) }}
+{{- fail "auth.providers needs urls.auth: the providers send browsers back to it" }}
+{{- end }}
+{{- include "cobranch.server" (dict "root" . "component" "auth-server" "values" .Values.authServer) }}

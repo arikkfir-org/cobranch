@@ -14,7 +14,7 @@ Cobranch is a Kfirs project, created by Arik Kfir, and is released under the [MI
 
 ## Status
 
-Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them, published to the hub's docs site under `cobranch/designs/`, behind its sign-in.
+Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions and the first tables are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)); organizations, roles and API keys follow in the same issue. The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them, published to the hub's docs site under `cobranch/designs/`, behind its sign-in.
 
 ## Layout
 
@@ -22,9 +22,9 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 
 | Path | What it holds |
 | --- | --- |
-| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, maintenance, agent), so every workload runs the same build at one version; today `rest-server`, `graphql-server`, `migrate` and `version` |
-| `internal/` | The Go packages: `services/` (the domain), `adapters/` (transports, storage, outside systems) and `system/` (configuration, telemetry, build information) |
-| `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`); a placeholder page until its first screen |
+| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `migrate`, `maintenance` and `version` |
+| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in and sessions), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `server`, `blob`) and `system/` (configuration, telemetry, build information) |
+| `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`); one page, sign-in and who you are, until its screens |
 | `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `cobranch migrate` applies them before the servers roll out |
@@ -58,8 +58,20 @@ server needs a bucket and the database, and turns ready once the schema is at th
 export COBRANCH_BLOB_URL='file:///tmp/cobranch-blobs?create_dir=true'
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
 bin/cobranch migrate
-bin/cobranch rest-server                                 # :8080: /healthz, /readyz, /v1/version
+bin/cobranch rest-server                                 # :8080: /healthz, /readyz, /v1/version, /v1/me
 COBRANCH_HTTP_ADDR=:8081 bin/cobranch graphql-server     # :8081: /healthz, /readyz, GraphQL at /
+```
+
+`auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
+(`COBRANCH_SEED=true` with `migrate`, then with `auth-server`, lets the sign-in page sign in as a demo user);
+`maintenance` deletes expired sign-in flows and sessions once and exits:
+
+```bash
+export COBRANCH_CONSOLE_URL=http://localhost:3000 COBRANCH_AUTH_URL=http://localhost:8082
+export COBRANCH_AUTH_PROVIDERS='[{"id":"google","name":"Google","preset":"google","clientId":"…"}]'
+export COBRANCH_AUTH_CLIENT_SECRET_GOOGLE='…'          # the redirect URI is $COBRANCH_AUTH_URL/callback
+COBRANCH_HTTP_ADDR=:8082 bin/cobranch auth-server        # :8082: /providers, /sign-in, /callback, /sign-out
+bin/cobranch maintenance
 ```
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces

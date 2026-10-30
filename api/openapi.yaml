@@ -24,6 +24,62 @@ paths:
                 $ref: "#/components/schemas/Version"
         default:
           $ref: "#/components/responses/Problem"
+  /me:
+    get:
+      operationId: getMe
+      summary: Who the request's credential signs in.
+      responses:
+        "200":
+          description: The user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/sessions:
+    get:
+      operationId: listMySessions
+      summary: The user's live sessions, newest first.
+      responses:
+        "200":
+          description: The sessions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/sessions/{id}:
+    delete:
+      operationId: revokeMySession
+      summary: Revokes one of the user's sessions; the next request with its cookie fails.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   responses:
     Problem:
@@ -41,6 +97,54 @@ components:
           type: string
           description: The version the server was built as, a release version or a commit's short SHA.
           examples: [v0.1.0, 1e76e84]
+    User:
+      type: object
+      description: A person, a principal of kind user.
+      required: [id, displayName, emails]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        emails:
+          type: array
+          description: The emails the user holds; the sign-up's verified one today, several later.
+          items:
+            $ref: "#/components/schemas/Email"
+    Email:
+      type: object
+      required: [email, verified]
+      properties:
+        email:
+          type: string
+        verified:
+          type: boolean
+    Session:
+      type: object
+      description: A signed-in browser.
+      required: [id, createdAt, lastSeenAt, expiresAt, userAgent, ip, current]
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        lastSeenAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the session ends however it is used.
+        userAgent:
+          type: string
+        ip:
+          type: string
+        current:
+          type: boolean
+          description: Whether this is the session the request itself came with.
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

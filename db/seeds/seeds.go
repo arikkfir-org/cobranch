@@ -15,4 +15,5 @@ import (
 // Go holds the seeds, in the order they apply.
 var Go = []*goose.Migration{
 	goose.NewGoMigration(1, &goose.GoFunc{RunTx: baseline}, nil),
+	goose.NewGoMigration(2, &goose.GoFunc{RunTx: users}, nil),
 }

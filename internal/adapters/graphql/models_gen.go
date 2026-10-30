@@ -2,5 +2,40 @@
 
 package graphql
 
+import (
+	"time"
+)
+
+type Email struct {
+	Email    string `json:"email"`
+	Verified bool   `json:"verified"`
+}
+
+type Mutation struct {
+}
+
 type Query struct {
+}
+
+// A signed-in browser.
+type Session struct {
+	ID         string    `json:"id"`
+	CreatedAt  time.Time `json:"createdAt"`
+	LastSeenAt time.Time `json:"lastSeenAt"`
+	// When the session ends however it is used.
+	ExpiresAt time.Time `json:"expiresAt"`
+	UserAgent string    `json:"userAgent"`
+	IP        string    `json:"ip"`
+	// Whether this is the session the request itself came with.
+	Current bool `json:"current"`
+}
+
+// A person: a principal of kind user.
+type User struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+	// The emails the user holds; the sign-up's verified one today, several later.
+	Emails []*Email `json:"emails"`
+	// The user's live sessions, newest first.
+	Sessions []*Session `json:"sessions"`
 }

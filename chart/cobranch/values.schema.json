@@ -97,6 +97,11 @@
           "type": "string",
           "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
           "description": "The GraphQL API's public URL: a host, and a path the route strips if any. Such as https://graphql.cobranch.example.com or https://cobranch.example.com/graphql."
+        },
+        "auth": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Auth server's public URL, which signs people in: a host, and a path the route strips if any. Each identity provider's redirect URI is it plus /callback. Such as https://auth.cobranch.example.com or https://cobranch.example.com/auth."
         }
       }
     },
@@ -191,6 +196,41 @@
         }
       }
     },
+    "authServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "restServer": {
       "type": "object",
       "additionalProperties": false,
@@ -272,6 +312,42 @@
         "activeDeadlineSeconds": {
           "type": "integer",
           "minimum": 60
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schedule",
+        "resources"
+      ],
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "minLength": 9,
+          "description": "A cron schedule; hourly by default."
         },
         "resources": {
           "$ref": "#/definitions/resources"
@@ -465,13 +541,134 @@
     },
     "global": {
       "type": "object"
+    },
+    "auth": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Sign-in: the identity providers and the policies.",
+      "properties": {
+        "providers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "clientId",
+              "clientSecret"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$",
+                "description": "Names the provider in URLs and the database: lowercase letters, digits and dashes. Keep it."
+              },
+              "name": {
+                "type": "string",
+                "description": "What the sign-in page shows; the id when empty."
+              },
+              "issuer": {
+                "type": "string",
+                "pattern": "^(https://.+)?$",
+                "description": "The provider's issuer URL, whose /.well-known/openid-configuration says the rest."
+              },
+              "preset": {
+                "type": "string",
+                "enum": [
+                  "google"
+                ],
+                "description": "A known provider, which fills the issuer in."
+              },
+              "clientId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "clientSecret": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "secretName"
+                ],
+                "properties": {
+                  "secretName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "A Secret of yours that holds the client's secret."
+                  },
+                  "key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Its key; client-secret by default."
+                  }
+                }
+              }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "issuer"
+                ],
+                "properties": {
+                  "issuer": {
+                    "minLength": 1
+                  }
+                },
+                "not": {
+                  "required": [
+                    "preset"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "preset"
+                ]
+              }
+            ]
+          }
+        },
+        "signUp": {
+          "type": "string",
+          "enum": [
+            "anyone",
+            "domains",
+            "invited"
+          ]
+        },
+        "signUpDomains": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "admins": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      }
+    },
+    "organizations": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "selfServe": {
+          "type": "boolean",
+          "description": "Every new user may create organizations."
+        }
+      }
     }
   },
   "required": [
     "blob",
+    "authServer",
     "restServer",
     "graphqlServer",
     "console",
-    "migrate"
+    "migrate",
+    "maintenance"
   ]
 }
