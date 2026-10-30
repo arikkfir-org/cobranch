@@ -375,7 +375,7 @@
     "seed": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Demo data for previews of Cobranch's own pull requests: never turn it on for a real installation.",
+      "description": "Demo data for a demo installation, such as Cobranch's own pull request previews: never turn it on for a real one.",
       "properties": {
         "enabled": {
           "type": "boolean",

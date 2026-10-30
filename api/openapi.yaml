@@ -1,5 +1,5 @@
 # Cobranch's REST contract, written first: internal/adapters/rest generates its server from it, and the SDKs will be
-# generated from it too (https://docs.dev.kfirs.com/cobranch/designs/architecture.md, "API conventions").
+# generated from it too (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md, "API conventions").
 openapi: 3.1.0
 info:
   title: Cobranch API

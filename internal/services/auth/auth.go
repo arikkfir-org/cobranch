@@ -1,6 +1,6 @@
 // Package auth is the domain of sign-in: identity providers, users and their identities, sign-in flows, sessions and
 // the grants a sign-in makes. It knows nothing of HTTP, OpenID Connect's wire format or PostgreSQL: adapters bring
-// those through its ports, Provider and Store (https://docs.dev.kfirs.com/cobranch/designs/sign-in-and-organizations.md).
+// those through its ports, Provider and Store (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md).
 package auth
 
 import (

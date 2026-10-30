@@ -1,6 +1,6 @@
 // Package authserver is the Auth server's HTTP surface: the only workload that sends browsers to identity providers
 // and sets the session cookie. It serves no data: the sign-in page is the Console's, which calls /providers and sends
-// the browser to /sign-in (https://docs.dev.kfirs.com/cobranch/designs/sign-in-and-organizations.md, "Sign-in").
+// the browser to /sign-in (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md, "Sign-in").
 package authserver
 
 import (

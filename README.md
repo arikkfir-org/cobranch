@@ -14,7 +14,7 @@ Cobranch is a Kfirs project, created by Arik Kfir, and is released under the [MI
 
 ## Status
 
-Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions and the first tables are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)); organizations, roles and API keys follow in the same issue. The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them, published to the hub's docs site under `cobranch/designs/`, behind its sign-in.
+Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions and the first tables are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)); organizations, roles and API keys follow in the same issue. The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them.
 
 ## Layout
 
@@ -28,7 +28,7 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 | `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `cobranch migrate` applies them before the servers roll out |
-| `db/seeds/` | Demo data, in Go, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as previews do |
+| `db/seeds/` | Demo data, in Go, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as a demo installation does |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
 | `chart/cobranch/` | The Helm chart that installs Cobranch |
 | `Dockerfile` | Image `cobranch`: the binary, with `git` |
@@ -76,9 +76,9 @@ bin/cobranch maintenance
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
-([Observability](https://docs.dev.kfirs.com/cobranch/designs/architecture.md#observability)).
+([Observability](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md#observability)).
 
-CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for the preview of its own that the hub installs, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the Cobranch repository](docs/cobranch/designs/repository.md).
+CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for a preview installation of its own, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the Cobranch repository](docs/cobranch/designs/repository.md).
 
 ## Installing
 

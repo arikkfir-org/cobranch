@@ -29,7 +29,7 @@ urls:
   # nobody can sign in.
   auth: ""
 
-# Sign-in (https://docs.dev.kfirs.com/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
+# Sign-in (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
 # says that sign-in isn't set up yet.
 auth:
   # The identity providers, any OpenID Connect provider each: its id (lowercase letters, digits and dashes; it names
@@ -176,8 +176,9 @@ maintenance:
   affinity: {}
   podAnnotations: {}
 
-# Cobranch's demo data (db/seeds): users, organizations, repositories and the rest, for previews of Cobranch's own pull
-# requests. Never turn it on for a real installation: with it on, the sign-in page signs anyone in as a demo user.
+# Cobranch's demo data (db/seeds): users, organizations, repositories and the rest, for a demo installation such as
+# Cobranch's own pull request previews. Never turn it on for a real one: the sign-in page then signs anyone in as a demo
+# user.
 seed:
   # The migrate Job adds the demo data it lacks after migrating the schema, and the Auth server signs in as its users.
   enabled: false

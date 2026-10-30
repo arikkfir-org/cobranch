@@ -289,7 +289,7 @@ func newExecutionContext(
 
 var sources = []*ast.Source{
 	{Name: "../../../api/graphql/schema.graphqls", Input: `# Cobranch's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
-# Console's surface (https://docs.dev.kfirs.com/cobranch/designs/architecture.md, "API conventions").
+# Console's surface (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md, "API conventions").
 
 "An instant, as RFC 3339."
 scalar Time

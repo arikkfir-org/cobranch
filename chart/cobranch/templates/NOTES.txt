@@ -3,8 +3,8 @@ this version's schema, and the servers turn ready once it is done.
 {{- if .Values.seed.enabled }}
 
 WARNING: seed.enabled is on. The migrate Job adds Cobranch's demo data to this installation's database, and the
-sign-in page signs anyone in as one of its users. It is for previews of Cobranch's own pull requests only: never leave
-it on for a real installation.
+sign-in page signs anyone in as one of its users. It is for a demo installation only: never leave it on for a
+real one.
 {{- end }}
 {{- if not .Values.urls.auth }}
 

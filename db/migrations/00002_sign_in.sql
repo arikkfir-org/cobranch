@@ -1,6 +1,6 @@
 -- Sign-in: principals and the emails they hold, their identities at the providers, the flows a sign-in waits in, the
 -- sessions it makes, the roles and grants a sign-in gives, and the audit log. Every ID is a UUIDv7
--- (https://docs.dev.kfirs.com/cobranch/designs/sign-in-and-organizations.md, "Data model").
+-- (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md, "Data model").
 
 -- +goose Up
 

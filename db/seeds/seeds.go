@@ -4,7 +4,7 @@
 // so an installation that never seeds keeps every one of its schema's versions.
 //
 // Every image holds the seeds; the migrate Job applies them after the schema's migrations, and only when the chart's
-// seed.enabled is on, as it is in previews alone. A preview upgraded in place applies only the seeds it lacks. Each
+// seed.enabled is on, as it is in Cobranch's own pull request previews alone. A preview upgraded in place applies only the seeds it lacks. Each
 // slice adds the seeds its feature needs, in Go, numbered after the last.
 package seeds
 

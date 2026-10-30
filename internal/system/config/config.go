@@ -154,7 +154,7 @@ type AuthServer struct {
 	Admins []string `envconfig:"AUTH_ADMINS"`
 	// SelfServe grants every new user Installation user, which creates organizations.
 	SelfServe bool `envconfig:"ORGANIZATIONS_SELF_SERVE" default:"true"`
-	// Seed lets the demo data's users sign in without a provider: previews only.
+	// Seed lets the demo data's users sign in without a provider: demo installations only.
 	Seed bool `envconfig:"SEED"`
 }
 
@@ -190,7 +190,7 @@ func lower(values []string) {
 type Migrate struct {
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// Seed adds the demo data (db/seeds) after migrating the schema: for previews only, never a real installation.
+	// Seed adds the demo data (db/seeds) after migrating the schema: for demo installations only, never a real one.
 	Seed bool `envconfig:"SEED"`
 }
 

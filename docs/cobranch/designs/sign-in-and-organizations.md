@@ -311,17 +311,18 @@ installation’s scope are rows the first migrations write.
 
 ## Rollout
 
-**Four pull requests in Cobranch, then the hub’s demo**
+**Four pull requests in Cobranch**
 
-![Four pull requests in Cobranch, then the hub’s demo](sign-in-and-organizations/rollout.svg)
+![Four pull requests in Cobranch](sign-in-and-organizations/rollout.svg)
 
-The hub hosts Cobranch as any operator would; its pull requests follow the product’s and never change it.
+Nothing of an installation is in the product: an operator configures sign-in through the chart’s values alone, and
+Cobranch’s own pull request previews sign in as seeded users.
 
 - **Each pull request keeps `main` working**, with its Console pages and tests. An installation that has no provider yet
-  shows the "not set up" page, so the hub's demo shows it between the first pull request and the hub's values.
-- **The hub's demo and previews** are the hub's to change, in `infra` and `delivery`: a client at an identity provider
-  for the demo, the Auth server's route and network admission, and previews that remove every cookie today, which must
-  let Cobranch's through and keep the hub's out.
+  shows the "not set up" page until its operator sets `urls.auth` and `auth.providers`.
+- **An installation is the operator's**, configured through the chart alone: a client registered at their identity
+  provider with `urls.auth` plus `/callback` as its redirect URI, its secret in a Secret of theirs, and the Auth
+  server's route beside the other workloads'. Cobranch's own pull request previews sign in as seeded users.
 
 ## Risks
 
@@ -362,8 +363,8 @@ The hub hosts Cobranch as any operator would; its pull requests follow the produ
 
 The owner took every recommendation on 2026-10-30:
 
-1. **Any OpenID Connect provider now, or Google only?** Any, with Google as a preset. It costs nothing more, and the
-   hub's demo signs in through the hub's own Keycloak instead of a Google client made by hand.
+1. **Any OpenID Connect provider now, or Google only?** Any, with Google as a preset. It costs nothing more, and an
+   installation signs in through whatever provider its operator already runs.
 2. **Previews sign in as seeded users?** Yes, rather than a fake provider deployed with every preview.
 3. **Mail in this slice?** No: invitations work by verified email and a link, and mail comes with notifications.
 

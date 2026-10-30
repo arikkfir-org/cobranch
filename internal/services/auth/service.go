@@ -74,7 +74,7 @@ type Settings struct {
 	Admins []string
 	// SelfServe grants every new user Installation user, which creates organizations.
 	SelfServe bool
-	// Seed lets the demo data's users sign in without a provider: previews only.
+	// Seed lets the demo data's users sign in without a provider: demo installations only.
 	Seed bool
 }
 
@@ -279,7 +279,7 @@ func (s *Service) signIn(ctx context.Context, identity Identity, client Client, 
 	return Completed{SessionToken: token, ReturnPath: returnPath}, nil
 }
 
-// SignInSeeded signs in as the demo user whose seed subject is subject, with no provider: for previews, while
+// SignInSeeded signs in as the demo user whose seed subject is subject, with no provider: for demo installations, while
 // seeding is on, and otherwise ErrSeedOff.
 func (s *Service) SignInSeeded(ctx context.Context, subject, returnPath string, client Client) (Completed, error) {
 	if !s.settings.Seed {
