@@ -81,7 +81,7 @@ run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
 Pipeline `preview` runs on every pull request, as `ci` does, with the same task as `main`: it builds both images of the
 head commit and pushes them to repository `cobranch-previews`, tagged the same way, for the pull request's preview. The
 hub installs that preview from the chart at the head commit, with those images and Cobranch's demo data (`db/seeds/`,
-`seed.enabled`), at a host of its own ([Cobranch's previews](../../delivery/designs/devhub-previews.md)). A newer push
+`seed.enabled`), at a host of its own ([Cobranch's previews](../../delivery/designs/cobranch-previews.md)). A newer push
 supersedes the build of the one before; it is no required check, since the pull request's own checks are `ci`'s.
 
 **Pipeline preview publishes both images of every pull request’s head commit, for its preview**
@@ -90,7 +90,7 @@ supersedes the build of the one before; it is no required check, since the pull 
 
 Any branch may run as `ci-cobranch-preview`, which writes `cobranch-previews` alone, never `main`’s or the versions’
 repository. The repository is infra’s ([Artifact Registry](../../infra/terraform/gcp.md#artifact-registry)); the
-ServiceAccount and the preview itself are delivery’s ([Cobranch’s previews](../../delivery/designs/devhub-previews.md)).
+ServiceAccount and the preview itself are delivery’s ([Cobranch’s previews](../../delivery/designs/cobranch-previews.md)).
 
 ## Releases
 
