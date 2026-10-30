@@ -1,7 +1,7 @@
 # The DevHub product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced
+> linked with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced
 > again once DevHub's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -193,7 +193,7 @@ reconciliation are worked out in the subsystem designs.
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once DevHub's shape settles. The work is tracked in Linear's [DevHub
 project](https://linear.app/arikkfir/project/devhub-56ee907dd1af), one issue per slice, each building on the one before
-it; the Back-office needs only organizations.
+it; the Back-office needs only organizations, and moving the domains' nameservers into Terraform blocks nothing.
 
 **The roadmap, in order, as of 2026-10-30**
 
