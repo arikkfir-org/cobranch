@@ -9,7 +9,7 @@ it on for a real installation.
 {{- if not .Values.urls.auth }}
 
 Nobody can sign in yet: urls.auth is empty, so the Auth server isn't deployed and the Console says sign-in isn't set up.
-Set it to the Auth server's public URL, then list your identity providers in auth.providers.
+Set it to the Auth server's public URL, with urls.console, then list your identity providers in auth.providers.
 {{- else if not .Values.auth.providers }}
 
 Nobody can sign in yet: auth.providers lists no identity provider, so the Console says sign-in isn't set up. Register a

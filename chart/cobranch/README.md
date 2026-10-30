@@ -25,8 +25,8 @@ lists every value, and `values.schema.json` checks them at install.
   host (`https://cobranch.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
   `urls.rest`, `urls.graphql` and `urls.auth` with `httpRoute.enabled` for an HTTPRoute each. Keep every URL under one
   parent domain: the session cookie is set for the one host they share, or else for their nearest common parent.
-- **Sign-in.** Set `urls.auth`, the Auth server's public URL: without it the Auth server isn't deployed and the Console
-  says sign-in isn't set up. Then list your identity providers in `auth.providers`: any OpenID Connect provider by its issuer, or
+- **Sign-in.** Set `urls.console` and `urls.auth`, the Console's and the Auth server's public URLs: without `urls.auth`
+  the Auth server isn't deployed and the Console says sign-in isn't set up. Then list your identity providers in `auth.providers`: any OpenID Connect provider by its issuer, or
   `preset: google`, with the client you registered there (its redirect URI is `urls.auth` plus `/callback`) and a
   Secret of yours holding the client's secret. `auth.signUp` says who may sign up (`anyone`, `domains` or `invited`),
   `auth.admins` lists the first administrators' emails, and `organizations.selfServe` lets every user create

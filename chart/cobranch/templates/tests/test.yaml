@@ -53,7 +53,11 @@ spec:
           {{- if and .Values.seed.enabled .Values.urls.auth }}
           # The sign-in page lists the demo users, a seeded sign-in sets the session cookie, and the cookie signs in.
           wget -qO- "$auth/providers" | tee /dev/stderr | grep -q '"subject":"owner"'
-          cookie=$(wget -qO- --server-response --max-redirect=0 "$auth/sign-in?user=owner" 2>&1 | sed -n 's/^ *Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p')
+          # BusyBox's wget follows the redirect and drops its headers, so nc reads the raw response; stdin stays open
+          # until the response is in, since the server cancels a request whose client went away.
+          host=${auth#http://}
+          cookie=$( (printf 'GET /sign-in?user=owner HTTP/1.0\r\nHost: %s\r\n\r\n' "$host"; sleep 2) | nc "$host" 80 | tr -d '\r' \
+            | sed -n 's/^Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p')
           [ -n "$cookie" ]
           wget -qO- --header "Cookie: $cookie" "$rest/v1/me" | tee /dev/stderr | grep -q '"displayName":"Olivia Owner"'
           {{- end }}
