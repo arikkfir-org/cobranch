@@ -10,9 +10,8 @@ import (
 	"errors"
 	"log/slog"
 
-	"github.com/google/uuid"
-
 	"cobranch.dev/internal/services/auth"
+	"github.com/google/uuid"
 )
 
 // RevokeSession is the resolver for the revokeSession field.
