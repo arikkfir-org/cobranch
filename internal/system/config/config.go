@@ -61,6 +61,8 @@ func LoadServer() (Server, error) {
 type Migrate struct {
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// Seed adds the demo data (db/seeds) after migrating the schema: for previews only, never a real installation.
+	Seed bool `envconfig:"SEED"`
 }
 
 // LoadMigrate reads the migrate Job's configuration from the environment.

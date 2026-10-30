@@ -58,7 +58,7 @@ They log text here and JSON in a pod (`DEVHUB_LOG_FORMAT` picks one, `DEVHUB_LOG
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
 ([Observability](https://docs.dev.kfirs.com/devhub/designs/architecture.md#observability)).
 
-CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, and pipeline `tag` each version's images and chart. How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
+CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for the preview of its own that the hub installs, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the DevHub repository](docs/devhub/designs/repository.md).
 
 ## Installing
 

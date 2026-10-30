@@ -7,7 +7,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/arikkfir-org/devhub/db/migrations"
+	"github.com/arikkfir-org/devhub/db/seeds"
 	"github.com/arikkfir-org/devhub/internal/adapters/postgres"
 	"github.com/arikkfir-org/devhub/internal/system/buildinfo"
 	"github.com/arikkfir-org/devhub/internal/system/config"
@@ -17,8 +20,9 @@ import (
 // firstMigrationRetry is how long the migrate Job waits before it tries migrating a database it could not reach again.
 const firstMigrationRetry = time.Second
 
-// runMigrate brings the database's schema to the version this build needs and exits, waiting for a database that
-// doesn't answer yet until ctx ends. The chart runs it as a Job before the servers roll out.
+// runMigrate brings the database's schema to the version this build needs, then, when asked to, adds the demo data
+// (DEVHUB_SEED, the chart's seed.enabled), and exits, waiting for a database that doesn't answer yet until ctx ends.
+// The chart runs it as a Job before the servers roll out.
 func runMigrate(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "migrate", buildinfo.Version())
 	if err != nil {
@@ -45,5 +49,23 @@ func runMigrate(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("migrating: %w", err)
 	}
 	slog.InfoContext(ctx, "Migrated the database", "schemaVersion", schema.Version())
+	if !cfg.Seed {
+		return nil
+	}
+	return seed(ctx, pool)
+}
+
+// seed adds the demo data the database lacks, once its schema is current: only the seeds newer than the last it has.
+func seed(ctx context.Context, pool *pgxpool.Pool) error {
+	demo, err := postgres.NewSeeds(pool, seeds.Go...)
+	if err != nil {
+		return fmt.Errorf("reading the seeds: %w", err)
+	}
+	defer func() { _ = demo.Close() }() // the seeds committed, or rolled back, already
+	slog.InfoContext(ctx, "Seeding the database", "seedVersion", demo.Version())
+	if err := demo.Migrate(ctx); err != nil {
+		return fmt.Errorf("seeding: %w", err)
+	}
+	slog.InfoContext(ctx, "Seeded the database", "seedVersion", demo.Version())
 	return nil
 }
