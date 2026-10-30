@@ -28,7 +28,8 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 | `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `cobranch migrate` applies them before the servers roll out |
-| `db/seeds/` | Demo data, in Go, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as a demo installation does |
+| `db/queries/` | The stores' SQL, from which `go generate ./...` writes `internal/adapters/postgres/queries` with [sqlc](https://sqlc.dev) (`sqlc.yaml`), checked against the schema; no Go file writes a query |
+| `db/seeds/` | Demo data, in Go over queries sqlc writes from its `queries.sql`, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as a demo installation does |
 | `sdk/` | _Planned_: the Go, Python and TypeScript SDKs |
 | `chart/cobranch/` | The Helm chart that installs Cobranch |
 | `Dockerfile` | Image `cobranch`: the binary, with `git` |
@@ -44,7 +45,7 @@ makes its own database there; without `COBRANCH_TEST_DATABASE_URL` they are skip
 docker run -d --name cobranch-postgres -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:18.6-alpine
 export COBRANCH_TEST_DATABASE_URL='postgres://postgres@localhost:5432/postgres?sslmode=disable'
 
-go generate ./...                      # the REST and GraphQL stubs, from api/; CI fails if they differ
+go generate ./...                      # the REST and GraphQL stubs from api/, the queries from db/; CI fails if they differ
 go vet ./... && go test -race ./...    # every test
 golangci-lint run ./...                # the house rules' linters (.golangci.yml)
 go build -o bin/ ./cmd/...             # bin/cobranch
