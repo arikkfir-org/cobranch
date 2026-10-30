@@ -1,4 +1,4 @@
-# DevHub's CI, run by Octomaton (https://github.com/arikkfir-org/octomaton/blob/main/README.md, the schema).
+# Cobranch's CI, run by Octomaton (https://github.com/arikkfir-org/octomaton/blob/main/README.md, the schema).
 apiVersion: octomaton.dev/v1
 pipelines:
   # Lint, vet, test and build every pull request and every merge queue group.
@@ -15,7 +15,7 @@ pipelines:
     timeout: 30m
 
   # Publish both images of every pull request's head commit, tagged with its short SHA, for its preview: delivery's
-  # ApplicationSet devhub-pull-requests installs the chart at that commit with them. Not a required check: a preview
+  # ApplicationSet cobranch-pull-requests installs the chart at that commit with them. Not a required check: a preview
   # waits for its images, and the pull request's own checks are ci's. Each push supersedes the build of the one before.
   - name: preview
     pipelineRun: .tekton/preview.yaml

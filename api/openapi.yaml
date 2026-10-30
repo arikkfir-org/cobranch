@@ -1,10 +1,10 @@
-# DevHub's REST contract, written first: internal/adapters/rest generates its server from it, and the SDKs will be
-# generated from it too (https://docs.dev.kfirs.com/devhub/designs/architecture.md, "API conventions").
+# Cobranch's REST contract, written first: internal/adapters/rest generates its server from it, and the SDKs will be
+# generated from it too (https://docs.dev.kfirs.com/cobranch/designs/architecture.md, "API conventions").
 openapi: 3.1.0
 info:
-  title: DevHub API
+  title: Cobranch API
   version: v1
-  description: The REST surface of DevHub, the surface of its SDKs.
+  description: The REST surface of Cobranch, the surface of its SDKs.
   license:
     name: MIT
     identifier: MIT
@@ -14,7 +14,7 @@ paths:
   /version:
     get:
       operationId: getVersion
-      summary: The version of DevHub that serves this installation.
+      summary: The version of Cobranch that serves this installation.
       responses:
         "200":
           description: The version.
@@ -43,7 +43,7 @@ components:
           examples: [v0.1.0, 1e76e84]
     Problem:
       type: object
-      description: Problem details (RFC 9457), with DevHub's stable error code and the request's ID.
+      description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
       required: [type, title, status, code, requestId]
       properties:
         type:

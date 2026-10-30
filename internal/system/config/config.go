@@ -1,4 +1,4 @@
-// Package config reads the workloads' configuration from environment variables, the only configuration DevHub reads.
+// Package config reads the workloads' configuration from environment variables, the only configuration Cobranch reads.
 // The Helm chart renders them.
 package config
 
@@ -11,8 +11,8 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-// Prefix starts every variable's name: DEVHUB_HTTP_ADDR, DEVHUB_BLOB_URL and so on.
-const Prefix = "DEVHUB"
+// Prefix starts every variable's name: COBRANCH_HTTP_ADDR, COBRANCH_BLOB_URL and so on.
+const Prefix = "COBRANCH"
 
 // Server configures the servers, each of which serves one API: rest-server and graphql-server.
 type Server struct {
@@ -52,7 +52,7 @@ func (o *Origin) Decode(value string) error {
 func LoadServer() (Server, error) {
 	var c Server
 	if err := envconfig.Process(Prefix, &c); err != nil {
-		return Server{}, fmt.Errorf("reading the server's configuration from the DEVHUB_ variables: %w", err)
+		return Server{}, fmt.Errorf("reading the server's configuration from the COBRANCH_ variables: %w", err)
 	}
 	return c, nil
 }
@@ -69,7 +69,7 @@ type Migrate struct {
 func LoadMigrate() (Migrate, error) {
 	var c Migrate
 	if err := envconfig.Process(Prefix, &c); err != nil {
-		return Migrate{}, fmt.Errorf("reading the migrate Job's configuration from the DEVHUB_ variables: %w", err)
+		return Migrate{}, fmt.Errorf("reading the migrate Job's configuration from the COBRANCH_ variables: %w", err)
 	}
 	return c, nil
 }

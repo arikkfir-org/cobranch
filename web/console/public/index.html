@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>DevHub</title>
-  <!-- The Console's placeholder, until its first screen: the design system's colours (docs/devhub/designs/design-system),
+  <title>Cobranch</title>
+  <!-- The Console's placeholder, until its first screen: the design system's colours (docs/cobranch/designs/design-system),
        and the version the REST API answers, at the URL config.json names. -->
   <style>
     :root {
@@ -81,7 +81,7 @@
 </head>
 <body>
   <main>
-    <h1>DevHub</h1>
+    <h1>Cobranch</h1>
     <span class="status" id="status" data-state="checking">Checking the REST API…</span>
     <p id="version">This installation's version shows here once its REST API answers.</p>
     <p>The Console's screens arrive with the next releases.</p>
@@ -98,7 +98,7 @@
         status.dataset.state = "ready";
         status.textContent = "REST API ready";
         const line = document.getElementById("version");
-        line.textContent = "This installation runs DevHub ";
+        line.textContent = "This installation runs Cobranch ";
         const code = document.createElement("code");
         code.textContent = version;
         line.append(code, ".");

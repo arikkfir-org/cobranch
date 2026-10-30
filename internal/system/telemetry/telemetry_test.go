@@ -30,8 +30,8 @@ func TestSetup(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer slog.SetDefault(slog.Default())
-			setEnv(t, "DEVHUB_LOG_LEVEL", tt.level)
-			setEnv(t, "DEVHUB_LOG_FORMAT", "json")
+			setEnv(t, "COBRANCH_LOG_LEVEL", tt.level)
+			setEnv(t, "COBRANCH_LOG_FORMAT", "json")
 			var out bytes.Buffer
 			shutdown, err := Setup(context.Background(), &out, "rest-server", "v1.2.3")
 			if (err != nil) != tt.wantErr {
@@ -66,7 +66,7 @@ func TestLogFormat(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer slog.SetDefault(slog.Default())
-			setEnv(t, "DEVHUB_LOG_FORMAT", tt.format)
+			setEnv(t, "COBRANCH_LOG_FORMAT", tt.format)
 			host := ""
 			if tt.inCluster {
 				host = "10.0.0.1"
@@ -91,7 +91,7 @@ func TestLogFormat(t *testing.T) {
 
 func TestLogsNameTheirTrace(t *testing.T) {
 	defer slog.SetDefault(slog.Default())
-	setEnv(t, "DEVHUB_LOG_FORMAT", "json")
+	setEnv(t, "COBRANCH_LOG_FORMAT", "json")
 	setEnv(t, "OTEL_EXPORTER_OTLP_ENDPOINT", "")
 	var out bytes.Buffer
 	shutdown, err := Setup(context.Background(), &out, "rest-server", "v1.2.3")

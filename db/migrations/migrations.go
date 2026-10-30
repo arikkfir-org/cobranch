@@ -1,4 +1,4 @@
-// Package migrations holds DevHub's PostgreSQL schema migrations, which goose applies in order: numbered SQL files,
+// Package migrations holds Cobranch's PostgreSQL schema migrations, which goose applies in order: numbered SQL files,
 // and Go for what SQL can't say. The migrate Job applies them before the servers roll out (internal/adapters/postgres),
 // and a server turns ready only once the schema is at the highest version they number.
 //

@@ -1,4 +1,4 @@
--- The baseline every later migration builds on. It creates nothing yet: DevHub's first tables come with sign-in.
+-- The baseline every later migration builds on. It creates nothing yet: Cobranch's first tables come with sign-in.
 
 -- +goose Up
 

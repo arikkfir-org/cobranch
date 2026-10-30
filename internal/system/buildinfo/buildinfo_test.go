@@ -17,7 +17,7 @@ func TestModuleVersion(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := &debug.BuildInfo{Main: debug.Module{Path: "github.com/arikkfir-org/devhub", Version: tt.module}}
+			info := &debug.BuildInfo{Main: debug.Module{Path: "cobranch.dev", Version: tt.module}}
 			if got := moduleVersion(tt.set, info); got != tt.want {
 				t.Fatalf("moduleVersion(%q, %q) = %q, want %q", tt.set, tt.module, got, tt.want)
 			}

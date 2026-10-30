@@ -1,2 +1,0 @@
-{{- include "devhub.checkDatabase" . }}
-{{- include "devhub.server" (dict "root" . "component" "graphql-server" "values" .Values.graphqlServer) }}

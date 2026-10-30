@@ -1,0 +1,167 @@
+# Cobranch's chart. Only blob.url is required; values.schema.json checks the rest at install.
+
+# The images, as Cobranch publishes them. An empty tag means the chart's appVersion: one version names the chart and
+# every image it runs.
+images:
+  cobranch:
+    repository: me-west1-docker.pkg.dev/arikkfir/cobranch/cobranch
+    tag: ""
+    pullPolicy: IfNotPresent
+  console:
+    repository: me-west1-docker.pkg.dev/arikkfir/cobranch/cobranch-console
+    tag: ""
+    pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Where you mount each workload, all under one parent domain: a host each, or paths on one host. Every workload serves
+# as if it were alone (the Console and GraphQL at /, REST under /v1/), so a URL's path is a prefix its HTTPRoute
+# strips. A server lets the Console's pages call it (CORS), the Console's pages call the REST API under its URL, and
+# each HTTPRoute takes its URL's host and path. Empty: the workload has none.
+urls:
+  # Such as https://cobranch.example.com.
+  console: ""
+  # Such as https://api.cobranch.example.com, or https://cobranch.example.com/api.
+  rest: ""
+  # Such as https://graphql.cobranch.example.com, or https://cobranch.example.com/graphql.
+  graphql: ""
+
+# The bucket, which only the servers reach: Go Cloud names it by URL (s3://, gs://, azblob:// or file://).
+blob:
+  # Required, such as s3://cobranch-objects?region=eu-west-1 or gs://cobranch-objects.
+  url: ""
+  # A Secret whose keys become the servers' environment, for credentials the URL's driver reads (such as
+  # AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
+  envFromSecret: ""
+  # A volume, as a pod spec writes one without its name, mounted at mountPath: the directory of a file:// bucket.
+  volume: {}
+  mountPath: /var/lib/cobranch/blobs
+
+# The servers' ServiceAccount, which both share.
+serviceAccount:
+  # Binds the servers to the cloud's workload identity, for the bucket.
+  annotations: {}
+
+# Every Cobranch workload's logs and traces. Logs are JSON on stdout, for the cluster's log collector. Traces go over
+# OTLP/HTTP to your OpenTelemetry Collector or a vendor's endpoint, as OpenTelemetry's own OTEL_ variables.
+telemetry:
+  # The lowest level logged: debug, info, warn or error.
+  logLevel: info
+  traces:
+    # Such as http://otel-collector.observability:4318. Empty: no span leaves a pod, and trace IDs still name every
+    # request in the logs. Google Cloud Trace takes a Collector with Google's exporter.
+    endpoint: ""
+    # A Secret of yours that holds the OTLP headers under headersKey, as key=value pairs separated by commas: a
+    # vendor's API key, say.
+    headersSecret: ""
+    headersKey: headers
+    # The share of new traces kept, from 0 to 1. A trace that a caller started follows the caller's choice.
+    sampleRatio: 1
+  # More of OpenTelemetry's variables, such as OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production. Each
+  # workload names itself as the service.
+  env: {}
+
+# The REST API's server.
+restServer:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The GraphQL API's server.
+graphqlServer:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The Console: its static files and config.json, served by Caddy.
+console:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The Job that migrates the database before the servers of a new version roll out.
+migrate:
+  # How long it may wait for the database and migrate, after which it fails.
+  activeDeadlineSeconds: 600
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Cobranch's demo data (db/seeds): users, organizations, repositories and the rest, for previews of Cobranch's own pull
+# requests. Never turn it on for a real installation.
+seed:
+  # The migrate Job adds the demo data it lacks after migrating the schema.
+  enabled: false
+
+# The bundled PostgreSQL: one replica of the official image, on a persistent volume. Turn it off to bring your own
+# database through externalDatabase.
+postgresql:
+  enabled: true
+  image:
+    repository: docker.io/library/postgres
+    tag: 18.6-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    database: cobranch
+    username: cobranch
+    # A Secret of yours that holds the password under secretKey. Without one, the chart generates a password on
+    # install and keeps it on upgrade, which needs the cluster at render time: under Argo CD, or anything else that
+    # renders without the cluster, give one.
+    existingSecret: ""
+    secretKey: password
+  storage:
+    size: 8Gi
+    # Empty uses the cluster's default storage class.
+    storageClassName: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# Your own PostgreSQL, when postgresql.enabled is false: a Secret holds its URL, sslmode included, under urlKey.
+externalDatabase:
+  existingSecret: ""
+  urlKey: url
+
+# An HTTPRoute per workload with a URL, on your Gateway, from the URL's host and path. The Gateway brings TLS.
+httpRoute:
+  enabled: false
+  annotations: {}
+  # The Gateway's listeners to attach to: [{name: public, namespace: gateways, sectionName: https}].
+  parentRefs: []

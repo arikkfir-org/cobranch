@@ -15,39 +15,39 @@ func TestLoadServer(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			env:  map[string]string{"DEVHUB_BLOB_URL": "file:///blob"},
+			env:  map[string]string{"COBRANCH_BLOB_URL": "file:///blob"},
 			want: Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second},
 		},
 		{
 			name: "every variable",
 			env: map[string]string{
-				"DEVHUB_HTTP_ADDR":        ":9090",
-				"DEVHUB_DATABASE_URL":     "postgres://db/devhub",
-				"DEVHUB_BLOB_URL":         "gs://bucket",
-				"DEVHUB_SHUTDOWN_TIMEOUT": "5s",
-				"DEVHUB_CONSOLE_URL":      "https://Console.Example.com/home",
+				"COBRANCH_HTTP_ADDR":        ":9090",
+				"COBRANCH_DATABASE_URL":     "postgres://db/cobranch",
+				"COBRANCH_BLOB_URL":         "gs://bucket",
+				"COBRANCH_SHUTDOWN_TIMEOUT": "5s",
+				"COBRANCH_CONSOLE_URL":      "https://Console.Example.com/home",
 			},
 			want: Server{
 				HTTPAddr:        ":9090",
-				DatabaseURL:     "postgres://db/devhub",
+				DatabaseURL:     "postgres://db/cobranch",
 				BlobURL:         "gs://bucket",
 				ShutdownTimeout: 5 * time.Second,
 				ConsoleOrigin:   "https://console.example.com",
 			},
 		},
-		{name: "the Console set empty", env: map[string]string{"DEVHUB_BLOB_URL": "file:///blob", "DEVHUB_CONSOLE_URL": ""}, want: Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}},
-		{name: "the Console without a scheme", env: map[string]string{"DEVHUB_BLOB_URL": "file:///blob", "DEVHUB_CONSOLE_URL": "console"}, wantErr: true},
+		{name: "the Console set empty", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_CONSOLE_URL": ""}, want: Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}},
+		{name: "the Console without a scheme", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_CONSOLE_URL": "console"}, wantErr: true},
 		{name: "no bucket", env: map[string]string{}, wantErr: true},
 		{
 			name:    "bad duration",
-			env:     map[string]string{"DEVHUB_BLOB_URL": "file:///blob", "DEVHUB_SHUTDOWN_TIMEOUT": "soon"},
+			env:     map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_SHUTDOWN_TIMEOUT": "soon"},
 			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			for _, name := range []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL"} {
-				unsetenv(t, "DEVHUB_"+name)
+				unsetenv(t, "COBRANCH_"+name)
 			}
 			for k, v := range tt.env {
 				t.Setenv(k, v)
@@ -99,14 +99,14 @@ func TestLoadMigrate(t *testing.T) {
 		want Migrate
 	}{
 		{name: "libpq's variables", env: map[string]string{}, want: Migrate{}},
-		{name: "a URL", env: map[string]string{"DEVHUB_DATABASE_URL": "postgres://db/devhub"}, want: Migrate{DatabaseURL: "postgres://db/devhub"}},
-		{name: "seeds", env: map[string]string{"DEVHUB_SEED": "true"}, want: Migrate{Seed: true}},
-		{name: "no seeds", env: map[string]string{"DEVHUB_SEED": "false"}, want: Migrate{}},
+		{name: "a URL", env: map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"}, want: Migrate{DatabaseURL: "postgres://db/cobranch"}},
+		{name: "seeds", env: map[string]string{"COBRANCH_SEED": "true"}, want: Migrate{Seed: true}},
+		{name: "no seeds", env: map[string]string{"COBRANCH_SEED": "false"}, want: Migrate{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			unsetenv(t, "DEVHUB_DATABASE_URL")
-			unsetenv(t, "DEVHUB_SEED")
+			unsetenv(t, "COBRANCH_DATABASE_URL")
+			unsetenv(t, "COBRANCH_SEED")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}

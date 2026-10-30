@@ -4,7 +4,7 @@
 # every platform, and the cluster's import fails on the content of those the daemon never pulled.
 set -eu
 kind=.ci/bin/kind
-"$kind" create cluster --name devhub --kubeconfig "$KUBECONFIG" --wait 3m
+"$kind" create cluster --name cobranch --kubeconfig "$KUBECONFIG" --wait 3m
 docker save --platform "$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')" --output .ci/images.tar \
-  "devhub:$VERSION" "devhub-console:$VERSION" "$(cat .ci/postgresql-image)"
-"$kind" load image-archive --name devhub .ci/images.tar
+  "cobranch:$VERSION" "cobranch-console:$VERSION" "$(cat .ci/postgresql-image)"
+"$kind" load image-archive --name cobranch .ci/images.tar

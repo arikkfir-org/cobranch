@@ -74,7 +74,7 @@ spec:
     - name: test
       image: docker.io/library/golang:1.27.1
       env:
-        - name: DEVHUB_TEST_DATABASE_URL
+        - name: COBRANCH_TEST_DATABASE_URL
           value: postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
         # A test that needs the database fails without it, rather than skip.
         - name: CI
@@ -88,4 +88,4 @@ spec:
       command: [go, build, -trimpath, -o, .ci/bin/, ./cmd/...]
     - name: version
       image: docker.io/library/golang:1.27.1
-      command: [$(workspaces.source.path)/.ci/bin/devhub, version]
+      command: [$(workspaces.source.path)/.ci/bin/cobranch, version]

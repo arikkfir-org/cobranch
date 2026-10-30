@@ -1,4 +1,4 @@
-// Package server serves one of DevHub's APIs on a port of its own, beside the health endpoints every server answers.
+// Package server serves one of Cobranch's APIs on a port of its own, beside the health endpoints every server answers.
 // Every API request gets a span of its trace, and every response names its request's ID.
 package server
 

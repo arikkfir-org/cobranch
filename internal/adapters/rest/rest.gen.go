@@ -13,7 +13,7 @@ import (
 	"net/http"
 )
 
-// Problem Problem details (RFC 9457), with DevHub's stable error code and the request's ID.
+// Problem Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
 type Problem struct {
 	// Code The stable error code, such as route.not_found.
 	Code string `json:"code"`
@@ -44,7 +44,7 @@ type Version struct {
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// GetVersion The version of DevHub that serves this installation.
+	// GetVersion The version of Cobranch that serves this installation.
 	// (GET /version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
 }
@@ -239,7 +239,7 @@ func (response GetVersiondefaultApplicationProblemPlusJSONResponse) VisitGetVers
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// GetVersion The version of DevHub that serves this installation.
+	// GetVersion The version of Cobranch that serves this installation.
 	// (GET /version)
 	GetVersion(ctx context.Context, request GetVersionRequestObject) (GetVersionResponseObject, error)
 }
