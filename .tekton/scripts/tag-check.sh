@@ -1,6 +1,7 @@
 #!/bin/sh
-# Refuses TAG unless it is a version (vX.Y.Z) and COMMIT, the commit it names, is on main, then writes that commit's
-# chart to .ci/release/chart/devhub for tag-chart.sh. Runs in a shallow checkout of main.
+# Refuses TAG unless it is a version (vX.Y.Z) and COMMIT, the commit it names, is on main and has a chart whose images
+# default to REGISTRY's, then writes that chart to .ci/release/chart/devhub for tag-chart.sh. Runs in a shallow checkout
+# of main.
 set -eu
 if ! printf '%s\n' "$TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
   echo "Tag $TAG is not a version (vX.Y.Z): ignoring it" >&2
@@ -24,4 +25,10 @@ fi
 rm -rf .ci/release
 mkdir -p .ci/release
 git archive "$COMMIT" chart/devhub | tar -x -C .ci/release
+values=.ci/release/chart/devhub/values.yaml
+if [ "$(yq '.images.devhub.repository' "$values")" != "$REGISTRY/devhub" ] ||
+  [ "$(yq '.images.console.repository' "$values")" != "$REGISTRY/devhub-console" ]; then
+  echo "Commit $COMMIT's chart doesn't default to the images in $REGISTRY: too old to be a version" >&2
+  exit 1
+fi
 echo "Tag $TAG names $COMMIT, on main"

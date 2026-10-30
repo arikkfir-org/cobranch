@@ -80,13 +80,13 @@ run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
 ## Releases
 
 A version is a [GitHub release](https://github.com/arikkfir-org/devhub/releases), as Octomaton's are: tag `v1.2.3` on a
-commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the [chart's
-guide](https://github.com/arikkfir-org/devhub/blob/main/chart/devhub/README.md) at the tag. Publishing the release
-creates the tag, which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a tag that isn't `vX.Y.Z`
-and a commit that isn't on `main`, waits up to 15 minutes for `main`'s images of the commit, adds `1.2.3` to both, and
-only then packages the commit's chart at `1.2.3`, its app version the same, and pushes it beside them as
-`charts/devhub`. So one version names the chart and every image it runs, and an operator installs it with nothing but a
-bucket:
+commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the chart's guide at the tag,
+`https://github.com/arikkfir-org/devhub/blob/v1.2.3/chart/devhub/README.md`. Publishing the release creates the tag,
+which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a tag that isn't `vX.Y.Z`, a commit that
+isn't on `main` and one whose chart doesn't default to the images published here, waits up to 15 minutes for `main`'s
+images of the commit, adds `1.2.3` to both, and only then packages the commit's chart at `1.2.3`, its app version the
+same, and pushes it beside them as `charts/devhub`. So one version names the chart and every image it runs, and an
+operator installs it with nothing but a bucket:
 
 ```bash
 helm install devhub oci://me-west1-docker.pkg.dev/arikkfir/devhub/charts/devhub --version 1.2.3 \
@@ -151,6 +151,8 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 - `main` builds only its newest waiting push, so a tag on a commit it skipped finds no images and fails after 15
   minutes: release `main`'s newest commit, or one it built. A tag on a commit whose build failed fails the same way;
   re-run `main`, then `tag`.
+- A commit from before releases is refused at once: its chart's images default to Docker Hub's names, so its version
+  would install images nobody tagged.
 - A tag moved to another commit moves the version's image tags and overwrites its chart. Don't; cut the next version.
 
 ## Rollout
