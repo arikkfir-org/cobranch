@@ -1,8 +1,8 @@
 # DevHub's build of main: build images devhub and devhub-console of a commit and push them to Artifact Registry,
 # tagged with the commit's short SHA (publish.task.yaml). The pod pushes as ServiceAccount ci-devhub-release, through
-# Workload Identity: the one ServiceAccount allowed to push to main's and the versions' repository, which only main may
-# use (octomaton.dev/branches); pipeline preview pushes elsewhere (preview.yaml). A plain Tekton PipelineRun; Octomaton
-# sets the params.
+# Workload Identity: the one ServiceAccount allowed to push to main's and the versions' repository, which only main and
+# v* tags may use (octomaton.dev/branches, octomaton.dev/tags); pipeline preview pushes elsewhere (preview.yaml). A
+# plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
