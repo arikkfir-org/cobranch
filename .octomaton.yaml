@@ -30,3 +30,17 @@ pipelines:
     concurrency:
       group: main
       policy: latest
+
+  # A version: a v* tag (v1.2.3, which publishing a GitHub release creates) adds 1.2.3 to the images main published for
+  # the tagged commit, rebuilding nothing, and publishes the chart at 1.2.3, once the tag is confirmed to be a version
+  # and the commit to be on main. A tag push runs main's definitions, so a tag can't skip the check.
+  - name: tag
+    pipelineRun: .tekton/tag.yaml
+    on:
+      push:
+        tags: ["v*"]
+    params:
+      repo-url: "{{ .Repository.CloneURL }}"
+      revision: "{{ .Revision }}"
+      tag: "{{ .Tag }}"
+    timeout: 30m

@@ -67,8 +67,7 @@ Pipeline `main` runs on pushes to `main`. It builds both images in a Docker daem
 them to DevHub's public repository on Artifact Registry, tagged with the commit's first seven characters, which the
 binary reports as its version too. An installation that follows `main` runs the images of the commit it is at, so only
 the newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
-commit always gets its images. Versions and the chart's own publishing follow with the rest of
-[ENG-207](https://linear.app/arikkfir/issue/ENG-207).
+commit always gets its images.
 
 **Pipeline main publishes both images of main’s newest commit, tagged with its short SHA**
 
@@ -77,6 +76,34 @@ commit always gets its images. Versions and the chart's own publishing follow wi
 The repository, its address and its grants are infra’s ([Artifact
 Registry](../../infra/terraform/gcp.md#artifact-registry)); ServiceAccount `ci-devhub-release` and the branches it may
 run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
+
+## Releases
+
+A version is a [GitHub release](https://github.com/arikkfir-org/devhub/releases), as Octomaton's are: tag `v1.2.3` on a
+commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the [chart's
+guide](https://github.com/arikkfir-org/devhub/blob/main/chart/devhub/README.md) at the tag. Publishing the release
+creates the tag, which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a tag that isn't `vX.Y.Z`
+and a commit that isn't on `main`, waits up to 15 minutes for `main`'s images of the commit, adds `1.2.3` to both, and
+only then packages the commit's chart at `1.2.3`, its app version the same, and pushes it beside them as
+`charts/devhub`. So one version names the chart and every image it runs, and an operator installs it with nothing but a
+bucket:
+
+```bash
+helm install devhub oci://me-west1-docker.pkg.dev/arikkfir/devhub/charts/devhub --version 1.2.3 \
+  --namespace devhub --create-namespace --set blob.url='gs://my-devhub-bucket'
+```
+
+**A version retags main’s images of a commit and publishes the chart at that version**
+
+![A version retags main’s images of a commit and publishes the chart at that version](repository/tag.svg)
+
+The tag’s rights are delivery’s: `ci-devhub-release` admits `main` and `v*` tags ([CI
+tenants](../../delivery/platform.md#ci-tenants)). The repository keeps every tagged version ([Artifact
+Registry](../../infra/terraform/gcp.md#artifact-registry)).
+
+The images are `main`'s, retagged, so the binary reports the commit's short SHA, and `helm test` checks that both
+servers answer with the same version rather than with the chart's. A tag runs `main`'s `.octomaton.yaml` and `.tekton/`,
+and its steps run `main`'s scripts against the tagged commit's chart, so no tag can carry a pipeline without the check.
 
 ## Checks
 
@@ -103,6 +130,10 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token |
 | golangci-lint from the first commit | The house rules' linters hold from the first line, instead of a cleanup later | Adding them later |
 | The chart installed on kind in every run | Each pull request proves the install and the upgrade end to end, on a cluster nobody else uses, and a failure shows the pods' events and logs | A namespace on a shared cluster, which would need its credentials and outlive a failed run |
+| A version retags `main`'s images of the commit | A version is the very image `main` published, with no second build to diverge, in seconds | Rebuilding at the tag, so the binary reports the version |
+| The chart beside the images, in repository `devhub`, as OCI | One public repository, one grant and one cleanup for all of DevHub's releases; Helm installs OCI charts directly | GitHub's container registry; a chart repository's `index.yaml` in a bucket |
+| One version, `1.2.3`, for the chart, its app version and the image tags; `v1.2.3` for the Git tag | A chart's version is SemVer without the `v`, and the chart's images default to its app version, so the images carry the same string | Octomaton's `v1.2.3` image tags, a second spelling beside the chart's |
+| `tag` runs `main`'s scripts on the tagged commit's chart | A tag can name any commit; only `main`'s files are reviewed | Running the tagged commit's checkout |
 | No persistent Go cache yet | A cold run takes about eight minutes since Go Cloud's SDKs came in, which the foundations' few pull requests can afford; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
 
 ## Security and failure modes
@@ -115,6 +146,12 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 - Without CI tenant `ci-devhub`, Octomaton refuses every pipeline on the repository, and its pull requests can't pass
   the required checks; without infra's docs grants, check `Docs` and `docs-publish` fail for want of their roles.
 - A missing check blocks the merge queue and never merges unchecked; the admin bypass remains the owner's.
+- Anyone with write access can push a `v*` tag, which releases, but only a commit of `main`: `tag` refuses any other,
+  and `ci-devhub-release` refuses any ref but `main` and `v*`.
+- `main` builds only its newest waiting push, so a tag on a commit it skipped finds no images and fails after 15
+  minutes: release `main`'s newest commit, or one it built. A tag on a commit whose build failed fails the same way;
+  re-run `main`, then `tag`.
+- A tag moved to another commit moves the version's image tags and overwrites its chart. Don't; cut the next version.
 
 ## Rollout
 

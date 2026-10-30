@@ -1,13 +1,14 @@
 # DevHub's chart. Only blob.url is required; values.schema.json checks the rest at install.
 
-# The images. An empty tag means the chart's appVersion: one version names the chart and every image it runs.
+# The images, as DevHub publishes them. An empty tag means the chart's appVersion: one version names the chart and
+# every image it runs.
 images:
   devhub:
-    repository: devhub
+    repository: me-west1-docker.pkg.dev/arikkfir/devhub/devhub
     tag: ""
     pullPolicy: IfNotPresent
   console:
-    repository: devhub-console
+    repository: me-west1-docker.pkg.dev/arikkfir/devhub/devhub-console
     tag: ""
     pullPolicy: IfNotPresent
 imagePullSecrets: []
