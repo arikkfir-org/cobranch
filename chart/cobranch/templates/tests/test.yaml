@@ -1,5 +1,6 @@
 {{- $fullname := include "cobranch.fullname" . }}
-# helm test: both servers are ready and answer, and the Console serves its page and where it finds the REST API.
+# helm test: every server is ready and answers, the Console serves its page and where it finds the APIs, and, with the
+# demo data on, a seeded sign-in makes a session the REST API accepts.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -34,7 +35,11 @@ spec:
           rest=http://{{ $fullname }}-rest-server
           graphql=http://{{ $fullname }}-graphql-server
           console=http://{{ $fullname }}-console
+          auth=http://{{ $fullname }}-auth-server
           wget -qO- "$rest/readyz"; echo
+          {{- if .Values.urls.auth }}
+          wget -qO- "$auth/readyz"; echo
+          {{- end }}
           # The version the binary was built as: a release's images are main's, retagged, so they report its commit.
           version=$(wget -qO- "$rest/v1/version" | tee /dev/stderr | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')
           [ -n "$version" ]
@@ -42,7 +47,20 @@ spec:
           wget -qO- --header 'Content-Type: application/json' --post-data '{"query":"{ version }"}' "$graphql/" | grep -q "\"version\":\"$version\""
           wget -qO- "$console/healthz"; echo
           wget -qO- "$console/" | grep -q '<h1>Cobranch</h1>'
-          wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}"'
+          wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}","authUrl":"{{ .Values.urls.auth | trimSuffix "/" }}"'
+          # Anonymous gets 401 from /v1/me, as a problem.
+          wget -qO- --server-response "$rest/v1/me" 2>&1 | grep -q 'HTTP/1.1 401'
+          {{- if and .Values.seed.enabled .Values.urls.auth }}
+          # The sign-in page lists the demo users, a seeded sign-in sets the session cookie, and the cookie signs in.
+          wget -qO- "$auth/providers" | tee /dev/stderr | grep -q '"subject":"owner"'
+          # BusyBox's wget follows the redirect and drops its headers, so nc reads the raw response; stdin stays open
+          # until the response is in, since the server cancels a request whose client went away.
+          host=${auth#http://}
+          cookie=$( (printf 'GET /sign-in?user=owner HTTP/1.0\r\nHost: %s\r\n\r\n' "$host"; sleep 2) | nc "$host" 80 | tr -d '\r' \
+            | sed -n 's/^Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p')
+          [ -n "$cookie" ]
+          wget -qO- --header "Cookie: $cookie" "$rest/v1/me" | tee /dev/stderr | grep -q '"displayName":"Olivia Owner"'
+          {{- end }}
           echo "Cobranch {{ .Values.images.cobranch.tag | default .Chart.AppVersion }} answers, built as $version"
       resources:
         requests:

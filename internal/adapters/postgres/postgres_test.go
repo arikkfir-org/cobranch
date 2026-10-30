@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 1},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 2},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 1},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 1},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 2},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 2},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -412,15 +412,31 @@ func TestNewSeeds(t *testing.T) {
 	}
 }
 
+// checkSeeded checks what the seeds wrote: Cobranch's demo users on Cobranch's schema, or wantRows of seedA's.
+func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) {
+	t.Helper()
+	if cobranch {
+		if users := countRows(t, pool, "SELECT count(*) FROM principals WHERE kind = 'user'"); users != 4 {
+			t.Errorf("seeded users = %d, want 4", users)
+		}
+		return
+	}
+	if rows := countRows(t, pool, "SELECT count(*) FROM a WHERE b = 'seeded'"); rows != wantRows {
+		t.Errorf("seeded rows = %d, want %d", rows, wantRows)
+	}
+}
+
 func TestSeedsMigrate(t *testing.T) {
 	tests := []struct {
 		name string
 		// runs are the seeds of each build that seeds the database, in order: a preview upgraded in place.
-		runs          [][]*goose.Migration
+		runs [][]*goose.Migration
+		// schema is the schema the seeds write into: columnB unless said otherwise.
+		schema        fs.FS
 		wantRows      int
 		wantSeedTable int64
 	}{
-		{name: "Cobranch's seeds", runs: [][]*goose.Migration{seeds.Go}, wantSeedTable: int64(len(seeds.Go))},
+		{name: "Cobranch's seeds", runs: [][]*goose.Migration{seeds.Go}, schema: migrations.FS, wantSeedTable: int64(len(seeds.Go))},
 		{name: "one build", runs: [][]*goose.Migration{{seedA(1, 1), seedA(2, 2)}}, wantRows: 2, wantSeedTable: 2},
 		{name: "the same build again", runs: [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1)}}, wantRows: 1, wantSeedTable: 1},
 		{
@@ -432,13 +448,15 @@ func TestSeedsMigrate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pool := migratedDatabase(t, true, columnB)
+			schema := tt.schema
+			if schema == nil {
+				schema = columnB
+			}
+			pool := migratedDatabase(t, true, schema)
 			for _, run := range tt.runs {
 				seed(t, pool, run)
 			}
-			if rows := countRows(t, pool, "SELECT count(*) FROM a WHERE b = 'seeded'"); rows != tt.wantRows {
-				t.Errorf("seeded rows = %d, want %d", rows, tt.wantRows)
-			}
+			checkSeeded(t, pool, tt.schema != nil, tt.wantRows)
 			if version := countRows(t, pool, "SELECT max(version_id) FROM "+SeedTable); int64(version) != tt.wantSeedTable {
 				t.Errorf("%s = %d, want %d", SeedTable, version, tt.wantSeedTable)
 			}

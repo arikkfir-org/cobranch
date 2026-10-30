@@ -62,7 +62,8 @@ ties them to their commits, but never decides who they are.
 The sign-up policy is anyone (the default), listed email domains, or invited emails only. A user can link more
 identities and sign in with any of them; Cobranch never merges users because their emails match.
 
-- **Identity providers.** Google only in phase 1, then other OpenID Connect providers and GitHub's OAuth.
+- **Identity providers.** Any OpenID Connect provider from the first slice, with Google as a preset; GitHub's OAuth,
+  which is not OpenID Connect, later ([sign-in and organizations](sign-in-and-organizations.md#identity-providers)).
 - **Organizations' providers.** Decided on 2026-10-27: each organization lists which of the installation's providers its
   members may use, all of them until it narrows the list. A member's grants there count only while they are signed in
   through one of them; a personal token counts as the identity of the session that created it.
@@ -362,7 +363,7 @@ and their consents add tables in their own slice.
 | Secrets live in organization and repository settings; `secrets.read` on the organization, a repository or one secret decides who receives them | Review, 2026-10-27: how agents hold outside credentials | Agreed |
 | A job can receive `secrets.read`, its one grant | Review, 2026-10-27: jobs need outside credentials; phase 2 narrows which | Agreed |
 | An agent's task receives the agent's secrets whoever assigned it | Review, 2026-10-27: few assigners hold `secrets.read`; the risk is an assigner coaxing a value out | Agreed |
-| Each organization chooses its identity providers; Google only in phase 1 | Decided on 2026-10-27; an organization keeps its members on providers it trusts | Agreed |
+| Each organization chooses among the installation's identity providers, any OpenID Connect provider | Decided on 2026-10-27; an organization keeps its members on providers it trusts. Widened from Google only on 2026-10-30 ([sign-in and organizations](sign-in-and-organizations.md#identity-providers)) | Agreed |
 | An OAuth app belongs to the organization that registers it | Decided on 2026-10-27; an organization answers for every app that reaches its data | Agreed |
 | Credentials' lifetimes default as listed, each an installation setting | Decided on 2026-10-27; machines get short tokens, people longer sessions | Agreed |
 | Organizations provision their members from their identity provider (SCIM) | Review, 2026-10-27: yes, in phase 2 | Planned |

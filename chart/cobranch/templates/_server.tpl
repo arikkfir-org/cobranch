@@ -7,6 +7,7 @@ the subcommand too, and the server's values.
 {{- $component := dict "root" $root "component" .component }}
 {{- $name := printf "%s-%s" (include "cobranch.fullname" $root) .component }}
 {{- $values := .values }}
+{{- $api := ne .component "auth-server" }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -36,7 +37,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- if $api }}
       serviceAccountName: {{ include "cobranch.serviceAccount" $root }}
+      {{- end }}
       automountServiceAccountToken: false
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
@@ -56,18 +59,21 @@ spec:
           env:
             - name: COBRANCH_HTTP_ADDR
               value: ":8080"
+            {{- if $api }}
             - name: COBRANCH_BLOB_URL
               value: {{ $root.Values.blob.url | quote }}
-            {{- with $root.Values.urls.console }}
-            - name: COBRANCH_CONSOLE_URL
-              value: {{ . | quote }}
+            {{- else }}
+            {{- include "cobranch.authEnv" $root | nindent 12 }}
             {{- end }}
+            {{- include "cobranch.urlsEnv" $root | nindent 12 }}
             {{- include "cobranch.telemetryEnv" $root | nindent 12 }}
             {{- include "cobranch.databaseEnv" $root | nindent 12 }}
           {{- with $root.Values.blob.envFromSecret }}
+          {{- if $api }}
           envFrom:
             - secretRef:
                 name: {{ . }}
+          {{- end }}
           {{- end }}
           # Only the process: a database outage makes the pods unready, never restarts them.
           livenessProbe:
@@ -75,7 +81,7 @@ spec:
               path: /healthz
               port: http
             periodSeconds: 10
-          # The schema is at least this version's, and the database and the bucket answer.
+          # The schema is at least this version's, and the database (and, for an API, the bucket) answer.
           readinessProbe:
             httpGet:
               path: /readyz
@@ -89,15 +95,17 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if $root.Values.blob.volume }}
+            {{- if and $api $root.Values.blob.volume }}
             - name: blob
               mountPath: {{ $root.Values.blob.mountPath }}
             {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if $api }}
         {{- with $root.Values.blob.volume }}
         - {{- toYaml (merge (dict "name" "blob") .) | nindent 10 }}
+        {{- end }}
         {{- end }}
 ---
 apiVersion: v1

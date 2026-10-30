@@ -24,6 +24,9 @@ func freeAddr(t *testing.T) string {
 	return ln.Addr().String()
 }
 
+// noRedirects answers a redirect as it is, so a test sees where the server sent the browser.
+var noRedirects = &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
 // get asks the server at addr for path and returns the status and body, or 0 while it doesn't answer.
 func get(addr, method, path, body string) (int, string) {
 	req, err := http.NewRequest(method, "http://"+addr+path, strings.NewReader(body))
@@ -31,7 +34,7 @@ func get(addr, method, path, body string) (int, string) {
 		return 0, err.Error()
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := noRedirects.Do(req)
 	if err != nil {
 		return 0, err.Error()
 	}

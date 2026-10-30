@@ -1,0 +1,52 @@
+{{- include "cobranch.checkDatabase" . }}
+{{- $component := dict "root" . "component" "maintenance" }}
+{{- $values := .Values.maintenance }}
+# Deletes what expired, sign-in flows and sessions, every hour. One run at a time; a run that misses its hour is
+# skipped, since the next one does the same work.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "cobranch.fullname" . }}-maintenance
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  schedule: {{ $values.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            {{- include "cobranch.labels" $component | nindent 12 }}
+          {{- with $values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "cobranch.podSecurityContext" . | nindent 10 }}
+          {{- include "cobranch.placement" $values | nindent 10 }}
+          containers:
+            - name: maintenance
+              image: {{ include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
+              imagePullPolicy: {{ .Values.images.cobranch.pullPolicy }}
+              args: [maintenance]
+              env:
+                {{- include "cobranch.telemetryEnv" . | nindent 16 }}
+                {{- include "cobranch.databaseEnv" . | nindent 16 }}
+              resources:
+                {{- toYaml $values.resources | nindent 16 }}
+              securityContext:
+                {{- include "cobranch.containerSecurityContext" . | nindent 16 }}

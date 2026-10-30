@@ -49,11 +49,18 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          {{- with .Values.urls.rest }}
-          # Where the Console's pages find the REST API; without it, at the root of their own host.
+          {{- if or .Values.urls.rest .Values.urls.auth }}
+          # Where the Console's pages find the REST API (without it, at the root of their own host) and the Auth
+          # server (without it, sign-in isn't set up).
           env:
+            {{- with .Values.urls.rest }}
             - name: COBRANCH_REST_URL
               value: {{ . | trimSuffix "/" | quote }}
+            {{- end }}
+            {{- with .Values.urls.auth }}
+            - name: COBRANCH_AUTH_URL
+              value: {{ . | trimSuffix "/" | quote }}
+            {{- end }}
           {{- end }}
           livenessProbe:
             httpGet:

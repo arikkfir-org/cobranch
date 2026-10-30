@@ -1,6 +1,6 @@
 #!/bin/sh
-# Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload and traces, and
-# with an external database, one host with a path per API and no traces. Writes the bundled PostgreSQL's image to
+# Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, Google and
+# traces, and with an external database, one host with a path per API, another provider and no traces. Writes the bundled PostgreSQL's image to
 # .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
@@ -9,7 +9,10 @@ mkdir -p "$out"
 helm lint --strict "$chart" --set blob.url=file:///var/lib/cobranch/blobs
 helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranch-objects \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://api.cobranch.example.com \
-  --set urls.graphql=https://graphql.cobranch.example.com \
+  --set urls.graphql=https://graphql.cobranch.example.com --set urls.auth=https://auth.cobranch.example.com \
+  --set 'auth.providers[0].id=google' --set 'auth.providers[0].name=Google' --set 'auth.providers[0].preset=google' \
+  --set 'auth.providers[0].clientId=1234.apps.googleusercontent.com' \
+  --set 'auth.providers[0].clientSecret.secretName=cobranch-google' --set 'auth.admins[0]=alice@example.com' \
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' \
   --set telemetry.traces.endpoint=http://otel-collector.observability:4318 --set telemetry.traces.headersSecret=otlp \
   --set-json telemetry.traces.sampleRatio=0.25 --set telemetry.env.OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=ci \
@@ -17,7 +20,11 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranc
 helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranch-objects \
   --set postgresql.enabled=false --set externalDatabase.existingSecret=cobranch-database \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://cobranch.example.com/api \
-  --set urls.graphql=https://cobranch.example.com/graphql \
+  --set urls.graphql=https://cobranch.example.com/graphql --set urls.auth=https://cobranch.example.com/auth \
+  --set 'auth.providers[0].id=my-idp' --set 'auth.providers[0].issuer=https://idp.example.com' \
+  --set 'auth.providers[0].clientId=cobranch' --set 'auth.providers[0].clientSecret.secretName=cobranch-idp' \
+  --set 'auth.providers[0].clientSecret.key=secret' --set auth.signUp=domains --set 'auth.signUpDomains[0]=example.com' \
+  --set organizations.selfServe=false \
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' >"$out/external.yaml"
 kubeconform -strict -summary -kubernetes-version 1.37.0 -schema-location default \
   -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \

@@ -4,22 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
-  <!-- The Console's placeholder, until its first screen: the design system's colours (docs/cobranch/designs/design-system),
-       and the version the REST API answers, at the URL config.json names. -->
+  <!-- The Console's first screen: sign in, and who you are once you have. The design system's colours
+       (docs/cobranch/designs/design-system), the REST API at the URL config.json names, and the Auth server at the
+       other URL it names. The Console's routes arrive with its screens; until then every path shows this page. -->
   <style>
     :root {
       color-scheme: light;
       --color-bg-canvas: #ffffff;
       --color-bg-sunken: #f8f9fa;
+      --color-bg-raised: #ffffff;
       --color-fg-default: #1a1d20;
       --color-fg-muted: #6b737b;
       --color-border-default: #e4e7ea;
+      --color-accent: #2f6fed;
+      --color-accent-fg: #ffffff;
       --color-status-success-fg: #0e6a3f;
       --color-status-success-bg: #ecfdf3;
       --color-status-success-border: #a6f0c4;
       --color-status-warning-fg: #8c500b;
       --color-status-warning-bg: #fff8eb;
       --color-status-warning-border: #fdd98a;
+      --color-status-danger-fg: #a1262b;
+      --color-status-danger-bg: #fff1f1;
+      --color-status-danger-border: #f7b8bb;
       --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
       --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     }
@@ -28,15 +35,21 @@
         color-scheme: dark;
         --color-bg-canvas: #131517;
         --color-bg-sunken: #0c0d0f;
+        --color-bg-raised: #1b1e21;
         --color-fg-default: #f8f9fa;
         --color-fg-muted: #b4bcc2;
         --color-border-default: #2e3338;
+        --color-accent: #6b9bff;
+        --color-accent-fg: #0c0d0f;
         --color-status-success-fg: #6cdda0;
         --color-status-success-bg: #062a1b;
         --color-status-success-border: #105335;
         --color-status-warning-fg: #fcc04d;
         --color-status-warning-bg: #361c05;
         --color-status-warning-border: #723f0f;
+        --color-status-danger-fg: #ff8a8e;
+        --color-status-danger-bg: #3a0d0f;
+        --color-status-danger-border: #7a2024;
       }
     }
     body {
@@ -59,8 +72,10 @@
       box-sizing: border-box;
     }
     h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
+    h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
     p { margin: 0; color: var(--color-fg-muted); }
     code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    [hidden] { display: none !important; }
     .status {
       justify-self: start;
       padding: 3px 10px;
@@ -77,6 +92,32 @@
       background: var(--color-status-success-bg);
       color: var(--color-status-success-fg);
     }
+    .buttons { display: grid; gap: 8px; }
+    .button {
+      display: block;
+      width: 100%;
+      padding: 9px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--color-border-default);
+      background: var(--color-bg-raised);
+      color: var(--color-fg-default);
+      font: inherit;
+      font-weight: 500;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+      box-sizing: border-box;
+    }
+    .button.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-fg); }
+    .alert {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--color-status-danger-border);
+      background: var(--color-status-danger-bg);
+      color: var(--color-status-danger-fg);
+    }
+    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .demo { padding-top: 12px; border-top: 1px solid var(--color-border-default); display: grid; gap: 8px; }
   </style>
 </head>
 <body>
@@ -84,28 +125,107 @@
     <h1>Cobranch</h1>
     <span class="status" id="status" data-state="checking">Checking the REST API…</span>
     <p id="version">This installation's version shows here once its REST API answers.</p>
-    <p>The Console's screens arrive with the next releases.</p>
+
+    <section id="viewer" hidden>
+      <div class="row">
+        <h2 id="viewer-name"></h2>
+        <button class="button" id="sign-out" type="button">Sign out</button>
+      </div>
+      <p id="viewer-email"></p>
+      <p>Your organizations arrive with the next release.</p>
+    </section>
+
+    <section id="sign-in" hidden>
+      <h2>Sign in</h2>
+      <p id="sign-in-error" class="alert" hidden></p>
+      <p id="not-set-up" hidden>Sign-in isn't set up yet: this installation lists no identity provider. Its operator
+        adds one to the chart's <code>auth.providers</code>.</p>
+      <div class="buttons" id="providers"></div>
+      <div class="demo" id="demo" hidden>
+        <p>Demo data is on: sign in as one of its users.</p>
+        <div class="buttons" id="seeded"></div>
+      </div>
+    </section>
   </main>
   <script>
-    // Relative to the page, wherever the operator mounts the Console: its route strips any prefix.
-    const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
-    fetch(base + "config.json")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-      .then(({ restUrl }) => fetch((restUrl || "") + "/v1/version", { headers: { Accept: "application/json" } }))
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-      .then(({ version }) => {
-        const status = document.getElementById("status");
+    // The Console's root, wherever the operator mounts it (its route strips the prefix): the page's path without its
+    // one sub-route, /sign-in, which the Auth server sends a failed sign-in back to. config.json lives at the root.
+    const base = location.pathname.replace(/\/sign-in\/?$/, "/").replace(/\/?$/, "/");
+    // Where a sign-in returns to: a path of the Console's URL, so without the mount prefix; its home, the one page.
+    const back = "/";
+    const byId = (id) => document.getElementById(id);
+    // What a failed sign-in's error code means, by the code the Auth server sent us back with.
+    const errors = {
+      provider: "The identity provider didn't sign you in. Try again.",
+      flow: "The sign-in took too long, or began in another browser. Try again.",
+      refused: "This installation doesn't let you sign up. Ask its operator for an invitation.",
+      email_taken: "Another account already holds your email, through a different identity provider. Sign in with that one.",
+      unknown_provider: "That identity provider isn't set up here.",
+      internal: "Something went wrong on our side. Try again in a moment.",
+    };
+    const getJSON = (url, options) => fetch(url, options).then((r) => (r.ok ? r.json() : Promise.reject(r)));
+
+    getJSON(base + "config.json").then(({ restUrl, authUrl }) => {
+      // Always relative to this page, so a path prefix the route strips still works.
+      const rest = restUrl || "";
+      checkVersion(rest);
+      return getJSON(rest + "/v1/me", { credentials: "include", headers: { Accept: "application/json" } })
+        .then((me) => showViewer(me, authUrl), (r) => (r.status === 401 ? showSignIn(authUrl) : Promise.reject(r)));
+    }).catch(() => { byId("status").textContent = "REST API unreachable"; });
+
+    function checkVersion(rest) {
+      return getJSON(rest + "/v1/version", { headers: { Accept: "application/json" } }).then(({ version }) => {
+        const status = byId("status");
         status.dataset.state = "ready";
         status.textContent = "REST API ready";
-        const line = document.getElementById("version");
+        const line = byId("version");
         line.textContent = "This installation runs Cobranch ";
         const code = document.createElement("code");
         code.textContent = version;
         line.append(code, ".");
-      })
-      .catch(() => {
-        document.getElementById("status").textContent = "REST API unreachable";
       });
+    }
+
+    function showViewer(me, authUrl) {
+      byId("viewer-name").textContent = me.displayName;
+      byId("viewer-email").textContent = me.emails.map((e) => e.email).join(", ");
+      byId("viewer").hidden = false;
+      byId("sign-out").addEventListener("click", () => {
+        fetch(authUrl + "/sign-out", { method: "POST", credentials: "include" }).finally(() => location.replace(base));
+      });
+    }
+
+    function showSignIn(authUrl) {
+      byId("sign-in").hidden = false;
+      const params = new URLSearchParams(location.search);
+      const code = params.get("error");
+      if (code) {
+        byId("sign-in-error").textContent = errors[code] || errors.internal;
+        byId("sign-in-error").hidden = false;
+      }
+      if (!authUrl) {
+        byId("not-set-up").hidden = false;
+        return;
+      }
+      return getJSON(authUrl + "/providers", { headers: { Accept: "application/json" } }).then(({ providers, seeded }) => {
+        byId("not-set-up").hidden = providers.length > 0 || seeded.length > 0;
+        for (const p of providers) {
+          const a = document.createElement("a");
+          a.className = "button primary";
+          a.href = authUrl + "/sign-in?" + new URLSearchParams({ provider: p.id, return: back });
+          a.textContent = "Sign in with " + p.name;
+          byId("providers").append(a);
+        }
+        byId("demo").hidden = seeded.length === 0;
+        for (const u of seeded) {
+          const a = document.createElement("a");
+          a.className = "button";
+          a.href = authUrl + "/sign-in?" + new URLSearchParams({ user: u.subject, return: back });
+          a.textContent = u.displayName + " (" + u.subject + ")";
+          byId("seeded").append(a);
+        }
+      }).catch(() => { byId("not-set-up").hidden = false; });
+    }
   </script>
 </body>
 </html>
