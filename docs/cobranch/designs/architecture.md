@@ -528,7 +528,7 @@ code is generated from them.
 
 ```
 go.mod                        one module: cobranch.dev
-cmd/cobranch/                   the binary: auth-server, graphql-server, rest-server, admin-server, git-server,
+cmd/cobranch/                 the binary: auth-server, graphql-server, rest-server, admin-server, git-server,
                               push-worker, controller, maintenance, migrate, agent
 internal/services/            domain logic: organizations, repositories, branches, annotations, events
 internal/adapters/            postgres, blob, git, kube, rest, graphql, oidc
@@ -540,8 +540,8 @@ db/migrations/                numbered SQL and Go migrations
 db/seeds/                     seed data for previews, Go, run only when the chart turns seeding on
 web/console/  web/back-office/  web/ui/
 sdk/go/  sdk/python/  sdk/typescript/
-chart/cobranch/                 the Helm chart
-docs/cobranch/                  the designs, once synced from these pages
+chart/cobranch/               the Helm chart
+docs/cobranch/                the designs, once synced from these pages
 .octomaton.yaml  .tekton/     Cobranch's own CI, on Octomaton until Cobranch can build itself
 ```
 
