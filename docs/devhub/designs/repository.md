@@ -1,7 +1,7 @@
 # The DevHub repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced again
+> with DevHub's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced again
 > once DevHub's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
