@@ -1,0 +1,51 @@
+# DevHub's previews' images: build images devhub and devhub-console of a pull request's head commit and push them to
+# Artifact Registry repository devhub-previews, tagged with the commit's short SHA (publish.task.yaml), which only the
+# pull requests' previews pull (https://docs.dev.kfirs.com/delivery/designs/devhub-previews.md). The pod pushes as
+# ServiceAccount ci-devhub-preview, through Workload Identity: any branch may use it, and it writes devhub-previews
+# alone, never main's or the versions' repository. A plain Tekton PipelineRun; Octomaton sets the params.
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: devhub-preview-
+spec:
+  taskRunTemplate:
+    serviceAccountName: ci-devhub-preview
+  # The steps only drive the Docker daemon, which its sidecar holds, with resources of its own.
+  taskRunSpecs:
+    - pipelineTaskName: publish
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+        limits:
+          memory: 256Mi
+  workspaces:
+    - name: source
+      emptyDir: {}
+  pipelineSpec:
+    params:
+      - name: repo-url
+        type: string
+        description: Git URL of the repository.
+      - name: revision
+        type: string
+        description: Commit to publish.
+    workspaces:
+      - name: source
+    tasks:
+      - name: publish
+        # A lost node (an upgrade or a repair, or a Spot node reclaimed) kills the build: the preview waits for its
+        # images, so try again. Pushing the same tags twice is harmless.
+        retries: 2
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+          - name: registry
+            value: me-west1-docker.pkg.dev/arikkfir/devhub-previews
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: publish # .tekton/publish.task.yaml

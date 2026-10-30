@@ -1,5 +1,10 @@
 DevHub {{ .Chart.AppVersion }} is installed as release {{ .Release.Name }}. Its migrate Job brings the database to this
 version's schema, and the servers turn ready once it is done.
+{{- if .Values.seed.enabled }}
+
+WARNING: seed.enabled is on. The migrate Job adds DevHub's demo data to this installation's database.
+It is for previews of DevHub's own pull requests only: never leave it on for a real installation.
+{{- end }}
 {{- if .Values.httpRoute.enabled }}
 
 It answers through an HTTPRoute per workload, on your Gateway:

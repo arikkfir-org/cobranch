@@ -27,6 +27,8 @@ lists every value, and `values.schema.json` checks them at install.
   that renders without the cluster, set `postgresql.auth.existingSecret`. For your own database, set
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.
 - **Telemetry.** Logs go to stdout as JSON; set `telemetry.traces.endpoint` to an OTLP endpoint for traces.
+- **Demo data.** `seed.enabled` adds DevHub's demo data after each migration, for previews of DevHub's own pull
+  requests. It is off by default; leave it off.
 
 ## Upgrade
 

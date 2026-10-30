@@ -1,15 +1,18 @@
-# Task main of .tekton/main.yaml (its pipeline task publish): build images devhub and devhub-console in a Docker
-# daemon beside the steps, and push them to Artifact Registry, tagged with the commit's short SHA. Octomaton inlines
-# it, and the step it references, into the PipelineRun.
+# Task publish of .tekton/main.yaml and .tekton/preview.yaml: build images devhub and devhub-console in a Docker daemon
+# beside the steps, and push them to an Artifact Registry repository, tagged with the commit's short SHA. Octomaton
+# inlines it, and the step it references, into each PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: main
+  name: publish
 spec:
   params:
     - name: repo-url
       type: string
     - name: revision
+      type: string
+    # Where the images go: main's and the versions' repository, or the previews'.
+    - name: registry
       type: string
   workspaces:
     - name: source
@@ -24,7 +27,7 @@ spec:
       - name: REVISION
         value: $(params.revision)
       - name: REGISTRY
-        value: me-west1-docker.pkg.dev/arikkfir/devhub
+        value: $(params.registry)
       - name: DOCKER_HOST
         value: unix:///run/docker/docker.sock
     volumeMounts:

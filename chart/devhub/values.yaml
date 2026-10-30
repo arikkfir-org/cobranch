@@ -117,6 +117,12 @@ migrate:
   affinity: {}
   podAnnotations: {}
 
+# DevHub's demo data (db/seeds): users, organizations, repositories and the rest, for previews of DevHub's own pull
+# requests. Never turn it on for a real installation.
+seed:
+  # The migrate Job adds the demo data it lacks after migrating the schema.
+  enabled: false
+
 # The bundled PostgreSQL: one replica of the official image, on a persistent volume. Turn it off to bring your own
 # database through externalDatabase.
 postgresql:
