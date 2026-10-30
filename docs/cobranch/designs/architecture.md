@@ -1,7 +1,7 @@
 # Cobranch technical architecture
 
 > **Snapshot.** This design lives in its [architecture page](https://claude.ai/artifact/L6NYy7k4ep31FEPAxQiPjv), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-27, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Agreed 2026-10-27 · [ENG-193](https://linear.app/arikkfir/issue/ENG-193) ·
@@ -162,8 +162,8 @@ chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job ru
 
 ## Data model
 
-PostgreSQL holds every fact Cobranch shows, Git refs included; blob storage holds only bytes. One database and one schema
-serve every organization.
+PostgreSQL holds every fact Cobranch shows, Git refs included; blob storage holds only bytes. One database and one
+schema serve every organization.
 
 **Agreed:** primary keys are UUIDv7, which sort by creation time. The API shows them with a type prefix (`org_…`,
 `repo_…`, `br_…`), which is how GraphQL's `node(id:)` knows the type. Organizations and repositories have slugs for
@@ -188,8 +188,8 @@ background work](#events-and-background-work).
 - **History is kept.** Deleting a branch deletes its ref but keeps its `branches` row, with its chat, reviews and
   status.
 - **Settings live in Git.** Repository and branch settings, merge requirements included, come from the default branch's
-  `/cobranch.yaml`; PostgreSQL keeps a parsed copy, replaced by the push that changes the file. Organization settings live
-  in PostgreSQL only.
+  `/cobranch.yaml`; PostgreSQL keeps a parsed copy, replaced by the push that changes the file. Organization settings
+  live in PostgreSQL only.
 - **Secrets are rows,** encrypted, each with the repositories that may use it ([below](#settings-secrets-and-models)).
 - **Unknown authors get principals.** A commit author or committer whose email nobody holds becomes a login-less user,
   which a user who later verifies that email [claims](principals-and-permissions.md#emails-and-login-less-users).
@@ -237,8 +237,8 @@ tasks the transaction queued, after the client has returned. **Agreed:** every p
 
 ![Every ref, whoever moves it, goes through the push worker](architecture/ref-road.svg)
 
-Repository and branch settings live in the default branch's `/cobranch.yaml`, so a change made in the Console takes effect
-when `cobranch/settings` merges, through the same merge requirements as any other branch.
+Repository and branch settings live in the default branch's `/cobranch.yaml`, so a change made in the Console takes
+effect when `cobranch/settings` merges, through the same merge requirements as any other branch.
 
 ### Which pushes are accepted
 
@@ -246,9 +246,9 @@ when `cobranch/settings` merges, through the same merge requirements as any othe
 
 ![A push into a protected branch must merge Ready branches](architecture/accept.svg)
 
-**Agreed:** clients cannot push refs under `cobranch/`, and a push into a branch with merge requirements must merge Ready
-branches unless the pusher holds [`repo.bypass`](principals-and-permissions.md#permissions). Otherwise a direct push
-would skip every requirement.
+**Agreed:** clients cannot push refs under `cobranch/`, and a push into a branch with merge requirements must merge
+Ready branches unless the pusher holds [`repo.bypass`](principals-and-permissions.md#permissions). Otherwise a direct
+push would skip every requirement.
 
 **Agreed** (review, 2026-10-27): a [path rule](#settings-secrets-and-models) that restricts pushes refuses a push, into
 any branch, that adds commits changing its paths, unless the rule names the pusher or one of their groups. The rule's
@@ -341,8 +341,8 @@ to survive a crash between the two.
 jobs and agents need from outside, secrets and models.
 
 - **In effect, and pending.** The Console shows the settings in effect, from the default branch's `/cobranch.yaml`, and
-  the pending changes: every other branch whose `/cobranch.yaml` differs, each with its diff, however many there are. The
-  push worker records each tip's file, so listing them is one query.
+  the pending changes: every other branch whose `/cobranch.yaml` differs, each with its diff, however many there are.
+  The push worker records each tip's file, so listing them is one query.
 - **A settings change merges like any branch.** **Agreed** (review, 2026-10-27): merge requirements gain path rules,
   which apply only when a branch changes matching paths, such as `/cobranch.yaml`. A path rule can require approval from
   named principals or groups, and refuse pushes that touch its paths from anyone else.
@@ -406,8 +406,8 @@ the credentials each caller presents.
 ![Every credential resolves to one principal, whose grants decide](architecture/credentials.svg)
 
 The session cookie is `HttpOnly`, `Secure` and `SameSite=Lax`, set by the Auth server after sign-in at an identity
-provider, for the parent domain of Cobranch’s hosts. The APIs answer CORS for the Console’s and the Back-office’s origins
-only, and cookie sessions can only send mutations as JSON bodies, which a cross-site form cannot produce.
+provider, for the parent domain of Cobranch’s hosts. The APIs answer CORS for the Console’s and the Back-office’s
+origins only, and cookie sessions can only send mutations as JSON bodies, which a cross-site form cannot produce.
 
 ### Errors
 
@@ -467,8 +467,8 @@ and the operator decides where both go. Cobranch calls no monitoring service of 
 The probes are not traced. Webhooks carry `traceparent` too, so a receiver that speaks Trace Context joins the trace.
 
 - **Logs.** `log/slog`: JSON, one object per line, inside a Kubernetes pod, for the cluster's log collector; text
-  elsewhere, for a person; `COBRANCH_LOG_FORMAT` overrides either. Every record names its workload and version and, inside
-  a request, its trace and span (`traceId`, `spanId`).
+  elsewhere, for a person; `COBRANCH_LOG_FORMAT` overrides either. Every record names its workload and version and,
+  inside a request, its trace and span (`traceId`, `spanId`).
 - **Traces.** W3C Trace Context carries one trace across every hop: the Console's calls, the internal calls between
   workloads, and the tasks in PostgreSQL, whose rows keep the `traceparent` of the transaction that queued them. Each
   workload is a service named after itself, in namespace `cobranch`.
