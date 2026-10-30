@@ -91,10 +91,7 @@
     const base = location.pathname.endsWith("/") ? location.pathname : location.pathname + "/";
     fetch(base + "config.json")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-      // The REST API may answer on another origin (urls.rest): send it the cookies a sign-in in front of it may need.
-      .then(({ restUrl }) =>
-        fetch((restUrl || "") + "/v1/version", { headers: { Accept: "application/json" }, credentials: "include" }),
-      )
+      .then(({ restUrl }) => fetch((restUrl || "") + "/v1/version", { headers: { Accept: "application/json" } }))
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
       .then(({ version }) => {
         const status = document.getElementById("status");
