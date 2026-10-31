@@ -44,8 +44,8 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
 | [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
-| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Proposed |
-| [Git hosting](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
+| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Agreed |
+| [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
