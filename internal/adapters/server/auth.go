@@ -10,39 +10,56 @@ import (
 	"cobranch.dev/internal/services/auth"
 )
 
-// Authenticator resolves a session token to who it signs in; auth.ErrUnauthenticated when nobody.
+// Authenticator resolves a credential's token, a session's or an API key's, to who it acts as;
+// auth.ErrUnauthenticated when nobody.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (auth.Authenticated, error)
 }
 
-// Authenticate resolves the request's session cookie, named cookie, and puts who it signs in on the request's
-// context for the API to read (auth.Viewer). A request without the cookie runs as Anonymous; one whose cookie signs
-// nobody in is refused with 401, as is one that would change something but isn't JSON from the Console's origin:
-// the browser sends the cookie wherever the request came from, so a cookie-authenticated mutation must come from the
-// Console's own pages (consoleOrigin), and when it carries no Origin, be JSON, which no form sends.
+// Authenticate resolves the request's credential and puts who it acts as on the request's context for the API to
+// read (auth.Viewer): a bearer token in the Authorization header (an API key's secret), or else the session cookie,
+// named cookie. A request with neither runs as Anonymous; one whose credential acts as nobody is refused with 401.
+// A request with the cookie that would change something must be JSON from the Console's origin, or it is refused
+// with 403: the browser sends the cookie wherever the request came from, so a cookie-authenticated mutation must come
+// from the Console's own pages (consoleOrigin), and when it carries no Origin, be JSON, which no form sends. A bearer
+// token is sent on purpose, so it needs no such check.
 func Authenticate(cookie string, a Authenticator, consoleOrigin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c, _ := r.Cookie(cookie)
-		if c == nil {
-			next.ServeHTTP(w, r)
-			return
+		token, bearer := bearerToken(r)
+		if !bearer {
+			c, _ := r.Cookie(cookie)
+			if c == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if !safeMethod(r.Method) && !fromConsole(r, consoleOrigin) {
+				http.Error(w, "a request with the session cookie that changes something must be JSON from the Console", http.StatusForbidden)
+				return
+			}
+			token = c.Value
 		}
-		if !safeMethod(r.Method) && !fromConsole(r, consoleOrigin) {
-			http.Error(w, "a request with the session cookie that changes something must be JSON from the Console", http.StatusForbidden)
-			return
-		}
-		viewer, err := a.Authenticate(r.Context(), c.Value)
+		viewer, err := a.Authenticate(r.Context(), token)
 		if errors.Is(err, auth.ErrUnauthenticated) {
-			http.Error(w, "the session cookie signs nobody in", http.StatusUnauthorized)
+			w.Header().Set("WWW-Authenticate", `Bearer realm="cobranch"`)
+			http.Error(w, "the credential acts as nobody: it is unknown, expired or revoked", http.StatusUnauthorized)
 			return
 		}
 		if err != nil {
-			slog.ErrorContext(r.Context(), "Checking the session failed", "error", err)
-			http.Error(w, "the session could not be checked", http.StatusInternalServerError)
+			slog.ErrorContext(r.Context(), "Checking the credential failed", "error", err)
+			http.Error(w, "the credential could not be checked", http.StatusInternalServerError)
 			return
 		}
 		next.ServeHTTP(w, r.WithContext(auth.WithViewer(r.Context(), viewer)))
 	})
+}
+
+// bearerToken returns the bearer token the request's Authorization header carries, and whether it carries one.
+func bearerToken(r *http.Request) (string, bool) {
+	scheme, token, found := strings.Cut(r.Header.Get("Authorization"), " ")
+	if !found || !strings.EqualFold(scheme, "Bearer") {
+		return "", false
+	}
+	return strings.TrimSpace(token), true
 }
 
 // safeMethod reports whether method changes nothing, so a cross-site request with it does no harm.

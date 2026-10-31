@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 5},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 6},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 5},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 5},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 6},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 6},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -419,8 +419,11 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 		if users := countRows(t, pool, "SELECT count(*) FROM principals WHERE kind = 'user'"); users != 4 {
 			t.Errorf("seeded users = %d, want 4", users)
 		}
-		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN roles r ON r.id = g.role_id WHERE NOT r.built_in AND r.org_id = g.scope_id"); n != 1 {
-			t.Errorf("seeded custom role grants = %d, want Max's Release manager at Acme", n)
+		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN roles r ON r.id = g.role_id WHERE NOT r.built_in AND r.org_id = g.scope_id"); n != 2 {
+			t.Errorf("seeded custom role grants = %d, want Release manager at Acme for Max and the Deploy script key", n)
+		}
+		if n := countRows(t, pool, "SELECT count(*) FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE p.kind = 'api_key' AND c.expires_at IS NULL"); n != 1 {
+			t.Errorf("seeded API key secrets = %d, want the Deploy script's", n)
 		}
 		return
 	}

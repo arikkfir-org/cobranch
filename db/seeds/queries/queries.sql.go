@@ -7,10 +7,58 @@ package queries
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
 )
+
+const insertSeedAPIKey = `-- name: InsertSeedAPIKey :exec
+INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES ($1, 'api_key', $2, $3, $4)
+`
+
+type InsertSeedAPIKeyParams struct {
+	ID        uuid.UUID
+	Name      string
+	OrgID     uuid.NullUUID
+	CreatedBy uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedAPIKey(ctx context.Context, arg InsertSeedAPIKeyParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedAPIKey,
+		arg.ID,
+		arg.Name,
+		arg.OrgID,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertSeedCredential = `-- name: InsertSeedCredential :exec
+INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at)
+VALUES ($1, 'api_key', $2, $3, $4, now(), $5, $6)
+`
+
+type InsertSeedCredentialParams struct {
+	ID          uuid.UUID
+	TokenHash   []byte
+	PrincipalID uuid.UUID
+	Hint        string
+	CreatedBy   uuid.NullUUID
+	ExpiresAt   sql.NullTime
+}
+
+func (q *Queries) InsertSeedCredential(ctx context.Context, arg InsertSeedCredentialParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedCredential,
+		arg.ID,
+		arg.TokenHash,
+		arg.PrincipalID,
+		arg.Hint,
+		arg.CreatedBy,
+		arg.ExpiresAt,
+	)
+	return err
+}
 
 const insertSeedGrant = `-- name: InsertSeedGrant :exec
 INSERT INTO grants (principal_id, role_id, scope, scope_id, source) VALUES ($1, $2, $3, $4, 'grant')
@@ -67,7 +115,7 @@ type InsertSeedInvitationParams struct {
 	OrgID     uuid.UUID
 	Email     string
 	RoleID    uuid.UUID
-	InvitedBy uuid.UUID
+	InvitedBy uuid.NullUUID
 	ExpiresAt time.Time
 }
 

@@ -303,8 +303,12 @@ func notLastOwner(ctx context.Context, q *queries.Queries, orgID, userID uuid.UU
 
 // invitation is the domain's view of an invitations row with its organization's slug and name and its role's name.
 func invitation(i queries.Invitation, slug, name, roleName string) orgs.Invitation {
-	return orgs.Invitation{ID: i.ID, OrgID: i.OrgID, OrgSlug: slug, OrgName: name, Email: i.Email, RoleID: i.RoleID, RoleName: roleName,
-		InvitedBy: i.InvitedBy, State: orgs.State(i.State), CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
+	out := orgs.Invitation{ID: i.ID, OrgID: i.OrgID, OrgSlug: slug, OrgName: name, Email: i.Email, RoleID: i.RoleID, RoleName: roleName,
+		State: orgs.State(i.State), CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
+	if i.InvitedBy != nil { // gone with the API key that invited
+		out.InvitedBy = *i.InvitedBy
+	}
+	return out
 }
 
 // Invite records the invitation. It holds the organization's lock and reads the role under it, as every grant does,
@@ -321,7 +325,7 @@ func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitat
 			return fmt.Errorf("dropping an expired invitation: %w", err)
 		}
 		if err := q.InsertInvitation(ctx, queries.InsertInvitationParams{
-			ID: inv.ID, OrgID: inv.OrgID, Email: inv.Email, RoleID: inv.RoleID, InvitedBy: inv.InvitedBy,
+			ID: inv.ID, OrgID: inv.OrgID, Email: inv.Email, RoleID: inv.RoleID, InvitedBy: &inv.InvitedBy,
 			CreatedAt: inv.CreatedAt, ExpiresAt: inv.ExpiresAt,
 		}); err != nil {
 			return fmt.Errorf("inserting the invitation: %w", err)

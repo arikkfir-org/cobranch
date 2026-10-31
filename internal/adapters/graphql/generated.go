@@ -38,6 +38,30 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	ApiKey struct {
+		CreatedAt      func(childComplexity int) int
+		CreatedBy      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Name           func(childComplexity int) int
+		OrganizationID func(childComplexity int) int
+		Roles          func(childComplexity int) int
+		Secrets        func(childComplexity int) int
+	}
+
+	ApiKeyCreated struct {
+		APIKey func(childComplexity int) int
+		Secret func(childComplexity int) int
+	}
+
+	ApiKeySecret struct {
+		CreatedAt  func(childComplexity int) int
+		ExpiresAt  func(childComplexity int) int
+		Hint       func(childComplexity int) int
+		ID         func(childComplexity int) int
+		LastUsedAt func(childComplexity int) int
+		RevokedAt  func(childComplexity int) int
+	}
+
 	Email struct {
 		Email    func(childComplexity int) int
 		Verified func(childComplexity int) int
@@ -78,23 +102,28 @@ type ComplexityRoot struct {
 		AcceptInvitation   func(childComplexity int, id string) int
 		ApproveJoinRequest func(childComplexity int, organizationID string, id string, roleID string) int
 		CancelInvitation   func(childComplexity int, organizationID string, id string) int
+		CreateAPIKey       func(childComplexity int, organizationID string, input APIKeyInput) int
 		CreateOrganization func(childComplexity int, slug string, name string) int
 		CreateRole         func(childComplexity int, organizationID string, input RoleInput) int
 		DeclineInvitation  func(childComplexity int, id string) int
 		DeclineJoinRequest func(childComplexity int, organizationID string, id string) int
+		DeleteAPIKey       func(childComplexity int, organizationID string, id string) int
 		DeleteRole         func(childComplexity int, organizationID string, id string) int
 		GrantRole          func(childComplexity int, organizationID string, userID string, roleID string) int
 		InviteMember       func(childComplexity int, organizationID string, email string, roleID string) int
 		LeaveOrganization  func(childComplexity int, id string) int
 		RemoveMember       func(childComplexity int, organizationID string, userID string) int
 		RequestToJoin      func(childComplexity int, slug string, note *string) int
+		RevokeAPIKeySecret func(childComplexity int, organizationID string, id string, secretID string) int
 		RevokeRole         func(childComplexity int, organizationID string, userID string, roleID string) int
 		RevokeSession      func(childComplexity int, id string) int
+		RotateAPIKey       func(childComplexity int, organizationID string, id string, input *SecretInput) int
 		UpdateOrganization func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRole         func(childComplexity int, organizationID string, id string, input RoleInput) int
 	}
 
 	Organization struct {
+		APIKeys             func(childComplexity int) int
 		AcceptsJoinRequests func(childComplexity int) int
 		CreatedAt           func(childComplexity int) int
 		ID                  func(childComplexity int) int
@@ -170,6 +199,10 @@ type MutationResolver interface {
 	CreateRole(ctx context.Context, organizationID string, input RoleInput) (*Role, error)
 	UpdateRole(ctx context.Context, organizationID string, id string, input RoleInput) (*Role, error)
 	DeleteRole(ctx context.Context, organizationID string, id string) (bool, error)
+	CreateAPIKey(ctx context.Context, organizationID string, input APIKeyInput) (*APIKeyCreated, error)
+	RotateAPIKey(ctx context.Context, organizationID string, id string, input *SecretInput) (*APIKeyCreated, error)
+	RevokeAPIKeySecret(ctx context.Context, organizationID string, id string, secretID string) (bool, error)
+	DeleteAPIKey(ctx context.Context, organizationID string, id string) (bool, error)
 }
 type OrganizationResolver interface {
 	ViewerPermissions(ctx context.Context, obj *Organization) ([]string, error)
@@ -177,6 +210,7 @@ type OrganizationResolver interface {
 	Invitations(ctx context.Context, obj *Organization) ([]*Invitation, error)
 	JoinRequests(ctx context.Context, obj *Organization) ([]*JoinRequest, error)
 	Roles(ctx context.Context, obj *Organization) ([]*Role, error)
+	APIKeys(ctx context.Context, obj *Organization) ([]*APIKey, error)
 }
 type QueryResolver interface {
 	Version(ctx context.Context) (string, error)
@@ -210,6 +244,99 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	ec := newExecutionContext(nil, e, nil)
 	_ = ec
 	switch typeName + "." + field {
+
+	case "ApiKey.createdAt":
+		if e.ComplexityRoot.ApiKey.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.CreatedAt(childComplexity), true
+	case "ApiKey.createdBy":
+		if e.ComplexityRoot.ApiKey.CreatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.CreatedBy(childComplexity), true
+	case "ApiKey.id":
+		if e.ComplexityRoot.ApiKey.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.ID(childComplexity), true
+	case "ApiKey.name":
+		if e.ComplexityRoot.ApiKey.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.Name(childComplexity), true
+	case "ApiKey.organizationId":
+		if e.ComplexityRoot.ApiKey.OrganizationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.OrganizationID(childComplexity), true
+	case "ApiKey.roles":
+		if e.ComplexityRoot.ApiKey.Roles == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.Roles(childComplexity), true
+	case "ApiKey.secrets":
+		if e.ComplexityRoot.ApiKey.Secrets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKey.Secrets(childComplexity), true
+
+	case "ApiKeyCreated.apiKey":
+		if e.ComplexityRoot.ApiKeyCreated.APIKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeyCreated.APIKey(childComplexity), true
+	case "ApiKeyCreated.secret":
+		if e.ComplexityRoot.ApiKeyCreated.Secret == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeyCreated.Secret(childComplexity), true
+
+	case "ApiKeySecret.createdAt":
+		if e.ComplexityRoot.ApiKeySecret.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.CreatedAt(childComplexity), true
+	case "ApiKeySecret.expiresAt":
+		if e.ComplexityRoot.ApiKeySecret.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.ExpiresAt(childComplexity), true
+	case "ApiKeySecret.hint":
+		if e.ComplexityRoot.ApiKeySecret.Hint == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.Hint(childComplexity), true
+	case "ApiKeySecret.id":
+		if e.ComplexityRoot.ApiKeySecret.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.ID(childComplexity), true
+	case "ApiKeySecret.lastUsedAt":
+		if e.ComplexityRoot.ApiKeySecret.LastUsedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.LastUsedAt(childComplexity), true
+	case "ApiKeySecret.revokedAt":
+		if e.ComplexityRoot.ApiKeySecret.RevokedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ApiKeySecret.RevokedAt(childComplexity), true
 
 	case "Email.email":
 		if e.ComplexityRoot.Email.Email == nil {
@@ -392,6 +519,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CancelInvitation(childComplexity, args["organizationId"].(string), args["id"].(string)), true
+	case "Mutation.createApiKey":
+		if e.ComplexityRoot.Mutation.CreateAPIKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createApiKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateAPIKey(childComplexity, args["organizationId"].(string), args["input"].(APIKeyInput)), true
 	case "Mutation.createOrganization":
 		if e.ComplexityRoot.Mutation.CreateOrganization == nil {
 			break
@@ -436,6 +574,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeclineJoinRequest(childComplexity, args["organizationId"].(string), args["id"].(string)), true
+	case "Mutation.deleteApiKey":
+		if e.ComplexityRoot.Mutation.DeleteAPIKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteApiKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteAPIKey(childComplexity, args["organizationId"].(string), args["id"].(string)), true
 	case "Mutation.deleteRole":
 		if e.ComplexityRoot.Mutation.DeleteRole == nil {
 			break
@@ -502,6 +651,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestToJoin(childComplexity, args["slug"].(string), args["note"].(*string)), true
+	case "Mutation.revokeApiKeySecret":
+		if e.ComplexityRoot.Mutation.RevokeAPIKeySecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeApiKeySecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeAPIKeySecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["secretId"].(string)), true
 	case "Mutation.revokeRole":
 		if e.ComplexityRoot.Mutation.RevokeRole == nil {
 			break
@@ -524,6 +684,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeSession(childComplexity, args["id"].(string)), true
+	case "Mutation.rotateApiKey":
+		if e.ComplexityRoot.Mutation.RotateAPIKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_rotateApiKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RotateAPIKey(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(*SecretInput)), true
 	case "Mutation.updateOrganization":
 		if e.ComplexityRoot.Mutation.UpdateOrganization == nil {
 			break
@@ -547,6 +718,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.UpdateRole(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(RoleInput)), true
 
+	case "Organization.apiKeys":
+		if e.ComplexityRoot.Organization.APIKeys == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.APIKeys(childComplexity), true
 	case "Organization.acceptsJoinRequests":
 		if e.ComplexityRoot.Organization.AcceptsJoinRequests == nil {
 			break
@@ -804,8 +981,10 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 	ec := newExecutionContext(opCtx, e, make(chan graphql.DeferredResult))
 	inputUnmarshalers := func() *graphql.InputUnmarshalerIndex {
 		return graphql.NewInputUnmarshalerIndex(
+			graphql.NewInputUnmarshaler("ApiKeyInput", ec.unmarshalInputApiKeyInput),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
+			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 		)
 	}
 	first := true
@@ -986,6 +1165,14 @@ extend type Mutation {
   updateRole(organizationId: ID!, id: ID!, input: RoleInput!): Role!
   "Deletes a custom role nobody holds, cancelling the invitations that offered it; takes org.grants.manage and every permission of the role."
   deleteRole(organizationId: ID!, id: ID!): Boolean!
+  "Makes an API key holding roles at the organization, and shows its first secret once; takes org.principals.manage, and the roles add the grant rules."
+  createApiKey(organizationId: ID!, input: ApiKeyInput!): ApiKeyCreated!
+  "Gives the key a new secret, shown once, beside the old one, which works until revoked or expired; a key with two live secrets takes no third. Takes org.principals.manage."
+  rotateApiKey(organizationId: ID!, id: ID!, input: SecretInput): ApiKeyCreated!
+  "Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage."
+  revokeApiKeySecret(organizationId: ID!, id: ID!, secretId: ID!): Boolean!
+  "Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds."
+  deleteApiKey(organizationId: ID!, id: ID!): Boolean!
 }
 
 "An organization: a slug for its URLs, a name, and its settings."
@@ -1010,6 +1197,57 @@ type Organization {
   joinRequests: [JoinRequest!]!
   "The roles the organization grants: the built-in ones first, then its own; takes org.read."
   roles: [Role!]!
+  "The API keys, with their roles and secrets, by name; takes org.read."
+  apiKeys: [ApiKey!]!
+}
+
+"An API key: a principal of the organization that a script acts as, with the roles it holds there and its secrets."
+type ApiKey {
+  id: ID!
+  organizationId: ID!
+  name: String!
+  "Who made the key; null once they are gone."
+  createdBy: ID
+  createdAt: Time!
+  roles: [Role!]!
+  "The key's secrets, oldest first, revoked and expired ones included."
+  secrets: [ApiKeySecret!]!
+}
+
+"One of an API key's secrets, as its manager sees it; the secret itself was shown once."
+type ApiKeySecret {
+  id: ID!
+  "The secret's last four characters."
+  hint: String!
+  createdAt: Time!
+  "When the secret stops working; null for one that never expires."
+  expiresAt: Time
+  lastUsedAt: Time
+  revokedAt: Time
+}
+
+"When a new secret stops working; a year from now when neither is given."
+input SecretInput {
+  "The end, in the future."
+  expiresAt: Time
+  "True for a secret with no end; not with expiresAt."
+  neverExpires: Boolean
+}
+
+"What makes an API key; its first secret's expiry as SecretInput's."
+input ApiKeyInput {
+  name: String!
+  "The roles the key holds at the organization; at least one."
+  roleIds: [ID!]!
+  expiresAt: Time
+  neverExpires: Boolean
+}
+
+"A key and a secret of its, which is shown here and never again."
+type ApiKeyCreated {
+  apiKey: ApiKey!
+  "The secret, to put in the script's own secret store."
+  secret: String!
 }
 
 input OrganizationSettings {
@@ -1081,6 +1319,54 @@ var parsedSchema = gqlparser.MustLoadSchema(sources...)
 // childFields_* functions provide shared child field context lookups.
 // Each function is generated once per unique object type, deduplicating the
 // switch statements that were previously inlined in every fieldContext_* function.
+
+func (ec *executionContext) childFields_ApiKey(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_ApiKey_id(ctx, field)
+	case "organizationId":
+		return ec.fieldContext_ApiKey_organizationId(ctx, field)
+	case "name":
+		return ec.fieldContext_ApiKey_name(ctx, field)
+	case "createdBy":
+		return ec.fieldContext_ApiKey_createdBy(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ApiKey_createdAt(ctx, field)
+	case "roles":
+		return ec.fieldContext_ApiKey_roles(ctx, field)
+	case "secrets":
+		return ec.fieldContext_ApiKey_secrets(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ApiKey", field.Name)
+}
+
+func (ec *executionContext) childFields_ApiKeyCreated(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "apiKey":
+		return ec.fieldContext_ApiKeyCreated_apiKey(ctx, field)
+	case "secret":
+		return ec.fieldContext_ApiKeyCreated_secret(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ApiKeyCreated", field.Name)
+}
+
+func (ec *executionContext) childFields_ApiKeySecret(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_ApiKeySecret_id(ctx, field)
+	case "hint":
+		return ec.fieldContext_ApiKeySecret_hint(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_ApiKeySecret_createdAt(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_ApiKeySecret_expiresAt(ctx, field)
+	case "lastUsedAt":
+		return ec.fieldContext_ApiKeySecret_lastUsedAt(ctx, field)
+	case "revokedAt":
+		return ec.fieldContext_ApiKeySecret_revokedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ApiKeySecret", field.Name)
+}
 
 func (ec *executionContext) childFields_Email(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
@@ -1180,6 +1466,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_joinRequests(ctx, field)
 	case "roles":
 		return ec.fieldContext_Organization_roles(ctx, field)
+	case "apiKeys":
+		return ec.fieldContext_Organization_apiKeys(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
 }
@@ -1426,6 +1714,28 @@ func (ec *executionContext) field_Mutation_cancelInvitation_args(ctx context.Con
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createApiKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (APIKeyInput, error) {
+			return ec.unmarshalNApiKeyInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createOrganization_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1485,6 +1795,28 @@ func (ec *executionContext) field_Mutation_declineInvitation_args(ctx context.Co
 }
 
 func (ec *executionContext) field_Mutation_declineJoinRequest_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteApiKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
 	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
@@ -1646,6 +1978,36 @@ func (ec *executionContext) field_Mutation_requestToJoin_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_revokeApiKeySecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "secretId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["secretId"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_revokeRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1687,6 +2049,36 @@ func (ec *executionContext) field_Mutation_revokeSession_args(ctx context.Contex
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_rotateApiKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (*SecretInput, error) {
+			return ec.unmarshalOSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
 	return args, nil
 }
 
@@ -1871,6 +2263,378 @@ func (ec *executionContext) field___Type_inputFields_args(ctx context.Context, r
 // endregion ***************************** args.gotpl *****************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _ApiKey_id(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKey", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ApiKey_organizationId(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_organizationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OrganizationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_organizationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKey", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ApiKey_name(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKey", field, false, false, "String")
+}
+
+func (ec *executionContext) _ApiKey_createdBy(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_createdBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKey", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ApiKey_createdAt(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKey", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ApiKey_roles(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_roles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Roles, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Role) graphql.Marshaler {
+			return ec.marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_roles(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiKey",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Role(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiKey_secrets(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKey_secrets(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Secrets, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*APIKeySecret) graphql.Marshaler {
+			return ec.marshalNApiKeySecret2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeySecretᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKey_secrets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiKey",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ApiKeySecret(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiKeyCreated_apiKey(ctx context.Context, field graphql.CollectedField, obj *APIKeyCreated) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeyCreated_apiKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.APIKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *APIKey) graphql.Marshaler {
+			return ec.marshalNApiKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKey(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeyCreated_apiKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ApiKeyCreated",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ApiKey(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ApiKeyCreated_secret(ctx context.Context, field graphql.CollectedField, obj *APIKeyCreated) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeyCreated_secret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Secret, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeyCreated_secret(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeyCreated", field, false, false, "String")
+}
+
+func (ec *executionContext) _ApiKeySecret_id(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ApiKeySecret_hint(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_hint(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hint, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_hint(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "String")
+}
+
+func (ec *executionContext) _ApiKeySecret_createdAt(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ApiKeySecret_expiresAt(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ApiKeySecret_lastUsedAt(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_lastUsedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastUsedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_lastUsedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ApiKeySecret_revokedAt(ctx context.Context, field graphql.CollectedField, obj *APIKeySecret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ApiKeySecret_revokedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RevokedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ApiKeySecret_revokedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "Time")
+}
 
 func (ec *executionContext) _Email_email(ctx context.Context, field graphql.CollectedField, obj *Email) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
@@ -3181,6 +3945,182 @@ func (ec *executionContext) fieldContext_Mutation_deleteRole(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createApiKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createApiKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateAPIKey(ctx, fc.Args["organizationId"].(string), fc.Args["input"].(APIKeyInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *APIKeyCreated) graphql.Marshaler {
+			return ec.marshalNApiKeyCreated2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyCreated(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createApiKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ApiKeyCreated(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createApiKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_rotateApiKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_rotateApiKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RotateAPIKey(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["input"].(*SecretInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *APIKeyCreated) graphql.Marshaler {
+			return ec.marshalNApiKeyCreated2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyCreated(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_rotateApiKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ApiKeyCreated(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_rotateApiKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeApiKeySecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeApiKeySecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeAPIKeySecret(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["secretId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeApiKeySecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeApiKeySecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteApiKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteApiKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteAPIKey(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteApiKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteApiKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_id(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -3488,6 +4428,38 @@ func (ec *executionContext) fieldContext_Organization_roles(_ context.Context, f
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Role(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Organization_apiKeys(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_apiKeys(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().APIKeys(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*APIKey) graphql.Marshaler {
+			return ec.marshalNApiKey2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_apiKeys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ApiKey(ctx, field)
 		},
 	}
 	return fc, nil
@@ -5357,6 +6329,69 @@ func (ec *executionContext) fieldContext___Type_isOneOf(_ context.Context, field
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputApiKeyInput(ctx context.Context, obj any) (APIKeyInput, error) {
+	var it APIKeyInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "roleIds", "expiresAt", "neverExpires"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "roleIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("roleIds"))
+			data, err := ec.unmarshalNID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RoleIds = data
+		case "expiresAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpiresAt = data
+		case "neverExpires":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("neverExpires"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NeverExpires = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalApiKeyInput unmarshals raw into the ApiKeyInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalApiKeyInput(ctx context.Context, raw any) (APIKeyInput, error) {
+	var out APIKeyInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ApiKeyInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputOrganizationSettings(ctx context.Context, obj any) (OrganizationSettings, error) {
 	var it OrganizationSettings
 	if obj == nil {
@@ -5483,6 +6518,55 @@ func UnmarshalRoleInput(ctx context.Context, raw any) (RoleInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputSecretInput(ctx context.Context, obj any) (SecretInput, error) {
+	var it SecretInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"expiresAt", "neverExpires"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "expiresAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpiresAt = data
+		case "neverExpires":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("neverExpires"))
+			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.NeverExpires = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalSecretInput unmarshals raw into the SecretInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalSecretInput(ctx context.Context, raw any) (SecretInput, error) {
+	var out SecretInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "SecretInput", raw, &out)
+	return out, err
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -5490,6 +6574,165 @@ func UnmarshalRoleInput(ctx context.Context, raw any) (RoleInput, error) {
 // endregion ************************** interface.gotpl ***************************
 
 // region    **************************** object.gotpl ****************************
+
+var apiKeyImplementors = []string{"ApiKey"}
+
+func (ec *executionContext) _ApiKey(ctx context.Context, sel ast.SelectionSet, obj *APIKey) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, apiKeyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ApiKey")
+		case "id":
+			out.Values[i] = ec._ApiKey_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "organizationId":
+			out.Values[i] = ec._ApiKey_organizationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._ApiKey_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdBy":
+			out.Values[i] = ec._ApiKey_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ApiKey_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roles":
+			out.Values[i] = ec._ApiKey_roles(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "secrets":
+			out.Values[i] = ec._ApiKey_secrets(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var apiKeyCreatedImplementors = []string{"ApiKeyCreated"}
+
+func (ec *executionContext) _ApiKeyCreated(ctx context.Context, sel ast.SelectionSet, obj *APIKeyCreated) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, apiKeyCreatedImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ApiKeyCreated")
+		case "apiKey":
+			out.Values[i] = ec._ApiKeyCreated_apiKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "secret":
+			out.Values[i] = ec._ApiKeyCreated_secret(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var apiKeySecretImplementors = []string{"ApiKeySecret"}
+
+func (ec *executionContext) _ApiKeySecret(ctx context.Context, sel ast.SelectionSet, obj *APIKeySecret) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, apiKeySecretImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ApiKeySecret")
+		case "id":
+			out.Values[i] = ec._ApiKeySecret_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hint":
+			out.Values[i] = ec._ApiKeySecret_hint(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._ApiKeySecret_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._ApiKeySecret_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "lastUsedAt":
+			out.Values[i] = ec._ApiKeySecret_lastUsedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "revokedAt":
+			out.Values[i] = ec._ApiKeySecret_revokedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
 
 var emailImplementors = []string{"Email"}
 
@@ -5861,6 +7104,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createApiKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createApiKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rotateApiKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_rotateApiKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeApiKeySecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeApiKeySecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteApiKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteApiKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5953,6 +7224,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_roles(ctx, field, obj)
+				})
+		case "apiKeys":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_apiKeys(ctx, field, obj)
 				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -6607,6 +7884,67 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 
 // region    ***************************** type.gotpl *****************************
 
+func (ec *executionContext) marshalNApiKey2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyᚄ(ctx context.Context, sel ast.SelectionSet, v []*APIKey) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNApiKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKey(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNApiKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKey(ctx context.Context, sel ast.SelectionSet, v *APIKey) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ApiKey!")
+		return graphql.Null
+	}
+	return ec._ApiKey(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNApiKeyCreated2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyCreated(ctx context.Context, sel ast.SelectionSet, v *APIKeyCreated) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ApiKeyCreated!")
+		return graphql.Null
+	}
+	return ec._ApiKeyCreated(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNApiKeyInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeyInput(ctx context.Context, v any) (APIKeyInput, error) {
+	res, err := ec.unmarshalInputApiKeyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNApiKeySecret2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeySecretᚄ(ctx context.Context, sel ast.SelectionSet, v []*APIKeySecret) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNApiKeySecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeySecret(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNApiKeySecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAPIKeySecret(ctx context.Context, sel ast.SelectionSet, v *APIKeySecret) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ApiKeySecret!")
+		return graphql.Null
+	}
+	return ec._ApiKeySecret(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -6657,6 +7995,35 @@ func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.Selec
 		graphql.AddInvalidNullFromMarshaler(ctx, "ID!")
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalNInvitation2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐInvitationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Invitation) graphql.Marshaler {
@@ -7077,6 +8444,14 @@ func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 	return ec._Organization(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretInput(ctx context.Context, v any) (*SecretInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputSecretInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) unmarshalOString2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -7127,6 +8502,24 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalString(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v any) (*time.Time, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalTime(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOTime2ᚖtimeᚐTime(ctx context.Context, sel ast.SelectionSet, v *time.Time) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalTime(*v)
 	return res
 }
 

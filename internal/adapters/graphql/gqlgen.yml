@@ -31,3 +31,4 @@ models:
       invitations: { resolver: true }
       joinRequests: { resolver: true }
       roles: { resolver: true }
+      apiKeys: { resolver: true }

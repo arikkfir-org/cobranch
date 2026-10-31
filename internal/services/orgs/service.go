@@ -78,6 +78,20 @@ type Store interface {
 	// RevokeRole takes the role from the member at the organization: ErrNotFound when they don't hold it, and
 	// ErrLastOwner for the Owner role of the organization's one Owner, decided under a lock.
 	RevokeRole(ctx context.Context, actor uuid.UUID, orgID, userID, roleID uuid.UUID) error
+	// APIKeys lists the organization's API keys with their roles and secrets, by name.
+	APIKeys(ctx context.Context, orgID uuid.UUID) ([]APIKey, error)
+	// APIKey finds one of the organization's API keys with its roles and secrets, or ErrNotFound.
+	APIKey(ctx context.Context, orgID, id uuid.UUID) (APIKey, error)
+	// CreateAPIKey makes the key's principal, grants it key.Roles at the organization, records its first secret
+	// (hash is what the database keeps of it) and the event, under the organization's lock.
+	CreateAPIKey(ctx context.Context, actor uuid.UUID, key APIKey, secret Secret, hash []byte) error
+	// AddSecret gives the key another secret, or ErrTwoSecrets while two act at `at`, decided under the
+	// organization's lock; ErrNotFound for a key that isn't the organization's.
+	AddSecret(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID, secret Secret, hash []byte, at time.Time) error
+	// RevokeSecret revokes one of the key's secrets at `at`, or ErrNotFound when it isn't the key's or is revoked.
+	RevokeSecret(ctx context.Context, actor uuid.UUID, orgID, keyID, secretID uuid.UUID, at time.Time) error
+	// DeleteAPIKey deletes the key with its principal, secrets and grants, or ErrNotFound.
+	DeleteAPIKey(ctx context.Context, actor uuid.UUID, orgID, keyID uuid.UUID) error
 	// DeleteExpired deletes the invitations and join requests that expired before now, and returns how many of each.
 	DeleteExpired(ctx context.Context, now time.Time) (invitations, requests int64, err error)
 }
@@ -89,6 +103,8 @@ const (
 	PermManage        = "org.manage"
 	PermMembersManage = "org.members.manage"
 	PermGrantsManage  = "org.grants.manage"
+	// PermPrincipalsManage makes, rotates and deletes the organization's API keys.
+	PermPrincipalsManage = "org.principals.manage"
 )
 
 // Service runs organizations: every operation checks its viewer's permissions through the authorizer first.
@@ -744,6 +760,141 @@ func (s *Service) DeleteExpired(ctx context.Context) (invitations, requests int6
 	return invitations, requests, nil
 }
 
+// APIKeys lists the organization's API keys with their roles and secrets; it takes org.read.
+func (s *Service) APIKeys(ctx context.Context, v Viewer, orgID uuid.UUID) ([]APIKey, error) {
+	if _, _, err := s.require(ctx, v, orgID, PermRead); err != nil {
+		return nil, err
+	}
+	keys, err := s.store.APIKeys(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("listing the API keys: %w", err)
+	}
+	return keys, nil
+}
+
+// apiKeyRoles finds the roles a key will hold, each an organization role the viewer, holding held, may grant: the
+// grant rules, with no exception for the membership role, which is for people who join.
+func (s *Service) apiKeyRoles(ctx context.Context, orgID uuid.UUID, held []string, roleIDs []uuid.UUID) ([]Role, error) {
+	if !slices.Contains(held, PermGrantsManage) {
+		return nil, fmt.Errorf("%w: giving a key roles takes %s", auth.ErrForbidden, PermGrantsManage)
+	}
+	roles := make([]Role, 0, len(roleIDs))
+	for _, id := range roleIDs {
+		role, err := s.organizationRole(ctx, orgID, id)
+		if err != nil {
+			return nil, err
+		}
+		if err := covers(held, role.Permissions, "giving a key "+role.Name); err != nil {
+			return nil, err
+		}
+		roles = append(roles, role)
+	}
+	return roles, nil
+}
+
+// newSecret makes a secret that ends at expiry: the secret itself, shown once, and what the key keeps of it.
+func (s *Service) newSecret(expiry Expiry) (string, Secret, error) {
+	now := s.now()
+	ends, err := expiry.Resolve(now)
+	if err != nil {
+		return "", Secret{}, err
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return "", Secret{}, fmt.Errorf("making the secret's ID: %w", err)
+	}
+	token := auth.NewSecret(auth.PrefixAPIKey)
+	return token, Secret{ID: id, Hint: auth.Hint(token), CreatedAt: now, ExpiresAt: ends}, nil
+}
+
+// CreateAPIKey makes an API key of the organization holding in.RoleIDs, with its first secret, which it returns
+// beside the key and never again; it takes org.principals.manage, and the roles add the grant rules.
+func (s *Service) CreateAPIKey(ctx context.Context, v Viewer, orgID uuid.UUID, in APIKeyInput) (APIKey, string, error) {
+	_, held, err := s.require(ctx, v, orgID, PermPrincipalsManage)
+	if err != nil {
+		return APIKey{}, "", err
+	}
+	if in, err = ValidateAPIKey(in); err != nil {
+		return APIKey{}, "", err
+	}
+	roles, err := s.apiKeyRoles(ctx, orgID, held, in.RoleIDs)
+	if err != nil {
+		return APIKey{}, "", err
+	}
+	token, secret, err := s.newSecret(in.Expiry)
+	if err != nil {
+		return APIKey{}, "", err
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return APIKey{}, "", fmt.Errorf("making the key's ID: %w", err)
+	}
+	key := APIKey{ID: id, OrgID: orgID, Name: in.Name, CreatedBy: v.ID, CreatedAt: secret.CreatedAt, Roles: roles, Secrets: []Secret{secret}}
+	if err := s.store.CreateAPIKey(ctx, v.ID, key, secret, auth.Hash(token)); err != nil {
+		return APIKey{}, "", wrap("recording the API key", err)
+	}
+	return key, token, nil
+}
+
+// apiKey finds one of the organization's keys for a viewer with org.principals.manage.
+func (s *Service) apiKey(ctx context.Context, v Viewer, orgID, keyID uuid.UUID) (APIKey, []string, error) {
+	_, held, err := s.require(ctx, v, orgID, PermPrincipalsManage)
+	if err != nil {
+		return APIKey{}, nil, err
+	}
+	key, err := s.store.APIKey(ctx, orgID, keyID)
+	if err != nil {
+		return APIKey{}, nil, wrap("finding the API key", err)
+	}
+	return key, held, nil
+}
+
+// RotateAPIKey gives the key a new secret ending at expiry, which it returns beside the key and never again; the
+// old one works until revoked or expired. A key with two live secrets takes no third: ErrTwoSecrets. It takes
+// org.principals.manage.
+func (s *Service) RotateAPIKey(ctx context.Context, v Viewer, orgID, keyID uuid.UUID, expiry Expiry) (APIKey, string, error) {
+	key, _, err := s.apiKey(ctx, v, orgID, keyID)
+	if err != nil {
+		return APIKey{}, "", err
+	}
+	if key.LiveSecrets(s.now()) >= 2 {
+		return APIKey{}, "", ErrTwoSecrets
+	}
+	token, secret, err := s.newSecret(expiry)
+	if err != nil {
+		return APIKey{}, "", err
+	}
+	if err := s.store.AddSecret(ctx, v.ID, orgID, keyID, secret, auth.Hash(token), secret.CreatedAt); err != nil {
+		return APIKey{}, "", wrap("adding the secret", err)
+	}
+	key.Secrets = append(key.Secrets, secret)
+	return key, token, nil
+}
+
+// RevokeSecret ends one of the key's secrets; a key whose every secret is gone fails each call until rotated. It
+// takes org.principals.manage.
+func (s *Service) RevokeSecret(ctx context.Context, v Viewer, orgID, keyID, secretID uuid.UUID) error {
+	if _, _, err := s.apiKey(ctx, v, orgID, keyID); err != nil {
+		return err
+	}
+	return wrap("revoking the secret", s.store.RevokeSecret(ctx, v.ID, orgID, keyID, secretID, s.now()))
+}
+
+// DeleteAPIKey deletes the key with its secrets and grants; it takes org.principals.manage and every permission of
+// the roles the key holds, as removing a member does.
+func (s *Service) DeleteAPIKey(ctx context.Context, v Viewer, orgID, keyID uuid.UUID) error {
+	key, held, err := s.apiKey(ctx, v, orgID, keyID)
+	if err != nil {
+		return err
+	}
+	for _, r := range key.Roles {
+		if err := covers(held, r.Permissions, "deleting a key that holds "+r.Name); err != nil {
+			return err
+		}
+	}
+	return wrap("deleting the API key", s.store.DeleteAPIKey(ctx, v.ID, orgID, keyID))
+}
+
 // wrap keeps the domain's own errors as they are and gives any other what's context.
 func wrap(what string, err error) error {
 	switch {
@@ -751,7 +902,7 @@ func wrap(what string, err error) error {
 		return nil
 	case errors.Is(err, ErrNotFound), errors.Is(err, ErrSlugTaken), errors.Is(err, ErrInvited), errors.Is(err, ErrRequested),
 		errors.Is(err, ErrAlreadyMember), errors.Is(err, ErrLastOwner), errors.Is(err, ErrRoleNameTaken),
-		errors.Is(err, ErrRoleInUse), errors.Is(err, ErrGranted):
+		errors.Is(err, ErrRoleInUse), errors.Is(err, ErrGranted), errors.Is(err, ErrTwoSecrets):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)

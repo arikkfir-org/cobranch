@@ -49,13 +49,48 @@ type Store struct {
 	Users      map[uuid.UUID]auth.User
 	Grants     map[uuid.UUID][]auth.Grant
 	ByToken    map[string]auth.Session // by token hash
-	Fail       error
+	// Credentials are the API keys' secrets by token hash, and Principals the principals they act as.
+	Credentials map[string]auth.Credential
+	Principals  map[uuid.UUID]auth.Principal
+	Fail        error
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
 	return &Store{Flows: map[string]auth.Flow{}, Identities: map[string]auth.Identity{}, Users: map[uuid.UUID]auth.User{},
-		Grants: map[uuid.UUID][]auth.Grant{}, ByToken: map[string]auth.Session{}}
+		Grants: map[uuid.UUID][]auth.Grant{}, ByToken: map[string]auth.Session{},
+		Credentials: map[string]auth.Credential{}, Principals: map[uuid.UUID]auth.Principal{}}
+}
+
+// AddCredential registers secret as a credential acting as principal, with expiresAt (zero never).
+func (s *Store) AddCredential(secret string, principal auth.Principal, expiresAt time.Time) auth.Credential {
+	c := auth.Credential{ID: uuid.New(), PrincipalID: principal.ID, Hint: auth.Hint(secret), ExpiresAt: expiresAt}
+	s.Credentials[string(auth.Hash(secret))] = c
+	s.Principals[principal.ID] = principal
+	return c
+}
+
+// Credential finds a credential by its token's hash, with its principal.
+func (s *Store) Credential(_ context.Context, tokenHash []byte) (auth.Credential, auth.Principal, error) {
+	if s.Fail != nil {
+		return auth.Credential{}, auth.Principal{}, s.Fail
+	}
+	c, ok := s.Credentials[string(tokenHash)]
+	if !ok {
+		return auth.Credential{}, auth.Principal{}, auth.ErrNotFound
+	}
+	return c, s.Principals[c.PrincipalID], nil
+}
+
+// TouchCredential marks credential id used at usedAt.
+func (s *Store) TouchCredential(_ context.Context, id uuid.UUID, usedAt time.Time) error {
+	for k, c := range s.Credentials {
+		if c.ID == id {
+			c.LastUsedAt = usedAt
+			s.Credentials[k] = c
+		}
+	}
+	return nil
 }
 
 // CreateFlow records f.

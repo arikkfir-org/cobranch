@@ -32,7 +32,7 @@ var demoOrganizations = []demoOrganization{
 // niaInvitation is Acme's pending invitation to Nia, as a Member, which never expires on its own.
 var niaInvitation = queries.InsertSeedInvitationParams{
 	ID: uuid.MustParse("00000000-0000-7000-8000-00000000d1a1"), OrgID: demoOrganizations[0].id, Email: "nia@cobranch.example",
-	RoleID: auth.RoleMember, InvitedBy: demoUsers[0].id, ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC),
+	RoleID: auth.RoleMember, InvitedBy: uuid.NullUUID{UUID: demoUsers[0].id, Valid: true}, ExpiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC),
 }
 
 // organizations seeds the demo organizations, their members and Nia's invitation, and lets every demo user create

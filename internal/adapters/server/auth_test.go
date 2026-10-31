@@ -14,13 +14,16 @@ import (
 	"cobranch.dev/internal/services/auth"
 )
 
-// fakeAuthenticator signs the token "cbs_alice" in as Alice, fails "cbs_down", and refuses the rest.
+// fakeAuthenticator signs the token "cbs_alice" in as Alice and "cbk_deploy" as the API key Deploy, fails
+// "cbs_down", and refuses the rest.
 type fakeAuthenticator struct{}
 
 func (fakeAuthenticator) Authenticate(_ context.Context, token string) (auth.Authenticated, error) {
 	switch token {
 	case "cbs_alice":
 		return auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: uuid.MustParse("00000000-0000-7000-8000-00000000aaaa"), DisplayName: "Alice"}}}, nil
+	case "cbk_deploy":
+		return auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: uuid.MustParse("00000000-0000-7000-8000-00000000bbbb"), Kind: auth.KindAPIKey, DisplayName: "Deploy"}}}, nil
 	case "cbs_down":
 		return auth.Authenticated{}, errors.New("down")
 	default:
@@ -34,6 +37,7 @@ func TestAuthenticate(t *testing.T) {
 		name        string
 		method      string
 		token       string
+		bearer      string
 		origin      string
 		contentType string
 		body        string
@@ -51,6 +55,11 @@ func TestAuthenticate(t *testing.T) {
 		{name: "a form with no Origin", method: "POST", token: "cbs_alice", contentType: "text/plain", body: "{}", wantStatus: 403},
 		{name: "a DELETE with no body from the Console", method: "DELETE", token: "cbs_alice", origin: console, wantStatus: 200, wantViewer: "Alice"},
 		{name: "a mutation without the cookie", method: "POST", origin: "https://evil.example.com", contentType: "text/plain", body: "x", wantStatus: 200, wantViewer: "anonymous"},
+		{name: "an API key", method: "GET", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy"},
+		{name: "an API key's mutation from anywhere", method: "POST", bearer: "bearer cbk_deploy", origin: "https://evil.example.com", contentType: "text/plain", body: "x", wantStatus: 200, wantViewer: "Deploy"},
+		{name: "an API key beside the cookie", method: "GET", token: "cbs_alice", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy"},
+		{name: "a dead API key", method: "GET", bearer: "Bearer cbk_old", wantStatus: 401},
+		{name: "another scheme", method: "GET", bearer: "Basic cbk_deploy", wantStatus: 200, wantViewer: "anonymous"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -62,10 +71,16 @@ func TestAuthenticate(t *testing.T) {
 				_, _ = io.WriteString(w, "anonymous")
 			}))
 			req := cookieRequest(tt.method, tt.body, tt.token, tt.origin, tt.contentType)
+			if tt.bearer != "" {
+				req.Header.Set("Authorization", tt.bearer)
+			}
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+			}
+			if rec.Code == 401 && rec.Header().Get("WWW-Authenticate") == "" {
+				t.Error("a 401 names no WWW-Authenticate scheme")
 			}
 			if tt.wantViewer != "" && rec.Body.String() != tt.wantViewer {
 				t.Errorf("viewer = %q, want %q", rec.Body, tt.wantViewer)

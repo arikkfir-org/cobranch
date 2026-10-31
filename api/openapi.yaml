@@ -550,6 +550,129 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys:
+    get:
+      operationId: listAPIKeys
+      summary: The organization's API keys, with their roles and secrets, by name; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [apiKeys]
+                properties:
+                  apiKeys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createAPIKey
+      summary: Makes an API key holding roles at the organization, and shows its first secret once; takes org.principals.manage, and the roles add the grant rules.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyInput"
+      responses:
+        "201":
+          description: The key and its secret, which is shown here and never again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys/{key}:
+    delete:
+      operationId: deleteAPIKey
+      summary: Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/key"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys/{key}/secrets:
+    post:
+      operationId: rotateAPIKey
+      summary: Gives the key a new secret, shown once, beside the old one, which works until revoked or expired; a key with two live secrets takes no third. Takes org.principals.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/key"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecretInput"
+      responses:
+        "201":
+          description: The key and its new secret, which is shown here and never again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/api-keys/{key}/secrets/{secret}:
+    delete:
+      operationId: revokeAPIKeySecret
+      summary: Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/key"
+        - $ref: "#/components/parameters/secret"
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/invitations:
     get:
       operationId: listInvitations
@@ -765,6 +888,24 @@ components:
       in: path
       required: true
       x-go-name: RoleID
+      schema:
+        type: string
+        format: uuid
+    key:
+      name: key
+      in: path
+      required: true
+      description: An API key's ID.
+      x-go-name: KeyID
+      schema:
+        type: string
+        format: uuid
+    secret:
+      name: secret
+      in: path
+      required: true
+      description: One of an API key's secrets, by ID.
+      x-go-name: SecretID
       schema:
         type: string
         format: uuid
@@ -988,6 +1129,98 @@ components:
         expiresAt:
           type: string
           format: date-time
+    ApiKey:
+      type: object
+      description: An API key, a principal of the organization that a script acts as, with the roles it holds there and its secrets.
+      required: [id, orgId, name, createdAt, roles, secrets]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+          description: Who made the key; absent once they are gone.
+        createdAt:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+        secrets:
+          type: array
+          description: The key's secrets, oldest first, revoked and expired ones included.
+          items:
+            $ref: "#/components/schemas/ApiKeySecret"
+    ApiKeySecret:
+      type: object
+      description: One of an API key's secrets, as its manager sees it; the secret itself was shown once.
+      required: [id, hint, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        hint:
+          type: string
+          description: The secret's last four characters.
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the secret stops working; absent for one that never expires.
+        lastUsedAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+    SecretInput:
+      type: object
+      description: When a new secret stops working; a year from now when neither is given.
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          description: The end, in the future.
+        neverExpires:
+          type: boolean
+          description: True for a secret with no end; not with expiresAt.
+    ApiKeyInput:
+      type: object
+      description: What makes an API key; its first secret's expiry as SecretInput's.
+      required: [name, roleIds]
+      properties:
+        name:
+          type: string
+        roleIds:
+          type: array
+          description: The roles the key holds at the organization; at least one.
+          items:
+            type: string
+            format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        neverExpires:
+          type: boolean
+    ApiKeyCreated:
+      type: object
+      description: A key and a secret of its, which is shown here and never again.
+      required: [apiKey, secret]
+      properties:
+        apiKey:
+          $ref: "#/components/schemas/ApiKey"
+        secret:
+          type: string
+          description: The secret, to put in the script's own secret store.
     JoinRequest:
       type: object
       description: A user's request to join an organization, waiting for a member manager.
