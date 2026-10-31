@@ -362,14 +362,18 @@
       main.append(...sections);
     }
 
+    // provider names an identity provider by its issuer's host, or the demo data's sign-in by name.
+    const provider = (issuer) => issuer === "cobranch:seed" ? "demo data" : URL.canParse(issuer) ? new URL(issuer).host : issuer;
+
     function showUsers(main) {
       const row = (u) => h("tr", {},
         h("td", {}, h("strong", {}, u.displayName), u.suspended ? h("span", { class: "chip" }, "suspended") : null, u.id === me.id ? h("span", { class: "chip" }, "you") : null),
         h("td", {}, u.emails.map((e) => h("div", {}, e.email, e.verified ? null : h("span", { class: "muted" }, " (unverified)")))),
+        h("td", {}, u.issuers.map((i) => h("span", { class: "chip", title: i }, provider(i)))),
         h("td", {}, u.roles.map((r) => h("span", { class: "chip" }, r))),
         h("td", { class: "number" }, String(u.organizations)),
         h("td", {}, when(u.lastSignInAt)), h("td", {}, when(u.createdAt)));
-      const users = list({ path: "/users", key: "users", head: ["User", "Emails", "Installation roles", "Organizations", "Last sign-in", "Signed up"], row, placeholder: "A name or an email" });
+      const users = list({ path: "/users", key: "users", head: ["User", "Emails", "Signs in with", "Installation roles", "Organizations", "Last sign-in", "Signed up"], row, placeholder: "A name or an email" });
       main.append(h("h1", {}, "Users"), users.panel);
     }
   </script>
