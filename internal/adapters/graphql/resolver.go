@@ -23,4 +23,6 @@ type Resolver struct {
 	Sessions Sessions
 	// Orgs is the organizations' service.
 	Orgs Organizations
+	// Repos is the repositories' service.
+	Repos Repositories
 }

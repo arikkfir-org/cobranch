@@ -20,6 +20,11 @@ var (
 	Guest  = orgs.Role{ID: auth.RoleGuest, Name: "Guest", BuiltIn: true, Permissions: []string{"org.read"}}
 	// Manager is a custom role for tests: it manages members but holds no grants.
 	Manager = orgs.Role{ID: uuid.MustParse("00000000-0000-7000-8000-000000000f01"), Name: "Manager", Permissions: []string{"org.read", "org.members.manage"}}
+	// The built-in repository roles, as migration 2 writes them.
+	Reader     = orgs.Role{ID: auth.RoleReader, Name: "Reader", BuiltIn: true, Permissions: []string{"repo.read"}}
+	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
+	Maintainer = orgs.Role{ID: auth.RoleMaintainer, Name: "Maintainer", BuiltIn: true, Permissions: slices.Clone(auth.RepositoryPermissions)}
+	Automation = orgs.Role{ID: auth.RoleAutomation, Name: "Automation", BuiltIn: true, Permissions: []string{"annotations.write", "messages.post", "repo.read", "reviews.submit"}}
 	// The installation's roles, which the authorizer reads too.
 	installationAdmin = orgs.Role{ID: auth.RoleInstallationAdmin, Name: "Installation admin", BuiltIn: true, Permissions: auth.InstallationPermissions}
 	installationUser  = orgs.Role{ID: auth.RoleInstallationUser, Name: "Installation user", BuiltIn: true, Permissions: []string{"orgs.create"}}
@@ -46,6 +51,10 @@ type Store struct {
 	// RoleList holds the organization roles, Roles' answer; installation holds the installation's.
 	RoleList     []orgs.Role
 	installation []orgs.Role
+	// RepositoryRoles holds the built-in repository roles; Repos maps each repository to its organization, so the
+	// authorizer's reads at a repository see the roles at its organization too.
+	RepositoryRoles []orgs.Role
+	Repos           map[uuid.UUID]uuid.UUID
 	// Keys are the API keys by ID; Hashes the hash of each secret, by secret ID, so a test can tell what was kept.
 	Keys   map[uuid.UUID]orgs.APIKey
 	Hashes map[uuid.UUID][]byte
@@ -71,8 +80,9 @@ func NewStore() *Store {
 		Orgs: map[uuid.UUID]orgs.Organization{}, Slugs: map[string]uuid.UUID{}, Memberships: map[uuid.UUID][]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, Emails: map[uuid.UUID][]string{}, Invites: map[uuid.UUID]orgs.Invitation{},
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
-		installation: []orgs.Role{installationAdmin, installationUser},
-		Keys:         map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
+		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation},
+		Repos: map[uuid.UUID]uuid.UUID{},
+		Keys:  map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: auth.InstallationSettings{Version: 1}, Providers: map[string]auth.StoredProvider{},
 	}
 }
@@ -97,7 +107,7 @@ func (s *Store) AddMember(org, user, role uuid.UUID) {
 }
 
 func (s *Store) role(id uuid.UUID) (orgs.Role, bool) {
-	for _, r := range slices.Concat(s.RoleList, s.installation) {
+	for _, r := range slices.Concat(s.RoleList, s.installation, s.RepositoryRoles) {
 		if r.ID == id {
 			return r, true
 		}
@@ -105,8 +115,21 @@ func (s *Store) role(id uuid.UUID) (orgs.Role, bool) {
 	return orgs.Role{}, false
 }
 
-// Permissions lists what principal's roles hold at the scope.
+// Permissions lists what principal's roles hold at the scope: at a repository, those of its grants there and of its
+// roles at the repository's organization, kept to the repository's own.
 func (s *Store) Permissions(_ context.Context, principal uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
+	out := s.held(principal, scope, scopeID)
+	if scope == auth.ScopeRepository {
+		out = slices.DeleteFunc(append(out, s.held(principal, auth.ScopeOrganization, s.Repos[scopeID])...), func(p string) bool {
+			return !slices.Contains(auth.RepositoryPermissions, p)
+		})
+	}
+	slices.Sort(out)
+	return slices.Compact(out), nil
+}
+
+// held lists the permissions of principal's grants at exactly the scope.
+func (s *Store) held(principal uuid.UUID, scope auth.Scope, scopeID uuid.UUID) []string {
 	var out []string
 	for _, g := range s.Grants {
 		if g.Principal == principal && g.Scope == scope && g.ScopeID == scopeID {
@@ -115,8 +138,21 @@ func (s *Store) Permissions(_ context.Context, principal uuid.UUID, scope auth.S
 			}
 		}
 	}
-	slices.Sort(out)
-	return slices.Compact(out), nil
+	return out
+}
+
+// Repositories lists the organization's repositories where principal holds permission, in no particular order.
+func (s *Store) Repositories(ctx context.Context, principal, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
+	var out []uuid.UUID
+	for repo, org := range s.Repos {
+		if org != orgID {
+			continue
+		}
+		if held, _ := s.Permissions(ctx, principal, auth.ScopeRepository, repo); slices.Contains(held, permission) {
+			out = append(out, repo)
+		}
+	}
+	return out, nil
 }
 
 // Create records the organization with its creator as Owner.

@@ -163,6 +163,40 @@ func (q *Queries) InsertSeedOrganization(ctx context.Context, arg InsertSeedOrga
 	return err
 }
 
+const insertSeedRepository = `-- name: InsertSeedRepository :exec
+INSERT INTO repositories (id, org_id, slug, name, description, created_by) VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertSeedRepositoryParams struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Slug        string
+	Name        string
+	Description string
+	CreatedBy   uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedRepository(ctx context.Context, arg InsertSeedRepositoryParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedRepository,
+		arg.ID,
+		arg.OrgID,
+		arg.Slug,
+		arg.Name,
+		arg.Description,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertSeedRepositorySlug = `-- name: InsertSeedRepositorySlug :exec
+INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES ($1, $2, $3)
+`
+
+func (q *Queries) InsertSeedRepositorySlug(ctx context.Context, orgID uuid.UUID, slug string, repoID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, insertSeedRepositorySlug, orgID, slug, repoID)
+	return err
+}
+
 const insertSeedRole = `-- name: InsertSeedRole :exec
 INSERT INTO roles (id, scope, name, description, permissions, built_in, org_id)
 VALUES ($1, 'organization', $2, $3, string_to_array($4::text, ','), false, $5)

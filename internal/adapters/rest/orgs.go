@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 )
 
 // Organizations is what the API needs of the organizations' service.
@@ -90,6 +91,8 @@ var conflicts = map[error]string{
 	orgs.ErrBuiltInRole:   "role.built_in",
 	orgs.ErrGranted:       "grant.exists",
 	orgs.ErrTwoSecrets:    "api_key.two_secrets",
+	repos.ErrSlugTaken:    "slug.taken",
+	repos.ErrGranted:      "grant.exists",
 }
 
 // fail maps the domain's errors to problems: kind names what wasn't found. Any other error stays one, which the
@@ -101,7 +104,7 @@ func fail(err error, kind string) error {
 		return refuse(http.StatusBadRequest, verr.Code, verr.Message)
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(http.StatusForbidden, "auth.forbidden", "You lack the permission this takes.")
-	case errors.Is(err, orgs.ErrNotFound):
+	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):
 		return refuse(http.StatusNotFound, kind+".not_found", "There is no such "+kind+", or you may not see it.")
 	case errors.Is(err, orgs.ErrNotMember):
 		return refuse(http.StatusNotFound, "member.not_found", "You don't belong to this organization.")

@@ -14,6 +14,8 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
+	"cobranch.dev/internal/services/repos"
+	"cobranch.dev/internal/services/repos/repostest"
 )
 
 // emptyOrgs returns the organizations' service over an empty store.
@@ -24,13 +26,17 @@ func emptyOrgs(t *testing.T) *orgs.Service {
 }
 
 // orgFixture is Acme, with Olivia its Owner and Max a Member, Nia outside it with a pending invitation and
-// permission to create organizations, over the organizations' service.
+// permission to create organizations, over the organizations' service; website is Acme's repository, which Olivia
+// created, over the repositories'.
 type orgFixture struct {
 	store            *orgstest.Store
 	service          *orgs.Service
+	repoStore        *repostest.Store
+	repos            *repos.Service
 	acme             orgs.Organization
 	olivia, max, nia auth.Authenticated
 	invitation       orgs.Invitation
+	website          repos.Repository
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -55,6 +61,13 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.invitation = orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, OrgSlug: "acme", OrgName: "Acme", Email: "nia@example.com", RoleID: auth.RoleMember,
 		InvitedBy: f.olivia.User.ID, State: orgs.StatePending, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
 	store.Invites[f.invitation.ID] = f.invitation
+	f.repoStore = repostest.NewStore(store)
+	f.repos = repos.NewService(f.repoStore, auth.NewAuthorizer(store))
+	f.website = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "website", Name: "Website", DefaultBranch: "main", ObjectFormat: "sha1",
+		CreatedBy: f.olivia.User.ID, CreatedAt: now}
+	if err := f.repoStore.Create(t.Context(), f.olivia.User.ID, f.website); err != nil {
+		t.Fatal(err)
+	}
 	return f
 }
 
@@ -65,7 +78,7 @@ func (f *orgFixture) call(viewer *auth.Authenticated, method, path, body string)
 		req.Header.Set("Content-Type", "application/json")
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos)).ServeHTTP(rec, req)
 	return rec
 }
 

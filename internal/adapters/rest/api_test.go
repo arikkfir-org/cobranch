@@ -30,7 +30,7 @@ func TestNewHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			NewHandler("v1.2.3", nil, nil).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
+			NewHandler("v1.2.3", nil, nil, nil).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

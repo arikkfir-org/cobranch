@@ -69,8 +69,16 @@ func organization(o queries.Organization) orgs.Organization {
 		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, CreatedAt: o.CreatedAt}
 }
 
-// Permissions lists what principalID's roles hold at the scope, through every grant it has there.
+// Permissions lists what principalID's roles hold at the scope, through every grant it has there: at a repository,
+// also the repository permissions of its roles at the repository's organization.
 func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
+	if scope == auth.ScopeRepository {
+		permissions, err := s.q.RepositoryPermissions(ctx, principalID, scopeID, auth.RepositoryPermissions)
+		if err != nil {
+			return nil, fmt.Errorf("reading the permissions at the repository: %w", err)
+		}
+		return permissions, nil
+	}
 	var id *uuid.UUID
 	if scopeID != uuid.Nil {
 		id = &scopeID
@@ -80,6 +88,16 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 		return nil, fmt.Errorf("reading the permissions: %w", err)
 	}
 	return permissions, nil
+}
+
+// Repositories lists the IDs of the organization's repositories where principalID holds permission, through a grant
+// on the repository or a role at the organization.
+func (s *OrgStore) Repositories(ctx context.Context, principalID, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
+	ids, err := s.q.RepositoriesWith(ctx, orgID, principalID, permission)
+	if err != nil {
+		return nil, fmt.Errorf("listing the repositories with %s: %w", permission, err)
+	}
+	return ids, nil
 }
 
 // Create makes the organization, claims its slug, makes its creator a member and its first Owner, and records both.

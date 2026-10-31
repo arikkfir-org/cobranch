@@ -32,3 +32,10 @@ models:
       joinRequests: { resolver: true }
       roles: { resolver: true }
       apiKeys: { resolver: true }
+      repositories: { resolver: true }
+      repository: { resolver: true }
+  Repository:
+    fields:
+      viewerPermissions: { resolver: true }
+      access: { resolver: true }
+      roles: { resolver: true }

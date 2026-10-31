@@ -19,6 +19,60 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for RepositoryObjectFormat.
+const (
+	Sha1   RepositoryObjectFormat = "sha1"
+	Sha256 RepositoryObjectFormat = "sha256"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryObjectFormat enum.
+func (e RepositoryObjectFormat) Valid() bool {
+	switch e {
+	case Sha1:
+		return true
+	case Sha256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryVisibility.
+const (
+	Internal RepositoryVisibility = "internal"
+	Private  RepositoryVisibility = "private"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryVisibility enum.
+func (e RepositoryVisibility) Valid() bool {
+	switch e {
+	case Internal:
+		return true
+	case Private:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RepositoryAccessKind.
+const (
+	RepositoryAccessKindApiKey RepositoryAccessKind = "api_key"
+	RepositoryAccessKindUser   RepositoryAccessKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the RepositoryAccessKind enum.
+func (e RepositoryAccessKind) Valid() bool {
+	switch e {
+	case RepositoryAccessKindApiKey:
+		return true
+	case RepositoryAccessKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListPermissionsParamsScope.
 const (
 	ListPermissionsParamsScopeOrganization ListPermissionsParamsScope = "organization"
@@ -191,6 +245,73 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
+// Repository One of an organization's Git repositories, with what the viewer may do there.
+type Repository struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who created it; absent once they are gone.
+	CreatedBy *openapi_types.UUID `json:"createdBy,omitempty"`
+
+	// DefaultBranch The branch the repository opens on.
+	DefaultBranch string             `json:"defaultBranch"`
+	Description   string             `json:"description"`
+	Id            openapi_types.UUID `json:"id"`
+	Name          string             `json:"name"`
+
+	// ObjectFormat The hash its history's objects are named by.
+	ObjectFormat RepositoryObjectFormat `json:"objectFormat"`
+	OrgId        openapi_types.UUID     `json:"orgId"`
+
+	// Slug The current slug; a request by an old one gets the repository with this one.
+	Slug string `json:"slug"`
+
+	// ViewerPermissions The permissions the viewer holds on the repository.
+	ViewerPermissions []string `json:"viewerPermissions"`
+
+	// Visibility Who reaches it, as its grants say. Private, its creator and the organization's Owners; internal, someone else too.
+	Visibility RepositoryVisibility `json:"visibility"`
+}
+
+// RepositoryObjectFormat The hash its history's objects are named by.
+type RepositoryObjectFormat string
+
+// RepositoryVisibility Who reaches it, as its grants say. Private, its creator and the organization's Owners; internal, someone else too.
+type RepositoryVisibility string
+
+// RepositoryAccess A principal's grants on a repository.
+type RepositoryAccess struct {
+	DisplayName string               `json:"displayName"`
+	Kind        RepositoryAccessKind `json:"kind"`
+	PrincipalId openapi_types.UUID   `json:"principalId"`
+
+	// Roles The roles it holds on the repository, each with the permissions it gives there.
+	Roles []Role `json:"roles"`
+}
+
+// RepositoryAccessKind defines model for RepositoryAccess.Kind.
+type RepositoryAccessKind string
+
+// RepositoryInput What makes a repository.
+type RepositoryInput struct {
+	// DefaultBranch main when left out.
+	DefaultBranch *string `json:"defaultBranch,omitempty"`
+	Description   *string `json:"description,omitempty"`
+
+	// Name The slug when left out.
+	Name *string `json:"name,omitempty"`
+
+	// Slug 1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit, not ending in .git, unique in the organization.
+	Slug string `json:"slug"`
+}
+
+// RepositorySettings What a maintainer changes; a field left out keeps its value.
+type RepositorySettings struct {
+	DefaultBranch *string `json:"defaultBranch,omitempty"`
+	Description   *string `json:"description,omitempty"`
+	Name          *string `json:"name,omitempty"`
+	Slug          *string `json:"slug,omitempty"`
+}
+
 // Role A role granted at the organization, built in or its own.
 type Role struct {
 	BuiltIn     bool               `json:"builtIn"`
@@ -272,6 +393,12 @@ type KeyID = openapi_types.UUID
 // Org defines model for org.
 type Org = string
 
+// PrincipalID defines model for principal.
+type PrincipalID = openapi_types.UUID
+
+// Repo defines model for repo.
+type Repo = string
+
 // RoleID defines model for role.
 type RoleID = openapi_types.UUID
 
@@ -314,6 +441,11 @@ type GrantRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
 }
 
+// GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
+type GrantRepositoryRoleJSONBody struct {
+	RoleId openapi_types.UUID `json:"roleId"`
+}
+
 // ListPermissionsParams defines parameters for ListPermissions.
 type ListPermissionsParams struct {
 	Scope ListPermissionsParamsScope `form:"scope" json:"scope"`
@@ -353,6 +485,15 @@ type ApproveJoinRequestJSONRequestBody ApproveJoinRequestJSONBody
 
 // GrantRoleJSONRequestBody defines body for GrantRole for application/json ContentType.
 type GrantRoleJSONRequestBody GrantRoleJSONBody
+
+// CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
+type CreateRepositoryJSONRequestBody = RepositoryInput
+
+// UpdateRepositoryJSONRequestBody defines body for UpdateRepository for application/json ContentType.
+type UpdateRepositoryJSONRequestBody = RepositorySettings
+
+// GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
+type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
 
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = RoleInput
@@ -446,6 +587,30 @@ type ServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(w http.ResponseWriter, r *http.Request, org Org, userID UserID, roleID RoleID)
+	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// (GET /orgs/{org}/repos)
+	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateRepository Creates a repository in the organization, empty and Private, with the viewer its Maintainer; takes repos.create.
+	// (POST /orgs/{org}/repos)
+	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
+	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+	// (GET /orgs/{org}/repos/{repo})
+	GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// UpdateRepository Changes a repository's slug, name, description or default branch; takes repo.manage. A new slug keeps the old one as a redirect.
+	// (PATCH /orgs/{org}/repos/{repo})
+	UpdateRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+	// (GET /orgs/{org}/repos/{repo}/access)
+	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
+	GrantRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID)
+	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
+	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
+	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
+	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/roles)
+	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(w http.ResponseWriter, r *http.Request, org Org)
@@ -1235,6 +1400,295 @@ func (siw *ServerInterfaceWrapper) RevokeRole(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositories operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositories(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositories(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepository operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepository(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRepository operation middleware
+func (siw *ServerInterfaceWrapper) GetRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRepository(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateRepository operation middleware
+func (siw *ServerInterfaceWrapper) UpdateRepository(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateRepository(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryAccess operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryAccess(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantRepositoryRole operation middleware
+func (siw *ServerInterfaceWrapper) GrantRepositoryRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantRepositoryRole(w, r, org, repo, principalID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeRepositoryRole operation middleware
+func (siw *ServerInterfaceWrapper) RevokeRepositoryRole(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "role" -------------
+	var roleID RoleID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "role", r.PathValue("role"), &roleID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeRepositoryRole(w, r, org, repo, principalID, roleID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryRoles(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoles operation middleware
 func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
 
@@ -1592,6 +2046,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests", wrapper.RequestToJoin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/approve", wrapper.ApproveJoinRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/decline", wrapper.DeclineJoinRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.ListRepositories)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.CreateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}", wrapper.GetRepository)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}", wrapper.UpdateRepository)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/roles", wrapper.ListRepositoryRoles)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access", wrapper.ListRepositoryAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles", wrapper.GrantRepositoryRole)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 
 	return m
 }
@@ -3899,6 +4361,718 @@ func (response RevokeRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeR
 	return err
 }
 
+type ListRepositoriesRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListRepositoriesResponseObject interface {
+	VisitListRepositoriesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositories200JSONResponse struct {
+	Repositories []Repository `json:"repositories"`
+}
+
+func (response ListRepositories200JSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositories401ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositories404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositories404ApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoriesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoriesdefaultApplicationProblemPlusJSONResponse) VisitListRepositoriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositoryRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateRepositoryJSONRequestBody
+}
+
+type CreateRepositoryResponseObject interface {
+	VisitCreateRepositoryResponse(w http.ResponseWriter) error
+}
+
+type CreateRepository201JSONResponse Repository
+
+func (response CreateRepository201JSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepository400ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository401ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository403ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository404ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepository409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepository409ApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateRepositorydefaultApplicationProblemPlusJSONResponse) VisitCreateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositoryRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type GetRepositoryResponseObject interface {
+	VisitGetRepositoryResponse(w http.ResponseWriter) error
+}
+
+type GetRepository200JSONResponse Repository
+
+func (response GetRepository200JSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepository401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRepository401ApplicationProblemPlusJSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRepository404ApplicationProblemPlusJSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRepositorydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRepositorydefaultApplicationProblemPlusJSONResponse) VisitGetRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositoryRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *UpdateRepositoryJSONRequestBody
+}
+
+type UpdateRepositoryResponseObject interface {
+	VisitUpdateRepositoryResponse(w http.ResponseWriter) error
+}
+
+type UpdateRepository200JSONResponse Repository
+
+func (response UpdateRepository200JSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateRepository400ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository401ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository403ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository404ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepository409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateRepository409ApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateRepositorydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateRepositorydefaultApplicationProblemPlusJSONResponse) VisitUpdateRepositoryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryAccessRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListRepositoryAccessResponseObject interface {
+	VisitListRepositoryAccessResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryAccess200JSONResponse struct {
+	Access []RepositoryAccess `json:"access"`
+}
+
+func (response ListRepositoryAccess200JSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryAccess401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryAccess401ApplicationProblemPlusJSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryAccess404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryAccess404ApplicationProblemPlusJSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryAccessdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoryAccessdefaultApplicationProblemPlusJSONResponse) VisitListRepositoryAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRoleRequestObject struct {
+	Org         Org         `json:"org"`
+	Repo        Repo        `json:"repo"`
+	PrincipalID PrincipalID `json:"principal"`
+	Body        *GrantRepositoryRoleJSONRequestBody
+}
+
+type GrantRepositoryRoleResponseObject interface {
+	VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error
+}
+
+type GrantRepositoryRole204Response struct {
+}
+
+func (response GrantRepositoryRole204Response) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantRepositoryRole400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GrantRepositoryRole400ApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRole401ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantRepositoryRole401ApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRole403ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantRepositoryRole403ApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRole404ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantRepositoryRole404ApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRole409ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantRepositoryRole409ApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantRepositoryRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GrantRepositoryRoledefaultApplicationProblemPlusJSONResponse) VisitGrantRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRepositoryRoleRequestObject struct {
+	Org         Org         `json:"org"`
+	Repo        Repo        `json:"repo"`
+	PrincipalID PrincipalID `json:"principal"`
+	RoleID      RoleID      `json:"role"`
+}
+
+type RevokeRepositoryRoleResponseObject interface {
+	VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error
+}
+
+type RevokeRepositoryRole204Response struct {
+}
+
+func (response RevokeRepositoryRole204Response) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeRepositoryRole400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeRepositoryRole400ApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRepositoryRole401ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeRepositoryRole401ApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRepositoryRole403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeRepositoryRole403ApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRepositoryRole404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeRepositoryRole404ApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeRepositoryRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRolesRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListRepositoryRolesResponseObject interface {
+	VisitListRepositoryRolesResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryRoles200JSONResponse struct {
+	Roles []Role `json:"roles"`
+}
+
+func (response ListRepositoryRoles200JSONResponse) VisitListRepositoryRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRoles401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryRoles401ApplicationProblemPlusJSONResponse) VisitListRepositoryRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRoles404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryRoles404ApplicationProblemPlusJSONResponse) VisitListRepositoryRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryRolesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoryRolesdefaultApplicationProblemPlusJSONResponse) VisitListRepositoryRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRolesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -4539,6 +5713,30 @@ type StrictServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(ctx context.Context, request RevokeRoleRequestObject) (RevokeRoleResponseObject, error)
+	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
+	// (GET /orgs/{org}/repos)
+	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
+	// CreateRepository Creates a repository in the organization, empty and Private, with the viewer its Maintainer; takes repos.create.
+	// (POST /orgs/{org}/repos)
+	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
+	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+	// (GET /orgs/{org}/repos/{repo})
+	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
+	// UpdateRepository Changes a repository's slug, name, description or default branch; takes repo.manage. A new slug keeps the old one as a redirect.
+	// (PATCH /orgs/{org}/repos/{repo})
+	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
+	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+	// (GET /orgs/{org}/repos/{repo}/access)
+	ListRepositoryAccess(ctx context.Context, request ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error)
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
+	GrantRepositoryRole(ctx context.Context, request GrantRepositoryRoleRequestObject) (GrantRepositoryRoleResponseObject, error)
+	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
+	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
+	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
+	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/roles)
+	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
@@ -5385,6 +6583,244 @@ func (sh *strictHandler) RevokeRole(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeRoleResponseObject); ok {
 		if err := validResponse.VisitRevokeRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositories operation middleware
+func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListRepositoriesRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositories(ctx, request.(ListRepositoriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositories")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoriesResponseObject); ok {
+		if err := validResponse.VisitListRepositoriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepository operation middleware
+func (sh *strictHandler) CreateRepository(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateRepositoryRequestObject
+
+	request.Org = org
+
+	var body CreateRepositoryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepository(ctx, request.(CreateRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositoryResponseObject); ok {
+		if err := validResponse.VisitCreateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRepository operation middleware
+func (sh *strictHandler) GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request GetRepositoryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRepository(ctx, request.(GetRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRepositoryResponseObject); ok {
+		if err := validResponse.VisitGetRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateRepository operation middleware
+func (sh *strictHandler) UpdateRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request UpdateRepositoryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body UpdateRepositoryJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateRepository(ctx, request.(UpdateRepositoryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateRepository")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateRepositoryResponseObject); ok {
+		if err := validResponse.VisitUpdateRepositoryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryAccess operation middleware
+func (sh *strictHandler) ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListRepositoryAccessRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryAccess(ctx, request.(ListRepositoryAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryAccessResponseObject); ok {
+		if err := validResponse.VisitListRepositoryAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantRepositoryRole operation middleware
+func (sh *strictHandler) GrantRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID) {
+	var request GrantRepositoryRoleRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.PrincipalID = principalID
+
+	var body GrantRepositoryRoleJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantRepositoryRole(ctx, request.(GrantRepositoryRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantRepositoryRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantRepositoryRoleResponseObject); ok {
+		if err := validResponse.VisitGrantRepositoryRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeRepositoryRole operation middleware
+func (sh *strictHandler) RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID) {
+	var request RevokeRepositoryRoleRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.PrincipalID = principalID
+	request.RoleID = roleID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeRepositoryRole(ctx, request.(RevokeRepositoryRoleRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeRepositoryRole")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeRepositoryRoleResponseObject); ok {
+		if err := validResponse.VisitRevokeRepositoryRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryRoles operation middleware
+func (sh *strictHandler) ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListRepositoryRolesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryRoles(ctx, request.(ListRepositoryRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryRolesResponseObject); ok {
+		if err := validResponse.VisitListRepositoryRolesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

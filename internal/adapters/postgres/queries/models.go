@@ -108,6 +108,18 @@ type Principal struct {
 	CreatedBy   *uuid.UUID
 }
 
+type Repository struct {
+	ID            uuid.UUID
+	OrgID         uuid.UUID
+	Slug          string
+	Name          string
+	Description   string
+	DefaultBranch string
+	ObjectFormat  string
+	CreatedBy     *uuid.UUID
+	CreatedAt     time.Time
+}
+
 type Role struct {
 	ID          uuid.UUID
 	Scope       string
