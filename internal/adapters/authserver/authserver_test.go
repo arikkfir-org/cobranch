@@ -253,6 +253,8 @@ func TestReturnURL(t *testing.T) {
 	tests := []struct {
 		name, to, want string
 		noBackOffice   bool
+		// at is the Back-office's URL, when not backOffice.
+		at string
 	}{
 		{name: "a Console path", to: "/orgs/acme", want: console + "/orgs/acme"},
 		{name: "the Console's home", to: "/", want: console + "/"},
@@ -266,10 +268,16 @@ func TestReturnURL(t *testing.T) {
 		{name: "a host that starts like the Back-office's", to: "https://admin.example.com.evil.example/back-office", want: console + "/"},
 		{name: "another scheme", to: "http://admin.example.com/back-office", want: console + "/"},
 		{name: "no Back-office", to: backOffice + "/users", noBackOffice: true, want: console + "/"},
+		{name: "the root of a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com", want: "https://admin.example.com/"},
+		{name: "a page of a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com/users", want: "https://admin.example.com/users"},
+		{name: "a path that leaves a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com//evil.example.com", want: console + "/"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := &handler{console: consoleURL, backOffice: backOfficeURL}
+			if tt.at != "" {
+				h.backOffice, _ = url.Parse(tt.at)
+			}
 			if tt.noBackOffice {
 				h.backOffice = nil
 			}

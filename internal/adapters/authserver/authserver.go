@@ -4,6 +4,7 @@
 package authserver
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -151,15 +152,18 @@ func (h *handler) finish(w http.ResponseWriter, r *http.Request, done auth.Compl
 // Console's home.
 func (h *handler) returnURL(to string) *url.URL {
 	u, err := url.Parse(to)
-	switch {
-	case err != nil || !u.IsAbs():
+	if err != nil || !u.IsAbs() {
 		if isLocalURL(to) {
 			return h.console.JoinPath(to)
 		}
-	case h.backOffice != nil && strings.EqualFold(u.Scheme, h.backOffice.Scheme) &&
-		strings.EqualFold(u.Host, h.backOffice.Host) && isLocalURL(u.Path):
+		return h.console.JoinPath("/")
+	}
+	// A Back-office at the root of its host is named without a path: its root is "/".
+	path := cmp.Or(u.Path, "/")
+	if h.backOffice != nil && strings.EqualFold(u.Scheme, h.backOffice.Scheme) &&
+		strings.EqualFold(u.Host, h.backOffice.Host) && isLocalURL(path) {
 		back := *h.backOffice
-		back.Path, back.RawPath, back.RawQuery, back.Fragment = u.Path, "", "", ""
+		back.Path, back.RawPath, back.RawQuery, back.Fragment = path, "", "", ""
 		return &back
 	}
 	return h.console.JoinPath("/")
