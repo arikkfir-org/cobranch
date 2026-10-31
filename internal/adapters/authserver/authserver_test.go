@@ -247,6 +247,36 @@ func TestSignInSeeded(t *testing.T) {
 	}
 }
 
+func TestReturnURL(t *testing.T) {
+	consoleURL, _ := url.Parse(console)
+	backOfficeURL, _ := url.Parse(backOffice)
+	tests := []struct {
+		name, to, want string
+		noBackOffice   bool
+	}{
+		{name: "a Console path", to: "/orgs/acme", want: console + "/orgs/acme"},
+		{name: "the Console's home", to: "/", want: console + "/"},
+		{name: "a Back-office page", to: backOffice + "/orgs?q=acme#new", want: backOffice + "/orgs?q=acme#new"},
+		{name: "the Back-office's host in another case", to: "https://ADMIN.example.com/back-office/users", want: backOffice + "/users"},
+		{name: "a user in the URL", to: "https://evil@admin.example.com/back-office", want: backOffice},
+		{name: "another site", to: "https://evil.example.com/back-office", want: console + "/"},
+		{name: "a host that starts like the Back-office's", to: "https://admin.example.com.evil.example/back-office", want: console + "/"},
+		{name: "another scheme", to: "http://admin.example.com/back-office", want: console + "/"},
+		{name: "no Back-office", to: backOffice + "/users", noBackOffice: true, want: console + "/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &handler{console: consoleURL, backOffice: backOfficeURL}
+			if tt.noBackOffice {
+				h.backOffice = nil
+			}
+			if got := h.returnURL(tt.to).String(); got != tt.want {
+				t.Errorf("returnURL(%q) = %s, want %s", tt.to, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestSignOut(t *testing.T) {
 	tests := []struct {
 		name       string

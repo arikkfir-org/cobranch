@@ -141,11 +141,24 @@ func (h *handler) finish(w http.ResponseWriter, r *http.Request, done auth.Compl
 		Name: h.cookie.Name, Value: done.SessionToken, Domain: h.cookie.Domain, Path: "/",
 		MaxAge: int(auth.SessionMax.Seconds()), HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
 	})
-	to := done.ReturnPath
-	if strings.HasPrefix(to, "/") {
-		to = h.console.JoinPath(to).String()
+	http.Redirect(w, r, h.returnURL(done.ReturnPath).String(), http.StatusFound)
+}
+
+// returnURL is where a finished sign-in sends the browser: a Console path joined to the Console's URL, or the path,
+// query and fragment of an absolute URL on the Back-office's host, on the Back-office's URL. The service keeps no other
+// return (auth.Service.SafeReturn), but the scheme and host come from the configuration all the same, so no stored
+// value can send the browser to another site: anything else returns to the Console's home.
+func (h *handler) returnURL(to string) *url.URL {
+	u, err := url.Parse(to)
+	if err != nil || !u.IsAbs() {
+		return h.console.JoinPath(to)
 	}
-	http.Redirect(w, r, to, http.StatusFound)
+	if h.backOffice == nil || !strings.EqualFold(u.Scheme, h.backOffice.Scheme) || !strings.EqualFold(u.Host, h.backOffice.Host) {
+		return h.console.JoinPath("/")
+	}
+	back := *h.backOffice
+	back.Path, back.RawPath, back.RawQuery, back.Fragment = u.Path, u.RawPath, u.RawQuery, u.Fragment
+	return &back
 }
 
 // signOut revokes the cookie's session and clears the cookie. Only the Console's and the Back-office's pages may ask:
