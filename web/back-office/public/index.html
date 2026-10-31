@@ -443,7 +443,8 @@
         const tr = h("tr", {}, h("td", {}, h("strong", {}, p.name), p.shadowed ? h("span", { class: "chip", title: "The chart's values took its ID: theirs signs in." }, "shadowed") : null),
           h("td", {}, h("code", {}, p.id)), h("td", {}, p.preset ? "Google" : p.issuer), h("td", {}, h("code", {}, p.clientId)),
           h("td", {}, h("span", { class: "chip" }, p.source === "values" ? "chart's values" : "Back-office")),
-          h("td", { class: "actions" }, p.source === "values" ? h("span", { class: "muted" }, "Change it in the values") : [
+          h("td", { class: "actions" }, p.source === "values" ? h("span", { class: "muted" }, "Change it in the values")
+            : p.shadowed ? h("span", { class: "muted" }, "The values' signs in until they drop its ID") : [
             h("button", { class: "button small", type: "button", onclick: () => open(tr, p, false) }, "Change"), " ",
             h("button", { class: "button small", type: "button", onclick: () => open(tr, p, true) }, "Remove")]));
         return tr;

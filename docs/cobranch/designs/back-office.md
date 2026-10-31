@@ -181,7 +181,7 @@ Changing or removing a provider takes effect on the next sign-in. Sessions alrea
 - **Beside the values', never over them.** **Agreed:** the values' providers stay as the sign-in design agreed, listed
   read-only in the Back-office; the Back-office adds more, kept in PostgreSQL. A provider's ID is unique across both:
   the Back-office refuses one the values use, and a values' provider added later with a Back-office provider's ID wins,
-  the other shown as shadowed.
+  the other shown as shadowed, read-only until the values drop its ID.
 - **A client secret is written once,** encrypted with the chart's secrets key (AES-256-GCM), and never read back: the
   Back-office shows only that one is set, as the architecture's [secrets](architecture.md#settings-secrets-and-models)
   are kept.
