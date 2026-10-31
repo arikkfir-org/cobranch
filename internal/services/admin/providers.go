@@ -55,7 +55,7 @@ type Provider struct {
 	Source string
 	// Shadowed is a Back-office provider whose ID the values took since: theirs signs in.
 	Shadowed bool
-	// Version counts a Back-office provider's changes; the values' have none.
+	// Version is new at each change of a Back-office provider, and never repeats under its ID; the values' have none.
 	Version   int64
 	CreatedAt time.Time
 	UpdatedAt time.Time

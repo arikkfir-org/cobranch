@@ -193,8 +193,9 @@ Changing or removing a provider takes effect on the next sign-in. Sessions alrea
   Connect discovery. A change or a removal names the version the administrator read (`If-Match`), and one someone made
   meanwhile is refused (`412`), as the settings' are.
 - **A change applies at the next sign-in.** The Auth server reads the database's providers at each sign-in and keeps
-  each one's discovery while its version holds. Removing a provider stops its sign-ins; its users keep their accounts,
-  and sign in again once a provider with the same issuer is back.
+  each one's discovery while its version holds. Versions come from one sequence and never repeat, so a provider removed
+  and added again under its ID is built anew. Removing a provider stops its sign-ins; its users keep their accounts, and
+  sign in again once a provider with the same issuer is back.
 
 ## The Back-office
 

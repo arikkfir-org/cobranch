@@ -40,7 +40,8 @@ type StoredProvider struct {
 	Preset       string
 	ClientID     string
 	SealedSecret []byte
-	// Version counts the changes; a change names the version it read, so one made meanwhile refuses it.
+	// Version is new at each change, from one sequence for every provider, so it never repeats under an ID, even one
+	// removed and added again: a change names the version it read, so one made meanwhile refuses it.
 	Version   int64
 	CreatedAt time.Time
 	UpdatedAt time.Time

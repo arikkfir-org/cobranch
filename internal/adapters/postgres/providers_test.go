@@ -26,25 +26,32 @@ func TestIdentityProviders(t *testing.T) {
 		{name: "an issuer", write: func() (auth.StoredProvider, error) { return f.s.CreateIdentityProvider(ctx, f.olivia, okta, now) },
 			want: []string{"okta https://acme.okta.com  1"}},
 		{name: "a preset", write: func() (auth.StoredProvider, error) { return f.s.CreateIdentityProvider(ctx, f.olivia, gsuite, now) },
-			want: []string{"gsuite  google 1", "okta https://acme.okta.com  1"}},
+			want: []string{"gsuite  google 2", "okta https://acme.okta.com  1"}},
+		// A refused insert takes a version too: sequences don't roll back.
 		{name: "a taken ID", write: func() (auth.StoredProvider, error) { return f.s.CreateIdentityProvider(ctx, f.olivia, okta, now) },
-			wantErr: admin.ErrProviderTaken, want: []string{"gsuite  google 1", "okta https://acme.okta.com  1"}},
+			wantErr: admin.ErrProviderTaken, want: []string{"gsuite  google 2", "okta https://acme.okta.com  1"}},
 		{name: "a change", write: func() (auth.StoredProvider, error) {
 			changed := okta
 			changed.Issuer, changed.Preset, changed.Version = "", "google", 1
 			return f.s.ChangeIdentityProvider(ctx, f.olivia, changed, now)
-		}, want: []string{"gsuite  google 1", "okta  google 2"}},
+		}, want: []string{"gsuite  google 2", "okta  google 4"}},
 		{name: "a change from an old version", write: func() (auth.StoredProvider, error) {
 			stale := okta
 			stale.Version = 1
 			return f.s.ChangeIdentityProvider(ctx, f.olivia, stale, now)
-		}, wantErr: admin.ErrStale, want: []string{"gsuite  google 1", "okta  google 2"}},
+		}, wantErr: admin.ErrStale, want: []string{"gsuite  google 2", "okta  google 4"}},
 		{name: "a removal from an old version", write: func() (auth.StoredProvider, error) {
 			return auth.StoredProvider{}, f.s.DeleteIdentityProvider(ctx, f.olivia, "okta", 1)
-		}, wantErr: admin.ErrStale, want: []string{"gsuite  google 1", "okta  google 2"}},
+		}, wantErr: admin.ErrStale, want: []string{"gsuite  google 2", "okta  google 4"}},
 		{name: "a removal", write: func() (auth.StoredProvider, error) {
-			return auth.StoredProvider{}, f.s.DeleteIdentityProvider(ctx, f.olivia, "okta", 2)
-		}, want: []string{"gsuite  google 1"}},
+			return auth.StoredProvider{}, f.s.DeleteIdentityProvider(ctx, f.olivia, "okta", 4)
+		}, want: []string{"gsuite  google 2"}},
+		{name: "its ID added again, at a version it never had",
+			write: func() (auth.StoredProvider, error) { return f.s.CreateIdentityProvider(ctx, f.olivia, okta, now) },
+			want:  []string{"gsuite  google 2", "okta https://acme.okta.com  5"}},
+		{name: "its removal again", write: func() (auth.StoredProvider, error) {
+			return auth.StoredProvider{}, f.s.DeleteIdentityProvider(ctx, f.olivia, "okta", 5)
+		}, want: []string{"gsuite  google 2"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,7 +102,7 @@ func checkProvidersAudited(t *testing.T, f *orgFixture) {
 			}
 		}
 	}
-	if !slices.Equal(actions, []string{"insert", "insert", "update", "delete"}) {
-		t.Errorf("audit log actions = %q, want two inserts, an update and a delete", actions)
+	if !slices.Equal(actions, []string{"insert", "insert", "update", "delete", "insert", "delete"}) {
+		t.Errorf("audit log actions = %q, want two inserts, an update, a delete, an insert and a delete", actions)
 	}
 }
