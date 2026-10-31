@@ -188,6 +188,80 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /settings:
+    get:
+      operationId: getSettings
+      summary: >-
+        The installation's settings, those the chart's values lock among them; takes installation.manage. A setting
+        neither the values nor an administrator set shows its default.
+      parameters:
+        - name: If-None-Match
+          in: header
+          description: The settings' ETag the caller holds; while it is still theirs, the answer is 304.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The settings. A change names their ETag in If-Match.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "304":
+          description: The settings are still those If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: changeSettings
+      summary: >-
+        Changes the settings the body names (a JSON merge patch, RFC 7396), unless they changed since the caller read
+        them; takes installation.manage. A setting the chart's values lock refuses any change.
+      parameters:
+        - name: If-Match
+          in: header
+          description: The ETag of the settings the change was made from. Without it, the answer is 428.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/SettingsChange"
+      responses:
+        "200":
+          description: The settings, changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     q:
@@ -214,6 +288,11 @@ components:
   headers:
     Link:
       description: The next page, as rel="next" (RFC 8288), relative to the request's own URL.
+      schema:
+        type: string
+    ETag:
+      description: A strong entity tag of the resource as it is now.
+      required: true
       schema:
         type: string
   responses:
@@ -320,6 +399,56 @@ components:
         lastSignInAt:
           type: string
           format: date-time
+    Settings:
+      type: object
+      description: >-
+        The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else
+        its default (anyone signs up, and creates organizations).
+      required: [signUp, signUpDomains, selfServe, locked, updatedAt]
+      properties:
+        signUp:
+          $ref: "#/components/schemas/SignUpPolicy"
+        signUpDomains:
+          type: array
+          description: The email domains the domains policy admits, lowercase.
+          items:
+            type: string
+        selfServe:
+          type: boolean
+          description: Whether every new user may create organizations (Installation user).
+        locked:
+          type: array
+          description: The settings the chart's values set, which only they change.
+          items:
+            type: string
+            enum: [signUp, selfServe]
+        updatedAt:
+          type: string
+          format: date-time
+          description: When an administrator last changed them, or when the installation began.
+        updatedBy:
+          type: string
+          format: uuid
+          description: Who last changed them; absent when nobody has, or they're gone.
+    SettingsChange:
+      type: object
+      description: The settings to change; those it leaves out stay as they are.
+      properties:
+        signUp:
+          $ref: "#/components/schemas/SignUpPolicy"
+        signUpDomains:
+          type: array
+          description: The domains the domains policy admits, such as example.com; at least one under that policy.
+          items:
+            type: string
+        selfServe:
+          type: boolean
+    SignUpPolicy:
+      type: string
+      description: >-
+        Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first
+        administrator's email always may.
+      enum: [anyone, domains, invited]
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

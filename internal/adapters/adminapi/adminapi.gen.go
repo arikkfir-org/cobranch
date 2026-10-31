@@ -18,6 +18,45 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for SettingsLocked.
+const (
+	SelfServe SettingsLocked = "selfServe"
+	SignUp    SettingsLocked = "signUp"
+)
+
+// Valid indicates whether the value is a known member of the SettingsLocked enum.
+func (e SettingsLocked) Valid() bool {
+	switch e {
+	case SelfServe:
+		return true
+	case SignUp:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SignUpPolicy.
+const (
+	Anyone  SignUpPolicy = "anyone"
+	Domains SignUpPolicy = "domains"
+	Invited SignUpPolicy = "invited"
+)
+
+// Valid indicates whether the value is a known member of the SignUpPolicy enum.
+func (e SignUpPolicy) Valid() bool {
+	switch e {
+	case Anyone:
+		return true
+	case Domains:
+		return true
+	case Invited:
+		return true
+	default:
+		return false
+	}
+}
+
 // Email defines model for Email.
 type Email struct {
 	Email    string `json:"email"`
@@ -75,6 +114,44 @@ type Problem struct {
 	// Type A URI that names the problem's type; "about:blank" when the status says it all.
 	Type string `json:"type"`
 }
+
+// Settings The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else its default (anyone signs up, and creates organizations).
+type Settings struct {
+	// Locked The settings the chart's values set, which only they change.
+	Locked []SettingsLocked `json:"locked"`
+
+	// SelfServe Whether every new user may create organizations (Installation user).
+	SelfServe bool `json:"selfServe"`
+
+	// SignUp Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first administrator's email always may.
+	SignUp SignUpPolicy `json:"signUp"`
+
+	// SignUpDomains The email domains the domains policy admits, lowercase.
+	SignUpDomains []string `json:"signUpDomains"`
+
+	// UpdatedAt When an administrator last changed them, or when the installation began.
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// UpdatedBy Who last changed them; absent when nobody has, or they're gone.
+	UpdatedBy *openapi_types.UUID `json:"updatedBy,omitempty"`
+}
+
+// SettingsLocked defines model for Settings.Locked.
+type SettingsLocked string
+
+// SettingsChange The settings to change; those it leaves out stay as they are.
+type SettingsChange struct {
+	SelfServe *bool `json:"selfServe,omitempty"`
+
+	// SignUp Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first administrator's email always may.
+	SignUp *SignUpPolicy `json:"signUp,omitempty"`
+
+	// SignUpDomains The domains the domains policy admits, such as example.com; at least one under that policy.
+	SignUpDomains *[]string `json:"signUpDomains,omitempty"`
+}
+
+// SignUpPolicy Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first administrator's email always may.
+type SignUpPolicy string
 
 // User A user as an administrator sees them.
 type User struct {
@@ -134,6 +211,18 @@ type EnterOrganizationJSONBody struct {
 	Reason string `json:"reason"`
 }
 
+// GetSettingsParams defines parameters for GetSettings.
+type GetSettingsParams struct {
+	// IfNoneMatch The settings' ETag the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// ChangeSettingsParams defines parameters for ChangeSettings.
+type ChangeSettingsParams struct {
+	// IfMatch The ETag of the settings the change was made from. Without it, the answer is 428.
+	IfMatch *string `json:"If-Match,omitempty"`
+}
+
 // ListUsersParams defines parameters for ListUsers.
 type ListUsersParams struct {
 	// Q Keeps the items that hold it, in any case, in a slug or name, or a user's name or email.
@@ -152,6 +241,9 @@ type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 // EnterOrganizationJSONRequestBody defines body for EnterOrganization for application/json ContentType.
 type EnterOrganizationJSONRequestBody EnterOrganizationJSONBody
 
+// ChangeSettingsApplicationMergePatchPlusJSONRequestBody defines body for ChangeSettings for application/merge-patch+json ContentType.
+type ChangeSettingsApplicationMergePatchPlusJSONRequestBody = SettingsChange
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetMe Who the request's credential signs in, with what they hold at the installation.
@@ -166,6 +258,12 @@ type ServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(w http.ResponseWriter, r *http.Request, org string)
+	// GetSettings The installation's settings, those the chart's values lock among them; takes installation.manage. A setting neither the values nor an administrator set shows its default.
+	// (GET /settings)
+	GetSettings(w http.ResponseWriter, r *http.Request, params GetSettingsParams)
+	// ChangeSettings Changes the settings the body names (a JSON merge patch, RFC 7396), unless they changed since the caller read them; takes installation.manage. A setting the chart's values lock refuses any change.
+	// (PATCH /settings)
+	ChangeSettings(w http.ResponseWriter, r *http.Request, params ChangeSettingsParams)
 	// ListUsers The installation's users, newest first, a page at a time; takes installation.users.manage.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request, params ListUsersParams)
@@ -287,6 +385,88 @@ func (siw *ServerInterfaceWrapper) EnterOrganization(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EnterOrganization(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSettings operation middleware
+func (siw *ServerInterfaceWrapper) GetSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSettings(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeSettings operation middleware
+func (siw *ServerInterfaceWrapper) ChangeSettings(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeSettingsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeSettings(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -495,6 +675,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/entries", wrapper.EnterOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.ChangeSettings)
 
 	return m
 }
@@ -845,6 +1027,231 @@ func (response EnterOrganizationdefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type GetSettingsRequestObject struct {
+	Params GetSettingsParams
+}
+
+type GetSettingsResponseObject interface {
+	VisitGetSettingsResponse(w http.ResponseWriter) error
+}
+
+type GetSettings200ResponseHeaders struct {
+	ETag string
+}
+
+type GetSettings200JSONResponse struct {
+	Body    Settings
+	Headers GetSettings200ResponseHeaders
+}
+
+func (response GetSettings200JSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSettings304ResponseHeaders struct {
+	ETag string
+}
+
+type GetSettings304Response struct {
+	Headers GetSettings304ResponseHeaders
+}
+
+func (response GetSettings304Response) VisitGetSettingsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetSettings401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetSettings401ApplicationProblemPlusJSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSettings403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetSettings403ApplicationProblemPlusJSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSettingsdefaultApplicationProblemPlusJSONResponse) VisitGetSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettingsRequestObject struct {
+	Params ChangeSettingsParams
+	Body   *ChangeSettingsApplicationMergePatchPlusJSONRequestBody
+}
+
+type ChangeSettingsResponseObject interface {
+	VisitChangeSettingsResponse(w http.ResponseWriter) error
+}
+
+type ChangeSettings200ResponseHeaders struct {
+	ETag string
+}
+
+type ChangeSettings200JSONResponse struct {
+	Body    Settings
+	Headers ChangeSettings200ResponseHeaders
+}
+
+func (response ChangeSettings200JSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeSettings400ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings401ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeSettings401ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeSettings403ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings409ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeSettings409ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings412ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeSettings412ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettings428ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeSettings428ApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeSettingsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChangeSettingsdefaultApplicationProblemPlusJSONResponse) VisitChangeSettingsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListUsersRequestObject struct {
 	Params ListUsersParams
 }
@@ -995,6 +1402,12 @@ type StrictServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(ctx context.Context, request EnterOrganizationRequestObject) (EnterOrganizationResponseObject, error)
+	// GetSettings The installation's settings, those the chart's values lock among them; takes installation.manage. A setting neither the values nor an administrator set shows its default.
+	// (GET /settings)
+	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
+	// ChangeSettings Changes the settings the body names (a JSON merge patch, RFC 7396), unless they changed since the caller read them; takes installation.manage. A setting the chart's values lock refuses any change.
+	// (PATCH /settings)
+	ChangeSettings(ctx context.Context, request ChangeSettingsRequestObject) (ChangeSettingsResponseObject, error)
 	// ListUsers The installation's users, newest first, a page at a time; takes installation.users.manage.
 	// (GET /users)
 	ListUsers(ctx context.Context, request ListUsersRequestObject) (ListUsersResponseObject, error)
@@ -1149,6 +1562,65 @@ func (sh *strictHandler) EnterOrganization(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EnterOrganizationResponseObject); ok {
 		if err := validResponse.VisitEnterOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSettings operation middleware
+func (sh *strictHandler) GetSettings(w http.ResponseWriter, r *http.Request, params GetSettingsParams) {
+	var request GetSettingsRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSettings(ctx, request.(GetSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSettingsResponseObject); ok {
+		if err := validResponse.VisitGetSettingsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeSettings operation middleware
+func (sh *strictHandler) ChangeSettings(w http.ResponseWriter, r *http.Request, params ChangeSettingsParams) {
+	var request ChangeSettingsRequestObject
+
+	request.Params = params
+
+	var body ChangeSettingsApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeSettings(ctx, request.(ChangeSettingsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeSettings")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeSettingsResponseObject); ok {
+		if err := validResponse.VisitChangeSettingsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

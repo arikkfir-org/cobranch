@@ -84,6 +84,19 @@ type Server struct {
 	// the pod's grace period does.
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
 	URLs
+	// SignUpSettings are the Admin server's, which shows those the values set as locked.
+	SignUpSettings
+}
+
+// SignUpSettings are the sign-up settings the chart's values give. Each they leave unset is the Back-office's, kept in
+// the database.
+type SignUpSettings struct {
+	// SignUp is the sign-up policy: anyone, domains or invited; empty, the Back-office's.
+	SignUp string `envconfig:"AUTH_SIGN_UP"`
+	// SignUpDomains are the email domains the domains policy admits.
+	SignUpDomains []string `envconfig:"AUTH_SIGN_UP_DOMAINS"`
+	// SelfServe grants every new user Installation user, which creates organizations; unset, the Back-office's.
+	SelfServe *bool `envconfig:"ORGANIZATIONS_SELF_SERVE"`
 }
 
 // LoadServer reads a server's configuration from the environment.
@@ -92,6 +105,7 @@ func LoadServer() (Server, error) {
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return Server{}, fmt.Errorf("reading the server's configuration from the COBRANCH_ variables: %w", err)
 	}
+	lower(c.SignUpDomains)
 	return c, nil
 }
 
@@ -148,14 +162,9 @@ type AuthServer struct {
 	URLs
 	// Providers are the identity providers, each with its client secret from its own variable.
 	Providers Providers `envconfig:"AUTH_PROVIDERS"`
-	// SignUp is the sign-up policy: anyone, domains or invited.
-	SignUp string `envconfig:"AUTH_SIGN_UP" default:"anyone"`
-	// SignUpDomains are the email domains the domains policy admits.
-	SignUpDomains []string `envconfig:"AUTH_SIGN_UP_DOMAINS"`
+	SignUpSettings
 	// Admins are the first administrators' emails.
 	Admins []string `envconfig:"AUTH_ADMINS"`
-	// SelfServe grants every new user Installation user, which creates organizations.
-	SelfServe bool `envconfig:"ORGANIZATIONS_SELF_SERVE" default:"true"`
 	// Seed lets the demo data's users sign in without a provider: demo installations only.
 	Seed bool `envconfig:"SEED"`
 }

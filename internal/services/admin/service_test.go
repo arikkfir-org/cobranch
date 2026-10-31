@@ -34,7 +34,7 @@ func user(name, email string) auth.User {
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	s := orgstest.NewStore()
-	f := &fixture{store: s, service: admin.NewService(s, auth.NewAuthorizer(s))}
+	f := &fixture{store: s, service: admin.NewService(s, auth.NewAuthorizer(s), auth.Settings{})}
 	f.service.SetClock(func() time.Time { return now })
 	f.ada, f.uma, f.olivia, f.max = user("Ada Admin", "ada@example.com"), user("Uma User", "uma@example.com"),
 		user("Olivia", "olivia@example.com"), user("Max", "max@example.com")

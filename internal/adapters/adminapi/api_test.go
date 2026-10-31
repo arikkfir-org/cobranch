@@ -36,8 +36,14 @@ func viewerOf(name, email string) auth.Authenticated {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
+	return newFixtureWith(t, auth.Settings{})
+}
+
+// newFixtureWith is the fixture under the values' sign-up settings.
+func newFixtureWith(t *testing.T, values auth.Settings) *fixture {
+	t.Helper()
 	s := orgstest.NewStore()
-	service := admin.NewService(s, auth.NewAuthorizer(s))
+	service := admin.NewService(s, auth.NewAuthorizer(s), values)
 	service.SetClock(func() time.Time { return now })
 	f := &fixture{store: s, handler: NewHandler("v1", service)}
 	f.ada, f.olivia, f.max = viewerOf("Ada Admin", "ada@example.com"), viewerOf("Olivia", "olivia@example.com"), viewerOf("Max", "max@example.com")
@@ -57,9 +63,17 @@ func newFixture(t *testing.T) *fixture {
 
 // call serves one request to the API as viewer (nil: Anonymous) and returns the recorder.
 func (f *fixture) call(viewer *auth.Authenticated, method, path, body string) *httptest.ResponseRecorder {
+	return f.callWith(viewer, method, path, body, nil)
+}
+
+// callWith is call with the request's headers set to header's.
+func (f *fixture) callWith(viewer *auth.Authenticated, method, path, body string, header map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range header {
+		req.Header.Set(k, v)
 	}
 	if viewer != nil {
 		req = req.WithContext(auth.WithViewer(req.Context(), *viewer))

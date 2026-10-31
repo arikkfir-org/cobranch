@@ -95,11 +95,17 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing a server wrote
-	// The servers only read sessions: no provider, and settings that matter at sign-in alone.
+	// The servers only read sessions: no provider, and settings that matter at sign-in alone. The Admin server shows
+	// the sign-up settings the values lock.
+	values, err := signUpSettings(cfg.SignUpSettings)
+	if err != nil {
+		return err
+	}
 	sessions := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
 	orgStore := postgres.NewOrgStore(pool)
 	authorizer := auth.NewAuthorizer(orgStore)
-	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer), administration: admin.NewService(orgStore, authorizer)}
+	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
+		administration: admin.NewService(orgStore, authorizer, values)}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {

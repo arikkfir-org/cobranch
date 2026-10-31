@@ -33,6 +33,11 @@ type Store interface {
 	// auth.SourceEntry, and records the entry with its reason in the organization's trail; orgs.ErrNotFound for an
 	// organization that isn't there.
 	Enter(ctx context.Context, actor, orgID uuid.UUID, reason string, at time.Time) error
+	// InstallationSettings reads the settings the Back-office changes.
+	InstallationSettings(ctx context.Context) (auth.InstallationSettings, error)
+	// ChangeInstallationSettings writes settings at at, acting for actor, unless the stored version is no longer
+	// settings.Version: then ErrStale. It returns the settings as written, their version bumped.
+	ChangeInstallationSettings(ctx context.Context, actor uuid.UUID, settings auth.InstallationSettings, at time.Time) (auth.InstallationSettings, error)
 }
 
 // Service runs the installation's administration: every operation checks its viewer's permissions at the
@@ -40,12 +45,14 @@ type Store interface {
 type Service struct {
 	store Store
 	authz *auth.Authorizer
-	now   func() time.Time
+	// values are the chart's sign-up settings, which lock those they set.
+	values auth.Settings
+	now    func() time.Time
 }
 
-// NewService returns a Service over store, checking permissions with authz.
-func NewService(store Store, authz *auth.Authorizer) *Service {
-	return &Service{store: store, authz: authz, now: time.Now}
+// NewService returns a Service over store, checking permissions with authz, under the chart's values' sign-up settings.
+func NewService(store Store, authz *auth.Authorizer, values auth.Settings) *Service {
+	return &Service{store: store, authz: authz, values: values, now: time.Now}
 }
 
 // SetClock makes the service read the time from now: for tests.

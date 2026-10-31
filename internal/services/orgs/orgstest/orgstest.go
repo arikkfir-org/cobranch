@@ -52,7 +52,9 @@ type Store struct {
 	Events []string
 	// Entered records each entry into an organization from the Back-office.
 	Entered []Entry
-	Fail    error
+	// Installation is the settings the Back-office changes, Version 1 at first.
+	Installation auth.InstallationSettings
+	Fail         error
 }
 
 // Entry is an administrator's entry into an organization, with its reason.
@@ -69,6 +71,7 @@ func NewStore() *Store {
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
 		installation: []orgs.Role{installationAdmin, installationUser},
 		Keys:         map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
+		Installation: auth.InstallationSettings{Version: 1},
 	}
 }
 

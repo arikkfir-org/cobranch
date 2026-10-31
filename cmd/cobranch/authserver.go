@@ -71,13 +71,27 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 // authSettings reads sign-in's settings from the configuration. A sign-in may return to the Back-office, when the
 // installation runs one.
 func authSettings(cfg config.AuthServer) (auth.Settings, error) {
-	policy, err := auth.ParsePolicy(cfg.SignUp)
+	settings, err := signUpSettings(cfg.SignUpSettings)
 	if err != nil {
-		return auth.Settings{}, fmt.Errorf("%s_AUTH_SIGN_UP: %w", config.Prefix, err)
+		return auth.Settings{}, err
 	}
-	settings := auth.Settings{SignUp: policy, SignUpDomains: cfg.SignUpDomains, Admins: cfg.Admins, SelfServe: cfg.SelfServe, Seed: cfg.Seed}
+	settings.Admins, settings.Seed = cfg.Admins, cfg.Seed
 	if cfg.BackOffice.URL != nil {
 		settings.ReturnURLs = append(settings.ReturnURLs, cfg.BackOffice.URL)
+	}
+	return settings, nil
+}
+
+// signUpSettings reads the sign-up settings the chart's values give, which lock those they set: the Back-office keeps
+// the rest.
+func signUpSettings(cfg config.SignUpSettings) (auth.Settings, error) {
+	settings := auth.Settings{SignUpDomains: cfg.SignUpDomains, SelfServe: cfg.SelfServe}
+	if cfg.SignUp != "" {
+		policy, err := auth.ParsePolicy(cfg.SignUp)
+		if err != nil {
+			return auth.Settings{}, fmt.Errorf("%s_AUTH_SIGN_UP: %w", config.Prefix, err)
+		}
+		settings.SignUp = policy
 	}
 	return settings, nil
 }

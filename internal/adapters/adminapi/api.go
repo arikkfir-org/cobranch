@@ -32,6 +32,8 @@ type Administration interface {
 	Users(ctx context.Context, v auth.User, p admin.Page) (admin.List[admin.User], error)
 	CreateOrganization(ctx context.Context, v auth.User, slug, name, ownerEmail string) (admin.Organization, error)
 	Enter(ctx context.Context, v auth.User, slug, reason string) (orgs.Organization, error)
+	Settings(ctx context.Context, v auth.User) (admin.Settings, error)
+	ChangeSettings(ctx context.Context, v auth.User, match string, change admin.SettingsChange) (admin.Settings, error)
 }
 
 // api implements api/admin.yaml's operations.
@@ -44,7 +46,8 @@ type api struct {
 var _ StrictServerInterface = api{}
 
 // NewHandler serves the API under BaseURL, for a server built as version, over the administration's service. Every
-// other path answers 404, and a request the API can't read 400, both as problem details.
+// other path answers 404, and a request the API can't read 400, both as problem details. A GET's answer is the
+// viewer's, and revalidated each time (Cache-Control: private, no-cache).
 func NewHandler(version string, administration Administration) http.Handler {
 	strict := NewStrictHandlerWithOptions(api{version: version, admin: administration}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
@@ -55,7 +58,12 @@ func NewHandler(version string, administration Administration) http.Handler {
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, "route.not_found", "No operation has this method and path.")
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			w.Header().Set("Cache-Control", "private, no-cache")
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // GetVersion answers the version the server was built as.
