@@ -184,9 +184,13 @@ Changing or removing a provider takes effect on the next sign-in. Sessions alrea
 - **A client secret is written once,** encrypted with the chart's secrets key (AES-256-GCM), and never read back: the
   Back-office shows only that one is set, as the architecture's [secrets](architecture.md#settings-secrets-and-models)
   are kept.
-- **The secrets key** is new to the chart: generated on install and kept on upgrade, or a Secret of the operator's
-  (`secretsKey.existingSecret`), which an installation rendered without the cluster, as under Argo CD, must give. Only
-  the Admin and Auth servers read it.
+- **The secrets key** is new to the chart: 32 characters at least, generated on install and kept on upgrade and
+  uninstall, or a Secret of the operator's (`secretsKey.existingSecret`, under `secretsKey.secretKey`), which an
+  installation rendered without the cluster, as under Argo CD, must give. Only the Admin and Auth servers read it;
+  without it, the Admin API refuses a new client secret (`409`).
+- **An issuer must answer.** Adding a provider, or changing its issuer or preset, first checks the issuer's OpenID
+  Connect discovery. A change or a removal names the version the administrator read (`If-Match`), and one someone made
+  meanwhile is refused (`412`), as the settings' are.
 - **A change applies at the next sign-in.** The Auth server reads the database's providers at each sign-in and keeps
   each one's discovery while its version holds. Removing a provider stops its sign-ins; its users keep their accounts,
   and sign in again once a provider with the same issuer is back.
@@ -216,7 +220,8 @@ components: tables, forms, status badges and the one-time dialog for a new secre
 | `adminServer`, `backOffice` | 1 replica each | The chart: resources and placement, like every workload's |
 | `auth.signUp`, `auth.signUpDomains` | None now | The Auth server, and the Admin server, which shows them locked; set, they lock the Back-office's settings |
 | `organizations.selfServe` | None now | The Auth server, and the Admin server, which shows it locked; set, it locks the Back-office's |
-| `secretsKey.existingSecret` | None: generated | The Admin and Auth servers: the key that encrypts providers' client secrets |
+| `auth.providers` | None | The Auth server, and the Admin server, which lists them read-only |
+| `secretsKey.existingSecret`, `secretsKey.secretKey` | None: generated; `key` | The Admin and Auth servers: the key that encrypts providers' client secrets |
 
 Without `urls.admin` the chart deploys neither new workload, as it deploys no Auth server without `urls.auth`.
 **Agreed** in the sign-in design: the chart passes each value as a `COBRANCH_` environment variable.
@@ -229,8 +234,8 @@ Without `urls.admin` the chart deploys neither new workload, as it deploys no Au
   ([risks](sign-in-and-organizations.md#risks)).
 - **Tests** cover every operation's permission at its scope, entering's transaction and event, the values' locks, and
   providers' encryption, on PostgreSQL as the other stores' tests do. The chart's kind test in CI signs in as a seeded
-  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations and
-  reads the installation's settings.
+  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations,
+  reads the installation's settings and lists its identity providers.
 
 ## Data model
 

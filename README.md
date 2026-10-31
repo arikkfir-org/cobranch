@@ -59,6 +59,7 @@ server needs a bucket and the database, and turns ready once the schema is at th
 ```bash
 export COBRANCH_BLOB_URL='file:///tmp/cobranch-blobs?create_dir=true'
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
+export COBRANCH_SECRETS_KEY="$(openssl rand -hex 24)"    # keep it: it seals the providers' secrets the Admin server adds
 bin/cobranch migrate
 bin/cobranch rest-server                                 # :8080: /healthz, /readyz, /v1/version, /v1/me, /v1/orgs/…
 COBRANCH_HTTP_ADDR=:8081 bin/cobranch graphql-server     # :8081: /healthz, /readyz, GraphQL at /
