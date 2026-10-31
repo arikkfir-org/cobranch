@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cobranch Back-office</title>
+  <!-- The Back-office: where an installation's administrators run it, through the Admin API at the URL config.json
+       names (docs/cobranch/designs/back-office). Its pages: the organizations (search, create one for a user, enter
+       one) and the users. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
+       design system's colours (docs/cobranch/designs/design-system), as the Console's. Caddy serves this page for every
+       path, and it routes on the path. -->
+  <style>
+    :root {
+      color-scheme: light;
+      --color-bg-canvas: #ffffff;
+      --color-bg-sunken: #f8f9fa;
+      --color-bg-raised: #ffffff;
+      --color-fg-default: #1a1d20;
+      --color-fg-muted: #6b737b;
+      --color-border-default: #e4e7ea;
+      --color-accent: #2f6fed;
+      --color-accent-fg: #ffffff;
+      --color-status-success-fg: #0e6a3f;
+      --color-status-success-bg: #ecfdf3;
+      --color-status-success-border: #a6f0c4;
+      --color-status-warning-fg: #8c500b;
+      --color-status-warning-bg: #fff8eb;
+      --color-status-warning-border: #fdd98a;
+      --color-status-danger-fg: #a1262b;
+      --color-status-danger-bg: #fff1f1;
+      --color-status-danger-border: #f7b8bb;
+      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+        --color-bg-canvas: #131517;
+        --color-bg-sunken: #0c0d0f;
+        --color-bg-raised: #1b1e21;
+        --color-fg-default: #f8f9fa;
+        --color-fg-muted: #b4bcc2;
+        --color-border-default: #2e3338;
+        --color-accent: #6b9bff;
+        --color-accent-fg: #0c0d0f;
+        --color-status-success-fg: #6cdda0;
+        --color-status-success-bg: #062a1b;
+        --color-status-success-border: #105335;
+        --color-status-warning-fg: #fcc04d;
+        --color-status-warning-bg: #361c05;
+        --color-status-warning-border: #723f0f;
+        --color-status-danger-fg: #ff8a8e;
+        --color-status-danger-bg: #3a0d0f;
+        --color-status-danger-border: #7a2024;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--color-bg-canvas);
+      color: var(--color-fg-default);
+      font: 14px/20px var(--font-sans);
+    }
+    body.centered { display: grid; place-items: center; }
+    h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
+    h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+    h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
+    p { margin: 0; color: var(--color-fg-muted); }
+    a { color: var(--color-accent); }
+    code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    [hidden] { display: none !important; }
+    main.card {
+      width: min(440px, calc(100vw - 32px));
+      display: grid;
+      gap: 16px;
+      padding: 32px;
+      border: 1px solid var(--color-border-default);
+      border-radius: 12px;
+      background: var(--color-bg-sunken);
+    }
+    .status {
+      justify-self: start;
+      padding: 3px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--color-status-warning-border);
+      background: var(--color-status-warning-bg);
+      color: var(--color-status-warning-fg);
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 500;
+    }
+    .status[data-state="ready"] {
+      border-color: var(--color-status-success-border);
+      background: var(--color-status-success-bg);
+      color: var(--color-status-success-fg);
+    }
+    .buttons { display: grid; gap: 8px; }
+    .button {
+      display: inline-block;
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--color-border-default);
+      background: var(--color-bg-raised);
+      color: var(--color-fg-default);
+      font: inherit;
+      font-weight: 500;
+      text-align: center;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .buttons .button { display: block; width: 100%; }
+    .button.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-fg); }
+    .button.danger { color: var(--color-status-danger-fg); border-color: var(--color-status-danger-border); }
+    .button.small { padding: 3px 10px; font-size: 13px; }
+    .button:disabled { opacity: 0.6; cursor: default; }
+    .alert {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--color-status-danger-border);
+      background: var(--color-status-danger-bg);
+      color: var(--color-status-danger-fg);
+    }
+    .notice {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--color-status-success-border);
+      background: var(--color-status-success-bg);
+      color: var(--color-status-success-fg);
+    }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .demo { padding-top: 12px; border-top: 1px solid var(--color-border-default); display: grid; gap: 8px; }
+    form { display: grid; gap: 10px; }
+    form.inline { grid-template-columns: 1fr auto; align-items: end; }
+    form.inline.with-role { grid-template-columns: 1fr auto auto; }
+    label { display: grid; gap: 4px; font-weight: 500; }
+    label span { color: var(--color-fg-muted); font-weight: 400; font-size: 12px; }
+    label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+    input, select {
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--color-border-default);
+      background: var(--color-bg-raised);
+      color: var(--color-fg-default);
+      font: inherit;
+      width: 100%;
+    }
+    header.bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--color-border-default);
+      background: var(--color-bg-sunken);
+      flex-wrap: wrap;
+    }
+    header.bar .brand { font-weight: 600; letter-spacing: -0.2px; text-decoration: none; color: var(--color-fg-default); }
+    header.bar .tag { color: var(--color-fg-muted); font-weight: 500; }
+    header.bar nav { display: flex; gap: 4px; }
+    header.bar nav a { padding: 5px 10px; border-radius: 8px; color: var(--color-fg-muted); text-decoration: none; font-weight: 500; }
+    header.bar nav a.current { background: var(--color-bg-raised); color: var(--color-fg-default); border: 1px solid var(--color-border-default); }
+    header.bar .spacer { flex: 1; }
+    main.page { width: min(1080px, 100%); margin: 0 auto; padding: 24px 16px; display: grid; gap: 24px; }
+    section.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--color-border-default); vertical-align: top; }
+    th { color: var(--color-fg-muted); font-weight: 500; font-size: 12px; }
+    td.actions { text-align: right; white-space: nowrap; }
+    td.number { font-variant-numeric: tabular-nums; }
+    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); font-size: 12px; margin: 0 4px 2px 0; }
+    .muted { color: var(--color-fg-muted); font-size: 12px; }
+    form.search { grid-template-columns: 1fr auto; align-items: end; }
+    form.create { grid-template-columns: repeat(3, 1fr) auto; align-items: end; }
+    @media (max-width: 720px) { form.create { grid-template-columns: 1fr; } }
+    tr.entering td { background: var(--color-bg-raised); }
+  </style>
+</head>
+<body class="centered">
+  <div id="app"></div>
+  <script>
+    // The Back-office's root, wherever the operator mounts it (its route strips the prefix): the path of its URL, which
+    // config.json names, and which every directory serves. Every page's path is relative to it.
+    let base = "/";
+    const app = document.getElementById("app");
+    let config = { adminUrl: "", authUrl: "", backOfficeUrl: "", consoleUrl: "" };
+    let me = null;
+    const can = (p) => me.permissions.includes(p);
+
+    // api calls the Admin API with the session cookie, and rejects with the problem it answered. It resolves with the
+    // body and the URL of the next page, which a list's Link names relative to the request's own URL.
+    async function api(method, path, body) {
+      const options = { method, credentials: "include", headers: { Accept: "application/json" } };
+      if (body !== undefined) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      const url = new URL(path.startsWith("http") ? path : config.adminUrl + "/v1" + path, location.href);
+      const r = await fetch(url, options);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
+      const link = /<([^>]*)>\s*;\s*rel="next"/.exec(r.headers.get("Link") || "");
+      return { data, next: link ? new URL(link[1], url).toString() : null };
+    }
+    const h = (tag, attrs = {}, ...children) => {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === "class") el.className = v;
+        else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+        else if (k === "hidden" || k === "disabled") el[k] = v;
+        else if (v !== undefined && v !== null) el.setAttribute(k, v);
+      }
+      el.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
+      return el;
+    };
+    const when = (at) => new Date(at).toLocaleDateString(undefined, { dateStyle: "medium" });
+    function go(path, replace) {
+      history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
+      render();
+    }
+    // route is the page's path under the Back-office's root: "" for its home, the organizations, or "users".
+    const route = () => location.pathname.slice(base.length).replace(/\/$/, "");
+    window.addEventListener("popstate", render);
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-nav]");
+      if (a && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        go(a.getAttribute("href").slice(base.length - 1));
+      }
+    });
+
+    // The first load: where the APIs are, and who the viewer is.
+    fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json()).then(async (c) => {
+      config = { adminUrl: c.adminUrl || "", authUrl: c.authUrl || "", backOfficeUrl: c.backOfficeUrl || location.origin + "/", consoleUrl: c.consoleUrl || location.origin };
+      if (c.backOfficeUrl) base = new URL(c.backOfficeUrl).pathname.replace(/\/?$/, "/");
+      try {
+        me = (await api("GET", "/me")).data;
+      } catch (err) {
+        if (err.status !== 401) throw err;
+      }
+      render();
+    }).catch(() => showCard(h("span", { class: "status" }, "Admin API unreachable"), h("p", {}, "The Back-office couldn't reach this installation's Admin API. Try again in a moment.")));
+
+    function showCard(...children) {
+      document.body.className = "centered";
+      app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Back-office"), ...children));
+    }
+
+    function render() {
+      if (!me) return showSignIn();
+      if (!can("installation.manage") && !can("installation.users.manage")) {
+        return showCard(h("p", {}, "You're signed in as " + me.displayName + ", who doesn't administer this installation."),
+          h("div", { class: "buttons" }, h("a", { class: "button", href: config.consoleUrl }, "Open the Console"), h("button", { class: "button", type: "button", onclick: signOut }, "Sign out")));
+      }
+      const page = route();
+      if (page !== "" && page !== "users") return go("/", true);
+      const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"]].filter(([, , p]) => can(p));
+      if (!pages.some(([p]) => p === page)) return go("/" + pages[0][0], true);
+      const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), h("span", { class: "tag" }, "Back-office"),
+        h("nav", {}, pages.map(([p, label]) => h("a", { href: base + p, "data-nav": "", class: p === page ? "current" : "" }, label))),
+        h("span", { class: "spacer" }), h("a", { href: config.consoleUrl }, "Console"), h("span", {}, me.displayName),
+        h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out"));
+      const main = h("main", { class: "page" });
+      document.body.className = "";
+      app.replaceChildren(bar, main);
+      return page === "users" ? showUsers(main) : showOrganizations(main);
+    }
+
+    // showSignIn offers the installation's providers and, while seeding is on, its demo users; each returns here.
+    async function showSignIn() {
+      if (!config.authUrl) {
+        return showCard(h("h2", {}, "Sign in"), h("p", {}, "Sign-in isn't set up yet: this installation lists no identity provider. Its operator adds one to the chart's ", h("code", {}, "auth.providers"), "."));
+      }
+      const card = [h("p", {}, "Sign in as one of this installation's administrators.")];
+      const back = config.backOfficeUrl;
+      try {
+        const { providers, seeded } = await (await fetch(config.authUrl + "/providers", { headers: { Accept: "application/json" } })).json();
+        if (providers.length === 0 && seeded.length === 0) card.push(h("p", {}, "Sign-in isn't set up yet: this installation lists no identity provider."));
+        card.push(h("div", { class: "buttons" }, providers.map((p) => h("a", { class: "button primary", href: config.authUrl + "/sign-in?" + new URLSearchParams({ provider: p.id, return: back }) }, "Sign in with " + p.name))));
+        if (seeded.length) {
+          card.push(h("div", { class: "demo" }, h("p", {}, "Demo data is on: sign in as one of its users."),
+            h("div", { class: "buttons" }, seeded.map((u) => h("a", { class: "button", href: config.authUrl + "/sign-in?" + new URLSearchParams({ user: u.subject, return: back }) }, u.displayName + " (" + u.subject + ")")))));
+        }
+      } catch {
+        card.push(h("p", {}, "Sign-in isn't answering. Try again in a moment."));
+      }
+      showCard(h("h2", {}, "Sign in"), ...card);
+    }
+
+    function signOut() {
+      fetch(config.authUrl + "/sign-out", { method: "POST", credentials: "include" }).finally(() => location.replace(base));
+    }
+
+    // list draws a searchable, paged list into panel: rows renders one item, and the More button fetches the page
+    // the last one's Link names.
+    function list({ path, key, head, row, placeholder }) {
+      const error = h("p", { class: "alert", hidden: true });
+      const body = h("tbody");
+      const more = h("button", { class: "button", type: "button", hidden: true }, "More");
+      const q = h("input", { type: "search", placeholder, value: new URLSearchParams(location.search).get("q") || "" });
+      let next = null;
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const load = (url, append) => api("GET", url).then(({ data, next: n }) => {
+        if (!append) body.replaceChildren();
+        body.append(...data[key].map(row));
+        if (!data[key].length && !append) body.append(h("tr", {}, h("td", { colspan: head.length }, h("p", {}, "Nothing matches."))));
+        next = n;
+        more.hidden = !n;
+        error.hidden = true;
+      }).catch(fail);
+      more.addEventListener("click", () => next && load(next, true));
+      const search = () => {
+        history.replaceState(null, "", location.pathname + (q.value ? "?" + new URLSearchParams({ q: q.value }) : ""));
+        return load(path + (q.value ? "?" + new URLSearchParams({ q: q.value }) : ""), false);
+      };
+      const panel = h("section", { class: "panel" },
+        h("form", { class: "search", onsubmit: (e) => { e.preventDefault(); search(); } }, h("label", {}, "Search", q), h("button", { class: "button", type: "submit" }, "Search")),
+        error, h("table", {}, h("thead", {}, h("tr", {}, head.map((t) => h("th", {}, t)))), body), h("div", {}, more));
+      search();
+      return { panel, reload: search };
+    }
+
+    function showOrganizations(main) {
+      const enter = (o, tr) => {
+        const reason = h("input", { required: true, maxlength: 500, placeholder: "Support ticket 4127: the owner asked for help" });
+        const error = h("p", { class: "alert", hidden: true });
+        const form = h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          api("POST", "/orgs/" + encodeURIComponent(o.slug) + "/entries", { reason: reason.value })
+            .then(({ data }) => location.assign(config.consoleUrl.replace(/\/?$/, "/") + encodeURIComponent(data.slug)))
+            .catch((err) => { error.textContent = err.message; error.hidden = false; });
+        } }, h("label", {}, "Why you enter " + o.name, h("span", {}, "You become one of its Owners. Its Owners read this reason in its audit trail."), reason), error,
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Enter " + o.name), " ", h("button", { class: "button", type: "button", onclick: () => form.closest("tr").remove() }, "Cancel")));
+        tr.after(h("tr", { class: "entering" }, h("td", { colspan: 5 }, form)));
+        reason.focus();
+      };
+      const row = (o) => {
+        const tr = h("tr", {}, h("td", {}, h("strong", {}, o.name)), h("td", {}, h("code", {}, o.slug)), h("td", { class: "number" }, String(o.members)), h("td", {}, when(o.createdAt)),
+          h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: (e) => !e.target.closest("tr").nextElementSibling?.classList.contains("entering") && enter(o, tr) }, "Enter")));
+        return tr;
+      };
+      const orgs = list({ path: "/orgs", key: "organizations", head: ["Name", "Slug", "Members", "Created", ""], row, placeholder: "A slug or a name" });
+      const sections = [h("h1", {}, "Organizations"), orgs.panel];
+      if (can("orgs.create") && can("installation.users.manage")) {
+        const name = h("input", { required: true, placeholder: "Acme" });
+        const slug = h("input", { required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39 });
+        const owner = h("input", { type: "email", required: true, placeholder: "olivia@example.com" });
+        const done = h("p", { class: "notice", hidden: true });
+        const error = h("p", { class: "alert", hidden: true });
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Create an organization for a user"),
+          h("p", {}, "Its first Owner is the user who holds the email, verified. You don't join it."), done, error,
+          h("form", { class: "create", onsubmit: (e) => {
+            e.preventDefault();
+            done.hidden = error.hidden = true;
+            api("POST", "/orgs", { slug: slug.value, name: name.value, ownerEmail: owner.value }).then(({ data }) => {
+              done.textContent = "Created " + data.name + " for " + owner.value + ".";
+              done.hidden = false;
+              e.target.reset();
+              orgs.reload();
+            }).catch((err) => { error.textContent = err.message; error.hidden = false; });
+          } }, h("label", {}, "Name", name), h("label", {}, "Slug", slug), h("label", {}, "Owner's email", owner), h("button", { class: "button primary", type: "submit" }, "Create"))));
+      }
+      main.append(...sections);
+    }
+
+    function showUsers(main) {
+      const row = (u) => h("tr", {},
+        h("td", {}, h("strong", {}, u.displayName), u.suspended ? h("span", { class: "chip" }, "suspended") : null, u.id === me.id ? h("span", { class: "chip" }, "you") : null),
+        h("td", {}, u.emails.map((e) => h("div", {}, e.email, e.verified ? null : h("span", { class: "muted" }, " (unverified)")))),
+        h("td", {}, u.roles.map((r) => h("span", { class: "chip" }, r))),
+        h("td", { class: "number" }, String(u.organizations)),
+        h("td", {}, when(u.lastSignInAt)), h("td", {}, when(u.createdAt)));
+      const users = list({ path: "/users", key: "users", head: ["User", "Emails", "Installation roles", "Organizations", "Last sign-in", "Signed up"], row, placeholder: "A name or an email" });
+      main.append(h("h1", {}, "Users"), users.panel);
+    }
+  </script>
+</body>
+</html>

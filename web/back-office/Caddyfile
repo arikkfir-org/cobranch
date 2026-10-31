@@ -1,0 +1,38 @@
+# The Back-office's server: its static files on port 8080, /healthz for the kubelet, and config.json, which tells its
+# pages where the Admin API answers (COBRANCH_ADMIN_URL), where the Auth server does (COBRANCH_AUTH_URL; empty, sign-in
+# isn't set up), where the Back-office itself does (COBRANCH_BACK_OFFICE_URL, whose path is the pages' root when a route
+# mounts it at a prefix, and where a sign-in returns) and where the Console does (COBRANCH_CONSOLE_URL), which an
+# administrator who enters an organization opens. The pages route in the browser, so a page at any depth asks for
+# config.json beside itself, and every directory answers it. The operator's routes bring the domain and TLS.
+{
+	admin off
+	auto_https off
+	persist_config off
+	log {
+		format json
+	}
+}
+
+:8080 {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		X-Frame-Options DENY
+		-Server
+	}
+	handle /healthz {
+		respond "ok" 200
+	}
+	@config path /config.json */config.json
+	handle @config {
+		header Content-Type application/json
+		header Cache-Control no-store
+		respond `\{"adminUrl":"{env.COBRANCH_ADMIN_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","backOfficeUrl":"{env.COBRANCH_BACK_OFFICE_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}"\}` 200
+	}
+	handle {
+		root * /srv
+		# The Back-office routes in the browser: every path it doesn't have a file for gets its page.
+		try_files {path} /index.html
+		file_server
+	}
+}
