@@ -190,6 +190,36 @@ func (q *Queries) RepositoryByID(ctx context.Context, id uuid.UUID) (Repository,
 	return i, err
 }
 
+const repositoryByPath = `-- name: RepositoryByPath :one
+SELECT r.id, r.org_id, r.slug, r.name, r.description, r.default_branch, r.object_format, r.created_by, r.created_at FROM repositories r
+JOIN repository_slugs rs ON rs.repo_id = r.id
+JOIN organization_slugs os ON os.org_id = r.org_id
+WHERE os.slug = $1 AND rs.slug = $2
+`
+
+type RepositoryByPathRow struct {
+	Repository Repository
+}
+
+// RepositoryByPath finds a repository by its organization's slug and its own, each one it has or had, as Git's URLs
+// name them.
+func (q *Queries) RepositoryByPath(ctx context.Context, orgSlug string, repoSlug string) (RepositoryByPathRow, error) {
+	row := q.db.QueryRow(ctx, repositoryByPath, orgSlug, repoSlug)
+	var i RepositoryByPathRow
+	err := row.Scan(
+		&i.Repository.ID,
+		&i.Repository.OrgID,
+		&i.Repository.Slug,
+		&i.Repository.Name,
+		&i.Repository.Description,
+		&i.Repository.DefaultBranch,
+		&i.Repository.ObjectFormat,
+		&i.Repository.CreatedBy,
+		&i.Repository.CreatedAt,
+	)
+	return i, err
+}
+
 const repositoryBySlug = `-- name: RepositoryBySlug :one
 SELECT r.id, r.org_id, r.slug, r.name, r.description, r.object_format, r.created_by, r.created_at FROM repositories r JOIN repository_slugs s ON s.repo_id = r.id WHERE s.org_id = $1 AND s.slug = $2
 `

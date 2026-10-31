@@ -85,3 +85,11 @@ DELETE FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'reposit
 -- name: DeleteRepositoryGrantsAt :execrows
 DELETE FROM grants g USING repositories r
 WHERE g.principal_id = @principal_id AND g.scope = 'repository' AND g.scope_id = r.id AND r.org_id = @org_id::uuid;
+
+-- RepositoryByPath finds a repository by its organization's slug and its own, each one it has or had, as Git's URLs
+-- name them.
+-- name: RepositoryByPath :one
+SELECT sqlc.embed(r) FROM repositories r
+JOIN repository_slugs rs ON rs.repo_id = r.id
+JOIN organization_slugs os ON os.org_id = r.org_id
+WHERE os.slug = @org_slug AND rs.slug = @repo_slug;

@@ -46,7 +46,11 @@ type Store interface {
 	Identity(ctx context.Context, issuer, subject string) (Identity, error)
 	// EmailHolder finds the user who holds email, verified, and the issuer of an identity of theirs, or ErrNotFound.
 	EmailHolder(ctx context.Context, email string) (uuid.UUID, string, error)
-	// SignUp creates the user, its identity, its email if verified, its grants, and their events.
+	// LoginlessHolder finds the login-less user who holds email unverified, a user with no identity whom a push made
+	// for a commit's author or committer, or ErrNotFound.
+	LoginlessHolder(ctx context.Context, email string) (uuid.UUID, error)
+	// SignUp creates the user, its identity, its email if verified, its grants, and their events; with Adopt, it gives
+	// the login-less user the identity and verifies the email instead of creating them.
 	SignUp(ctx context.Context, s SignUp) error
 	// SignIn records the identity's latest claims and sign-in, sets Installation admin from the installation's list
 	// (adding or taking back only the grant that list gave), creates the session and its event.
@@ -263,8 +267,18 @@ func (s *Service) signUp(ctx context.Context, c Claims, now time.Time) (Identity
 	if err != nil {
 		return Identity{}, fmt.Errorf("making an ID: %w", err)
 	}
+	adopt := false
+	if verified {
+		loginless, err := s.store.LoginlessHolder(ctx, c.Email)
+		switch {
+		case err == nil:
+			id, adopt = loginless, true
+		case !errors.Is(err, ErrNotFound):
+			return Identity{}, fmt.Errorf("looking for a login-less user with the email: %w", err)
+		}
+	}
 	identity := Identity{Issuer: c.Issuer, Subject: c.Subject, UserID: id, Email: c.Email, EmailVerified: c.EmailVerified, Name: c.Name, LastSignInAt: now}
-	up := SignUp{Principal: Principal{ID: id, Kind: KindUser, DisplayName: displayName(c)}, Identity: identity}
+	up := SignUp{Principal: Principal{ID: id, Kind: KindUser, DisplayName: displayName(c)}, Identity: identity, Adopt: adopt}
 	if settings.SelfServe {
 		up.Grants = append(up.Grants, Grant{RoleID: RoleInstallationUser, Source: SourceSelfServe})
 	}

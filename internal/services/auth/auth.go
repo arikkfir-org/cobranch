@@ -202,6 +202,9 @@ type SignUp struct {
 	Principal Principal
 	Identity  Identity
 	Grants    []Grant
+	// Adopt signs the identity up as Principal, a login-less user who holds its verified email unverified, rather than
+	// as a new user: the email turns verified, and the commits a push gave them are the identity's at once.
+	Adopt bool
 }
 
 // Policy is an installation's sign-up policy.
