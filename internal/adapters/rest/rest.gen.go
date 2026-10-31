@@ -590,7 +590,7 @@ type ServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
-	// CreateRepository Creates a repository in the organization, empty and Private, with the viewer its Maintainer; takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
@@ -5716,7 +5716,7 @@ type StrictServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
-	// CreateRepository Creates a repository in the organization, empty and Private, with the viewer its Maintainer; takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.

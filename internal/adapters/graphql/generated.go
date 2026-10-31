@@ -1287,7 +1287,7 @@ extend type Organization {
 }
 
 extend type Mutation {
-  "Creates a repository in the organization, empty and Private, with the viewer its Maintainer; takes repos.create."
+  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create."
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
   "Changes a repository's slug, name, description and default branch; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
