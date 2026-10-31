@@ -97,7 +97,7 @@ func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, s
 // SignUp creates a user, their identity, their verified email if any, their installation grants and the event.
 func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 	p, i := up.Principal, up.Identity
-	return s.transact(ctx, "signing up", p.ID, func(q *queries.Queries) error {
+	return s.transact(ctx, "signing up", p.ID, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{
 			ID: p.ID, Kind: string(p.Kind), DisplayName: p.DisplayName, CreatedAt: i.LastSignInAt,
 		}); err != nil {
@@ -129,7 +129,7 @@ func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 // SignIn records the identity's latest claims and sign-in, sets Installation admin from the installation's list,
 // and creates the session and its event.
 func (s *AuthStore) SignIn(ctx context.Context, i auth.Identity, admin bool, session auth.Session) error {
-	return s.transact(ctx, "signing in", i.UserID, func(q *queries.Queries) error {
+	return s.transact(ctx, "signing in", i.UserID, func(ctx context.Context, q *queries.Queries) error {
 		updated, err := q.UpdateIdentity(ctx, queries.UpdateIdentityParams{
 			Issuer: i.Issuer, Subject: i.Subject, Email: i.Email, EmailVerified: i.EmailVerified, Name: i.Name,
 			SignedInAt: i.LastSignInAt,
@@ -278,7 +278,7 @@ func (s *AuthStore) Sessions(ctx context.Context, userID uuid.UUID) ([]auth.Sess
 
 // Revoke revokes session id of user userID at now.
 func (s *AuthStore) Revoke(ctx context.Context, userID, id uuid.UUID, now time.Time) error {
-	return s.transact(ctx, "revoking the session", userID, func(q *queries.Queries) error {
+	return s.transact(ctx, "revoking the session", userID, func(ctx context.Context, q *queries.Queries) error {
 		revoked, err := q.RevokeSession(ctx, now, id, userID)
 		if err != nil {
 			return fmt.Errorf("updating the session: %w", err)
@@ -328,6 +328,6 @@ func wrap(what string, err error) error {
 }
 
 // transact runs fn in a transaction that acts for actor (transact).
-func (s *AuthStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(q *queries.Queries) error) error {
+func (s *AuthStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
 	return transact(ctx, s.pool, s.q, what, actor, fn)
 }

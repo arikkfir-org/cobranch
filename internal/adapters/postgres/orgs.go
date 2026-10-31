@@ -41,7 +41,7 @@ var conflicts = map[string]error{
 }
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a conflict to the domain's error.
-func (s *OrgStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(q *queries.Queries) error) error {
+func (s *OrgStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(ctx context.Context, q *queries.Queries) error) error {
 	err := transact(ctx, s.pool, s.q, what, actor, fn)
 	var conflict *ConflictError
 	if errors.As(err, &conflict) {
@@ -81,7 +81,7 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 
 // Create makes the organization, claims its slug, makes its creator a member and its first Owner, and records both.
 func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
-	return s.transact(ctx, "creating the organization", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
 			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
 			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, CreatedAt: org.CreatedAt,
@@ -147,7 +147,7 @@ func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, e
 // Update writes the organization's settings, claiming its slug when it changed: one of its own former slugs comes back
 // to it, another organization's is taken.
 func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
-	return s.transact(ctx, "updating the organization", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "updating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		before, err := q.OrganizationByID(ctx, org.ID)
 		if err != nil {
 			return wrapOrg("reading the organization", err)
@@ -245,7 +245,7 @@ func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email str
 // Leave drops the member and every role they hold at the organization; actor is who did it. The organization's row
 // is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
 func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, _ time.Time) error {
-	return s.transact(ctx, "dropping the member", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "dropping the member", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
 			return wrapOrg("locking the organization", err)
 		}
@@ -300,7 +300,7 @@ func invitation(i queries.Invitation, slug, name string) orgs.Invitation {
 
 // Invite records the invitation.
 func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitation) error {
-	return s.transact(ctx, "recording the invitation", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "recording the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.DeleteExpiredInvitationTo(ctx, inv.OrgID, inv.Email, inv.CreatedAt); err != nil {
 			return fmt.Errorf("dropping an expired invitation: %w", err)
 		}
@@ -363,7 +363,7 @@ func closeInvitation(ctx context.Context, q *queries.Queries, actor uuid.UUID, i
 
 // Accept makes the invitee a member with the invitation's role, closes the invitation, and records both.
 func (s *OrgStore) Accept(ctx context.Context, actor uuid.UUID, inv orgs.Invitation, userID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "accepting the invitation", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "accepting the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := closeInvitation(ctx, q, actor, inv, orgs.StateAccepted, at); err != nil {
 			return err
 		}
@@ -377,7 +377,7 @@ func (s *OrgStore) CloseInvitation(ctx context.Context, actor uuid.UUID, id uuid
 	if err != nil {
 		return err
 	}
-	return s.transact(ctx, "closing the invitation", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "closing the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
 		return closeInvitation(ctx, q, actor, inv, state, at)
 	})
 }
@@ -390,7 +390,7 @@ func joinRequest(j queries.JoinRequest, slug, name, userName string) orgs.JoinRe
 
 // Request records the join request.
 func (s *OrgStore) Request(ctx context.Context, actor uuid.UUID, req orgs.JoinRequest) error {
-	return s.transact(ctx, "recording the request", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "recording the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.DeleteExpiredJoinRequestOf(ctx, req.OrgID, req.UserID, req.CreatedAt); err != nil {
 			return fmt.Errorf("dropping an expired request: %w", err)
 		}
@@ -452,7 +452,7 @@ func closeJoinRequest(ctx context.Context, q *queries.Queries, actor uuid.UUID, 
 
 // Approve makes the requester a member with roleID, closes the request, and records both.
 func (s *OrgStore) Approve(ctx context.Context, actor uuid.UUID, req orgs.JoinRequest, roleID uuid.UUID, at time.Time) error {
-	return s.transact(ctx, "approving the request", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "approving the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := closeJoinRequest(ctx, q, actor, req, orgs.StateApproved, at); err != nil {
 			return err
 		}
@@ -466,7 +466,7 @@ func (s *OrgStore) CloseJoinRequest(ctx context.Context, actor uuid.UUID, id uui
 	if err != nil {
 		return err
 	}
-	return s.transact(ctx, "closing the request", actor, func(q *queries.Queries) error {
+	return s.transact(ctx, "closing the request", actor, func(ctx context.Context, q *queries.Queries) error {
 		return closeJoinRequest(ctx, q, actor, req, state, at)
 	})
 }
