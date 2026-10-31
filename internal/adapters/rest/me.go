@@ -32,22 +32,26 @@ func unauthenticated(ctx context.Context) ProblemApplicationProblemPlusJSONRespo
 	return ProblemApplicationProblemPlusJSONResponse(problem(ctx, http.StatusUnauthorized, "auth.unauthenticated", "Sign in first."))
 }
 
-// user is u as the API shows them.
-func user(u auth.User) User {
+// user is u as the API shows them, holding permissions at the installation.
+func user(u auth.User, permissions []string) User {
 	emails := make([]Email, 0, len(u.Emails))
 	for _, e := range u.Emails {
 		emails = append(emails, Email{Email: e.Email, Verified: e.Verified})
 	}
-	return User{Id: u.ID, DisplayName: u.DisplayName, Emails: emails}
+	return User{Id: u.ID, DisplayName: u.DisplayName, Emails: emails, Permissions: nonNil(permissions)}
 }
 
-// GetMe answers who the request's credential signs in.
+// GetMe answers who the request's credential signs in, with what they hold at the installation.
 func (a api) GetMe(ctx context.Context, _ GetMeRequestObject) (GetMeResponseObject, error) {
 	v, ok := auth.Viewer(ctx)
 	if !ok {
 		return GetMe401ApplicationProblemPlusJSONResponse{unauthenticated(ctx)}, nil
 	}
-	return GetMe200JSONResponse(user(v.User)), nil
+	permissions, err := a.orgs.Permissions(ctx, v.User)
+	if err != nil {
+		return nil, fmt.Errorf("reading the permissions: %w", err)
+	}
+	return GetMe200JSONResponse(user(v.User, permissions)), nil
 }
 
 // ListMySessions lists the viewer's live sessions, newest first, marking the request's own.

@@ -9,15 +9,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
 )
-
-// uniqueViolation is PostgreSQL's error code for a row that a unique constraint refuses.
-const uniqueViolation = "23505"
 
 // AuthStore keeps sign-in's rows (db/migrations/00002_sign_in.sql): auth.Store on PostgreSQL, through the queries sqlc
 // generates from db/queries.
@@ -195,8 +191,13 @@ func grant(ctx context.Context, q *queries.Queries, principalID uuid.UUID, g aut
 	return event(ctx, q, principalID, "grant.made", principalID, map[string]any{"role": g.RoleID, "source": g.Source})
 }
 
-// event appends to the audit log.
+// event appends to the activity log an event of the installation's: one of no organization.
 func event(ctx context.Context, q *queries.Queries, actorID uuid.UUID, kind string, subjectID uuid.UUID, details map[string]any) error {
+	return orgEvent(ctx, q, nil, actorID, kind, subjectID, details)
+}
+
+// orgEvent appends to the activity log an event that happened in organization orgID, or in none when nil.
+func orgEvent(ctx context.Context, q *queries.Queries, orgID *uuid.UUID, actorID uuid.UUID, kind string, subjectID uuid.UUID, details map[string]any) error {
 	if details == nil {
 		details = map[string]any{}
 	}
@@ -205,7 +206,7 @@ func event(ctx context.Context, q *queries.Queries, actorID uuid.UUID, kind stri
 		return fmt.Errorf("encoding the event's details: %w", err)
 	}
 	if err := q.InsertEvent(ctx, queries.InsertEventParams{
-		ActorID: actorID, Kind: kind, SubjectID: &subjectID, Details: encoded,
+		ActorID: actorID, Kind: kind, SubjectID: &subjectID, Details: encoded, OrgID: orgID,
 	}); err != nil {
 		return fmt.Errorf("recording the event: %w", err)
 	}
@@ -326,31 +327,7 @@ func wrap(what string, err error) error {
 	return fmt.Errorf("%s: %w", what, err)
 }
 
-// transact runs fn with the queries in a transaction that acts for actor, committed when it returns nil and rolled
-// back otherwise; a unique constraint it hits is a row that is already there. The actor goes in session variable
-// cobranch.principal_id, local to the transaction, so trigger audit() records who changed each row
-// (db/migrations/00003_audit.sql); uuid.Nil leaves it unset, for a change of Cobranch's own.
+// transact runs fn in a transaction that acts for actor (transact).
 func (s *AuthStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(q *queries.Queries) error) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("%s: beginning the transaction: %w", what, err)
-	}
-	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
-	q := s.q.WithTx(tx)
-	if actor != uuid.Nil {
-		if err := q.SetPrincipal(ctx, actor.String()); err != nil {
-			return fmt.Errorf("%s: naming the principal: %w", what, err)
-		}
-	}
-	if err := fn(q); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
-			return fmt.Errorf("%s: a row is already there (%s): %w", what, pgErr.ConstraintName, err)
-		}
-		return fmt.Errorf("%s: %w", what, err)
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("%s: committing: %w", what, err)
-	}
-	return nil
+	return transact(ctx, s.pool, s.q, what, actor, fn)
 }

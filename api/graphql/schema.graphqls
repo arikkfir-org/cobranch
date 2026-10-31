@@ -43,3 +43,124 @@ type Session {
   "Whether this is the session the request itself came with."
   current: Boolean!
 }
+
+"The scopes roles are granted at. Repositories come with their slice."
+enum RoleScope {
+  ORGANIZATION
+}
+
+extend type Query {
+  "An organization by its slug, current or former: null unless the viewer may read it."
+  organization(slug: String!): Organization
+  "The roles granted at a scope, the built-in ones first."
+  roles(scope: RoleScope!): [Role!]!
+}
+
+extend type User {
+  "The permissions the viewer holds at the installation, such as orgs.create."
+  permissions: [String!]!
+  "The organizations the viewer belongs to."
+  organizations: [Organization!]!
+  "The pending invitations to the viewer's verified emails."
+  invitations: [Invitation!]!
+  "The viewer's pending requests to join organizations."
+  joinRequests: [JoinRequest!]!
+}
+
+extend type Mutation {
+  "Creates an organization and makes the viewer its Owner; takes orgs.create."
+  createOrganization(slug: String!, name: String!): Organization!
+  "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
+  updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
+  "Invites an email to the organization with a role; takes org.members.manage and the role's permissions."
+  inviteMember(organizationId: ID!, email: String!, roleId: ID!): Invitation!
+  "Cancels a pending invitation; takes org.members.manage."
+  cancelInvitation(organizationId: ID!, id: ID!): Boolean!
+  "Accepts an invitation to one of the viewer's verified emails, and joins the organization."
+  acceptInvitation(id: ID!): Organization!
+  "Declines an invitation to one of the viewer's verified emails."
+  declineInvitation(id: ID!): Boolean!
+  "Asks to join an organization that accepts join requests, by slug, with a note for its managers."
+  requestToJoin(slug: String!, note: String): JoinRequest!
+  "Approves a pending join request with a role; takes org.members.manage and the role's permissions."
+  approveJoinRequest(organizationId: ID!, id: ID!, roleId: ID!): Boolean!
+  "Declines a pending join request; takes org.members.manage."
+  declineJoinRequest(organizationId: ID!, id: ID!): Boolean!
+  "Leaves an organization. Its last Owner can't."
+  leaveOrganization(id: ID!): Boolean!
+  "Removes a member; takes org.members.manage and every permission of the roles they hold. Oneself is leaving."
+  removeMember(organizationId: ID!, userId: ID!): Boolean!
+}
+
+"An organization: a slug for its URLs, a name, and its settings."
+type Organization {
+  id: ID!
+  slug: String!
+  name: String!
+  "The role everyone who joins gets: Member by default."
+  membershipRoleId: ID!
+  "Whether users may ask to join by slug. Off, the organization answers like one that doesn't exist."
+  acceptsJoinRequests: Boolean!
+  "The identity providers its members may sign in with, or null for all of the installation's."
+  providers: [String!]
+  createdAt: Time!
+  "The permissions the viewer holds here."
+  viewerPermissions: [String!]!
+  "The members and the roles they hold; takes org.read."
+  members: [Member!]!
+  "The pending invitations; takes org.members.manage."
+  invitations: [Invitation!]!
+  "The pending join requests; takes org.members.manage."
+  joinRequests: [JoinRequest!]!
+}
+
+input OrganizationSettings {
+  slug: String!
+  name: String!
+  membershipRoleId: ID!
+  acceptsJoinRequests: Boolean!
+  "Null lets members sign in with any of the installation's providers."
+  providers: [String!]
+}
+
+"A role granted at a scope."
+type Role {
+  id: ID!
+  name: String!
+  description: String!
+  permissions: [String!]!
+  builtIn: Boolean!
+}
+
+"A user who belongs to an organization, with the roles they hold there."
+type Member {
+  userId: ID!
+  displayName: String!
+  joinedAt: Time!
+  roles: [Role!]!
+}
+
+"An invitation to an email; only a user who holds it, verified, accepts it."
+type Invitation {
+  id: ID!
+  organizationId: ID!
+  organizationSlug: String!
+  organizationName: String!
+  email: String!
+  roleId: ID!
+  createdAt: Time!
+  expiresAt: Time!
+}
+
+"A user's request to join an organization, waiting for one of its member managers."
+type JoinRequest {
+  id: ID!
+  organizationId: ID!
+  organizationSlug: String!
+  organizationName: String!
+  userId: ID!
+  userName: String!
+  note: String!
+  createdAt: Time!
+  expiresAt: Time!
+}

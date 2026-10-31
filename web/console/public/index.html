@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
-  <!-- The Console's first screen: sign in, and who you are once you have. The design system's colours
-       (docs/cobranch/designs/design-system), the REST API at the URL config.json names, and the Auth server at the
-       other URL it names. The Console's routes arrive with its screens; until then every path shows this page. -->
+  <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), and an organization's home,
+       members and settings under its slug. The design system's colours (docs/cobranch/designs/design-system), the REST
+       API at the URL config.json names, and the Auth server at the other URL it names. Caddy serves this page for
+       every path, and it routes on the path: the organization's slug first, then its page. -->
   <style>
     :root {
       color-scheme: light;
@@ -52,30 +53,31 @@
         --color-status-danger-border: #7a2024;
       }
     }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      display: grid;
-      place-items: center;
       background: var(--color-bg-canvas);
       color: var(--color-fg-default);
       font: 14px/20px var(--font-sans);
     }
-    main {
-      width: min(420px, calc(100vw - 32px));
+    body.centered { display: grid; place-items: center; }
+    h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
+    h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
+    h3 { margin: 0; font-size: 14px; line-height: 20px; font-weight: 600; color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: 0.4px; font-size: 12px; }
+    p { margin: 0; color: var(--color-fg-muted); }
+    a { color: var(--color-accent); }
+    code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    [hidden] { display: none !important; }
+    main.card {
+      width: min(440px, calc(100vw - 32px));
       display: grid;
       gap: 16px;
       padding: 32px;
       border: 1px solid var(--color-border-default);
       border-radius: 12px;
       background: var(--color-bg-sunken);
-      box-sizing: border-box;
     }
-    h1 { margin: 0; font-size: 30px; line-height: 36px; letter-spacing: -0.6px; font-weight: 600; }
-    h2 { margin: 0; font-size: 16px; line-height: 24px; font-weight: 600; }
-    p { margin: 0; color: var(--color-fg-muted); }
-    code { font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
-    [hidden] { display: none !important; }
     .status {
       justify-self: start;
       padding: 3px 10px;
@@ -94,9 +96,8 @@
     }
     .buttons { display: grid; gap: 8px; }
     .button {
-      display: block;
-      width: 100%;
-      padding: 9px 14px;
+      display: inline-block;
+      padding: 7px 14px;
       border-radius: 8px;
       border: 1px solid var(--color-border-default);
       background: var(--color-bg-raised);
@@ -106,9 +107,12 @@
       text-align: center;
       text-decoration: none;
       cursor: pointer;
-      box-sizing: border-box;
     }
+    .buttons .button { display: block; width: 100%; }
     .button.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-fg); }
+    .button.danger { color: var(--color-status-danger-fg); border-color: var(--color-status-danger-border); }
+    .button.small { padding: 3px 10px; font-size: 13px; }
+    .button:disabled { opacity: 0.6; cursor: default; }
     .alert {
       padding: 10px 12px;
       border-radius: 8px;
@@ -116,46 +120,67 @@
       background: var(--color-status-danger-bg);
       color: var(--color-status-danger-fg);
     }
-    .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .notice {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--color-status-success-border);
+      background: var(--color-status-success-bg);
+      color: var(--color-status-success-fg);
+    }
+    .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
     .demo { padding-top: 12px; border-top: 1px solid var(--color-border-default); display: grid; gap: 8px; }
+    form { display: grid; gap: 10px; }
+    form.inline { grid-template-columns: 1fr auto; align-items: end; }
+    form.inline.with-role { grid-template-columns: 1fr auto auto; }
+    label { display: grid; gap: 4px; font-weight: 500; }
+    label span { color: var(--color-fg-muted); font-weight: 400; font-size: 12px; }
+    label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+    input, select {
+      padding: 7px 10px;
+      border-radius: 8px;
+      border: 1px solid var(--color-border-default);
+      background: var(--color-bg-raised);
+      color: var(--color-fg-default);
+      font: inherit;
+      width: 100%;
+    }
+    header.bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--color-border-default);
+      background: var(--color-bg-sunken);
+      flex-wrap: wrap;
+    }
+    header.bar .brand { font-weight: 600; letter-spacing: -0.2px; text-decoration: none; color: var(--color-fg-default); }
+    header.bar select { width: auto; }
+    header.bar nav { display: flex; gap: 4px; }
+    header.bar nav a { padding: 5px 10px; border-radius: 8px; color: var(--color-fg-muted); text-decoration: none; font-weight: 500; }
+    header.bar nav a.current { background: var(--color-bg-raised); color: var(--color-fg-default); border: 1px solid var(--color-border-default); }
+    header.bar .spacer { flex: 1; }
+    main.page { width: min(880px, 100%); margin: 0 auto; padding: 24px; display: grid; gap: 24px; }
+    section.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--color-border-default); vertical-align: middle; }
+    th { color: var(--color-fg-muted); font-weight: 500; font-size: 12px; }
+    td.actions { text-align: right; white-space: nowrap; }
+    .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); font-size: 12px; margin-right: 4px; }
+    .perms { display: flex; flex-wrap: wrap; gap: 4px; }
+    .perms code { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); }
   </style>
 </head>
-<body>
-  <main>
-    <h1>Cobranch</h1>
-    <span class="status" id="status" data-state="checking">Checking the REST API…</span>
-    <p id="version">This installation's version shows here once its REST API answers.</p>
-
-    <section id="viewer" hidden>
-      <div class="row">
-        <h2 id="viewer-name"></h2>
-        <button class="button" id="sign-out" type="button">Sign out</button>
-      </div>
-      <p id="viewer-email"></p>
-      <p>Your organizations arrive with the next release.</p>
-    </section>
-
-    <section id="sign-in" hidden>
-      <h2>Sign in</h2>
-      <p id="sign-in-error" class="alert" hidden></p>
-      <p id="not-set-up" hidden>Sign-in isn't set up yet: this installation lists no identity provider. Its operator
-        adds one to the chart's <code>auth.providers</code>.</p>
-      <div class="buttons" id="providers"></div>
-      <div class="demo" id="demo" hidden>
-        <p>Demo data is on: sign in as one of its users.</p>
-        <div class="buttons" id="seeded"></div>
-      </div>
-    </section>
-  </main>
+<body class="centered">
+  <div id="app"></div>
   <script>
-    // The Console's root, wherever the operator mounts it (its route strips the prefix): the page's path without its
-    // one sub-route, /sign-in, which the Auth server sends a failed sign-in back to. config.json lives at the root.
-    const base = location.pathname.replace(/\/sign-in\/?$/, "/").replace(/\/?$/, "/");
-    // Where a sign-in returns to: a path of the Console's URL, so without the mount prefix; its home, the one page.
-    const back = "/";
+    // The Console's root, wherever the operator mounts it (its route strips the prefix): the path of the Console's URL,
+    // which config.json names, and which every directory serves. Every page's path is relative to it; the Auth
+    // server sends a failed sign-in back to /sign-in.
+    let base = "/";
     const byId = (id) => document.getElementById(id);
+    const app = byId("app");
     // What a failed sign-in's error code means, by the code the Auth server sent us back with.
-    const errors = {
+    const signInErrors = {
       provider: "The identity provider didn't sign you in. Try again.",
       flow: "The sign-in took too long, or began in another browser. Try again.",
       refused: "This installation doesn't let you sign up. Ask its operator for an invitation.",
@@ -163,68 +188,256 @@
       unknown_provider: "That identity provider isn't set up here.",
       internal: "Something went wrong on our side. Try again in a moment.",
     };
-    const getJSON = (url, options) => fetch(url, options).then((r) => (r.ok ? r.json() : Promise.reject(r)));
+    // The Console's own paths, which no organization's slug is.
+    const reserved = ["sign-in", "new", "join", "invitations", "me", "settings"];
+    let config = { restUrl: "", authUrl: "" };
+    let me = null;
+    let orgs = [];
+    let roles = [];
 
-    getJSON(base + "config.json").then(({ restUrl, authUrl }) => {
-      // Always relative to this page, so a path prefix the route strips still works.
-      const rest = restUrl || "";
-      checkVersion(rest);
-      return getJSON(rest + "/v1/me", { credentials: "include", headers: { Accept: "application/json" } })
-        .then((me) => showViewer(me, authUrl), (r) => (r.status === 401 ? showSignIn(authUrl) : Promise.reject(r)));
-    }).catch(() => { byId("status").textContent = "REST API unreachable"; });
+    // api calls the REST API with the session cookie, and rejects with the problem it answered.
+    async function api(method, path, body) {
+      const options = { method, credentials: "include", headers: { Accept: "application/json" } };
+      if (body !== undefined) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      const r = await fetch(config.restUrl + "/v1" + path, options);
+      if (r.status === 204) return null;
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
+      return data;
+    }
+    const h = (tag, attrs = {}, ...children) => {
+      const el = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === "class") el.className = v;
+        else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+        else if (k === "hidden" || k === "disabled" || k === "checked" || k === "selected") el[k] = v;
+        else if (v !== undefined && v !== null) el.setAttribute(k, v);
+      }
+      el.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
+      return el;
+    };
+    const when = (at) => new Date(at).toLocaleDateString(undefined, { dateStyle: "medium" });
+    // go navigates within the Console; render draws the page for the path.
+    function go(path, replace) {
+      history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
+      render();
+    }
+    // route is the page's path under the Console's root: [] for its home, [slug] or [slug, page] for an organization's.
+    function route() {
+      const rest = location.pathname.slice(base.length).replace(/\/$/, "");
+      return rest ? rest.split("/") : [];
+    }
+    window.addEventListener("popstate", render);
+    document.addEventListener("click", (e) => {
+      const a = e.target.closest("a[data-nav]");
+      if (a && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        go(a.getAttribute("href").slice(base.length - 1));
+      }
+    });
 
-    function checkVersion(rest) {
-      return getJSON(rest + "/v1/version", { headers: { Accept: "application/json" } }).then(({ version }) => {
-        const status = byId("status");
-        status.dataset.state = "ready";
-        status.textContent = "REST API ready";
-        const line = byId("version");
-        line.textContent = "This installation runs Cobranch ";
-        const code = document.createElement("code");
-        code.textContent = version;
-        line.append(code, ".");
-      });
+    // The first load: where the APIs are, the version, and who the viewer is.
+    fetch("config.json").then((r) => r.json()).then(async (c) => {
+      config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "" };
+      if (c.consoleUrl) base = new URL(c.consoleUrl).pathname.replace(/\/?$/, "/");
+      try {
+        me = await api("GET", "/me");
+        [orgs, roles] = await Promise.all([api("GET", "/me/organizations").then((d) => d.organizations), api("GET", "/roles?scope=organization").then((d) => d.roles)]);
+      } catch (err) {
+        if (err.status !== 401) throw err;
+      }
+      render();
+    }).catch(() => showCard(h("span", { class: "status" }, "REST API unreachable"), h("p", {}, "The Console couldn't reach this installation's REST API. Try again in a moment.")));
+
+    function showCard(...children) {
+      document.body.className = "centered";
+      app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Cobranch"), ...children));
     }
 
-    function showViewer(me, authUrl) {
-      byId("viewer-name").textContent = me.displayName;
-      byId("viewer-email").textContent = me.emails.map((e) => e.email).join(", ");
-      byId("viewer").hidden = false;
-      byId("sign-out").addEventListener("click", () => {
-        fetch(authUrl + "/sign-out", { method: "POST", credentials: "include" }).finally(() => location.replace(base));
-      });
+    function render() {
+      const parts = route();
+      if (!me) return showSignIn();
+      if (parts.length === 0) {
+        const remembered = (() => { try { return localStorage.getItem("cobranch.org"); } catch { return null; } })();
+        const first = orgs.find((o) => o.slug === remembered) || orgs[0];
+        if (first) return go("/" + first.slug, true);
+        return showWelcome();
+      }
+      if (parts[0] === "new") return showWelcome();
+      if (reserved.includes(parts[0])) return showWelcome();
+      return showOrganization(parts[0], parts[1] || "");
     }
 
-    function showSignIn(authUrl) {
-      byId("sign-in").hidden = false;
+    async function showSignIn() {
+      const card = [];
       const params = new URLSearchParams(location.search);
       const code = params.get("error");
-      if (code) {
-        byId("sign-in-error").textContent = errors[code] || errors.internal;
-        byId("sign-in-error").hidden = false;
+      if (code) card.push(h("p", { class: "alert" }, signInErrors[code] || signInErrors.internal));
+      if (!config.authUrl) {
+        return showCard(h("h2", {}, "Sign in"), ...card, h("p", {}, "Sign-in isn't set up yet: this installation lists no identity provider. Its operator adds one to the chart's ", h("code", {}, "auth.providers"), "."));
       }
-      if (!authUrl) {
-        byId("not-set-up").hidden = false;
-        return;
+      try {
+        const { providers, seeded } = await (await fetch(config.authUrl + "/providers", { headers: { Accept: "application/json" } })).json();
+        if (providers.length === 0 && seeded.length === 0) card.push(h("p", {}, "Sign-in isn't set up yet: this installation lists no identity provider."));
+        card.push(h("div", { class: "buttons" }, providers.map((p) => h("a", { class: "button primary", href: config.authUrl + "/sign-in?" + new URLSearchParams({ provider: p.id, return: "/" }) }, "Sign in with " + p.name))));
+        if (seeded.length) {
+          card.push(h("div", { class: "demo" }, h("p", {}, "Demo data is on: sign in as one of its users."),
+            h("div", { class: "buttons" }, seeded.map((u) => h("a", { class: "button", href: config.authUrl + "/sign-in?" + new URLSearchParams({ user: u.subject, return: "/" }) }, u.displayName + " (" + u.subject + ")")))));
+        }
+      } catch {
+        card.push(h("p", {}, "Sign-in isn't answering. Try again in a moment."));
       }
-      return getJSON(authUrl + "/providers", { headers: { Accept: "application/json" } }).then(({ providers, seeded }) => {
-        byId("not-set-up").hidden = providers.length > 0 || seeded.length > 0;
-        for (const p of providers) {
-          const a = document.createElement("a");
-          a.className = "button primary";
-          a.href = authUrl + "/sign-in?" + new URLSearchParams({ provider: p.id, return: back });
-          a.textContent = "Sign in with " + p.name;
-          byId("providers").append(a);
+      showCard(h("h2", {}, "Sign in"), ...card);
+    }
+
+    function signOut() {
+      fetch(config.authUrl + "/sign-out", { method: "POST", credentials: "include" }).finally(() => location.replace(base));
+    }
+
+    // The welcome page: a user who belongs nowhere creates, asks to join, or accepts an invitation. It is also /new.
+    async function showWelcome() {
+      const [invitations, requests] = await Promise.all([api("GET", "/me/invitations").then((d) => d.invitations), api("GET", "/me/join-requests").then((d) => d.joinRequests)]);
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const sections = [h("div", { class: "row" }, h("h2", {}, "Welcome, " + me.displayName), h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out")), error];
+      if (orgs.length) sections.push(h("p", {}, "You belong to ", orgs.map((o, i) => [i ? ", " : "", h("a", { href: base + o.slug, "data-nav": "" }, o.name)]), "."));
+      if (invitations.length) {
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"), ...invitations.map((inv) => h("div", { class: "row" },
+          h("div", {}, h("strong", {}, inv.orgName), h("p", {}, "as " + roleName(inv.roleId) + ", to " + inv.email + ", until " + when(inv.expiresAt))),
+          h("div", {}, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/accept").then(reloadTo).catch(fail) }, "Accept"), " ",
+            h("button", { class: "button small", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/decline").then(() => showWelcome()).catch(fail) }, "Decline"))))));
+      }
+      if (me.permissions.includes("orgs.create")) {
+        const slug = h("input", { name: "slug", required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39 });
+        const name = h("input", { name: "name", required: true, placeholder: "Acme" });
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Create an organization"),
+          h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs", { slug: slug.value, name: name.value }).then(reloadTo).catch(fail); } },
+            h("label", {}, "Name", name), h("label", {}, "Slug", h("span", {}, "Its URL: 2 to 39 lowercase letters, digits and hyphens."), slug),
+            h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
+      }
+      const joinSlug = h("input", { name: "slug", required: true, placeholder: "acme" });
+      const note = h("input", { name: "note", placeholder: "A word for its managers (optional)", maxlength: 500 });
+      sections.push(h("section", { class: "panel" }, h("h3", {}, "Ask to join"),
+        h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs/" + encodeURIComponent(joinSlug.value) + "/join-requests", { note: note.value }).then(() => showWelcome()).catch(fail); } },
+          h("label", {}, "Organization slug", joinSlug), h("label", {}, "Note", note), h("div", {}, h("button", { class: "button", type: "submit" }, "Ask to join"))),
+        requests.length ? h("p", {}, "Waiting: ", requests.map((r, i) => [i ? ", " : "", h("strong", {}, r.orgName)]), ".") : null));
+      document.body.className = "centered";
+      app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Cobranch"), ...sections));
+    }
+
+    // reloadTo reloads the viewer's organizations and opens org.
+    async function reloadTo(org) {
+      orgs = (await api("GET", "/me/organizations")).organizations;
+      go("/" + org.slug);
+    }
+    const roleName = (id) => (roles.find((r) => r.id === id) || { name: "?" }).name;
+    const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
+
+    // An organization's pages: its home, members and settings, under a bar with the switcher and the navigation.
+    async function showOrganization(slug, page) {
+      let org;
+      try {
+        org = await api("GET", "/orgs/" + encodeURIComponent(slug));
+      } catch (err) {
+        if (err.status === 404) return notFound(slug);
+        throw err;
+      }
+      if (org.slug !== slug) return go("/" + org.slug + (page ? "/" + page : ""), true);
+      try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
+      const can = (p) => org.viewerPermissions.includes(p);
+      const pages = [["", "Home"], ["members", "Members"]];
+      if (can("org.manage")) pages.push(["settings", "Settings"]);
+      const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === page ? "current" : "" }, label);
+      const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
+        orgs.map((o) => h("option", { value: o.slug, selected: o.slug === org.slug }, o.name)), h("option", { value: "+" }, "Create or join…"));
+      const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), switcher, h("nav", {}, pages.map(link)),
+        h("span", { class: "spacer" }), h("span", {}, me.displayName), h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out"));
+      const main = h("main", { class: "page" });
+      document.body.className = "";
+      app.replaceChildren(bar, main);
+      if (page === "members") return showMembers(org, main, can);
+      if (page === "settings" && can("org.manage")) return showSettings(org, main);
+      if (page) return go("/" + org.slug);
+      main.append(h("h1", {}, org.name), h("p", {}, h("code", {}, org.slug), org.acceptsJoinRequests ? " · accepts join requests" : ""),
+        h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, org.viewerPermissions.map((p) => h("code", {}, p)))),
+        h("section", { class: "panel" }, h("h3", {}, "Next"), h("p", {}, "Repositories, agents and the rest arrive with their slices. For now, manage ", h("a", { href: base + org.slug + "/members", "data-nav": "" }, "its members"), ".")));
+    }
+
+    function notFound(slug) {
+      showCard(h("h2", {}, "No such organization"), h("p", {}, "There is no organization ", h("code", {}, slug), " that you may see."), h("a", { class: "button", href: base, "data-nav": "" }, "Back"));
+    }
+
+    async function showMembers(org, main, can) {
+      const manage = can("org.members.manage");
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const refresh = () => showMembers(org, main, can);
+      const [members, invitations, requests] = await Promise.all([
+        api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
+        manage ? api("GET", "/orgs/" + org.slug + "/invitations").then((d) => d.invitations) : [],
+        manage ? api("GET", "/orgs/" + org.slug + "/join-requests").then((d) => d.joinRequests) : [],
+      ]);
+      const memberRow = (m) => h("tr", {}, h("td", {}, m.displayName, m.userId === me.id ? h("span", { class: "chip" }, "you") : null),
+        h("td", {}, m.roles.map((r) => h("span", { class: "chip" }, r.name))), h("td", {}, when(m.joinedAt)),
+        h("td", { class: "actions" }, m.userId === me.id
+          ? h("button", { class: "button small danger", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/leave").then(() => location.replace(base)).catch(fail) }, "Leave")
+          : manage ? h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId).then(refresh).catch(fail) }, "Remove") : null));
+      const sections = [h("h1", {}, "Members"), error,
+        h("section", { class: "panel" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Member"), h("th", {}, "Roles"), h("th", {}, "Joined"), h("th", {}))), h("tbody", {}, members.map(memberRow))))];
+      if (manage) {
+        const email = h("input", { name: "email", type: "email", required: true, placeholder: "pat@example.com" });
+        const role = roleSelect(org.membershipRoleId);
+        const inviteLink = (inv) => location.origin + base + "invitations#" + inv.id;
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"),
+          h("form", { class: "inline with-role", onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs/" + org.slug + "/invitations", { email: email.value, roleId: role.value }).then(refresh).catch(fail); } },
+            h("label", {}, "Email", email), h("label", {}, "Role", role), h("button", { class: "button primary", type: "submit" }, "Invite")),
+          invitations.length ? h("table", {}, h("tbody", {}, invitations.map((inv) => h("tr", {}, h("td", {}, inv.email), h("td", {}, h("span", { class: "chip" }, roleName(inv.roleId))), h("td", {}, "until " + when(inv.expiresAt)),
+            h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: (e) => navigator.clipboard.writeText(inviteLink(inv)).then(() => { e.target.textContent = "Copied"; }).catch(() => {}) }, "Copy link"), " ",
+              h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/invitations/" + inv.id).then(refresh).catch(fail) }, "Cancel")))))) : h("p", {}, "No pending invitations. An invitee signs in with the email you invite, and accepts it on their welcome page.")));
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Join requests"),
+          requests.length ? h("table", {}, h("tbody", {}, requests.map((r) => {
+            const role = roleSelect(org.membershipRoleId);
+            return h("tr", {}, h("td", {}, r.userName, r.note ? h("p", {}, r.note) : null), h("td", {}, role), h("td", {}, "until " + when(r.expiresAt)),
+              h("td", { class: "actions" }, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/approve", { roleId: role.value }).then(refresh).catch(fail) }, "Approve"), " ",
+                h("button", { class: "button small", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/decline").then(refresh).catch(fail) }, "Decline")));
+          }))) : h("p", {}, org.acceptsJoinRequests ? "Nobody is asking to join." : "This organization doesn't accept join requests; its settings turn them on.")));
+      }
+      main.replaceChildren(...sections);
+    }
+
+    async function showSettings(org, main) {
+      const error = h("p", { class: "alert", hidden: true });
+      const saved = h("p", { class: "notice", hidden: true }, "Saved.");
+      const name = h("input", { name: "name", required: true, value: org.name });
+      const slug = h("input", { name: "slug", required: true, value: org.slug, pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39 });
+      const role = roleSelect(org.membershipRoleId);
+      const accepts = h("input", { name: "acceptsJoinRequests", type: "checkbox", checked: org.acceptsJoinRequests });
+      const providers = h("input", { name: "providers", value: (org.providers || []).join(", "), placeholder: "All of this installation's" });
+      const form = h("form", { onsubmit: async (e) => {
+        e.preventDefault();
+        error.hidden = saved.hidden = true;
+        const list = providers.value.split(",").map((s) => s.trim()).filter(Boolean);
+        try {
+          const updated = await api("PATCH", "/orgs/" + org.slug, { name: name.value, slug: slug.value, membershipRoleId: role.value, acceptsJoinRequests: accepts.checked, providers: list });
+          orgs = (await api("GET", "/me/organizations")).organizations;
+          if (updated.slug !== org.slug) return go("/" + updated.slug + "/settings");
+          saved.hidden = false;
+          org = updated;
+        } catch (err) {
+          error.textContent = err.message;
+          error.hidden = false;
         }
-        byId("demo").hidden = seeded.length === 0;
-        for (const u of seeded) {
-          const a = document.createElement("a");
-          a.className = "button";
-          a.href = authUrl + "/sign-in?" + new URLSearchParams({ user: u.subject, return: back });
-          a.textContent = u.displayName + " (" + u.subject + ")";
-          byId("seeded").append(a);
-        }
-      }).catch(() => { byId("not-set-up").hidden = false; });
+      } },
+        h("label", {}, "Name", name),
+        h("label", {}, "Slug", h("span", {}, "Its URL. The old slug keeps pointing here after a change."), slug),
+        h("label", {}, "Membership role", h("span", {}, "The role everyone who joins gets."), role),
+        h("label", { class: "check" }, accepts, "Accept join requests by slug"),
+        h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
+      main.replaceChildren(h("h1", {}, "Settings"), error, saved, h("section", { class: "panel" }, form));
     }
   </script>
 </body>

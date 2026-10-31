@@ -24,7 +24,7 @@ func (q *Queries) DeleteGrant(ctx context.Context, principalID uuid.UUID, roleID
 }
 
 const insertEvent = `-- name: InsertEvent :exec
-INSERT INTO events (actor_id, kind, subject_id, details) VALUES ($1, $2, $3, $4)
+INSERT INTO events (actor_id, kind, subject_id, details, org_id) VALUES ($1, $2, $3, $4, $5)
 `
 
 type InsertEventParams struct {
@@ -32,6 +32,7 @@ type InsertEventParams struct {
 	Kind      string
 	SubjectID *uuid.UUID
 	Details   []byte
+	OrgID     *uuid.UUID
 }
 
 func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error {
@@ -40,6 +41,7 @@ func (q *Queries) InsertEvent(ctx context.Context, arg InsertEventParams) error 
 		arg.Kind,
 		arg.SubjectID,
 		arg.Details,
+		arg.OrgID,
 	)
 	return err
 }

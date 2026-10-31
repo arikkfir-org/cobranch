@@ -16,3 +16,17 @@ resolver:
   type: Resolver
 omit_gqlgen_version_in_file_notice: true
 skip_mod_tidy: true
+models:
+  User:
+    fields:
+      sessions: { resolver: true }
+      permissions: { resolver: true }
+      organizations: { resolver: true }
+      invitations: { resolver: true }
+      joinRequests: { resolver: true }
+  Organization:
+    fields:
+      viewerPermissions: { resolver: true }
+      members: { resolver: true }
+      invitations: { resolver: true }
+      joinRequests: { resolver: true }

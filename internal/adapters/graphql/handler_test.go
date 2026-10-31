@@ -27,7 +27,7 @@ func TestNewHandler(t *testing.T) {
 				req.Header.Set("Content-Type", "application/json")
 			}
 			rec := httptest.NewRecorder()
-			NewHandler("v1.2.3", nil).ServeHTTP(rec, req)
+			NewHandler("v1.2.3", nil, nil).ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
 				t.Errorf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

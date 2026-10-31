@@ -58,13 +58,17 @@
   `go generate ./...`) writes `internal/adapters/postgres/queries` on pgx and `db/seeds/queries` on database/sql. A
   store converts between the generated rows and the domain's types and writes no SQL of its own; the one exception is
   the schema version's read of goose's table, whose name sqlc doesn't know.
-- Every table of data people manage (principals, their emails and identities, sessions, roles, grants, and each such
-  table a slice adds) carries trigger `audit()` (`db/migrations/00003_audit.sql`), which writes `audit_log` with the
+- Every table of data people manage (principals, their emails and identities, sessions, roles, grants, organizations,
+  their slugs, memberships, invitations, join requests, and each such table a slice adds) carries trigger `audit()` (`db/migrations/00003_audit.sql`), which writes `audit_log` with the
   principal from session variable `cobranch.principal_id`; a new table gets the trigger in its migration, with the
   columns to keep out of the log (a token's hash) as the trigger's arguments. A change a person makes to an audited
   table runs in a store transaction that names them (`transact`'s actor; the variable is local to the transaction).
   Cobranch's own changes (a migration, a seed, maintenance's expiry sweep, a session's touch) name nobody, and
   transient rows (`sign_in_flows`) aren't audited.
+- Every permission check goes through `auth.Authorizer` over the viewer's grants (`internal/services/auth/authorize.go`):
+  a service asks `Can` or `Holds`, never reads `grants` itself, and answers `ErrNotFound` where `org.read` fails, so an
+  organization the viewer may not see looks like none. The Console's own paths are `orgs.ReservedSlugs`; a new
+  Console route goes there first.
 - `golangci-lint` runs the house rules' linters (`.golangci.yml`); fix what it reports rather than silence it.
 
 ## Tests

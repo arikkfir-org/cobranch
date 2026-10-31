@@ -5,6 +5,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -20,6 +21,8 @@ type api struct {
 	version string
 	// sessions is sign-in's service, for the viewer's sessions.
 	sessions Sessions
+	// orgs is the organizations' service.
+	orgs Organizations
 }
 
 // GetVersion answers the version the server was built as.
@@ -27,10 +30,11 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 	return GetVersion200JSONResponse{Version: a.version}, nil
 }
 
-// NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's. Every
-// other path answers 404, and a request the API can't read 400, both as problem details.
-func NewHandler(version string, sessions Sessions) http.Handler {
-	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions}, nil, StrictHTTPServerOptions{
+// NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's and
+// organizations for theirs. Every other path answers 404, and a request the API can't read 400, both as problem
+// details.
+func NewHandler(version string, sessions Sessions, organizations Organizations) http.Handler {
+	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions, orgs: organizations}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,
 	})
@@ -46,8 +50,14 @@ func badRequest(w http.ResponseWriter, r *http.Request, err error) {
 	writeProblem(w, r, http.StatusBadRequest, "request.invalid", err.Error())
 }
 
-// internalError hides err from the caller, who gets the request's ID to report instead.
+// internalError writes the problem an operation refused with (apiError), and hides any other err from the caller,
+// who gets the request's ID to report instead.
 func internalError(w http.ResponseWriter, r *http.Request, err error) {
+	var refused *apiError
+	if errors.As(err, &refused) {
+		writeProblem(w, r, refused.status, refused.code, refused.detail)
+		return
+	}
 	slog.ErrorContext(r.Context(), "A REST operation failed",
 		"path", r.URL.Path, "requestId", server.RequestID(r.Context()), "error", err)
 	writeProblem(w, r, http.StatusInternalServerError, "internal", "")

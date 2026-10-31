@@ -11,6 +11,7 @@ import (
 	"log/slog"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/orgs"
 	"github.com/google/uuid"
 )
 
@@ -35,6 +36,207 @@ func (r *mutationResolver) RevokeSession(ctx context.Context, id string) (bool, 
 	return true, nil
 }
 
+// CreateOrganization is the resolver for the createOrganization field.
+func (r *mutationResolver) CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := r.Orgs.Create(ctx, v.User, slug, name)
+	if err != nil {
+		return nil, fail(ctx, err, "organization", "creating the organization")
+	}
+	return organization(org), nil
+}
+
+// UpdateOrganization is the resolver for the updateOrganization field.
+func (r *mutationResolver) UpdateOrganization(ctx context.Context, id string, input OrganizationSettings) (*Organization, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, id, "organization")
+	if err != nil {
+		return nil, err
+	}
+	s, err := settings(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	org, err := r.Orgs.Update(ctx, v.User, orgID, s)
+	if err != nil {
+		return nil, fail(ctx, err, "organization", "updating the organization")
+	}
+	return organization(org), nil
+}
+
+// InviteMember is the resolver for the inviteMember field.
+func (r *mutationResolver) InviteMember(ctx context.Context, organizationID string, email string, roleID string) (*Invitation, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	role, err := parseID(ctx, roleID, "role")
+	if err != nil {
+		return nil, err
+	}
+	inv, err := r.Orgs.Invite(ctx, v.User, orgID, email, role)
+	if err != nil {
+		return nil, fail(ctx, err, "role", "inviting")
+	}
+	return invitation(inv), nil
+}
+
+// CancelInvitation is the resolver for the cancelInvitation field.
+func (r *mutationResolver) CancelInvitation(ctx context.Context, organizationID string, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, id, "invitation", func(orgID, id uuid.UUID) error {
+		return r.Orgs.CancelInvitation(ctx, v.User, orgID, id)
+	}, "cancelling the invitation")
+}
+
+// AcceptInvitation is the resolver for the acceptInvitation field.
+func (r *mutationResolver) AcceptInvitation(ctx context.Context, id string) (*Organization, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	invID, err := parseID(ctx, id, "invitation")
+	if err != nil {
+		return nil, err
+	}
+	org, err := r.Orgs.AcceptInvitation(ctx, v.User, invID)
+	if err != nil {
+		return nil, fail(ctx, err, "invitation", "accepting the invitation")
+	}
+	return organization(org), nil
+}
+
+// DeclineInvitation is the resolver for the declineInvitation field.
+func (r *mutationResolver) DeclineInvitation(ctx context.Context, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	invID, err := parseID(ctx, id, "invitation")
+	if err != nil {
+		return false, err
+	}
+	if err := r.Orgs.DeclineInvitation(ctx, v.User, invID); err != nil {
+		return false, fail(ctx, err, "invitation", "declining the invitation")
+	}
+	return true, nil
+}
+
+// RequestToJoin is the resolver for the requestToJoin field.
+func (r *mutationResolver) RequestToJoin(ctx context.Context, slug string, note *string) (*JoinRequest, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var text string
+	if note != nil {
+		text = *note
+	}
+	req, err := r.Orgs.RequestToJoin(ctx, v.User, slug, text)
+	if err != nil {
+		return nil, fail(ctx, err, "organization", "requesting to join")
+	}
+	return joinRequest(req), nil
+}
+
+// ApproveJoinRequest is the resolver for the approveJoinRequest field.
+func (r *mutationResolver) ApproveJoinRequest(ctx context.Context, organizationID string, id string, roleID string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	role, err := parseID(ctx, roleID, "role")
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, id, "join request", func(orgID, id uuid.UUID) error {
+		return r.Orgs.ApproveJoinRequest(ctx, v.User, orgID, id, role)
+	}, "approving the join request")
+}
+
+// DeclineJoinRequest is the resolver for the declineJoinRequest field.
+func (r *mutationResolver) DeclineJoinRequest(ctx context.Context, organizationID string, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, id, "join request", func(orgID, id uuid.UUID) error {
+		return r.Orgs.DeclineJoinRequest(ctx, v.User, orgID, id)
+	}, "declining the join request")
+}
+
+// LeaveOrganization is the resolver for the leaveOrganization field.
+func (r *mutationResolver) LeaveOrganization(ctx context.Context, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	orgID, err := parseID(ctx, id, "organization")
+	if err != nil {
+		return false, err
+	}
+	if err := r.Orgs.Leave(ctx, v.User, orgID); err != nil {
+		return false, fail(ctx, err, "organization", "leaving the organization")
+	}
+	return true, nil
+}
+
+// RemoveMember is the resolver for the removeMember field.
+func (r *mutationResolver) RemoveMember(ctx context.Context, organizationID string, userID string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, userID, "member", func(orgID, id uuid.UUID) error {
+		return r.Orgs.RemoveMember(ctx, v.User, orgID, id)
+	}, "removing the member")
+}
+
+// ViewerPermissions is the resolver for the viewerPermissions field.
+func (r *organizationResolver) ViewerPermissions(ctx context.Context, obj *Organization) ([]string, error) {
+	return resolveOrg(ctx, obj, r.Orgs.ViewerPermissions, "reading the viewer's permissions")
+}
+
+// Members is the resolver for the members field.
+func (r *organizationResolver) Members(ctx context.Context, obj *Organization) ([]*Member, error) {
+	members, err := resolveOrg(ctx, obj, r.Orgs.Members, "listing the members")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(members, member), nil
+}
+
+// Invitations is the resolver for the invitations field.
+func (r *organizationResolver) Invitations(ctx context.Context, obj *Organization) ([]*Invitation, error) {
+	all, err := resolveOrg(ctx, obj, r.Orgs.Invitations, "listing the invitations")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(all, invitation), nil
+}
+
+// JoinRequests is the resolver for the joinRequests field.
+func (r *organizationResolver) JoinRequests(ctx context.Context, obj *Organization) ([]*JoinRequest, error) {
+	all, err := resolveOrg(ctx, obj, r.Orgs.JoinRequests, "listing the join requests")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(all, joinRequest), nil
+}
+
 // Version is the resolver for the version field.
 func (r *queryResolver) Version(ctx context.Context) (string, error) {
 	return r.Resolver.Version, nil
@@ -46,23 +248,98 @@ func (r *queryResolver) Viewer(ctx context.Context) (*User, error) {
 	if !ok {
 		return nil, nil
 	}
-	u := user(v.User)
+	return user(v.User), nil
+}
+
+// Organization is the resolver for the organization field.
+func (r *queryResolver) Organization(ctx context.Context, slug string) (*Organization, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := r.Orgs.Get(ctx, v.User, slug)
+	switch {
+	case errors.Is(err, orgs.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fail(ctx, err, "organization", "reading the organization")
+	}
+	return organization(org), nil
+}
+
+// Roles is the resolver for the roles field.
+func (r *queryResolver) Roles(ctx context.Context, scope RoleScope) ([]*Role, error) {
+	if _, err := viewer(ctx); err != nil {
+		return nil, err
+	}
+	roles, err := r.Orgs.Roles(ctx)
+	if err != nil {
+		return nil, fail(ctx, err, "role", "listing the roles")
+	}
+	return mapAll(roles, role), nil
+}
+
+// Sessions is the resolver for the sessions field.
+func (r *userResolver) Sessions(ctx context.Context, obj *User) ([]*Session, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sessions, err := r.sessions(ctx, v)
 	if err != nil {
 		slog.ErrorContext(ctx, "Listing the viewer's sessions failed", "error", err)
 		return nil, err
 	}
-	u.Sessions = sessions
-	return u, nil
+	return sessions, nil
+}
+
+// Permissions is the resolver for the permissions field.
+func (r *userResolver) Permissions(ctx context.Context, obj *User) ([]string, error) {
+	return resolveUser(ctx, r.Orgs.Permissions, "reading the viewer's permissions")
+}
+
+// Organizations is the resolver for the organizations field.
+func (r *userResolver) Organizations(ctx context.Context, obj *User) ([]*Organization, error) {
+	all, err := resolveUser(ctx, r.Orgs.Organizations, "listing the viewer's organizations")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(all, organization), nil
+}
+
+// Invitations is the resolver for the invitations field.
+func (r *userResolver) Invitations(ctx context.Context, obj *User) ([]*Invitation, error) {
+	all, err := resolveUser(ctx, r.Orgs.MyInvitations, "listing the viewer's invitations")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(all, invitation), nil
+}
+
+// JoinRequests is the resolver for the joinRequests field.
+func (r *userResolver) JoinRequests(ctx context.Context, obj *User) ([]*JoinRequest, error) {
+	all, err := resolveUser(ctx, r.Orgs.MyJoinRequests, "listing the viewer's join requests")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(all, joinRequest), nil
 }
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }
 
+// Organization returns OrganizationResolver implementation.
+func (r *Resolver) Organization() OrganizationResolver { return &organizationResolver{r} }
+
 // Query returns QueryResolver implementation.
 func (r *Resolver) Query() QueryResolver { return &queryResolver{r} }
 
+// User returns UserResolver implementation.
+func (r *Resolver) User() UserResolver { return &userResolver{r} }
+
 type (
-	mutationResolver struct{ *Resolver }
-	queryResolver    struct{ *Resolver }
+	mutationResolver     struct{ *Resolver }
+	organizationResolver struct{ *Resolver }
+	queryResolver        struct{ *Resolver }
+	userResolver         struct{ *Resolver }
 )
