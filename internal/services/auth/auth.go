@@ -19,6 +19,8 @@ type Kind string
 const (
 	KindUser      Kind = "user"
 	KindAnonymous Kind = "anonymous"
+	// KindAPIKey is an API key: a principal of an organization that a script acts as, with its own grants.
+	KindAPIKey Kind = "api_key"
 )
 
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
@@ -135,6 +137,26 @@ type Session struct {
 // Live reports whether the session signs its user in at now: not revoked, used lately and not aged out.
 func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
+}
+
+// Credential is a secret that acts as a principal: an API key's, shown once when made and kept hashed. The
+// Authorization header carries it as a bearer token.
+type Credential struct {
+	ID          uuid.UUID
+	PrincipalID uuid.UUID
+	// Hint is the secret's last four characters, which the Console shows.
+	Hint      string
+	CreatedAt time.Time
+	CreatedBy uuid.UUID
+	// ExpiresAt is when the credential stops working; zero for one that never expires.
+	ExpiresAt  time.Time
+	LastUsedAt time.Time
+	RevokedAt  time.Time
+}
+
+// Live reports whether the credential acts at now: not revoked and not expired.
+func (c Credential) Live(now time.Time) bool {
+	return c.RevokedAt.IsZero() && (c.ExpiresAt.IsZero() || now.Before(c.ExpiresAt))
 }
 
 // Client is what a session records about the browser that made it.

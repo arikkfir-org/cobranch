@@ -87,7 +87,7 @@ type InsertInvitationParams struct {
 	OrgID     uuid.UUID
 	Email     string
 	RoleID    uuid.UUID
-	InvitedBy uuid.UUID
+	InvitedBy *uuid.UUID
 	CreatedAt time.Time
 	ExpiresAt time.Time
 }

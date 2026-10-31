@@ -42,6 +42,11 @@ type Organizations interface {
 	DeclineJoinRequest(ctx context.Context, v orgs.Viewer, orgID, id uuid.UUID) error
 	Leave(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) error
 	RemoveMember(ctx context.Context, v orgs.Viewer, orgID, userID uuid.UUID) error
+	APIKeys(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.APIKey, error)
+	CreateAPIKey(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.APIKeyInput) (orgs.APIKey, string, error)
+	RotateAPIKey(ctx context.Context, v orgs.Viewer, orgID, keyID uuid.UUID, expiry orgs.Expiry) (orgs.APIKey, string, error)
+	RevokeSecret(ctx context.Context, v orgs.Viewer, orgID, keyID, secretID uuid.UUID) error
+	DeleteAPIKey(ctx context.Context, v orgs.Viewer, orgID, keyID uuid.UUID) error
 }
 
 // The error codes a field's error carries in its extensions, beside unauthenticated.
@@ -65,6 +70,7 @@ var conflicts = map[error]string{
 	orgs.ErrRoleInUse:     "role.in_use",
 	orgs.ErrBuiltInRole:   "role.built_in",
 	orgs.ErrGranted:       "grant.exists",
+	orgs.ErrTwoSecrets:    "api_key.two_secrets",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.

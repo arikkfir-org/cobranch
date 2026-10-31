@@ -102,6 +102,14 @@ extend type Mutation {
   updateRole(organizationId: ID!, id: ID!, input: RoleInput!): Role!
   "Deletes a custom role nobody holds, cancelling the invitations that offered it; takes org.grants.manage and every permission of the role."
   deleteRole(organizationId: ID!, id: ID!): Boolean!
+  "Makes an API key holding roles at the organization, and shows its first secret once; takes org.principals.manage, and the roles add the grant rules."
+  createApiKey(organizationId: ID!, input: ApiKeyInput!): ApiKeyCreated!
+  "Gives the key a new secret, shown once, beside the old one, which works until revoked or expired; a key with two live secrets takes no third. Takes org.principals.manage."
+  rotateApiKey(organizationId: ID!, id: ID!, input: SecretInput): ApiKeyCreated!
+  "Revokes one of the key's secrets; a key with no live secret fails every call until rotated. Takes org.principals.manage."
+  revokeApiKeySecret(organizationId: ID!, id: ID!, secretId: ID!): Boolean!
+  "Deletes an API key with its secrets and grants; takes org.principals.manage and every permission of the roles it holds."
+  deleteApiKey(organizationId: ID!, id: ID!): Boolean!
 }
 
 "An organization: a slug for its URLs, a name, and its settings."
@@ -126,6 +134,57 @@ type Organization {
   joinRequests: [JoinRequest!]!
   "The roles the organization grants: the built-in ones first, then its own; takes org.read."
   roles: [Role!]!
+  "The API keys, with their roles and secrets, by name; takes org.read."
+  apiKeys: [ApiKey!]!
+}
+
+"An API key: a principal of the organization that a script acts as, with the roles it holds there and its secrets."
+type ApiKey {
+  id: ID!
+  organizationId: ID!
+  name: String!
+  "Who made the key; null once they are gone."
+  createdBy: ID
+  createdAt: Time!
+  roles: [Role!]!
+  "The key's secrets, oldest first, revoked and expired ones included."
+  secrets: [ApiKeySecret!]!
+}
+
+"One of an API key's secrets, as its manager sees it; the secret itself was shown once."
+type ApiKeySecret {
+  id: ID!
+  "The secret's last four characters."
+  hint: String!
+  createdAt: Time!
+  "When the secret stops working; null for one that never expires."
+  expiresAt: Time
+  lastUsedAt: Time
+  revokedAt: Time
+}
+
+"When a new secret stops working; a year from now when neither is given."
+input SecretInput {
+  "The end, in the future."
+  expiresAt: Time
+  "True for a secret with no end; not with expiresAt."
+  neverExpires: Boolean
+}
+
+"What makes an API key; its first secret's expiry as SecretInput's."
+input ApiKeyInput {
+  name: String!
+  "The roles the key holds at the organization; at least one."
+  roleIds: [ID!]!
+  expiresAt: Time
+  neverExpires: Boolean
+}
+
+"A key and a secret of its, which is shown here and never again."
+type ApiKeyCreated {
+  apiKey: ApiKey!
+  "The secret, to put in the script's own secret store."
+  secret: String!
 }
 
 input OrganizationSettings {

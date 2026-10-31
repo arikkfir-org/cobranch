@@ -242,7 +242,19 @@ state, deletes its principal, secrets and grants; its events keep its ID and nam
 | `cbp_` | A personal token | [ENG-198](https://linear.app/arikkfir/issue/ENG-198) |
 
 - **Both APIs take them,** as `Authorization: Bearer`. The APIs answer CORS for the Console's origin only, so keys are
-  for scripts and servers, not for other sites' pages.
+  for scripts and servers, not for other sites' pages. A bearer token is sent on purpose, so a request with one skips
+  the cookie's origin check, and it wins over a cookie sent beside it.
+- **What a key is.** A principal of kind `api_key` that belongs to one organization (`principals.org_id`) and
+  remembers who made it; its roles are grants at that organization, which the maker must hold `org.grants.manage` for
+  and cover, as for a member. A key reads with its grants but has no emails and no sessions, and may not make keys.
+- **A secret's end** is given as `expiresAt`, a future instant, or `neverExpires`; neither means a year from now, and
+  both together are refused (`api_key.expiry_invalid`). A key holds at most two live secrets: rotating a key with two
+  is a conflict (`api_key.two_secrets`) until one is revoked or expires. A secret's last use is recorded at most once
+  a minute, outside the audit log.
+- **Deleting a key** takes `org.principals.manage` and every permission of the roles it holds, as removing a member
+  does. The key's events keep its ID as their actor (`events.actor_id` no longer references `principals`), and an
+  invitation or decision it authored stays with no author: `invitations.invited_by` and the `decided_by` columns are
+  nullable and set to null when their principal goes, so accepting such an invitation adds nobody.
 
 ## Operations
 
@@ -280,8 +292,9 @@ Organization pages live under the organization’s slug, such as `/acme/members`
 reserved slugs.
 
 The [design system](design-system.md#screens) has drawn Sign in, the organization step of sign-up, the organization's
-home and its members. The roles and settings pages followed them with the same components; the API keys and profile
-pages are drawn there before the Console builds them.
+home and its members. The roles, settings and API keys pages followed them with the same components: the API keys page
+lists each key's roles and secrets with their state, makes a key, rotates and revokes, and shows a new secret once with
+a copy button. The profile page is drawn there before the Console builds it.
 
 ## Configuration
 
@@ -316,7 +329,9 @@ These tables fill in the principals design's [data model](principals-and-permiss
 ![This slice’s tables: who a user is, how they prove it, and where they belong](sign-in-and-organizations/er.svg)
 
 Every row an organization owns carries its `org_id`, and every query is scoped by it: a custom role's `org_id` is its
-organization's, and a built-in role's is null. Built-in roles, Anonymous and the
+organization's, and a built-in role's is null. An API key is a `principals` row with `org_id` and `created_by` set
+(`kind = 'api_key'` exactly when `org_id` is), and its secrets are rows of `credentials` (the secret's SHA-256, its
+hint, who made it, its end, last use and revocation), audited without the hash. Built-in roles, Anonymous and the
 installation’s scope are rows the first migrations write.
 
 ## Rollout

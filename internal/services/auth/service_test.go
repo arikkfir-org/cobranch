@@ -431,3 +431,59 @@ func TestSessionLive(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthenticateAPIKey resolves API keys' secrets: bearer tokens that act as a key's principal.
+func TestAuthenticateAPIKey(t *testing.T) {
+	key := auth.Principal{ID: uuid.New(), Kind: auth.KindAPIKey, DisplayName: "Deploy"}
+	tests := []struct {
+		name      string
+		principal auth.Principal
+		expiresAt time.Time
+		revoked   bool
+		lastUsed  time.Time
+		token     string // instead of the credential's secret
+		at        time.Time
+		wantErr   error
+		wantTouch bool
+	}{
+		{name: "a live secret", principal: key, expiresAt: now.Add(time.Hour), at: now, wantTouch: true},
+		{name: "a secret used lately", principal: key, expiresAt: now.Add(time.Hour), lastUsed: now.Add(-time.Second), at: now},
+		{name: "a secret that never expires", principal: key, at: now.AddDate(10, 0, 0), wantTouch: true},
+		{name: "an expired secret", principal: key, expiresAt: now, at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "a revoked secret", principal: key, expiresAt: now.Add(time.Hour), revoked: true, at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "a suspended key", principal: auth.Principal{ID: key.ID, Kind: auth.KindAPIKey, Suspended: true}, at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "a secret nobody has", principal: key, token: auth.NewSecret(auth.PrefixAPIKey), at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "not a secret", principal: key, token: "cbk_nonsense", at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "a session's token", principal: key, token: auth.NewSecret(auth.PrefixSession), at: now, wantErr: auth.ErrUnauthenticated},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, store, _ := newService(auth.Settings{}, alice)
+			secret := auth.NewSecret(auth.PrefixAPIKey)
+			c := store.AddCredential(secret, tt.principal, tt.expiresAt)
+			c.LastUsedAt = tt.lastUsed
+			if tt.revoked {
+				c.RevokedAt = now.Add(-time.Minute)
+			}
+			store.Credentials[string(auth.Hash(secret))] = c
+			s.SetClock(func() time.Time { return tt.at })
+			token := secret
+			if tt.token != "" {
+				token = tt.token
+			}
+			got, err := s.Authenticate(context.Background(), token)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.User.ID != key.ID || got.User.Kind != auth.KindAPIKey || got.Credential.ID != c.ID || got.Session.ID != uuid.Nil {
+				t.Errorf("Authenticate() = %+v", got)
+			}
+			if touched := got.Credential.LastUsedAt.Equal(tt.at); touched != tt.wantTouch {
+				t.Errorf("last used %v at %v, want touched %t", got.Credential.LastUsedAt, tt.at, tt.wantTouch)
+			}
+		})
+	}
+}

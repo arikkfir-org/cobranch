@@ -27,3 +27,10 @@ VALUES (@id, @org_id, @email, @role_id, @invited_by, @expires_at);
 -- name: InsertSeedRole :exec
 INSERT INTO roles (id, scope, name, description, permissions, built_in, org_id)
 VALUES (@id, 'organization', @name, @description, string_to_array(@permissions::text, ','), false, @org_id);
+
+-- name: InsertSeedAPIKey :exec
+INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id, 'api_key', @name, @org_id, @created_by);
+
+-- name: InsertSeedCredential :exec
+INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, revoked_at)
+VALUES (@id, 'api_key', @token_hash, @principal_id, @hint, now(), @created_by, @expires_at, @revoked_at);

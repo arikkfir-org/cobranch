@@ -96,6 +96,94 @@ func ValidateRole(in RoleInput) (RoleInput, error) {
 	return in, nil
 }
 
+// APIKeyLifetime is how long an API key's secret lasts unless its manager sets an end, or none.
+const APIKeyLifetime = 365 * 24 * time.Hour
+
+// APIKey is a principal of the organization that a script acts as, with the roles it holds there and the secrets
+// that act as it: at most two live at once, so a rotation overlaps them.
+type APIKey struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Name      string
+	CreatedBy uuid.UUID
+	CreatedAt time.Time
+	Roles     []Role
+	Secrets   []Secret
+}
+
+// LiveSecrets counts the key's secrets that act at now.
+func (k APIKey) LiveSecrets(now time.Time) int {
+	n := 0
+	for _, s := range k.Secrets {
+		if s.Live(now) {
+			n++
+		}
+	}
+	return n
+}
+
+// Secret is one of an API key's secrets, as the key's manager sees it: never the secret itself, which is shown once.
+type Secret struct {
+	ID uuid.UUID
+	// Hint is the secret's last four characters.
+	Hint      string
+	CreatedAt time.Time
+	// ExpiresAt is when the secret stops working; zero for one that never expires.
+	ExpiresAt  time.Time
+	LastUsedAt time.Time
+	RevokedAt  time.Time
+}
+
+// Live reports whether the secret acts at now: not revoked and not expired.
+func (s Secret) Live(now time.Time) bool {
+	return s.RevokedAt.IsZero() && (s.ExpiresAt.IsZero() || now.Before(s.ExpiresAt))
+}
+
+// Expiry is when a secret should stop working: At, or never when Never; neither for the default, APIKeyLifetime.
+type Expiry struct {
+	At    time.Time
+	Never bool
+}
+
+// Resolve gives the secret's end from now: zero for never; a ValidationError for an end that passed, or for never
+// with an end.
+func (e Expiry) Resolve(now time.Time) (time.Time, error) {
+	switch {
+	case e.Never && !e.At.IsZero():
+		return time.Time{}, &ValidationError{Field: "expiresAt", Code: "api_key.expiry_invalid", Message: "a secret that never expires has no end"}
+	case e.Never:
+		return time.Time{}, nil
+	case e.At.IsZero():
+		return now.Add(APIKeyLifetime), nil
+	case !e.At.After(now):
+		return time.Time{}, &ValidationError{Field: "expiresAt", Code: "api_key.expiry_invalid", Message: "the end must be in the future"}
+	}
+	return e.At, nil
+}
+
+// APIKeyInput is what makes an API key: its name, the roles it holds at the organization, and its first secret's
+// expiry.
+type APIKeyInput struct {
+	Name    string
+	RoleIDs []uuid.UUID
+	Expiry  Expiry
+}
+
+// ValidateAPIKey normalizes in, or refuses it: a name of 1 to 100 characters and at least one role.
+func ValidateAPIKey(in APIKeyInput) (APIKeyInput, error) {
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || len(in.Name) > 100 {
+		return in, &ValidationError{Field: "name", Code: "api_key.name_invalid", Message: "a name is 1 to 100 characters"}
+	}
+	roles := slices.Clone(in.RoleIDs)
+	slices.SortFunc(roles, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
+	in.RoleIDs = slices.Compact(roles)
+	if len(in.RoleIDs) == 0 {
+		return in, &ValidationError{Field: "roleIds", Code: "api_key.roles_invalid", Message: "a key holds at least one role"}
+	}
+	return in, nil
+}
+
 // Member is a user who belongs to an organization, with the roles they hold there.
 type Member struct {
 	UserID      uuid.UUID
@@ -176,6 +264,8 @@ var (
 	ErrRoleInUse = errors.New("the role is still granted, or is the membership role")
 	// ErrGranted is a role the member already holds.
 	ErrGranted = errors.New("the member already holds this role")
+	// ErrTwoSecrets is an API key that already holds two live secrets, the most a rotation overlaps.
+	ErrTwoSecrets = errors.New("the key already holds two live secrets; revoke one first")
 )
 
 // ValidationError is input the domain refuses: Field names what, Code why, in the API's terms.

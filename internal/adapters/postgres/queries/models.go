@@ -10,6 +10,19 @@ import (
 	"github.com/google/uuid"
 )
 
+type Credential struct {
+	ID          uuid.UUID
+	Kind        string
+	TokenHash   []byte
+	PrincipalID uuid.UUID
+	Hint        string
+	CreatedAt   time.Time
+	CreatedBy   *uuid.UUID
+	ExpiresAt   *time.Time
+	LastUsedAt  *time.Time
+	RevokedAt   *time.Time
+}
+
 type Identity struct {
 	Issuer        string
 	Subject       string
@@ -26,7 +39,7 @@ type Invitation struct {
 	OrgID     uuid.UUID
 	Email     string
 	RoleID    uuid.UUID
-	InvitedBy uuid.UUID
+	InvitedBy *uuid.UUID
 	State     string
 	CreatedAt time.Time
 	ExpiresAt time.Time
@@ -68,6 +81,8 @@ type Principal struct {
 	DisplayName string
 	Suspended   bool
 	CreatedAt   time.Time
+	OrgID       *uuid.UUID
+	CreatedBy   *uuid.UUID
 }
 
 type Role struct {
