@@ -197,7 +197,8 @@ definitions, its default-branch trust boundary and its organization pipelines ar
 | Issues | Linked to branches by branch name, or by hand |
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
-| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack and members provisioned from an identity provider |
+| Infrastructure as code | A Terraform provider for Cobranch's resources, a client of the REST API like any other, in [phase 2](#phase-2), once the roadmap's slices have landed |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider and the Terraform provider |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -225,5 +226,11 @@ Planned after the foundations, each with a design of its own when its turn comes
 - **Git LFS.**
 - **Slack,** with several use cases still to design.
 - **Members provisioned from an identity provider** (SCIM), so an organization imports and removes its people there.
+- **A Terraform provider,** so an operator or an organization declares its Cobranch resources in code and applies them:
+  organizations, their settings, members and roles, repositories, API keys, agents and identity providers, as teams
+  provision their code host's repositories and teams with Terraform today. The provider is a client of the REST API with
+  no privileges of its own, authenticating as an API key or a personal token, so it can do exactly what its principal
+  may; a new resource kind reaches it once the API serves it. It waits for the roadmap's slices to land: the API's shape
+  has to settle before a provider pins it.
 
 Cobranch is a Kfirs project, created by Arik Kfir.
