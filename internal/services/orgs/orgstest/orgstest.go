@@ -46,8 +46,11 @@ type Store struct {
 	// RoleList holds the organization roles, Roles' answer; installation holds the installation's.
 	RoleList     []orgs.Role
 	installation []orgs.Role
-	Events       []string
-	Fail         error
+	// Keys are the API keys by ID; Hashes the hash of each secret, by secret ID, so a test can tell what was kept.
+	Keys   map[uuid.UUID]orgs.APIKey
+	Hashes map[uuid.UUID][]byte
+	Events []string
+	Fail   error
 }
 
 // NewStore returns an empty Store with the built-in roles and Manager.
@@ -57,6 +60,7 @@ func NewStore() *Store {
 		Names: map[uuid.UUID]string{}, Emails: map[uuid.UUID][]string{}, Invites: map[uuid.UUID]orgs.Invitation{},
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
 		installation: []orgs.Role{installationAdmin, installationUser},
+		Keys:         map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 	}
 }
 
@@ -538,4 +542,108 @@ func (s *Store) DeleteExpired(_ context.Context, at time.Time) (int64, int64, er
 		}
 	}
 	return invitations, requests, nil
+}
+
+// AddKey registers an API key holding role at its organization, with one secret that never expires.
+func (s *Store) AddKey(key orgs.APIKey, role uuid.UUID) orgs.APIKey {
+	r, _ := s.role(role)
+	key.Roles = append(key.Roles, r)
+	if key.Secrets == nil {
+		key.Secrets = []orgs.Secret{{ID: uuid.New(), Hint: "zzzz", CreatedAt: key.CreatedAt}}
+	}
+	s.Keys[key.ID] = key
+	s.Grant(key.ID, role, auth.ScopeOrganization, key.OrgID)
+	return key
+}
+
+// APIKeys lists the organization's keys by name.
+func (s *Store) APIKeys(_ context.Context, org uuid.UUID) ([]orgs.APIKey, error) {
+	var out []orgs.APIKey
+	for _, k := range s.Keys {
+		if k.OrgID == org {
+			out = append(out, k)
+		}
+	}
+	slices.SortFunc(out, func(a, b orgs.APIKey) int { return cmpStrings(a.Name, b.Name) })
+	return out, nil
+}
+
+// APIKey finds one of the organization's keys.
+func (s *Store) APIKey(_ context.Context, org, id uuid.UUID) (orgs.APIKey, error) {
+	k, ok := s.Keys[id]
+	if !ok || k.OrgID != org {
+		return orgs.APIKey{}, orgs.ErrNotFound
+	}
+	return k, nil
+}
+
+// CreateAPIKey records the key, its grants and its first secret.
+func (s *Store) CreateAPIKey(_ context.Context, _ uuid.UUID, key orgs.APIKey, secret orgs.Secret, hash []byte) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	key.Secrets = []orgs.Secret{secret}
+	s.Keys[key.ID] = key
+	for _, r := range key.Roles {
+		s.Grant(key.ID, r.ID, auth.ScopeOrganization, key.OrgID)
+	}
+	s.Hashes[secret.ID] = hash
+	s.Events = append(s.Events, "api_key.created")
+	return nil
+}
+
+// AddSecret gives the key a secret, unless two act at `at`.
+func (s *Store) AddSecret(ctx context.Context, _ uuid.UUID, org, keyID uuid.UUID, secret orgs.Secret, hash []byte, at time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	k, err := s.APIKey(ctx, org, keyID)
+	if err != nil {
+		return err
+	}
+	if k.LiveSecrets(at) >= 2 {
+		return orgs.ErrTwoSecrets
+	}
+	k.Secrets = append(k.Secrets, secret)
+	s.Keys[keyID] = k
+	s.Hashes[secret.ID] = hash
+	s.Events = append(s.Events, "api_key.rotated")
+	return nil
+}
+
+// RevokeSecret revokes one of the key's live secrets.
+func (s *Store) RevokeSecret(ctx context.Context, _ uuid.UUID, org, keyID, secretID uuid.UUID, at time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	k, err := s.APIKey(ctx, org, keyID)
+	if err != nil {
+		return err
+	}
+	i := slices.IndexFunc(k.Secrets, func(sec orgs.Secret) bool { return sec.ID == secretID && sec.RevokedAt.IsZero() })
+	if i < 0 {
+		return orgs.ErrNotFound
+	}
+	k.Secrets[i].RevokedAt = at
+	s.Keys[keyID] = k
+	s.Events = append(s.Events, "api_key.secret_revoked")
+	return nil
+}
+
+// DeleteAPIKey deletes the key with its grants and secrets.
+func (s *Store) DeleteAPIKey(ctx context.Context, _ uuid.UUID, org, keyID uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	k, err := s.APIKey(ctx, org, keyID)
+	if err != nil {
+		return err
+	}
+	for _, sec := range k.Secrets {
+		delete(s.Hashes, sec.ID)
+	}
+	delete(s.Keys, keyID)
+	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool { return g.Principal == keyID })
+	s.Events = append(s.Events, "api_key.deleted")
+	return nil
 }

@@ -10,6 +10,47 @@ import (
 	"time"
 )
 
+// An API key: a principal of the organization that a script acts as, with the roles it holds there and its secrets.
+type APIKey struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	Name           string `json:"name"`
+	// Who made the key; null once they are gone.
+	CreatedBy *string   `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	Roles     []*Role   `json:"roles"`
+	// The key's secrets, oldest first, revoked and expired ones included.
+	Secrets []*APIKeySecret `json:"secrets"`
+}
+
+// A key and a secret of its, which is shown here and never again.
+type APIKeyCreated struct {
+	APIKey *APIKey `json:"apiKey"`
+	// The secret, to put in the script's own secret store.
+	Secret string `json:"secret"`
+}
+
+// What makes an API key; its first secret's expiry as SecretInput's.
+type APIKeyInput struct {
+	Name string `json:"name"`
+	// The roles the key holds at the organization; at least one.
+	RoleIds      []string   `json:"roleIds"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
+	NeverExpires *bool      `json:"neverExpires,omitempty"`
+}
+
+// One of an API key's secrets, as its manager sees it; the secret itself was shown once.
+type APIKeySecret struct {
+	ID string `json:"id"`
+	// The secret's last four characters.
+	Hint      string    `json:"hint"`
+	CreatedAt time.Time `json:"createdAt"`
+	// When the secret stops working; null for one that never expires.
+	ExpiresAt  *time.Time `json:"expiresAt,omitempty"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
@@ -75,6 +116,8 @@ type Organization struct {
 	JoinRequests []*JoinRequest `json:"joinRequests"`
 	// The roles the organization grants: the built-in ones first, then its own; takes org.read.
 	Roles []*Role `json:"roles"`
+	// The API keys, with their roles and secrets, by name; takes org.read.
+	APIKeys []*APIKey `json:"apiKeys"`
 }
 
 type OrganizationSettings struct {
@@ -106,6 +149,14 @@ type RoleInput struct {
 	Description *string `json:"description,omitempty"`
 	// From the permissions listed at scope ORGANIZATION; at least one.
 	Permissions []string `json:"permissions"`
+}
+
+// When a new secret stops working; a year from now when neither is given.
+type SecretInput struct {
+	// The end, in the future.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	// True for a secret with no end; not with expiresAt.
+	NeverExpires *bool `json:"neverExpires,omitempty"`
 }
 
 // A signed-in browser.

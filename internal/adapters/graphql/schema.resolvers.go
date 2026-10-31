@@ -264,6 +264,78 @@ func (r *mutationResolver) DeleteRole(ctx context.Context, organizationID string
 	}, "deleting the role")
 }
 
+// CreateAPIKey is the resolver for the createApiKey field.
+func (r *mutationResolver) CreateAPIKey(ctx context.Context, organizationID string, input APIKeyInput) (*APIKeyCreated, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	in, err := apiKeyInput(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	key, secret, err := r.Orgs.CreateAPIKey(ctx, v.User, orgID, in)
+	if err != nil {
+		return nil, fail(ctx, err, "role", "making the API key")
+	}
+	return &APIKeyCreated{APIKey: apiKey(key), Secret: secret}, nil
+}
+
+// RotateAPIKey is the resolver for the rotateApiKey field.
+func (r *mutationResolver) RotateAPIKey(ctx context.Context, organizationID string, id string, input *SecretInput) (*APIKeyCreated, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	keyID, err := parseID(ctx, id, "api_key")
+	if err != nil {
+		return nil, err
+	}
+	var e orgs.Expiry
+	if input != nil {
+		e = expiry(input.ExpiresAt, input.NeverExpires)
+	}
+	key, secret, err := r.Orgs.RotateAPIKey(ctx, v.User, orgID, keyID, e)
+	if err != nil {
+		return nil, fail(ctx, err, "api_key", "rotating the API key")
+	}
+	return &APIKeyCreated{APIKey: apiKey(key), Secret: secret}, nil
+}
+
+// RevokeAPIKeySecret is the resolver for the revokeApiKeySecret field.
+func (r *mutationResolver) RevokeAPIKeySecret(ctx context.Context, organizationID string, id string, secretID string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	secret, err := parseID(ctx, secretID, "secret")
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, id, "api_key", func(orgID, keyID uuid.UUID) error {
+		return r.Orgs.RevokeSecret(ctx, v.User, orgID, keyID, secret)
+	}, "revoking the secret")
+}
+
+// DeleteAPIKey is the resolver for the deleteApiKey field.
+func (r *mutationResolver) DeleteAPIKey(ctx context.Context, organizationID string, id string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	return act(ctx, organizationID, id, "api_key", func(orgID, keyID uuid.UUID) error {
+		return r.Orgs.DeleteAPIKey(ctx, v.User, orgID, keyID)
+	}, "deleting the API key")
+}
+
 // ViewerPermissions is the resolver for the viewerPermissions field.
 func (r *organizationResolver) ViewerPermissions(ctx context.Context, obj *Organization) ([]string, error) {
 	return resolveOrg(ctx, obj, r.Orgs.ViewerPermissions, "reading the viewer's permissions")
@@ -303,6 +375,15 @@ func (r *organizationResolver) Roles(ctx context.Context, obj *Organization) ([]
 		return nil, err
 	}
 	return mapAll(all, role), nil
+}
+
+// APIKeys is the resolver for the apiKeys field.
+func (r *organizationResolver) APIKeys(ctx context.Context, obj *Organization) ([]*APIKey, error) {
+	keys, err := resolveOrg(ctx, obj, r.Orgs.APIKeys, "listing the API keys")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(keys, apiKey), nil
 }
 
 // Version is the resolver for the version field.

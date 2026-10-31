@@ -75,7 +75,7 @@ func (q *Queries) RevokeSession(ctx context.Context, revokedAt time.Time, sessio
 }
 
 const sessionByToken = `-- name: SessionByToken :one
-SELECT s.id, s.token_hash, s.principal_id, s.issuer, s.subject, s.created_at, s.last_seen_at, s.idle_expires_at, s.expires_at, s.revoked_at, s.user_agent, s.ip, p.id, p.kind, p.display_name, p.suspended, p.created_at FROM sessions s JOIN principals p ON p.id = s.principal_id WHERE s.token_hash = $1
+SELECT s.id, s.token_hash, s.principal_id, s.issuer, s.subject, s.created_at, s.last_seen_at, s.idle_expires_at, s.expires_at, s.revoked_at, s.user_agent, s.ip, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by FROM sessions s JOIN principals p ON p.id = s.principal_id WHERE s.token_hash = $1
 `
 
 type SessionByTokenRow struct {
@@ -105,6 +105,8 @@ func (q *Queries) SessionByToken(ctx context.Context, tokenHash []byte) (Session
 		&i.Principal.DisplayName,
 		&i.Principal.Suspended,
 		&i.Principal.CreatedAt,
+		&i.Principal.OrgID,
+		&i.Principal.CreatedBy,
 	)
 	return i, err
 }

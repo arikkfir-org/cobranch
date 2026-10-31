@@ -76,7 +76,7 @@ var auditCases = []struct {
 			up := alice(t, s)
 			return &up.Principal.ID
 		},
-		want: []auditRow{{Action: "insert", After: map[string]any{"id": nil, "kind": nil, "display_name": nil, "suspended": nil, "created_at": nil}}},
+		want: []auditRow{{Action: "insert", After: map[string]any{"id": nil, "kind": nil, "display_name": nil, "suspended": nil, "created_at": nil, "org_id": nil, "created_by": nil}}},
 	},
 	{
 		name: "an update keeps the whole row before and only the changed columns after", table: "identities",
@@ -138,7 +138,7 @@ var auditCases = []struct {
 			must(t, err)
 			return nil
 		},
-		want: []auditRow{{Action: "insert", After: map[string]any{"id": nil, "kind": nil, "display_name": nil, "suspended": nil, "created_at": nil}}},
+		want: []auditRow{{Action: "insert", After: map[string]any{"id": nil, "kind": nil, "display_name": nil, "suspended": nil, "created_at": nil, "org_id": nil, "created_by": nil}}},
 	},
 }
 

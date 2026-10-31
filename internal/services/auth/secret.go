@@ -47,7 +47,11 @@ func ValidSecret(prefix, s string) bool {
 	return checksum(s[:len(s)-checkLen]) == s[len(s)-checkLen:]
 }
 
-// Hash is what the database keeps of a secret: its SHA-256, so a copy of the database signs nobody in.
+// Hash is what the database keeps of a secret: its SHA-256, so a copy of the database signs nobody in. A plain,
+// fast hash is the right one here, not a password hash: a secret is 32 random bytes from NewSecret, which no
+// dictionary or brute force reaches, and the database finds a credential by its hash on every request, which a
+// salted or slow hash would make impossible. Code scanners that take any hashed secret for a password flag this
+// line; that finding is a false positive, dismissed as such.
 func Hash(secret string) []byte {
 	sum := sha256.Sum256([]byte(secret))
 	return sum[:]
