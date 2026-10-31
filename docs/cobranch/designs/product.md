@@ -211,8 +211,8 @@ reconciliation are worked out in the subsystem designs.
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
-slice after the ones it waits for. The design and the installable foundations are done, and so are sign-in and
-organizations; the Back-office and Git hosting are in progress.
+slice after the ones it waits for. The design, the installable foundations, and identity and organizations (sign-in,
+organizations and the Back-office) are done; Git hosting is in progress.
 
 **The roadmap by milestone, as of 2026-10-31**
 
