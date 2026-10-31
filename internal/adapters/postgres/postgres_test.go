@@ -417,7 +417,10 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 	t.Helper()
 	if cobranch {
 		if users := countRows(t, pool, "SELECT count(*) FROM principals WHERE kind = 'user'"); users != 4 {
-			t.Errorf("seeded users = %d, want 5", users)
+			t.Errorf("seeded users = %d, want 4", users)
+		}
+		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN roles r ON r.id = g.role_id WHERE NOT r.built_in AND r.org_id = g.scope_id"); n != 1 {
+			t.Errorf("seeded custom role grants = %d, want Max's Release manager at Acme", n)
 		}
 		return
 	}
