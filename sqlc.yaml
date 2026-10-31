@@ -11,6 +11,7 @@ sql:
         out: internal/adapters/postgres/queries
         sql_package: pgx/v5
         query_parameter_limit: 3
+        omit_unused_structs: true
         rename:
           ip: IP
         overrides:
@@ -40,6 +41,7 @@ sql:
         out: db/seeds/queries
         sql_package: database/sql
         query_parameter_limit: 3
+        omit_unused_structs: true
         overrides:
           - db_type: uuid
             go_type: github.com/google/uuid.UUID

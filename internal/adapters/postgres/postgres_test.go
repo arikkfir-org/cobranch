@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 2},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 3},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 2},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 2},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 3},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 3},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -448,9 +448,11 @@ func TestSeedsMigrate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			schema := tt.schema
+			schema, wantSchemaVersion := tt.schema, int64(2) // columnB's
 			if schema == nil {
 				schema = columnB
+			} else {
+				wantSchemaVersion = newSchema(t, testDatabase(t), schema).Version()
 			}
 			pool := migratedDatabase(t, true, schema)
 			for _, run := range tt.runs {
@@ -460,8 +462,8 @@ func TestSeedsMigrate(t *testing.T) {
 			if version := countRows(t, pool, "SELECT max(version_id) FROM "+SeedTable); int64(version) != tt.wantSeedTable {
 				t.Errorf("%s = %d, want %d", SeedTable, version, tt.wantSeedTable)
 			}
-			if version := schemaVersion(t, pool); version != 2 {
-				t.Errorf("schema version = %d after seeding, want columnB's 2", version)
+			if version := schemaVersion(t, pool); version != wantSchemaVersion {
+				t.Errorf("schema version = %d after seeding, want the schema's %d", version, wantSchemaVersion)
 			}
 		})
 	}

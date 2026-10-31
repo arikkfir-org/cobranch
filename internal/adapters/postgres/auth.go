@@ -100,8 +100,8 @@ func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, s
 
 // SignUp creates a user, their identity, their verified email if any, their installation grants and the event.
 func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
-	return s.transact(ctx, "signing up", func(q *queries.Queries) error {
-		p, i := up.Principal, up.Identity
+	p, i := up.Principal, up.Identity
+	return s.transact(ctx, "signing up", p.ID, func(q *queries.Queries) error {
 		if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{
 			ID: p.ID, Kind: string(p.Kind), DisplayName: p.DisplayName, CreatedAt: i.LastSignInAt,
 		}); err != nil {
@@ -133,7 +133,7 @@ func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 // SignIn records the identity's latest claims and sign-in, sets Installation admin from the installation's list,
 // and creates the session and its event.
 func (s *AuthStore) SignIn(ctx context.Context, i auth.Identity, admin bool, session auth.Session) error {
-	return s.transact(ctx, "signing in", func(q *queries.Queries) error {
+	return s.transact(ctx, "signing in", i.UserID, func(q *queries.Queries) error {
 		updated, err := q.UpdateIdentity(ctx, queries.UpdateIdentityParams{
 			Issuer: i.Issuer, Subject: i.Subject, Email: i.Email, EmailVerified: i.EmailVerified, Name: i.Name,
 			SignedInAt: i.LastSignInAt,
@@ -277,7 +277,7 @@ func (s *AuthStore) Sessions(ctx context.Context, userID uuid.UUID) ([]auth.Sess
 
 // Revoke revokes session id of user userID at now.
 func (s *AuthStore) Revoke(ctx context.Context, userID, id uuid.UUID, now time.Time) error {
-	return s.transact(ctx, "revoking the session", func(q *queries.Queries) error {
+	return s.transact(ctx, "revoking the session", userID, func(q *queries.Queries) error {
 		revoked, err := q.RevokeSession(ctx, now, id, userID)
 		if err != nil {
 			return fmt.Errorf("updating the session: %w", err)
@@ -326,15 +326,23 @@ func wrap(what string, err error) error {
 	return fmt.Errorf("%s: %w", what, err)
 }
 
-// transact runs fn with the queries in a transaction, committed when it returns nil and rolled back otherwise; a
-// unique constraint it hits is a row that is already there.
-func (s *AuthStore) transact(ctx context.Context, what string, fn func(q *queries.Queries) error) error {
+// transact runs fn with the queries in a transaction that acts for actor, committed when it returns nil and rolled
+// back otherwise; a unique constraint it hits is a row that is already there. The actor goes in session variable
+// cobranch.principal_id, local to the transaction, so trigger audit() records who changed each row
+// (db/migrations/00003_audit.sql); uuid.Nil leaves it unset, for a change of Cobranch's own.
+func (s *AuthStore) transact(ctx context.Context, what string, actor uuid.UUID, fn func(q *queries.Queries) error) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("%s: beginning the transaction: %w", what, err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
-	if err := fn(s.q.WithTx(tx)); err != nil {
+	q := s.q.WithTx(tx)
+	if actor != uuid.Nil {
+		if err := q.SetPrincipal(ctx, actor.String()); err != nil {
+			return fmt.Errorf("%s: naming the principal: %w", what, err)
+		}
+	}
+	if err := fn(q); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == uniqueViolation {
 			return fmt.Errorf("%s: a row is already there (%s): %w", what, pgErr.ConstraintName, err)

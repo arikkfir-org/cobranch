@@ -37,10 +37,11 @@ the full table as the layout grows.
 
 Pipeline `ci` runs two tasks side by side, each in a pod of its own, and reports check `Continuous Integration`, which
 fails when either does. Task `ci` tests the Go module. `generated` fails when `go generate` changes the checkout, so the
-REST and GraphQL stubs match `api/`. `lint` runs golangci-lint's standard linters, the house rules' (errcheck,
-wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt. `test` runs
-against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach it. Go Cloud's
-drivers bring the AWS, Azure and Google Cloud SDKs: on a cold cache lint peaks near 1.5Gi, hence the task's size.
+REST and GraphQL stubs match `api/` and the queries match `db/`. `lint` runs golangci-lint's standard linters, the house
+rules' (errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and
+gofmt. `test` runs against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach
+it. Go Cloud's drivers bring the AWS, Azure and Google Cloud SDKs: on a cold cache lint peaks near 1.5Gi, hence the
+task's size.
 
 **Task ci runs seven steps in one pod, beside a PostgreSQL sidecar**
 
