@@ -22,11 +22,12 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 
 | Path | What it holds |
 | --- | --- |
-| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `migrate`, `maintenance` and `version` |
-| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `server`, `blob`) and `system/` (configuration, telemetry, build information) |
+| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `admin-server`, `migrate`, `maintenance` and `version` |
+| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys; `admin`, the installation's administration), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `adminapi`, `server`, `blob`) and `system/` (configuration, telemetry, build information) |
 | `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`): sign-in, the welcome page (create, join, invitations) and an organization's home, members, roles, API keys and settings under its slug, routed in the browser |
-| `web/back-office/`, `web/ui/` | _Planned_: the Back-office and the components the web apps share |
-| `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and, with the Back-office, the admin API (`admin.yaml`) |
+| `web/back-office/` | The Back-office, which Caddy serves as static files (image `cobranch-back-office`): an installation's organizations (search, create one for a user, enter one) and its users, routed in the browser |
+| `web/ui/` | _Planned_: the components the web apps share |
+| `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and the Admin API (`admin.yaml`), which the Back-office calls |
 | `db/migrations/` | PostgreSQL's migrations, SQL and Go, embedded in the binary; `cobranch migrate` applies them before the servers roll out. Trigger `audit()` on the audited tables writes `audit_log` with the principal each transaction acts for |
 | `db/queries/` | The stores' SQL, from which `go generate ./...` writes `internal/adapters/postgres/queries` with [sqlc](https://sqlc.dev) (`sqlc.yaml`), checked against the schema; no Go file writes a query but the schema version's read of goose's table |
 | `db/seeds/` | Demo data, in Go over queries sqlc writes from its `queries.sql`, in every build; `cobranch migrate` adds it after the schema only with `COBRANCH_SEED` (the chart's `seed.enabled`), as a demo installation does |
@@ -61,6 +62,8 @@ export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
 bin/cobranch migrate
 bin/cobranch rest-server                                 # :8080: /healthz, /readyz, /v1/version, /v1/me, /v1/orgs/…
 COBRANCH_HTTP_ADDR=:8081 bin/cobranch graphql-server     # :8081: /healthz, /readyz, GraphQL at /
+COBRANCH_HTTP_ADDR=:8083 COBRANCH_BACK_OFFICE_URL=http://localhost:3001 \
+  bin/cobranch admin-server                              # :8083: /healthz, /readyz, /v1/orgs, /v1/users, …
 ```
 
 `auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
@@ -79,7 +82,7 @@ They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
 ([Observability](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md#observability)).
 
-CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes both images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for a preview installation of its own, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the Cobranch repository](docs/cobranch/designs/repository.md).
+CI runs the same on every pull request and merge queue group (check `Continuous Integration`), beside the organization's checks `Docs`, `Linear` and the AI review, pipeline `main` publishes the images of `main`'s newest commit, pipeline `tag` each version's images and chart, and pipeline `preview` each pull request's images, for a preview installation of its own, seeded with demo data (`db/seeds/`). How the repository and its CI fit together: [the Cobranch repository](docs/cobranch/designs/repository.md).
 
 ## Installing
 
@@ -94,29 +97,33 @@ helm test cobranch --namespace cobranch
 
 A version is a [GitHub release](https://github.com/arikkfir-org/cobranch/releases): publishing it creates tag `v1.2.3`,
 whose pipeline `tag` adds `1.2.3` to the images pipeline `main` published for the commit and publishes the chart at
-`1.2.3` ([Releases](docs/cobranch/designs/repository.md#releases)). Pipeline `main` publishes images `cobranch` and
-`cobranch-console` of `main`'s newest commit to `me-west1-docker.pkg.dev/arikkfir/cobranch`, tagged with the commit's
+`1.2.3` ([Releases](docs/cobranch/designs/repository.md#releases)). Pipeline `main` publishes images `cobranch`,
+`cobranch-console` and `cobranch-back-office` of `main`'s newest commit to `me-west1-docker.pkg.dev/arikkfir/cobranch`, tagged with the commit's
 first seven characters; an older commit may have none, since a push that a newer one overtakes while it waits is never
 built. To follow `main`, install the chart from a checkout with its commit's images:
 
 ```bash
 helm install cobranch chart/cobranch --namespace cobranch --create-namespace \
   --set-string images.cobranch.tag=$(git rev-parse HEAD | cut -c1-7) \
-  --set-string images.console.tag=$(git rev-parse HEAD | cut -c1-7) --set blob.url='gs://my-cobranch-bucket'
+  --set-string images.console.tag=$(git rev-parse HEAD | cut -c1-7) \
+  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7) --set blob.url='gs://my-cobranch-bucket'
 ```
 
-For a commit of your own, build both images, push them where your cluster pulls from, and install with those
+For a commit of your own, build the images, push them where your cluster pulls from, and install with those
 repositories and tag `dev`:
 
 ```bash
 docker build --build-arg VERSION=dev -t registry.example.com/cobranch:dev .
 docker build -t registry.example.com/cobranch-console:dev web/console
+docker build -t registry.example.com/cobranch-back-office:dev web/back-office
 docker push registry.example.com/cobranch:dev && docker push registry.example.com/cobranch-console:dev
+docker push registry.example.com/cobranch-back-office:dev
 ```
 
 Every workload serves as if it were alone, so you choose where each one lives: a host each, or paths on one host
 (`https://cobranch.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
-`urls.rest` and `urls.graphql` with `httpRoute.enabled` for an HTTPRoute each. Logs go to stdout as JSON; to see
+`urls.rest`, `urls.graphql`, `urls.auth`, `urls.admin` and `urls.backOffice` with `httpRoute.enabled` for an HTTPRoute
+each. Logs go to stdout as JSON; to see
 traces, set `telemetry.traces.endpoint` to your OpenTelemetry Collector's or a vendor's OTLP endpoint.
 
 ## Contributing

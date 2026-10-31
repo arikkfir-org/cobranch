@@ -6,5 +6,5 @@ set -eu
 kind=.ci/bin/kind
 "$kind" create cluster --name cobranch --kubeconfig "$KUBECONFIG" --wait 3m
 docker save --platform "$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')" --output .ci/images.tar \
-  "cobranch:$VERSION" "cobranch-console:$VERSION" "$(cat .ci/postgresql-image)"
+  "cobranch:$VERSION" "cobranch-console:$VERSION" "cobranch-back-office:$VERSION" "$(cat .ci/postgresql-image)"
 "$kind" load image-archive --name cobranch .ci/images.tar

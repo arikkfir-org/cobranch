@@ -1,5 +1,6 @@
-# Task publish of .tekton/main.yaml and .tekton/preview.yaml: build images cobranch and cobranch-console in a Docker
-# daemon beside the steps, and push them to an Artifact Registry repository, tagged with the commit's short SHA.
+# Task publish of .tekton/main.yaml and .tekton/preview.yaml: build images cobranch, cobranch-console and
+# cobranch-back-office in a Docker daemon beside the steps, and push them to an Artifact Registry repository, tagged
+# with the commit's short SHA.
 # Octomaton inlines it, and the step it references, into each PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task

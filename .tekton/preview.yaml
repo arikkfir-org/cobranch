@@ -1,5 +1,6 @@
-# Cobranch's previews' images: build images cobranch and cobranch-console of a pull request's head commit and push them
-# to Artifact Registry repository cobranch-previews, tagged with the commit's short SHA (publish.task.yaml), which only
+# Cobranch's previews' images: build images cobranch, cobranch-console and cobranch-back-office of a pull request's head
+# commit and push them to Artifact Registry repository cobranch-previews, tagged with the commit's short SHA
+# (publish.task.yaml), which only
 # the pull requests' previews pull (https://docs.dev.kfirs.com/delivery/designs/cobranch-previews.md). The pod pushes as
 # ServiceAccount ci-cobranch-preview, through Workload Identity: any branch may use it, and it writes cobranch-previews
 # alone, never main's or the versions' repository. A plain Tekton PipelineRun; Octomaton sets the params.

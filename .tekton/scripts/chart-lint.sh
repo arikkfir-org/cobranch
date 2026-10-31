@@ -1,6 +1,6 @@
 #!/bin/sh
 # Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, Google and
-# traces, and with an external database, one host with a path per API, another provider and no traces. Writes the bundled PostgreSQL's image to
+# traces, and with an external database, one host with a path per workload, another provider and no traces. Writes the bundled PostgreSQL's image to
 # .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
@@ -10,6 +10,7 @@ helm lint --strict "$chart" --set blob.url=file:///var/lib/cobranch/blobs
 helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranch-objects \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://api.cobranch.example.com \
   --set urls.graphql=https://graphql.cobranch.example.com --set urls.auth=https://auth.cobranch.example.com \
+  --set urls.admin=https://admin-api.cobranch.example.com --set urls.backOffice=https://admin.cobranch.example.com \
   --set 'auth.providers[0].id=google' --set 'auth.providers[0].name=Google' --set 'auth.providers[0].preset=google' \
   --set 'auth.providers[0].clientId=1234.apps.googleusercontent.com' \
   --set 'auth.providers[0].clientSecret.secretName=cobranch-google' --set 'auth.admins[0]=alice@example.com' \
@@ -21,6 +22,7 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranc
   --set postgresql.enabled=false --set externalDatabase.existingSecret=cobranch-database \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://cobranch.example.com/api \
   --set urls.graphql=https://cobranch.example.com/graphql --set urls.auth=https://cobranch.example.com/auth \
+  --set urls.admin=https://cobranch.example.com/admin --set urls.backOffice=https://cobranch.example.com/back-office \
   --set 'auth.providers[0].id=my-idp' --set 'auth.providers[0].issuer=https://idp.example.com' \
   --set 'auth.providers[0].clientId=cobranch' --set 'auth.providers[0].clientSecret.secretName=cobranch-idp' \
   --set 'auth.providers[0].clientSecret.key=secret' --set auth.signUp=domains --set 'auth.signUpDomains[0]=example.com' \
