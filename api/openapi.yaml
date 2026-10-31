@@ -80,6 +80,71 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/tokens:
+    get:
+      operationId: listMyTokens
+      summary: The user's personal tokens that are not revoked, expired ones included, newest first.
+      responses:
+        "200":
+          description: The tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens]
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PersonalToken"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createMyToken
+      summary: Makes a personal token that acts as the user, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonalTokenInput"
+      responses:
+        "201":
+          description: The token and its secret, which is shown here and never again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalTokenCreated"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/tokens/{id}:
+    delete:
+      operationId: revokeMyToken
+      summary: Revokes one of the user's personal tokens; the next request with it fails.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/organizations:
     get:
       operationId: listMyOrganizations
@@ -1491,6 +1556,61 @@ components:
         revokedAt:
           type: string
           format: date-time
+    PersonalToken:
+      type: object
+      description: A personal token, as its user sees it; the token itself was shown once.
+      required: [id, name, hint, permissions, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hint:
+          type: string
+          description: The token's last four characters.
+        permissions:
+          type: array
+          description: The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give.
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token stops working.
+        lastUsedAt:
+          type: string
+          format: date-time
+    PersonalTokenInput:
+      type: object
+      description: What makes a personal token.
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: What the token is for, 1 to 100 characters.
+        permissions:
+          type: array
+          description: The permissions the token may use, from the catalog; repo.read and repo.push when absent or empty.
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token stops working, in the future and within a year; 30 days from now when absent.
+    PersonalTokenCreated:
+      type: object
+      description: A personal token and its secret, which is shown here and never again.
+      required: [token, secret]
+      properties:
+        token:
+          $ref: "#/components/schemas/PersonalToken"
+        secret:
+          type: string
+          description: The token, to give a Git client as its password or a script as its bearer token.
     SecretInput:
       type: object
       description: When a new secret stops working; a year from now when neither is given.

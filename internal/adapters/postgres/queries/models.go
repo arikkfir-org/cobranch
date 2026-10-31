@@ -21,6 +21,10 @@ type Credential struct {
 	ExpiresAt   *time.Time
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time
+	Name        string
+	Permissions []string
+	Issuer      string
+	Subject     string
 }
 
 type Identity struct {

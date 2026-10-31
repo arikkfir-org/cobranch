@@ -105,6 +105,7 @@ type ComplexityRoot struct {
 		CancelInvitation     func(childComplexity int, organizationID string, id string) int
 		CreateAPIKey         func(childComplexity int, organizationID string, input APIKeyInput) int
 		CreateOrganization   func(childComplexity int, slug string, name string) int
+		CreatePersonalToken  func(childComplexity int, input PersonalTokenInput) int
 		CreateRepository     func(childComplexity int, organizationID string, input RepositoryInput) int
 		CreateRole           func(childComplexity int, organizationID string, input RoleInput) int
 		DeclineInvitation    func(childComplexity int, id string) int
@@ -118,6 +119,7 @@ type ComplexityRoot struct {
 		RemoveMember         func(childComplexity int, organizationID string, userID string) int
 		RequestToJoin        func(childComplexity int, slug string, note *string) int
 		RevokeAPIKeySecret   func(childComplexity int, organizationID string, id string, secretID string) int
+		RevokePersonalToken  func(childComplexity int, id string) int
 		RevokeRepositoryRole func(childComplexity int, repositoryID string, principalID string, roleID string) int
 		RevokeRole           func(childComplexity int, organizationID string, userID string, roleID string) int
 		RevokeSession        func(childComplexity int, id string) int
@@ -143,6 +145,21 @@ type ComplexityRoot struct {
 		Roles               func(childComplexity int) int
 		Slug                func(childComplexity int) int
 		ViewerPermissions   func(childComplexity int) int
+	}
+
+	PersonalToken struct {
+		CreatedAt   func(childComplexity int) int
+		ExpiresAt   func(childComplexity int) int
+		Hint        func(childComplexity int) int
+		ID          func(childComplexity int) int
+		LastUsedAt  func(childComplexity int) int
+		Name        func(childComplexity int) int
+		Permissions func(childComplexity int) int
+	}
+
+	PersonalTokenCreated struct {
+		Secret func(childComplexity int) int
+		Token  func(childComplexity int) int
 	}
 
 	Query struct {
@@ -195,14 +212,15 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
-		DisplayName   func(childComplexity int) int
-		Emails        func(childComplexity int) int
-		ID            func(childComplexity int) int
-		Invitations   func(childComplexity int) int
-		JoinRequests  func(childComplexity int) int
-		Organizations func(childComplexity int) int
-		Permissions   func(childComplexity int) int
-		Sessions      func(childComplexity int) int
+		DisplayName    func(childComplexity int) int
+		Emails         func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Invitations    func(childComplexity int) int
+		JoinRequests   func(childComplexity int) int
+		Organizations  func(childComplexity int) int
+		Permissions    func(childComplexity int) int
+		PersonalTokens func(childComplexity int) int
+		Sessions       func(childComplexity int) int
 	}
 }
 
@@ -212,6 +230,8 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	RevokeSession(ctx context.Context, id string) (bool, error)
+	CreatePersonalToken(ctx context.Context, input PersonalTokenInput) (*PersonalTokenCreated, error)
+	RevokePersonalToken(ctx context.Context, id string) (bool, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -261,6 +281,7 @@ type RepositoryResolver interface {
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
+	PersonalTokens(ctx context.Context, obj *User) ([]*PersonalToken, error)
 	Permissions(ctx context.Context, obj *User) ([]string, error)
 	Organizations(ctx context.Context, obj *User) ([]*Organization, error)
 	Invitations(ctx context.Context, obj *User) ([]*Invitation, error)
@@ -581,6 +602,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateOrganization(childComplexity, args["slug"].(string), args["name"].(string)), true
+	case "Mutation.createPersonalToken":
+		if e.ComplexityRoot.Mutation.CreatePersonalToken == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createPersonalToken_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreatePersonalToken(childComplexity, args["input"].(PersonalTokenInput)), true
 	case "Mutation.createRepository":
 		if e.ComplexityRoot.Mutation.CreateRepository == nil {
 			break
@@ -724,6 +756,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeAPIKeySecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["secretId"].(string)), true
+	case "Mutation.revokePersonalToken":
+		if e.ComplexityRoot.Mutation.RevokePersonalToken == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokePersonalToken_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokePersonalToken(childComplexity, args["id"].(string)), true
 	case "Mutation.revokeRepositoryRole":
 		if e.ComplexityRoot.Mutation.RevokeRepositoryRole == nil {
 			break
@@ -897,6 +940,62 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.ViewerPermissions(childComplexity), true
+
+	case "PersonalToken.createdAt":
+		if e.ComplexityRoot.PersonalToken.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.CreatedAt(childComplexity), true
+	case "PersonalToken.expiresAt":
+		if e.ComplexityRoot.PersonalToken.ExpiresAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.ExpiresAt(childComplexity), true
+	case "PersonalToken.hint":
+		if e.ComplexityRoot.PersonalToken.Hint == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.Hint(childComplexity), true
+	case "PersonalToken.id":
+		if e.ComplexityRoot.PersonalToken.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.ID(childComplexity), true
+	case "PersonalToken.lastUsedAt":
+		if e.ComplexityRoot.PersonalToken.LastUsedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.LastUsedAt(childComplexity), true
+	case "PersonalToken.name":
+		if e.ComplexityRoot.PersonalToken.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.Name(childComplexity), true
+	case "PersonalToken.permissions":
+		if e.ComplexityRoot.PersonalToken.Permissions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalToken.Permissions(childComplexity), true
+
+	case "PersonalTokenCreated.secret":
+		if e.ComplexityRoot.PersonalTokenCreated.Secret == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalTokenCreated.Secret(childComplexity), true
+	case "PersonalTokenCreated.token":
+		if e.ComplexityRoot.PersonalTokenCreated.Token == nil {
+			break
+		}
+
+		return e.ComplexityRoot.PersonalTokenCreated.Token(childComplexity), true
 
 	case "Query.organization":
 		if e.ComplexityRoot.Query.Organization == nil {
@@ -1164,6 +1263,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.Permissions(childComplexity), true
+	case "User.personalTokens":
+		if e.ComplexityRoot.User.PersonalTokens == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.PersonalTokens(childComplexity), true
 	case "User.sessions":
 		if e.ComplexityRoot.User.Sessions == nil {
 			break
@@ -1182,6 +1287,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		return graphql.NewInputUnmarshalerIndex(
 			graphql.NewInputUnmarshaler("ApiKeyInput", ec.unmarshalInputApiKeyInput),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
+			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
@@ -1347,6 +1453,10 @@ type Query {
 type Mutation {
   "Revokes one of the viewer's sessions; the next request with its cookie fails. False when the viewer has no such session."
   revokeSession(id: ID!): Boolean!
+  "Makes a personal token that acts as the viewer, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key."
+  createPersonalToken(input: PersonalTokenInput!): PersonalTokenCreated!
+  "Revokes one of the viewer's personal tokens; the next request with it fails. False when the viewer has no such token."
+  revokePersonalToken(id: ID!): Boolean!
 }
 
 "A person: a principal of kind user."
@@ -1357,6 +1467,8 @@ type User {
   emails: [Email!]!
   "The user's live sessions, newest first."
   sessions: [Session!]!
+  "The user's personal tokens that are not revoked, expired ones included, newest first."
+  personalTokens: [PersonalToken!]!
 }
 
 type Email {
@@ -1375,6 +1487,37 @@ type Session {
   ip: String!
   "Whether this is the session the request itself came with."
   current: Boolean!
+}
+
+"A personal token, as its user sees it; the token itself was shown once."
+type PersonalToken {
+  id: ID!
+  name: String!
+  "The token's last four characters."
+  hint: String!
+  "The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give."
+  permissions: [String!]!
+  createdAt: Time!
+  "When the token stops working."
+  expiresAt: Time!
+  lastUsedAt: Time
+}
+
+"What makes a personal token."
+input PersonalTokenInput {
+  "What the token is for, 1 to 100 characters."
+  name: String!
+  "The permissions the token may use, from the catalog; repo.read and repo.push when null or empty."
+  permissions: [String!]
+  "When the token stops working, in the future and within a year; 30 days from now when null."
+  expiresAt: Time
+}
+
+"A personal token and its secret, which is shown here and never again."
+type PersonalTokenCreated {
+  token: PersonalToken!
+  "The token, to give a Git client as its password or a script as its bearer token."
+  secret: String!
 }
 
 "The scopes roles are granted at. Repositories come with their slice."
@@ -1746,6 +1889,36 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
 }
 
+func (ec *executionContext) childFields_PersonalToken(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_PersonalToken_id(ctx, field)
+	case "name":
+		return ec.fieldContext_PersonalToken_name(ctx, field)
+	case "hint":
+		return ec.fieldContext_PersonalToken_hint(ctx, field)
+	case "permissions":
+		return ec.fieldContext_PersonalToken_permissions(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_PersonalToken_createdAt(ctx, field)
+	case "expiresAt":
+		return ec.fieldContext_PersonalToken_expiresAt(ctx, field)
+	case "lastUsedAt":
+		return ec.fieldContext_PersonalToken_lastUsedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PersonalToken", field.Name)
+}
+
+func (ec *executionContext) childFields_PersonalTokenCreated(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "token":
+		return ec.fieldContext_PersonalTokenCreated_token(ctx, field)
+	case "secret":
+		return ec.fieldContext_PersonalTokenCreated_secret(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type PersonalTokenCreated", field.Name)
+}
+
 func (ec *executionContext) childFields_Repository(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -1838,6 +2011,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_emails(ctx, field)
 	case "sessions":
 		return ec.fieldContext_User_sessions(ctx, field)
+	case "personalTokens":
+		return ec.fieldContext_User_personalTokens(ctx, field)
 	case "permissions":
 		return ec.fieldContext_User_permissions(ctx, field)
 	case "organizations":
@@ -2073,6 +2248,20 @@ func (ec *executionContext) field_Mutation_createOrganization_args(ctx context.C
 		return nil, err
 	}
 	args["name"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_createPersonalToken_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (PersonalTokenInput, error) {
+			return ec.unmarshalNPersonalTokenInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -2375,6 +2564,20 @@ func (ec *executionContext) field_Mutation_revokeApiKeySecret_args(ctx context.C
 		return nil, err
 	}
 	args["secretId"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_revokePersonalToken_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -3671,6 +3874,94 @@ func (ec *executionContext) fieldContext_Mutation_revokeSession(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_revokeSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createPersonalToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createPersonalToken(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreatePersonalToken(ctx, fc.Args["input"].(PersonalTokenInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PersonalTokenCreated) graphql.Marshaler {
+			return ec.marshalNPersonalTokenCreated2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenCreated(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createPersonalToken(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PersonalTokenCreated(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createPersonalToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokePersonalToken(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokePersonalToken(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokePersonalToken(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokePersonalToken(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokePersonalToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5153,6 +5444,222 @@ func (ec *executionContext) fieldContext_Organization_repository(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _PersonalToken_id(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "ID")
+}
+
+func (ec *executionContext) _PersonalToken_name(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "String")
+}
+
+func (ec *executionContext) _PersonalToken_hint(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_hint(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hint, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_hint(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "String")
+}
+
+func (ec *executionContext) _PersonalToken_permissions(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_permissions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Permissions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_permissions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "String")
+}
+
+func (ec *executionContext) _PersonalToken_createdAt(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "Time")
+}
+
+func (ec *executionContext) _PersonalToken_expiresAt(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_expiresAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExpiresAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "Time")
+}
+
+func (ec *executionContext) _PersonalToken_lastUsedAt(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalToken_lastUsedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastUsedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalToken_lastUsedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalToken", field, false, false, "Time")
+}
+
+func (ec *executionContext) _PersonalTokenCreated_token(ctx context.Context, field graphql.CollectedField, obj *PersonalTokenCreated) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalTokenCreated_token(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Token, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *PersonalToken) graphql.Marshaler {
+			return ec.marshalNPersonalToken2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalToken(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalTokenCreated_token(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "PersonalTokenCreated",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PersonalToken(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _PersonalTokenCreated_secret(ctx context.Context, field graphql.CollectedField, obj *PersonalTokenCreated) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_PersonalTokenCreated_secret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Secret, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_PersonalTokenCreated_secret(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("PersonalTokenCreated", field, false, false, "String")
+}
+
 func (ec *executionContext) _Query_version(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -6215,6 +6722,38 @@ func (ec *executionContext) fieldContext_User_sessions(_ context.Context, field 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Session(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _User_personalTokens(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_personalTokens(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().PersonalTokens(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*PersonalToken) graphql.Marshaler {
+			return ec.marshalNPersonalToken2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_personalTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_PersonalToken(ctx, field)
 		},
 	}
 	return fc, nil
@@ -7545,6 +8084,62 @@ func UnmarshalOrganizationSettings(ctx context.Context, raw any) (OrganizationSe
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputPersonalTokenInput(ctx context.Context, obj any) (PersonalTokenInput, error) {
+	var it PersonalTokenInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "permissions", "expiresAt"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "permissions":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("permissions"))
+			data, err := ec.unmarshalOString2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Permissions = data
+		case "expiresAt":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("expiresAt"))
+			data, err := ec.unmarshalOTime2ᚖtimeᚐTime(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.ExpiresAt = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalPersonalTokenInput unmarshals raw into the PersonalTokenInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalPersonalTokenInput(ctx context.Context, raw any) (PersonalTokenInput, error) {
+	var out PersonalTokenInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "PersonalTokenInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputRepositoryInput(ctx context.Context, obj any) (RepositoryInput, error) {
 	var it RepositoryInput
 	if obj == nil {
@@ -8131,6 +8726,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createPersonalToken":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createPersonalToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokePersonalToken":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokePersonalToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createRepository":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createRepository(ctx, field)
@@ -8410,6 +9019,107 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_repository(ctx, field, obj)
 				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var personalTokenImplementors = []string{"PersonalToken"}
+
+func (ec *executionContext) _PersonalToken(ctx context.Context, sel ast.SelectionSet, obj *PersonalToken) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, personalTokenImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PersonalToken")
+		case "id":
+			out.Values[i] = ec._PersonalToken_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._PersonalToken_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hint":
+			out.Values[i] = ec._PersonalToken_hint(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "permissions":
+			out.Values[i] = ec._PersonalToken_permissions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._PersonalToken_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "expiresAt":
+			out.Values[i] = ec._PersonalToken_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastUsedAt":
+			out.Values[i] = ec._PersonalToken_lastUsedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var personalTokenCreatedImplementors = []string{"PersonalTokenCreated"}
+
+func (ec *executionContext) _PersonalTokenCreated(ctx context.Context, sel ast.SelectionSet, obj *PersonalTokenCreated) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, personalTokenCreatedImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("PersonalTokenCreated")
+		case "token":
+			out.Values[i] = ec._PersonalTokenCreated_token(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "secret":
+			out.Values[i] = ec._PersonalTokenCreated_secret(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -8798,6 +9508,12 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_sessions(ctx, field, obj)
+				})
+		case "personalTokens":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._User_personalTokens(ctx, field, obj)
 				})
 		case "permissions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -9442,6 +10158,43 @@ func (ec *executionContext) marshalNOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 
 func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSettings(ctx context.Context, v any) (OrganizationSettings, error) {
 	res, err := ec.unmarshalInputOrganizationSettings(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPersonalToken2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenᚄ(ctx context.Context, sel ast.SelectionSet, v []*PersonalToken) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNPersonalToken2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalToken(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNPersonalToken2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalToken(ctx context.Context, sel ast.SelectionSet, v *PersonalToken) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "PersonalToken!")
+		return graphql.Null
+	}
+	return ec._PersonalToken(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPersonalTokenCreated2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenCreated(ctx context.Context, sel ast.SelectionSet, v *PersonalTokenCreated) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "PersonalTokenCreated!")
+		return graphql.Null
+	}
+	return ec._PersonalTokenCreated(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNPersonalTokenInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenInput(ctx context.Context, v any) (PersonalTokenInput, error) {
+	res, err := ec.unmarshalInputPersonalTokenInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 

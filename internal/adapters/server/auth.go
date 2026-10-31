@@ -11,15 +11,16 @@ import (
 	"cobranch.dev/internal/services/auth"
 )
 
-// Authenticator resolves a credential's token, a session's or an API key's, to who it acts as;
+// Authenticator resolves a credential's token, a session's, a personal token or an API key's, to who it acts as;
 // auth.ErrUnauthenticated when nobody.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (auth.Authenticated, error)
 }
 
 // Authenticate resolves the request's credential and puts who it acts as on the request's context for the API to
-// read (auth.Viewer): a bearer token in the Authorization header (an API key's secret), or else the session cookie,
-// named cookie. A request with neither runs as Anonymous; one whose credential acts as nobody is refused with 401.
+// read (auth.Viewer): a bearer token in the Authorization header (a personal token or an API key's secret), or else
+// the session cookie, named cookie. A request with neither runs as Anonymous; one whose credential acts as nobody is
+// refused with 401.
 // A request with the cookie that would change something must be JSON from the origin of the pages that call the API,
 // or it is refused with 403: the browser sends the cookie wherever the request came from, so a cookie-authenticated
 // mutation must come from those pages (pagesOrigin: the Console's, or the Back-office's for the Admin API), and when it

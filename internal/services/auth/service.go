@@ -55,10 +55,17 @@ type Store interface {
 	Session(ctx context.Context, tokenHash []byte) (Session, User, error)
 	// Touch records that session id was used at seen.
 	Touch(ctx context.Context, id uuid.UUID, seen time.Time) error
-	// Credential finds a credential by its token's hash, with the principal it acts as, or ErrNotFound.
-	Credential(ctx context.Context, tokenHash []byte) (Credential, Principal, error)
+	// Credential finds a credential by its token's hash, with the principal it acts as (a user with their emails), or
+	// ErrNotFound.
+	Credential(ctx context.Context, tokenHash []byte) (Credential, User, error)
 	// TouchCredential records that credential id was used at usedAt.
 	TouchCredential(ctx context.Context, id uuid.UUID, usedAt time.Time) error
+	// CreateToken records personal token t, its secret hashed to hash, and its event, as its user.
+	CreateToken(ctx context.Context, t Credential, hash []byte) error
+	// Tokens lists a user's personal tokens that are not revoked, newest first.
+	Tokens(ctx context.Context, userID uuid.UUID) ([]Credential, error)
+	// RevokeToken revokes personal token id of user userID at now, or ErrNotFound.
+	RevokeToken(ctx context.Context, userID, id uuid.UUID, now time.Time) error
 	// Sessions lists a user's sessions that are not revoked, newest first.
 	Sessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
 	// Revoke revokes session id of user userID at now, or ErrNotFound.
@@ -325,23 +332,25 @@ func (s *Service) SeededUsers(ctx context.Context) ([]Seeded, error) {
 	return users, nil
 }
 
-// Authenticated is who a credential resolved to: a user and the session it came from if a cookie's, or an API key's
-// principal and the credential it came from if a bearer token's.
+// Authenticated is who a credential resolved to: a user and the session it came from if a cookie's, a user and their
+// personal token, or an API key's principal and its secret.
 type Authenticated struct {
 	User       User
 	Session    Session
 	Credential Credential
 }
 
-// Authenticate resolves a token to who it acts as: a session token (the cookie's) to its user, an API key's secret
-// (a bearer token) to the key. ErrUnauthenticated when it matches nothing, expired, was revoked or its principal is
-// suspended. A live credential is marked used, at most once a minute.
+// Authenticate resolves a token to who it acts as: a session token (the cookie's) to its user, a personal token to
+// its user, an API key's secret to the key. ErrUnauthenticated when it matches nothing, expired, was revoked or its
+// principal is suspended. A live credential is marked used, at most once a minute.
 func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated, error) {
 	switch {
 	case ValidSecret(PrefixSession, token):
 		return s.authenticateSession(ctx, token)
+	case ValidSecret(PrefixPersonalToken, token):
+		return s.authenticateCredential(ctx, token, CredentialPersonalToken)
 	case ValidSecret(PrefixAPIKey, token):
-		return s.authenticateKey(ctx, token)
+		return s.authenticateCredential(ctx, token, CredentialAPIKey)
 	}
 	return Authenticated{}, ErrUnauthenticated
 }
@@ -366,28 +375,6 @@ func (s *Service) authenticateSession(ctx context.Context, token string) (Authen
 		session.LastSeenAt = now
 	}
 	return Authenticated{User: user, Session: session}, nil
-}
-
-// authenticateKey resolves an API key's secret to the key's principal.
-func (s *Service) authenticateKey(ctx context.Context, token string) (Authenticated, error) {
-	credential, principal, err := s.store.Credential(ctx, Hash(token))
-	if errors.Is(err, ErrNotFound) {
-		return Authenticated{}, ErrUnauthenticated
-	}
-	if err != nil {
-		return Authenticated{}, fmt.Errorf("finding the credential: %w", err)
-	}
-	now := s.now()
-	if !credential.Live(now) || principal.Suspended {
-		return Authenticated{}, ErrUnauthenticated
-	}
-	if now.Sub(credential.LastUsedAt) >= touchEvery {
-		if err := s.store.TouchCredential(ctx, credential.ID, now); err != nil {
-			return Authenticated{}, fmt.Errorf("marking the credential used: %w", err)
-		}
-		credential.LastUsedAt = now
-	}
-	return Authenticated{User: User{Principal: principal}, Credential: credential}, nil
 }
 
 // SignOut revokes the session token names; a token that signs nobody in is no error, the browser is signed out

@@ -240,19 +240,27 @@ func (s *AuthStore) Session(ctx context.Context, tokenHash []byte) (auth.Session
 	if err != nil {
 		return auth.Session{}, auth.User{}, wrap("reading the session", err)
 	}
-	p := row.Principal
+	u, err := s.user(ctx, row.Principal)
+	if err != nil {
+		return auth.Session{}, auth.User{}, err
+	}
+	return sessionOf(row.Session), u, nil
+}
+
+// user is the domain's view of principal p, with the emails it holds: a user's, and none of an API key's.
+func (s *AuthStore) user(ctx context.Context, p queries.Principal) (auth.User, error) {
 	u := auth.User{
 		Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
 		CreatedAt: p.CreatedAt,
 	}
 	emails, err := s.q.Emails(ctx, u.ID)
 	if err != nil {
-		return auth.Session{}, auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
+		return auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
 	}
 	for _, e := range emails {
 		u.Emails = append(u.Emails, auth.Email{Email: e.Email, Verified: e.Verified})
 	}
-	return sessionOf(row.Session), u, nil
+	return u, nil
 }
 
 // Touch records that session id was used at seen.
