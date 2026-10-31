@@ -84,6 +84,7 @@ func TestRunServer(t *testing.T) {
 			requests: append([]request{
 				{method: "GET", path: "/v1/version", wantStatus: 200, wantBody: `{"version":"` + version + `"}` + "\n"},
 				{method: "GET", path: "/v1/orgs", wantStatus: 401, wantBody: `"code":"auth.unauthenticated"`},
+				{method: "GET", path: "/v1/providers", wantStatus: 401, wantBody: `"code":"auth.unauthenticated"`},
 				{method: "POST", path: "/", body: `{"query":"{ version }"}`, wantStatus: 404, wantBody: `"code":"route.not_found"`},
 			}, health...),
 		},

@@ -45,6 +45,14 @@ func TestRunAuthServer(t *testing.T) {
 				{method: "GET", path: "/sign-in?user=owner", wantStatus: 302},
 			},
 		},
+		{
+			name: "a secrets key, no provider added yet",
+			env:  map[string]string{"COBRANCH_SEED": "true", "COBRANCH_SECRETS_KEY": strings.Repeat("k", 32)},
+			requests: []request{
+				{method: "GET", path: "/providers", wantStatus: 200, wantBody: `"providers":[],"seeded":[{"subject":"admin"`},
+				{method: "GET", path: "/sign-in?provider=okta", wantStatus: 302},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -53,7 +61,7 @@ func TestRunAuthServer(t *testing.T) {
 			t.Setenv("COBRANCH_DATABASE_URL", postgrestest.Database(t))
 			t.Setenv("COBRANCH_CONSOLE_URL", "https://cobranch.test")
 			t.Setenv("COBRANCH_AUTH_URL", "https://cobranch.test/auth")
-			unset(t, "COBRANCH_SEED", "COBRANCH_AUTH_PROVIDERS", "COBRANCH_AUTH_CLIENT_SECRET_GOOGLE")
+			unset(t, "COBRANCH_SEED", "COBRANCH_AUTH_PROVIDERS", "COBRANCH_AUTH_CLIENT_SECRET_GOOGLE", "COBRANCH_SECRETS_KEY")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
@@ -77,11 +85,12 @@ func TestRunAuthServerConfiguration(t *testing.T) {
 		{name: "no URLs", env: map[string]string{}, wantErr: "COBRANCH_CONSOLE_URL and COBRANCH_AUTH_URL"},
 		{name: "a bad policy", env: map[string]string{"COBRANCH_CONSOLE_URL": "https://cobranch.test", "COBRANCH_AUTH_URL": "https://cobranch.test/auth", "COBRANCH_AUTH_SIGN_UP": "everyone"}, wantErr: "not a sign-up policy"},
 		{name: "an unknown preset", env: map[string]string{"COBRANCH_CONSOLE_URL": "https://cobranch.test", "COBRANCH_AUTH_URL": "https://cobranch.test/auth", "COBRANCH_AUTH_PROVIDERS": `[{"id":"x","preset":"nope","clientId":"c"}]`, "COBRANCH_AUTH_CLIENT_SECRET_X": "s"}, wantErr: "no preset"},
+		{name: "a short secrets key", env: map[string]string{"COBRANCH_CONSOLE_URL": "https://cobranch.test", "COBRANCH_AUTH_URL": "https://cobranch.test/auth", "COBRANCH_SECRETS_KEY": "short"}, wantErr: "COBRANCH_SECRETS_KEY"},
 		{name: "hosts without a parent", env: map[string]string{"COBRANCH_CONSOLE_URL": "https://cobranch.test", "COBRANCH_AUTH_URL": "https://auth.example"}, wantErr: "naming the session cookie"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			unset(t, "COBRANCH_CONSOLE_URL", "COBRANCH_AUTH_URL", "COBRANCH_AUTH_SIGN_UP", "COBRANCH_AUTH_PROVIDERS", "COBRANCH_SEED")
+			unset(t, "COBRANCH_CONSOLE_URL", "COBRANCH_AUTH_URL", "COBRANCH_AUTH_SIGN_UP", "COBRANCH_AUTH_PROVIDERS", "COBRANCH_SEED", "COBRANCH_SECRETS_KEY")
 			for k, v := range tt.env {
 				t.Setenv(k, v)
 			}
