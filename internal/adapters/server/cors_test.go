@@ -23,7 +23,9 @@ func TestAllowOrigin(t *testing.T) {
 		wantHandled bool
 	}{
 		{name: "the Console's call", allowed: console, method: "GET", origin: console, wantStatus: 200, wantAllowed: console, wantCreds: "true", wantHandled: true},
-		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight", allowed: console, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight for a PATCH", allowed: console, method: "OPTIONS", origin: console, preflight: "PATCH", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight for a DELETE", allowed: console, method: "OPTIONS", origin: console, preflight: "DELETE", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
 		{name: "another origin's call", allowed: console, method: "GET", origin: "https://evil.example.com", wantStatus: 200, wantHandled: true},
 		{name: "another origin's preflight", allowed: console, method: "OPTIONS", origin: "https://evil.example.com", preflight: "POST", wantStatus: 200, wantHandled: true},
 		{name: "a call from no page", allowed: console, method: "GET", wantStatus: 200, wantHandled: true},

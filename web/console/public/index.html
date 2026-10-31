@@ -240,7 +240,8 @@
     });
 
     // The first load: where the APIs are, the version, and who the viewer is.
-    fetch("config.json").then((r) => r.json()).then(async (c) => {
+    // config.json sits beside the page's directory: for the Console's root without a trailing slash too.
+    fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json()).then(async (c) => {
       config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "" };
       if (c.consoleUrl) base = new URL(c.consoleUrl).pathname.replace(/\/?$/, "/");
       try {
