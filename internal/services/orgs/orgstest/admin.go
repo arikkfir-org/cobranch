@@ -107,3 +107,25 @@ func (s *Store) Enter(_ context.Context, actor, orgID uuid.UUID, reason string, 
 	s.Events = append(s.Events, "org.entered")
 	return nil
 }
+
+// InstallationSettings reads the settings the Back-office changes.
+func (s *Store) InstallationSettings(context.Context) (auth.InstallationSettings, error) {
+	if s.Fail != nil {
+		return auth.InstallationSettings{}, s.Fail
+	}
+	return s.Installation, nil
+}
+
+// ChangeInstallationSettings writes settings unless the stored version is no longer theirs, and bumps the version.
+func (s *Store) ChangeInstallationSettings(_ context.Context, actor uuid.UUID, settings auth.InstallationSettings, at time.Time) (auth.InstallationSettings, error) {
+	if s.Fail != nil {
+		return auth.InstallationSettings{}, s.Fail
+	}
+	if settings.Version != s.Installation.Version {
+		return auth.InstallationSettings{}, admin.ErrStale
+	}
+	settings.Version++
+	settings.UpdatedAt, settings.UpdatedBy = at, actor
+	s.Installation = settings
+	return settings, nil
+}

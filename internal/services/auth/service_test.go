@@ -149,26 +149,32 @@ func begun(t *testing.T, s *auth.Service) (state, browser string) {
 	return stateOf(t, b.RedirectURL), b.BrowserToken
 }
 
+// completeCase is a sign-in for TestComplete and TestCompleteSettings to finish.
+type completeCase struct {
+	name     string
+	settings auth.Settings
+	// db is what the Back-office set; nil: self-serve off, the rest unset.
+	db       *auth.InstallationSettings
+	claims   auth.Claims
+	existing *auth.SignUp // a user already there
+	code     string
+	late     bool
+	wrongB   bool
+	wrongS   bool
+	wantErr  error
+	wantName string
+	wantRole []uuid.UUID
+}
+
 func TestComplete(t *testing.T) {
 	unverified := alice
 	unverified.EmailVerified = false
 	nameless := alice
 	nameless.Name = ""
-	tests := []struct {
-		name     string
-		settings auth.Settings
-		claims   auth.Claims
-		existing *auth.SignUp // a user already there
-		code     string
-		late     bool
-		wrongB   bool
-		wrongS   bool
-		wantErr  error
-		wantName string
-		wantRole []uuid.UUID
-	}{
+	on := true
+	tests := []completeCase{
 		{name: "a new user, anyone may", settings: auth.Settings{SignUp: auth.PolicyAnyone}, claims: alice, code: "good", wantName: "Alice"},
-		{name: "a new user with self-serve", settings: auth.Settings{SignUp: auth.PolicyAnyone, SelfServe: true}, claims: alice, code: "good", wantName: "Alice", wantRole: []uuid.UUID{auth.RoleInstallationUser}},
+		{name: "a new user with self-serve", settings: auth.Settings{SignUp: auth.PolicyAnyone, SelfServe: &on}, claims: alice, code: "good", wantName: "Alice", wantRole: []uuid.UUID{auth.RoleInstallationUser}},
 		{name: "a first administrator", settings: auth.Settings{SignUp: auth.PolicyInvited, Admins: []string{"alice@example.com"}}, claims: alice, code: "good", wantName: "Alice", wantRole: []uuid.UUID{auth.RoleInstallationAdmin}},
 		{name: "an administrator's email, unverified", settings: auth.Settings{SignUp: auth.PolicyInvited, Admins: []string{"alice@example.com"}}, claims: unverified, code: "good", wantErr: auth.ErrSignUpRefused},
 		{name: "a domain the policy admits", settings: auth.Settings{SignUp: auth.PolicyDomains, SignUpDomains: []string{"example.com"}}, claims: alice, code: "good", wantName: "Alice"},
@@ -184,31 +190,56 @@ func TestComplete(t *testing.T) {
 		{name: "an unknown state", settings: auth.Settings{SignUp: auth.PolicyAnyone}, claims: alice, code: "good", wrongS: true, wantErr: auth.ErrFlow},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			s, store, google := newService(tt.settings, tt.claims)
-			if tt.existing != nil {
-				tt.existing.Identity.UserID = tt.existing.Principal.ID
-				_ = store.SignUp(context.Background(), *tt.existing)
-			}
-			state, browser := begun(t, s)
-			state, browser = tamper(s, state, browser, tt.late, tt.wrongB, tt.wrongS)
-			got, err := s.Complete(context.Background(), tt.code, state, browser, auth.Client{UserAgent: "test", IP: "::1"})
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Complete() error = %v, want %v", err, tt.wantErr)
-			}
-			if _, left := store.Flows[string(auth.Hash(state))]; left {
-				t.Error("the flow is still there after Complete()")
-			}
-			if err != nil {
-				checkTaken(t, err)
-				return
-			}
-			if google.Got.Code != "good" || google.Got.Nonce == "" || google.Got.Verifier == "" {
-				t.Errorf("Exchange got %+v: wants the code, the flow's nonce and its PKCE verifier", google.Got)
-			}
-			checkCompleted(t, store, got, tt.wantName, tt.wantRole)
-		})
+		t.Run(tt.name, func(t *testing.T) { runComplete(t, tt) })
 	}
+}
+
+// TestCompleteSettings finishes sign-ups under the settings the Back-office keeps, and the values' over them.
+func TestCompleteSettings(t *testing.T) {
+	on, off := true, false
+	invited, domains := auth.PolicyInvited, auth.PolicyDomains
+	tests := []completeCase{
+		{name: "the defaults: anyone, self-serve", db: &auth.InstallationSettings{}, claims: alice, code: "good", wantName: "Alice", wantRole: []uuid.UUID{auth.RoleInstallationUser}},
+		{name: "the Back-office's policy", db: &auth.InstallationSettings{SignUp: &invited}, claims: alice, code: "good", wantErr: auth.ErrSignUpRefused},
+		{name: "the Back-office's domains", db: &auth.InstallationSettings{SignUp: &domains, SignUpDomains: []string{"example.com"}, SelfServe: &off}, claims: alice, code: "good", wantName: "Alice"},
+		{name: "the values' policy over the Back-office's", settings: auth.Settings{SignUp: auth.PolicyAnyone}, db: &auth.InstallationSettings{SignUp: &invited, SelfServe: &off}, claims: alice, code: "good", wantName: "Alice"},
+		{name: "the values' self-serve over the Back-office's", settings: auth.Settings{SelfServe: &off}, db: &auth.InstallationSettings{SelfServe: &on}, claims: alice, code: "good", wantName: "Alice"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { runComplete(t, tt) })
+	}
+}
+
+// runComplete begins tt's sign-in, tampers with it as tt says, finishes it and checks the outcome.
+func runComplete(t *testing.T, tt completeCase) {
+	t.Helper()
+	off := false
+	s, store, google := newService(tt.settings, tt.claims)
+	store.Installation = auth.InstallationSettings{SelfServe: &off}
+	if tt.db != nil {
+		store.Installation = *tt.db
+	}
+	if tt.existing != nil {
+		tt.existing.Identity.UserID = tt.existing.Principal.ID
+		_ = store.SignUp(context.Background(), *tt.existing)
+	}
+	state, browser := begun(t, s)
+	state, browser = tamper(s, state, browser, tt.late, tt.wrongB, tt.wrongS)
+	got, err := s.Complete(context.Background(), tt.code, state, browser, auth.Client{UserAgent: "test", IP: "::1"})
+	if !errors.Is(err, tt.wantErr) {
+		t.Fatalf("Complete() error = %v, want %v", err, tt.wantErr)
+	}
+	if _, left := store.Flows[string(auth.Hash(state))]; left {
+		t.Error("the flow is still there after Complete()")
+	}
+	if err != nil {
+		checkTaken(t, err)
+		return
+	}
+	if google.Got.Code != "good" || google.Got.Nonce == "" || google.Got.Verifier == "" {
+		t.Errorf("Exchange got %+v: wants the code, the flow's nonce and its PKCE verifier", google.Got)
+	}
+	checkCompleted(t, store, got, tt.wantName, tt.wantRole)
 }
 
 // tamper spoils a begun sign-in the way a case asks: late, from another browser, or with an unknown state.
@@ -510,6 +541,39 @@ func TestAuthenticateAPIKey(t *testing.T) {
 			}
 			if touched := got.Credential.LastUsedAt.Equal(tt.at); touched != tt.wantTouch {
 				t.Errorf("last used %v at %v, want touched %t", got.Credential.LastUsedAt, tt.at, tt.wantTouch)
+			}
+		})
+	}
+}
+
+func TestSignUpSettings(t *testing.T) {
+	on, off := true, false
+	invited := auth.PolicyInvited
+	tests := []struct {
+		name          string
+		values        auth.Settings
+		db            auth.InstallationSettings
+		want          auth.SignUpSettings
+		wantSignUpLck bool
+		wantSelfLck   bool
+	}{
+		{name: "neither: the defaults", want: auth.SignUpSettings{SignUp: auth.PolicyAnyone, SelfServe: true}},
+		{name: "the Back-office's", db: auth.InstallationSettings{SignUp: &invited, SignUpDomains: []string{"example.com"}, SelfServe: &off},
+			want: auth.SignUpSettings{SignUp: auth.PolicyInvited, SignUpDomains: []string{"example.com"}}},
+		{name: "the values', locked", values: auth.Settings{SignUp: auth.PolicyDomains, SignUpDomains: []string{"example.org"}, SelfServe: &on},
+			db:   auth.InstallationSettings{SignUp: &invited, SignUpDomains: []string{"example.com"}, SelfServe: &off},
+			want: auth.SignUpSettings{SignUp: auth.PolicyDomains, SignUpDomains: []string{"example.org"}, SelfServe: true}, wantSignUpLck: true, wantSelfLck: true},
+		{name: "the values' self-serve, the Back-office's policy", values: auth.Settings{SelfServe: &off}, db: auth.InstallationSettings{SignUp: &invited},
+			want: auth.SignUpSettings{SignUp: auth.PolicyInvited}, wantSelfLck: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.values.SignUpSettings(tt.db)
+			if got.SignUp != tt.want.SignUp || !slices.Equal(got.SignUpDomains, tt.want.SignUpDomains) || got.SelfServe != tt.want.SelfServe {
+				t.Errorf("SignUpSettings() = %+v, want %+v", got, tt.want)
+			}
+			if tt.values.SignUpLocked() != tt.wantSignUpLck || tt.values.SelfServeLocked() != tt.wantSelfLck {
+				t.Errorf("locked = %t, %t, want %t, %t", tt.values.SignUpLocked(), tt.values.SelfServeLocked(), tt.wantSignUpLck, tt.wantSelfLck)
 			}
 		})
 	}

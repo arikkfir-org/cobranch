@@ -34,6 +34,16 @@ type Identity struct {
 	LastSignInAt  time.Time
 }
 
+type InstallationSetting struct {
+	ID            bool
+	SignUp        *string
+	SignUpDomains []string
+	SelfServe     *bool
+	Version       int64
+	UpdatedAt     time.Time
+	UpdatedBy     *uuid.UUID
+}
+
 type Invitation struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID

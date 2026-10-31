@@ -31,6 +31,16 @@ sql:
               import: time
               type: Time
               pointer: true
+          - db_type: text
+            nullable: true
+            go_type:
+              type: string
+              pointer: true
+          - db_type: pg_catalog.bool
+            nullable: true
+            go_type:
+              type: bool
+              pointer: true
   # The seeds run in goose's database/sql transactions, so theirs is a second package, on database/sql.
   - engine: postgresql
     schema: db/migrations

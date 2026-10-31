@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"mime"
 	"net/http"
 	"strings"
 
@@ -69,10 +70,20 @@ func safeMethod(method string) bool {
 
 // fromPages reports whether r is JSON and, when it names its Origin, pagesOrigin.
 func fromPages(r *http.Request, pagesOrigin string) bool {
-	if ct := r.Header.Get("Content-Type"); r.ContentLength != 0 && !strings.HasPrefix(ct, "application/json") {
+	if r.ContentLength != 0 && !isJSON(r.Header.Get("Content-Type")) {
 		return false
 	}
 	return SameOrigin(r, pagesOrigin)
+}
+
+// isJSON reports whether contentType is JSON: application/json, or a type of it such as a merge patch's
+// (application/merge-patch+json), which no form sends either.
+func isJSON(contentType string) bool {
+	mediaType, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return false
+	}
+	return mediaType == "application/json" || strings.HasPrefix(mediaType, "application/") && strings.HasSuffix(mediaType, "+json")
 }
 
 // SameOrigin reports whether r came from origin: its Origin header is origin, or it carries none, which no browser's

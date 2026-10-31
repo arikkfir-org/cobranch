@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/system/config"
 )
 
@@ -138,20 +139,33 @@ func TestRunMaintenance(t *testing.T) {
 
 func TestAuthSettings(t *testing.T) {
 	backOffice := config.URL{URL: &url.URL{Scheme: "https", Host: "admin.cobranch.test", Path: "/back-office"}}
+	off := false
 	tests := []struct {
 		name        string
 		cfg         config.AuthServer
 		wantReturns []string
+		wantSignUp  auth.Policy
+		wantLocked  bool
+		wantErr     bool
 	}{
-		{name: "without a Back-office", cfg: config.AuthServer{SignUp: "anyone"}},
-		{name: "with a Back-office", cfg: config.AuthServer{SignUp: "anyone", URLs: config.URLs{BackOffice: backOffice}},
+		{name: "without a Back-office, sign-up the Back-office's", cfg: config.AuthServer{}},
+		{name: "with a Back-office", cfg: config.AuthServer{URLs: config.URLs{BackOffice: backOffice}},
 			wantReturns: []string{"https://admin.cobranch.test/back-office"}},
+		{name: "sign-up the values'", cfg: config.AuthServer{SignUpSettings: config.SignUpSettings{SignUp: "invited", SelfServe: &off}},
+			wantSignUp: auth.PolicyInvited, wantLocked: true},
+		{name: "a sign-up policy that isn't one", cfg: config.AuthServer{SignUpSettings: config.SignUpSettings{SignUp: "everyone"}}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			settings, err := authSettings(tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("authSettings() error = %v, want one %t", err, tt.wantErr)
+			}
 			if err != nil {
-				t.Fatal(err)
+				return
+			}
+			if settings.SignUp != tt.wantSignUp || settings.SignUpLocked() != tt.wantLocked || settings.SelfServeLocked() != tt.wantLocked {
+				t.Errorf("authSettings() = %+v, want sign-up %q, locked %t", settings, tt.wantSignUp, tt.wantLocked)
 			}
 			var returns []string
 			for _, u := range settings.ReturnURLs {

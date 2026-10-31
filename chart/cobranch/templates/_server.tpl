@@ -62,6 +62,14 @@ spec:
             {{- if $api }}
             - name: COBRANCH_BLOB_URL
               value: {{ $root.Values.blob.url | quote }}
+            {{- if eq .component "admin-server" }}
+            {{- with include "cobranch.signUpEnv" $root | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- with include "cobranch.secretsKeyEnv" $root | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- end }}
             {{- else }}
             {{- include "cobranch.authEnv" $root | nindent 12 }}
             {{- end }}

@@ -52,7 +52,9 @@ type Store struct {
 	// Credentials are the API keys' secrets by token hash, and Principals the principals they act as.
 	Credentials map[string]auth.Credential
 	Principals  map[uuid.UUID]auth.Principal
-	Fail        error
+	// Installation is the settings the Back-office changes.
+	Installation auth.InstallationSettings
+	Fail         error
 }
 
 // NewStore returns an empty Store.
@@ -239,6 +241,14 @@ func (s *Store) SeededUsers(context.Context) ([]auth.Seeded, error) {
 // SeededUser finds a seed identity by its subject.
 func (s *Store) SeededUser(ctx context.Context, subject string) (auth.Identity, error) {
 	return s.Identity(ctx, auth.SeedIssuer, subject)
+}
+
+// InstallationSettings reads the settings the Back-office changes.
+func (s *Store) InstallationSettings(context.Context) (auth.InstallationSettings, error) {
+	if s.Fail != nil {
+		return auth.InstallationSettings{}, s.Fail
+	}
+	return s.Installation, nil
 }
 
 // DeleteExpired drops the flows and sessions that expired at `at`.

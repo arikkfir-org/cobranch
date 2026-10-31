@@ -69,9 +69,12 @@ type Store interface {
 	SeededUser(ctx context.Context, subject string) (Identity, error)
 	// DeleteExpired deletes the flows and sessions that expired before now, and returns how many of each.
 	DeleteExpired(ctx context.Context, now time.Time) (flows, sessions int64, err error)
+	// InstallationSettings reads the settings the Back-office changes.
+	InstallationSettings(ctx context.Context) (InstallationSettings, error)
 }
 
-// Settings is the installation's sign-in configuration, from the chart's values.
+// Settings is the installation's sign-in configuration, from the chart's values. A sign-up setting they leave unset
+// (an empty SignUp, a nil SelfServe) is the Back-office's (InstallationSettings).
 type Settings struct {
 	SignUp Policy
 	// SignUpDomains admits verified emails under PolicyDomains, lowercase.
@@ -79,7 +82,7 @@ type Settings struct {
 	// Admins are the first administrators' emails, lowercase: a verified sign-in with one gets Installation admin.
 	Admins []string
 	// SelfServe grants every new user Installation user, which creates organizations.
-	SelfServe bool
+	SelfServe *bool
 	// Seed lets the demo data's users sign in without a provider: demo installations only.
 	Seed bool
 	// ReturnURLs are the absolute URLs, besides the Console's paths, below which a sign-in may return: the
@@ -241,8 +244,13 @@ func (s *Service) signUp(ctx context.Context, c Claims, now time.Time) (Identity
 			return Identity{}, fmt.Errorf("looking the email up: %w", err)
 		}
 	}
+	installation, err := s.store.InstallationSettings(ctx)
+	if err != nil {
+		return Identity{}, fmt.Errorf("reading the installation's settings: %w", err)
+	}
+	settings := s.settings.SignUpSettings(installation)
 	admin := verified && s.isAdmin(c.Email)
-	if !admin && !s.admits(c, verified) {
+	if !admin && !settings.admits(c, verified) {
 		return Identity{}, ErrSignUpRefused
 	}
 	id, err := uuid.NewV7()
@@ -251,7 +259,7 @@ func (s *Service) signUp(ctx context.Context, c Claims, now time.Time) (Identity
 	}
 	identity := Identity{Issuer: c.Issuer, Subject: c.Subject, UserID: id, Email: c.Email, EmailVerified: c.EmailVerified, Name: c.Name, LastSignInAt: now}
 	up := SignUp{Principal: Principal{ID: id, Kind: KindUser, DisplayName: displayName(c)}, Identity: identity}
-	if s.settings.SelfServe {
+	if settings.SelfServe {
 		up.Grants = append(up.Grants, Grant{RoleID: RoleInstallationUser, Source: SourceSelfServe})
 	}
 	if admin {
@@ -261,28 +269,6 @@ func (s *Service) signUp(ctx context.Context, c Claims, now time.Time) (Identity
 		return Identity{}, fmt.Errorf("signing up: %w", err)
 	}
 	return identity, nil
-}
-
-// admits reports whether the sign-up policy lets c sign up; a first administrator's email always may.
-func (s *Service) admits(c Claims, verified bool) bool {
-	switch s.settings.SignUp {
-	case PolicyAnyone:
-		return true
-	case PolicyDomains:
-		if !verified {
-			return false
-		}
-		_, domain, _ := strings.Cut(c.Email, "@")
-		for _, d := range s.settings.SignUpDomains {
-			if domain == d {
-				return true
-			}
-		}
-		return false
-	default:
-		// PolicyInvited: invitations come with organizations, so nobody but a first administrator yet.
-		return false
-	}
 }
 
 func (s *Service) isAdmin(email string) bool {

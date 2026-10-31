@@ -40,26 +40,25 @@ func TestLoadServer(t *testing.T) {
 		want    func(t *testing.T) Server
 		wantErr bool
 	}{
-		{
-			name: "defaults",
-			env:  map[string]string{"COBRANCH_BLOB_URL": "file:///blob"},
-			want: func(*testing.T) Server {
-				return Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}
-			},
-		},
+		{name: "defaults", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob"}, want: func(*testing.T) Server {
+			return Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}
+		}},
 		{
 			name: "every variable",
 			env: map[string]string{
-				"COBRANCH_HTTP_ADDR":        ":9090",
-				"COBRANCH_DATABASE_URL":     "postgres://db/cobranch",
-				"COBRANCH_BLOB_URL":         "gs://bucket",
-				"COBRANCH_SHUTDOWN_TIMEOUT": "5s",
-				"COBRANCH_CONSOLE_URL":      "https://Console.Example.com/home/",
-				"COBRANCH_REST_URL":         "https://api.example.com",
-				"COBRANCH_GRAPHQL_URL":      "https://console.example.com/graphql",
-				"COBRANCH_AUTH_URL":         "https://console.example.com/auth",
-				"COBRANCH_ADMIN_URL":        "https://admin.example.com/v/",
-				"COBRANCH_BACK_OFFICE_URL":  "https://back-office.example.com",
+				"COBRANCH_HTTP_ADDR":                ":9090",
+				"COBRANCH_DATABASE_URL":             "postgres://db/cobranch",
+				"COBRANCH_BLOB_URL":                 "gs://bucket",
+				"COBRANCH_SHUTDOWN_TIMEOUT":         "5s",
+				"COBRANCH_CONSOLE_URL":              "https://Console.Example.com/home/",
+				"COBRANCH_REST_URL":                 "https://api.example.com",
+				"COBRANCH_GRAPHQL_URL":              "https://console.example.com/graphql",
+				"COBRANCH_AUTH_URL":                 "https://console.example.com/auth",
+				"COBRANCH_ADMIN_URL":                "https://admin.example.com/v/",
+				"COBRANCH_BACK_OFFICE_URL":          "https://back-office.example.com",
+				"COBRANCH_AUTH_SIGN_UP":             "domains",
+				"COBRANCH_AUTH_SIGN_UP_DOMAINS":     "Example.com",
+				"COBRANCH_ORGANIZATIONS_SELF_SERVE": "false",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
@@ -67,6 +66,7 @@ func TestLoadServer(t *testing.T) {
 					URLs: URLs{Console: mustURL(t, "https://console.example.com/home"), REST: mustURL(t, "https://api.example.com"),
 						GraphQL: mustURL(t, "https://console.example.com/graphql"), Auth: mustURL(t, "https://console.example.com/auth"),
 						Admin: mustURL(t, "https://admin.example.com/v"), BackOffice: mustURL(t, "https://back-office.example.com")},
+					SignUpSettings: SignUpSettings{SignUp: "domains", SignUpDomains: []string{"example.com"}, SelfServe: &no},
 				}
 			},
 		},
@@ -159,6 +159,9 @@ func with(more map[string]string) map[string]string {
 	return env
 }
 
+// yes and no are a setting's values, which a nil leaves unset.
+var yes, no = true, false
+
 // authServerTests are TestLoadAuthServer's cases.
 var authServerTests = []struct {
 	name          string
@@ -167,11 +170,11 @@ var authServerTests = []struct {
 	wantSignUp    string
 	wantDomains   []string
 	wantAdmins    []string
-	wantSelfServe bool
+	wantSelfServe *bool
 	wantSeed      bool
 	wantErr       bool
 }{
-	{name: "defaults, no provider", env: authBase, wantSignUp: "anyone", wantSelfServe: true},
+	{name: "defaults, no provider: sign-up is the Back-office's", env: authBase},
 	{
 		name: "every variable",
 		env: with(map[string]string{
@@ -188,8 +191,10 @@ var authServerTests = []struct {
 			{ID: "google", Name: "Google", Preset: "google", ClientID: "c1", ClientSecret: "s1"},
 			{ID: "my-idp", Issuer: "https://idp.example.com", ClientID: "c2", ClientSecret: "s2"},
 		},
-		wantSignUp: "domains", wantDomains: []string{"example.com", "example.org"}, wantAdmins: []string{"alice@example.com"}, wantSeed: true,
+		wantSignUp: "domains", wantDomains: []string{"example.com", "example.org"}, wantAdmins: []string{"alice@example.com"}, wantSelfServe: &no, wantSeed: true,
 	},
+	{name: "self-serve set on", env: with(map[string]string{"COBRANCH_ORGANIZATIONS_SELF_SERVE": "true"}), wantSelfServe: &yes},
+	{name: "self-serve that isn't a boolean", env: with(map[string]string{"COBRANCH_ORGANIZATIONS_SELF_SERVE": "maybe"}), wantErr: true},
 	{name: "a provider without its secret", env: with(map[string]string{"COBRANCH_AUTH_PROVIDERS": `[{"id":"google","preset":"google","clientId":"c1"}]`}), wantErr: true},
 	{name: "a provider with an empty secret", env: with(map[string]string{"COBRANCH_AUTH_PROVIDERS": `[{"id":"google","preset":"google","clientId":"c1"}]`, "COBRANCH_AUTH_CLIENT_SECRET_GOOGLE": ""}), wantErr: true},
 	{name: "a bad provider ID", env: with(map[string]string{"COBRANCH_AUTH_PROVIDERS": `[{"id":"My IdP","issuer":"https://idp.example.com","clientId":"c"}]`}), wantErr: true},
@@ -212,7 +217,7 @@ func TestLoadAuthServer(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got.Providers, tt.wantProviders) || got.SignUp != tt.wantSignUp ||
 				!reflect.DeepEqual(got.SignUpDomains, tt.wantDomains) || !reflect.DeepEqual(got.Admins, tt.wantAdmins) ||
-				got.SelfServe != tt.wantSelfServe || got.Seed != tt.wantSeed {
+				!reflect.DeepEqual(got.SelfServe, tt.wantSelfServe) || got.Seed != tt.wantSeed {
 				t.Errorf("LoadAuthServer() = %+v", got)
 			}
 			if got.Console.Host != "cobranch.example.com" || got.Auth.Path != "/auth" || got.HTTPAddr != ":8080" {

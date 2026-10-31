@@ -31,12 +31,17 @@ lists every value, and `values.schema.json` checks them at install.
   `preset: google`, with the client you registered there (its redirect URI is `urls.auth` plus `/callback`) and a
   Secret of yours holding the client's secret. `auth.signUp` says who may sign up (`anyone`, `domains` or `invited`),
   `auth.admins` lists the first administrators' emails, and `organizations.selfServe` lets every user create
-  organizations. Without a provider the Console says sign-in isn't set up yet either
+  organizations. Left unset, `auth.signUp` and `organizations.selfServe` are the Back-office's to change (anyone signs
+  up, and creates organizations, until an administrator changes them); set, the Back-office only shows them. Without a provider the Console says sign-in isn't set up yet either
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md)).
 - **Back-office.** Set `urls.admin` and `urls.backOffice`, together, to run the Admin server and the Back-office, where
-  the administrators that `auth.admins` names list and create organizations, enter one (recorded in its audit trail)
-  and list the users. Both may stay on a gateway only your operators reach
+  the administrators that `auth.admins` names list and create organizations, enter one (recorded in its audit trail),
+  list the users and change the installation's settings. Both may stay on a gateway only your operators reach
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/back-office.md)).
+- **Secrets key.** `secretsKey.existingSecret` names a Secret of yours holding a key of 32 characters or more under
+  `key` (`secretsKey.secretKey`), which the Auth and Admin servers read: it seals the secrets Cobranch keeps in its
+  database, such as the client secrets of the identity providers the Back-office adds. A lost key loses those secrets,
+  which administrators then enter again.
 - **Database.** The bundled PostgreSQL generates its password on install and keeps it. Under Argo CD, or anything else
   that renders without the cluster, set `postgresql.auth.existingSecret`. For your own database, set
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.
@@ -49,8 +54,13 @@ lists every value, and `values.schema.json` checks them at install.
 
 ```bash
 helm upgrade cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.4 \
-  --namespace cobranch --reuse-values
+  --namespace cobranch --reset-then-reuse-values
 ```
+
+`--reset-then-reuse-values` (Helm 3.14 or later) keeps the values you set and takes the new version's defaults for the
+rest. `--reuse-values` keeps the previous version's defaults too, so a value a version adds or changes stays as it was:
+from a version before the Back-office's settings, it keeps `auth.signUp: anyone` and `organizations.selfServe: true`,
+which then lock those settings in the Back-office.
 
 The new version's migrate Job brings the schema forward while the old pods serve; the new pods turn ready once it is
 done. Each version's migrations keep the previous version's pods working, so roll back one version at most.
