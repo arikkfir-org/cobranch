@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -12,17 +13,17 @@ import (
 )
 
 // deployKey is Acme's API key, holding Release manager, so a reviewer sees a key with its roles and a secret on the
-// keys page and calls the APIs with it. Its secret is fixed, so a reviewer can use it: a demo installation alone
-// seeds, where every seeded credential is public by design.
+// keys page. Its one secret is revoked, so the key holds no credential anyone knows: a reviewer rotates it from the
+// keys page and gets a secret of their own, shown once, to call the APIs with.
 var deployKey = struct {
 	id, secretID uuid.UUID
-	name, secret string
+	name         string
 }{
 	id: uuid.MustParse("00000000-0000-7000-8000-00000000d1e1"), secretID: uuid.MustParse("00000000-0000-7000-8000-00000000d1e2"),
-	name: "Deploy script", secret: "cbk_rmj3kyPYS3Stleno6ieY6J5uyEuDgkBJPj4w0C7inos2PndWL",
+	name: "Deploy script",
 }
 
-// apiKeys seeds Acme's API key with its grant and its secret, which never expires.
+// apiKeys seeds Acme's API key with its grant and a revoked secret, whose value nobody keeps.
 func apiKeys(ctx context.Context, tx *sql.Tx) error {
 	q := queries.New(tx)
 	acme, olivia := demoOrganizations[0], demoUsers[0].id
@@ -36,9 +37,10 @@ func apiKeys(ctx context.Context, tx *sql.Tx) error {
 	}); err != nil {
 		return fmt.Errorf("granting the API key %s at %s: %w", releaseManager.name, acme.slug, err)
 	}
+	gone := auth.NewSecret(auth.PrefixAPIKey) // forgotten once hashed: the row shows a revoked secret, not a way in
 	if err := q.InsertSeedCredential(ctx, queries.InsertSeedCredentialParams{
-		ID: deployKey.secretID, TokenHash: auth.Hash(deployKey.secret), PrincipalID: deployKey.id, Hint: auth.Hint(deployKey.secret),
-		CreatedBy: uuid.NullUUID{UUID: olivia, Valid: true},
+		ID: deployKey.secretID, TokenHash: auth.Hash(gone), PrincipalID: deployKey.id, Hint: auth.Hint(gone),
+		CreatedBy: uuid.NullUUID{UUID: olivia, Valid: true}, RevokedAt: sql.NullTime{Time: time.Now(), Valid: true},
 	}); err != nil {
 		return fmt.Errorf("seeding the API key's secret: %w", err)
 	}

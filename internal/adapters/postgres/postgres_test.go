@@ -422,7 +422,7 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN roles r ON r.id = g.role_id WHERE NOT r.built_in AND r.org_id = g.scope_id"); n != 2 {
 			t.Errorf("seeded custom role grants = %d, want Release manager at Acme for Max and the Deploy script key", n)
 		}
-		if n := countRows(t, pool, "SELECT count(*) FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE p.kind = 'api_key' AND c.expires_at IS NULL"); n != 1 {
+		if n := countRows(t, pool, "SELECT count(*) FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE p.kind = 'api_key' AND c.revoked_at IS NOT NULL"); n != 1 {
 			t.Errorf("seeded API key secrets = %d, want the Deploy script's", n)
 		}
 		return

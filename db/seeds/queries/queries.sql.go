@@ -35,8 +35,8 @@ func (q *Queries) InsertSeedAPIKey(ctx context.Context, arg InsertSeedAPIKeyPara
 }
 
 const insertSeedCredential = `-- name: InsertSeedCredential :exec
-INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at)
-VALUES ($1, 'api_key', $2, $3, $4, now(), $5, $6)
+INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, revoked_at)
+VALUES ($1, 'api_key', $2, $3, $4, now(), $5, $6, $7)
 `
 
 type InsertSeedCredentialParams struct {
@@ -46,6 +46,7 @@ type InsertSeedCredentialParams struct {
 	Hint        string
 	CreatedBy   uuid.NullUUID
 	ExpiresAt   sql.NullTime
+	RevokedAt   sql.NullTime
 }
 
 func (q *Queries) InsertSeedCredential(ctx context.Context, arg InsertSeedCredentialParams) error {
@@ -56,6 +57,7 @@ func (q *Queries) InsertSeedCredential(ctx context.Context, arg InsertSeedCreden
 		arg.Hint,
 		arg.CreatedBy,
 		arg.ExpiresAt,
+		arg.RevokedAt,
 	)
 	return err
 }

@@ -32,5 +32,5 @@ VALUES (@id, 'organization', @name, @description, string_to_array(@permissions::
 INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id, 'api_key', @name, @org_id, @created_by);
 
 -- name: InsertSeedCredential :exec
-INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at)
-VALUES (@id, 'api_key', @token_hash, @principal_id, @hint, now(), @created_by, @expires_at);
+INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, revoked_at)
+VALUES (@id, 'api_key', @token_hash, @principal_id, @hint, now(), @created_by, @expires_at, @revoked_at);
