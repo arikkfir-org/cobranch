@@ -282,7 +282,7 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // ReservedSlugs are the Console's own paths, which no organization may take.
 var ReservedSlugs = []string{
-	"api", "auth", "graphql", "new", "settings", "sign-in", "sign-out", "sign-up", "join", "invitations", "me", "admin",
+	"api", "auth", "graphql", "new", "settings", "sign-in", "sign-out", "sign-up", "join", "invitations", "me", "admin", "back-office",
 	"about", "help", "docs", "static", "assets", "healthz", "readyz",
 }
 
