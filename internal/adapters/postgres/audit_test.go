@@ -198,9 +198,18 @@ func checkAuditRow(t *testing.T, i int, row, want auditRow, table string, princi
 	}
 }
 
-// TestAuditPrincipalIsLocal checks that a transaction's principal never outlives it on the pooled connection.
+// TestAuditPrincipalIsLocal checks that a transaction's principal never outlives it on the connection it used: the
+// pool has one connection, so the transaction and the check share it.
 func TestAuditPrincipalIsLocal(t *testing.T) {
-	s, pool := authStore(t)
+	_, shared := authStore(t)
+	cfg := shared.Config().Copy()
+	cfg.MaxConns = 1
+	pool, err := pgxpool.NewWithConfig(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	s := NewAuthStore(pool)
 	alice(t, s)
 	var principal *string
 	if err := pool.QueryRow(t.Context(), "SELECT nullif(current_setting('cobranch.principal_id', true), '')").Scan(&principal); err != nil {
