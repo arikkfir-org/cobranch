@@ -28,9 +28,10 @@ organizations](sign-in-and-organizations.md), whose sign-in, organizations and g
 
 Each page asks the same authorizer as the Console’s, so later pages add operations, not a new model.
 
-Choices beyond those designs are collected under [Decisions](#decisions), all Proposed. One of them settles a conflict
-between [ENG-219](https://linear.app/arikkfir/issue/ENG-219) and the agreed sign-in design, about identity providers: it
-is the [open question](#open-questions).
+Choices beyond those designs are collected under [Decisions](#decisions), all Proposed but one, agreed on 2026-10-31:
+the Back-office adds identity providers beside the chart's values, which settles a conflict between
+[ENG-219](https://linear.app/arikkfir/issue/ENG-219) and the agreed sign-in design ([identity
+providers](#identity-providers)).
 
 ## Components
 
@@ -177,7 +178,7 @@ organizations. Lifetimes and mail come with later slices.
 
 Changing or removing a provider takes effect on the next sign-in. Sessions already made keep working until they end.
 
-- **Beside the values', never over them.** **Proposed:** the values' providers stay as the sign-in design agreed, listed
+- **Beside the values', never over them.** **Agreed:** the values' providers stay as the sign-in design agreed, listed
   read-only in the Back-office; the Back-office adds more, kept in PostgreSQL. A provider's ID is unique across both:
   the Back-office refuses one the values use, and a values' provider added later with a Back-office provider's ID wins,
   the other shown as shadowed.
@@ -194,9 +195,6 @@ Changing or removing a provider takes effect on the next sign-in. Sessions alrea
 - **A change applies at the next sign-in.** The Auth server reads the database's providers at each sign-in and keeps
   each one's discovery while its version holds. Removing a provider stops its sign-ins; its users keep their accounts,
   and sign in again once a provider with the same issuer is back.
-- **If providers stay in the values only** (the [open question](#open-questions)), this section becomes a read-only list
-  of the values' providers, the secrets key waits for the slices that keep secrets, and pull request 3 shrinks to the
-  list.
 
 ## The Back-office
 
@@ -283,17 +281,13 @@ alone.
 | An administrator creates an organization for an existing user, who becomes its Owner; the administrator doesn't join | Installations with self-serve off give organizations out; administrators see no content | Proposed |
 | Entering asks for a reason, kept in `org.entered` on the organization's trail; the Owner grant's source is `entry` | Owners see why someone entered; the grant can be told apart | Proposed |
 | The chart's values lock the settings they set; the rest live in PostgreSQL, audited and versioned | Git-only operators lose nothing; others change settings without a redeploy | Proposed |
-| Identity providers can be added in the Back-office beside the values', client secrets encrypted with the chart's secrets key | [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for it; the agreed providers in the values stay as they are | Open |
+| Identity providers can be added in the Back-office beside the values', client secrets encrypted with the chart's secrets key | [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for it; the agreed providers in the values stay as they are | Agreed |
 | Lists page with an opaque cursor and `Link: rel="next"` | An installation's organizations and users outgrow one answer | Proposed |
 | Suspending users, revoking their sessions, installation roles, an organization's own administration, audit trails, lifetimes and mail come later | Keeps this slice to its issue | Proposed |
 
 ## Open questions
 
-1. **Should the Back-office edit identity providers, or only show the chart's?**
-   [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for "installation settings, identity providers included",
-   while the agreed sign-in design keeps providers in the chart's values, "in Git with the rest of the installation",
-   and the product design repeats it. Recommended: both, the values' providers read-only and the Back-office's beside
-   them, as [above](#identity-providers). The other way, providers stay in the values alone and the Back-office lists
-   them.
+None. The one this page raised, whether the Back-office edits identity providers or only shows the chart's, was answered
+on 2026-10-31: it adds them beside the values', as [above](#identity-providers).
 
 Cobranch is a Kfirs project, created by Arik Kfir.
