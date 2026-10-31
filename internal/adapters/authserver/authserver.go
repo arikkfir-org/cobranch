@@ -144,20 +144,21 @@ func (h *handler) finish(w http.ResponseWriter, r *http.Request, done auth.Compl
 	http.Redirect(w, r, h.returnURL(done.ReturnPath).String(), http.StatusFound)
 }
 
-// returnURL is where a finished sign-in sends the browser: a Console path joined to the Console's URL, or the path,
-// query and fragment of an absolute URL on the Back-office's host, on the Back-office's URL. The service keeps no other
-// return (auth.Service.SafeReturn), but the scheme and host come from the configuration all the same, so no stored
-// value can send the browser to another site: anything else returns to the Console's home.
+// returnURL is where a finished sign-in sends the browser: a Console path joined to the Console's URL, or the path of
+// an absolute URL on the Back-office's host on the Back-office's URL (its pages route by path alone). The service keeps
+// no other return (auth.Service.SafeReturn), but the scheme and host come from the configuration all the same, and the
+// path is checked again, so no stored value can send the browser to another site: anything else returns to the
+// Console's home.
 func (h *handler) returnURL(to string) *url.URL {
 	u, err := url.Parse(to)
 	if err != nil || !u.IsAbs() {
-		return h.console.JoinPath(to)
+		return h.console.JoinPath(auth.SafeReturnPath(to))
 	}
 	if h.backOffice == nil || !strings.EqualFold(u.Scheme, h.backOffice.Scheme) || !strings.EqualFold(u.Host, h.backOffice.Host) {
 		return h.console.JoinPath("/")
 	}
 	back := *h.backOffice
-	back.Path, back.RawPath, back.RawQuery, back.Fragment = u.Path, u.RawPath, u.RawQuery, u.Fragment
+	back.Path, back.RawPath, back.RawQuery, back.Fragment = auth.SafeReturnPath(u.Path), "", "", ""
 	return &back
 }
 
