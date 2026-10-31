@@ -54,6 +54,8 @@ extend type Query {
   organization(slug: String!): Organization
   "The permissions a role granted at a scope may hold, from the catalog."
   permissions(scope: RoleScope!): [String!]!
+  "The built-in roles granted at a scope."
+  roles(scope: RoleScope!): [Role!]! @deprecated(reason: "Roles are an organization's: Organization.roles lists them all. Removed two minor releases after 0.2.")
 }
 
 extend type User {
@@ -170,6 +172,8 @@ type Invitation {
   organizationName: String!
   email: String!
   roleId: ID!
+  "The role's name; empty once a custom role it offered is gone."
+  roleName: String!
   createdAt: Time!
   expiresAt: Time!
 }

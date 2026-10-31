@@ -17,14 +17,16 @@ type Email struct {
 
 // An invitation to an email; only a user who holds it, verified, accepts it.
 type Invitation struct {
-	ID               string    `json:"id"`
-	OrganizationID   string    `json:"organizationId"`
-	OrganizationSlug string    `json:"organizationSlug"`
-	OrganizationName string    `json:"organizationName"`
-	Email            string    `json:"email"`
-	RoleID           string    `json:"roleId"`
-	CreatedAt        time.Time `json:"createdAt"`
-	ExpiresAt        time.Time `json:"expiresAt"`
+	ID               string `json:"id"`
+	OrganizationID   string `json:"organizationId"`
+	OrganizationSlug string `json:"organizationSlug"`
+	OrganizationName string `json:"organizationName"`
+	Email            string `json:"email"`
+	RoleID           string `json:"roleId"`
+	// The role's name; empty once a custom role it offered is gone.
+	RoleName  string    `json:"roleName"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
 }
 
 // A user's request to join an organization, waiting for one of its member managers.

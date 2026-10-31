@@ -451,6 +451,7 @@ func (s *Store) DeleteRole(_ context.Context, _ uuid.UUID, org, role uuid.UUID, 
 		if inv.OrgID == org && inv.RoleID == role && inv.State == orgs.StatePending {
 			inv.State = orgs.StateCancelled
 			s.Invites[id] = inv
+			s.Events = append(s.Events, "invitation.cancelled")
 		}
 	}
 	s.RoleList = slices.Delete(s.RoleList, i, i+1)

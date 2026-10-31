@@ -52,6 +52,7 @@ type ComplexityRoot struct {
 		OrganizationName func(childComplexity int) int
 		OrganizationSlug func(childComplexity int) int
 		RoleID           func(childComplexity int) int
+		RoleName         func(childComplexity int) int
 	}
 
 	JoinRequest struct {
@@ -111,6 +112,7 @@ type ComplexityRoot struct {
 	Query struct {
 		Organization func(childComplexity int, slug string) int
 		Permissions  func(childComplexity int, scope RoleScope) int
+		Roles        func(childComplexity int, scope RoleScope) int
 		Version      func(childComplexity int) int
 		Viewer       func(childComplexity int) int
 	}
@@ -181,6 +183,7 @@ type QueryResolver interface {
 	Viewer(ctx context.Context) (*User, error)
 	Organization(ctx context.Context, slug string) (*Organization, error)
 	Permissions(ctx context.Context, scope RoleScope) ([]string, error)
+	Roles(ctx context.Context, scope RoleScope) ([]*Role, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -269,6 +272,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Invitation.RoleID(childComplexity), true
+	case "Invitation.roleName":
+		if e.ComplexityRoot.Invitation.RoleName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Invitation.RoleName(childComplexity), true
 
 	case "JoinRequest.createdAt":
 		if e.ComplexityRoot.JoinRequest.CreatedAt == nil {
@@ -633,6 +642,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Permissions(childComplexity, args["scope"].(RoleScope)), true
+	case "Query.roles":
+		if e.ComplexityRoot.Query.Roles == nil {
+			break
+		}
+
+		args, err := ec.field_Query_roles_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Query.Roles(childComplexity, args["scope"].(RoleScope)), true
 	case "Query.version":
 		if e.ComplexityRoot.Query.Version == nil {
 			break
@@ -918,6 +938,8 @@ extend type Query {
   organization(slug: String!): Organization
   "The permissions a role granted at a scope may hold, from the catalog."
   permissions(scope: RoleScope!): [String!]!
+  "The built-in roles granted at a scope."
+  roles(scope: RoleScope!): [Role!]! @deprecated(reason: "Roles are an organization's: Organization.roles lists them all. Removed two minor releases after 0.2.")
 }
 
 extend type User {
@@ -1034,6 +1056,8 @@ type Invitation {
   organizationName: String!
   email: String!
   roleId: ID!
+  "The role's name; empty once a custom role it offered is gone."
+  roleName: String!
   createdAt: Time!
   expiresAt: Time!
 }
@@ -1082,6 +1106,8 @@ func (ec *executionContext) childFields_Invitation(ctx context.Context, field gr
 		return ec.fieldContext_Invitation_email(ctx, field)
 	case "roleId":
 		return ec.fieldContext_Invitation_roleId(ctx, field)
+	case "roleName":
+		return ec.fieldContext_Invitation_roleName(ctx, field)
 	case "createdAt":
 		return ec.fieldContext_Invitation_createdAt(ctx, field)
 	case "expiresAt":
@@ -1758,6 +1784,20 @@ func (ec *executionContext) field_Query_permissions_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Query_roles_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "scope",
+		func(ctx context.Context, v any) (RoleScope, error) {
+			return ec.unmarshalNRoleScope2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleScope(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["scope"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field___Directive_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2014,6 +2054,29 @@ func (ec *executionContext) _Invitation_roleId(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_Invitation_roleId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Invitation", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Invitation_roleName(ctx context.Context, field graphql.CollectedField, obj *Invitation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Invitation_roleName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RoleName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Invitation_roleName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Invitation", field, false, false, "String")
 }
 
 func (ec *executionContext) _Invitation_createdAt(ctx context.Context, field graphql.CollectedField, obj *Invitation) (ret graphql.Marshaler) {
@@ -3567,6 +3630,50 @@ func (ec *executionContext) fieldContext_Query_permissions(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Query_permissions_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_roles(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_roles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Query().Roles(ctx, fc.Args["scope"].(RoleScope))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Role) graphql.Marshaler {
+			return ec.marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_roles(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Role(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_roles_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -5463,6 +5570,11 @@ func (ec *executionContext) _Invitation(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "roleName":
+			out.Values[i] = ec._Invitation_roleName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createdAt":
 			out.Values[i] = ec._Invitation_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -5901,6 +6013,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_permissions(ctx, field)
+				})
+		case "roles":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_roles(ctx, field)
 				})
 		case "__type":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {

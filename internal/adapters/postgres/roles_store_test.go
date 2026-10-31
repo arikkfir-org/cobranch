@@ -73,11 +73,14 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 	if err := f.s.Invite(ctx, f.olivia, inv); err != nil {
 		t.Fatal(err)
 	}
+	if got, err := f.s.Invitation(ctx, inv.ID); err != nil || got.RoleName != "Releaser" {
+		t.Errorf("Invitation() = %+v, %v, want its role named Releaser", got, err)
+	}
 	if err := f.s.DeleteRole(ctx, f.olivia, f.acme.ID, release.ID, now); err != nil {
 		t.Fatalf("DeleteRole() error = %v", err)
 	}
-	if got, err := f.s.Invitation(ctx, inv.ID); err != nil || got.State != orgs.StateCancelled {
-		t.Errorf("the deleted role's invitation = %+v, %v, want cancelled", got, err)
+	if got, err := f.s.Invitation(ctx, inv.ID); err != nil || got.State != orgs.StateCancelled || got.RoleName != "" {
+		t.Errorf("the deleted role's invitation = %+v, %v, want cancelled, its role's name gone", got, err)
 	}
 	if roles, _ := f.s.Roles(ctx, f.acme.ID); len(roles) != 3 {
 		t.Errorf("%d roles remain, want the built-in 3", len(roles))
@@ -85,7 +88,7 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 	if err := f.s.DeleteRole(ctx, f.olivia, f.acme.ID, auth.RoleGuest, now); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("DeleteRole(Guest) error = %v, want not found", err)
 	}
-	want := []string{"role.created", "org.created", "member.joined", "role.created", "role.updated", "role.granted", "role.revoked", "invitation.made", "role.deleted"}
+	want := []string{"role.created", "org.created", "member.joined", "role.created", "role.updated", "role.granted", "role.revoked", "invitation.made", "invitation.cancelled", "role.deleted"}
 	if got := eventKinds(t, f.pool); !slices.Equal(got[len(got)-len(want):], want) {
 		t.Errorf("events = %v, want them to end with %v", got, want)
 	}
@@ -124,5 +127,30 @@ func TestOrgStoreRevokeKeepsAnOwner(t *testing.T) {
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM grants WHERE role_id = $1 AND scope_id = $2", auth.RoleOwner, f.acme.ID); n != 1 {
 		t.Errorf("%d Owners remain, want 1", n)
+	}
+}
+
+// TestOrgStoreDeleteRoleAgainstGrant deletes a role while another transaction grants it, many times over: the
+// organization's lock orders them, so either the grant lands and the deletion is refused, or the deletion lands and
+// the grant finds no role. A grant that lands and then vanishes with the role is the failure.
+func TestOrgStoreDeleteRoleAgainstGrant(t *testing.T) {
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	for i := range 10 {
+		role := orgs.Role{ID: uuid.New(), Name: "Temp " + uuid.NewString()[:8], Permissions: []string{"org.read"}, OrgID: f.acme.ID}
+		if err := f.s.CreateRole(ctx, f.olivia, role); err != nil {
+			t.Fatal(err)
+		}
+		deletes, grants := make(chan error, 1), make(chan error, 1)
+		go func() { deletes <- f.s.DeleteRole(ctx, f.olivia, f.acme.ID, role.ID, now) }()
+		go func() { grants <- f.s.GrantRole(ctx, f.olivia, f.acme.ID, f.max, role.ID) }()
+		deleted, granted := <-deletes, <-grants
+		grantRows, roleRows := count(t, f.pool, "SELECT count(*) FROM grants WHERE role_id = $1", role.ID), count(t, f.pool, "SELECT count(*) FROM roles WHERE id = $1", role.ID)
+		switch {
+		case deleted == nil && errors.Is(granted, orgs.ErrNotFound) && grantRows == 0 && roleRows == 0:
+		case errors.Is(deleted, orgs.ErrRoleInUse) && granted == nil && grantRows == 1 && roleRows == 1:
+		default:
+			t.Fatalf("round %d: delete = %v, grant = %v, %d grants and %d roles remain", i, deleted, granted, grantRows, roleRows)
+		}
 	}
 }

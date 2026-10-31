@@ -22,6 +22,7 @@ type Organizations interface {
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
+	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)
 	CreateRole(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
 	UpdateRole(ctx context.Context, v orgs.Viewer, orgID, roleID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
 	DeleteRole(ctx context.Context, v orgs.Viewer, orgID, roleID uuid.UUID) error
@@ -153,7 +154,7 @@ func member(m orgs.Member) *Member {
 
 func invitation(i orgs.Invitation) *Invitation {
 	return &Invitation{ID: i.ID.String(), OrganizationID: i.OrgID.String(), OrganizationSlug: i.OrgSlug, OrganizationName: i.OrgName,
-		Email: i.Email, RoleID: i.RoleID.String(), CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
+		Email: i.Email, RoleID: i.RoleID.String(), RoleName: i.RoleName, CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
 }
 
 func joinRequest(r orgs.JoinRequest) *JoinRequest {

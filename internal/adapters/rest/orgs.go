@@ -22,6 +22,7 @@ type Organizations interface {
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
 	Roles(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]orgs.Role, error)
+	BuiltInRoles(ctx context.Context) ([]orgs.Role, error)
 	CreateRole(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
 	UpdateRole(ctx context.Context, v orgs.Viewer, orgID, roleID uuid.UUID, in orgs.RoleInput) (orgs.Role, error)
 	DeleteRole(ctx context.Context, v orgs.Viewer, orgID, roleID uuid.UUID) error
@@ -134,7 +135,7 @@ func role(r orgs.Role) Role {
 }
 
 func invitation(i orgs.Invitation) Invitation {
-	return Invitation{Id: i.ID, OrgId: i.OrgID, OrgSlug: i.OrgSlug, OrgName: i.OrgName, Email: i.Email, RoleId: i.RoleID,
+	return Invitation{Id: i.ID, OrgId: i.OrgID, OrgSlug: i.OrgSlug, OrgName: i.OrgName, Email: i.Email, RoleId: i.RoleID, RoleName: i.RoleName,
 		CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
 }
 
@@ -264,6 +265,31 @@ func (a api) UpdateOrganization(ctx context.Context, req UpdateOrganizationReque
 		return nil, err
 	}
 	return UpdateOrganization200JSONResponse(shown), nil
+}
+
+// Deprecated routes announce their end with these headers (RFC 9745 and RFC 8594): /roles went when roles became
+// an organization's, and goes two minor releases later.
+const (
+	rolesDeprecation = "@1793404800" // 2026-10-31
+	rolesSunset      = "Sun, 31 Jan 2027 00:00:00 GMT"
+)
+
+// ListBuiltInRoles lists the built-in organization roles: deprecated, the organization's roles list them all.
+func (a api) ListBuiltInRoles(ctx context.Context, req ListBuiltInRolesRequestObject) (ListBuiltInRolesResponseObject, error) {
+	if _, err := viewer(ctx); err != nil {
+		return nil, err
+	}
+	if !req.Params.Scope.Valid() {
+		return nil, refuse(http.StatusBadRequest, "request.invalid", "Roles are listed at scope organization.")
+	}
+	roles, err := a.orgs.BuiltInRoles(ctx)
+	if err != nil {
+		return nil, fail(err, "role")
+	}
+	deprecation, sunset := rolesDeprecation, rolesSunset
+	out := ListBuiltInRoles200JSONResponse{Headers: ListBuiltInRoles200ResponseHeaders{Deprecation: &deprecation, Sunset: &sunset}}
+	out.Body.Roles = mapAll(roles, role)
+	return out, nil
 }
 
 // ListPermissions lists the permissions a role at a scope may hold.

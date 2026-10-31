@@ -62,7 +62,8 @@ type Store interface {
 	CloseJoinRequest(ctx context.Context, actor uuid.UUID, id uuid.UUID, state State, at time.Time) error
 	// Role finds a role, or ErrNotFound.
 	Role(ctx context.Context, id uuid.UUID) (Role, error)
-	// Roles lists the roles granted at the organization: the built-in organization roles first, then its own.
+	// Roles lists the roles granted at the organization: the built-in organization roles first, then its own;
+	// uuid.Nil lists the built-in ones alone.
 	Roles(ctx context.Context, orgID uuid.UUID) ([]Role, error)
 	// CreateRole records a custom role of role.OrgID, or ErrRoleNameTaken.
 	CreateRole(ctx context.Context, actor uuid.UUID, role Role) error
@@ -252,6 +253,16 @@ func (s *Service) Roles(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Role,
 	roles, err := s.store.Roles(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the roles: %w", err)
+	}
+	return roles, nil
+}
+
+// BuiltInRoles lists the built-in organization roles, for any signed-in viewer: what GET /v1/roles answered before
+// roles became an organization's, kept while that route is deprecated.
+func (s *Service) BuiltInRoles(ctx context.Context) ([]Role, error) {
+	roles, err := s.store.Roles(ctx, uuid.Nil)
+	if err != nil {
+		return nil, fmt.Errorf("listing the built-in roles: %w", err)
 	}
 	return roles, nil
 }
@@ -474,7 +485,7 @@ func (s *Service) Invite(ctx context.Context, v Viewer, orgID uuid.UUID, email s
 		return Invitation{}, fmt.Errorf("making an ID: %w", err)
 	}
 	now := s.now()
-	inv := Invitation{ID: id, OrgID: orgID, OrgSlug: org.Slug, OrgName: org.Name, Email: email, RoleID: role.ID, InvitedBy: v.ID,
+	inv := Invitation{ID: id, OrgID: orgID, OrgSlug: org.Slug, OrgName: org.Name, Email: email, RoleID: role.ID, RoleName: role.Name, InvitedBy: v.ID,
 		State: StatePending, CreatedAt: now, ExpiresAt: now.Add(InvitationLifetime)}
 	if err := s.store.Invite(ctx, v.ID, inv); err != nil {
 		return Invitation{}, wrap("recording the invitation", err)

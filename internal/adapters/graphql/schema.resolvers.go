@@ -336,11 +336,23 @@ func (r *queryResolver) Organization(ctx context.Context, slug string) (*Organiz
 }
 
 // Permissions is the resolver for the permissions field.
-func (r *queryResolver) Permissions(ctx context.Context, _ RoleScope) ([]string, error) {
+func (r *queryResolver) Permissions(ctx context.Context, scope RoleScope) ([]string, error) {
 	if _, err := viewer(ctx); err != nil {
 		return nil, err
 	}
 	return orgs.RolePermissions(), nil
+}
+
+// Roles is the resolver for the roles field.
+func (r *queryResolver) Roles(ctx context.Context, _ RoleScope) ([]*Role, error) {
+	if _, err := viewer(ctx); err != nil {
+		return nil, err
+	}
+	roles, err := r.Orgs.BuiltInRoles(ctx)
+	if err != nil {
+		return nil, fail(ctx, err, "role", "listing the built-in roles")
+	}
+	return mapAll(roles, role), nil
 }
 
 // Sessions is the resolver for the sessions field.

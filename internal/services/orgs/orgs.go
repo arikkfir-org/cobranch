@@ -125,10 +125,12 @@ type Invitation struct {
 	OrgSlug, OrgName string
 	Email            string
 	RoleID           uuid.UUID
-	InvitedBy        uuid.UUID
-	State            State
-	CreatedAt        time.Time
-	ExpiresAt        time.Time
+	// RoleName names the role, for whoever reads the invitation; empty once a custom role is gone.
+	RoleName  string
+	InvitedBy uuid.UUID
+	State     State
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 // JoinRequest is a user's request to join an organization, waiting for one of its member managers.

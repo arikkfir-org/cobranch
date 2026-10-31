@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 )
 
-const cancelInvitationsOfRole = `-- name: CancelInvitationsOfRole :execrows
+const cancelInvitationsOfRole = `-- name: CancelInvitationsOfRole :many
 UPDATE invitations SET state = 'cancelled', decided_at = $1, decided_by = $2
-WHERE org_id = $3 AND role_id = $4 AND state = 'pending'
+WHERE org_id = $3 AND role_id = $4 AND state = 'pending' RETURNING id, email
 `
 
 type CancelInvitationsOfRoleParams struct {
@@ -24,18 +24,35 @@ type CancelInvitationsOfRoleParams struct {
 	RoleID    uuid.UUID
 }
 
-// CancelInvitationsOfRole cancels the organization's pending invitations that offer the role.
-func (q *Queries) CancelInvitationsOfRole(ctx context.Context, arg CancelInvitationsOfRoleParams) (int64, error) {
-	result, err := q.db.Exec(ctx, cancelInvitationsOfRole,
+type CancelInvitationsOfRoleRow struct {
+	ID    uuid.UUID
+	Email string
+}
+
+// CancelInvitationsOfRole cancels the organization's pending invitations that offer the role, and names each.
+func (q *Queries) CancelInvitationsOfRole(ctx context.Context, arg CancelInvitationsOfRoleParams) ([]CancelInvitationsOfRoleRow, error) {
+	rows, err := q.db.Query(ctx, cancelInvitationsOfRole,
 		arg.DecidedAt,
 		arg.DecidedBy,
 		arg.OrgID,
 		arg.RoleID,
 	)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected(), nil
+	defer rows.Close()
+	var items []CancelInvitationsOfRoleRow
+	for rows.Next() {
+		var i CancelInvitationsOfRoleRow
+		if err := rows.Scan(&i.ID, &i.Email); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const deleteOrganizationGrant = `-- name: DeleteOrganizationGrant :execrows

@@ -34,6 +34,21 @@ func (e ListPermissionsParamsScope) Valid() bool {
 	}
 }
 
+// Defines values for ListBuiltInRolesParamsScope.
+const (
+	ListBuiltInRolesParamsScopeOrganization ListBuiltInRolesParamsScope = "organization"
+)
+
+// Valid indicates whether the value is a known member of the ListBuiltInRolesParamsScope enum.
+func (e ListBuiltInRolesParamsScope) Valid() bool {
+	switch e {
+	case ListBuiltInRolesParamsScopeOrganization:
+		return true
+	default:
+		return false
+	}
+}
+
 // Email defines model for Email.
 type Email struct {
 	Email    string `json:"email"`
@@ -50,6 +65,9 @@ type Invitation struct {
 	OrgName   string             `json:"orgName"`
 	OrgSlug   string             `json:"orgSlug"`
 	RoleId    openapi_types.UUID `json:"roleId"`
+
+	// RoleName The role's name; empty once a custom role it offered is gone.
+	RoleName string `json:"roleName"`
 }
 
 // JoinRequest A user's request to join an organization, waiting for a member manager.
@@ -241,6 +259,14 @@ type ListPermissionsParams struct {
 // ListPermissionsParamsScope defines parameters for ListPermissions.
 type ListPermissionsParamsScope string
 
+// ListBuiltInRolesParams defines parameters for ListBuiltInRoles.
+type ListBuiltInRolesParams struct {
+	Scope ListBuiltInRolesParamsScope `form:"scope" json:"scope"`
+}
+
+// ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
+type ListBuiltInRolesParamsScope string
+
 // CreateOrganizationJSONRequestBody defines body for CreateOrganization for application/json ContentType.
 type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 
@@ -351,6 +377,11 @@ type ServerInterface interface {
 	// ListPermissions The permissions a role granted at a scope may hold, from the catalog.
 	// (GET /permissions)
 	ListPermissions(w http.ResponseWriter, r *http.Request, params ListPermissionsParams)
+	// ListBuiltInRoles The built-in roles granted at a scope. Deprecated, since roles are an organization's; the organization's roles list them all.
+	// (GET /roles)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	ListBuiltInRoles(w http.ResponseWriter, r *http.Request, params ListBuiltInRolesParams)
 	// GetVersion The version of Cobranch that serves this installation.
 	// (GET /version)
 	GetVersion(w http.ResponseWriter, r *http.Request)
@@ -1109,6 +1140,39 @@ func (siw *ServerInterfaceWrapper) ListPermissions(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// ListBuiltInRoles operation middleware
+func (siw *ServerInterfaceWrapper) ListBuiltInRoles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListBuiltInRolesParams
+
+	// ------------- Required query parameter "scope" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "scope", r.URL.Query(), &params.Scope, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "scope"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "scope", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBuiltInRoles(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetVersion operation middleware
 func (siw *ServerInterfaceWrapper) GetVersion(w http.ResponseWriter, r *http.Request) {
 
@@ -1252,6 +1316,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/decline", wrapper.DeclineInvitation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/join-requests", wrapper.ListMyJoinRequests)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/roles", wrapper.ListBuiltInRoles)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/permissions", wrapper.ListPermissions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrganization)
@@ -3571,6 +3636,77 @@ func (response ListPermissionsdefaultApplicationProblemPlusJSONResponse) VisitLi
 	return err
 }
 
+type ListBuiltInRolesRequestObject struct {
+	Params ListBuiltInRolesParams
+}
+
+type ListBuiltInRolesResponseObject interface {
+	VisitListBuiltInRolesResponse(w http.ResponseWriter) error
+}
+
+type ListBuiltInRoles200ResponseHeaders struct {
+	Deprecation *string
+	Sunset      *string
+}
+
+type ListBuiltInRoles200JSONResponse struct {
+	Body struct {
+		Roles []Role `json:"roles"`
+	}
+	Headers ListBuiltInRoles200ResponseHeaders
+}
+
+func (response ListBuiltInRoles200JSONResponse) VisitListBuiltInRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Deprecation != nil {
+		w.Header().Set("Deprecation", fmt.Sprint(*response.Headers.Deprecation))
+	}
+	if response.Headers.Sunset != nil {
+		w.Header().Set("Sunset", fmt.Sprint(*response.Headers.Sunset))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBuiltInRoles401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListBuiltInRoles401ApplicationProblemPlusJSONResponse) VisitListBuiltInRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBuiltInRolesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListBuiltInRolesdefaultApplicationProblemPlusJSONResponse) VisitListBuiltInRolesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetVersionRequestObject struct {
 }
 
@@ -3695,6 +3831,11 @@ type StrictServerInterface interface {
 	// ListPermissions The permissions a role granted at a scope may hold, from the catalog.
 	// (GET /permissions)
 	ListPermissions(ctx context.Context, request ListPermissionsRequestObject) (ListPermissionsResponseObject, error)
+	// ListBuiltInRoles The built-in roles granted at a scope. Deprecated, since roles are an organization's; the organization's roles list them all.
+	// (GET /roles)
+	//
+	// Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
+	ListBuiltInRoles(ctx context.Context, request ListBuiltInRolesRequestObject) (ListBuiltInRolesResponseObject, error)
 	// GetVersion The version of Cobranch that serves this installation.
 	// (GET /version)
 	GetVersion(ctx context.Context, request GetVersionRequestObject) (GetVersionResponseObject, error)
@@ -4516,6 +4657,32 @@ func (sh *strictHandler) ListPermissions(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListPermissionsResponseObject); ok {
 		if err := validResponse.VisitListPermissionsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBuiltInRoles operation middleware
+func (sh *strictHandler) ListBuiltInRoles(w http.ResponseWriter, r *http.Request, params ListBuiltInRolesParams) {
+	var request ListBuiltInRolesRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBuiltInRoles(ctx, request.(ListBuiltInRolesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBuiltInRoles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBuiltInRolesResponseObject); ok {
+		if err := validResponse.VisitListBuiltInRolesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

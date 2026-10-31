@@ -179,6 +179,44 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /roles:
+    get:
+      operationId: listBuiltInRoles
+      deprecated: true
+      summary: The built-in roles granted at a scope. Deprecated, since roles are an organization's; the organization's roles list them all.
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [organization]
+      responses:
+        "200":
+          description: The built-in roles, with the route's end announced.
+          headers:
+            Deprecation:
+              description: When the route was deprecated, as RFC 9745 says.
+              schema:
+                type: string
+            Sunset:
+              description: When the route goes, as RFC 8594 says.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roles]
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Role"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /permissions:
     get:
       operationId: listPermissions
@@ -924,7 +962,7 @@ components:
     Invitation:
       type: object
       description: An invitation to an email, which only a user holding it, verified, accepts.
-      required: [id, orgId, orgSlug, orgName, email, roleId, createdAt, expiresAt]
+      required: [id, orgId, orgSlug, orgName, email, roleId, roleName, createdAt, expiresAt]
       properties:
         id:
           type: string
@@ -941,6 +979,9 @@ components:
         roleId:
           type: string
           format: uuid
+        roleName:
+          type: string
+          description: The role's name; empty once a custom role it offered is gone.
         createdAt:
           type: string
           format: date-time

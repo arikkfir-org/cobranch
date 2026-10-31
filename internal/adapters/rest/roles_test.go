@@ -24,6 +24,12 @@ func TestRoleListing(t *testing.T) {
 					t.Errorf("permissions = %s", body)
 				}
 			}},
+		{name: "the deprecated built-in roles", viewer: maxim, method: "GET", path: fixed("/v1/roles?scope=organization"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[struct{ Roles []Role }](t, body); len(got.Roles) != 4 || got.Roles[0].Name != "Owner" {
+					t.Errorf("roles = %s", body)
+				}
+			}},
 		{name: "permissions at another scope", viewer: maxim, method: "GET", path: fixed("/v1/permissions?scope=repository"), wantStatus: 400, wantCode: "request.invalid"},
 	})
 }
@@ -71,4 +77,12 @@ func TestRolesAPI(t *testing.T) {
 			return "/v1/orgs/acme/members/" + f.olivia.User.ID.String() + "/roles/" + auth.RoleOwner.String()
 		}, wantStatus: 409, wantCode: "org.last_owner"},
 	})
+}
+
+func TestDeprecatedRolesRouteHeaders(t *testing.T) {
+	f := newOrgFixture(t)
+	rec := f.call(&f.max, "GET", "/v1/roles?scope=organization", "")
+	if rec.Code != 200 || rec.Header().Get("Deprecation") != rolesDeprecation || rec.Header().Get("Sunset") != rolesSunset {
+		t.Errorf("status %d, Deprecation %q, Sunset %q", rec.Code, rec.Header().Get("Deprecation"), rec.Header().Get("Sunset"))
+	}
 }

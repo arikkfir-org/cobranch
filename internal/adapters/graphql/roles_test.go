@@ -43,6 +43,7 @@ func TestRoleMutations(t *testing.T) {
 		{name: "revoke the last Owner's role", viewer: olivia, document: func(f *orgFixture) string {
 			return `mutation { revokeRole(organizationId: "` + f.acme.ID.String() + `", userId: "` + f.olivia.User.ID.String() + `", roleId: "` + auth.RoleOwner.String() + `") }`
 		}, wantCode: conflict, wantReason: "org.last_owner"},
+		{name: "the deprecated built-in roles", viewer: maxim, document: fixed(`{ roles(scope: ORGANIZATION) { name } }`), want: []string{`{"name":"Owner"}`, `{"name":"Manager"}`}},
 		{name: "revoke with nonsense ids", viewer: olivia, document: fixed(`mutation { revokeRole(organizationId: "x", userId: "y", roleId: "z") }`), wantCode: notFound, wantReason: "role.not_found"},
 	})
 }

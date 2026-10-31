@@ -316,7 +316,7 @@
       if (orgs.length) sections.push(h("p", {}, "You belong to ", orgs.map((o, i) => [i ? ", " : "", h("a", { href: base + o.slug, "data-nav": "" }, o.name)]), "."));
       if (invitations.length) {
         sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"), ...invitations.map((inv) => h("div", { class: "row" },
-          h("div", {}, h("strong", {}, inv.orgName), h("p", {}, "as " + roleName(inv.roleId) + ", to " + inv.email + ", until " + when(inv.expiresAt))),
+          h("div", {}, h("strong", {}, inv.orgName), h("p", {}, "as " + (inv.roleName || "a member") + ", to " + inv.email + ", until " + when(inv.expiresAt))),
           h("div", {}, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/accept").then(reloadTo).catch(fail) }, "Accept"), " ",
             h("button", { class: "button small", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/decline").then(() => showWelcome()).catch(fail) }, "Decline"))))));
       }
@@ -343,7 +343,6 @@
       orgs = (await api("GET", "/me/organizations")).organizations;
       go("/" + org.slug);
     }
-    const roleName = (id) => (roles.find((r) => r.id === id) || { name: "?" }).name;
     const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
 
     // An organization's pages: its home, members and settings, under a bar with the switcher and the navigation.
@@ -416,7 +415,7 @@
         sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"),
           h("form", { class: "inline with-role", onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs/" + org.slug + "/invitations", { email: email.value, roleId: role.value }).then(refresh).catch(fail); } },
             h("label", {}, "Email", email), h("label", {}, "Role", role), h("button", { class: "button primary", type: "submit" }, "Invite")),
-          invitations.length ? h("table", {}, h("tbody", {}, invitations.map((inv) => h("tr", {}, h("td", {}, inv.email), h("td", {}, h("span", { class: "chip" }, roleName(inv.roleId))), h("td", {}, "until " + when(inv.expiresAt)),
+          invitations.length ? h("table", {}, h("tbody", {}, invitations.map((inv) => h("tr", {}, h("td", {}, inv.email), h("td", {}, h("span", { class: "chip" }, inv.roleName || "?")), h("td", {}, "until " + when(inv.expiresAt)),
             h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: (e) => navigator.clipboard.writeText(inviteLink(inv)).then(() => { e.target.textContent = "Copied"; }).catch(() => {}) }, "Copy link"), " ",
               h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/invitations/" + inv.id).then(refresh).catch(fail) }, "Cancel")))))) : h("p", {}, "No pending invitations. An invitee signs in with the email you invite, and accepts it on their welcome page.")));
         sections.push(h("section", { class: "panel" }, h("h3", {}, "Join requests"),
