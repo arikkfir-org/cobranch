@@ -84,7 +84,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
-	github.com/google/cel-go v0.28.0 // indirect
+	github.com/google/cel-go v0.29.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/wire v0.7.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.21 // indirect
