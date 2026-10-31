@@ -78,6 +78,15 @@ func TestRunServer(t *testing.T) {
 				{method: "GET", path: "/v1/version", wantStatus: 404},
 			}, health...),
 		},
+		{
+			name: "Admin",
+			api:  adminServer,
+			requests: append([]request{
+				{method: "GET", path: "/v1/version", wantStatus: 200, wantBody: `{"version":"` + version + `"}` + "\n"},
+				{method: "GET", path: "/v1/orgs", wantStatus: 401, wantBody: `"code":"auth.unauthenticated"`},
+				{method: "POST", path: "/", body: `{"query":"{ version }"}`, wantStatus: 404, wantBody: `"code":"route.not_found"`},
+			}, health...),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

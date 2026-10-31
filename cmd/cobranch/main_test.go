@@ -23,6 +23,7 @@ func TestRun(t *testing.T) {
 		{name: "unknown subcommand", args: []string{"serve"}, wantCode: 2, wantStderr: usage + "\n"},
 		{name: "REST server without a bucket", args: []string{"rest-server"}, wantCode: 1, wantStderr: "cobranch rest-server: configuring: reading the server's configuration from the COBRANCH_ variables: required key BLOB_URL missing value\n"},
 		{name: "GraphQL server without a bucket", args: []string{"graphql-server"}, wantCode: 1, wantStderr: "cobranch graphql-server: configuring: reading the server's configuration from the COBRANCH_ variables: required key BLOB_URL missing value\n"},
+		{name: "Admin server without a bucket", args: []string{"admin-server"}, wantCode: 1, wantStderr: "cobranch admin-server: configuring: reading the server's configuration from the COBRANCH_ variables: required key BLOB_URL missing value\n"},
 		{
 			name:       "migrate with a database URL that isn't one",
 			args:       []string{"migrate"},

@@ -18,24 +18,25 @@ import (
 )
 
 // Handler serves the Auth server's endpoints for service, setting cookie as the session cookie and returning browsers
-// to console, the Console's public URL. The browser sees it at its public URL, whose path the route strips, so every
-// path here is relative to that.
+// to console, the Console's public URL, or below backOffice, the Back-office's, when a sign-in began there (nil when
+// the installation runs none). The browser sees it at its public URL, whose path the route strips, so every path here
+// is relative to that.
 //
 //   - GET /providers: the identity providers, and the seeded users while seeding is on, as the sign-in page shows them.
 //   - GET /sign-in?provider=<id>&return=<path>: begins a sign-in at the provider; ?user=<subject> signs in as a seeded
-//     user instead.
+//     user instead. The return is a Console path, or a Back-office URL (auth.Service.SafeReturn).
 //   - GET /callback: where the provider sends the browser back.
-//   - POST /sign-out: revokes the cookie's session, from the Console's origin alone.
+//   - POST /sign-out: revokes the cookie's session, from the Console's or the Back-office's origin alone.
 //
 // An error on the way back sends the browser to the Console's /sign-in?error=<code>.
-func Handler(service *auth.Service, cookie auth.Cookie, console *url.URL) http.Handler {
-	h := &handler{service: service, cookie: cookie, console: console}
+func Handler(service *auth.Service, cookie auth.Cookie, console, backOffice *url.URL) http.Handler {
+	h := &handler{service: service, cookie: cookie, console: console, backOffice: backOffice}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /providers", h.providers)
 	mux.HandleFunc("GET /sign-in", h.signIn)
 	mux.HandleFunc("GET /callback", h.callback)
 	mux.HandleFunc("POST /sign-out", h.signOut)
-	return server.AllowOrigin(origin(console), mux)
+	return server.AllowOrigin([]string{origin(console), origin(backOffice)}, mux)
 }
 
 // origin is u's origin, or "" without one.
@@ -47,9 +48,9 @@ func origin(u *url.URL) string {
 }
 
 type handler struct {
-	service *auth.Service
-	cookie  auth.Cookie
-	console *url.URL
+	service             *auth.Service
+	cookie              auth.Cookie
+	console, backOffice *url.URL
 }
 
 // provider is a provider as the sign-in page lists it.
@@ -133,20 +134,25 @@ func (h *handler) callback(w http.ResponseWriter, r *http.Request) {
 	h.finish(w, r, done)
 }
 
-// finish sets the session cookie and returns the browser to the Console.
+// finish sets the session cookie and returns the browser to the Console's path, or to the Back-office's URL, that the
+// sign-in began with.
 func (h *handler) finish(w http.ResponseWriter, r *http.Request, done auth.Completed) {
 	http.SetCookie(w, &http.Cookie{
 		Name: h.cookie.Name, Value: done.SessionToken, Domain: h.cookie.Domain, Path: "/",
 		MaxAge: int(auth.SessionMax.Seconds()), HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
 	})
-	http.Redirect(w, r, h.console.JoinPath(done.ReturnPath).String(), http.StatusFound)
+	to := done.ReturnPath
+	if strings.HasPrefix(to, "/") {
+		to = h.console.JoinPath(to).String()
+	}
+	http.Redirect(w, r, to, http.StatusFound)
 }
 
-// signOut revokes the cookie's session and clears the cookie. Only the Console's pages may ask: the request must
-// come from its origin, since the browser sends the cookie wherever the request came from.
+// signOut revokes the cookie's session and clears the cookie. Only the Console's and the Back-office's pages may ask:
+// the request must come from their origin, since the browser sends the cookie wherever the request came from.
 func (h *handler) signOut(w http.ResponseWriter, r *http.Request) {
-	if !server.SameOrigin(r, origin(h.console)) {
-		http.Error(w, "sign-out is the Console's to ask for", http.StatusForbidden)
+	if !server.SameOrigin(r, origin(h.console)) && !server.SameOrigin(r, origin(h.backOffice)) {
+		http.Error(w, "sign-out is the Console's or the Back-office's to ask for", http.StatusForbidden)
 		return
 	}
 	if c, _ := r.Cookie(h.cookie.Name); c != nil {

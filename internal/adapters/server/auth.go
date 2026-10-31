@@ -19,11 +19,11 @@ type Authenticator interface {
 // Authenticate resolves the request's credential and puts who it acts as on the request's context for the API to
 // read (auth.Viewer): a bearer token in the Authorization header (an API key's secret), or else the session cookie,
 // named cookie. A request with neither runs as Anonymous; one whose credential acts as nobody is refused with 401.
-// A request with the cookie that would change something must be JSON from the Console's origin, or it is refused
-// with 403: the browser sends the cookie wherever the request came from, so a cookie-authenticated mutation must come
-// from the Console's own pages (consoleOrigin), and when it carries no Origin, be JSON, which no form sends. A bearer
-// token is sent on purpose, so it needs no such check.
-func Authenticate(cookie string, a Authenticator, consoleOrigin string, next http.Handler) http.Handler {
+// A request with the cookie that would change something must be JSON from the origin of the pages that call the API,
+// or it is refused with 403: the browser sends the cookie wherever the request came from, so a cookie-authenticated
+// mutation must come from those pages (pagesOrigin: the Console's, or the Back-office's for the Admin API), and when it
+// carries no Origin, be JSON, which no form sends. A bearer token is sent on purpose, so it needs no such check.
+func Authenticate(cookie string, a Authenticator, pagesOrigin string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, bearer := bearerToken(r)
 		if !bearer {
@@ -32,8 +32,8 @@ func Authenticate(cookie string, a Authenticator, consoleOrigin string, next htt
 				next.ServeHTTP(w, r)
 				return
 			}
-			if !safeMethod(r.Method) && !fromConsole(r, consoleOrigin) {
-				http.Error(w, "a request with the session cookie that changes something must be JSON from the Console", http.StatusForbidden)
+			if !safeMethod(r.Method) && !fromPages(r, pagesOrigin) {
+				http.Error(w, "a request with the session cookie that changes something must be JSON from the API's own pages", http.StatusForbidden)
 				return
 			}
 			token = c.Value
@@ -67,12 +67,12 @@ func safeMethod(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
 }
 
-// fromConsole reports whether r is JSON and, when it names its Origin, the Console's.
-func fromConsole(r *http.Request, consoleOrigin string) bool {
+// fromPages reports whether r is JSON and, when it names its Origin, pagesOrigin.
+func fromPages(r *http.Request, pagesOrigin string) bool {
 	if ct := r.Header.Get("Content-Type"); r.ContentLength != 0 && !strings.HasPrefix(ct, "application/json") {
 		return false
 	}
-	return SameOrigin(r, consoleOrigin)
+	return SameOrigin(r, pagesOrigin)
 }
 
 // SameOrigin reports whether r came from origin: its Origin header is origin, or it carries none, which no browser's

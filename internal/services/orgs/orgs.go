@@ -305,6 +305,20 @@ func ValidateName(name string) error {
 	return nil
 }
 
+// NewOrganization makes a new organization with slug and name, created at `at`, with the defaults every new one
+// starts from: Member for everyone who joins, and join requests accepted. It refuses a slug or name the rules refuse.
+func NewOrganization(slug, name string, at time.Time) (Organization, error) {
+	name = strings.TrimSpace(name)
+	if err := errors.Join(ValidateSlug(slug), ValidateName(name)); err != nil {
+		return Organization{}, err
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return Organization{}, fmt.Errorf("making an ID: %w", err)
+	}
+	return Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: at}, nil
+}
+
 // ValidateEmail reports whether email can be invited: something@somewhere, lowercase.
 func ValidateEmail(email string) error {
 	at := strings.LastIndex(email, "@")

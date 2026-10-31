@@ -8,11 +8,13 @@ import (
 	"net/http"
 
 	"cobranch.dev/db/migrations"
+	"cobranch.dev/internal/adapters/adminapi"
 	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/graphql"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/rest"
 	"cobranch.dev/internal/adapters/server"
+	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/system/buildinfo"
@@ -26,20 +28,37 @@ type api struct {
 	workload string
 	// pattern is where the server mounts the API.
 	pattern string
-	// handler serves the API for a server built as version, over sign-in's service for the viewer's sessions and the
-	// organizations' for theirs.
-	handler func(version string, sessions *auth.Service, organizations *orgs.Service) http.Handler
+	// pages picks the public URL of the pages that call the API, from the workloads': CORS lets them call it, and only
+	// they may change something with the session cookie.
+	pages func(config.URLs) config.URL
+	// handler serves the API for a server built as version, over the domain's services.
+	handler func(version string, s services) http.Handler
 }
+
+// services are the domain's services an API serves: sign-in's for the viewer's sessions, the organizations' and the
+// installation's administration.
+type services struct {
+	sessions       *auth.Service
+	organizations  *orgs.Service
+	administration *admin.Service
+}
+
+func console(u config.URLs) config.URL    { return u.Console }
+func backOffice(u config.URLs) config.URL { return u.BackOffice }
 
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
-	restServer = api{workload: "rest-server", pattern: "/", handler: func(version string, s *auth.Service, o *orgs.Service) http.Handler {
-		return rest.NewHandler(version, s, o)
+	restServer = api{workload: "rest-server", pattern: "/", pages: console, handler: func(version string, s services) http.Handler {
+		return rest.NewHandler(version, s.sessions, s.organizations)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
-	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", handler: func(version string, s *auth.Service, o *orgs.Service) http.Handler {
-		return graphql.NewHandler(version, s, o)
+	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, handler: func(version string, s services) http.Handler {
+		return graphql.NewHandler(version, s.sessions, s.organizations)
+	}}
+	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
+	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version string, s services) http.Handler {
+		return adminapi.NewHandler(version, s.administration)
 	}}
 )
 
@@ -79,15 +98,16 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	// The servers only read sessions: no provider, and settings that matter at sign-in alone.
 	sessions := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
 	orgStore := postgres.NewOrgStore(pool)
-	organizations := orgs.NewService(orgStore, auth.NewAuthorizer(orgStore))
+	authorizer := auth.NewAuthorizer(orgStore)
+	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer), administration: admin.NewService(orgStore, authorizer)}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
 		return fmt.Errorf("listening: %w", err)
 	}
-	console := cfg.Console.Origin()
-	handler := server.AllowOrigin(console, server.Handler(a.pattern,
-		server.Authenticate(cookie.Name, sessions, console, a.handler(version, sessions, organizations)),
+	pages := a.pages(cfg.URLs).Origin()
+	handler := server.AllowOrigin([]string{pages}, server.Handler(a.pattern,
+		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, domain)),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)}))
 	slog.InfoContext(ctx, "Starting the server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
