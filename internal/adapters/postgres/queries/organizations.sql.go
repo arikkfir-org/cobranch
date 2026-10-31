@@ -12,6 +12,20 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimSlug = `-- name: ClaimSlug :execrows
+INSERT INTO organization_slugs (slug, org_id) VALUES ($1, $2)
+ON CONFLICT (slug) DO UPDATE SET org_id = EXCLUDED.org_id WHERE organization_slugs.org_id = EXCLUDED.org_id
+`
+
+// ClaimSlug gives the organization the slug, or changes nothing when another organization has or had it: zero rows.
+func (q *Queries) ClaimSlug(ctx context.Context, slug string, orgID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, claimSlug, slug, orgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const countRoleHolders = `-- name: CountRoleHolders :one
 SELECT count(*) FROM grants WHERE role_id = $1 AND scope = 'organization' AND scope_id = $2::uuid
 `
@@ -47,6 +61,17 @@ func (q *Queries) DeleteScopeGrants(ctx context.Context, principalID uuid.UUID, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const holdsRole = `-- name: HoldsRole :one
+SELECT EXISTS (SELECT 1 FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'organization' AND scope_id = $3::uuid)
+`
+
+func (q *Queries) HoldsRole(ctx context.Context, principalID uuid.UUID, roleID uuid.UUID, orgID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, holdsRole, principalID, roleID, orgID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertGrant = `-- name: InsertGrant :execrows
@@ -121,6 +146,19 @@ INSERT INTO organization_slugs (slug, org_id) VALUES ($1, $2)
 func (q *Queries) InsertSlug(ctx context.Context, slug string, orgID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, insertSlug, slug, orgID)
 	return err
+}
+
+const lockOrganization = `-- name: LockOrganization :one
+SELECT id FROM organizations WHERE id = $1 FOR UPDATE
+`
+
+// LockOrganization holds the organization's row until the transaction ends, so changes to who may act there
+// happen one at a time.
+func (q *Queries) LockOrganization(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockOrganization, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const memberByEmail = `-- name: MemberByEmail :one

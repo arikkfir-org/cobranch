@@ -206,11 +206,15 @@ func (s *Store) MemberByEmail(_ context.Context, org uuid.UUID, email string) (u
 	return uuid.Nil, orgs.ErrNotFound
 }
 
-// Leave drops the member and their roles at the organization.
+// Leave drops the member and their roles at the organization, and what waited for them there; the last Owner can't go.
 func (s *Store) Leave(_ context.Context, actor, org, user uuid.UUID, _ time.Time) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
+	if s.holds(user, auth.RoleOwner, org) && s.countRoleHolders(org, auth.RoleOwner) <= 1 {
+		return orgs.ErrLastOwner
+	}
+	s.dropPending(org, user)
 	s.Memberships[org] = slices.DeleteFunc(s.Memberships[org], func(u uuid.UUID) bool { return u == user })
 	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool {
 		return g.Principal == user && g.Scope == auth.ScopeOrganization && g.ScopeID == org
@@ -228,9 +232,12 @@ func (s *Store) Invite(_ context.Context, _ uuid.UUID, inv orgs.Invitation) erro
 	if s.Fail != nil {
 		return s.Fail
 	}
-	for _, other := range s.Invites {
+	for id, other := range s.Invites {
 		if other.OrgID == inv.OrgID && other.Email == inv.Email && other.State == orgs.StatePending {
-			return orgs.ErrInvited
+			if other.ExpiresAt.After(inv.CreatedAt) {
+				return orgs.ErrInvited
+			}
+			delete(s.Invites, id)
 		}
 	}
 	s.Invites[inv.ID] = inv
@@ -277,6 +284,7 @@ func (s *Store) Accept(ctx context.Context, actor uuid.UUID, inv orgs.Invitation
 		return err
 	}
 	s.AddMember(inv.OrgID, user, inv.RoleID)
+	s.dropPending(inv.OrgID, user)
 	s.Events = append(s.Events, "member.joined")
 	return nil
 }
@@ -301,9 +309,12 @@ func (s *Store) Request(_ context.Context, _ uuid.UUID, req orgs.JoinRequest) er
 	if s.Fail != nil {
 		return s.Fail
 	}
-	for _, other := range s.Reqs {
+	for id, other := range s.Reqs {
 		if other.OrgID == req.OrgID && other.UserID == req.UserID && other.State == orgs.StatePending {
-			return orgs.ErrRequested
+			if other.ExpiresAt.After(req.CreatedAt) {
+				return orgs.ErrRequested
+			}
+			delete(s.Reqs, id)
 		}
 	}
 	s.Reqs[req.ID] = req
@@ -350,6 +361,7 @@ func (s *Store) Approve(ctx context.Context, actor uuid.UUID, req orgs.JoinReque
 		return err
 	}
 	s.AddMember(req.OrgID, req.UserID, role)
+	s.dropPending(req.OrgID, req.UserID)
 	s.Events = append(s.Events, "member.joined")
 	return nil
 }
@@ -383,15 +395,34 @@ func (s *Store) Roles(context.Context) ([]orgs.Role, error) {
 	return s.RoleList, nil
 }
 
-// CountRoleHolders counts who holds role at the organization.
-func (s *Store) CountRoleHolders(_ context.Context, org, role uuid.UUID) (int, error) {
+// countRoleHolders counts who holds role at the organization.
+func (s *Store) countRoleHolders(org, role uuid.UUID) int {
 	n := 0
 	for _, g := range s.Grants {
 		if g.Role == role && g.Scope == auth.ScopeOrganization && g.ScopeID == org {
 			n++
 		}
 	}
-	return n, nil
+	return n
+}
+
+// holds says whether the principal holds role at the organization.
+func (s *Store) holds(principal, role, org uuid.UUID) bool {
+	return slices.Contains(s.Grants, Grant{Principal: principal, Role: role, Scope: auth.ScopeOrganization, ScopeID: org})
+}
+
+// dropPending deletes the pending invitations to the user's emails and their pending requests at the organization.
+func (s *Store) dropPending(org, user uuid.UUID) {
+	for id, inv := range s.Invites {
+		if inv.OrgID == org && inv.State == orgs.StatePending && slices.Contains(s.Emails[user], inv.Email) {
+			delete(s.Invites, id)
+		}
+	}
+	for id, req := range s.Reqs {
+		if req.OrgID == org && req.State == orgs.StatePending && req.UserID == user {
+			delete(s.Reqs, id)
+		}
+	}
 }
 
 // DeleteExpired drops what expired at `at`.

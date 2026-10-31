@@ -22,3 +22,13 @@ UPDATE invitations SET state = @state, decided_at = @decided_at, decided_by = @d
 
 -- name: DeleteExpiredInvitations :execrows
 DELETE FROM invitations WHERE state = 'pending' AND expires_at < @now::timestamptz;
+
+-- DeleteUserInvitations drops the pending invitations to any of the user's verified emails at the organization:
+-- they are moot once the user joined, and must not outlive their leaving.
+-- name: DeleteUserInvitations :execrows
+DELETE FROM invitations WHERE org_id = @org_id AND state = 'pending'
+  AND email IN (SELECT email FROM principal_emails WHERE principal_id = @user_id AND verified);
+
+-- DeleteExpiredInvitationTo drops an expired invitation to the email that would block a new one.
+-- name: DeleteExpiredInvitationTo :execrows
+DELETE FROM invitations WHERE org_id = $1 AND email = $2 AND state = 'pending' AND expires_at <= @now::timestamptz;

@@ -37,12 +37,40 @@ func (q *Queries) CloseInvitation(ctx context.Context, arg CloseInvitationParams
 	return result.RowsAffected(), nil
 }
 
+const deleteExpiredInvitationTo = `-- name: DeleteExpiredInvitationTo :execrows
+DELETE FROM invitations WHERE org_id = $1 AND email = $2 AND state = 'pending' AND expires_at <= $3::timestamptz
+`
+
+// DeleteExpiredInvitationTo drops an expired invitation to the email that would block a new one.
+func (q *Queries) DeleteExpiredInvitationTo(ctx context.Context, orgID uuid.UUID, email string, now time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredInvitationTo, orgID, email, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredInvitations = `-- name: DeleteExpiredInvitations :execrows
 DELETE FROM invitations WHERE state = 'pending' AND expires_at < $1::timestamptz
 `
 
 func (q *Queries) DeleteExpiredInvitations(ctx context.Context, now time.Time) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteExpiredInvitations, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteUserInvitations = `-- name: DeleteUserInvitations :execrows
+DELETE FROM invitations WHERE org_id = $1 AND state = 'pending'
+  AND email IN (SELECT email FROM principal_emails WHERE principal_id = $2 AND verified)
+`
+
+// DeleteUserInvitations drops the pending invitations to any of the user's verified emails at the organization:
+// they are moot once the user joined, and must not outlive their leaving.
+func (q *Queries) DeleteUserInvitations(ctx context.Context, orgID uuid.UUID, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserInvitations, orgID, userID)
 	if err != nil {
 		return 0, err
 	}

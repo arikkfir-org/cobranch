@@ -109,6 +109,14 @@ func TestOrgStoreUpdate(t *testing.T) {
 	if err := f.s.Update(ctx, f.nia, other); !errors.Is(err, orgs.ErrSlugTaken) {
 		t.Errorf("Update() to an old slug error = %v, want slug taken", err)
 	}
+	// Acme takes its own old slug back.
+	org.Slug = "acme"
+	if err := f.s.Update(ctx, f.olivia, org); err != nil {
+		t.Errorf("Update() back to its own old slug error = %v", err)
+	}
+	if got, err := f.s.BySlug(ctx, "acme-inc"); err != nil || got.Slug != "acme" {
+		t.Errorf("BySlug(acme-inc) after renaming back = %+v, %v", got, err)
+	}
 	if _, err := f.s.ByID(ctx, uuid.New()); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("ByID() of nothing error = %v, want not found", err)
 	}
@@ -178,12 +186,13 @@ func TestOrgStoreInvitations(t *testing.T) {
 	if err != nil || got.OrgSlug != "acme" || got.OrgName != "Acme" || got.Email != inv.Email || got.State != orgs.StatePending {
 		t.Fatalf("Invitation() = %+v, %v", got, err)
 	}
+	at := inv.CreatedAt
 	for name, list := range map[string]func() ([]orgs.Invitation, error){
-		"Invitations": func() ([]orgs.Invitation, error) { return f.s.Invitations(ctx, f.acme.ID, now) },
+		"Invitations": func() ([]orgs.Invitation, error) { return f.s.Invitations(ctx, f.acme.ID, at) },
 		"InvitationsFor": func() ([]orgs.Invitation, error) {
-			return f.s.InvitationsFor(ctx, []string{"x@example.com", "nia@example.com"}, now)
+			return f.s.InvitationsFor(ctx, []string{"x@example.com", "nia@example.com"}, at)
 		},
-		"after it expired": func() ([]orgs.Invitation, error) { return f.s.Invitations(ctx, f.acme.ID, now.Add(2*time.Hour)) },
+		"after it expired": func() ([]orgs.Invitation, error) { return f.s.Invitations(ctx, f.acme.ID, at.Add(2*time.Hour)) },
 	} {
 		got, err := list()
 		want := 1
@@ -194,8 +203,16 @@ func TestOrgStoreInvitations(t *testing.T) {
 			t.Errorf("%s = %d (%v), want %d", name, len(got), err, want)
 		}
 	}
-	if err := f.s.Accept(ctx, f.nia, got, f.nia, now.Add(time.Minute)); err != nil {
+	// A request of Nia's waits too; joining by the invitation drops it.
+	req := orgs.JoinRequest{ID: uuid.New(), OrgID: f.acme.ID, UserID: f.nia, CreatedAt: at, ExpiresAt: at.Add(time.Hour)}
+	if err := f.s.Request(ctx, f.nia, req); err != nil {
 		t.Fatal(err)
+	}
+	if err := f.s.Accept(ctx, f.nia, got, f.nia, at.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM join_requests WHERE user_id = $1", f.nia); n != 0 {
+		t.Errorf("%d requests of Nia's remain after she joined, want none", n)
 	}
 	m, err := f.s.Member(ctx, f.acme.ID, f.nia)
 	if err != nil || len(m.Roles) != 1 || m.Roles[0].ID != auth.RoleGuest {
@@ -206,6 +223,37 @@ func TestOrgStoreInvitations(t *testing.T) {
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM invitations WHERE state = 'accepted' AND decided_by = $1", f.nia); n != 1 {
 		t.Errorf("%d accepted invitations decided by Nia, want 1", n)
+	}
+}
+
+func TestOrgStoreInviteAfterExpiry(t *testing.T) {
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	inv := orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, Email: "nia@example.com", RoleID: auth.RoleGuest, InvitedBy: f.olivia, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+	if err := f.s.Invite(ctx, f.olivia, inv); err != nil {
+		t.Fatal(err)
+	}
+	// Once the first expired, a new one takes its place; before that, it is refused.
+	later := inv
+	later.ID, later.CreatedAt, later.ExpiresAt = uuid.New(), inv.ExpiresAt, inv.ExpiresAt.Add(time.Hour)
+	if err := f.s.Invite(ctx, f.olivia, later); err != nil {
+		t.Errorf("Invite() after expiry error = %v", err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM invitations WHERE org_id = $1", f.acme.ID); n != 1 {
+		t.Errorf("%d invitations remain, want the new one alone", n)
+	}
+	req := orgs.JoinRequest{ID: uuid.New(), OrgID: f.acme.ID, UserID: f.nia, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+	if err := f.s.Request(ctx, f.nia, req); err != nil {
+		t.Fatal(err)
+	}
+	again := req
+	again.ID, again.CreatedAt, again.ExpiresAt = uuid.New(), now.Add(time.Minute), now.Add(2*time.Hour)
+	if err := f.s.Request(ctx, f.nia, again); !errors.Is(err, orgs.ErrRequested) {
+		t.Errorf("Request() while one waits error = %v, want requested", err)
+	}
+	again.CreatedAt = req.ExpiresAt
+	if err := f.s.Request(ctx, f.nia, again); err != nil {
+		t.Errorf("Request() after expiry error = %v", err)
 	}
 }
 
@@ -239,6 +287,54 @@ func TestOrgStoreJoinRequests(t *testing.T) {
 	}
 	if _, err := f.s.Member(ctx, f.acme.ID, f.nia); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Nia is a member after a refused approval: %v", err)
+	}
+}
+
+func TestOrgStoreLeave(t *testing.T) {
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	if err := f.s.Leave(ctx, f.olivia, f.acme.ID, f.olivia, now); !errors.Is(err, orgs.ErrLastOwner) {
+		t.Errorf("Leave() by the last Owner error = %v, want last owner", err)
+	}
+	// Max becomes an Owner; an invitation to his email waits, and leaving drops it with his roles.
+	if _, err := f.pool.Exec(ctx, "INSERT INTO grants (principal_id, role_id, scope, scope_id, source) VALUES ($1, $2, 'organization', $3, 'grant')", f.max, auth.RoleOwner, f.acme.ID); err != nil {
+		t.Fatal(err)
+	}
+	inv := orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, Email: "max@example.com", RoleID: auth.RoleGuest, InvitedBy: f.olivia, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
+	if err := f.s.Invite(ctx, f.olivia, inv); err != nil {
+		t.Fatal(err)
+	}
+	// Both Owners leave at once: exactly one goes.
+	errs := make(chan error, 2)
+	for _, user := range []uuid.UUID{f.olivia, f.max} {
+		go func() { errs <- f.s.Leave(ctx, user, f.acme.ID, user, now) }()
+	}
+	var left, refused int
+	for range 2 {
+		switch err := <-errs; {
+		case err == nil:
+			left++
+		case errors.Is(err, orgs.ErrLastOwner):
+			refused++
+		default:
+			t.Errorf("Leave() error = %v", err)
+		}
+	}
+	if left != 1 || refused != 1 {
+		t.Errorf("%d left and %d were refused, want one each", left, refused)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM grants WHERE role_id = $1 AND scope_id = $2", auth.RoleOwner, f.acme.ID); n != 1 {
+		t.Errorf("%d Owners remain, want 1", n)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM memberships WHERE org_id = $1", f.acme.ID); n != 1 {
+		t.Errorf("%d members remain, want 1", n)
+	}
+	if _, err := f.s.Member(ctx, f.acme.ID, f.max); err == nil {
+		if n := count(t, f.pool, "SELECT count(*) FROM invitations WHERE id = $1", inv.ID); n != 1 {
+			t.Errorf("Max stayed, but his invitation is gone")
+		}
+	} else if n := count(t, f.pool, "SELECT count(*) FROM invitations WHERE id = $1", inv.ID); n != 0 {
+		t.Errorf("Max left, but %d invitations to him remain", n)
 	}
 }
 

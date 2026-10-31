@@ -78,7 +78,7 @@ type OrganizationSettings struct {
 	Name                string `json:"name"`
 	MembershipRoleID    string `json:"membershipRoleId"`
 	AcceptsJoinRequests bool   `json:"acceptsJoinRequests"`
-	// Null lets members sign in with any of the installation's providers.
+	// Null or empty lets members sign in with any of the installation's providers.
 	Providers []string `json:"providers,omitempty"`
 }
 

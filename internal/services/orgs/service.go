@@ -32,7 +32,9 @@ type Store interface {
 	Member(ctx context.Context, orgID, userID uuid.UUID) (Member, error)
 	// MemberByEmail finds the member who holds email, verified, or ErrNotFound.
 	MemberByEmail(ctx context.Context, orgID uuid.UUID, email string) (uuid.UUID, error)
-	// Leave drops the member and every role they hold at the organization; actor is who did it.
+	// Leave drops the member and every role they hold at the organization, with the pending invitations to their
+	// emails and their pending requests there; actor is who did it. The organization's last Owner can't go:
+	// ErrLastOwner, decided under a lock, so two Owners leaving at once don't both.
 	Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, at time.Time) error
 	// Invite records the invitation, or ErrInvited for an email already invited.
 	Invite(ctx context.Context, actor uuid.UUID, inv Invitation) error
@@ -62,8 +64,6 @@ type Store interface {
 	Role(ctx context.Context, id uuid.UUID) (Role, error)
 	// Roles lists the roles granted at organizations, the built-in ones first.
 	Roles(ctx context.Context) ([]Role, error)
-	// CountRoleHolders counts the principals holding roleID at the organization.
-	CountRoleHolders(ctx context.Context, orgID, roleID uuid.UUID) (int, error)
 	// DeleteExpired deletes the invitations and join requests that expired before now, and returns how many of each.
 	DeleteExpired(ctx context.Context, now time.Time) (invitations, requests int64, err error)
 }
@@ -208,6 +208,9 @@ func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, setting
 	}
 	org.Slug, org.Name, org.MembershipRoleID = settings.Slug, settings.Name, settings.MembershipRoleID
 	org.AcceptsJoinRequests, org.Providers = settings.AcceptsJoinRequests, settings.Providers
+	if len(org.Providers) == 0 {
+		org.Providers = nil // all of the installation's, however a client spells it
+	}
 	if err := s.store.Update(ctx, v.ID, org); err != nil {
 		return Organization{}, fmt.Errorf("updating the organization: %w", err)
 	}
@@ -512,15 +515,10 @@ func (s *Service) Leave(ctx context.Context, v Viewer, orgID uuid.UUID) error {
 	if _, err := s.read(ctx, v, orgID); err != nil {
 		return err
 	}
-	member, err := s.store.Member(ctx, orgID, v.ID)
-	if errors.Is(err, ErrNotFound) {
+	if _, err := s.store.Member(ctx, orgID, v.ID); errors.Is(err, ErrNotFound) {
 		return ErrNotMember
-	}
-	if err != nil {
+	} else if err != nil {
 		return fmt.Errorf("finding the member: %w", err)
-	}
-	if err := s.notLastOwner(ctx, orgID, member); err != nil {
-		return err
 	}
 	return wrap("leaving the organization", s.store.Leave(ctx, v.ID, orgID, v.ID, s.now()))
 }
@@ -544,25 +542,7 @@ func (s *Service) RemoveMember(ctx context.Context, v Viewer, orgID, userID uuid
 			return fmt.Errorf("%w: removing a %s takes every permission of the role", auth.ErrForbidden, r.Name)
 		}
 	}
-	if err := s.notLastOwner(ctx, orgID, member); err != nil {
-		return err
-	}
 	return wrap("removing the member", s.store.Leave(ctx, v.ID, orgID, userID, s.now()))
-}
-
-// notLastOwner refuses to drop member when they are the one Owner the organization has.
-func (s *Service) notLastOwner(ctx context.Context, orgID uuid.UUID, member Member) error {
-	if !slices.ContainsFunc(member.Roles, func(r Role) bool { return r.ID == auth.RoleOwner }) {
-		return nil
-	}
-	owners, err := s.store.CountRoleHolders(ctx, orgID, auth.RoleOwner)
-	if err != nil {
-		return fmt.Errorf("counting the Owners: %w", err)
-	}
-	if owners <= 1 {
-		return ErrLastOwner
-	}
-	return nil
 }
 
 // DeleteExpired drops the invitations and join requests that expired: the maintenance job's hourly task.

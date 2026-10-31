@@ -263,6 +263,34 @@ func TestInvitations(t *testing.T) {
 	})
 }
 
+func TestExpiredRowsDontBlock(t *testing.T) {
+	runCases(t, []testCase{
+		{name: "an expired invitation gives way to a new one", run: func(ctx context.Context, f *fixture) error {
+			for id, inv := range f.store.Invites {
+				if id != f.stale.ID {
+					delete(f.store.Invites, id)
+				}
+				_ = inv
+			}
+			_, err := f.service.Invite(ctx, f.olivia, f.acme.ID, "nia@example.com", uuid.Nil)
+			if _, stale := f.store.Invites[f.stale.ID]; stale {
+				t.Error("the expired invitation remains")
+			}
+			return got(err)
+		}, wantEvents: []string{"invitation.made"}},
+		{name: "an expired request gives way to a new one", run: func(ctx context.Context, f *fixture) error {
+			stale := f.request
+			stale.ExpiresAt = now.Add(-time.Minute)
+			f.store.Reqs[stale.ID] = stale
+			_, err := f.service.RequestToJoin(ctx, f.nia, "acme", "")
+			if _, remains := f.store.Reqs[stale.ID]; remains {
+				t.Error("the expired request remains")
+			}
+			return got(err)
+		}, wantEvents: []string{"join_request.made"}},
+	})
+}
+
 func TestAcceptingInvitations(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "the invitee sees theirs", run: func(ctx context.Context, f *fixture) error {
@@ -398,6 +426,32 @@ func TestDecidingJoinRequests(t *testing.T) {
 		{name: "a Manager declines", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.DeclineJoinRequest(ctx, f.mia, f.acme.ID, f.request.ID))
 		}, wantEvents: []string{"join_request.declined"}},
+	})
+}
+
+func TestRemovalClosesEveryWayBackIn(t *testing.T) {
+	runCases(t, []testCase{
+		{name: "removal closes every way back in", run: func(ctx context.Context, f *fixture) error {
+			// Nia joins by her request while an invitation to her waits, is removed, and neither the invitation nor a
+			// request made before her removal lets her back.
+			if err := f.service.ApproveJoinRequest(ctx, f.olivia, f.acme.ID, f.request.ID, uuid.Nil); err != nil {
+				return got(err)
+			}
+			if _, err := f.service.MyInvitations(ctx, f.nia); err != nil || len(f.store.Invites) != 0 {
+				t.Errorf("after joining, %d invitations remain (%v), want none", len(f.store.Invites), err)
+			}
+			if err := f.service.RemoveMember(ctx, f.olivia, f.acme.ID, f.nia.ID); err != nil {
+				return got(err)
+			}
+			if _, err := f.service.AcceptInvitation(ctx, f.nia, f.invitation.ID); !errors.Is(err, orgs.ErrNotFound) {
+				t.Errorf("AcceptInvitation() after removal error = %v, want not found", err)
+			}
+			if err := f.service.ApproveJoinRequest(ctx, f.olivia, f.acme.ID, f.request.ID, uuid.Nil); !errors.Is(err, orgs.ErrNotFound) {
+				t.Errorf("ApproveJoinRequest() after removal error = %v, want not found", err)
+			}
+			_, err := f.store.Member(ctx, f.acme.ID, f.nia.ID)
+			return got(err)
+		}, wantErr: orgs.ErrNotFound, wantEvents: []string{"join_request.approved", "member.joined", "member.removed"}},
 	})
 }
 

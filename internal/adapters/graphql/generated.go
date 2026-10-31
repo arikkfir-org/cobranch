@@ -902,7 +902,7 @@ input OrganizationSettings {
   name: String!
   membershipRoleId: ID!
   acceptsJoinRequests: Boolean!
-  "Null lets members sign in with any of the installation's providers."
+  "Null or empty lets members sign in with any of the installation's providers."
   providers: [String!]
 }
 

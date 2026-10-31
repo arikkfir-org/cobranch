@@ -108,7 +108,22 @@ func join(ctx context.Context, q *queries.Queries, orgID, actor, userID, roleID 
 	}); err != nil {
 		return fmt.Errorf("inserting the grant: %w", err)
 	}
+	if err := dropPending(ctx, q, orgID, userID); err != nil {
+		return err
+	}
 	return orgEvent(ctx, q, &orgID, actor, "member.joined", userID, map[string]any{"role": roleID, "how": how})
+}
+
+// dropPending deletes the pending invitations to the user's verified emails and their pending requests at the
+// organization: moot once they are a member, and no way back in once they aren't.
+func dropPending(ctx context.Context, q *queries.Queries, orgID, userID uuid.UUID) error {
+	if _, err := q.DeleteUserInvitations(ctx, orgID, userID); err != nil {
+		return fmt.Errorf("dropping the user's invitations: %w", err)
+	}
+	if _, err := q.DeleteUserJoinRequests(ctx, orgID, userID); err != nil {
+		return fmt.Errorf("dropping the user's requests: %w", err)
+	}
+	return nil
 }
 
 // BySlug finds an organization by any slug it has had.
@@ -129,7 +144,8 @@ func (s *OrgStore) ByID(ctx context.Context, id uuid.UUID) (orgs.Organization, e
 	return organization(o), nil
 }
 
-// Update writes the organization's settings, claiming its slug when it changed.
+// Update writes the organization's settings, claiming its slug when it changed: one of its own former slugs comes back
+// to it, another organization's is taken.
 func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
 	return s.transact(ctx, "updating the organization", actor, func(q *queries.Queries) error {
 		before, err := q.OrganizationByID(ctx, org.ID)
@@ -137,8 +153,12 @@ func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 			return wrapOrg("reading the organization", err)
 		}
 		if before.Slug != org.Slug {
-			if err := q.InsertSlug(ctx, org.Slug, org.ID); err != nil {
+			claimed, err := q.ClaimSlug(ctx, org.Slug, org.ID)
+			if err != nil {
 				return fmt.Errorf("claiming the slug: %w", err)
+			}
+			if claimed == 0 {
+				return orgs.ErrSlugTaken
 			}
 		}
 		if _, err := q.UpdateOrganization(ctx, queries.UpdateOrganizationParams{
@@ -222,9 +242,16 @@ func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email str
 	return id, nil
 }
 
-// Leave drops the member and every role they hold at the organization; actor is who did it.
+// Leave drops the member and every role they hold at the organization; actor is who did it. The organization's row
+// is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
 func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, _ time.Time) error {
 	return s.transact(ctx, "dropping the member", actor, func(q *queries.Queries) error {
+		if _, err := q.LockOrganization(ctx, orgID); err != nil {
+			return wrapOrg("locking the organization", err)
+		}
+		if err := notLastOwner(ctx, q, orgID, userID); err != nil {
+			return err
+		}
 		deleted, err := q.DeleteMembership(ctx, orgID, userID)
 		if err != nil {
 			return fmt.Errorf("deleting the membership: %w", err)
@@ -235,12 +262,34 @@ func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uui
 		if _, err := q.DeleteScopeGrants(ctx, userID, string(auth.ScopeOrganization), orgID); err != nil {
 			return fmt.Errorf("deleting the grants: %w", err)
 		}
+		if err := dropPending(ctx, q, orgID, userID); err != nil {
+			return err
+		}
 		kind := "member.removed"
 		if actor == userID {
 			kind = "member.left"
 		}
 		return orgEvent(ctx, q, &orgID, actor, kind, userID, nil)
 	})
+}
+
+// notLastOwner refuses to drop userID when they are the one Owner the organization has.
+func notLastOwner(ctx context.Context, q *queries.Queries, orgID, userID uuid.UUID) error {
+	owner, err := q.HoldsRole(ctx, userID, auth.RoleOwner, orgID)
+	if err != nil {
+		return fmt.Errorf("reading the member's roles: %w", err)
+	}
+	if !owner {
+		return nil
+	}
+	owners, err := q.CountRoleHolders(ctx, auth.RoleOwner, orgID)
+	if err != nil {
+		return fmt.Errorf("counting the Owners: %w", err)
+	}
+	if owners <= 1 {
+		return orgs.ErrLastOwner
+	}
+	return nil
 }
 
 // invitation is the domain's view of an invitations row with its organization's slug and name.
@@ -252,6 +301,9 @@ func invitation(i queries.Invitation, slug, name string) orgs.Invitation {
 // Invite records the invitation.
 func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitation) error {
 	return s.transact(ctx, "recording the invitation", actor, func(q *queries.Queries) error {
+		if _, err := q.DeleteExpiredInvitationTo(ctx, inv.OrgID, inv.Email, inv.CreatedAt); err != nil {
+			return fmt.Errorf("dropping an expired invitation: %w", err)
+		}
 		if err := q.InsertInvitation(ctx, queries.InsertInvitationParams{
 			ID: inv.ID, OrgID: inv.OrgID, Email: inv.Email, RoleID: inv.RoleID, InvitedBy: inv.InvitedBy,
 			CreatedAt: inv.CreatedAt, ExpiresAt: inv.ExpiresAt,
@@ -339,6 +391,9 @@ func joinRequest(j queries.JoinRequest, slug, name, userName string) orgs.JoinRe
 // Request records the join request.
 func (s *OrgStore) Request(ctx context.Context, actor uuid.UUID, req orgs.JoinRequest) error {
 	return s.transact(ctx, "recording the request", actor, func(q *queries.Queries) error {
+		if _, err := q.DeleteExpiredJoinRequestOf(ctx, req.OrgID, req.UserID, req.CreatedAt); err != nil {
+			return fmt.Errorf("dropping an expired request: %w", err)
+		}
 		if err := q.InsertJoinRequest(ctx, queries.InsertJoinRequestParams{
 			ID: req.ID, OrgID: req.OrgID, UserID: req.UserID, Note: req.Note, CreatedAt: req.CreatedAt, ExpiresAt: req.ExpiresAt,
 		}); err != nil {

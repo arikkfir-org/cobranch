@@ -70,3 +70,16 @@ SELECT * FROM roles WHERE id = $1;
 -- RolesAt lists the roles granted at a scope, the built-in ones first.
 -- name: RolesAt :many
 SELECT * FROM roles WHERE scope = $1 ORDER BY built_in DESC, name;
+
+-- ClaimSlug gives the organization the slug, or changes nothing when another organization has or had it: zero rows.
+-- name: ClaimSlug :execrows
+INSERT INTO organization_slugs (slug, org_id) VALUES ($1, $2)
+ON CONFLICT (slug) DO UPDATE SET org_id = EXCLUDED.org_id WHERE organization_slugs.org_id = EXCLUDED.org_id;
+
+-- LockOrganization holds the organization's row until the transaction ends, so changes to who may act there
+-- happen one at a time.
+-- name: LockOrganization :one
+SELECT id FROM organizations WHERE id = $1 FOR UPDATE;
+
+-- name: HoldsRole :one
+SELECT EXISTS (SELECT 1 FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'organization' AND scope_id = @org_id::uuid);

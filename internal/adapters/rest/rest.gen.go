@@ -99,7 +99,7 @@ type OrganizationSettings struct {
 	MembershipRoleId    *openapi_types.UUID `json:"membershipRoleId,omitempty"`
 	Name                *string             `json:"name,omitempty"`
 
-	// Providers The identity providers members may sign in with; an empty list means all of the installation's.
+	// Providers The identity providers members may sign in with, by ID. Left out, null or empty, all of the installation's.
 	Providers *[]string `json:"providers,omitempty"`
 	Slug      *string   `json:"slug,omitempty"`
 }

@@ -32,7 +32,8 @@ type Organization struct {
 	MembershipRoleID uuid.UUID
 	// AcceptsJoinRequests lets users ask to join by slug; off, the organization answers like one that doesn't exist.
 	AcceptsJoinRequests bool
-	// Providers lists the identity providers its members may sign in with, or nil for all of the installation's.
+	// Providers lists the identity providers its members may sign in with, or nil for all of the installation's;
+	// an empty list is nil too.
 	Providers []string
 	CreatedAt time.Time
 }

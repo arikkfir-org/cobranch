@@ -26,3 +26,12 @@ UPDATE join_requests SET state = @state, decided_at = @decided_at, decided_by = 
 
 -- name: DeleteExpiredJoinRequests :execrows
 DELETE FROM join_requests WHERE state = 'pending' AND expires_at < @now::timestamptz;
+
+-- DeleteUserJoinRequests drops the user's pending requests at the organization: moot once they joined, and not to
+-- outlive their leaving.
+-- name: DeleteUserJoinRequests :execrows
+DELETE FROM join_requests WHERE org_id = $1 AND user_id = $2 AND state = 'pending';
+
+-- DeleteExpiredJoinRequestOf drops the user's expired request that would block a new one.
+-- name: DeleteExpiredJoinRequestOf :execrows
+DELETE FROM join_requests WHERE org_id = $1 AND user_id = $2 AND state = 'pending' AND expires_at <= @now::timestamptz;

@@ -681,7 +681,7 @@ components:
           type: boolean
         providers:
           type: array
-          description: The identity providers members may sign in with; an empty list means all of the installation's.
+          description: The identity providers members may sign in with, by ID. Left out, null or empty, all of the installation's.
           items:
             type: string
     Role:

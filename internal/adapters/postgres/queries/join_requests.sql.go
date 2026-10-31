@@ -37,12 +37,39 @@ func (q *Queries) CloseJoinRequest(ctx context.Context, arg CloseJoinRequestPara
 	return result.RowsAffected(), nil
 }
 
+const deleteExpiredJoinRequestOf = `-- name: DeleteExpiredJoinRequestOf :execrows
+DELETE FROM join_requests WHERE org_id = $1 AND user_id = $2 AND state = 'pending' AND expires_at <= $3::timestamptz
+`
+
+// DeleteExpiredJoinRequestOf drops the user's expired request that would block a new one.
+func (q *Queries) DeleteExpiredJoinRequestOf(ctx context.Context, orgID uuid.UUID, userID uuid.UUID, now time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteExpiredJoinRequestOf, orgID, userID, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteExpiredJoinRequests = `-- name: DeleteExpiredJoinRequests :execrows
 DELETE FROM join_requests WHERE state = 'pending' AND expires_at < $1::timestamptz
 `
 
 func (q *Queries) DeleteExpiredJoinRequests(ctx context.Context, now time.Time) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteExpiredJoinRequests, now)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteUserJoinRequests = `-- name: DeleteUserJoinRequests :execrows
+DELETE FROM join_requests WHERE org_id = $1 AND user_id = $2 AND state = 'pending'
+`
+
+// DeleteUserJoinRequests drops the user's pending requests at the organization: moot once they joined, and not to
+// outlive their leaving.
+func (q *Queries) DeleteUserJoinRequests(ctx context.Context, orgID uuid.UUID, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUserJoinRequests, orgID, userID)
 	if err != nil {
 		return 0, err
 	}
