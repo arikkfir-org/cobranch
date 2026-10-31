@@ -1,7 +1,7 @@
 # The Cobranch repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
@@ -53,11 +53,12 @@ The clone is anonymous: the repository is public, so the run holds no token.
 Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
 throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
 lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
-`cobranch` and `cobranch-console` in the daemon, tagged with the commit, and `cluster` creates the cluster there and
-loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the migrate Job and every
-pod, and `test` runs the chart's tests: both servers answer with the build's version, and the Console serves its page
-and the REST API's URL. `upgrade` rolls every pod, and fails if the generated database password changed or its migrate
-Job applied anything; `retest` tests again. Both tasks clone the commit with one StepAction.
+`cobranch`, `cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, and `cluster` creates
+the cluster there and loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the
+migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, and the
+Console and the Back-office serve their pages and the APIs' URLs. `upgrade` rolls every pod, and fails if the generated
+database password changed or its migrate Job applied anything; `retest` tests again. Both tasks clone the commit with
+one StepAction.
 
 **Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
 
@@ -66,29 +67,29 @@ Job applied anything; `retest` tests again. Both tasks clone the commit with one
 Every image is pinned to a version. The cluster’s pods count against the daemon’s resources, not the steps’, and nothing
 outlives the run: the clone is anonymous, and the task holds no token and no cloud role.
 
-Pipeline `main` runs on pushes to `main`. It builds both images in a Docker daemon, as task `chart` does, and pushes
-them to Cobranch's public repository on Artifact Registry, tagged with the commit's first seven characters, which the
-binary reports as its version too. An installation that follows `main` runs the images of the commit it is at, so only
-the newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
+Pipeline `main` runs on pushes to `main`. It builds the images in a Docker daemon, as task `chart` does, and pushes them
+to Cobranch's public repository on Artifact Registry, tagged with the commit's first seven characters, which the binary
+reports as its version too. An installation that follows `main` runs the images of the commit it is at, so only the
+newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
 commit always gets its images.
 
-**Pipeline main publishes both images of main’s newest commit, tagged with its short SHA**
+**Pipeline main publishes the images of main’s newest commit, tagged with its short SHA**
 
-![Pipeline main publishes both images of main’s newest commit, tagged with its short SHA](repository/main.svg)
+![Pipeline main publishes the images of main’s newest commit, tagged with its short SHA](repository/main.svg)
 
 The repository, its address and its grants are infra’s ([Artifact
 Registry](../../infra/terraform/gcp.md#artifact-registry)); ServiceAccount `ci-cobranch-release` and the branches it may
 run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
 
-Pipeline `preview` runs on every pull request, as `ci` does, with the same task as `main`: it builds both images of the
+Pipeline `preview` runs on every pull request, as `ci` does, with the same task as `main`: it builds the images of the
 head commit and pushes them to repository `cobranch-previews`, tagged the same way, for the pull request's preview. The
 hub installs that preview from the chart at the head commit, with those images and Cobranch's demo data (`db/seeds/`,
 `seed.enabled`), at a host of its own ([Cobranch's previews](../../delivery/designs/cobranch-previews.md)). A newer push
 supersedes the build of the one before; it is no required check, since the pull request's own checks are `ci`'s.
 
-**Pipeline preview publishes both images of every pull request’s head commit, for its preview**
+**Pipeline preview publishes the images of every pull request’s head commit, for its preview**
 
-![Pipeline preview publishes both images of every pull request’s head commit, for its preview](repository/preview.svg)
+![Pipeline preview publishes the images of every pull request’s head commit, for its preview](repository/preview.svg)
 
 Any branch may run as `ci-cobranch-preview`, which writes `cobranch-previews` alone, never `main`’s or the versions’
 repository. The repository is infra’s ([Artifact Registry](../../infra/terraform/gcp.md#artifact-registry)); the
@@ -102,7 +103,7 @@ a commit of `main`, title `1.2.3`, GitHub's generated notes and a link to the ch
 `https://github.com/arikkfir-org/cobranch/blob/v1.2.3/chart/cobranch/README.md`. Publishing the release creates the tag,
 which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a tag that isn't `vX.Y.Z`, a commit that
 isn't on `main` and one whose chart doesn't default to the images published here, waits up to 15 minutes for `main`'s
-images of the commit, adds `1.2.3` to both, and only then packages the commit's chart at `1.2.3`, its app version the
+images of the commit, adds `1.2.3` to each, and only then packages the commit's chart at `1.2.3`, its app version the
 same, and pushes it beside them as `charts/cobranch`. So one version names the chart and every image it runs, and an
 operator installs it with nothing but a bucket:
 
@@ -119,8 +120,8 @@ The tag’s rights are delivery’s: `ci-cobranch-release` admits `main` and `v*
 tenants](../../delivery/platform.md#ci-tenants)). The repository keeps every tagged version ([Artifact
 Registry](../../infra/terraform/gcp.md#artifact-registry)).
 
-The images are `main`'s, retagged, so the binary reports the commit's short SHA, and `helm test` checks that both
-servers answer with the same version rather than with the chart's. A tag runs `main`'s `.octomaton.yaml` and `.tekton/`,
+The images are `main`'s, retagged, so the binary reports the commit's short SHA, and `helm test` checks that every
+server answers with the same version rather than with the chart's. A tag runs `main`'s `.octomaton.yaml` and `.tekton/`,
 and its steps run `main`'s scripts against the tagged commit's chart, so no tag can carry a pipeline without the check.
 
 ## Checks
