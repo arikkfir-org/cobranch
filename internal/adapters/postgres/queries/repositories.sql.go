@@ -38,6 +38,21 @@ func (q *Queries) DeleteRepositoryGrant(ctx context.Context, principalID uuid.UU
 	return result.RowsAffected(), nil
 }
 
+const deleteRepositoryGrantsAt = `-- name: DeleteRepositoryGrantsAt :execrows
+DELETE FROM grants g USING repositories r
+WHERE g.principal_id = $1 AND g.scope = 'repository' AND g.scope_id = r.id AND r.org_id = $2::uuid
+`
+
+// DeleteRepositoryGrantsAt takes every role the principal holds on the organization's repositories: they go with the
+// membership.
+func (q *Queries) DeleteRepositoryGrantsAt(ctx context.Context, principalID uuid.UUID, orgID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteRepositoryGrantsAt, principalID, orgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const grantee = `-- name: Grantee :one
 SELECT p.id, p.kind, p.display_name FROM principals p
 WHERE p.id = $1 AND (p.org_id = $2::uuid

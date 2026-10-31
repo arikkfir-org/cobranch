@@ -112,8 +112,7 @@ func (s *Service) require(ctx context.Context, v Viewer, repoID uuid.UUID, permi
 	return repo, held, nil
 }
 
-// Create makes a repository in the organization, empty and Private, its creator v its Maintainer; it takes
-// repos.create there.
+// Create makes an empty repository in the organization, its creator v its Maintainer; it takes repos.create there.
 func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Input) (Repository, error) {
 	held, err := s.orgHolds(ctx, v, orgID)
 	if err != nil {
@@ -131,11 +130,16 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 		return Repository{}, fmt.Errorf("making an ID: %w", err)
 	}
 	repo := Repository{ID: id, OrgID: orgID, Slug: in.Slug, Name: in.Name, Description: in.Description, DefaultBranch: in.DefaultBranch,
-		ObjectFormat: ObjectFormatSHA1, CreatedBy: v.ID, CreatedAt: s.now(), Visibility: VisibilityPrivate}
+		ObjectFormat: ObjectFormatSHA1, CreatedBy: v.ID, CreatedAt: s.now()}
 	if err := s.store.Create(ctx, v.ID, repo); err != nil {
 		return Repository{}, wrap("creating the repository", err)
 	}
-	return repo, nil
+	// Read back for its visibility, which the store infers: an organization role may read it from the start.
+	created, err := s.store.ByID(ctx, repo.ID)
+	if err != nil {
+		return Repository{}, wrap("reading the repository back", err)
+	}
+	return created, nil
 }
 
 // List lists the organization's repositories v reads, by slug; it takes org.read.
@@ -222,18 +226,19 @@ func (s *Service) Roles(ctx context.Context, v Viewer, repoID uuid.UUID) ([]orgs
 	if err != nil {
 		return nil, err
 	}
-	return s.roles(ctx, repo.OrgID)
+	return s.roles(ctx, repo.OrgID, false)
 }
 
-// roles lists the roles the organization's repositories grant, kept to their repository permissions.
-func (s *Service) roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error) {
-	all, err := s.store.Roles(ctx, orgID)
+// roles lists the roles the organization's repositories grant, kept to their repository permissions. With all, it
+// keeps the organization's roles that hold none too: a role may have lost them since it was granted on a repository.
+func (s *Service) roles(ctx context.Context, orgID uuid.UUID, all bool) ([]orgs.Role, error) {
+	list, err := s.store.Roles(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("listing the roles: %w", err)
 	}
 	var out []orgs.Role
-	for _, r := range all {
-		if r.Permissions = RepositoryPermissions(r.Permissions); len(r.Permissions) > 0 {
+	for _, r := range list {
+		if r.Permissions = RepositoryPermissions(r.Permissions); all || len(r.Permissions) > 0 {
 			out = append(out, r)
 		}
 	}
@@ -241,8 +246,10 @@ func (s *Service) roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, erro
 }
 
 // grantable finds the repository, the role and the principal a grant or a revocation names, for a viewer with
-// org.grants.manage at the repository's organization who holds every permission the role gives on the repository.
-func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID) (Repository, orgs.Role, error) {
+// org.grants.manage at the repository's organization who holds every permission the role gives on the repository. A
+// revocation finds the role among all the organization's, so a grant whose role has since lost its repository
+// permissions can still be taken back.
+func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID, revoking bool) (Repository, orgs.Role, error) {
 	repo, held, err := s.require(ctx, v, repoID, PermRead)
 	if err != nil {
 		return Repository{}, orgs.Role{}, err
@@ -254,7 +261,7 @@ func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, 
 	if !slices.Contains(atOrg, orgs.PermGrantsManage) {
 		return Repository{}, orgs.Role{}, fmt.Errorf("%w: %s at the organization", auth.ErrForbidden, orgs.PermGrantsManage)
 	}
-	roles, err := s.roles(ctx, repo.OrgID)
+	roles, err := s.roles(ctx, repo.OrgID, revoking)
 	if err != nil {
 		return Repository{}, orgs.Role{}, err
 	}
@@ -274,7 +281,7 @@ func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, 
 // Grant gives one of the organization's members or API keys a role on the repository; it takes org.grants.manage
 // and every permission the role gives there.
 func (s *Service) Grant(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID) error {
-	repo, role, err := s.grantable(ctx, v, repoID, principalID, roleID)
+	repo, role, err := s.grantable(ctx, v, repoID, principalID, roleID, false)
 	if err != nil {
 		return err
 	}
@@ -284,7 +291,7 @@ func (s *Service) Grant(ctx context.Context, v Viewer, repoID, principalID, role
 // Revoke takes a role from a principal on the repository; it takes org.grants.manage and every permission the role
 // gives there.
 func (s *Service) Revoke(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID) error {
-	repo, role, err := s.grantable(ctx, v, repoID, principalID, roleID)
+	repo, role, err := s.grantable(ctx, v, repoID, principalID, roleID, true)
 	if err != nil {
 		return err
 	}

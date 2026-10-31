@@ -79,3 +79,9 @@ WHERE p.id = @principal_id AND (p.org_id = @org_id::uuid
 -- DeleteRepositoryGrant takes one role from the principal on the repository.
 -- name: DeleteRepositoryGrant :execrows
 DELETE FROM grants WHERE principal_id = $1 AND role_id = $2 AND scope = 'repository' AND scope_id = @repo_id::uuid;
+
+-- DeleteRepositoryGrantsAt takes every role the principal holds on the organization's repositories: they go with the
+-- membership.
+-- name: DeleteRepositoryGrantsAt :execrows
+DELETE FROM grants g USING repositories r
+WHERE g.principal_id = @principal_id AND g.scope = 'repository' AND g.scope_id = r.id AND r.org_id = @org_id::uuid;

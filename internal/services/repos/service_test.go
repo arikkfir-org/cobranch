@@ -116,13 +116,13 @@ func runCases(t *testing.T, cases []testCase) {
 
 func TestCreate(t *testing.T) {
 	runCases(t, []testCase{
-		{name: "a member with repos.create makes it Private, as its Maintainer", run: func(ctx context.Context, f *fixture) error {
+		{name: "a member with repos.create makes it as its Maintainer, Internal at once since Rita's role reads it", run: func(ctx context.Context, f *fixture) error {
 			repo, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools", Description: " Scripts "})
 			if err != nil {
 				return got(err)
 			}
 			if repo.Name != "tools" || repo.Description != "Scripts" || repo.DefaultBranch != "main" || repo.ObjectFormat != "sha1" ||
-				repo.CreatedBy != f.max.ID || repo.Visibility != repos.VisibilityPrivate || !repo.CreatedAt.Equal(now) {
+				repo.CreatedBy != f.max.ID || repo.Visibility != repos.VisibilityInternal || !repo.CreatedAt.Equal(now) {
 				return fmt.Errorf("created %+v", repo)
 			}
 			_, held, err := f.service.Get(ctx, f.max, f.acme.ID, "tools")
@@ -130,6 +130,14 @@ func TestCreate(t *testing.T) {
 				return fmt.Errorf("Max holds %v on it (%w), want Maintainer's permissions", held, err)
 			}
 			return nil
+		}, wantEvents: []string{"repo.created"}},
+		{name: "Private where no organization role reads every repository", run: func(ctx context.Context, f *fixture) error {
+			f.orgs.Grants = slices.DeleteFunc(f.orgs.Grants, func(g orgstest.Grant) bool { return g.Principal == f.rita.ID })
+			repo, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools"})
+			if err == nil && repo.Visibility != repos.VisibilityPrivate {
+				return fmt.Errorf("visibility %s", repo.Visibility)
+			}
+			return got(err)
 		}, wantEvents: []string{"repo.created"}},
 		{name: "another default branch", run: func(ctx context.Context, f *fixture) error {
 			repo, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools", Name: "Tools", DefaultBranch: "trunk"})
@@ -348,7 +356,7 @@ func TestAccessAndRoles(t *testing.T) {
 	}
 }
 
-func TestGrantAndRevoke(t *testing.T) {
+func TestGrant(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "an Owner grants a guest Reader, who then reads it", run: func(ctx context.Context, f *fixture) error {
 			if err := f.service.Grant(ctx, f.olivia, f.secret.ID, f.gwen.ID, auth.RoleReader); err != nil {
@@ -382,6 +390,11 @@ func TestGrantAndRevoke(t *testing.T) {
 		{name: "someone outside the organization", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.nia.ID, auth.RoleReader))
 		}, wantErr: repos.ErrNotFound},
+	})
+}
+
+func TestRevoke(t *testing.T) {
+	runCases(t, []testCase{
 		{name: "an Owner revokes Max's Developer", run: func(ctx context.Context, f *fixture) error {
 			if err := f.service.Revoke(ctx, f.olivia, f.website.ID, f.max.ID, auth.RoleDeveloper); err != nil {
 				return got(err)
@@ -394,6 +407,24 @@ func TestGrantAndRevoke(t *testing.T) {
 		{name: "a role not held", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Revoke(ctx, f.olivia, f.website.ID, f.gwen.ID, auth.RoleReader))
 		}, wantErr: repos.ErrNotFound},
+		{name: "a custom role that has since lost its repository permissions", run: func(ctx context.Context, f *fixture) error {
+			if err := f.service.Grant(ctx, f.olivia, f.website.ID, f.gwen.ID, f.releaseManager.ID); err != nil {
+				return got(err)
+			}
+			i := slices.IndexFunc(f.orgs.RoleList, func(r orgs.Role) bool { return r.ID == f.releaseManager.ID })
+			f.orgs.RoleList[i].Permissions = []string{"org.read"}
+			return got(f.service.Revoke(ctx, f.olivia, f.website.ID, f.gwen.ID, f.releaseManager.ID))
+		}, wantEvents: []string{"repo.role_granted", "repo.role_revoked"}},
+		{name: "a member who leaves loses their roles on its repositories", run: func(ctx context.Context, f *fixture) error {
+			if err := f.orgs.Leave(ctx, f.max.ID, f.acme.ID, f.max.ID, now); err != nil {
+				return got(err)
+			}
+			access, err := f.service.Access(ctx, f.olivia, f.website.ID)
+			if err != nil || slices.ContainsFunc(access, func(a repos.Access) bool { return a.Principal.ID == f.max.ID }) {
+				return fmt.Errorf("website's access after Max left: %+v (%w)", access, err)
+			}
+			return nil
+		}},
 	})
 }
 

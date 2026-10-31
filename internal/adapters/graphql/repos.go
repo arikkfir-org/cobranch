@@ -70,10 +70,19 @@ func resolveRepo[T any](ctx context.Context, obj *Repository, read func(context.
 }
 
 // changeRepositoryGrant grants or revokes a role of a principal on a repository, through change, and answers true
-// when it did.
+// when it did. It reads the repository first, so a repository the viewer may not read is told apart from what missing
+// names: the principal of a grant, or the grant a revocation takes.
 func (r *mutationResolver) changeRepositoryGrant(ctx context.Context, repositoryID, principalID, roleID string,
-	change func(ctx context.Context, v repos.Viewer, repoID, principalID, roleID uuid.UUID) error, what string) (bool, error) {
+	change func(ctx context.Context, v repos.Viewer, repoID, principalID, roleID uuid.UUID) error, missing, what string) (bool, error) {
 	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	repoID, err := parseID(ctx, repositoryID, "repository")
+	if err != nil {
+		return false, err
+	}
+	principal, err := parseID(ctx, principalID, "principal")
 	if err != nil {
 		return false, err
 	}
@@ -81,7 +90,11 @@ func (r *mutationResolver) changeRepositoryGrant(ctx context.Context, repository
 	if err != nil {
 		return false, err
 	}
-	return act(ctx, repositoryID, principalID, "principal", func(repoID, id uuid.UUID) error {
-		return change(ctx, v.User, repoID, id, role)
-	}, what)
+	if _, _, err := r.Repos.ByID(ctx, v.User, repoID); err != nil {
+		return false, fail(ctx, err, "repository", what)
+	}
+	if err := change(ctx, v.User, repoID, principal, role); err != nil {
+		return false, fail(ctx, err, missing, what)
+	}
+	return true, nil
 }

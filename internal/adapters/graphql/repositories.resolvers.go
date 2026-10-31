@@ -50,12 +50,12 @@ func (r *mutationResolver) UpdateRepository(ctx context.Context, id string, inpu
 
 // GrantRepositoryRole is the resolver for the grantRepositoryRole field.
 func (r *mutationResolver) GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error) {
-	return r.changeRepositoryGrant(ctx, repositoryID, principalID, roleID, r.Repos.Grant, "granting the role")
+	return r.changeRepositoryGrant(ctx, repositoryID, principalID, roleID, r.Repos.Grant, "principal", "granting the role")
 }
 
 // RevokeRepositoryRole is the resolver for the revokeRepositoryRole field.
 func (r *mutationResolver) RevokeRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error) {
-	return r.changeRepositoryGrant(ctx, repositoryID, principalID, roleID, r.Repos.Revoke, "revoking the role")
+	return r.changeRepositoryGrant(ctx, repositoryID, principalID, roleID, r.Repos.Revoke, "grant", "revoking the role")
 }
 
 // Repositories is the resolver for the repositories field.

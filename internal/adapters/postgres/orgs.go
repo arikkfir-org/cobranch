@@ -281,8 +281,8 @@ func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email str
 	return id, nil
 }
 
-// Leave drops the member and every role they hold at the organization; actor is who did it. The organization's row
-// is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
+// Leave drops the member and every role they hold at the organization and on its repositories; actor is who did it.
+// The organization's row is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
 func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, _ time.Time) error {
 	return s.transact(ctx, "dropping the member", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.LockOrganization(ctx, orgID); err != nil {
@@ -300,6 +300,9 @@ func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uui
 		}
 		if _, err := q.DeleteScopeGrants(ctx, userID, string(auth.ScopeOrganization), orgID); err != nil {
 			return fmt.Errorf("deleting the grants: %w", err)
+		}
+		if _, err := q.DeleteRepositoryGrantsAt(ctx, userID, orgID); err != nil {
+			return fmt.Errorf("deleting the grants on the organization's repositories: %w", err)
 		}
 		if err := dropPending(ctx, q, orgID, userID); err != nil {
 			return err

@@ -259,7 +259,8 @@ func (s *Store) MemberByEmail(_ context.Context, org uuid.UUID, email string) (u
 	return uuid.Nil, orgs.ErrNotFound
 }
 
-// Leave drops the member and their roles at the organization, and what waited for them there; the last Owner can't go.
+// Leave drops the member and their roles at the organization and on its repositories, and what waited for them there;
+// the last Owner can't go.
 func (s *Store) Leave(_ context.Context, actor, org, user uuid.UUID, _ time.Time) error {
 	if s.Fail != nil {
 		return s.Fail
@@ -270,7 +271,7 @@ func (s *Store) Leave(_ context.Context, actor, org, user uuid.UUID, _ time.Time
 	s.dropPending(org, user)
 	s.Memberships[org] = slices.DeleteFunc(s.Memberships[org], func(u uuid.UUID) bool { return u == user })
 	s.Grants = slices.DeleteFunc(s.Grants, func(g Grant) bool {
-		return g.Principal == user && g.Scope == auth.ScopeOrganization && g.ScopeID == org
+		return g.Principal == user && ((g.Scope == auth.ScopeOrganization && g.ScopeID == org) || (g.Scope == auth.ScopeRepository && s.Repos[g.ScopeID] == org))
 	})
 	if actor == user {
 		s.Events = append(s.Events, "member.left")

@@ -150,6 +150,27 @@ func TestRepoStorePermissions(t *testing.T) {
 	}
 }
 
+func TestRepoStoreLeave(t *testing.T) {
+	f := newRepoFixture(t)
+	ctx := context.Background()
+	if err := f.r.Grant(ctx, f.olivia, f.website, f.max, auth.RoleDeveloper); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.Leave(ctx, f.olivia, f.acme.ID, f.max, now); err != nil {
+		t.Fatal(err)
+	}
+	if p, err := f.s.Permissions(ctx, f.max, auth.ScopeRepository, f.website.ID); err != nil || len(p) != 0 {
+		t.Errorf("Max holds %v (%v) on website after his removal, want nothing", p, err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM grants WHERE principal_id = $1", f.max); n != 0 {
+		t.Errorf("Max keeps %d grants after his removal, want none", n)
+	}
+	// Olivia's own grants on the repositories stay.
+	if access, err := f.r.Access(ctx, f.website.ID); err != nil || len(access) != 1 || access[0].Principal.ID != f.olivia {
+		t.Errorf("Access() = %+v, %v, want Olivia alone", access, err)
+	}
+}
+
 func TestRepoStorePrincipalsAndRoles(t *testing.T) {
 	f := newRepoFixture(t)
 	ctx := context.Background()

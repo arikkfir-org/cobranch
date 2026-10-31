@@ -58,6 +58,16 @@ func TestRepositoryMutations(t *testing.T) {
 				return `mutation { grantRepositoryRole(repositoryId: "` + f.website.ID.String() + `", principalId: "` + f.nia.User.ID.String() + `", roleId: "` + auth.RoleReader.String() + `") }`
 			},
 			wantCode: notFound, wantReason: "principal.not_found"},
+		{name: "revoke a role not held", viewer: olivia,
+			document: func(f *orgFixture) string {
+				return `mutation { revokeRepositoryRole(repositoryId: "` + f.website.ID.String() + `", principalId: "` + f.max.User.ID.String() + `", roleId: "` + auth.RoleReader.String() + `") }`
+			},
+			wantCode: notFound, wantReason: "grant.not_found"},
+		{name: "grant on a repository the viewer doesn't read", viewer: maxim,
+			document: func(f *orgFixture) string {
+				return `mutation { grantRepositoryRole(repositoryId: "` + f.website.ID.String() + `", principalId: "` + f.olivia.User.ID.String() + `", roleId: "` + auth.RoleReader.String() + `") }`
+			},
+			wantCode: notFound, wantReason: "repository.not_found"},
 		{name: "revoke the creator's Maintainer", viewer: olivia,
 			document: func(f *orgFixture) string {
 				return `mutation { revokeRepositoryRole(repositoryId: "` + f.website.ID.String() + `", principalId: "` + f.olivia.User.ID.String() + `", roleId: "` + auth.RoleMaintainer.String() + `") }`
