@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
 )
@@ -85,11 +86,15 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 	if roles, _ := f.s.Roles(ctx, f.acme.ID); len(roles) != 3 {
 		t.Errorf("%d roles remain, want the built-in 3", len(roles))
 	}
+	inv.ID, inv.Email = uuid.New(), "late@example.com"
+	if err := f.s.Invite(ctx, f.olivia, inv); !errors.Is(err, orgs.ErrNotFound) {
+		t.Errorf("Invite() with the deleted role: error = %v, want not found", err)
+	}
 	if err := f.s.DeleteRole(ctx, f.olivia, f.acme.ID, auth.RoleGuest, now); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("DeleteRole(Guest) error = %v, want not found", err)
 	}
 	want := []string{"role.created", "org.created", "member.joined", "role.created", "role.updated", "role.granted", "role.revoked", "invitation.made", "invitation.cancelled", "role.deleted"}
-	if got := eventKinds(t, f.pool); !slices.Equal(got[len(got)-len(want):], want) {
+	if got := eventKinds(t, f.pool); len(got) < len(want) || !slices.Equal(got[len(got)-len(want):], want) {
 		t.Errorf("events = %v, want them to end with %v", got, want)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'roles' AND principal_id = $1", f.olivia); n != 3 {
@@ -152,5 +157,42 @@ func TestOrgStoreDeleteRoleAgainstGrant(t *testing.T) {
 		default:
 			t.Fatalf("round %d: delete = %v, grant = %v, %d grants and %d roles remain", i, deleted, granted, grantRows, roleRows)
 		}
+	}
+}
+
+// TestCustomRolesRollback rolls the custom roles' migration back over a database that holds one, granted and set as
+// the membership role, then applies it again.
+func TestCustomRolesRollback(t *testing.T) {
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	release := orgs.Role{ID: uuid.New(), Name: "Release manager", Permissions: []string{"org.read", "repo.merge"}, OrgID: f.acme.ID}
+	if err := f.s.CreateRole(ctx, f.olivia, release); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.s.GrantRole(ctx, f.olivia, f.acme.ID, f.max, release.ID); err != nil {
+		t.Fatal(err)
+	}
+	f.acme.MembershipRoleID = release.ID
+	if err := f.s.Update(ctx, f.olivia, f.acme); err != nil {
+		t.Fatal(err)
+	}
+	schema := newSchema(t, f.pool, migrations.FS, migrations.Go...)
+	if _, err := schema.provider.DownTo(ctx, 4); err != nil {
+		t.Fatalf("rolling back to version 4: %v", err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM roles WHERE id = $1", release.ID); n != 0 {
+		t.Error("the custom role survived the rollback")
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM grants WHERE principal_id = $1 AND scope_id = $2", f.max, f.acme.ID); n != 1 {
+		t.Errorf("Max holds %d grants at Acme after the rollback, want Member alone", n)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM organizations WHERE id = $1 AND membership_role_id = $2", f.acme.ID, auth.RoleMember); n != 1 {
+		t.Error("Acme's membership role isn't Member after the rollback")
+	}
+	if err := schema.Migrate(ctx); err != nil {
+		t.Fatalf("migrating again: %v", err)
+	}
+	if err := f.s.CreateRole(ctx, f.olivia, release); err != nil {
+		t.Errorf("CreateRole() after the rollback and migration: %v", err)
 	}
 }

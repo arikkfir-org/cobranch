@@ -307,9 +307,16 @@ func invitation(i queries.Invitation, slug, name, roleName string) orgs.Invitati
 		InvitedBy: i.InvitedBy, State: orgs.State(i.State), CreatedAt: i.CreatedAt, ExpiresAt: i.ExpiresAt}
 }
 
-// Invite records the invitation.
+// Invite records the invitation. It holds the organization's lock and reads the role under it, as every grant does,
+// so a role being deleted isn't offered meanwhile.
 func (s *OrgStore) Invite(ctx context.Context, actor uuid.UUID, inv orgs.Invitation) error {
 	return s.transact(ctx, "recording the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.LockOrganization(ctx, inv.OrgID); err != nil {
+			return wrapOrg("locking the organization", err)
+		}
+		if _, err := q.Role(ctx, inv.RoleID); err != nil {
+			return wrapOrg("reading the role", err)
+		}
 		if _, err := q.DeleteExpiredInvitationTo(ctx, inv.OrgID, inv.Email, inv.CreatedAt); err != nil {
 			return fmt.Errorf("dropping an expired invitation: %w", err)
 		}
@@ -370,9 +377,13 @@ func closeInvitation(ctx context.Context, q *queries.Queries, actor uuid.UUID, i
 	return orgEvent(ctx, q, &inv.OrgID, actor, "invitation."+string(state), inv.ID, map[string]any{"email": inv.Email})
 }
 
-// Accept makes the invitee a member with the invitation's role, closes the invitation, and records both.
+// Accept makes the invitee a member with the invitation's role, closes the invitation, and records both. It takes
+// the organization's lock before touching the invitation, the order DeleteRole uses, so the two can't deadlock.
 func (s *OrgStore) Accept(ctx context.Context, actor uuid.UUID, inv orgs.Invitation, userID uuid.UUID, at time.Time) error {
 	return s.transact(ctx, "accepting the invitation", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.LockOrganization(ctx, inv.OrgID); err != nil {
+			return wrapOrg("locking the organization", err)
+		}
 		if err := closeInvitation(ctx, q, actor, inv, orgs.StateAccepted, at); err != nil {
 			return err
 		}

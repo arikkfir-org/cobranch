@@ -12,10 +12,16 @@ CREATE INDEX roles_org ON roles (org_id);
 
 -- An invitation keeps the ID of the role it offered, as events do, even once a custom role is gone: deleting a role
 -- cancels the invitations that still offer it.
-ALTER TABLE invitations DROP CONSTRAINT invitations_role_id_fkey;
+ALTER TABLE invitations DROP CONSTRAINT IF EXISTS invitations_role_id_fkey; -- gone already after a rollback
 
 -- +goose Down
-ALTER TABLE invitations ADD CONSTRAINT invitations_role_id_fkey FOREIGN KEY (role_id) REFERENCES roles (id);
+-- Rolling back deletes the custom roles, with their grants, and makes Member the membership role where a custom
+-- role was: the previous schema has no room for them. Invitations keep their role IDs, and no foreign key comes back,
+-- since cancelled invitations may name roles that are gone.
+UPDATE organizations SET membership_role_id = '00000000-0000-7000-8000-000000000202'
+WHERE membership_role_id IN (SELECT id FROM roles WHERE NOT built_in);
+DELETE FROM grants WHERE role_id IN (SELECT id FROM roles WHERE NOT built_in);
+DELETE FROM roles WHERE NOT built_in;
 DROP INDEX roles_org;
 DROP INDEX roles_name;
 ALTER TABLE roles ADD CONSTRAINT roles_scope_name_key UNIQUE (scope, name);
