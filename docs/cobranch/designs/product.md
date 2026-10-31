@@ -1,7 +1,7 @@
 # The Cobranch product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced
+> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced
 > again once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -44,6 +44,8 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
 | [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
+| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Proposed |
+| [Git hosting](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -208,12 +210,13 @@ reconciliation are worked out in the subsystem designs.
 
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
-project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), one issue per slice, each building on the one
-before it; the Back-office needs only organizations, and moving the domains' nameservers into Terraform blocks nothing.
+project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
+slice after the ones it waits for. The design and the installable foundations are done, and so are sign-in and
+organizations; the Back-office and Git hosting are in progress.
 
-**The roadmap, in order, as of 2026-10-30**
+**The roadmap by milestone, as of 2026-10-31**
 
-![The roadmap, in order, as of 2026-10-30](product/roadmap.svg)
+![The roadmap by milestone, as of 2026-10-31](product/roadmap.svg)
 
 ### Phase 2
 
@@ -228,9 +231,9 @@ Planned after the foundations, each with a design of its own when its turn comes
 - **Members provisioned from an identity provider** (SCIM), so an organization imports and removes its people there.
 - **A Terraform provider,** so an operator or an organization declares its Cobranch resources in code and applies them:
   organizations, their settings, members and roles, repositories, API keys and agents (identity providers stay in the
-  chart's values), as teams provision their code host's repositories and teams with Terraform today. The provider is a client of the REST API with
-  no privileges of its own, authenticating as an API key or a personal token, so it can do exactly what its principal
-  may; a new resource kind reaches it once the API serves it. It waits for the roadmap's slices to land: the API's shape
-  has to settle before a provider pins it.
+  chart's values), as teams provision their code host's repositories and teams with Terraform today. The provider is a
+  client of the REST API with no privileges of its own, authenticating as an API key or a personal token, so it can do
+  exactly what its principal may; a new resource kind reaches it once the API serves it. It waits for the roadmap's
+  slices to land: the API's shape has to settle before a provider pins it.
 
 Cobranch is a Kfirs project, created by Arik Kfir.
