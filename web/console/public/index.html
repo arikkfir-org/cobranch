@@ -484,12 +484,12 @@
       return { el, value };
     }
 
-    async function showApiKeys(org, main, can) {
+    // showApiKeys renders the organization's API keys; shown is a secret just made, which this render shows once.
+    async function showApiKeys(org, main, can, shown = null) {
       const manage = can("org.principals.manage");
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-      let shown = null; // the secret just made, shown once
-      const refresh = (created) => { shown = created || null; showApiKeys(org, main, can).catch(fail); };
+      const refresh = (created) => showApiKeys(org, main, can, created || null).catch(fail);
       // reveal shows a new secret, which the API never shows again.
       const reveal = (created) => {
         const code = h("code", {}, created.secret);

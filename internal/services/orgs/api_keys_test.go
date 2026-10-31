@@ -117,6 +117,11 @@ func TestMakingAPIKeys(t *testing.T) {
 			f.store.RoleList = append(f.store.RoleList, keeper)
 			return third(f.service.CreateAPIKey(ctx, f.gwen, f.acme.ID, orgs.APIKeyInput{Name: "Deploy", RoleIDs: []uuid.UUID{auth.RoleGuest}}))
 		}, wantEvents: []string{"api_key.created"}},
+		{name: "a key holding Owner", run: func(ctx context.Context, f *fixture) error {
+			key, _ := f.deployKey(ctx, t, auth.RoleOwner)
+			asKey := orgs.Viewer{Principal: auth.Principal{ID: key.ID, Kind: auth.KindAPIKey, DisplayName: key.Name}}
+			return third(f.service.CreateAPIKey(ctx, asKey, f.acme.ID, orgs.APIKeyInput{Name: "Other", RoleIDs: member}))
+		}, wantErr: auth.ErrForbidden, wantEvents: []string{"api_key.created"}},
 		{name: "from outside", run: func(ctx context.Context, f *fixture) error {
 			return third(f.service.CreateAPIKey(ctx, f.nia, f.acme.ID, orgs.APIKeyInput{Name: "Deploy", RoleIDs: member}))
 		}, wantErr: orgs.ErrNotFound},

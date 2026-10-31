@@ -810,6 +810,9 @@ func (s *Service) newSecret(expiry Expiry) (string, Secret, error) {
 // CreateAPIKey makes an API key of the organization holding in.RoleIDs, with its first secret, which it returns
 // beside the key and never again; it takes org.principals.manage, and the roles add the grant rules.
 func (s *Service) CreateAPIKey(ctx context.Context, v Viewer, orgID uuid.UUID, in APIKeyInput) (APIKey, string, error) {
+	if v.Kind == auth.KindAPIKey {
+		return APIKey{}, "", fmt.Errorf("%w: a key makes no keys; a person does", auth.ErrForbidden)
+	}
 	_, held, err := s.require(ctx, v, orgID, PermPrincipalsManage)
 	if err != nil {
 		return APIKey{}, "", err

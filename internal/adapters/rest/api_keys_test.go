@@ -17,9 +17,10 @@ func (f *orgFixture) withKey(secrets ...orgs.Secret) orgs.APIKey {
 	return f.store.AddKey(key, auth.RoleMember)
 }
 
-// asKey is the fixture's key as a viewer: an API key's principal, which a bearer token resolved to.
+// asKey is the fixture's key as a viewer: an API key's principal, which a bearer token resolved to, holding Owner too.
 func asKey(f *orgFixture) *auth.Authenticated {
 	key := f.withKey()
+	f.store.Grant(key.ID, auth.RoleOwner, auth.ScopeOrganization, f.acme.ID)
 	return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: key.ID, Kind: auth.KindAPIKey, DisplayName: key.Name}}}
 }
 
