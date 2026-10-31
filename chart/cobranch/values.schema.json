@@ -56,11 +56,15 @@
         },
         "console": {
           "$ref": "#/definitions/image"
+        },
+        "backOffice": {
+          "$ref": "#/definitions/image"
         }
       },
       "required": [
         "cobranch",
-        "console"
+        "console",
+        "backOffice"
       ]
     },
     "imagePullSecrets": {
@@ -102,6 +106,16 @@
           "type": "string",
           "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
           "description": "The Auth server's public URL, which signs people in: a host, and a path the route strips if any. Each identity provider's redirect URI is it plus /callback. Such as https://auth.cobranch.example.com or https://cobranch.example.com/auth."
+        },
+        "admin": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Admin server's public URL, under which it answers /v1/ to the Back-office: a host, and a path the route strips if any. With it, the chart runs the Admin server and the Back-office, which urls.backOffice must name. Such as https://admin.cobranch.example.com/api."
+        },
+        "backOffice": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Back-office's public URL, where an installation's administrators run it: a host, and a path the route strips if any. Such as https://admin.cobranch.example.com."
         }
       }
     },
@@ -301,6 +315,41 @@
         }
       }
     },
+    "adminServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "migrate": {
       "type": "object",
       "additionalProperties": false,
@@ -384,6 +433,41 @@
       }
     },
     "console": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "backOffice": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -667,7 +751,9 @@
     "authServer",
     "restServer",
     "graphqlServer",
+    "adminServer",
     "console",
+    "backOffice",
     "migrate",
     "maintenance"
   ]

@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 6},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 7},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 6},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 6},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 7},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 7},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -416,8 +416,11 @@ func TestNewSeeds(t *testing.T) {
 func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) {
 	t.Helper()
 	if cobranch {
-		if users := countRows(t, pool, "SELECT count(*) FROM principals WHERE kind = 'user'"); users != 4 {
-			t.Errorf("seeded users = %d, want 4", users)
+		if users := countRows(t, pool, "SELECT count(*) FROM principals WHERE kind = 'user'"); users != 5 {
+			t.Errorf("seeded users = %d, want 5", users)
+		}
+		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN principals p ON p.id = g.principal_id WHERE p.display_name = 'Ada Admin'"); n != 0 {
+			t.Errorf("the seeded administrator holds %d grants, want none: auth.admins grants Installation admin", n)
 		}
 		if n := countRows(t, pool, "SELECT count(*) FROM grants g JOIN roles r ON r.id = g.role_id WHERE NOT r.built_in AND r.org_id = g.scope_id"); n != 2 {
 			t.Errorf("seeded custom role grants = %d, want Release manager at Acme for Max and the Deploy script key", n)

@@ -15,7 +15,7 @@ import (
 	"cobranch.dev/internal/system/buildinfo"
 )
 
-const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | maintenance"
+const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | admin-server | maintenance"
 
 // telemetryFlushTimeout bounds how long a workload waits, as it exits, for its last spans to be exported.
 const telemetryFlushTimeout = 5 * time.Second
@@ -50,6 +50,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runServer(ctx, stdout, restServer)
 	case graphqlServer.workload:
 		err = runServer(ctx, stdout, graphqlServer)
+	case adminServer.workload:
+		err = runServer(ctx, stdout, adminServer)
 	default:
 		_, _ = fmt.Fprintln(stderr, usage) // stderr is gone; nothing to tell
 		return 2

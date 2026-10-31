@@ -1,0 +1,7 @@
+{{- /* The Back-office, with the Admin server (admin-server.yaml checks their URLs come together). Its pages find the
+Admin API, the Auth server, themselves (where a sign-in returns) and the Console, which an administrator who enters an
+organization opens. */}}
+{{- if .Values.urls.admin }}
+{{- include "cobranch.site" (dict "root" . "component" "back-office" "values" .Values.backOffice "image" .Values.images.backOffice
+  "env" (dict "ADMIN" .Values.urls.admin "AUTH" .Values.urls.auth "BACK_OFFICE" .Values.urls.backOffice "CONSOLE" .Values.urls.console)) }}
+{{- end }}

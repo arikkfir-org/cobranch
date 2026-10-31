@@ -11,12 +11,16 @@ images:
     repository: me-west1-docker.pkg.dev/arikkfir/cobranch/cobranch-console
     tag: ""
     pullPolicy: IfNotPresent
+  backOffice:
+    repository: me-west1-docker.pkg.dev/arikkfir/cobranch/cobranch-back-office
+    tag: ""
+    pullPolicy: IfNotPresent
 imagePullSecrets: []
 
 # Where you mount each workload, all under one parent domain: a host each, or paths on one host. Every workload serves
-# as if it were alone (the Console and GraphQL at /, REST under /v1/), so a URL's path is a prefix its HTTPRoute
-# strips. A server lets the Console's pages call it (CORS), the Console's pages call the REST API under its URL, and
-# each HTTPRoute takes its URL's host and path. Empty: the workload has none.
+# as if it were alone (the Console, the Back-office and GraphQL at /, REST and Admin under /v1/), so a URL's path is a
+# prefix its HTTPRoute strips. A server lets the pages that call it do so (CORS): the Console's, or the Back-office's
+# for the Admin server. Each HTTPRoute takes its URL's host and path. Empty: the workload has none.
 urls:
   # Such as https://cobranch.example.com.
   console: ""
@@ -28,6 +32,12 @@ urls:
   # https://cobranch.example.com/auth. Each identity provider's redirect URI is this URL plus /callback. Without it,
   # nobody can sign in.
   auth: ""
+  # The Admin server, which the Back-office calls: such as https://admin.cobranch.example.com/api. With it, the chart
+  # runs the Admin server and the Back-office, which backOffice names; without it, neither. Both may stay on a gateway
+  # only your operators reach; the Admin API checks every caller's permissions either way.
+  admin: ""
+  # The Back-office, where the installation's administrators run it: such as https://admin.cobranch.example.com.
+  backOffice: ""
 
 # Sign-in (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
 # says that sign-in isn't set up yet.
@@ -48,8 +58,9 @@ auth:
   # email). A first administrator's email may always sign up.
   signUp: anyone
   signUpDomains: []
-  # The first administrators' emails: a verified sign-in with one grants Installation admin, and an email that leaves
-  # the list loses that grant at its next sign-in. Grants made in the Back-office are never touched.
+  # The first administrators' emails: a verified sign-in with one grants Installation admin, which runs the
+  # Back-office, and an email that leaves the list loses that grant at its next sign-in. Grants made in the Back-office
+  # are never touched.
   admins: []
 
 organizations:
@@ -133,9 +144,39 @@ graphqlServer:
   affinity: {}
   podAnnotations: {}
 
+# The Admin API's server, with urls.admin, which the Back-office calls. A few administrators use it, so one replica
+# serves.
+adminServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
 # The Console: its static files and config.json, served by Caddy.
 console:
   replicas: 2
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The Back-office, with urls.admin: its static files and config.json, served by Caddy, as the Console's. A few
+# administrators use it, so one replica serves.
+backOffice:
+  replicas: 1
   resources:
     requests:
       cpu: 10m

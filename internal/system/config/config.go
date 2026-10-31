@@ -18,19 +18,21 @@ import (
 const Prefix = "COBRANCH"
 
 // URLs are the workloads' public URLs, as the browser sees them: where the Console's pages find each API, and
-// together, the hosts the session cookie is set for. A server lets the Console's pages call it from its origin (CORS).
-// An empty URL is a workload that has none.
+// together, the hosts the session cookie is set for. A server lets the Console's pages call it from its origin (CORS);
+// the Admin server, the Back-office's. An empty URL is a workload that has none.
 type URLs struct {
-	Console URL `envconfig:"CONSOLE_URL"`
-	REST    URL `envconfig:"REST_URL"`
-	GraphQL URL `envconfig:"GRAPHQL_URL"`
-	Auth    URL `envconfig:"AUTH_URL"`
+	Console    URL `envconfig:"CONSOLE_URL"`
+	REST       URL `envconfig:"REST_URL"`
+	GraphQL    URL `envconfig:"GRAPHQL_URL"`
+	Auth       URL `envconfig:"AUTH_URL"`
+	Admin      URL `envconfig:"ADMIN_URL"`
+	BackOffice URL `envconfig:"BACK_OFFICE_URL"`
 }
 
 // All lists the URLs that are set.
 func (u URLs) All() []*url.URL {
 	var all []*url.URL
-	for _, each := range []URL{u.Console, u.REST, u.GraphQL, u.Auth} {
+	for _, each := range []URL{u.Console, u.REST, u.GraphQL, u.Auth, u.Admin, u.BackOffice} {
 		if each.URL != nil {
 			all = append(all, each.URL)
 		}
@@ -69,7 +71,7 @@ func (u URL) Origin() string {
 	return u.Scheme + "://" + u.Host
 }
 
-// Server configures the servers that serve an API: rest-server and graphql-server.
+// Server configures the servers that serve an API: rest-server, graphql-server and admin-server.
 type Server struct {
 	// HTTPAddr is the address the server listens on.
 	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`

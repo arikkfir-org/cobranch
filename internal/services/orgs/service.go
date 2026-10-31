@@ -152,15 +152,10 @@ func (s *Service) Create(ctx context.Context, v Viewer, slug, name string) (Orga
 	if err := s.authz.Can(ctx, v.ID, PermCreate, auth.ScopeInstallation, uuid.Nil); err != nil {
 		return Organization{}, fmt.Errorf("checking the viewer: %w", err)
 	}
-	name = strings.TrimSpace(name)
-	if err := errors.Join(ValidateSlug(slug), ValidateName(name)); err != nil {
+	org, err := NewOrganization(slug, name, s.now())
+	if err != nil {
 		return Organization{}, err
 	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return Organization{}, fmt.Errorf("making an ID: %w", err)
-	}
-	org := Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: s.now()}
 	if err := s.store.Create(ctx, v.ID, org); err != nil {
 		return Organization{}, fmt.Errorf("creating the organization: %w", err)
 	}

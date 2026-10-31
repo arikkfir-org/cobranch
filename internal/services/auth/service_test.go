@@ -3,6 +3,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -107,6 +108,32 @@ func TestSafeReturnPath(t *testing.T) {
 		t.Run(tt.path, func(t *testing.T) {
 			if got := auth.SafeReturnPath(tt.path); got != tt.want {
 				t.Errorf("auth.SafeReturnPath(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSafeReturn(t *testing.T) {
+	backOffice, _ := url.Parse("https://admin.example.com/back-office")
+	s := auth.NewService(nil, nil, auth.Settings{ReturnURLs: []*url.URL{backOffice}})
+	tests := []struct {
+		name, to, want string
+	}{
+		{name: "a Console path", to: "/acme", want: "/acme"},
+		{name: "the Back-office's URL", to: "https://admin.example.com/back-office", want: "https://admin.example.com/back-office"},
+		{name: "a page of the Back-office", to: "https://Admin.example.com/back-office/users?q=ada", want: "https://Admin.example.com/back-office/users?q=ada"},
+		{name: "another path of its host", to: "https://admin.example.com/back-officer", want: "/"},
+		{name: "a path that climbs out of it", to: "https://admin.example.com/back-office/../acme", want: "/"},
+		{name: "another scheme", to: "http://admin.example.com/back-office", want: "/"},
+		{name: "another host", to: "https://evil.example.com/back-office", want: "/"},
+		{name: "credentials", to: "https://x@admin.example.com/back-office", want: "/"},
+		{name: "a line break", to: "https://admin.example.com/back-office\r\nSet-Cookie: x", want: "/"},
+		{name: "a protocol-relative URL", to: "//admin.example.com/back-office", want: "/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := s.SafeReturn(tt.to); got != tt.want {
+				t.Errorf("SafeReturn(%q) = %q, want %q", tt.to, got, tt.want)
 			}
 		})
 	}

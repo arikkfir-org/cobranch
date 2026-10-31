@@ -1,0 +1,7 @@
+# oapi-codegen's settings for adminapi.gen.go: the models and a strict server on the standard library's routing.
+package: adminapi
+output: adminapi.gen.go
+generate:
+  models: true
+  std-http-server: true
+  strict-server: true

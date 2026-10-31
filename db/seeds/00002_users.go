@@ -31,17 +31,25 @@ var demoUsers = []demoUser{
 func users(ctx context.Context, tx *sql.Tx) error {
 	q := queries.New(tx)
 	for _, u := range demoUsers {
-		if err := q.InsertUser(ctx, u.id, u.name); err != nil {
-			return fmt.Errorf("seeding user %s: %w", u.subject, err)
+		if err := seedUser(ctx, q, u); err != nil {
+			return err
 		}
-		if err := q.InsertVerifiedEmail(ctx, u.email, u.id); err != nil {
-			return fmt.Errorf("seeding %s's email: %w", u.subject, err)
-		}
-		if err := q.InsertSeedIdentity(ctx, queries.InsertSeedIdentityParams{
-			Issuer: auth.SeedIssuer, Subject: u.subject, PrincipalID: u.id, Email: u.email, Name: u.name,
-		}); err != nil {
-			return fmt.Errorf("seeding %s's identity: %w", u.subject, err)
-		}
+	}
+	return nil
+}
+
+// seedUser seeds u with a verified email and an identity of auth.SeedIssuer.
+func seedUser(ctx context.Context, q *queries.Queries, u demoUser) error {
+	if err := q.InsertUser(ctx, u.id, u.name); err != nil {
+		return fmt.Errorf("seeding user %s: %w", u.subject, err)
+	}
+	if err := q.InsertVerifiedEmail(ctx, u.email, u.id); err != nil {
+		return fmt.Errorf("seeding %s's email: %w", u.subject, err)
+	}
+	if err := q.InsertSeedIdentity(ctx, queries.InsertSeedIdentityParams{
+		Issuer: auth.SeedIssuer, Subject: u.subject, PrincipalID: u.id, Email: u.email, Name: u.name,
+	}); err != nil {
+		return fmt.Errorf("seeding %s's identity: %w", u.subject, err)
 	}
 	return nil
 }

@@ -197,7 +197,7 @@ template:
 {{/* The workloads' public URLs, which every server reads: where the Console's pages find each API, and together the
 hosts the session cookie is set for. */}}
 {{- define "cobranch.urlsEnv" -}}
-{{- range $name, $url := dict "CONSOLE" .Values.urls.console "REST" .Values.urls.rest "GRAPHQL" .Values.urls.graphql "AUTH" .Values.urls.auth }}
+{{- range $name, $url := dict "CONSOLE" .Values.urls.console "REST" .Values.urls.rest "GRAPHQL" .Values.urls.graphql "AUTH" .Values.urls.auth "ADMIN" .Values.urls.admin "BACK_OFFICE" .Values.urls.backOffice }}
 {{- if $url }}
 - name: COBRANCH_{{ $name }}_URL
   value: {{ $url | quote }}

@@ -58,7 +58,7 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("listening: %w", err)
 	}
-	handler := server.Handler("/", authserver.Handler(service, cookie, cfg.Console.URL),
+	handler := server.Handler("/", authserver.Handler(service, cookie, cfg.Console.URL, cfg.BackOffice.URL),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)})
 	slog.InfoContext(ctx, "Starting the Auth server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name,
 		"providers", len(providers), "signUp", settings.SignUp, "seed", settings.Seed)
@@ -68,13 +68,18 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 	return nil
 }
 
-// authSettings reads sign-in's settings from the configuration.
+// authSettings reads sign-in's settings from the configuration. A sign-in may return to the Back-office, when the
+// installation runs one.
 func authSettings(cfg config.AuthServer) (auth.Settings, error) {
 	policy, err := auth.ParsePolicy(cfg.SignUp)
 	if err != nil {
 		return auth.Settings{}, fmt.Errorf("%s_AUTH_SIGN_UP: %w", config.Prefix, err)
 	}
-	return auth.Settings{SignUp: policy, SignUpDomains: cfg.SignUpDomains, Admins: cfg.Admins, SelfServe: cfg.SelfServe, Seed: cfg.Seed}, nil
+	settings := auth.Settings{SignUp: policy, SignUpDomains: cfg.SignUpDomains, Admins: cfg.Admins, SelfServe: cfg.SelfServe, Seed: cfg.Seed}
+	if cfg.BackOffice.URL != nil {
+		settings.ReturnURLs = append(settings.ReturnURLs, cfg.BackOffice.URL)
+	}
+	return settings, nil
 }
 
 // identityProviders builds the providers the configuration lists, whose callback is the Auth server's /callback.

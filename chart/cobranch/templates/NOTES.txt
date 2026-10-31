@@ -30,6 +30,12 @@ It answers through an HTTPRoute per workload, on your Gateway:
 {{- with .Values.urls.auth }}
   Auth      {{ . }}
 {{- end }}
+{{- with .Values.urls.admin }}
+  Admin     {{ . }}
+{{- end }}
+{{- with .Values.urls.backOffice }}
+  Back-office {{ . }}
+{{- end }}
 {{- else }}
 
 No route reaches it yet: route each workload's Service from your Gateway, turn on httpRoute, or forward a port to

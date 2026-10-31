@@ -552,6 +552,7 @@ func TestValidation(t *testing.T) {
 		{name: "a double hyphen", check: func() error { return orgs.ValidateSlug("a--b") }, wantErr: true},
 		{name: "uppercase", check: func() error { return orgs.ValidateSlug("Acme") }, wantErr: true},
 		{name: "reserved", check: func() error { return orgs.ValidateSlug("sign-in") }, wantErr: true},
+		{name: "the Back-office's path", check: func() error { return orgs.ValidateSlug("back-office") }, wantErr: true},
 		{name: "an email", check: func() error { return orgs.ValidateEmail("a@b.example") }},
 		{name: "no @", check: func() error { return orgs.ValidateEmail("ab.example") }, wantErr: true},
 		{name: "an uppercase email", check: func() error { return orgs.ValidateEmail("A@b.example") }, wantErr: true},

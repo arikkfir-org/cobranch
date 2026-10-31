@@ -1,0 +1,109 @@
+package orgstest
+
+import (
+	"context"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"cobranch.dev/internal/services/admin"
+	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/orgs"
+)
+
+var _ admin.Store = (*Store)(nil)
+
+// newestFirst sorts ids by their UUIDv7 order, newest first, and keeps those after `after` (uuid.Nil: all).
+func newestFirst(ids []uuid.UUID, after uuid.UUID) []uuid.UUID {
+	slices.SortFunc(ids, func(a, b uuid.UUID) int { return strings.Compare(b.String(), a.String()) })
+	if after == uuid.Nil {
+		return ids
+	}
+	return slices.DeleteFunc(ids, func(id uuid.UUID) bool { return id.String() >= after.String() })
+}
+
+// holds reports whether any of values holds query, in any case.
+func holds(query string, values ...string) bool {
+	return slices.ContainsFunc(values, func(v string) bool { return strings.Contains(strings.ToLower(v), strings.ToLower(query)) })
+}
+
+// AllOrganizations lists a page of the organizations.
+func (s *Store) AllOrganizations(_ context.Context, page admin.Page) ([]admin.Organization, error) {
+	var ids []uuid.UUID
+	for id := range s.Orgs {
+		ids = append(ids, id)
+	}
+	var out []admin.Organization
+	for _, id := range newestFirst(ids, page.After) {
+		o := s.Orgs[id]
+		if holds(page.Query, o.Slug, o.Name) && len(out) < page.Limit {
+			out = append(out, admin.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: len(s.Memberships[id])})
+		}
+	}
+	return out, nil
+}
+
+// AllUsers lists a page of the users AddUser registered.
+func (s *Store) AllUsers(_ context.Context, page admin.Page) ([]admin.User, error) {
+	var ids []uuid.UUID
+	for id := range s.Names {
+		ids = append(ids, id)
+	}
+	var out []admin.User
+	for _, id := range newestFirst(ids, page.After) {
+		if !holds(page.Query, append([]string{s.Names[id]}, s.Emails[id]...)...) || len(out) == page.Limit {
+			continue
+		}
+		u := admin.User{ID: id, DisplayName: s.Names[id]}
+		for _, e := range s.Emails[id] {
+			u.Emails = append(u.Emails, auth.Email{Email: e, Verified: true})
+		}
+		for _, g := range s.Grants {
+			if r, ok := s.role(g.Role); ok && g.Principal == id && g.Scope == auth.ScopeInstallation {
+				u.Roles = append(u.Roles, r.Name)
+			}
+		}
+		for _, users := range s.Memberships {
+			if slices.Contains(users, id) {
+				u.Organizations++
+			}
+		}
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+// VerifiedEmailHolder finds the user AddUser registered with email.
+func (s *Store) VerifiedEmailHolder(_ context.Context, email string) (uuid.UUID, error) {
+	for id, emails := range s.Emails {
+		if slices.Contains(emails, email) {
+			return id, nil
+		}
+	}
+	return uuid.Nil, orgs.ErrNotFound
+}
+
+// CreateFor records the organization with owner its first Owner.
+func (s *Store) CreateFor(ctx context.Context, _, owner uuid.UUID, org orgs.Organization) error {
+	return s.Create(ctx, owner, org)
+}
+
+// Enter makes actor an Owner of the organization, a member first, and records the entry.
+func (s *Store) Enter(_ context.Context, actor, orgID uuid.UUID, reason string, _ time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	if _, ok := s.Orgs[orgID]; !ok {
+		return orgs.ErrNotFound
+	}
+	if !slices.Contains(s.Memberships[orgID], actor) {
+		s.Memberships[orgID] = append(s.Memberships[orgID], actor)
+		s.Events = append(s.Events, "member.joined")
+	}
+	s.Grant(actor, auth.RoleOwner, auth.ScopeOrganization, orgID)
+	s.Entered = append(s.Entered, Entry{Org: orgID, User: actor, Reason: reason})
+	s.Events = append(s.Events, "org.entered")
+	return nil
+}

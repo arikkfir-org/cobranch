@@ -282,7 +282,7 @@ var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
 // ReservedSlugs are the Console's own paths, which no organization may take.
 var ReservedSlugs = []string{
-	"api", "auth", "graphql", "new", "settings", "sign-in", "sign-out", "sign-up", "join", "invitations", "me", "admin",
+	"api", "auth", "graphql", "new", "settings", "sign-in", "sign-out", "sign-up", "join", "invitations", "me", "admin", "back-office",
 	"about", "help", "docs", "static", "assets", "healthz", "readyz",
 }
 
@@ -303,6 +303,20 @@ func ValidateName(name string) error {
 		return &ValidationError{Field: "name", Code: "name.invalid", Message: "a name is 1 to 100 characters"}
 	}
 	return nil
+}
+
+// NewOrganization makes a new organization with slug and name, created at `at`, with the defaults every new one
+// starts from: Member for everyone who joins, and join requests accepted. It refuses a slug or name the rules refuse.
+func NewOrganization(slug, name string, at time.Time) (Organization, error) {
+	name = strings.TrimSpace(name)
+	if err := errors.Join(ValidateSlug(slug), ValidateName(name)); err != nil {
+		return Organization{}, err
+	}
+	id, err := uuid.NewV7()
+	if err != nil {
+		return Organization{}, fmt.Errorf("making an ID: %w", err)
+	}
+	return Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: at}, nil
 }
 
 // ValidateEmail reports whether email can be invited: something@somewhere, lowercase.

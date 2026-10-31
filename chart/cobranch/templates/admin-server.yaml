@@ -1,0 +1,9 @@
+{{- /* The Admin server and the Back-office come together, with urls.admin: the Back-office's pages call the Admin
+server, which lets only them call it with the session cookie. */}}
+{{- if ne (empty .Values.urls.admin) (empty .Values.urls.backOffice) }}
+{{- fail "urls.admin and urls.backOffice go together: the Back-office's pages call the Admin server" }}
+{{- end }}
+{{- if .Values.urls.admin }}
+{{- include "cobranch.checkDatabase" . }}
+{{- include "cobranch.server" (dict "root" . "component" "admin-server" "values" .Values.adminServer) }}
+{{- end }}

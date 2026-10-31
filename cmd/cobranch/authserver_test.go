@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"io"
+	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
+	"cobranch.dev/internal/system/config"
 )
 
 func TestRunAuthServer(t *testing.T) {
@@ -23,7 +26,7 @@ func TestRunAuthServer(t *testing.T) {
 			env:  map[string]string{"COBRANCH_SEED": "true"},
 			requests: []request{
 				{method: "GET", path: "/healthz", wantStatus: 200, wantBody: "ok\n"},
-				{method: "GET", path: "/providers", wantStatus: 200, wantBody: `"providers":[],"seeded":[{"subject":"guest"`},
+				{method: "GET", path: "/providers", wantStatus: 200, wantBody: `"providers":[],"seeded":[{"subject":"admin"`},
 				{method: "GET", path: "/sign-in?user=owner&return=/orgs", wantStatus: 302},
 				{method: "GET", path: "/sign-in?provider=google", wantStatus: 302},
 				{method: "POST", path: "/sign-out", wantStatus: 204},
@@ -130,5 +133,33 @@ func TestRunMaintenance(t *testing.T) {
 	}
 	if err := runMaintenance(context.Background(), io.Discard); err != nil {
 		t.Errorf("runMaintenance() = %v", err)
+	}
+}
+
+func TestAuthSettings(t *testing.T) {
+	backOffice := config.URL{URL: &url.URL{Scheme: "https", Host: "admin.cobranch.test", Path: "/back-office"}}
+	tests := []struct {
+		name        string
+		cfg         config.AuthServer
+		wantReturns []string
+	}{
+		{name: "without a Back-office", cfg: config.AuthServer{SignUp: "anyone"}},
+		{name: "with a Back-office", cfg: config.AuthServer{SignUp: "anyone", URLs: config.URLs{BackOffice: backOffice}},
+			wantReturns: []string{"https://admin.cobranch.test/back-office"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			settings, err := authSettings(tt.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var returns []string
+			for _, u := range settings.ReturnURLs {
+				returns = append(returns, u.String())
+			}
+			if !slices.Equal(returns, tt.wantReturns) {
+				t.Errorf("ReturnURLs = %v, want %v", returns, tt.wantReturns)
+			}
+		})
 	}
 }

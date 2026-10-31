@@ -50,7 +50,15 @@ type Store struct {
 	Keys   map[uuid.UUID]orgs.APIKey
 	Hashes map[uuid.UUID][]byte
 	Events []string
-	Fail   error
+	// Entered records each entry into an organization from the Back-office.
+	Entered []Entry
+	Fail    error
+}
+
+// Entry is an administrator's entry into an organization, with its reason.
+type Entry struct {
+	Org, User uuid.UUID
+	Reason    string
 }
 
 // NewStore returns an empty Store with the built-in roles and Manager.

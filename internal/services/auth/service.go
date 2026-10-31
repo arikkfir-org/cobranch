@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -80,6 +82,9 @@ type Settings struct {
 	SelfServe bool
 	// Seed lets the demo data's users sign in without a provider: demo installations only.
 	Seed bool
+	// ReturnURLs are the absolute URLs, besides the Console's paths, below which a sign-in may return: the
+	// Back-office's, whose pages sign in through the Console's Auth server too.
+	ReturnURLs []*url.URL
 }
 
 // Service signs people in and up, and resolves their sessions.
@@ -121,8 +126,8 @@ type Begun struct {
 	BrowserToken string
 }
 
-// Begin starts a sign-in at provider providerID that returns to returnPath, a path of the Console's own URL (anything
-// else returns to its home), and records the flow for whichever replica the callback reaches.
+// Begin starts a sign-in at provider providerID that returns to returnPath (SafeReturn), and records the flow for
+// whichever replica the callback reaches.
 func (s *Service) Begin(ctx context.Context, providerID, returnPath string) (Begun, error) {
 	p, ok := s.providers[providerID]
 	if !ok {
@@ -135,7 +140,7 @@ func (s *Service) Begin(ctx context.Context, providerID, returnPath string) (Beg
 		ProviderID:   providerID,
 		Nonce:        nonce,
 		PKCEVerifier: verifier,
-		ReturnPath:   SafeReturnPath(returnPath),
+		ReturnPath:   s.SafeReturn(returnPath),
 		ExpiresAt:    s.now().Add(FlowLifetime),
 	}
 	if err := s.store.CreateFlow(ctx, flow); err != nil {
@@ -157,7 +162,32 @@ func SafeReturnPath(returnPath string) string {
 	return returnPath
 }
 
-// Completed is a finished sign-in: the session's token, for the cookie, and where the Console page is to return to.
+// SafeReturn keeps where a sign-in returns to when it is a path of the Console's own URL, or an absolute URL at or
+// below one of the settings' ReturnURLs, and otherwise returns the Console's home: never another site.
+func (s *Service) SafeReturn(returnTo string) string {
+	u, err := url.Parse(returnTo)
+	if err != nil || !u.IsAbs() || u.User != nil || strings.ContainsAny(returnTo, " \r\n\\") {
+		return SafeReturnPath(returnTo)
+	}
+	for _, base := range s.settings.ReturnURLs {
+		if strings.EqualFold(u.Scheme, base.Scheme) && strings.EqualFold(u.Host, base.Host) && below(u.Path, base.Path) {
+			return returnTo
+		}
+	}
+	return "/"
+}
+
+// below reports whether p is base, or a path under it, with no dot segments that would climb out of it.
+func below(p, base string) bool {
+	if clean := path.Clean(p); p != "" && clean != p && clean != strings.TrimSuffix(p, "/") {
+		return false
+	}
+	base = strings.TrimSuffix(base, "/")
+	return p == base || strings.HasPrefix(p, base+"/")
+}
+
+// Completed is a finished sign-in: the session's token, for the cookie, and where the browser is to return to: a
+// Console path, or an absolute URL that SafeReturn kept.
 type Completed struct {
 	SessionToken string
 	ReturnPath   string
@@ -295,7 +325,7 @@ func (s *Service) SignInSeeded(ctx context.Context, subject, returnPath string, 
 	}
 	now := s.now()
 	identity.LastSignInAt = now
-	return s.signIn(ctx, identity, client, now, SafeReturnPath(returnPath))
+	return s.signIn(ctx, identity, client, now, s.SafeReturn(returnPath))
 }
 
 // SeededUsers lists the demo users the sign-in page offers while seeding is on, and nothing otherwise.

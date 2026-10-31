@@ -9,7 +9,7 @@ import (
 
 // every names every variable the loaders read, to unset before each test.
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
-	"AUTH_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED",
+	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP"}
 
 // clean unsets every variable, then sets env.
@@ -58,12 +58,15 @@ func TestLoadServer(t *testing.T) {
 				"COBRANCH_REST_URL":         "https://api.example.com",
 				"COBRANCH_GRAPHQL_URL":      "https://console.example.com/graphql",
 				"COBRANCH_AUTH_URL":         "https://console.example.com/auth",
+				"COBRANCH_ADMIN_URL":        "https://admin.example.com/v/",
+				"COBRANCH_BACK_OFFICE_URL":  "https://back-office.example.com",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
 					HTTPAddr: ":9090", DatabaseURL: "postgres://db/cobranch", BlobURL: "gs://bucket", ShutdownTimeout: 5 * time.Second,
 					URLs: URLs{Console: mustURL(t, "https://console.example.com/home"), REST: mustURL(t, "https://api.example.com"),
-						GraphQL: mustURL(t, "https://console.example.com/graphql"), Auth: mustURL(t, "https://console.example.com/auth")},
+						GraphQL: mustURL(t, "https://console.example.com/graphql"), Auth: mustURL(t, "https://console.example.com/auth"),
+						Admin: mustURL(t, "https://admin.example.com/v"), BackOffice: mustURL(t, "https://back-office.example.com")},
 				}
 			},
 		},
@@ -131,9 +134,9 @@ func TestURLDecode(t *testing.T) {
 }
 
 func TestURLsAll(t *testing.T) {
-	u := URLs{Console: mustURL(t, "https://a.example.com"), Auth: mustURL(t, "https://b.example.com")}
+	u := URLs{Console: mustURL(t, "https://a.example.com"), Auth: mustURL(t, "https://b.example.com"), BackOffice: mustURL(t, "https://c.example.com")}
 	all := u.All()
-	if len(all) != 2 || all[0].Host != "a.example.com" || all[1].Host != "b.example.com" {
+	if len(all) != 3 || all[0].Host != "a.example.com" || all[1].Host != "b.example.com" || all[2].Host != "c.example.com" {
 		t.Errorf("All() = %v", all)
 	}
 	if (URLs{}).All() != nil {

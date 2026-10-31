@@ -82,6 +82,12 @@ func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope
 
 // Create makes the organization, claims its slug, makes its creator a member and its first Owner, and records both.
 func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
+	return s.CreateFor(ctx, actor, actor, org)
+}
+
+// CreateFor makes the organization as Create does, with owner its first Owner: an administrator who creates one for a
+// user is the actor, and the user its Owner, whom the event names when it isn't the actor.
+func (s *OrgStore) CreateFor(ctx context.Context, actor, owner uuid.UUID, org orgs.Organization) error {
 	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
 			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
@@ -92,10 +98,14 @@ func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 		if err := q.InsertSlug(ctx, org.Slug, org.ID); err != nil {
 			return fmt.Errorf("claiming the slug: %w", err)
 		}
-		if err := orgEvent(ctx, q, &org.ID, actor, "org.created", org.ID, map[string]any{"slug": org.Slug, "name": org.Name}); err != nil {
+		details := map[string]any{"slug": org.Slug, "name": org.Name}
+		if owner != actor {
+			details["owner"] = owner
+		}
+		if err := orgEvent(ctx, q, &org.ID, actor, "org.created", org.ID, details); err != nil {
 			return err
 		}
-		return join(ctx, q, org.ID, actor, actor, auth.RoleOwner, org.CreatedAt, "created")
+		return join(ctx, q, org.ID, actor, owner, auth.RoleOwner, org.CreatedAt, "created")
 	})
 }
 

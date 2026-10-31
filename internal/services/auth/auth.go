@@ -46,6 +46,9 @@ const (
 	SourceAdmins Source = "admins"
 	// SourceSelfServe is Installation user, granted at sign-up while self-serve organizations are on.
 	SourceSelfServe Source = "self_serve"
+	// SourceEntry is Owner, granted to an installation's administrator who entered the organization from the
+	// Back-office.
+	SourceEntry Source = "entry"
 )
 
 // SeedIssuer is the issuer of the identities the demo data makes: no provider has it, and the Auth server signs in as

@@ -18,18 +18,28 @@ import (
 
 var alice = auth.Claims{Issuer: "https://idp.example.com", Subject: "1", Email: "alice@example.com", EmailVerified: true, Name: "Alice"}
 
-const console = "https://cobranch.example.com"
+const (
+	console          = "https://cobranch.example.com"
+	backOfficeOrigin = "https://admin.example.com"
+	backOffice       = backOfficeOrigin + "/back-office"
+)
 
-// newHandler serves the Auth server over a fake store and provider, under settings, with cookie.
+// newHandler serves the Auth server over a fake store and provider, under settings, with cookie, for the Console and
+// the Back-office, which sign-ins may return to.
 func newHandler(t *testing.T, settings auth.Settings, cookie auth.Cookie) (http.Handler, *authtest.Store) {
 	t.Helper()
-	store := authtest.NewStore()
-	service := auth.NewService(store, []auth.Provider{&authtest.Provider{ProviderID: "google", Claims: alice}}, settings)
-	u, err := url.Parse(console)
+	consoleURL, err := url.Parse(console)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return Handler(service, cookie, u), store
+	backOfficeURL, err := url.Parse(backOffice)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.ReturnURLs = []*url.URL{backOfficeURL}
+	store := authtest.NewStore()
+	service := auth.NewService(store, []auth.Provider{&authtest.Provider{ProviderID: "google", Claims: alice}}, settings)
+	return Handler(service, cookie, consoleURL, backOfficeURL), store
 }
 
 // cookieNamed finds the cookie name in rec's response, or nil.
@@ -56,6 +66,7 @@ func TestProviders(t *testing.T) {
 		{name: "providers alone", wantSeeded: 0},
 		{name: "with the seeded users", seed: true, wantSeeded: 1},
 		{name: "from the Console's page", origin: console, wantOrigin: console},
+		{name: "from the Back-office's page", origin: backOfficeOrigin, wantOrigin: backOfficeOrigin},
 		{name: "from another page", origin: "https://evil.example.com"},
 	}
 	for _, tt := range tests {
@@ -211,20 +222,69 @@ func checkSessionCookie(t *testing.T, rec *httptest.ResponseRecorder, store *aut
 }
 
 func TestSignInSeeded(t *testing.T) {
-	h, store := newHandler(t, auth.Settings{Seed: true}, auth.Cookie{Name: auth.HostCookie})
-	demo := auth.SignUp{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindUser, DisplayName: "Demo"},
-		Identity: auth.Identity{Issuer: auth.SeedIssuer, Subject: "owner", Email: "owner@example.com", EmailVerified: true}}
-	demo.Identity.UserID = demo.Principal.ID
-	_ = store.SignUp(context.Background(), demo)
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/sign-in?user=owner&return=/orgs", nil))
-	if rec.Code != 302 || rec.Header().Get("Location") != console+"/orgs" || cookieNamed(rec, auth.HostCookie) == nil {
-		t.Errorf("got %d to %s with cookies %v, want 302 to the Console with a session", rec.Code, rec.Header().Get("Location"), rec.Result().Cookies())
+	tests := []struct {
+		name, target, wantTo string
+		wantSession          bool
+	}{
+		{name: "to a Console path", target: "/sign-in?user=owner&return=/orgs", wantTo: console + "/orgs", wantSession: true},
+		{name: "to the Back-office", target: "/sign-in?user=owner&return=" + url.QueryEscape(backOffice+"/users"), wantTo: backOffice + "/users", wantSession: true},
+		{name: "to another site", target: "/sign-in?user=owner&return=" + url.QueryEscape("https://evil.example.com/back-office"), wantTo: console + "/", wantSession: true},
+		{name: "an unknown seeded user", target: "/sign-in?user=nobody", wantTo: console + "/sign-in?error=unknown_provider"},
 	}
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest("GET", "/sign-in?user=nobody", nil))
-	if rec.Header().Get("Location") != console+"/sign-in?error=unknown_provider" {
-		t.Errorf("an unknown seeded user went to %s", rec.Header().Get("Location"))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h, store := newHandler(t, auth.Settings{Seed: true}, auth.Cookie{Name: auth.HostCookie})
+			demo := auth.SignUp{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindUser, DisplayName: "Demo"},
+				Identity: auth.Identity{Issuer: auth.SeedIssuer, Subject: "owner", Email: "owner@example.com", EmailVerified: true}}
+			demo.Identity.UserID = demo.Principal.ID
+			_ = store.SignUp(context.Background(), demo)
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest("GET", tt.target, nil))
+			if rec.Code != 302 || rec.Header().Get("Location") != tt.wantTo || (cookieNamed(rec, auth.HostCookie) != nil) != tt.wantSession {
+				t.Errorf("got %d to %s with cookies %v, want 302 to %s, a session %t", rec.Code, rec.Header().Get("Location"), rec.Result().Cookies(), tt.wantTo, tt.wantSession)
+			}
+		})
+	}
+}
+
+func TestReturnURL(t *testing.T) {
+	consoleURL, _ := url.Parse(console)
+	backOfficeURL, _ := url.Parse(backOffice)
+	tests := []struct {
+		name, to, want string
+		noBackOffice   bool
+		// at is the Back-office's URL, when not backOffice.
+		at string
+	}{
+		{name: "a Console path", to: "/orgs/acme", want: console + "/orgs/acme"},
+		{name: "the Console's home", to: "/", want: console + "/"},
+		{name: "a Back-office page", to: backOffice + "/orgs", want: backOffice + "/orgs"},
+		{name: "a Back-office page's query and fragment", to: backOffice + "/orgs?q=acme#new", want: backOffice + "/orgs"},
+		{name: "a Console path that leaves the host", to: "//evil.example.com/x", want: console + "/"},
+		{name: "the Back-office's host in another case", to: "https://ADMIN.example.com/back-office/users", want: backOffice + "/users"},
+		{name: "a Back-office path that leaves the host", to: "https://admin.example.com//evil.example.com/x", want: console + "/"},
+		{name: "a user in the URL", to: "https://evil@admin.example.com/back-office", want: backOffice},
+		{name: "another site", to: "https://evil.example.com/back-office", want: console + "/"},
+		{name: "a host that starts like the Back-office's", to: "https://admin.example.com.evil.example/back-office", want: console + "/"},
+		{name: "another scheme", to: "http://admin.example.com/back-office", want: console + "/"},
+		{name: "no Back-office", to: backOffice + "/users", noBackOffice: true, want: console + "/"},
+		{name: "the root of a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com", want: "https://admin.example.com/"},
+		{name: "a page of a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com/users", want: "https://admin.example.com/users"},
+		{name: "a path that leaves a Back-office on its own host", at: "https://admin.example.com", to: "https://admin.example.com//evil.example.com", want: console + "/"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &handler{console: consoleURL, backOffice: backOfficeURL}
+			if tt.at != "" {
+				h.backOffice, _ = url.Parse(tt.at)
+			}
+			if tt.noBackOffice {
+				h.backOffice = nil
+			}
+			if got := h.returnURL(tt.to).String(); got != tt.want {
+				t.Errorf("returnURL(%q) = %s, want %s", tt.to, got, tt.want)
+			}
+		})
 	}
 }
 
@@ -237,6 +297,7 @@ func TestSignOut(t *testing.T) {
 		wantLive   int
 	}{
 		{name: "from the Console", origin: console, withCookie: true, wantStatus: 204, wantLive: 0},
+		{name: "from the Back-office", origin: backOfficeOrigin, withCookie: true, wantStatus: 204, wantLive: 0},
 		{name: "without an Origin", withCookie: true, wantStatus: 204, wantLive: 0},
 		{name: "from another origin", origin: "https://evil.example.com", withCookie: true, wantStatus: 403, wantLive: 1},
 		{name: "without a cookie", origin: console, wantStatus: 204, wantLive: 1},

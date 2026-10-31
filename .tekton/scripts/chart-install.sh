@@ -1,7 +1,8 @@
 #!/bin/sh
 # Installs chart/cobranch on the throwaway cluster as release cobranch, seeded with the demo data so the test signs in,
-# or upgrades it there rolling every workload, and waits for the migrate Job to finish and every pod to be ready. An
-# upgrade must keep the generated database password, and its migrate Job find nothing left to apply.
+# its administrator among auth.admins, or upgrades it there rolling every workload, and waits for the migrate Job to
+# finish and every pod to be ready. An upgrade must keep the generated database password, and its migrate Job find
+# nothing left to apply.
 set -eu
 action=$1
 ns=cobranch
@@ -19,10 +20,13 @@ set -- --namespace "$ns" --wait --wait-for-jobs --timeout 5m \
   --set images.cobranch.repository=cobranch --set-string "images.cobranch.tag=$VERSION" \
   --set images.cobranch.pullPolicy=Never \
   --set images.console.repository=cobranch-console --set-string "images.console.tag=$VERSION" \
-  --set images.console.pullPolicy=Never --set postgresql.image.pullPolicy=Never \
+  --set images.console.pullPolicy=Never \
+  --set images.backOffice.repository=cobranch-back-office --set-string "images.backOffice.tag=$VERSION" \
+  --set images.backOffice.pullPolicy=Never --set postgresql.image.pullPolicy=Never \
   --set blob.url=file:///var/lib/cobranch/blobs --set-json 'blob.volume={"emptyDir":{}}' \
   --set urls.console=https://cobranch.test --set urls.rest=https://cobranch.test/api --set urls.auth=https://cobranch.test/auth \
-  --set seed.enabled=true
+  --set urls.admin=https://cobranch.test/admin --set urls.backOffice=https://cobranch.test/back-office \
+  --set seed.enabled=true --set 'auth.admins[0]=ada@cobranch.example'
 password() { kubectl -n "$ns" get secret cobranch-postgresql -o jsonpath='{.data.password}'; }
 case "$action" in
 install)
@@ -34,7 +38,8 @@ upgrade)
   helm upgrade cobranch chart/cobranch "$@" \
     --set-string "restServer.podAnnotations.ci/rolled=$now" --set-string "graphqlServer.podAnnotations.ci/rolled=$now" \
     --set-string "console.podAnnotations.ci/rolled=$now" --set-string "migrate.podAnnotations.ci/rolled=$now" \
-    --set-string "authServer.podAnnotations.ci/rolled=$now"
+    --set-string "authServer.podAnnotations.ci/rolled=$now" --set-string "adminServer.podAnnotations.ci/rolled=$now" \
+    --set-string "backOffice.podAnnotations.ci/rolled=$now"
   [ "$(password)" = "$before" ] || { echo "The upgrade changed the database's password" >&2; exit 1; }
   jobs=$(kubectl -n "$ns" get jobs -l app.kubernetes.io/component=migrate -o name)
   # Helm deletes the Job the previous release named, and its new one is the only one left.

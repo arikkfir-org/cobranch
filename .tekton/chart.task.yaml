@@ -1,4 +1,4 @@
-# Task chart of .tekton/ci.yaml: build both images and install the chart on a throwaway kind cluster, in a privileged
+# Task chart of .tekton/ci.yaml: build the images and install the chart on a throwaway kind cluster, in a privileged
 # Docker daemon beside the steps; test the release, upgrade it, and test it again. Octomaton inlines it, and the step
 # it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
