@@ -36,12 +36,12 @@ lists every value, and `values.schema.json` checks them at install.
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md)).
 - **Back-office.** Set `urls.admin` and `urls.backOffice`, together, to run the Admin server and the Back-office, where
   the administrators that `auth.admins` names list and create organizations, enter one (recorded in its audit trail),
-  list the users and change the installation's settings. Both may stay on a gateway only your operators reach
-  ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/back-office.md)).
-- **Secrets key.** `secretsKey.existingSecret` names a Secret of yours holding a key of 32 characters or more under
-  `key` (`secretsKey.secretKey`), which the Auth and Admin servers read: it seals the secrets Cobranch keeps in its
-  database, such as the client secrets of the identity providers the Back-office adds. A lost key loses those secrets,
-  which administrators then enter again.
+  list the users and change the installation's settings and identity providers. Both may stay on a gateway only your
+  operators reach ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/back-office.md)).
+- **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
+  with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the
+  cluster, set `secretsKey.existingSecret`, a Secret holding 32 characters or more under `key` (`secretsKey.secretKey`). A lost key loses those
+  client secrets, which administrators then enter again.
 - **Database.** The bundled PostgreSQL generates its password on install and keeps it. Under Argo CD, or anything else
   that renders without the cluster, set `postgresql.auth.existingSecret`. For your own database, set
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.
