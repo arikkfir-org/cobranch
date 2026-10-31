@@ -151,15 +151,23 @@ func (h *handler) finish(w http.ResponseWriter, r *http.Request, done auth.Compl
 // Console's home.
 func (h *handler) returnURL(to string) *url.URL {
 	u, err := url.Parse(to)
-	if err != nil || !u.IsAbs() {
-		return h.console.JoinPath(auth.SafeReturnPath(to))
+	switch {
+	case err != nil || !u.IsAbs():
+		if isLocalURL(to) {
+			return h.console.JoinPath(to)
+		}
+	case h.backOffice != nil && strings.EqualFold(u.Scheme, h.backOffice.Scheme) &&
+		strings.EqualFold(u.Host, h.backOffice.Host) && isLocalURL(u.Path):
+		back := *h.backOffice
+		back.Path, back.RawPath, back.RawQuery, back.Fragment = u.Path, "", "", ""
+		return &back
 	}
-	if h.backOffice == nil || !strings.EqualFold(u.Scheme, h.backOffice.Scheme) || !strings.EqualFold(u.Host, h.backOffice.Host) {
-		return h.console.JoinPath("/")
-	}
-	back := *h.backOffice
-	back.Path, back.RawPath, back.RawQuery, back.Fragment = auth.SafeReturnPath(u.Path), "", "", ""
-	return &back
+	return h.console.JoinPath("/")
+}
+
+// isLocalURL reports whether to is a path on the host it is joined to, one that auth.SafeReturnPath keeps as it is.
+func isLocalURL(to string) bool {
+	return to != "" && auth.SafeReturnPath(to) == to
 }
 
 // signOut revokes the cookie's session and clears the cookie. Only the Console's and the Back-office's pages may ask:

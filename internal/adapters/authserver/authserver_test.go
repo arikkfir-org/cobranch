@@ -260,6 +260,7 @@ func TestReturnURL(t *testing.T) {
 		{name: "a Back-office page's query and fragment", to: backOffice + "/orgs?q=acme#new", want: backOffice + "/orgs"},
 		{name: "a Console path that leaves the host", to: "//evil.example.com/x", want: console + "/"},
 		{name: "the Back-office's host in another case", to: "https://ADMIN.example.com/back-office/users", want: backOffice + "/users"},
+		{name: "a Back-office path that leaves the host", to: "https://admin.example.com//evil.example.com/x", want: console + "/"},
 		{name: "a user in the URL", to: "https://evil@admin.example.com/back-office", want: backOffice},
 		{name: "another site", to: "https://evil.example.com/back-office", want: console + "/"},
 		{name: "a host that starts like the Back-office's", to: "https://admin.example.com.evil.example/back-office", want: console + "/"},
