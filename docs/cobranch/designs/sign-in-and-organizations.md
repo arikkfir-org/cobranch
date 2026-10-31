@@ -55,7 +55,7 @@ creates the tables before the servers roll out.
 
 ![Sign-in is OpenID Connect’s code flow with PKCE, finished by whichever replica the callback reaches](sign-in-and-organizations/sign-in.svg)
 
-The return path must be a path of the Console’s own URL. A flow that is late, used, or opened in another browser fails,
+The return path must be a path of the Console’s own URL, or a URL under the Back-office’s. A flow that is late, used, or opened in another browser fails,
 and the page offers to start again.
 
 - **A flow is a row.** **Agreed:** the state, nonce, PKCE verifier and return path wait in PostgreSQL for 10 minutes,
@@ -64,7 +64,8 @@ and the page offers to start again.
 - **PKCE and a nonce** on every sign-in, so neither a stolen code nor a replayed ID token signs anyone in.
 - **An identity is its provider's issuer and subject.** **Agreed:** OpenID Connect's own unique pair, never the email,
   so renaming a provider in the chart's values keeps its users.
-- **The return path** is a path of the Console's own URL; anything else returns to the Console's home.
+- **The return path** is a path of the Console's own URL, or a URL under the Back-office's
+  ([Back-office](back-office.md#sign-in)); anything else returns to the Console's home.
 
 ### Identity providers
 
@@ -315,8 +316,9 @@ passes each value as a `COBRANCH_` environment variable.
 
 - **Previews sign in as seeded users.** **Agreed:** an identity provider registers every redirect URI exactly, and every
   preview has a host of its own. With seeding on, which a real installation never turns on, the sign-in page also lists
-  the seeded users, an Owner, a Member, a Guest and one with no organization, and signs in as any of them, so a reviewer
-  tries each role ([previews](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8#previews)).
+  the seeded users, an Owner, a Member, a Guest, one with no organization and Ada Admin, an administrator once an
+  installation lists her in `auth.admins` ([Back-office](back-office.md#previews-and-tests)), and signs in as any of
+  them, so a reviewer tries each role ([previews](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8#previews)).
 - **Tests run a fake provider.** Go tests serve one from `httptest`; the chart's kind test in CI installs the chart with
   the demo data on and signs in end to end as a seeded user, so no provider runs beside the cluster.
 

@@ -229,7 +229,7 @@ Without `urls.admin` the chart deploys neither new workload, as it deploys no Au
   ([risks](sign-in-and-organizations.md#risks)).
 - **Tests** cover every operation's permission at its scope, entering's transaction and event, the values' locks, and
   providers' encryption, on PostgreSQL as the other stores' tests do. The chart's kind test in CI signs in as a seeded
-  user and reads the Admin server's `/v1/me`.
+  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations.
 
 ## Data model
 
