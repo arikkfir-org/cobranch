@@ -6,7 +6,8 @@ import (
 )
 
 // AllowOrigin lets pages from origins call h from their own (CORS), with the session cookie: it answers their
-// preflight requests and names their origin on its answers to them, exposing the request's ID and a list's Link. Every
+// preflight requests and names their origin on its answers to them, exposing the request's ID, a list's Link and a
+// resource's ETag, which they name in If-Match and If-None-Match. Every
 // other origin gets h's answers alone, which a browser keeps from its page. Empty origins are none; with none, it
 // returns h.
 func AllowOrigin(origins []string, h http.Handler) http.Handler {
@@ -23,10 +24,10 @@ func AllowOrigin(origins []string, h http.Handler) http.Handler {
 		}
 		w.Header().Set("Access-Control-Allow-Origin", origin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Expose-Headers", RequestIDHeader+", Link")
+		w.Header().Set("Access-Control-Expose-Headers", RequestIDHeader+", Link, ETag")
 		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, "+RequestIDHeader+", traceparent, tracestate")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match, If-None-Match, "+RequestIDHeader+", traceparent, tracestate")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)
 			return

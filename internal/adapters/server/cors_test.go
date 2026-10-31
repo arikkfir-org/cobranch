@@ -23,16 +23,16 @@ func TestAllowOrigin(t *testing.T) {
 		wantHandled bool
 	}{
 		{name: "the Console's call", allowed: []string{console}, method: "GET", origin: console, wantStatus: 200, wantAllowed: console, wantCreds: "true", wantHandled: true},
-		{name: "the Console's preflight", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
-		{name: "the Console's preflight for a PATCH", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "PATCH", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
-		{name: "the Console's preflight for a DELETE", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "DELETE", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "POST", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, If-Match, If-None-Match, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight for a PATCH", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "PATCH", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, If-Match, If-None-Match, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the Console's preflight for a DELETE", allowed: []string{console}, method: "OPTIONS", origin: console, preflight: "DELETE", wantStatus: 204, wantAllowed: console, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, If-Match, If-None-Match, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
 		{name: "another origin's call", allowed: []string{console}, method: "GET", origin: "https://evil.example.com", wantStatus: 200, wantHandled: true},
 		{name: "another origin's preflight", allowed: []string{console}, method: "OPTIONS", origin: "https://evil.example.com", preflight: "POST", wantStatus: 200, wantHandled: true},
 		{name: "a call from no page", allowed: []string{console}, method: "GET", wantStatus: 200, wantHandled: true},
 		{name: "no origin allowed", method: "GET", origin: console, wantStatus: 200, wantHandled: true},
 		{name: "an empty origin is none", allowed: []string{""}, method: "GET", origin: "", wantStatus: 200, wantHandled: true},
 		{name: "the second origin's call", allowed: []string{console, backOffice}, method: "GET", origin: backOffice, wantStatus: 200, wantAllowed: backOffice, wantCreds: "true", wantHandled: true},
-		{name: "the second origin's preflight", allowed: []string{console, backOffice}, method: "OPTIONS", origin: backOffice, preflight: "POST", wantStatus: 204, wantAllowed: backOffice, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
+		{name: "the second origin's preflight", allowed: []string{console, backOffice}, method: "OPTIONS", origin: backOffice, preflight: "POST", wantStatus: 204, wantAllowed: backOffice, wantMethods: "GET, POST, PATCH, DELETE", wantHeaders: "Content-Type, If-Match, If-None-Match, X-Request-Id, traceparent, tracestate", wantCreds: "true"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,7 +58,7 @@ func TestAllowOrigin(t *testing.T) {
 				"Access-Control-Allow-Methods":     tt.wantMethods,
 				"Access-Control-Allow-Headers":     tt.wantHeaders,
 				"Access-Control-Allow-Credentials": tt.wantCreds,
-				"Access-Control-Expose-Headers":    map[bool]string{true: "X-Request-Id, Link"}[tt.wantAllowed != ""],
+				"Access-Control-Expose-Headers":    map[bool]string{true: "X-Request-Id, Link, ETag"}[tt.wantAllowed != ""],
 			} {
 				if got := rec.Header().Get(header); got != want {
 					t.Errorf("%s = %q, want %q", header, got, want)

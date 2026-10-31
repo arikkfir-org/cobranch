@@ -205,8 +205,8 @@ hosts the session cookie is set for. */}}
 {{- end }}
 {{- end -}}
 
-{{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets) and the
-policies. */}}
+{{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets), the
+first administrators and the sign-up settings. */}}
 {{- define "cobranch.authEnv" -}}
 {{- $providers := list }}
 {{- range .Values.auth.providers }}
@@ -221,21 +221,31 @@ policies. */}}
       name: {{ required (printf "auth.providers[%s].clientSecret.secretName names the Secret that holds the client's secret" .id) .clientSecret.secretName }}
       key: {{ .clientSecret.key | default "client-secret" }}
 {{- end }}
-- name: COBRANCH_AUTH_SIGN_UP
-  value: {{ .Values.auth.signUp | quote }}
-{{- with .Values.auth.signUpDomains }}
-- name: COBRANCH_AUTH_SIGN_UP_DOMAINS
-  value: {{ join "," . | quote }}
-{{- end }}
+{{- include "cobranch.signUpEnv" . }}
 {{- with .Values.auth.admins }}
 - name: COBRANCH_AUTH_ADMINS
   value: {{ join "," . | quote }}
 {{- end }}
-- name: COBRANCH_ORGANIZATIONS_SELF_SERVE
-  value: {{ .Values.organizations.selfServe | quote }}
 {{- if .Values.seed.enabled }}
 # Demo data, for previews only: the sign-in page signs in as its users.
 - name: COBRANCH_SEED
   value: "true"
+{{- end }}
+{{- end -}}
+
+{{/* The sign-up settings the values set, which the Auth server follows and the Admin server shows as locked; those
+they leave unset are the Back-office's. */}}
+{{- define "cobranch.signUpEnv" -}}
+{{- with .Values.auth.signUp }}
+- name: COBRANCH_AUTH_SIGN_UP
+  value: {{ . | quote }}
+{{- with $.Values.auth.signUpDomains }}
+- name: COBRANCH_AUTH_SIGN_UP_DOMAINS
+  value: {{ join "," . | quote }}
+{{- end }}
+{{- end }}
+{{- if not (kindIs "invalid" .Values.organizations.selfServe) }}
+- name: COBRANCH_ORGANIZATIONS_SELF_SERVE
+  value: {{ .Values.organizations.selfServe | quote }}
 {{- end }}
 {{- end -}}

@@ -714,10 +714,12 @@
         "signUp": {
           "type": "string",
           "enum": [
+            "",
             "anyone",
             "domains",
             "invited"
-          ]
+          ],
+          "description": "Who may sign up; empty, the Back-office's setting."
         },
         "signUpDomains": {
           "type": "array",
@@ -740,8 +742,11 @@
       "additionalProperties": false,
       "properties": {
         "selfServe": {
-          "type": "boolean",
-          "description": "Every new user may create organizations."
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Every new user may create organizations; null, the Back-office's setting."
         }
       }
     }

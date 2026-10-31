@@ -303,10 +303,10 @@ a copy button. The profile page is drawn there before the Console builds it.
 | --- | --- | --- |
 | `urls.auth` | None | The Auth server, for its redirects; the Console, to send people there; all of them, with the other URLs, to name the cookie. The provider's redirect URI is it plus `/callback` |
 | `auth.providers` | None | The Auth server: each provider's `id`, `name`, `issuer` (or `preset: google`), `clientId` and `clientSecret` (a Secret's key); the Console, their IDs and names |
-| `auth.signUp` | `anyone` | The Auth server: `anyone`, `domains` or `invited` |
+| `auth.signUp` | None: the Back-office's, `anyone` until an administrator changes it | The Auth server: `anyone`, `domains` or `invited`; set, it locks the Back-office's ([Back-office](back-office.md#installation-settings)) |
 | `auth.signUpDomains` | None | The Auth server, under `domains` |
 | `auth.admins` | None | The Auth server: the first administrators' emails |
-| `organizations.selfServe` | `true` | The Auth server, at sign-up |
+| `organizations.selfServe` | None: the Back-office's, on until an administrator changes it | The Auth server, at sign-up; set, it locks the Back-office's |
 | `authServer` | 2 replicas | The chart: resources and placement, like every workload's |
 
 An installation with no provider starts, and its Console says that sign-in isn't set up yet. **Agreed:** the chart

@@ -55,8 +55,9 @@ auth:
   #       key: client-secret
   providers: []
   # Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation to a verified
-  # email). A first administrator's email may always sign up.
-  signUp: anyone
+  # email). A first administrator's email may always sign up. Set, it and signUpDomains are the values', which the
+  # Back-office only shows; empty, the Back-office's (anyone until an administrator changes it).
+  signUp: ""
   signUpDomains: []
   # The first administrators' emails: a verified sign-in with one grants Installation admin, which runs the
   # Back-office, and an email that leaves the list loses that grant at its next sign-in. Grants made in the Back-office
@@ -64,8 +65,9 @@ auth:
   admins: []
 
 organizations:
-  # Every new user may create organizations (Installation user). Off, only the administrators grant it.
-  selfServe: true
+  # Every new user may create organizations (Installation user). Off, only the administrators grant it. Set, it is the
+  # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).
+  selfServe: null
 
 # The bucket, which only the servers reach: Go Cloud names it by URL (s3://, gs://, azblob:// or file://).
 blob:

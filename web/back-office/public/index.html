@@ -6,7 +6,7 @@
   <title>Cobranch Back-office</title>
   <!-- The Back-office: where an installation's administrators run it, through the Admin API at the URL config.json
        names (docs/cobranch/designs/back-office). Its pages: the organizations (search, create one for a user, enter
-       one) and the users. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
+       one), the users and the installation's settings. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
        design system's colours (docs/cobranch/designs/design-system), as the Console's. Caddy serves this page for every
        path, and it routes on the path. -->
   <style>
@@ -136,7 +136,7 @@
     label { display: grid; gap: 4px; font-weight: 500; }
     label span { color: var(--color-fg-muted); font-weight: 400; font-size: 12px; }
     label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
-    input, select {
+    input, select, textarea {
       padding: 7px 10px;
       border-radius: 8px;
       border: 1px solid var(--color-border-default);
@@ -145,6 +145,7 @@
       font: inherit;
       width: 100%;
     }
+    input[type="checkbox"] { width: auto; }
     header.bar {
       display: flex;
       align-items: center;
@@ -186,12 +187,13 @@
     let me = null;
     const can = (p) => me.permissions.includes(p);
 
-    // api calls the Admin API with the session cookie, and rejects with the problem it answered. It resolves with the
-    // body and the URL of the next page, which a list's Link names relative to the request's own URL.
-    async function api(method, path, body) {
-      const options = { method, credentials: "include", headers: { Accept: "application/json" } };
+    // api calls the Admin API with the session cookie and headers, and rejects with the problem it answered. It
+    // resolves with the body, the URL of the next page, which a list's Link names relative to the request's own URL,
+    // and the ETag. A PATCH's body is a merge patch.
+    async function api(method, path, body, headers = {}) {
+      const options = { method, credentials: "include", headers: { Accept: "application/json", ...headers } };
       if (body !== undefined) {
-        options.headers["Content-Type"] = "application/json";
+        options.headers["Content-Type"] = method === "PATCH" ? "application/merge-patch+json" : "application/json";
         options.body = JSON.stringify(body);
       }
       const url = new URL(path.startsWith("http") ? path : config.adminUrl + "/v1" + path, location.href);
@@ -199,7 +201,7 @@
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
       const link = /<([^>]*)>\s*;\s*rel="next"/.exec(r.headers.get("Link") || "");
-      return { data, next: link ? new URL(link[1], url).toString() : null };
+      return { data, next: link ? new URL(link[1], url).toString() : null, etag: r.headers.get("ETag") };
     }
     const h = (tag, attrs = {}, ...children) => {
       const el = document.createElement(tag);
@@ -217,7 +219,7 @@
       history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
       render();
     }
-    // route is the page's path under the Back-office's root: "" for its home, the organizations, or "users".
+    // route is the page's path under the Back-office's root: "" for its home, the organizations, "users" or "settings".
     const route = () => location.pathname.slice(base.length).replace(/\/$/, "");
     window.addEventListener("popstate", render);
     document.addEventListener("click", (e) => {
@@ -252,8 +254,8 @@
           h("div", { class: "buttons" }, h("a", { class: "button", href: config.consoleUrl }, "Open the Console"), h("button", { class: "button", type: "button", onclick: signOut }, "Sign out")));
       }
       const page = route();
-      if (page !== "" && page !== "users") return go("/", true);
-      const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"]].filter(([, , p]) => can(p));
+      if (!["", "users", "settings"].includes(page)) return go("/", true);
+      const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"], ["settings", "Settings", "installation.manage"]].filter(([, , p]) => can(p));
       if (!pages.some(([p]) => p === page)) return go("/" + pages[0][0], true);
       const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), h("span", { class: "tag" }, "Back-office"),
         h("nav", {}, pages.map(([p, label]) => h("a", { href: base + p, "data-nav": "", class: p === page ? "current" : "" }, label))),
@@ -262,7 +264,7 @@
       const main = h("main", { class: "page" });
       document.body.className = "";
       app.replaceChildren(bar, main);
-      return page === "users" ? showUsers(main) : showOrganizations(main);
+      return ({ users: showUsers, settings: showSettings }[page] || showOrganizations)(main);
     }
 
     // showSignIn offers the installation's providers and, while seeding is on, its demo users; each returns here.
@@ -375,6 +377,60 @@
         h("td", {}, when(u.lastSignInAt)), h("td", {}, when(u.createdAt)));
       const users = list({ path: "/users", key: "users", head: ["User", "Emails", "Signs in with", "Installation roles", "Organizations", "Last sign-in", "Signed up"], row, placeholder: "A name or an email" });
       main.append(h("h1", {}, "Users"), users.panel);
+    }
+
+    // showSettings shows the installation's settings and changes those the chart's values leave to it, from the ones
+    // it read: when someone changed them meanwhile, the Admin API refuses the change (412) and the page reads them again.
+    function showSettings(main) {
+      const done = h("p", { class: "notice", hidden: true });
+      const error = h("p", { class: "alert", hidden: true });
+      const form = h("form");
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      let etag = null;
+      const draw = (s) => {
+        const signUpLocked = s.locked.includes("signUp");
+        const selfServeLocked = s.locked.includes("selfServe");
+        const lock = (locked, value) => locked ? h("p", { class: "muted" }, "The chart's values set this: change ", h("code", {}, value), " there.") : null;
+        const policy = h("select", { disabled: signUpLocked }, [["anyone", "Anyone"], ["domains", "People with a verified email at these domains"], ["invited", "Only people invited to an organization"]]
+          .map(([value, label]) => h("option", { value }, label)));
+        policy.value = s.signUp;
+        const domains = h("textarea", { rows: 3, disabled: signUpLocked, placeholder: "example.com" });
+        domains.value = s.signUpDomains.join("\n");
+        const domainsLabel = h("label", { hidden: s.signUp !== "domains" }, "Domains", h("span", {}, "One per line, such as example.com."), domains);
+        policy.addEventListener("change", () => { domainsLabel.hidden = policy.value !== "domains"; });
+        const selfServe = h("input", { type: "checkbox", disabled: selfServeLocked });
+        selfServe.checked = s.selfServe;
+        form.replaceChildren(...[
+          h("h3", {}, "Sign-up"),
+          h("label", {}, "Who may sign up", h("span", {}, "The first administrators' emails always may."), policy), domainsLabel, lock(signUpLocked, "auth.signUp"),
+          h("h3", {}, "Organizations"),
+          h("label", { class: "check" }, selfServe, "Every new user may create organizations"), lock(selfServeLocked, "organizations.selfServe"),
+          s.updatedBy ? h("p", { class: "muted" }, "Last changed on " + when(s.updatedAt) + (s.updatedBy === me.id ? ", by you." : ".")) : null,
+          h("div", {}, h("button", { class: "button primary", type: "submit", disabled: signUpLocked && selfServeLocked }, "Save"))].filter(Boolean));
+        form.onsubmit = (e) => {
+          e.preventDefault();
+          done.hidden = error.hidden = true;
+          const change = {};
+          if (!signUpLocked) {
+            change.signUp = policy.value;
+            if (policy.value === "domains") change.signUpDomains = domains.value.split(/[\s,]+/).filter(Boolean);
+          }
+          if (!selfServeLocked) change.selfServe = selfServe.checked;
+          api("PATCH", "/settings", change, { "If-Match": etag }).then((r) => {
+            etag = r.etag;
+            draw(r.data);
+            done.textContent = "Saved. The next sign-up follows them.";
+            done.hidden = false;
+          }).catch((err) => err.status === 412
+            ? load().then(() => fail(new Error("Someone changed the settings while you had them open: these are theirs. Make your change again.")))
+            : fail(err));
+        };
+      };
+      const load = () => api("GET", "/settings").then((r) => { etag = r.etag; draw(r.data); }).catch(fail);
+      main.append(h("h1", {}, "Settings"), h("section", { class: "panel" },
+        h("p", {}, "Who may sign up, and whether new users create organizations. Until the chart's values or an administrator set them, anyone signs up, and creates organizations."),
+        done, error, form));
+      load();
     }
   </script>
 </body>

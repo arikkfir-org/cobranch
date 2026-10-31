@@ -214,8 +214,8 @@ components: tables, forms, status badges and the one-time dialog for a new secre
 | `urls.backOffice` | None | The Back-office's public URL: the Admin server's CORS, the Auth server's returns, the cookie |
 | `images.backOffice` | Cobranch's | The Back-office's image, at the chart's version |
 | `adminServer`, `backOffice` | 1 replica each | The chart: resources and placement, like every workload's |
-| `auth.signUp`, `auth.signUpDomains` | None now | The Auth server; set, they lock the Back-office's settings |
-| `organizations.selfServe` | None now | The Auth server; set, it locks the Back-office's |
+| `auth.signUp`, `auth.signUpDomains` | None now | The Auth server, and the Admin server, which shows them locked; set, they lock the Back-office's settings |
+| `organizations.selfServe` | None now | The Auth server, and the Admin server, which shows it locked; set, it locks the Back-office's |
 | `secretsKey.existingSecret` | None: generated | The Admin and Auth servers: the key that encrypts providers' client secrets |
 
 Without `urls.admin` the chart deploys neither new workload, as it deploys no Auth server without `urls.auth`.
@@ -229,7 +229,8 @@ Without `urls.admin` the chart deploys neither new workload, as it deploys no Au
   ([risks](sign-in-and-organizations.md#risks)).
 - **Tests** cover every operation's permission at its scope, entering's transaction and event, the values' locks, and
   providers' encryption, on PostgreSQL as the other stores' tests do. The chart's kind test in CI signs in as a seeded
-  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations.
+  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations and
+  reads the installation's settings.
 
 ## Data model
 
