@@ -26,7 +26,7 @@ func TestRunAuthServer(t *testing.T) {
 			env:  map[string]string{"COBRANCH_SEED": "true"},
 			requests: []request{
 				{method: "GET", path: "/healthz", wantStatus: 200, wantBody: "ok\n"},
-				{method: "GET", path: "/providers", wantStatus: 200, wantBody: `"providers":[],"seeded":[{"subject":"guest"`},
+				{method: "GET", path: "/providers", wantStatus: 200, wantBody: `"providers":[],"seeded":[{"subject":"admin"`},
 				{method: "GET", path: "/sign-in?user=owner&return=/orgs", wantStatus: 302},
 				{method: "GET", path: "/sign-in?provider=google", wantStatus: 302},
 				{method: "POST", path: "/sign-out", wantStatus: 204},
