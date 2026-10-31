@@ -34,6 +34,11 @@ type Administration interface {
 	Enter(ctx context.Context, v auth.User, slug, reason string) (orgs.Organization, error)
 	Settings(ctx context.Context, v auth.User) (admin.Settings, error)
 	ChangeSettings(ctx context.Context, v auth.User, match string, change admin.SettingsChange) (admin.Settings, error)
+	Providers(ctx context.Context, v auth.User) ([]admin.Provider, error)
+	Provider(ctx context.Context, v auth.User, id string) (admin.Provider, error)
+	AddProvider(ctx context.Context, v auth.User, p admin.NewProvider) (admin.Provider, error)
+	ChangeProvider(ctx context.Context, v auth.User, id, match string, change admin.ProviderChange) (admin.Provider, error)
+	RemoveProvider(ctx context.Context, v auth.User, id, match string) error
 }
 
 // api implements api/admin.yaml's operations.

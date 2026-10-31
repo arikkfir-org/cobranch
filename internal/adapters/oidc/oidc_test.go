@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc/oidctest"
+
+	"cobranch.dev/internal/services/auth"
 )
 
 // idp is a fake identity provider: discovery and keys from oidctest, and a token endpoint that answers an ID token
@@ -79,7 +81,7 @@ func TestNew(t *testing.T) {
 		wantName string
 		wantErr  bool
 	}{
-		{name: "complete", cfg: Config{ID: "google", Name: "Google", Issuer: Presets["google"], ClientID: "c", ClientSecret: "s"}, wantName: "Google"},
+		{name: "complete", cfg: Config{ID: "google", Name: "Google", Issuer: auth.Presets["google"], ClientID: "c", ClientSecret: "s"}, wantName: "Google"},
 		{name: "no name", cfg: Config{ID: "okta", Issuer: "https://okta.example.com", ClientID: "c", ClientSecret: "s"}, wantName: "okta"},
 		{name: "no issuer", cfg: Config{ID: "okta", ClientID: "c", ClientSecret: "s"}, wantErr: true},
 		{name: "no client ID", cfg: Config{ID: "okta", Issuer: "https://okta.example.com", ClientSecret: "s"}, wantErr: true},
@@ -129,6 +131,28 @@ func TestAuthCodeURLDiscoveryFails(t *testing.T) {
 	p.server.Close()
 	if _, err := p.provider(t).AuthCodeURL(context.Background(), "s", "n", "v"); err == nil {
 		t.Error("AuthCodeURL() = nil with the provider down")
+	}
+}
+
+func TestDiscover(t *testing.T) {
+	p := newIDP(t)
+	down := newIDP(t)
+	down.server.Close()
+	tests := []struct {
+		name    string
+		issuer  string
+		wantErr bool
+	}{
+		{name: "an issuer that answers", issuer: p.server.URL},
+		{name: "a document that names another issuer", issuer: p.server.URL + "/other", wantErr: true},
+		{name: "an issuer that is down", issuer: down.server.URL, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := Discover(context.Background(), tt.issuer, p.server.Client()); (err != nil) != tt.wantErr {
+				t.Errorf("Discover(%s) error = %v, want an error: %t", tt.issuer, err, tt.wantErr)
+			}
+		})
 	}
 }
 

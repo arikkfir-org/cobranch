@@ -54,7 +54,9 @@ type Store struct {
 	Entered []Entry
 	// Installation is the settings the Back-office changes, Version 1 at first.
 	Installation auth.InstallationSettings
-	Fail         error
+	// Providers are the identity providers the Back-office added, by ID.
+	Providers map[string]auth.StoredProvider
+	Fail      error
 }
 
 // Entry is an administrator's entry into an organization, with its reason.
@@ -71,7 +73,7 @@ func NewStore() *Store {
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
 		installation: []orgs.Role{installationAdmin, installationUser},
 		Keys:         map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
-		Installation: auth.InstallationSettings{Version: 1},
+		Installation: auth.InstallationSettings{Version: 1}, Providers: map[string]auth.StoredProvider{},
 	}
 }
 

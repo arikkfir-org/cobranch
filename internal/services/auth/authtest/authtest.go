@@ -52,8 +52,9 @@ type Store struct {
 	// Credentials are the API keys' secrets by token hash, and Principals the principals they act as.
 	Credentials map[string]auth.Credential
 	Principals  map[uuid.UUID]auth.Principal
-	// Installation is the settings the Back-office changes.
+	// Installation is the settings the Back-office changes, and Stored the providers it added, by ID.
 	Installation auth.InstallationSettings
+	Stored       []auth.StoredProvider
 	Fail         error
 }
 
@@ -251,6 +252,14 @@ func (s *Store) InstallationSettings(context.Context) (auth.InstallationSettings
 	return s.Installation, nil
 }
 
+// IdentityProviders lists the providers the Back-office added.
+func (s *Store) IdentityProviders(context.Context) ([]auth.StoredProvider, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return s.Stored, nil
+}
+
 // DeleteExpired drops the flows and sessions that expired at `at`.
 func (s *Store) DeleteExpired(_ context.Context, at time.Time) (int64, int64, error) {
 	if s.Fail != nil {
@@ -270,4 +279,27 @@ func (s *Store) DeleteExpired(_ context.Context, at time.Time) (int64, int64, er
 		}
 	}
 	return flows, sessions, nil
+}
+
+// Sealer is an auth.Sealer that seals in plain sight, as "sealed:<about>:<plain>", so a test can read what it sealed.
+// Fail, when set, fails every call.
+type Sealer struct {
+	Fail error
+}
+
+// Seal prefixes plain with what it is sealed for.
+func (s Sealer) Seal(plain []byte, about string) ([]byte, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return append([]byte("sealed:"+about+":"), plain...), nil
+}
+
+// Open strips what Seal prefixed, or fails for another about.
+func (s Sealer) Open(sealed []byte, about string) ([]byte, error) {
+	prefix := "sealed:" + about + ":"
+	if s.Fail != nil || !strings.HasPrefix(string(sealed), prefix) {
+		return nil, errors.New("doesn't open")
+	}
+	return sealed[len(prefix):], nil
 }

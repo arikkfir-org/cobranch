@@ -18,6 +18,54 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for NewProviderPreset.
+const (
+	NewProviderPresetGoogle NewProviderPreset = "google"
+)
+
+// Valid indicates whether the value is a known member of the NewProviderPreset enum.
+func (e NewProviderPreset) Valid() bool {
+	switch e {
+	case NewProviderPresetGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderSource.
+const (
+	BackOffice ProviderSource = "backOffice"
+	Values     ProviderSource = "values"
+)
+
+// Valid indicates whether the value is a known member of the ProviderSource enum.
+func (e ProviderSource) Valid() bool {
+	switch e {
+	case BackOffice:
+		return true
+	case Values:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ProviderChangePreset.
+const (
+	ProviderChangePresetGoogle ProviderChangePreset = "google"
+)
+
+// Valid indicates whether the value is a known member of the ProviderChangePreset enum.
+func (e ProviderChangePreset) Valid() bool {
+	switch e {
+	case ProviderChangePresetGoogle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for SettingsLocked.
 const (
 	SelfServe SettingsLocked = "selfServe"
@@ -83,6 +131,29 @@ type Me struct {
 	Permissions []string `json:"permissions"`
 }
 
+// NewProvider An identity provider to add, at an issuer or a preset, one of the two.
+type NewProvider struct {
+	ClientId string `json:"clientId"`
+
+	// ClientSecret Written once, sealed, never shown again.
+	ClientSecret string `json:"clientSecret"`
+
+	// Id 1 to 32 lowercase letters, digits and dashes, neither first nor last a dash; no other provider's.
+	Id string `json:"id"`
+
+	// Issuer An https URL whose /.well-known/openid-configuration answers.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// Name 1 to 100 characters.
+	Name string `json:"name"`
+
+	// Preset A known provider instead of an issuer.
+	Preset *NewProviderPreset `json:"preset,omitempty"`
+}
+
+// NewProviderPreset A known provider instead of an issuer.
+type NewProviderPreset string
+
 // Organization An organization as an administrator sees it, never its content.
 type Organization struct {
 	CreatedAt time.Time          `json:"createdAt"`
@@ -114,6 +185,55 @@ type Problem struct {
 	// Type A URI that names the problem's type; "about:blank" when the status says it all.
 	Type string `json:"type"`
 }
+
+// Provider An identity provider, never with its client secret.
+type Provider struct {
+	ClientId string `json:"clientId"`
+
+	// CreatedAt When an administrator added it; absent for the values'.
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// Id Names the provider in sign-in URLs; lowercase letters, digits and dashes.
+	Id string `json:"id"`
+
+	// Issuer The provider's issuer URL; absent when preset names it.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// Name What the sign-in page shows.
+	Name string `json:"name"`
+
+	// Preset A known provider whose issuer it is, such as google.
+	Preset *string `json:"preset,omitempty"`
+
+	// Shadowed A provider administrators added whose ID the values took since; theirs signs in.
+	Shadowed bool `json:"shadowed"`
+
+	// Source Where it comes from; the values' only they change.
+	Source ProviderSource `json:"source"`
+
+	// UpdatedAt When an administrator last changed it; absent for the values'.
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+
+	// UpdatedBy Who last changed it; absent for the values', or when they're gone.
+	UpdatedBy *openapi_types.UUID `json:"updatedBy,omitempty"`
+}
+
+// ProviderSource Where it comes from; the values' only they change.
+type ProviderSource string
+
+// ProviderChange What to change of a provider; what it leaves out stays as it is. Naming an issuer drops the preset, and the other way round.
+type ProviderChange struct {
+	ClientId *string `json:"clientId,omitempty"`
+
+	// ClientSecret A new client secret, sealed, never shown again.
+	ClientSecret *string               `json:"clientSecret,omitempty"`
+	Issuer       *string               `json:"issuer,omitempty"`
+	Name         *string               `json:"name,omitempty"`
+	Preset       *ProviderChangePreset `json:"preset,omitempty"`
+}
+
+// ProviderChangePreset defines model for ProviderChange.Preset.
+type ProviderChangePreset string
 
 // Settings The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else its default (anyone signs up, and creates organizations).
 type Settings struct {
@@ -211,6 +331,24 @@ type EnterOrganizationJSONBody struct {
 	Reason string `json:"reason"`
 }
 
+// RemoveProviderParams defines parameters for RemoveProvider.
+type RemoveProviderParams struct {
+	// IfMatch The ETag of the provider the removal was decided on. Without it, the answer is 428.
+	IfMatch *string `json:"If-Match,omitempty"`
+}
+
+// GetProviderParams defines parameters for GetProvider.
+type GetProviderParams struct {
+	// IfNoneMatch The provider's ETag the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// ChangeProviderParams defines parameters for ChangeProvider.
+type ChangeProviderParams struct {
+	// IfMatch The ETag of the provider the change was made from. Without it, the answer is 428.
+	IfMatch *string `json:"If-Match,omitempty"`
+}
+
 // GetSettingsParams defines parameters for GetSettings.
 type GetSettingsParams struct {
 	// IfNoneMatch The settings' ETag the caller holds; while it is still theirs, the answer is 304.
@@ -241,6 +379,12 @@ type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 // EnterOrganizationJSONRequestBody defines body for EnterOrganization for application/json ContentType.
 type EnterOrganizationJSONRequestBody EnterOrganizationJSONBody
 
+// AddProviderJSONRequestBody defines body for AddProvider for application/json ContentType.
+type AddProviderJSONRequestBody = NewProvider
+
+// ChangeProviderApplicationMergePatchPlusJSONRequestBody defines body for ChangeProvider for application/merge-patch+json ContentType.
+type ChangeProviderApplicationMergePatchPlusJSONRequestBody = ProviderChange
+
 // ChangeSettingsApplicationMergePatchPlusJSONRequestBody defines body for ChangeSettings for application/merge-patch+json ContentType.
 type ChangeSettingsApplicationMergePatchPlusJSONRequestBody = SettingsChange
 
@@ -258,6 +402,21 @@ type ServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(w http.ResponseWriter, r *http.Request, org string)
+	// ListProviders The installation's identity providers: the chart's values', which only they change, then those administrators added, by ID; takes installation.manage. A client secret is never shown.
+	// (GET /providers)
+	ListProviders(w http.ResponseWriter, r *http.Request)
+	// AddProvider Adds an identity provider beside the values', once its issuer answers OpenID Connect discovery; its client secret is sealed with the installation's secrets key and never shown again. Takes installation.manage. The next sign-in offers it.
+	// (POST /providers)
+	AddProvider(w http.ResponseWriter, r *http.Request)
+	// RemoveProvider Removes a provider administrators added, unless it changed since the caller read it; takes installation.manage. Its users keep their accounts, and sign in with it again once a provider with its issuer is back. The values' providers refuse.
+	// (DELETE /providers/{provider})
+	RemoveProvider(w http.ResponseWriter, r *http.Request, provider string, params RemoveProviderParams)
+	// GetProvider An identity provider; takes installation.manage.
+	// (GET /providers/{provider})
+	GetProvider(w http.ResponseWriter, r *http.Request, provider string, params GetProviderParams)
+	// ChangeProvider Changes what the body names of a provider administrators added (a JSON merge patch, RFC 7396), unless it changed since the caller read it; takes installation.manage. A new issuer must answer discovery; a new client secret is sealed. The values' providers refuse any change. The next sign-in uses it.
+	// (PATCH /providers/{provider})
+	ChangeProvider(w http.ResponseWriter, r *http.Request, provider string, params ChangeProviderParams)
 	// GetSettings The installation's settings, those the chart's values lock among them; takes installation.manage. A setting neither the values nor an administrator set shows its default.
 	// (GET /settings)
 	GetSettings(w http.ResponseWriter, r *http.Request, params GetSettingsParams)
@@ -385,6 +544,184 @@ func (siw *ServerInterfaceWrapper) EnterOrganization(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EnterOrganization(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddProvider operation middleware
+func (siw *ServerInterfaceWrapper) AddProvider(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddProvider(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveProvider operation middleware
+func (siw *ServerInterfaceWrapper) RemoveProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveProvider(w, r, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetProvider operation middleware
+func (siw *ServerInterfaceWrapper) GetProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetProvider(w, r, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeProvider operation middleware
+func (siw *ServerInterfaceWrapper) ChangeProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "provider" -------------
+	var provider string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeProvider(w, r, provider, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -677,6 +1014,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.ChangeSettings)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/providers", wrapper.ListProviders)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/providers", wrapper.AddProvider)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/providers/{provider}", wrapper.RemoveProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/providers/{provider}", wrapper.GetProvider)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/providers/{provider}", wrapper.ChangeProvider)
 
 	return m
 }
@@ -1016,6 +1358,558 @@ type EnterOrganizationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response EnterOrganizationdefaultApplicationProblemPlusJSONResponse) VisitEnterOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProvidersRequestObject struct {
+}
+
+type ListProvidersResponseObject interface {
+	VisitListProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListProviders200JSONResponse struct {
+	Items []Provider `json:"items"`
+}
+
+func (response ListProviders200JSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProviders401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListProviders401ApplicationProblemPlusJSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProviders403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListProviders403ApplicationProblemPlusJSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListProvidersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListProvidersdefaultApplicationProblemPlusJSONResponse) VisitListProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProviderRequestObject struct {
+	Body *AddProviderJSONRequestBody
+}
+
+type AddProviderResponseObject interface {
+	VisitAddProviderResponse(w http.ResponseWriter) error
+}
+
+type AddProvider201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AddProvider201JSONResponse struct {
+	Body    Provider
+	Headers AddProvider201ResponseHeaders
+}
+
+func (response AddProvider201JSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProvider400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AddProvider400ApplicationProblemPlusJSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProvider401ApplicationProblemPlusJSONResponse Problem
+
+func (response AddProvider401ApplicationProblemPlusJSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response AddProvider403ApplicationProblemPlusJSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProvider409ApplicationProblemPlusJSONResponse Problem
+
+func (response AddProvider409ApplicationProblemPlusJSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AddProviderdefaultApplicationProblemPlusJSONResponse) VisitAddProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProviderRequestObject struct {
+	Provider string `json:"provider"`
+	Params   RemoveProviderParams
+}
+
+type RemoveProviderResponseObject interface {
+	VisitRemoveProviderResponse(w http.ResponseWriter) error
+}
+
+type RemoveProvider204Response struct {
+}
+
+func (response RemoveProvider204Response) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveProvider401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveProvider401ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveProvider403ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveProvider404ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProvider409ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveProvider409ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProvider412ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveProvider412ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProvider428ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveProvider428ApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveProviderdefaultApplicationProblemPlusJSONResponse) VisitRemoveProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProviderRequestObject struct {
+	Provider string `json:"provider"`
+	Params   GetProviderParams
+}
+
+type GetProviderResponseObject interface {
+	VisitGetProviderResponse(w http.ResponseWriter) error
+}
+
+type GetProvider200ResponseHeaders struct {
+	ETag string
+}
+
+type GetProvider200JSONResponse struct {
+	Body    Provider
+	Headers GetProvider200ResponseHeaders
+}
+
+func (response GetProvider200JSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProvider304ResponseHeaders struct {
+	ETag string
+}
+
+type GetProvider304Response struct {
+	Headers GetProvider304ResponseHeaders
+}
+
+func (response GetProvider304Response) VisitGetProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetProvider401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetProvider401ApplicationProblemPlusJSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetProvider403ApplicationProblemPlusJSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetProvider404ApplicationProblemPlusJSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetProviderdefaultApplicationProblemPlusJSONResponse) VisitGetProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProviderRequestObject struct {
+	Provider string `json:"provider"`
+	Params   ChangeProviderParams
+	Body     *ChangeProviderApplicationMergePatchPlusJSONRequestBody
+}
+
+type ChangeProviderResponseObject interface {
+	VisitChangeProviderResponse(w http.ResponseWriter) error
+}
+
+type ChangeProvider200ResponseHeaders struct {
+	ETag string
+}
+
+type ChangeProvider200JSONResponse struct {
+	Body    Provider
+	Headers ChangeProvider200ResponseHeaders
+}
+
+func (response ChangeProvider200JSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeProvider400ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider401ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider401ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider403ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider404ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider409ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider409ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider412ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider412ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProvider428ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeProvider428ApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChangeProviderdefaultApplicationProblemPlusJSONResponse) VisitChangeProviderResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -1402,6 +2296,21 @@ type StrictServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(ctx context.Context, request EnterOrganizationRequestObject) (EnterOrganizationResponseObject, error)
+	// ListProviders The installation's identity providers: the chart's values', which only they change, then those administrators added, by ID; takes installation.manage. A client secret is never shown.
+	// (GET /providers)
+	ListProviders(ctx context.Context, request ListProvidersRequestObject) (ListProvidersResponseObject, error)
+	// AddProvider Adds an identity provider beside the values', once its issuer answers OpenID Connect discovery; its client secret is sealed with the installation's secrets key and never shown again. Takes installation.manage. The next sign-in offers it.
+	// (POST /providers)
+	AddProvider(ctx context.Context, request AddProviderRequestObject) (AddProviderResponseObject, error)
+	// RemoveProvider Removes a provider administrators added, unless it changed since the caller read it; takes installation.manage. Its users keep their accounts, and sign in with it again once a provider with its issuer is back. The values' providers refuse.
+	// (DELETE /providers/{provider})
+	RemoveProvider(ctx context.Context, request RemoveProviderRequestObject) (RemoveProviderResponseObject, error)
+	// GetProvider An identity provider; takes installation.manage.
+	// (GET /providers/{provider})
+	GetProvider(ctx context.Context, request GetProviderRequestObject) (GetProviderResponseObject, error)
+	// ChangeProvider Changes what the body names of a provider administrators added (a JSON merge patch, RFC 7396), unless it changed since the caller read it; takes installation.manage. A new issuer must answer discovery; a new client secret is sealed. The values' providers refuse any change. The next sign-in uses it.
+	// (PATCH /providers/{provider})
+	ChangeProvider(ctx context.Context, request ChangeProviderRequestObject) (ChangeProviderResponseObject, error)
 	// GetSettings The installation's settings, those the chart's values lock among them; takes installation.manage. A setting neither the values nor an administrator set shows its default.
 	// (GET /settings)
 	GetSettings(ctx context.Context, request GetSettingsRequestObject) (GetSettingsResponseObject, error)
@@ -1562,6 +2471,149 @@ func (sh *strictHandler) EnterOrganization(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EnterOrganizationResponseObject); ok {
 		if err := validResponse.VisitEnterOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListProviders operation middleware
+func (sh *strictHandler) ListProviders(w http.ResponseWriter, r *http.Request) {
+	var request ListProvidersRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListProviders(ctx, request.(ListProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListProvidersResponseObject); ok {
+		if err := validResponse.VisitListProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddProvider operation middleware
+func (sh *strictHandler) AddProvider(w http.ResponseWriter, r *http.Request) {
+	var request AddProviderRequestObject
+
+	var body AddProviderJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddProvider(ctx, request.(AddProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddProviderResponseObject); ok {
+		if err := validResponse.VisitAddProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveProvider operation middleware
+func (sh *strictHandler) RemoveProvider(w http.ResponseWriter, r *http.Request, provider string, params RemoveProviderParams) {
+	var request RemoveProviderRequestObject
+
+	request.Provider = provider
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveProvider(ctx, request.(RemoveProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveProviderResponseObject); ok {
+		if err := validResponse.VisitRemoveProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetProvider operation middleware
+func (sh *strictHandler) GetProvider(w http.ResponseWriter, r *http.Request, provider string, params GetProviderParams) {
+	var request GetProviderRequestObject
+
+	request.Provider = provider
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetProvider(ctx, request.(GetProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetProviderResponseObject); ok {
+		if err := validResponse.VisitGetProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeProvider operation middleware
+func (sh *strictHandler) ChangeProvider(w http.ResponseWriter, r *http.Request, provider string, params ChangeProviderParams) {
+	var request ChangeProviderRequestObject
+
+	request.Provider = provider
+	request.Params = params
+
+	var body ChangeProviderApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeProvider(ctx, request.(ChangeProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeProviderResponseObject); ok {
+		if err := validResponse.VisitChangeProviderResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

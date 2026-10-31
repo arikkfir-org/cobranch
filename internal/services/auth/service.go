@@ -71,6 +71,8 @@ type Store interface {
 	DeleteExpired(ctx context.Context, now time.Time) (flows, sessions int64, err error)
 	// InstallationSettings reads the settings the Back-office changes.
 	InstallationSettings(ctx context.Context) (InstallationSettings, error)
+	// IdentityProviders lists the identity providers the Back-office added, by ID.
+	IdentityProviders(ctx context.Context) ([]StoredProvider, error)
 }
 
 // Settings is the installation's sign-in configuration, from the chart's values. A sign-up setting they leave unset
@@ -95,8 +97,10 @@ type Service struct {
 	store     Store
 	providers map[string]Provider
 	order     []Provider
-	settings  Settings
-	now       func() time.Time
+	// stored are the Back-office's providers, when the service offers them (UseStoredProviders).
+	stored   *storedProviders
+	settings Settings
+	now      func() time.Time
 }
 
 // NewService returns a Service over store, trusting providers, under settings.
@@ -113,11 +117,6 @@ func (s *Service) SetClock(now func() time.Time) {
 	s.now = now
 }
 
-// Providers lists the installation's identity providers, in the values' order.
-func (s *Service) Providers() []Provider {
-	return s.order
-}
-
 // Settings returns the installation's sign-in settings.
 func (s *Service) Settings() Settings {
 	return s.settings
@@ -132,9 +131,9 @@ type Begun struct {
 // Begin starts a sign-in at provider providerID that returns to returnPath (SafeReturn), and records the flow for
 // whichever replica the callback reaches.
 func (s *Service) Begin(ctx context.Context, providerID, returnPath string) (Begun, error) {
-	p, ok := s.providers[providerID]
-	if !ok {
-		return Begun{}, ErrUnknownProvider
+	p, err := s.provider(ctx, providerID)
+	if err != nil {
+		return Begun{}, err
 	}
 	state, nonce, verifier, browser := randomText(), randomText(), randomText(), randomText()
 	flow := Flow{
@@ -210,9 +209,9 @@ func (s *Service) Complete(ctx context.Context, code, state, browserToken string
 	if !now.Before(flow.ExpiresAt) || string(flow.BrowserHash) != string(Hash(browserToken)) {
 		return Completed{}, ErrFlow
 	}
-	p, ok := s.providers[flow.ProviderID]
-	if !ok {
-		return Completed{}, ErrUnknownProvider
+	p, err := s.provider(ctx, flow.ProviderID)
+	if err != nil {
+		return Completed{}, err
 	}
 	claims, err := p.Exchange(ctx, code, flow.PKCEVerifier, flow.Nonce)
 	if err != nil {

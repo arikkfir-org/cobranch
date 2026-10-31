@@ -86,6 +86,10 @@ type Server struct {
 	URLs
 	// SignUpSettings are the Admin server's, which shows those the values set as locked.
 	SignUpSettings
+	// Providers are the values' identity providers, without their secrets: the Admin server's, which shows them.
+	Providers Providers `envconfig:"AUTH_PROVIDERS"`
+	// SecretsKey seals the secrets the Admin server keeps: the Back-office's providers' client secrets.
+	SecretsKey string `envconfig:"SECRETS_KEY"`
 }
 
 // SignUpSettings are the sign-up settings the chart's values give. Each they leave unset is the Back-office's, kept in
@@ -163,6 +167,8 @@ type AuthServer struct {
 	// Providers are the identity providers, each with its client secret from its own variable.
 	Providers Providers `envconfig:"AUTH_PROVIDERS"`
 	SignUpSettings
+	// SecretsKey opens the Back-office's providers' client secrets; without one, only the values' providers sign in.
+	SecretsKey string `envconfig:"SECRETS_KEY"`
 	// Admins are the first administrators' emails.
 	Admins []string `envconfig:"AUTH_ADMINS"`
 	// Seed lets the demo data's users sign in without a provider: demo installations only.

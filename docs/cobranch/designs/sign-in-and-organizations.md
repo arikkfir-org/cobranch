@@ -74,7 +74,8 @@ and the page offers to start again.
   Keycloak, Okta, Entra ID and Dex need only theirs. GitHub's OAuth, which is not OpenID Connect, stays later.
 - **The chart's values list them.** **Agreed:** each provider's ID, name, issuer and client ID, with its client secret
   in a Secret ([configuration](#configuration)). The first administrator signs in before any Back-office exists, and the
-  providers stay in Git with the rest of the installation.
+  providers stay in Git with the rest of the installation. The Back-office adds more beside them, kept in PostgreSQL,
+  and lists the values' read-only ([Back-office](back-office.md#identity-providers)).
 - **Organizations narrow them.** Each organization lists which providers its members may use, all of them by default; a
   user's grants there count only in a session from one of those
   ([principals](principals-and-permissions.md#sign-in-and-sign-up)).
@@ -302,7 +303,7 @@ a copy button. The profile page is drawn there before the Console builds it.
 | Value | Default | Read by |
 | --- | --- | --- |
 | `urls.auth` | None | The Auth server, for its redirects; the Console, to send people there; all of them, with the other URLs, to name the cookie. The provider's redirect URI is it plus `/callback` |
-| `auth.providers` | None | The Auth server: each provider's `id`, `name`, `issuer` (or `preset: google`), `clientId` and `clientSecret` (a Secret's key); the Console, their IDs and names |
+| `auth.providers` | None | The Auth server: each provider's `id`, `name`, `issuer` (or `preset: google`), `clientId` and `clientSecret` (a Secret's key); the Admin server, all but the secrets, which the Back-office lists read-only beside its own; the Console lists them through the Auth server |
 | `auth.signUp` | None: the Back-office's, `anyone` until an administrator changes it | The Auth server: `anyone`, `domains` or `invited`; set, it locks the Back-office's ([Back-office](back-office.md#installation-settings)) |
 | `auth.signUpDomains` | None | The Auth server, under `domains` |
 | `auth.admins` | None | The Auth server: the first administrators' emails |
@@ -367,7 +368,7 @@ Cobranch’s own pull request previews sign in as seeded users.
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | Any OpenID Connect provider from this slice; Google is a preset | One code path for every issuer; self-hosted teams use Keycloak, Okta, Entra ID or Dex; tests use a fake one. Changes [ENG-196](https://linear.app/arikkfir/issue/ENG-196)'s "Google only in phase 1" | Agreed |
-| Providers come from the chart's values, client secrets from Secrets | The first administrator signs in before the Back-office exists; they stay in Git | Agreed |
+| Providers come from the chart's values, client secrets from Secrets; the Back-office adds more beside them | The first administrator signs in before the Back-office exists; the values' stay in Git, and the Back-office never changes them | Agreed |
 | An identity is its provider's issuer and subject | OpenID Connect's unique pair; a renamed provider keeps its users | Agreed |
 | A sign-in flow is a PostgreSQL row, bound to its browser by a cookie; PKCE and a nonce on every sign-in | No signing key; any replica finishes it; login CSRF and stolen codes fail | Agreed |
 | Sessions are opaque tokens stored hashed, a new row per sign-in | Revocation works on the next request; a database copy signs nobody in | Agreed |

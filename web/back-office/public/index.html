@@ -208,7 +208,7 @@
       for (const [k, v] of Object.entries(attrs)) {
         if (k === "class") el.className = v;
         else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
-        else if (k === "hidden" || k === "disabled") el[k] = v;
+        else if (k === "hidden" || k === "disabled" || k === "required") el[k] = v;
         else if (v !== undefined && v !== null) el.setAttribute(k, v);
       }
       el.append(...children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false));
@@ -219,7 +219,8 @@
       history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
       render();
     }
-    // route is the page's path under the Back-office's root: "" for its home, the organizations, "users" or "settings".
+    // route is the page's path under the Back-office's root: "" for its home, the organizations, "users", "providers" or
+    // "settings".
     const route = () => location.pathname.slice(base.length).replace(/\/$/, "");
     window.addEventListener("popstate", render);
     document.addEventListener("click", (e) => {
@@ -254,8 +255,9 @@
           h("div", { class: "buttons" }, h("a", { class: "button", href: config.consoleUrl }, "Open the Console"), h("button", { class: "button", type: "button", onclick: signOut }, "Sign out")));
       }
       const page = route();
-      if (!["", "users", "settings"].includes(page)) return go("/", true);
-      const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"], ["settings", "Settings", "installation.manage"]].filter(([, , p]) => can(p));
+      if (!["", "users", "providers", "settings"].includes(page)) return go("/", true);
+      const pages = [["", "Organizations", "installation.manage"], ["users", "Users", "installation.users.manage"], ["providers", "Identity providers", "installation.manage"],
+        ["settings", "Settings", "installation.manage"]].filter(([, , p]) => can(p));
       if (!pages.some(([p]) => p === page)) return go("/" + pages[0][0], true);
       const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), h("span", { class: "tag" }, "Back-office"),
         h("nav", {}, pages.map(([p, label]) => h("a", { href: base + p, "data-nav": "", class: p === page ? "current" : "" }, label))),
@@ -264,7 +266,7 @@
       const main = h("main", { class: "page" });
       document.body.className = "";
       app.replaceChildren(bar, main);
-      return ({ users: showUsers, settings: showSettings }[page] || showOrganizations)(main);
+      return ({ users: showUsers, providers: showProviders, settings: showSettings }[page] || showOrganizations)(main);
     }
 
     // showSignIn offers the installation's providers and, while seeding is on, its demo users; each returns here.
@@ -377,6 +379,95 @@
         h("td", {}, when(u.lastSignInAt)), h("td", {}, when(u.createdAt)));
       const users = list({ path: "/users", key: "users", head: ["User", "Emails", "Signs in with", "Installation roles", "Organizations", "Last sign-in", "Signed up"], row, placeholder: "A name or an email" });
       main.append(h("h1", {}, "Users"), users.panel);
+    }
+
+    // providerFields are a provider's inputs, filled from p when it has one: its client secret is never shown, and an
+    // empty one keeps it. value() is what they say, as the Admin API takes it.
+    function providerFields(p = {}) {
+      const name = h("input", { required: true, maxlength: 100, value: p.name, placeholder: "Okta" });
+      const kind = h("select", {}, h("option", { value: "" }, "An issuer URL"), h("option", { value: "google" }, "Google"));
+      kind.value = p.preset || "";
+      const issuer = h("input", { type: "url", required: !p.preset, value: p.issuer, placeholder: "https://acme.okta.com" });
+      const issuerLabel = h("label", { hidden: !!p.preset }, "Issuer", h("span", {}, "It answers OpenID Connect discovery at /.well-known/openid-configuration."), issuer);
+      kind.addEventListener("change", () => { issuerLabel.hidden = !!kind.value; issuer.required = !kind.value; });
+      const clientId = h("input", { required: true, value: p.clientId });
+      const secret = h("input", { type: "password", autocomplete: "new-password", required: !p.id, placeholder: p.id ? "Unchanged" : "" });
+      return {
+        labels: [h("label", {}, "Name", h("span", {}, "What the sign-in page shows."), name), h("label", {}, "Provider", kind), issuerLabel,
+          h("label", {}, "Client ID", clientId),
+          h("label", {}, "Client secret", h("span", {}, p.id ? "Never shown; leave it empty to keep it." : "Sealed, and never shown again."), secret)],
+        value: () => ({ name: name.value, ...(kind.value ? { preset: kind.value } : { issuer: issuer.value }), clientId: clientId.value,
+          ...(secret.value ? { clientSecret: secret.value } : {}) }),
+      };
+    }
+
+    // showProviders lists the identity providers: the chart's values', which only they change, then those administrators
+    // added, which they change and remove here, each from the version it read. A change reaches the next sign-in.
+    function showProviders(main) {
+      const done = h("p", { class: "notice", hidden: true });
+      const error = h("p", { class: "alert", hidden: true });
+      const body = h("tbody");
+      const fail = (shown) => (err) => { shown.textContent = err.message; shown.hidden = false; };
+      const say = (text) => { done.textContent = text; done.hidden = false; error.hidden = true; };
+      const load = () => api("GET", "/providers").then(({ data }) => body.replaceChildren(...(data.items.length ? data.items.map(row)
+        : [h("tr", {}, h("td", { colspan: 6 }, h("p", {}, "No identity provider yet: only seeded demo users can sign in.")))]))).catch(fail(error));
+      // stale reloads the list after a change someone else made first, which closes the form: the page says so.
+      const stale = (shown) => (err) => err.status === 412
+        ? load().then(() => fail(error)(new Error("Someone changed this provider while you had it open. Look again, and make your change again.")))
+        : fail(shown)(err);
+      // open reads the provider again, for its ETag, and opens its form under its row: a change, or a removal.
+      const open = (tr, p, removing) => {
+        if (tr.nextElementSibling?.classList.contains("entering")) return;
+        api("GET", "/providers/" + encodeURIComponent(p.id)).then(({ data, etag }) => {
+          const shown = h("p", { class: "alert", hidden: true });
+          const path = "/providers/" + encodeURIComponent(p.id);
+          const cancel = h("button", { class: "button", type: "button", onclick: (e) => e.target.closest("tr").remove() }, "Cancel");
+          let form;
+          if (removing) {
+            form = h("form", { onsubmit: (e) => {
+              e.preventDefault();
+              api("DELETE", path, undefined, { "If-Match": etag }).then(() => { say("Removed " + data.name + "."); load(); }).catch(stale(shown));
+            } }, h("p", {}, "Remove " + data.name + "? Nobody signs in with it from the next sign-in on. Its users keep their accounts, and sign in again once a provider with its issuer is back."),
+              shown, h("div", {}, h("button", { class: "button primary", type: "submit" }, "Remove " + data.name), " ", cancel));
+          } else {
+            const fields = providerFields(data);
+            form = h("form", { onsubmit: (e) => {
+              e.preventDefault();
+              api("PATCH", path, fields.value(), { "If-Match": etag }).then(({ data: changed }) => { say("Saved " + changed.name + ". The next sign-in uses it."); load(); }).catch(stale(shown));
+            } }, fields.labels, shown, h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", cancel));
+          }
+          tr.after(h("tr", { class: "entering" }, h("td", { colspan: 6 }, form)));
+        }).catch(fail(error));
+      };
+      const row = (p) => {
+        const tr = h("tr", {}, h("td", {}, h("strong", {}, p.name), p.shadowed ? h("span", { class: "chip", title: "The chart's values took its ID: theirs signs in." }, "shadowed") : null),
+          h("td", {}, h("code", {}, p.id)), h("td", {}, p.preset ? "Google" : p.issuer), h("td", {}, h("code", {}, p.clientId)),
+          h("td", {}, h("span", { class: "chip" }, p.source === "values" ? "chart's values" : "Back-office")),
+          h("td", { class: "actions" }, p.source === "values" ? h("span", { class: "muted" }, "Change it in the values")
+            : p.shadowed ? h("span", { class: "muted" }, "The values' signs in until they drop its ID") : [
+            h("button", { class: "button small", type: "button", onclick: () => open(tr, p, false) }, "Change"), " ",
+            h("button", { class: "button small", type: "button", onclick: () => open(tr, p, true) }, "Remove")]));
+        return tr;
+      };
+      const fields = providerFields();
+      const id = h("input", { required: true, maxlength: 32, pattern: "[a-z0-9]([a-z0-9-]*[a-z0-9])?", placeholder: "okta" });
+      const added = h("p", { class: "alert", hidden: true });
+      main.append(h("h1", {}, "Identity providers"),
+        h("section", { class: "panel" }, h("p", {}, "People sign in with these. The chart's values list theirs, which only they change; the next sign-in uses any change made here."),
+          done, error, h("table", {}, h("thead", {}, h("tr", {}, ["Name", "ID", "Issuer", "Client ID", "From", ""].map((t) => h("th", {}, t)))), body)),
+        h("section", { class: "panel" }, h("h3", {}, "Add an identity provider"),
+          h("p", {}, "Any OpenID Connect provider. Register a client there whose redirect URI is ", h("code", {}, config.authUrl + "/callback"), "."), added,
+          h("form", { onsubmit: (e) => {
+            e.preventDefault();
+            added.hidden = true;
+            api("POST", "/providers", { id: id.value, ...fields.value() }).then(({ data }) => {
+              say("Added " + data.name + ". The next sign-in offers it.");
+              e.target.reset();
+              load();
+            }).catch(fail(added));
+          } }, h("label", {}, "ID", h("span", {}, "Lowercase letters, digits and dashes; it names the provider in sign-in URLs, so keep it."), id), fields.labels,
+            h("div", {}, h("button", { class: "button primary", type: "submit" }, "Add")))));
+      load();
     }
 
     // showSettings shows the installation's settings and changes those the chart's values leave to it, from the ones

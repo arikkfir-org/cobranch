@@ -9,7 +9,7 @@ import (
 
 // every names every variable the loaders read, to unset before each test.
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
-	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED",
+	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP"}
 
 // clean unsets every variable, then sets env.
@@ -59,6 +59,8 @@ func TestLoadServer(t *testing.T) {
 				"COBRANCH_AUTH_SIGN_UP":             "domains",
 				"COBRANCH_AUTH_SIGN_UP_DOMAINS":     "Example.com",
 				"COBRANCH_ORGANIZATIONS_SELF_SERVE": "false",
+				"COBRANCH_AUTH_PROVIDERS":           `[{"id":"google","name":"Google","preset":"google","clientId":"c1"}]`,
+				"COBRANCH_SECRETS_KEY":              "a secrets key of at least 32 characters",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
@@ -67,6 +69,7 @@ func TestLoadServer(t *testing.T) {
 						GraphQL: mustURL(t, "https://console.example.com/graphql"), Auth: mustURL(t, "https://console.example.com/auth"),
 						Admin: mustURL(t, "https://admin.example.com/v"), BackOffice: mustURL(t, "https://back-office.example.com")},
 					SignUpSettings: SignUpSettings{SignUp: "domains", SignUpDomains: []string{"example.com"}, SelfServe: &no},
+					Providers:      Providers{{ID: "google", Name: "Google", Preset: "google", ClientID: "c1"}}, SecretsKey: "a secrets key of at least 32 characters",
 				}
 			},
 		},
@@ -84,11 +87,8 @@ func TestLoadServer(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("LoadServer() error = %v, want error %t", err, tt.wantErr)
 			}
-			if err != nil {
-				return
-			}
-			if want := tt.want(t); !reflect.DeepEqual(got, want) {
-				t.Errorf("LoadServer() = %+v, want %+v", got, want)
+			if want := tt.want; err == nil && !reflect.DeepEqual(got, want(t)) {
+				t.Errorf("LoadServer() = %+v, want %+v", got, want(t))
 			}
 		})
 	}
@@ -172,6 +172,7 @@ var authServerTests = []struct {
 	wantAdmins    []string
 	wantSelfServe *bool
 	wantSeed      bool
+	wantKey       string
 	wantErr       bool
 }{
 	{name: "defaults, no provider: sign-up is the Back-office's", env: authBase},
@@ -186,12 +187,14 @@ var authServerTests = []struct {
 			"COBRANCH_AUTH_ADMINS":               "Alice@Example.com",
 			"COBRANCH_ORGANIZATIONS_SELF_SERVE":  "false",
 			"COBRANCH_SEED":                      "true",
+			"COBRANCH_SECRETS_KEY":               "a secrets key of at least 32 characters",
 		}),
 		wantProviders: Providers{
 			{ID: "google", Name: "Google", Preset: "google", ClientID: "c1", ClientSecret: "s1"},
 			{ID: "my-idp", Issuer: "https://idp.example.com", ClientID: "c2", ClientSecret: "s2"},
 		},
 		wantSignUp: "domains", wantDomains: []string{"example.com", "example.org"}, wantAdmins: []string{"alice@example.com"}, wantSelfServe: &no, wantSeed: true,
+		wantKey: "a secrets key of at least 32 characters",
 	},
 	{name: "self-serve set on", env: with(map[string]string{"COBRANCH_ORGANIZATIONS_SELF_SERVE": "true"}), wantSelfServe: &yes},
 	{name: "self-serve that isn't a boolean", env: with(map[string]string{"COBRANCH_ORGANIZATIONS_SELF_SERVE": "maybe"}), wantErr: true},
@@ -217,7 +220,7 @@ func TestLoadAuthServer(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got.Providers, tt.wantProviders) || got.SignUp != tt.wantSignUp ||
 				!reflect.DeepEqual(got.SignUpDomains, tt.wantDomains) || !reflect.DeepEqual(got.Admins, tt.wantAdmins) ||
-				!reflect.DeepEqual(got.SelfServe, tt.wantSelfServe) || got.Seed != tt.wantSeed {
+				!reflect.DeepEqual(got.SelfServe, tt.wantSelfServe) || got.Seed != tt.wantSeed || got.SecretsKey != tt.wantKey {
 				t.Errorf("LoadAuthServer() = %+v", got)
 			}
 			if got.Console.Host != "cobranch.example.com" || got.Auth.Path != "/auth" || got.HTTPAddr != ":8080" {

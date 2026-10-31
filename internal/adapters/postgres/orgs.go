@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
+	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
 )
@@ -39,6 +40,7 @@ var conflicts = map[string]error{
 	"join_requests_pending":   orgs.ErrRequested,
 	"memberships_pkey":        orgs.ErrAlreadyMember,
 	"roles_name":              orgs.ErrRoleNameTaken,
+	"identity_providers_pkey": admin.ErrProviderTaken,
 }
 
 // transact runs fn in a transaction that acts for actor (transact), mapping a conflict to the domain's error.

@@ -70,8 +70,14 @@ type seeded struct {
 // providers answers the identity providers and, while seeding is on, the seeded users, so the sign-in page knows
 // what to offer; an installation with none of either isn't set up yet.
 func (h *handler) providers(w http.ResponseWriter, r *http.Request) {
-	providers := make([]provider, 0)
-	for _, p := range h.service.Providers() {
+	listed, err := h.service.Providers(r.Context())
+	if err != nil {
+		slog.ErrorContext(r.Context(), "Listing the identity providers failed", "error", err)
+		http.Error(w, "the identity providers could not be listed", http.StatusInternalServerError)
+		return
+	}
+	providers := make([]provider, 0, len(listed))
+	for _, p := range listed {
 		providers = append(providers, provider{ID: p.ID(), Name: p.Name()})
 	}
 	users, err := h.service.SeededUsers(r.Context())

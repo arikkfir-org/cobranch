@@ -1,7 +1,7 @@
 {{- $fullname := include "cobranch.fullname" . }}
 # helm test: every server is ready and answers, the Console and the Back-office serve their pages and where they find
 # the APIs, and, with the demo data on, a seeded sign-in makes a session the REST API accepts, which the Admin API
-# refuses unless the user administers the installation, who reads its settings.
+# refuses unless the user administers the installation, who reads its settings and identity providers.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -87,6 +87,8 @@ spec:
           wget -qO- --header "Cookie: $cookie" "$admin/v1/orgs" | tee /dev/stderr | grep -q '"slug":"acme"'
           # They read the installation's settings, with their ETag.
           wget -qO- --server-response --header "Cookie: $cookie" "$admin/v1/settings" 2>&1 | tee /dev/stderr | grep -qi 'etag: "'
+          # They list the identity providers.
+          wget -qO- --header "Cookie: $cookie" "$admin/v1/providers" | tee /dev/stderr | grep -q '"items":\['
           {{- end }}
           {{- end }}
           {{- end }}

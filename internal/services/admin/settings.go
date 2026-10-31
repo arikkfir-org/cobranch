@@ -24,10 +24,10 @@ const (
 )
 
 var (
-	// ErrStale is a change to settings that changed since the change read them.
-	ErrStale = errors.New("the settings changed since they were read")
-	// ErrLocked is a change to a setting the chart's values set: only they change it.
-	ErrLocked = errors.New("the chart's values set this setting")
+	// ErrStale is a change to settings, or to a provider, that changed since the change read them.
+	ErrStale = errors.New("it changed since it was read")
+	// ErrLocked is a change to a setting, or to a provider, the chart's values set: only they change it.
+	ErrLocked = errors.New("the chart's values set this")
 )
 
 // Settings are the installation's settings as the Back-office shows them: those a sign-up follows, which of them the

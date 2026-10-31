@@ -205,26 +205,36 @@ hosts the session cookie is set for. */}}
 {{- end }}
 {{- end -}}
 
-{{/* The secrets key, which the Auth and Admin servers read, when the values name its Secret. */}}
+{{/* The Secret that holds the secrets key. */}}
+{{- define "cobranch.secretsKey.secret" -}}
+{{ .Values.secretsKey.existingSecret | default (printf "%s-secrets-key" (include "cobranch.fullname" .)) }}
+{{- end -}}
+
+{{/* The secrets key, which the Auth and Admin servers read: it seals the Back-office's providers' client secrets. */}}
 {{- define "cobranch.secretsKeyEnv" -}}
-{{- with .Values.secretsKey.existingSecret }}
 - name: COBRANCH_SECRETS_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ . }}
-      key: {{ $.Values.secretsKey.secretKey }}
-{{- end }}
+      name: {{ include "cobranch.secretsKey.secret" . }}
+      key: {{ .Values.secretsKey.secretKey }}
 {{- end -}}
 
-{{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets), the
-first administrators and the sign-up settings. */}}
-{{- define "cobranch.authEnv" -}}
+{{/* The values' identity providers, without their secrets: the Auth server signs in with them, and the Admin server
+shows them. */}}
+{{- define "cobranch.providersEnv" -}}
 {{- $providers := list }}
 {{- range .Values.auth.providers }}
 {{- $providers = append $providers (dict "id" .id "name" (.name | default .id) "issuer" (.issuer | default "") "preset" (.preset | default "") "clientId" .clientId) }}
-{{- end }}
+{{- end -}}
 - name: COBRANCH_AUTH_PROVIDERS
   value: {{ $providers | toJson | quote }}
+{{- end -}}
+
+{{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets) and the
+secrets key, the first administrators and the sign-up settings. */}}
+{{- define "cobranch.authEnv" -}}
+{{ include "cobranch.providersEnv" . }}
+{{ include "cobranch.secretsKeyEnv" . }}
 {{- range .Values.auth.providers }}
 - name: COBRANCH_AUTH_CLIENT_SECRET_{{ .id | upper | replace "-" "_" }}
   valueFrom:
@@ -233,7 +243,6 @@ first administrators and the sign-up settings. */}}
       key: {{ .clientSecret.key | default "client-secret" }}
 {{- end }}
 {{- include "cobranch.signUpEnv" . }}
-{{- include "cobranch.secretsKeyEnv" . }}
 {{- with .Values.auth.admins }}
 - name: COBRANCH_AUTH_ADMINS
   value: {{ join "," . | quote }}

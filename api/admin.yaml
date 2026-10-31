@@ -262,6 +262,181 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /providers:
+    get:
+      operationId: listProviders
+      summary: >-
+        The installation's identity providers: the chart's values', which only they change, then those administrators
+        added, by ID; takes installation.manage. A client secret is never shown.
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Provider"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: addProvider
+      summary: >-
+        Adds an identity provider beside the values', once its issuer answers OpenID Connect discovery; its client
+        secret is sealed with the installation's secrets key and never shown again. Takes installation.manage. The
+        next sign-in offers it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewProvider"
+      responses:
+        "201":
+          description: The provider.
+          headers:
+            Location:
+              description: The provider's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /providers/{provider}:
+    parameters:
+      - name: provider
+        in: path
+        required: true
+        description: The provider's ID.
+        schema:
+          type: string
+    get:
+      operationId: getProvider
+      summary: An identity provider; takes installation.manage.
+      parameters:
+        - name: If-None-Match
+          in: header
+          description: The provider's ETag the caller holds; while it is still theirs, the answer is 304.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The provider. A change names its ETag in If-Match.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "304":
+          description: The provider is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: changeProvider
+      summary: >-
+        Changes what the body names of a provider administrators added (a JSON merge patch, RFC 7396), unless it changed
+        since the caller read it; takes installation.manage. A new issuer must answer discovery; a new client secret is
+        sealed. The values' providers refuse any change. The next sign-in uses it.
+      parameters:
+        - name: If-Match
+          in: header
+          description: The ETag of the provider the change was made from. Without it, the answer is 428.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ProviderChange"
+      responses:
+        "200":
+          description: The provider, changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Provider"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeProvider
+      summary: >-
+        Removes a provider administrators added, unless it changed since the caller read it; takes installation.manage.
+        Its users keep their accounts, and sign in with it again once a provider with its issuer is back. The values'
+        providers refuse.
+      parameters:
+        - name: If-Match
+          in: header
+          description: The ETag of the provider the removal was decided on. Without it, the answer is 428.
+          schema:
+            type: string
+      responses:
+        "204":
+          description: The provider is gone.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     q:
@@ -449,6 +624,85 @@ components:
         Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first
         administrator's email always may.
       enum: [anyone, domains, invited]
+    Provider:
+      type: object
+      description: An identity provider, never with its client secret.
+      required: [id, name, clientId, source, shadowed]
+      properties:
+        id:
+          type: string
+          description: Names the provider in sign-in URLs; lowercase letters, digits and dashes.
+        name:
+          type: string
+          description: What the sign-in page shows.
+        issuer:
+          type: string
+          description: The provider's issuer URL; absent when preset names it.
+        preset:
+          type: string
+          description: A known provider whose issuer it is, such as google.
+        clientId:
+          type: string
+        source:
+          type: string
+          description: Where it comes from; the values' only they change.
+          enum: [values, backOffice]
+        shadowed:
+          type: boolean
+          description: A provider administrators added whose ID the values took since; theirs signs in.
+        createdAt:
+          type: string
+          format: date-time
+          description: When an administrator added it; absent for the values'.
+        updatedAt:
+          type: string
+          format: date-time
+          description: When an administrator last changed it; absent for the values'.
+        updatedBy:
+          type: string
+          format: uuid
+          description: Who last changed it; absent for the values', or when they're gone.
+    NewProvider:
+      type: object
+      description: An identity provider to add, at an issuer or a preset, one of the two.
+      required: [id, name, clientId, clientSecret]
+      properties:
+        id:
+          type: string
+          description: 1 to 32 lowercase letters, digits and dashes, neither first nor last a dash; no other provider's.
+        name:
+          type: string
+          description: 1 to 100 characters.
+        issuer:
+          type: string
+          description: An https URL whose /.well-known/openid-configuration answers.
+        preset:
+          type: string
+          description: A known provider instead of an issuer.
+          enum: [google]
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+          description: Written once, sealed, never shown again.
+    ProviderChange:
+      type: object
+      description: >-
+        What to change of a provider; what it leaves out stays as it is. Naming an issuer drops the preset, and the
+        other way round.
+      properties:
+        name:
+          type: string
+        issuer:
+          type: string
+        preset:
+          type: string
+          enum: [google]
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+          description: A new client secret, sealed, never shown again.
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

@@ -28,9 +28,10 @@ organizations](sign-in-and-organizations.md), whose sign-in, organizations and g
 
 Each page asks the same authorizer as the Console’s, so later pages add operations, not a new model.
 
-Choices beyond those designs are collected under [Decisions](#decisions), all Proposed. One of them settles a conflict
-between [ENG-219](https://linear.app/arikkfir/issue/ENG-219) and the agreed sign-in design, about identity providers: it
-is the [open question](#open-questions).
+Choices beyond those designs are collected under [Decisions](#decisions), all Proposed but one, agreed on 2026-10-31:
+the Back-office adds identity providers beside the chart's values, which settles a conflict between
+[ENG-219](https://linear.app/arikkfir/issue/ENG-219) and the agreed sign-in design ([identity
+providers](#identity-providers)).
 
 ## Components
 
@@ -177,22 +178,24 @@ organizations. Lifetimes and mail come with later slices.
 
 Changing or removing a provider takes effect on the next sign-in. Sessions already made keep working until they end.
 
-- **Beside the values', never over them.** **Proposed:** the values' providers stay as the sign-in design agreed, listed
+- **Beside the values', never over them.** **Agreed:** the values' providers stay as the sign-in design agreed, listed
   read-only in the Back-office; the Back-office adds more, kept in PostgreSQL. A provider's ID is unique across both:
   the Back-office refuses one the values use, and a values' provider added later with a Back-office provider's ID wins,
-  the other shown as shadowed.
+  the other shown as shadowed, read-only until the values drop its ID.
 - **A client secret is written once,** encrypted with the chart's secrets key (AES-256-GCM), and never read back: the
   Back-office shows only that one is set, as the architecture's [secrets](architecture.md#settings-secrets-and-models)
   are kept.
-- **The secrets key** is new to the chart: generated on install and kept on upgrade, or a Secret of the operator's
-  (`secretsKey.existingSecret`), which an installation rendered without the cluster, as under Argo CD, must give. Only
-  the Admin and Auth servers read it.
+- **The secrets key** is new to the chart: 32 characters at least, generated on install and kept on upgrade and
+  uninstall, or a Secret of the operator's (`secretsKey.existingSecret`, under `secretsKey.secretKey`), which an
+  installation rendered without the cluster, as under Argo CD, must give. Only the Admin and Auth servers read it;
+  without it, the Admin API refuses a new client secret (`409`).
+- **An issuer must answer.** Adding a provider, or changing its issuer or preset, first checks the issuer's OpenID
+  Connect discovery. A change or a removal names the version the administrator read (`If-Match`), and one someone made
+  meanwhile is refused (`412`), as the settings' are.
 - **A change applies at the next sign-in.** The Auth server reads the database's providers at each sign-in and keeps
-  each one's discovery while its version holds. Removing a provider stops its sign-ins; its users keep their accounts,
-  and sign in again once a provider with the same issuer is back.
-- **If providers stay in the values only** (the [open question](#open-questions)), this section becomes a read-only list
-  of the values' providers, the secrets key waits for the slices that keep secrets, and pull request 3 shrinks to the
-  list.
+  each one's discovery while its version holds. Versions come from one sequence and never repeat, so a provider removed
+  and added again under its ID is built anew. Removing a provider stops its sign-ins; its users keep their accounts, and
+  sign in again once a provider with the same issuer is back.
 
 ## The Back-office
 
@@ -216,7 +219,8 @@ components: tables, forms, status badges and the one-time dialog for a new secre
 | `adminServer`, `backOffice` | 1 replica each | The chart: resources and placement, like every workload's |
 | `auth.signUp`, `auth.signUpDomains` | None now | The Auth server, and the Admin server, which shows them locked; set, they lock the Back-office's settings |
 | `organizations.selfServe` | None now | The Auth server, and the Admin server, which shows it locked; set, it locks the Back-office's |
-| `secretsKey.existingSecret` | None: generated | The Admin and Auth servers: the key that encrypts providers' client secrets |
+| `auth.providers` | None | The Auth server, and the Admin server, which lists them read-only |
+| `secretsKey.existingSecret`, `secretsKey.secretKey` | None: generated; `key` | The Admin and Auth servers: the key that encrypts providers' client secrets |
 
 Without `urls.admin` the chart deploys neither new workload, as it deploys no Auth server without `urls.auth`.
 **Agreed** in the sign-in design: the chart passes each value as a `COBRANCH_` environment variable.
@@ -229,8 +233,8 @@ Without `urls.admin` the chart deploys neither new workload, as it deploys no Au
   ([risks](sign-in-and-organizations.md#risks)).
 - **Tests** cover every operation's permission at its scope, entering's transaction and event, the values' locks, and
   providers' encryption, on PostgreSQL as the other stores' tests do. The chart's kind test in CI signs in as a seeded
-  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations and
-  reads the installation's settings.
+  Owner, whom the Admin API refuses, and as Ada Admin, whom it lists in `auth.admins`, who lists the organizations,
+  reads the installation's settings and lists its identity providers.
 
 ## Data model
 
@@ -278,17 +282,13 @@ alone.
 | An administrator creates an organization for an existing user, who becomes its Owner; the administrator doesn't join | Installations with self-serve off give organizations out; administrators see no content | Proposed |
 | Entering asks for a reason, kept in `org.entered` on the organization's trail; the Owner grant's source is `entry` | Owners see why someone entered; the grant can be told apart | Proposed |
 | The chart's values lock the settings they set; the rest live in PostgreSQL, audited and versioned | Git-only operators lose nothing; others change settings without a redeploy | Proposed |
-| Identity providers can be added in the Back-office beside the values', client secrets encrypted with the chart's secrets key | [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for it; the agreed providers in the values stay as they are | Open |
+| Identity providers can be added in the Back-office beside the values', client secrets encrypted with the chart's secrets key | [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for it; the agreed providers in the values stay as they are | Agreed |
 | Lists page with an opaque cursor and `Link: rel="next"` | An installation's organizations and users outgrow one answer | Proposed |
 | Suspending users, revoking their sessions, installation roles, an organization's own administration, audit trails, lifetimes and mail come later | Keeps this slice to its issue | Proposed |
 
 ## Open questions
 
-1. **Should the Back-office edit identity providers, or only show the chart's?**
-   [ENG-219](https://linear.app/arikkfir/issue/ENG-219) asks for "installation settings, identity providers included",
-   while the agreed sign-in design keeps providers in the chart's values, "in Git with the rest of the installation",
-   and the product design repeats it. Recommended: both, the values' providers read-only and the Back-office's beside
-   them, as [above](#identity-providers). The other way, providers stay in the values alone and the Back-office lists
-   them.
+None. The one this page raised, whether the Back-office edits identity providers or only shows the chart's, was answered
+on 2026-10-31: it adds them beside the values', as [above](#identity-providers).
 
 Cobranch is a Kfirs project, created by Arik Kfir.

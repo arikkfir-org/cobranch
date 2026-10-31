@@ -38,6 +38,19 @@ type Store interface {
 	// ChangeInstallationSettings writes settings at at, acting for actor, unless the stored version is no longer
 	// settings.Version: then ErrStale. It returns the settings as written, their version bumped.
 	ChangeInstallationSettings(ctx context.Context, actor uuid.UUID, settings auth.InstallationSettings, at time.Time) (auth.InstallationSettings, error)
+	// IdentityProviders lists the identity providers the Back-office added, by ID.
+	IdentityProviders(ctx context.Context) ([]auth.StoredProvider, error)
+	// IdentityProvider finds the Back-office's provider id, or orgs.ErrNotFound.
+	IdentityProvider(ctx context.Context, id string) (auth.StoredProvider, error)
+	// CreateIdentityProvider adds p at at, acting for actor, or ErrProviderTaken for an ID another has. It returns the
+	// provider as written.
+	CreateIdentityProvider(ctx context.Context, actor uuid.UUID, p auth.StoredProvider, at time.Time) (auth.StoredProvider, error)
+	// ChangeIdentityProvider writes p at at, acting for actor, unless the stored version is no longer p.Version: then
+	// ErrStale. It returns the provider as written, its version bumped.
+	ChangeIdentityProvider(ctx context.Context, actor uuid.UUID, p auth.StoredProvider, at time.Time) (auth.StoredProvider, error)
+	// DeleteIdentityProvider removes provider id, acting for actor, unless its version is no longer version: then
+	// ErrStale.
+	DeleteIdentityProvider(ctx context.Context, actor uuid.UUID, id string, version int64) error
 }
 
 // Service runs the installation's administration: every operation checks its viewer's permissions at the
@@ -47,7 +60,9 @@ type Service struct {
 	authz *auth.Authorizer
 	// values are the chart's sign-up settings, which lock those they set.
 	values auth.Settings
-	now    func() time.Time
+	// providers is what the identity providers' administration needs (SetProviders).
+	providers ProviderSetup
+	now       func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz, under the chart's values' sign-up settings.
