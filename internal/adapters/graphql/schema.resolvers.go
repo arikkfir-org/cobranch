@@ -344,7 +344,7 @@ func (r *queryResolver) Permissions(ctx context.Context, scope RoleScope) ([]str
 }
 
 // Roles is the resolver for the roles field.
-func (r *queryResolver) Roles(ctx context.Context, _ RoleScope) ([]*Role, error) {
+func (r *queryResolver) Roles(ctx context.Context, scope RoleScope) ([]*Role, error) {
 	if _, err := viewer(ctx); err != nil {
 		return nil, err
 	}
