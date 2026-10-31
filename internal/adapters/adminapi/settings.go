@@ -36,16 +36,16 @@ func (a api) ChangeSettings(ctx context.Context, req ChangeSettingsRequestObject
 	if err != nil {
 		return nil, err
 	}
-	if req.Params.IfMatch == nil || strings.TrimSpace(*req.Params.IfMatch) == "" {
-		return nil, refuse(http.StatusPreconditionRequired, "precondition.required", "Name the settings' ETag in If-Match.")
+	match, err := ifMatch(req.Params.IfMatch, "the settings'")
+	if err != nil {
+		return nil, err
 	}
 	change := admin.SettingsChange{SignUpDomains: req.Body.SignUpDomains, SelfServe: req.Body.SelfServe}
 	if req.Body.SignUp != nil {
 		policy := auth.Policy(*req.Body.SignUp)
 		change.SignUp = &policy
 	}
-	// If-Match compares strongly: a weak tag matches nothing.
-	s, err := a.admin.ChangeSettings(ctx, v, strings.Trim(strings.TrimSpace(*req.Params.IfMatch), `"`), change)
+	s, err := a.admin.ChangeSettings(ctx, v, match, change)
 	switch {
 	case errors.Is(err, admin.ErrStale):
 		return nil, refuse(http.StatusPreconditionFailed, "precondition.failed", "The settings changed since you read them: read them again.")
@@ -88,4 +88,13 @@ func settings(s admin.Settings) Settings {
 		out.UpdatedBy = &by
 	}
 	return out
+}
+
+// ifMatch reads If-Match's one strong tag, or refuses with 428 when there is none; whose names the resource.
+func ifMatch(header *string, whose string) (string, error) {
+	if header == nil || strings.TrimSpace(*header) == "" {
+		return "", refuse(http.StatusPreconditionRequired, "precondition.required", "Name "+whose+" ETag in If-Match.")
+	}
+	// If-Match compares strongly: a weak tag matches nothing.
+	return strings.Trim(strings.TrimSpace(*header), `"`), nil
 }

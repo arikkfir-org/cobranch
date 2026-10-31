@@ -2,6 +2,7 @@ package orgstest
 
 import (
 	"context"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -128,4 +129,64 @@ func (s *Store) ChangeInstallationSettings(_ context.Context, actor uuid.UUID, s
 	settings.UpdatedAt, settings.UpdatedBy = at, actor
 	s.Installation = settings
 	return settings, nil
+}
+
+// IdentityProviders lists the Back-office's providers by ID.
+func (s *Store) IdentityProviders(context.Context) ([]auth.StoredProvider, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	out := make([]auth.StoredProvider, 0, len(s.Providers))
+	for _, id := range slices.Sorted(maps.Keys(s.Providers)) {
+		out = append(out, s.Providers[id])
+	}
+	return out, nil
+}
+
+// IdentityProvider finds the Back-office's provider id.
+func (s *Store) IdentityProvider(_ context.Context, id string) (auth.StoredProvider, error) {
+	p, ok := s.Providers[id]
+	if !ok {
+		return auth.StoredProvider{}, orgs.ErrNotFound
+	}
+	return p, nil
+}
+
+// CreateIdentityProvider adds p at version 1, unless its ID is taken.
+func (s *Store) CreateIdentityProvider(_ context.Context, actor uuid.UUID, p auth.StoredProvider, at time.Time) (auth.StoredProvider, error) {
+	if s.Fail != nil {
+		return auth.StoredProvider{}, s.Fail
+	}
+	if _, taken := s.Providers[p.ID]; taken {
+		return auth.StoredProvider{}, admin.ErrProviderTaken
+	}
+	p.Version, p.CreatedAt, p.UpdatedAt, p.UpdatedBy = 1, at, at, actor
+	s.Providers[p.ID] = p
+	return p, nil
+}
+
+// ChangeIdentityProvider writes p unless the stored version is no longer its, and bumps the version.
+func (s *Store) ChangeIdentityProvider(_ context.Context, actor uuid.UUID, p auth.StoredProvider, at time.Time) (auth.StoredProvider, error) {
+	if s.Fail != nil {
+		return auth.StoredProvider{}, s.Fail
+	}
+	if stored, ok := s.Providers[p.ID]; !ok || stored.Version != p.Version {
+		return auth.StoredProvider{}, admin.ErrStale
+	}
+	p.Version++
+	p.UpdatedAt, p.UpdatedBy = at, actor
+	s.Providers[p.ID] = p
+	return p, nil
+}
+
+// DeleteIdentityProvider removes provider id unless its version is no longer version.
+func (s *Store) DeleteIdentityProvider(_ context.Context, _ uuid.UUID, id string, version int64) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	if stored, ok := s.Providers[id]; !ok || stored.Version != version {
+		return admin.ErrStale
+	}
+	delete(s.Providers, id)
+	return nil
 }

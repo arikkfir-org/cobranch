@@ -1,8 +1,10 @@
 package adminapi
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -14,6 +16,7 @@ import (
 
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/auth/authtest"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 )
@@ -45,6 +48,16 @@ func newFixtureWith(t *testing.T, values auth.Settings) *fixture {
 	s := orgstest.NewStore()
 	service := admin.NewService(s, auth.NewAuthorizer(s), values)
 	service.SetClock(func() time.Time { return now })
+	service.SetProviders(admin.ProviderSetup{
+		Values: []auth.ProviderConfig{{ID: "google", Name: "Google", Issuer: "https://accounts.google.com", Preset: "google", ClientID: "g"}},
+		Sealer: authtest.Sealer{},
+		Discover: func(_ context.Context, issuer string) error {
+			if strings.Contains(issuer, "down.example.com") {
+				return errors.New("connection refused")
+			}
+			return nil
+		},
+	})
 	f := &fixture{store: s, handler: NewHandler("v1", service)}
 	f.ada, f.olivia, f.max = viewerOf("Ada Admin", "ada@example.com"), viewerOf("Olivia", "olivia@example.com"), viewerOf("Max", "max@example.com")
 	for _, v := range []auth.Authenticated{f.ada, f.olivia, f.max} {

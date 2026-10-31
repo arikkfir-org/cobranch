@@ -34,6 +34,19 @@ type Identity struct {
 	LastSignInAt  time.Time
 }
 
+type IdentityProvider struct {
+	ID           string
+	Name         string
+	Issuer       *string
+	Preset       *string
+	ClientID     string
+	ClientSecret []byte
+	Version      int64
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
+}
+
 type InstallationSetting struct {
 	ID            bool
 	SignUp        *string

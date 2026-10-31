@@ -96,16 +96,15 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	}
 	defer func() { _ = schema.Close() }() // holds nothing a server wrote
 	// The servers only read sessions: no provider, and settings that matter at sign-in alone. The Admin server shows
-	// the sign-up settings the values lock.
-	values, err := signUpSettings(cfg.SignUpSettings)
-	if err != nil {
-		return err
-	}
+	// the sign-up settings and providers the values give.
 	sessions := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
 	orgStore := postgres.NewOrgStore(pool)
 	authorizer := auth.NewAuthorizer(orgStore)
-	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		administration: admin.NewService(orgStore, authorizer, values)}
+	administration, err := adminService(cfg, orgStore, authorizer)
+	if err != nil {
+		return err
+	}
+	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {

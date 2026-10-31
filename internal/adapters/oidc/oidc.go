@@ -1,6 +1,6 @@
 // Package oidc speaks OpenID Connect's authorization code flow, with PKCE and a nonce, to the identity providers an
-// installation trusts: auth.Provider over github.com/coreos/go-oidc. Google is a preset; any provider that publishes
-// its discovery document works.
+// installation trusts: auth.Provider over github.com/coreos/go-oidc. Google is a preset (auth.Presets); any provider
+// that publishes its discovery document works.
 package oidc
 
 import (
@@ -17,11 +17,6 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 )
-
-// Presets are the providers the values may name instead of an issuer.
-var Presets = map[string]string{
-	"google": "https://accounts.google.com",
-}
 
 // Config is one identity provider, as the values describe it.
 type Config struct {
@@ -65,6 +60,18 @@ func New(cfg Config, redirectURL string, client *http.Client) (*Provider, error)
 		client = http.DefaultClient
 	}
 	return &Provider{cfg: cfg, redirectURL: redirectURL, client: client}, nil
+}
+
+// Discover checks that issuer answers OpenID Connect discovery, as a provider there would need: its document is
+// there and names it. client makes the request; nil is http.DefaultClient.
+func Discover(ctx context.Context, issuer string, client *http.Client) error {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	if _, err := gooidc.NewProvider(gooidc.ClientContext(ctx, client), issuer); err != nil {
+		return fmt.Errorf("discovering %s: %w", issuer, err)
+	}
+	return nil
 }
 
 // ID names the provider.

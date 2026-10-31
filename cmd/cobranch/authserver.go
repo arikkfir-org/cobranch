@@ -8,7 +8,6 @@ import (
 
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/authserver"
-	"cobranch.dev/internal/adapters/oidc"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/server"
 	"cobranch.dev/internal/services/auth"
@@ -38,10 +37,6 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("configuring: %w", err)
 	}
-	providers, err := identityProviders(cfg)
-	if err != nil {
-		return fmt.Errorf("configuring: %w", err)
-	}
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to the database: %w", err)
@@ -52,7 +47,10 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the server wrote
-	service := auth.NewService(postgres.NewAuthStore(pool), providers, settings)
+	service, err := signInService(cfg, postgres.NewAuthStore(pool), settings)
+	if err != nil {
+		return fmt.Errorf("configuring: %w", err)
+	}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
@@ -61,7 +59,7 @@ func runAuthServer(ctx context.Context, logs io.Writer) error {
 	handler := server.Handler("/", authserver.Handler(service, cookie, cfg.Console.URL, cfg.BackOffice.URL),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)})
 	slog.InfoContext(ctx, "Starting the Auth server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name,
-		"providers", len(providers), "signUp", settings.SignUp, "seed", settings.Seed)
+		"providers", len(cfg.Providers), "secretsKey", cfg.SecretsKey != "", "signUp", settings.SignUp, "seed", settings.Seed)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("serving: %w", err)
 	}
@@ -96,24 +94,29 @@ func signUpSettings(cfg config.SignUpSettings) (auth.Settings, error) {
 	return settings, nil
 }
 
-// identityProviders builds the providers the configuration lists, whose callback is the Auth server's /callback.
-func identityProviders(cfg config.AuthServer) ([]auth.Provider, error) {
-	redirect := cfg.Auth.JoinPath("/callback").String()
-	providers := make([]auth.Provider, 0, len(cfg.Providers))
-	for _, p := range cfg.Providers {
-		issuer := p.Issuer
-		if p.Preset != "" {
-			preset, ok := oidc.Presets[p.Preset]
-			if !ok {
-				return nil, fmt.Errorf("provider %q: no preset %q; the presets are google", p.ID, p.Preset)
-			}
-			issuer = preset
-		}
-		provider, err := oidc.New(oidc.Config{ID: p.ID, Name: p.Name, Issuer: issuer, ClientID: p.ClientID, ClientSecret: p.ClientSecret}, redirect, nil)
+// signInService is the Auth server's domain over store: the values' identity providers and, with a secrets key, the
+// Back-office's beside them, whose callback is the Auth server's /callback.
+func signInService(cfg config.AuthServer, store auth.Store, settings auth.Settings) (*auth.Service, error) {
+	configs, err := providerConfigs(cfg.Providers)
+	if err != nil {
+		return nil, err
+	}
+	build := providerBuilder(cfg)
+	providers := make([]auth.Provider, 0, len(configs))
+	for _, p := range configs {
+		provider, err := build(p)
 		if err != nil {
-			return nil, fmt.Errorf("configuring the identity providers: %w", err)
+			return nil, err
 		}
 		providers = append(providers, provider)
 	}
-	return providers, nil
+	service := auth.NewService(store, providers, settings)
+	box, err := sealer(cfg.SecretsKey)
+	if err != nil {
+		return nil, err
+	}
+	if box != nil {
+		service.UseStoredProviders(box, build)
+	}
+	return service, nil
 }
