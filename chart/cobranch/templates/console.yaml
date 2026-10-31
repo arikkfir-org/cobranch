@@ -49,10 +49,14 @@ spec:
           ports:
             - name: http
               containerPort: 8080
-          {{- if or .Values.urls.rest .Values.urls.auth }}
-          # Where the Console's pages find the REST API (without it, at the root of their own host) and the Auth
-          # server (without it, sign-in isn't set up).
+          {{- if or .Values.urls.rest .Values.urls.auth .Values.urls.console }}
+          # Where the Console's pages find the REST API (without it, at the root of their own host), the Auth
+          # server (without it, sign-in isn't set up) and themselves (without it, the root of their own host).
           env:
+            {{- with .Values.urls.console }}
+            - name: COBRANCH_CONSOLE_URL
+              value: {{ . | trimSuffix "/" | quote }}
+            {{- end }}
             {{- with .Values.urls.rest }}
             - name: COBRANCH_REST_URL
               value: {{ . | trimSuffix "/" | quote }}

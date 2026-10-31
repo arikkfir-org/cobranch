@@ -6,4 +6,4 @@ INSERT INTO grants (principal_id, role_id, scope, source) VALUES ($1, $2, 'insta
 DELETE FROM grants WHERE principal_id = $1 AND role_id = $2 AND source = $3;
 
 -- name: InsertEvent :exec
-INSERT INTO events (actor_id, kind, subject_id, details) VALUES ($1, $2, $3, $4);
+INSERT INTO events (actor_id, kind, subject_id, details, org_id) VALUES ($1, $2, $3, $4, $5);

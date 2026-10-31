@@ -21,12 +21,62 @@ type Identity struct {
 	LastSignInAt  time.Time
 }
 
+type Invitation struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Email     string
+	RoleID    uuid.UUID
+	InvitedBy uuid.UUID
+	State     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	DecidedAt *time.Time
+	DecidedBy *uuid.UUID
+}
+
+type JoinRequest struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	UserID    uuid.UUID
+	Note      string
+	State     string
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	DecidedAt *time.Time
+	DecidedBy *uuid.UUID
+}
+
+type Membership struct {
+	OrgID    uuid.UUID
+	UserID   uuid.UUID
+	JoinedAt time.Time
+}
+
+type Organization struct {
+	ID                  uuid.UUID
+	Slug                string
+	Name                string
+	MembershipRoleID    uuid.UUID
+	AcceptsJoinRequests bool
+	Providers           []string
+	CreatedAt           time.Time
+}
+
 type Principal struct {
 	ID          uuid.UUID
 	Kind        string
 	DisplayName string
 	Suspended   bool
 	CreatedAt   time.Time
+}
+
+type Role struct {
+	ID          uuid.UUID
+	Scope       string
+	Name        string
+	Description string
+	Permissions []string
+	BuiltIn     bool
 }
 
 type Session struct {

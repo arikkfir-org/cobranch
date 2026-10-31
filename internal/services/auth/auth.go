@@ -28,6 +28,9 @@ var AnonymousID = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 var (
 	RoleInstallationAdmin = uuid.MustParse("00000000-0000-7000-8000-000000000101")
 	RoleInstallationUser  = uuid.MustParse("00000000-0000-7000-8000-000000000102")
+	RoleOwner             = uuid.MustParse("00000000-0000-7000-8000-000000000201")
+	RoleMember            = uuid.MustParse("00000000-0000-7000-8000-000000000202")
+	RoleGuest             = uuid.MustParse("00000000-0000-7000-8000-000000000203")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.

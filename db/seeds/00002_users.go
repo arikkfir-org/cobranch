@@ -12,7 +12,7 @@ import (
 )
 
 // A demo user: the sign-in page offers each one while seeding is on, and signs in as them with no provider. Their
-// organizations and grants come with the organizations seed; until then each is a user with an email.
+// organizations and grants come with the organizations seed.
 type demoUser struct {
 	id                   uuid.UUID
 	subject, name, email string

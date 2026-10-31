@@ -7,9 +7,31 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const insertSeedGrant = `-- name: InsertSeedGrant :exec
+INSERT INTO grants (principal_id, role_id, scope, scope_id, source) VALUES ($1, $2, $3, $4, 'grant')
+`
+
+type InsertSeedGrantParams struct {
+	PrincipalID uuid.UUID
+	RoleID      uuid.UUID
+	Scope       string
+	ScopeID     uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedGrant(ctx context.Context, arg InsertSeedGrantParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedGrant,
+		arg.PrincipalID,
+		arg.RoleID,
+		arg.Scope,
+		arg.ScopeID,
+	)
+	return err
+}
 
 const insertSeedIdentity = `-- name: InsertSeedIdentity :exec
 INSERT INTO identities (issuer, subject, principal_id, email, email_verified, name)
@@ -32,6 +54,71 @@ func (q *Queries) InsertSeedIdentity(ctx context.Context, arg InsertSeedIdentity
 		arg.Email,
 		arg.Name,
 	)
+	return err
+}
+
+const insertSeedInvitation = `-- name: InsertSeedInvitation :exec
+INSERT INTO invitations (id, org_id, email, role_id, invited_by, expires_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type InsertSeedInvitationParams struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	Email     string
+	RoleID    uuid.UUID
+	InvitedBy uuid.UUID
+	ExpiresAt time.Time
+}
+
+func (q *Queries) InsertSeedInvitation(ctx context.Context, arg InsertSeedInvitationParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedInvitation,
+		arg.ID,
+		arg.OrgID,
+		arg.Email,
+		arg.RoleID,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const insertSeedMembership = `-- name: InsertSeedMembership :exec
+INSERT INTO memberships (org_id, user_id) VALUES ($1, $2)
+`
+
+func (q *Queries) InsertSeedMembership(ctx context.Context, orgID uuid.UUID, userID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, insertSeedMembership, orgID, userID)
+	return err
+}
+
+const insertSeedOrganization = `-- name: InsertSeedOrganization :exec
+INSERT INTO organizations (id, slug, name, membership_role_id) VALUES ($1, $2, $3, $4)
+`
+
+type InsertSeedOrganizationParams struct {
+	ID               uuid.UUID
+	Slug             string
+	SlugName         string
+	MembershipRoleID uuid.UUID
+}
+
+func (q *Queries) InsertSeedOrganization(ctx context.Context, arg InsertSeedOrganizationParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedOrganization,
+		arg.ID,
+		arg.Slug,
+		arg.SlugName,
+		arg.MembershipRoleID,
+	)
+	return err
+}
+
+const insertSeedSlug = `-- name: InsertSeedSlug :exec
+INSERT INTO organization_slugs (slug, org_id) VALUES ($1, $2)
+`
+
+func (q *Queries) InsertSeedSlug(ctx context.Context, slug string, orgID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, insertSeedSlug, slug, orgID)
 	return err
 }
 

@@ -3,6 +3,10 @@
 package graphql
 
 import (
+	"bytes"
+	"fmt"
+	"io"
+	"strconv"
 	"time"
 )
 
@@ -11,10 +15,83 @@ type Email struct {
 	Verified bool   `json:"verified"`
 }
 
+// An invitation to an email; only a user who holds it, verified, accepts it.
+type Invitation struct {
+	ID               string    `json:"id"`
+	OrganizationID   string    `json:"organizationId"`
+	OrganizationSlug string    `json:"organizationSlug"`
+	OrganizationName string    `json:"organizationName"`
+	Email            string    `json:"email"`
+	RoleID           string    `json:"roleId"`
+	CreatedAt        time.Time `json:"createdAt"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+}
+
+// A user's request to join an organization, waiting for one of its member managers.
+type JoinRequest struct {
+	ID               string    `json:"id"`
+	OrganizationID   string    `json:"organizationId"`
+	OrganizationSlug string    `json:"organizationSlug"`
+	OrganizationName string    `json:"organizationName"`
+	UserID           string    `json:"userId"`
+	UserName         string    `json:"userName"`
+	Note             string    `json:"note"`
+	CreatedAt        time.Time `json:"createdAt"`
+	ExpiresAt        time.Time `json:"expiresAt"`
+}
+
+// A user who belongs to an organization, with the roles they hold there.
+type Member struct {
+	UserID      string    `json:"userId"`
+	DisplayName string    `json:"displayName"`
+	JoinedAt    time.Time `json:"joinedAt"`
+	Roles       []*Role   `json:"roles"`
+}
+
 type Mutation struct {
 }
 
+// An organization: a slug for its URLs, a name, and its settings.
+type Organization struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+	// The role everyone who joins gets: Member by default.
+	MembershipRoleID string `json:"membershipRoleId"`
+	// Whether users may ask to join by slug. Off, the organization answers like one that doesn't exist.
+	AcceptsJoinRequests bool `json:"acceptsJoinRequests"`
+	// The identity providers its members may sign in with, or null for all of the installation's.
+	Providers []string  `json:"providers,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// The permissions the viewer holds here.
+	ViewerPermissions []string `json:"viewerPermissions"`
+	// The members and the roles they hold; takes org.read.
+	Members []*Member `json:"members"`
+	// The pending invitations; takes org.members.manage.
+	Invitations []*Invitation `json:"invitations"`
+	// The pending join requests; takes org.members.manage.
+	JoinRequests []*JoinRequest `json:"joinRequests"`
+}
+
+type OrganizationSettings struct {
+	Slug                string `json:"slug"`
+	Name                string `json:"name"`
+	MembershipRoleID    string `json:"membershipRoleId"`
+	AcceptsJoinRequests bool   `json:"acceptsJoinRequests"`
+	// Null or empty lets members sign in with any of the installation's providers.
+	Providers []string `json:"providers,omitempty"`
+}
+
 type Query struct {
+}
+
+// A role granted at a scope.
+type Role struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Permissions []string `json:"permissions"`
+	BuiltIn     bool     `json:"builtIn"`
 }
 
 // A signed-in browser.
@@ -38,4 +115,66 @@ type User struct {
 	Emails []*Email `json:"emails"`
 	// The user's live sessions, newest first.
 	Sessions []*Session `json:"sessions"`
+	// The permissions the viewer holds at the installation, such as orgs.create.
+	Permissions []string `json:"permissions"`
+	// The organizations the viewer belongs to.
+	Organizations []*Organization `json:"organizations"`
+	// The pending invitations to the viewer's verified emails.
+	Invitations []*Invitation `json:"invitations"`
+	// The viewer's pending requests to join organizations.
+	JoinRequests []*JoinRequest `json:"joinRequests"`
+}
+
+// The scopes roles are granted at. Repositories come with their slice.
+type RoleScope string
+
+const (
+	RoleScopeOrganization RoleScope = "ORGANIZATION"
+)
+
+var AllRoleScope = []RoleScope{
+	RoleScopeOrganization,
+}
+
+func (e RoleScope) IsValid() bool {
+	switch e {
+	case RoleScopeOrganization:
+		return true
+	}
+	return false
+}
+
+func (e RoleScope) String() string {
+	return string(e)
+}
+
+func (e *RoleScope) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RoleScope(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RoleScope", str)
+	}
+	return nil
+}
+
+func (e RoleScope) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RoleScope) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RoleScope) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }

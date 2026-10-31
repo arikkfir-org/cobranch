@@ -80,7 +80,491 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/organizations:
+    get:
+      operationId: listMyOrganizations
+      summary: The organizations the user belongs to, by name.
+      responses:
+        "200":
+          description: The organizations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [organizations]
+                properties:
+                  organizations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/invitations:
+    get:
+      operationId: listMyInvitations
+      summary: The invitations waiting for the user's verified emails, oldest first.
+      responses:
+        "200":
+          description: The invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invitation"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/invitations/{id}/accept:
+    post:
+      operationId: acceptInvitation
+      summary: Joins the organization through an invitation to one of the user's verified emails.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The organization joined.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/invitations/{id}/decline:
+    post:
+      operationId: declineInvitation
+      summary: Declines an invitation to one of the user's verified emails.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Declined.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/join-requests:
+    get:
+      operationId: listMyJoinRequests
+      summary: The user's requests to join organizations that still wait, oldest first.
+      responses:
+        "200":
+          description: The requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [joinRequests]
+                properties:
+                  joinRequests:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JoinRequest"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /roles:
+    get:
+      operationId: listRoles
+      summary: The roles granted at a scope, the built-in ones first.
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [organization]
+      responses:
+        "200":
+          description: The roles.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roles]
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Role"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs:
+    post:
+      operationId: createOrganization
+      summary: Creates an organization, with the user its first Owner; takes orgs.create.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name]
+              properties:
+                slug:
+                  type: string
+                  description: 2 to 39 lowercase letters, digits and single hyphens, unique among organizations and their old slugs.
+                name:
+                  type: string
+      responses:
+        "201":
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}:
+    get:
+      operationId: getOrganization
+      summary: An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The organization, with its current slug.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateOrganization
+      summary: Changes an organization's name, slug or settings; takes org.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrganizationSettings"
+      responses:
+        "200":
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/leave:
+    post:
+      operationId: leaveOrganization
+      summary: Leaves the organization, dropping every role held there; its last Owner can't.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "204":
+          description: Left.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/members:
+    get:
+      operationId: listMembers
+      summary: The organization's members with the roles they hold there; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The members.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [members]
+                properties:
+                  members:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Member"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/members/{user}:
+    delete:
+      operationId: removeMember
+      summary: Removes a member, with every role they hold; takes org.members.manage and every permission of those roles.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: user
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/invitations:
+    get:
+      operationId: listInvitations
+      summary: The organization's invitations that wait, oldest first; takes org.members.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The invitations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitations]
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Invitation"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: invite
+      summary: Invites an email; takes org.members.manage, and a role other than the membership role adds the grant rules.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                roleId:
+                  type: string
+                  format: uuid
+                  description: The role the invitee gets; the organization's membership role when left out.
+      responses:
+        "201":
+          description: The invitation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invitation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/invitations/{id}:
+    delete:
+      operationId: cancelInvitation
+      summary: Cancels an invitation that waits; takes org.members.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Cancelled.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/join-requests:
+    get:
+      operationId: listJoinRequests
+      summary: The requests to join the organization that wait, oldest first; takes org.members.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [joinRequests]
+                properties:
+                  joinRequests:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/JoinRequest"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: requestToJoin
+      summary: Asks to join the organization the slug names; one that takes no requests answers 404 like one that doesn't exist.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: A word for the managers, at most 500 characters.
+      responses:
+        "201":
+          description: The request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JoinRequest"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/join-requests/{id}/approve:
+    post:
+      operationId: approveJoinRequest
+      summary: Makes the requester a member; takes org.members.manage, and a role other than the membership role adds the grant rules.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                roleId:
+                  type: string
+                  format: uuid
+                  description: The role the requester gets; the organization's membership role when left out.
+      responses:
+        "204":
+          description: Approved.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/join-requests/{id}/decline:
+    post:
+      operationId: declineJoinRequest
+      summary: Declines a request that waits; takes org.members.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Declined.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
+  parameters:
+    org:
+      name: org
+      in: path
+      required: true
+      description: The organization's slug, or an old slug of its.
+      schema:
+        type: string
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
   responses:
     Problem:
       description: An error, as problem details (RFC 9457).
@@ -100,7 +584,7 @@ components:
     User:
       type: object
       description: A person, a principal of kind user.
-      required: [id, displayName, emails]
+      required: [id, displayName, emails, permissions]
       properties:
         id:
           type: string
@@ -112,6 +596,11 @@ components:
           description: The emails the user holds; the sign-up's verified one today, several later.
           items:
             $ref: "#/components/schemas/Email"
+        permissions:
+          type: array
+          description: The permissions the user holds at the installation, such as orgs.create.
+          items:
+            type: string
     Email:
       type: object
       required: [email, verified]
@@ -145,6 +634,144 @@ components:
         current:
           type: boolean
           description: Whether this is the session the request itself came with.
+    Organization:
+      type: object
+      description: An organization, with what the viewer may do there.
+      required: [id, slug, name, membershipRoleId, acceptsJoinRequests, createdAt, viewerPermissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: The current slug; a request by an old one gets the organization with this one.
+        name:
+          type: string
+        membershipRoleId:
+          type: string
+          format: uuid
+          description: The role everyone who joins gets.
+        acceptsJoinRequests:
+          type: boolean
+        providers:
+          type: array
+          description: The identity providers its members may sign in with; absent, all of the installation's.
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        viewerPermissions:
+          type: array
+          description: The permissions the viewer holds at the organization.
+          items:
+            type: string
+    OrganizationSettings:
+      type: object
+      description: What a manager changes; a field left out keeps its value.
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        membershipRoleId:
+          type: string
+          format: uuid
+        acceptsJoinRequests:
+          type: boolean
+        providers:
+          type: array
+          description: The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
+          items:
+            type: string
+    Role:
+      type: object
+      required: [id, name, description, permissions, builtIn]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+        builtIn:
+          type: boolean
+    Member:
+      type: object
+      description: A user who belongs to the organization, with the roles they hold there.
+      required: [userId, displayName, joinedAt, roles]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Role"
+    Invitation:
+      type: object
+      description: An invitation to an email, which only a user holding it, verified, accepts.
+      required: [id, orgId, orgSlug, orgName, email, roleId, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        orgSlug:
+          type: string
+        orgName:
+          type: string
+        email:
+          type: string
+        roleId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    JoinRequest:
+      type: object
+      description: A user's request to join an organization, waiting for a member manager.
+      required: [id, orgId, orgSlug, orgName, userId, userName, note, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        orgSlug:
+          type: string
+        orgName:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        userName:
+          type: string
+        note:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

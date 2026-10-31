@@ -24,7 +24,8 @@ lists every value, and `values.schema.json` checks them at install.
 - **Routes.** Every workload serves as if it were alone, so you choose where each lives: a host each, or paths on one
   host (`https://cobranch.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
   `urls.rest`, `urls.graphql` and `urls.auth` with `httpRoute.enabled` for an HTTPRoute each. Keep every URL under one
-  parent domain: the session cookie is set for the one host they share, or else for their nearest common parent.
+  parent domain: the session cookie is set for the one host they share, or else for their nearest common parent. The
+  Console's pages route in the browser under `urls.console`'s path, so set it when a route mounts the Console at a prefix.
 - **Sign-in.** Set `urls.console` and `urls.auth`, the Console's and the Auth server's public URLs: without `urls.auth`
   the Auth server isn't deployed and the Console says sign-in isn't set up. Then list your identity providers in `auth.providers`: any OpenID Connect provider by its issuer, or
   `preset: google`, with the client you registered there (its redirect URI is `urls.auth` plus `/callback`) and a

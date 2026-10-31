@@ -25,7 +25,7 @@ func viewer(ctx context.Context) (auth.Authenticated, error) {
 	return v, nil
 }
 
-// user is u as the API shows them; sessions resolve on their own.
+// user is u as the API shows them; sessions, organizations and the rest resolve on their own.
 func user(u auth.User) *User {
 	emails := make([]*Email, 0, len(u.Emails))
 	for _, e := range u.Emails {

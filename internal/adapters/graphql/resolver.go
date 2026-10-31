@@ -21,4 +21,6 @@ type Resolver struct {
 	Version string
 	// Sessions is sign-in's service.
 	Sessions Sessions
+	// Orgs is the organizations' service.
+	Orgs Organizations
 }

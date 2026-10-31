@@ -244,7 +244,8 @@ state, deletes its principal, secrets and grants; its events keep its ID and nam
 ## Operations
 
 Sign-in and sign-out are the Auth server's. Every other operation is in both GraphQL and REST, over one service layer
-([API](architecture.md#api-conventions)); the Console uses GraphQL.
+([API](architecture.md#api-conventions)); the Console uses GraphQL. **Until its build-out,** the Console's first
+pages call the REST API, as its sign-in page already did; they switch to GraphQL when the Console grows its own client.
 
 | Operation | Takes |
 | --- | --- |
