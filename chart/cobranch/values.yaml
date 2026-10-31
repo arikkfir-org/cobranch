@@ -64,6 +64,12 @@ auth:
   # are never touched.
   admins: []
 
+# The key that seals the secrets Cobranch keeps in its database, the Back-office's identity providers' client secrets:
+# 32 characters at least. A Secret of yours that holds it under secretKey, which the Auth and Admin servers read.
+secretsKey:
+  existingSecret: ""
+  secretKey: key
+
 organizations:
   # Every new user may create organizations (Installation user). Off, only the administrators grant it. Set, it is the
   # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).

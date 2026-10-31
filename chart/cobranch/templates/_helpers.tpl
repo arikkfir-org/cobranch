@@ -205,6 +205,17 @@ hosts the session cookie is set for. */}}
 {{- end }}
 {{- end -}}
 
+{{/* The secrets key, which the Auth and Admin servers read, when the values name its Secret. */}}
+{{- define "cobranch.secretsKeyEnv" -}}
+{{- with .Values.secretsKey.existingSecret }}
+- name: COBRANCH_SECRETS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ . }}
+      key: {{ $.Values.secretsKey.secretKey }}
+{{- end }}
+{{- end -}}
+
 {{/* Sign-in's settings, which the Auth server alone reads: the providers (their secrets from your Secrets), the
 first administrators and the sign-up settings. */}}
 {{- define "cobranch.authEnv" -}}
@@ -222,6 +233,7 @@ first administrators and the sign-up settings. */}}
       key: {{ .clientSecret.key | default "client-secret" }}
 {{- end }}
 {{- include "cobranch.signUpEnv" . }}
+{{- include "cobranch.secretsKeyEnv" . }}
 {{- with .Values.auth.admins }}
 - name: COBRANCH_AUTH_ADMINS
   value: {{ join "," . | quote }}

@@ -253,7 +253,8 @@ alone.
 - **Each pull request keeps `main` working,** with its Back-office pages and tests, and is Part of
   [ENG-219](https://linear.app/arikkfir/issue/ENG-219); the third closes it.
 - **An installation is the operator's,** configured through the chart alone: the two new workloads' routes, `urls.admin`
-  and `urls.backOffice`, and from the third pull request a secrets key, or the chart's generated one.
+  and `urls.backOffice`, and from the second pull request a secrets key, which an installation rendered without the
+  cluster gives before the third, whose chart generates one otherwise.
 
 ## Risks
 
