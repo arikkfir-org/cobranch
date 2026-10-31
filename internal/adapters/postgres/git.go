@@ -17,7 +17,7 @@ import (
 	"cobranch.dev/internal/services/git"
 )
 
-// GitStore keeps Git hosting's rows (db/migrations/00011_git.sql): git.Store on PostgreSQL, through the queries sqlc
+// GitStore keeps Git hosting's rows (db/migrations/00012_git.sql): git.Store on PostgreSQL, through the queries sqlc
 // generates from db/queries.
 type GitStore struct {
 	pool *pgxpool.Pool
