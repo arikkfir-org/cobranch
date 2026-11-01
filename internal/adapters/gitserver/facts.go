@@ -165,8 +165,8 @@ func parseAheadBehind(line string) (git.Facts, error) {
 	if len(fields) != 3 {
 		return git.Facts{}, fmt.Errorf("git for-each-ref printed %q", line)
 	}
-	ahead, aheadErr := strconv.Atoi(fields[1])
-	behind, behindErr := strconv.Atoi(fields[2])
+	ahead, aheadErr := countOf(fields[1])
+	behind, behindErr := countOf(fields[2])
 	if aheadErr != nil || behindErr != nil {
 		return git.Facts{}, fmt.Errorf("git for-each-ref printed %q", line)
 	}
@@ -193,7 +193,7 @@ func (s *Server) count(ctx context.Context, dir string, env []string, revs ...st
 	if err != nil {
 		return 0, err
 	}
-	n, err := strconv.Atoi(strings.TrimSpace(out))
+	n, err := countOf(strings.TrimSpace(out))
 	if err != nil {
 		return 0, fmt.Errorf("git rev-list printed %q", strings.TrimSpace(out))
 	}
@@ -223,4 +223,13 @@ func (s *Server) tipsDir(dir string, tips map[string]string) (string, func(), er
 		return "", nil, fmt.Errorf("writing the alternates: %w", err)
 	}
 	return refs, remove, nil
+}
+
+// countOf reads a count Git printed, which the branches' rows keep as integers of 32 bits.
+func countOf(s string) (int, error) {
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("reading count %q: %w", s, err)
+	}
+	return int(n), nil
 }
