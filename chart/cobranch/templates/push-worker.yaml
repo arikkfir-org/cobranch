@@ -1,24 +1,4 @@
 {{- if .Values.urls.git }}
 {{- include "cobranch.checkDatabase" . }}
-{{- include "cobranch.server" (dict "root" . "component" "push-worker" "values" .Values.pushWorker "bucket" false "env" (include "cobranch.internalEnv" .)) }}
----
-# Only the Git server's pods reach the push worker, which writes every ref: no route, and no other pod.
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: {{ include "cobranch.fullname" . }}-push-worker
-  labels:
-    {{- include "cobranch.labels" (dict "root" . "component" "push-worker") | nindent 4 }}
-spec:
-  podSelector:
-    matchLabels:
-      {{- include "cobranch.selectorLabels" (dict "root" . "component" "push-worker") | nindent 6 }}
-  policyTypes: [Ingress]
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              {{- include "cobranch.selectorLabels" (dict "root" . "component" "git-server") | nindent 14 }}
-      ports:
-        - port: http
+{{- include "cobranch.server" (dict "root" . "component" "push-worker" "values" .Values.pushWorker "bucket" false "service" false) }}
 {{- end }}

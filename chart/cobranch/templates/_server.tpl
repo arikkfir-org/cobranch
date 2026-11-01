@@ -1,8 +1,8 @@
 {{/*
 A server of one API: its Deployment, Service and budget. Pass a dict of the root context, the component, which names
 the subcommand too, and the server's values; and, for the Git workloads, bucket (false for one that never reads it),
-env (more of the container's variables, as YAML) and volumes (more emptyDirs: a name, a mountPath and the emptyDir
-each).
+service (false for one nobody calls), env (more of the container's variables, as YAML) and volumes (more emptyDirs: a
+name, a mountPath and the emptyDir each). Values without replicas leave the count to an autoscaler.
 */}}
 {{- define "cobranch.server" -}}
 {{- $root := .root }}
@@ -24,7 +24,9 @@ metadata:
     # Argo CD rolls the servers out once the migrate Job, a wave before, is done.
     argocd.argoproj.io/sync-wave: "2"
 spec:
+  {{- if hasKey $values "replicas" }}
   replicas: {{ $values.replicas }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "cobranch.selectorLabels" $component | nindent 6 }}
@@ -134,6 +136,7 @@ spec:
           emptyDir:
             {{- toYaml .emptyDir | nindent 12 }}
         {{- end }}
+{{- if (hasKey . "service" | ternary .service true) }}
 ---
 apiVersion: v1
 kind: Service
@@ -148,6 +151,7 @@ spec:
     - name: http
       port: 80
       targetPort: http
+{{- end }}
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

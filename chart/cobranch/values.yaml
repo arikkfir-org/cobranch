@@ -77,13 +77,6 @@ secretsKey:
   existingSecret: ""
   secretKey: key
 
-# The token the Git server bears to call the push worker, which only the two hold. A Secret of yours that holds it
-# under secretKey; without one, the chart generates it on install and keeps it on upgrade, which needs the cluster at
-# render time: under Argo CD, or anything else that renders without the cluster, give one.
-internal:
-  existingSecret: ""
-  secretKey: token
-
 organizations:
   # Every new user may create organizations (Installation user). Off, only the administrators grant it. Set, it is the
   # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).
@@ -234,8 +227,10 @@ gitServer:
   affinity: {}
   podAnnotations: {}
 
-# The push worker, with urls.git: it records the Git server's pushes in the database, and only the Git server's pods
-# reach it (a NetworkPolicy of the chart's).
+# The push worker, with urls.git: it does what follows each push the Git server recorded, from the database, which
+# wakes it; nobody calls it. Set replicas to null to leave the count to an autoscaler, which may scale it to zero
+# while no push waits: the pushes waiting are SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <=
+# now(), as KEDA's PostgreSQL scaler asks.
 pushWorker:
   replicas: 2
   resources:

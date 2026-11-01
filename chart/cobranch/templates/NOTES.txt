@@ -59,8 +59,4 @@ set postgresql.auth.existingSecret instead: such a render can't find the Secret 
 
 Git clients clone, fetch and push at {{ .Values.urls.git }}/<organization>/<repository>.git, with a personal token as
 the password, which each user makes in the Console's settings.
-{{- if not .Values.internal.existingSecret }} The Git server and the push worker share a token the chart generated and
-keeps in Secret {{ include "cobranch.internal.secret" . }}; under Argo CD, or anything else that renders without the
-cluster, set internal.existingSecret instead.
-{{- end }}
 {{- end }}

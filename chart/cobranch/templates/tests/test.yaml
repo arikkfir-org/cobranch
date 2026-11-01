@@ -100,7 +100,7 @@ spec:
           {{- end }}
           {{- if .Values.urls.git }}
           # Olivia, who maintains Acme's website, makes a personal token from her session and clones the website with
-          # it, empty the first time. Her commit's push returns once the push worker recorded it, and a fresh clone,
+          # it, empty the first time. Her commit's push returns once the Git server recorded it, and a fresh clone,
           # from any Git server, brings it.
           cookie=$(signIn owner)
           token=$(wget -qO- --header "Cookie: $cookie" --header 'Content-Type: application/json' --post-data '{"name":"helm test"}' "$rest/v1/me/tokens" \

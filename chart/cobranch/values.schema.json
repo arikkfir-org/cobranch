@@ -430,7 +430,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "replicas",
         "resources"
       ],
       "properties": {
@@ -849,19 +848,6 @@
       }
     },
     "secretsKey": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "existingSecret": {
-          "type": "string"
-        },
-        "secretKey": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "internal": {
       "type": "object",
       "additionalProperties": false,
       "properties": {

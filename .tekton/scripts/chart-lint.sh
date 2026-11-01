@@ -1,7 +1,7 @@
 #!/bin/sh
 # Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, Google and
-# traces, and with an external database, one host with a path per workload, another provider, the operator's internal
-# token and no traces. Writes the bundled PostgreSQL's image to
+# traces, and with an external database, one host with a path per workload, another provider, an autoscaled push
+# worker and no traces. Writes the bundled PostgreSQL's image to
 # .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
@@ -25,7 +25,7 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranc
   --set urls.console=https://cobranch.example.com --set urls.rest=https://cobranch.example.com/api \
   --set urls.graphql=https://cobranch.example.com/graphql --set urls.auth=https://cobranch.example.com/auth \
   --set urls.admin=https://cobranch.example.com/admin --set urls.backOffice=https://cobranch.example.com/back-office \
-  --set urls.git=https://cobranch.example.com/git --set internal.existingSecret=cobranch-internal \
+  --set urls.git=https://cobranch.example.com/git --set pushWorker.replicas=null \
   --set 'auth.providers[0].id=my-idp' --set 'auth.providers[0].issuer=https://idp.example.com' \
   --set 'auth.providers[0].clientId=cobranch' --set 'auth.providers[0].clientSecret.secretName=cobranch-idp' \
   --set 'auth.providers[0].clientSecret.key=secret' --set auth.signUp=domains --set 'auth.signUpDomains[0]=example.com' \
