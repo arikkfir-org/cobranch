@@ -2118,7 +2118,7 @@ components:
           type: string
         parents:
           type: array
-          description: Its parents' names, the first of which its branch's history follows.
+          description: "Its parents' names, in Git's order: history follows all of them, or the first alone, as asked."
           items:
             type: string
         message:

@@ -926,7 +926,13 @@
           draw = null;
           toggle.hidden = true;
           panel.append(h("p", {}, "This installation runs no Git server, so history follows first parents alone."));
-          shown = await load(start(true));
+          try {
+            shown = await load(start(true));
+          } catch (again) {
+            if (again.code !== "git.unavailable") throw again;
+            panel.append(h("p", {}, "A tag's history needs the Git server too: pick a branch or a commit."));
+            return panel;
+          }
         } else if (err.code === "ref.not_found" || err.code === "ref.invalid") {
           panel.append(h("p", {}, "This repository has no branch, tag or commit ", h("code", {}, ref), "."));
           return panel;

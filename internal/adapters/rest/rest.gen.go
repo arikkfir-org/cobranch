@@ -425,7 +425,7 @@ type Commit struct {
 	Committer Person `json:"committer"`
 	Message   string `json:"message"`
 
-	// Parents Its parents' names, the first of which its branch's history follows.
+	// Parents Its parents' names, in Git's order: history follows all of them, or the first alone, as asked.
 	Parents []string `json:"parents"`
 
 	// Push The push that first brought a commit; getCommit alone answers it.

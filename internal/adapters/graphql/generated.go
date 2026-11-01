@@ -2365,7 +2365,7 @@ type CommitPage {
 type Commit {
   sha: String!
   tree: String!
-  "Its parents' names, the first of which its branch's history follows."
+  "Its parents' names, in Git's order: history follows all of them, or the first alone, as asked."
   parents: [String!]!
   message: String!
   author: Person!
