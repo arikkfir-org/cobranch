@@ -122,6 +122,18 @@ func (s *CodeStore) Tags(ctx context.Context, repoID uuid.UUID) ([]code.Tag, err
 	return out, nil
 }
 
+// Slugs finds the repository's slug and its organization's (code.Store).
+func (s *CodeStore) Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error) {
+	row, err := s.q.Slugs(ctx, repoID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", repos.ErrNotFound
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("reading the repository's slugs: %w", err)
+	}
+	return row.Org, row.Repo, nil
+}
+
 // commitsAt finds those of the repository's commits that shas name, with their annotations, by name.
 func (s *CodeStore) commitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
 	if len(shas) == 0 {

@@ -157,7 +157,7 @@ func TestRaw(t *testing.T) {
 
 func TestWithoutGitServer(t *testing.T) {
 	f := newFixture()
-	f.service = code.NewService(f.store, nil, f.authz)
+	f.service = code.NewService(f.store, nil, nil, f.authz)
 	if _, err := f.service.Tree(t.Context(), f.max, f.repo, "main", ""); !errors.Is(err, code.ErrUnavailable) {
 		t.Errorf("Tree() without a Git server: %v, want ErrUnavailable", err)
 	}
@@ -218,6 +218,100 @@ func TestValidatePath(t *testing.T) {
 	for _, tt := range tests {
 		if got := code.ValidatePath(tt.path) == nil; got != tt.want {
 			t.Errorf("ValidatePath(%q) passes = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestTreeREADME(t *testing.T) {
+	tests := []struct {
+		name      string
+		files     map[string]string
+		path      string
+		renderer  bool
+		fail      error
+		wantPath  string
+		wantText  string
+		wantHTML  string
+		wantNone  bool
+		wantError error
+	}{
+		{name: "the root's README renders", files: map[string]string{"README.md": "# Hi\n", "a.txt": "a\n"}, renderer: true,
+			wantPath: "README.md", wantText: "# Hi\n", wantHTML: `<div data-doc="acme/website@main:` + sha(5) + `:README.md"># Hi` + "\n</div>"},
+		{name: "a directory's, whatever its case", files: map[string]string{"docs/ReadMe.MD": "Docs\n"}, path: "docs", renderer: true,
+			wantPath: "docs/ReadMe.MD", wantText: "Docs\n", wantHTML: `<div data-doc="acme/website@main:` + sha(5) + `:docs/ReadMe.MD">Docs` + "\n</div>"},
+		{name: "Markdown before text", files: map[string]string{"README.txt": "Text\n", "README.markdown": "Markdown\n"}, renderer: true,
+			wantPath: "README.markdown", wantText: "Markdown\n", wantHTML: `<div data-doc="acme/website@main:` + sha(5) + `:README.markdown">Markdown` + "\n</div>"},
+		{name: "a text README shows as text", files: map[string]string{"README": "Plain\n"}, renderer: true, wantPath: "README", wantText: "Plain\n"},
+		{name: "without a renderer, Markdown shows as text", files: map[string]string{"README.md": "# Hi\n"}, wantPath: "README.md", wantText: "# Hi\n"},
+		{name: "a binary README is none", files: map[string]string{"README": "\x00\x01"}, renderer: true, wantNone: true},
+		{name: "a directory named README is none", files: map[string]string{"README/x.md": "x\n"}, renderer: true, wantNone: true},
+		{name: "a directory without one", files: map[string]string{"a.txt": "a\n"}, renderer: true, wantNone: true},
+		{name: "the renderer's failure", files: map[string]string{"README.md": "# Hi\n"}, renderer: true, fail: errors.New("broken"), wantError: errors.New("broken")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture()
+			f.objects.Commit(sha(5), tt.files, "main")
+			f.markdown.Fail = tt.fail
+			if !tt.renderer {
+				f.service = code.NewService(f.store, f.objects, nil, f.authz)
+			}
+			got, err := f.service.Tree(t.Context(), f.max, f.repo, "main", tt.path)
+			if !sameError(err, tt.wantError) {
+				t.Fatalf("got error %v, want %v", err, tt.wantError)
+			}
+			if err == nil {
+				checkREADME(t, got.README, tt.wantNone, code.File{Path: tt.wantPath, Text: tt.wantText, HTML: tt.wantHTML})
+			}
+		})
+	}
+}
+
+// checkREADME checks that got is no README when none is wanted, or else want's path, text and HTML.
+func checkREADME(t *testing.T, got *code.File, none bool, want code.File) {
+	t.Helper()
+	switch {
+	case none && got != nil:
+		t.Errorf("got README %+v, want none", got)
+	case none:
+	case got == nil:
+		t.Error("got no README")
+	case got.Path != want.Path || got.Text != want.Text || got.HTML != want.HTML:
+		t.Errorf("got README %q with text %q and HTML %q", got.Path, got.Text, got.HTML)
+	}
+}
+
+func TestFileMarkdown(t *testing.T) {
+	tests := []struct {
+		name     string
+		ref      string
+		path     string
+		wantHTML string
+	}{
+		{name: "a Markdown file renders at the ref it was asked at", ref: "v1", path: "docs/guide.mkdn",
+			wantHTML: `<div data-doc="acme/website@v1:` + sha(5) + `:docs/guide.mkdn">Guide` + "\n</div>"},
+		{name: "a text file doesn't", ref: "main", path: "a.txt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture()
+			f.objects.Commit(sha(5), map[string]string{"docs/guide.mkdn": "Guide\n", "a.txt": "a\n"}, "main", "v1")
+			got, err := f.service.File(t.Context(), f.max, f.repo, tt.ref, tt.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.HTML != tt.wantHTML {
+				t.Errorf("got HTML %q, want %q", got.HTML, tt.wantHTML)
+			}
+		})
+	}
+}
+
+func TestIsMarkdown(t *testing.T) {
+	for p, want := range map[string]bool{"README.md": true, "a/b.MARKDOWN": true, "x.mdown": true, "x.mkd": true, "x.mkdn": true,
+		"x.txt": false, "md": false, "x.md.txt": false, "x.mdx": false} {
+		if got := code.IsMarkdown(p); got != want {
+			t.Errorf("IsMarkdown(%q) = %v, want %v", p, got, want)
 		}
 	}
 }

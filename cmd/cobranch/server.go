@@ -14,6 +14,7 @@ import (
 	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
+	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/rest"
 	"cobranch.dev/internal/adapters/server"
@@ -112,7 +113,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return err
 	}
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg, pool), authorizer),
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg, pool), markdown.New(cfg.Console.URL, cfg.REST.URL), authorizer),
 		administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)

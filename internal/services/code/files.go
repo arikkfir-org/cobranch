@@ -52,7 +52,7 @@ func (s *Service) Tags(ctx context.Context, v Viewer, repoID uuid.UUID) ([]Tag, 
 }
 
 // Tree reads the directory at path in the commit ref names (a full commit name, a branch or a tag, in that order),
-// its directories first and then its files, each by name; it takes repo.read.
+// its directories first and then its files, each by name, and its README; it takes repo.read.
 func (s *Service) Tree(ctx context.Context, v Viewer, repoID uuid.UUID, ref, path string) (Tree, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.Tree")
 	defer span.End()
@@ -65,11 +65,14 @@ func (s *Service) Tree(ctx context.Context, v Viewer, repoID uuid.UUID, ref, pat
 		return Tree{}, failed(span, "reading the tree", err)
 	}
 	sortEntries(tree.Entries)
+	if tree, err = s.withREADME(ctx, repoID, ref, tree); err != nil {
+		return Tree{}, failed(span, "reading the tree", err)
+	}
 	return tree, nil
 }
 
 // File reads the file or symlink at path in the commit ref names: whether it is binary and, when it isn't, its text
-// up to MaxText; it takes repo.read.
+// up to MaxText, rendered as HTML when it is Markdown; it takes repo.read.
 func (s *Service) File(ctx context.Context, v Viewer, repoID uuid.UUID, ref, path string) (File, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.File")
 	defer span.End()
@@ -84,7 +87,11 @@ func (s *Service) File(ctx context.Context, v Viewer, repoID uuid.UUID, ref, pat
 	if err != nil {
 		return File{}, failed(span, "reading the file", err)
 	}
-	return file(blob), nil
+	f, err := s.render(ctx, repoID, ref, file(blob))
+	if err != nil {
+		return File{}, failed(span, "reading the file", err)
+	}
+	return f, nil
 }
 
 // file is blob as people read it: its text, unless it is binary, without a character the limit cut in two.

@@ -174,6 +174,8 @@ type File struct {
 	Truncated bool `json:"truncated"`
 	// Its text, up to 1 MiB; null when it is binary. A symlink's is its target.
 	Text *string `json:"text,omitempty"`
+	// A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file.
+	HTML *string `json:"html,omitempty"`
 }
 
 // An invitation to an email; only a user who holds it, verified, accepts it.
@@ -347,7 +349,7 @@ type Repository struct {
 	Commit *Commit `json:"commit,omitempty"`
 	// The repository's tags, by name, each with the object it names; takes repo.read.
 	Tags []*Tag `json:"tags"`
-	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
+	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
 	Tree *Tree `json:"tree,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
@@ -450,6 +452,8 @@ type Tree struct {
 	Sha string `json:"sha"`
 	// Its directories and submodules first, then its files and symlinks, each by name.
 	Entries []*TreeEntry `json:"entries"`
+	// Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+	Readme *File `json:"readme,omitempty"`
 }
 
 // One of a directory's entries.
