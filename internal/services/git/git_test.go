@@ -121,6 +121,8 @@ func TestServiceRecord(t *testing.T) {
 		{name: "moving no ref", want: git.Answer{Message: "the push moves no ref"}},
 		{name: "a ref another push moved", updates: push.Updates, storeErr: &git.StaleError{Ref: "refs/heads/main"},
 			want: git.Answer{Message: "refs/heads/main moved since you fetched: fetch, merge or rebase, then push again"}, wantCalls: 1},
+		{name: "a push the merge requirements refuse", updates: push.Updates, storeErr: &git.RefusedError{Message: "main requires feature to be Ready: ci/build failed on " + a[:7]},
+			want: git.Answer{Message: "main requires feature to be Ready: ci/build failed on " + a[:7]}, wantCalls: 1},
 		{name: "a store that fails", updates: push.Updates, storeErr: broken, wantErr: broken, wantCalls: 4},
 		{name: "a repository that's gone", updates: push.Updates, storeErr: git.ErrNotFound, wantErr: git.ErrNotFound, wantCalls: 1},
 	}

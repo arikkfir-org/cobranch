@@ -157,6 +157,64 @@ func (b *InsertMergeRequirementsBatchResults) Close() error {
 	return b.br.Close()
 }
 
+const recordMerge = `-- name: RecordMerge :batchexec
+UPDATE branches SET merged_head = $1::text, merged_by = $2, merged_at = $3::timestamptz
+WHERE repo_id = $4 AND name = $5 AND deleted_at IS NULL
+`
+
+type RecordMergeBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type RecordMergeParams struct {
+	Head     string
+	MergedBy *uuid.UUID
+	MergedAt time.Time
+	RepoID   uuid.UUID
+	Name     string
+}
+
+// RecordMerge records a merge of a live branch into its base, at the head merged, for the pusher, at when Cobranch
+// recorded the push.
+func (q *Queries) RecordMerge(ctx context.Context, arg []RecordMergeParams) *RecordMergeBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Head,
+			a.MergedBy,
+			a.MergedAt,
+			a.RepoID,
+			a.Name,
+		}
+		batch.Queue(recordMerge, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &RecordMergeBatchResults{br, len(arg), false}
+}
+
+func (b *RecordMergeBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *RecordMergeBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const setBranchFacts = `-- name: SetBranchFacts :batchexec
 UPDATE branches SET base = $1::text, ahead = $2::integer, behind = $3::integer, merges = $4::integer,
     status = 'processing', waits_for = $5::uuid

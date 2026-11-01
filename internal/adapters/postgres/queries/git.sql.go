@@ -13,7 +13,7 @@ import (
 )
 
 const claimPush = `-- name: ClaimPush :one
-SELECT id, repo_id, received_at, attempts, traceparent FROM pushes
+SELECT id, repo_id, pusher_id, received_at, committed_at, attempts, traceparent, merged FROM pushes
 WHERE processed_at IS NULL AND retry_at <= now()
 ORDER BY retry_at, committed_at
 LIMIT 1
@@ -23,9 +23,12 @@ FOR UPDATE SKIP LOCKED
 type ClaimPushRow struct {
 	ID          uuid.UUID
 	RepoID      uuid.UUID
+	PusherID    *uuid.UUID
 	ReceivedAt  time.Time
+	CommittedAt time.Time
 	Attempts    int32
 	Traceparent string
+	Merged      []byte
 }
 
 // ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
@@ -36,9 +39,12 @@ func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
 	err := row.Scan(
 		&i.ID,
 		&i.RepoID,
+		&i.PusherID,
 		&i.ReceivedAt,
+		&i.CommittedAt,
 		&i.Attempts,
 		&i.Traceparent,
+		&i.Merged,
 	)
 	return i, err
 }
@@ -188,8 +194,8 @@ func (q *Queries) InsertPack(ctx context.Context, arg InsertPackParams) error {
 }
 
 const insertPush = `-- name: InsertPush :exec
-INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent, merged)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type InsertPushParams struct {
@@ -202,6 +208,7 @@ type InsertPushParams struct {
 	Pack        string
 	ReceivedAt  time.Time
 	Traceparent string
+	Merged      []byte
 }
 
 func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
@@ -215,6 +222,7 @@ func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
 		arg.Pack,
 		arg.ReceivedAt,
 		arg.Traceparent,
+		arg.Merged,
 	)
 	return err
 }

@@ -6,7 +6,7 @@
 
 **Status**: Proposed 2026-11-01 · [ENG-199](https://linear.app/arikkfir/issue/ENG-199) · Builds the [product’s
 branches](product.md#branches) on [Git hosting](git-hosting.md) · Adds no workload and no chart value · Built by
-[ENG-199](https://linear.app/arikkfir/issue/ENG-199), in three pull requests
+[ENG-199](https://linear.app/arikkfir/issue/ENG-199), in four pull requests
 
 A branch is a request to merge into `main`: principals set annotations on its commits, `main`’s `/cobranch.yaml` names
 the annotations a merge needs and whether history stays linear, the push worker computes each branch’s status after
@@ -153,8 +153,8 @@ A merge Cobranch builds goes through the same Git server and the same counting, 
 - **Counted from the push's snapshot, checked as it records.** Another push may record first, between this one's
   snapshot and its record. The push's transaction keeps only the facts of branches still where they were counted, since
   the other push stored its own against the same `main`. A `main` another push moved, or any branch that moved under a
-  push into `main`, would leave facts nobody counted: the push is refused with `refs/heads/<branch> moved while Cobranch
-  took your push; nothing changed, so push again`.
+  push into `main`, would leave facts nobody counted: the push is refused with
+  `refs/heads/<branch> moved while Cobranch took your push; nothing changed, so push again`.
 - **Merged by this push.** When a push moves `main`, `git for-each-ref --merged=<new> --no-merged=<old>` lists the
   branches whose heads it brings into `main`; the push keeps them for the push worker, which records the merges.
 - **A branch whose facts change turns Processing** in the push's transaction, and names the push. The rest keep their
@@ -195,6 +195,13 @@ current) still come first.
   head the push brings into it, and each such branch must be Ready at that head. The Git server lists the commits no
   merged branch brings; the push's transaction checks the branches' status. A pusher holding `repo.bypass` skips both,
   and the push appends event `branch.bypassed`, naming what didn't hold.
+- **Its own merge commits merge cleanly.** A merge commit the push adds that no brought branch holds must have two
+  parents and the tree `git merge-tree` writes for them, so a conflict resolved by hand or a change slipped into a merge
+  comes from no Ready branch and is refused. Where the branch requires linear history, the push adds no merge commit at
+  all, not even one a Ready branch holds, except those already in `main`: Ready branches merge by fast-forward.
+- **Creating such a branch** adds the commits `main` lacks, so a branch created at `main`'s tip brings nothing, and one
+  created at a Ready branch's head brings that branch. Commits already in `main` never count against a push into another
+  branch.
 - **Deleting such a branch** needs `repo.bypass` too.
 - **Into any other branch,** nothing is checked, as today; a branch it brings into `main` is still recorded Merged.
 
@@ -202,6 +209,8 @@ current) still come first.
 | --- | --- |
 | `main requires its commits to come from Ready branches: 3 commits come from none` | The push adds commits no merged branch holds |
 | `main requires feature/login to be Ready: ci/test failed on 9f3c2e1` | A branch it merges isn't Ready |
+| `main requires merge commits to merge cleanly: 9f3c2e1 holds changes of its own; make them in a Ready branch` | A merge commit of its own resolves a conflict, changes more than its parents merge, or has more than two parents |
+| `main requires linear history: the push adds 1 merge commit` | `main` requires linear history and the push adds a merge commit, even one a Ready branch holds |
 | `/cobranch.yaml: line 4: annotations must be a list of names` | `main`'s new `/cobranch.yaml` doesn't parse |
 
 ### By asking Cobranch
@@ -268,15 +277,16 @@ Git’s. Every new row carries `org_id`.
 
 ## Rollout
 
-**Three pull requests, each with its tests and its Console pages**
+**Four pull requests, each with its tests and its Console pages**
 
-![Three pull requests, each with its tests and its Console pages](branch-status/rollout.svg)
+![Four pull requests, each with its tests and its Console pages](branch-status/rollout.svg)
 
 Nothing changes for an operator: no chart value is added, and a repository opts into requirements through its own
 `/cobranch.yaml`.
 
 - **Each pull request keeps `main` working,** with its tests and its Console pages, and is Part of
-  [ENG-199](https://linear.app/arikkfir/issue/ENG-199); the third closes it.
+  [ENG-199](https://linear.app/arikkfir/issue/ENG-199); the fourth closes it. Merges came apart into two, by a push and
+  by asking Cobranch, to keep each one reviewable.
 - **Upgrading needs nothing of the operator.** Branches pushed before the upgrade show Processing until their
   repository's next push works out their facts, and branches merged before it show Empty, since no merge of theirs was
   recorded.

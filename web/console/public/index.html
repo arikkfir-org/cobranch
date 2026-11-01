@@ -942,7 +942,8 @@
       const file = () => h("code", {}, "/cobranch.yaml");
       return h("section", { class: "panel" }, h("h3", {}, "Merge requirements"),
         h("p", {}, "A branch merges into ", h("code", {}, "main"), " once it is up to date with it", main && main.requirements ? ", and needs:" : "."),
-        main && main.requirements ? h("ul", {}, needs(main.requirements)) : null,
+        main && main.requirements ? [h("ul", {}, needs(main.requirements)),
+          h("p", {}, "A push into ", h("code", {}, "main"), " brings only Ready branches' commits; a principal holding ", h("code", {}, "repo.bypass"), " pushes past.")] : null,
         main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations or linear history."),
         others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
     }
@@ -961,8 +962,11 @@
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "History"));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
-      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b))), branchChecks(b)];
-      if (b.commit) sections.push(await branchCommits(path, at, b), commitAnnotations(path, b.commit, can, fail));
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)))];
+      // A Merged branch has nothing left to check or to merge.
+      if (b.status !== "merged") sections.push(branchChecks(b));
+      if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
+      if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail));
       return sections;
     }
 
@@ -1035,7 +1039,8 @@
       const into = [" into ", h("code", {}, b.base)];
       const updated = [" · updated ", when(b.updatedAt)];
       if (b.ahead === undefined) return ["Cobranch is still working out what it would merge", ...into, "."];
-      if (b.status === "merged") return ["Merged", ...into, ...updated];
+      if (b.status === "merged") return ["Merged", ...into, " by ", b.merge && b.merge.by ? b.merge.by.displayName : "a principal since gone", " · ",
+        b.merge ? whenExactly(b.merge.at) : when(b.updatedAt)];
       if (!b.ahead) return ["Nothing to merge: every commit of it is in ", h("code", {}, b.base), " already", ...updated];
       const commits = b.ahead === 1 ? "1 commit" : b.ahead + " commits";
       return [b.commit ? [who(b.commit.author), " wants to merge "] : "It would merge ", commits, ...into, ...updated];

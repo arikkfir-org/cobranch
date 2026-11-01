@@ -104,6 +104,8 @@ type Branch struct {
 	Behind *int `json:"behind,omitempty"`
 	// What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch.
 	Requirements *MergeRequirements `json:"requirements,omitempty"`
+	// The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's.
+	Merge *BranchMerge `json:"merge,omitempty"`
 }
 
 // One of a branch's merge requirements and how it stands.
@@ -116,6 +118,16 @@ type BranchCheck struct {
 	// For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION.
 	Count *int `json:"count,omitempty"`
 	Met   bool `json:"met"`
+}
+
+// A merge of a branch into its base that a push made.
+type BranchMerge struct {
+	// The head it brought into the base.
+	Head string `json:"head"`
+	// Who pushed it; null once they are gone.
+	By *CommitPrincipal `json:"by,omitempty"`
+	// When Cobranch recorded the push.
+	At time.Time `json:"at"`
 }
 
 // A commit a push brought, as the push recorded it.
@@ -142,7 +154,7 @@ type CommitPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// Who is behind a commit's author or committer, a push or an annotation: a user, perhaps one with no login whom a push made for an unknown email, or an API key.
+// Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key.
 type CommitPrincipal struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`

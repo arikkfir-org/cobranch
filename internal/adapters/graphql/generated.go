@@ -85,6 +85,7 @@ type ComplexityRoot struct {
 		Commit       func(childComplexity int) int
 		CreatedAt    func(childComplexity int) int
 		Head         func(childComplexity int) int
+		Merge        func(childComplexity int) int
 		Name         func(childComplexity int) int
 		Requirements func(childComplexity int) int
 		Status       func(childComplexity int) int
@@ -97,6 +98,12 @@ type ComplexityRoot struct {
 		Met    func(childComplexity int) int
 		Name   func(childComplexity int) int
 		Status func(childComplexity int) int
+	}
+
+	BranchMerge struct {
+		At   func(childComplexity int) int
+		By   func(childComplexity int) int
+		Head func(childComplexity int) int
 	}
 
 	Commit struct {
@@ -655,6 +662,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Branch.Head(childComplexity), true
+	case "Branch.merge":
+		if e.ComplexityRoot.Branch.Merge == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.Merge(childComplexity), true
 	case "Branch.name":
 		if e.ComplexityRoot.Branch.Name == nil {
 			break
@@ -710,6 +723,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BranchCheck.Status(childComplexity), true
+
+	case "BranchMerge.at":
+		if e.ComplexityRoot.BranchMerge.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchMerge.At(childComplexity), true
+	case "BranchMerge.by":
+		if e.ComplexityRoot.BranchMerge.By == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchMerge.By(childComplexity), true
+	case "BranchMerge.head":
+		if e.ComplexityRoot.BranchMerge.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchMerge.Head(childComplexity), true
 
 	case "Commit.annotations":
 		if e.ComplexityRoot.Commit.Annotations == nil {
@@ -2256,6 +2288,18 @@ type Branch {
   behind: Int
   "What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch."
   requirements: MergeRequirements
+  "The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's."
+  merge: BranchMerge
+}
+
+"A merge of a branch into its base that a push made."
+type BranchMerge {
+  "The head it brought into the base."
+  head: String!
+  "Who pushed it; null once they are gone."
+  by: CommitPrincipal
+  "When Cobranch recorded the push."
+  at: Time!
 }
 
 "Where a branch stands as a request to merge into its base, the first that holds."
@@ -2375,7 +2419,7 @@ type Person {
   principal: CommitPrincipal
 }
 
-"Who is behind a commit's author or committer, a push or an annotation: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
+"Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
 type CommitPrincipal {
   id: ID!
   displayName: String!
@@ -2884,6 +2928,8 @@ func (ec *executionContext) childFields_Branch(ctx context.Context, field graphq
 		return ec.fieldContext_Branch_behind(ctx, field)
 	case "requirements":
 		return ec.fieldContext_Branch_requirements(ctx, field)
+	case "merge":
+		return ec.fieldContext_Branch_merge(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Branch", field.Name)
 }
@@ -2902,6 +2948,18 @@ func (ec *executionContext) childFields_BranchCheck(ctx context.Context, field g
 		return ec.fieldContext_BranchCheck_met(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type BranchCheck", field.Name)
+}
+
+func (ec *executionContext) childFields_BranchMerge(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "head":
+		return ec.fieldContext_BranchMerge_head(ctx, field)
+	case "by":
+		return ec.fieldContext_BranchMerge_by(ctx, field)
+	case "at":
+		return ec.fieldContext_BranchMerge_at(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BranchMerge", field.Name)
 }
 
 func (ec *executionContext) childFields_Commit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -5344,6 +5402,38 @@ func (ec *executionContext) fieldContext_Branch_requirements(_ context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Branch_merge(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_merge(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Merge, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BranchMerge) graphql.Marshaler {
+			return ec.marshalOBranchMerge2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchMerge(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_merge(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Branch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BranchMerge(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BranchCheck_kind(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5457,6 +5547,84 @@ func (ec *executionContext) _BranchCheck_met(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_BranchCheck_met(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _BranchMerge_head(ctx context.Context, field graphql.CollectedField, obj *BranchMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchMerge_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BranchMerge_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchMerge", field, false, false, "String")
+}
+
+func (ec *executionContext) _BranchMerge_by(ctx context.Context, field graphql.CollectedField, obj *BranchMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchMerge_by(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.By, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BranchMerge_by(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BranchMerge",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BranchMerge_at(ctx context.Context, field graphql.CollectedField, obj *BranchMerge) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchMerge_at(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BranchMerge_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchMerge", field, false, false, "Time")
 }
 
 func (ec *executionContext) _Commit_sha(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
@@ -12728,6 +12896,11 @@ func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "merge":
+			out.Values[i] = ec._Branch_merge(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12778,6 +12951,49 @@ func (ec *executionContext) _BranchCheck(ctx context.Context, sel ast.SelectionS
 			}
 		case "met":
 			out.Values[i] = ec._BranchCheck_met(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var branchMergeImplementors = []string{"BranchMerge"}
+
+func (ec *executionContext) _BranchMerge(ctx context.Context, sel ast.SelectionSet, obj *BranchMerge) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, branchMergeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BranchMerge")
+		case "head":
+			out.Values[i] = ec._BranchMerge_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "by":
+			out.Values[i] = ec._BranchMerge_by(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "at":
+			out.Values[i] = ec._BranchMerge_at(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -15796,6 +16012,13 @@ func (ec *executionContext) marshalOBranch2ᚖcobranchᚗdevᚋinternalᚋadapte
 		return graphql.Null
 	}
 	return ec._Branch(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOBranchMerge2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchMerge(ctx context.Context, sel ast.SelectionSet, v *BranchMerge) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._BranchMerge(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOBranchStatus2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchStatus(ctx context.Context, v any) (*BranchStatus, error) {

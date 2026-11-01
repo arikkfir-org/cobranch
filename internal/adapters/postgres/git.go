@@ -80,8 +80,9 @@ func (s *GitStore) Record(ctx context.Context, push git.Push) error {
 }
 
 // apply records a push no transaction recorded before: once its refs prove to be where it found them, and the
-// branches its facts were counted from leave facts that hold, it locks the repository's branches, stores the push,
-// moves its refs and stores the branches' facts, then tells the push workers.
+// branches its facts were counted from leave facts that hold, it locks the repository's branches and checks the push
+// against their merge requirements, stores the push, moves its refs and stores the branches' facts, then tells the
+// push workers.
 func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
 	after, err := checkRefs(ctx, q, push)
 	if err != nil {
@@ -93,7 +94,14 @@ func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 	if err := q.LockLiveBranches(ctx, push.RepoID); err != nil {
 		return fmt.Errorf("locking the branches: %w", err)
 	}
+	broken, err := checkMerges(ctx, q, push)
+	if err != nil {
+		return err
+	}
 	if err := s.insertPush(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := recordBypasses(ctx, q, orgID, push, broken); err != nil {
 		return err
 	}
 	if err := moveRefs(ctx, q, orgID, push); err != nil {
@@ -205,9 +213,13 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	if err != nil {
 		return fmt.Errorf("encoding the ref updates: %w", err)
 	}
+	merged, err := mergedJSON(push)
+	if err != nil {
+		return err
+	}
 	if err := q.InsertPush(ctx, queries.InsertPushParams{
 		ID: push.ID, OrgID: orgID, RepoID: push.RepoID, PusherID: &push.PusherID, Transport: string(push.Transport),
-		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt, Traceparent: traceparent(ctx),
+		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt, Traceparent: traceparent(ctx), Merged: merged,
 	}); err != nil {
 		return fmt.Errorf("recording the push: %w", err)
 	}
@@ -252,6 +264,9 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		}
 		linkPush(ctx, claimed.Traceparent)
 		if err := s.attribute(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := recordMerges(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
