@@ -49,16 +49,20 @@ spec:
               {{- include "cobranch.signIn" . | nindent 14 }}
               cookie=$(signIn owner)
               [ -n "$cookie" ]
+              # A website with a branch or a tag has a history already, and gets no token that would only pile up.
+              website="$rest/v1/orgs/acme/repos/website"
+              branches=$(wget -qO- --header "Cookie: $cookie" "$website/branches")
+              tags=$(wget -qO- --header "Cookie: $cookie" "$website/tags")
+              case "$branches $tags" in
+                *'"branches":[]'*'"tags":[]'*) ;;
+                *'"branches":['*'"tags":['*) echo "acme/website has a history already, so the demo data adds none"; exit 0 ;;
+                *) echo "Could not read acme/website's branches and tags: $branches $tags" >&2; exit 1 ;;
+              esac
               token=$(wget -qO- --header "Cookie: $cookie" --header 'Content-Type: application/json' --post-data '{"name":"demo data"}' "$rest/v1/me/tokens" \
                 | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')
               [ -n "$token" ]
               export HOME=/tmp/seed GIT_TERMINAL_PROMPT=0
               url="http://git:$token@${gitserver#http://}/acme/website.git"
-              refs=$(git ls-remote "$url")
-              if [ -n "$refs" ]; then
-                echo "acme/website has a history already, so the demo data adds none"
-                exit 0
-              fi
               mkdir -p "$HOME/website" && cd "$HOME/website"
               git init -q -b main
               # by runs git with the rest of its arguments as $1 (olivia, max or gwen), a demo user, at $2.

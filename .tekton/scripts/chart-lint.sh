@@ -1,7 +1,7 @@
 #!/bin/sh
 # Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, SSH behind a
 # load balancer, Google and traces, and with an external database, one host with a path per workload, SSH with the
-# operator's host key, another provider, an autoscaled push worker and no traces. Writes the bundled PostgreSQL's
+# operator's host key, another provider, an autoscaled push worker, no traces and the demo data with its seed Job. Writes the bundled PostgreSQL's
 # image to .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
@@ -32,7 +32,7 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranc
   --set 'auth.providers[0].id=my-idp' --set 'auth.providers[0].issuer=https://idp.example.com' \
   --set 'auth.providers[0].clientId=cobranch' --set 'auth.providers[0].clientSecret.secretName=cobranch-idp' \
   --set 'auth.providers[0].clientSecret.key=secret' --set auth.signUp=domains --set 'auth.signUpDomains[0]=example.com' \
-  --set organizations.selfServe=false \
+  --set organizations.selfServe=false --set seed.enabled=true \
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' >"$out/external.yaml"
 kubeconform -strict -summary -kubernetes-version 1.37.0 -schema-location default \
   -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
