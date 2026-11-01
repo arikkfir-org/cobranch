@@ -30,13 +30,14 @@ const (
 )
 
 // InternalHandler serves the internal call (package gitinternal) to callers that send token as a bearer token: the
-// REST and GraphQL servers' reads of a repository's trees and files, each from one snapshot. It checks no viewer,
-// since its callers checked theirs, and nothing outside the cluster reaches its port.
+// REST and GraphQL servers' reads of a repository's trees and files, each from one snapshot, and their merges. It
+// checks no viewer, since its callers checked theirs, and nothing outside the cluster reaches its port.
 func (s *Server) InternalHandler(token *gitinternal.Token) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/tree", s.internal(token, "tree", s.readTree))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blob", s.internal(token, "blob", s.readBlob))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal(token, "raw", s.readRaw))
+	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/merge", s.mergeHandler(token))
 	return mux
 }
 

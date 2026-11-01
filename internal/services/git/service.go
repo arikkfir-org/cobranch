@@ -90,7 +90,7 @@ func (s *Service) Record(ctx context.Context, push Push) (Answer, error) {
 	var refused *RefusedError
 	switch {
 	case errors.As(err, &stale):
-		return Answer{Message: stale.Error()}, nil
+		return Answer{Message: stale.Error(), Stale: true}, nil
 	case errors.As(err, &refused):
 		return Answer{Message: refused.Message}, nil
 	case err != nil:

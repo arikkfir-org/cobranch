@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
-// Objects reads a repository's Git objects, which only the Git server holds: the Git server's internal call. Each read
-// resolves ref in one snapshot of the repository and answers ErrRefNotFound, ErrPathNotFound, ErrNotTree, ErrNotBlob
-// or ErrSubmodule for what it doesn't find there.
+// Objects reads a repository's Git objects, which only the Git server holds, and builds merges of them: the Git
+// server's internal call. Each read resolves ref in one snapshot of the repository and answers ErrRefNotFound,
+// ErrPathNotFound, ErrNotTree, ErrNotBlob or ErrSubmodule for what it doesn't find there.
 type Objects interface {
 	// Tree reads the directory at path in the commit ref names.
 	Tree(ctx context.Context, repoID uuid.UUID, ref, path string) (Tree, error)
@@ -19,6 +19,9 @@ type Objects interface {
 	Blob(ctx context.Context, repoID uuid.UUID, ref, path string, limit int64) (Blob, error)
 	// Raw streams the bytes of the file or symlink at path in the commit ref names.
 	Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (Raw, error)
+	// Merge builds the merge req asks for and records it as a push of its base, answering once it is committed:
+	// ErrBranchMoved when the branch or its base moved, and a *MergeError for a merge Cobranch won't make.
+	Merge(ctx context.Context, repoID uuid.UUID, req MergeRequest) (Merged, error)
 }
 
 // unavailable answers every read with ErrUnavailable, for an installation that runs no Git server.
@@ -34,6 +37,10 @@ func (unavailable) Blob(context.Context, uuid.UUID, string, string, int64) (Blob
 
 func (unavailable) Raw(context.Context, uuid.UUID, string, string) (Raw, error) {
 	return Raw{}, ErrUnavailable
+}
+
+func (unavailable) Merge(context.Context, uuid.UUID, MergeRequest) (Merged, error) {
+	return Merged{}, ErrUnavailable
 }
 
 // Tags lists the repository's tags by name, each with the object its ref names; it takes repo.read.

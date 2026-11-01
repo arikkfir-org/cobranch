@@ -78,6 +78,8 @@ type Transport string
 const (
 	TransportHTTPS Transport = "https"
 	TransportSSH   Transport = "ssh"
+	// TransportAPI is a merge a principal asked Cobranch for, which the Git server built.
+	TransportAPI Transport = "api"
 )
 
 // Push is a push's manifest, which the Git server records once Git has checked its objects: who pushed,
@@ -188,10 +190,12 @@ type RefusedError struct {
 
 func (e *RefusedError) Error() string { return e.Message }
 
-// Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines.
+// Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines;
+// Stale when another push moved a ref first.
 type Answer struct {
 	Accepted bool
 	Message  string
+	Stale    bool
 }
 
 // The messages a client sees, as the design's table of accepted pushes words them.
