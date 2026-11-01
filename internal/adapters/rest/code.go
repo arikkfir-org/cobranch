@@ -9,6 +9,7 @@ import (
 
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/repos"
 )
 
 // Code is what the API needs of the code's service.
@@ -44,13 +45,24 @@ func branch(b code.Branch) Branch {
 	return out
 }
 
+// codeRepo finds the repository whose code the path names, by its organization's slug and its own, each current or
+// old, for a viewer with repo.read on it. Unlike repo, it asks nothing of the organization, so a personal token that
+// lists repo.read alone reads the code it clones.
+func (a api) codeRepo(ctx context.Context, v repos.Viewer, orgSlug, slug string) (repos.Repository, error) {
+	repo, _, err := a.repos.Locate(ctx, v, orgSlug, slug)
+	if err != nil {
+		return repos.Repository{}, fail(err, "repository")
+	}
+	return repo, nil
+}
+
 // ListBranches lists the repository's live branches.
 func (a api) ListBranches(ctx context.Context, req ListBranchesRequestObject) (ListBranchesResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
 		return nil, err
 	}
-	repo, _, err := a.repo(ctx, v, req.Org, req.Repo)
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +79,7 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 	if err != nil {
 		return nil, err
 	}
-	repo, _, err := a.repo(ctx, v, req.Org, req.Repo)
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +116,7 @@ func (a api) GetCommit(ctx context.Context, req GetCommitRequestObject) (GetComm
 	if err != nil {
 		return nil, err
 	}
-	repo, _, err := a.repo(ctx, v, req.Org, req.Repo)
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
 	if err != nil {
 		return nil, err
 	}

@@ -37,6 +37,10 @@ func TestBranchesAPI(t *testing.T) {
 			}},
 		{name: "a Member who doesn't read it sees no branches", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches"),
 			wantStatus: 404, wantCode: "repository.not_found"},
+		{name: "a token with repo.read alone lists them", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches"),
+			wantStatus: 200},
+		{name: "an organization that isn't there", viewer: olivia, method: "GET", path: fixed("/v1/orgs/nobody/repos/website/branches"),
+			wantStatus: 404, wantCode: "repository.not_found"},
 	})
 }
 
@@ -70,6 +74,8 @@ func TestCommitsAPI(t *testing.T) {
 			wantStatus: 400, wantCode: "limit.invalid"},
 		{name: "an Owner's token without repo.read sees no history", viewer: oliviaToken("org.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits"),
 			wantStatus: 404, wantCode: "repository.not_found"},
+		{name: "a token with repo.read alone reads it", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits"),
+			wantStatus: 200, check: history("c", "b", "a")},
 	})
 }
 
@@ -96,5 +102,7 @@ func TestCommitAPI(t *testing.T) {
 			wantStatus: 400, wantCode: "sha.invalid"},
 		{name: "a Member who doesn't read it sees no commit", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("c")),
 			wantStatus: 404, wantCode: "repository.not_found"},
+		{name: "a token with repo.read alone reads it", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("c")),
+			wantStatus: 200},
 	})
 }
