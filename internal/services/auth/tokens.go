@@ -63,8 +63,9 @@ func ValidateToken(in TokenInput, now time.Time) (TokenInput, error) {
 }
 
 // CreateToken makes a personal token for the user a signs in, from a session only: never from another token or an API
-// key's secret, so a token never outlives or outgrows the sign-in behind it. The token keeps the session's identity;
-// CreateToken returns it with its secret, which is shown this once.
+// key's secret, so no credential makes another. The token keeps the session's identity but not the session: it lasts
+// until its end or its revocation, whatever becomes of the session. CreateToken returns it with its secret, which is
+// shown this once.
 func (s *Service) CreateToken(ctx context.Context, a Authenticated, in TokenInput) (Credential, string, error) {
 	if a.Session.ID == uuid.Nil || a.User.Kind != KindUser {
 		return Credential{}, "", fmt.Errorf("%w: only a signed-in user makes a personal token, never a token or a key", ErrForbidden)

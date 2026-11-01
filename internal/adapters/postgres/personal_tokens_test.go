@@ -81,12 +81,16 @@ func TestAuthStorePersonalTokenConstraints(t *testing.T) {
 		name  string
 		query string
 	}{
-		{name: "a token without an end", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, name, permissions)
-			VALUES (gen_random_uuid(), 'personal_token', 'h1', $1, 'abcd', now(), 'Laptop', '{repo.read}')`},
-		{name: "a token without permissions", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, name)
-			VALUES (gen_random_uuid(), 'personal_token', 'h2', $1, 'abcd', now(), now(), 'Laptop')`},
-		{name: "a token without a name", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, permissions)
-			VALUES (gen_random_uuid(), 'personal_token', 'h3', $1, 'abcd', now(), now(), '{repo.read}')`},
+		{name: "a token without an end", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, name, permissions, issuer, subject)
+			VALUES (gen_random_uuid(), 'personal_token', 'h1', $1, 'abcd', now(), 'Laptop', '{repo.read}', 'https://idp.example.com', '1')`},
+		{name: "a token without permissions", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, name, issuer, subject)
+			VALUES (gen_random_uuid(), 'personal_token', 'h2', $1, 'abcd', now(), now(), 'Laptop', 'https://idp.example.com', '1')`},
+		{name: "a token without a name", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, permissions, issuer, subject)
+			VALUES (gen_random_uuid(), 'personal_token', 'h3', $1, 'abcd', now(), now(), '{repo.read}', 'https://idp.example.com', '1')`},
+		{name: "a token without its session's identity", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, name, permissions)
+			VALUES (gen_random_uuid(), 'personal_token', 'h5', $1, 'abcd', now(), now(), 'Laptop', '{repo.read}')`},
+		{name: "a token without its session's subject", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, expires_at, name, permissions, issuer)
+			VALUES (gen_random_uuid(), 'personal_token', 'h6', $1, 'abcd', now(), now(), 'Laptop', '{repo.read}', 'https://idp.example.com')`},
 		{name: "an API key's secret with permissions", query: `INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, permissions)
 			VALUES (gen_random_uuid(), 'api_key', 'h4', $1, 'abcd', now(), '{repo.read}')`},
 	}
