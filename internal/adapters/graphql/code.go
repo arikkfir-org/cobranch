@@ -13,6 +13,7 @@ import (
 // Code is what the API needs of the code's service.
 type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
+	Branch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
@@ -144,10 +145,53 @@ func codeRepo(ctx context.Context, repositoryID string) (code.Viewer, uuid.UUID,
 	return v.User, repoID, nil
 }
 
+// branch is b as the API shows it: every branch but main with its base, status, checks and facts, and any branch
+// /cobranch.yaml names with what a merge into it needs.
 func branch(b code.Branch) *Branch {
-	out := &Branch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt}
+	out := &Branch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt, Checks: mapAll(b.Checks, check)}
 	if b.Commit != nil {
 		out.Commit = commit(*b.Commit)
+	}
+	if b.Base != "" {
+		status := branchStatuses[b.Status]
+		out.Base, out.Status = &b.Base, &status
+	}
+	if b.Facts != nil {
+		out.Ahead, out.Behind = &b.Facts.Ahead, &b.Facts.Behind
+	}
+	if r := b.Requirements; r != nil {
+		annotations := r.Annotations
+		if annotations == nil {
+			annotations = []string{}
+		}
+		out.Requirements = &MergeRequirements{Annotations: annotations, LinearHistory: r.LinearHistory}
+	}
+	return out
+}
+
+// branchStatuses maps the domain's branch statuses to the schema's.
+var branchStatuses = map[code.BranchStatus]BranchStatus{
+	code.StatusProcessing: BranchStatusProcessing, code.StatusBlocked: BranchStatusBlocked, code.StatusEmpty: BranchStatusEmpty,
+	code.StatusMerged: BranchStatusMerged, code.StatusReady: BranchStatusReady,
+}
+
+// checkKinds maps the domain's kinds of checks to the schema's.
+var checkKinds = map[code.CheckKind]BranchCheckKind{
+	code.CheckAnnotation: BranchCheckKindAnnotation, code.CheckLinearHistory: BranchCheckKindLinearHistory, code.CheckUpToDate: BranchCheckKindUpToDate,
+}
+
+// check is one of a branch's checks as the API shows it, each field only where its kind has it.
+func check(c code.Check) *BranchCheck {
+	out := &BranchCheck{Kind: checkKinds[c.Kind], Met: c.Met}
+	switch c.Kind {
+	case code.CheckAnnotation:
+		out.Name = &c.Name
+		if c.Status != "" {
+			status := annotationStatuses[c.Status]
+			out.Status = &status
+		}
+	default:
+		out.Count = &c.Count
 	}
 	return out
 }

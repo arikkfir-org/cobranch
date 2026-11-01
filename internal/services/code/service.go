@@ -106,6 +106,22 @@ func (s *Service) Branches(ctx context.Context, v Viewer, repoID uuid.UUID) ([]B
 	return branches, nil
 }
 
+// Branch finds one of the repository's live branches by name, with the commit it is at, its status and what a merge
+// into it needs; it takes repo.read. A branch that isn't there is repos.ErrNotFound.
+func (s *Service) Branch(ctx context.Context, v Viewer, repoID uuid.UUID, name string) (Branch, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.Branch")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", name))
+	if err := s.read(ctx, v, repoID); err != nil {
+		return Branch{}, failed(span, "reading the branch", err)
+	}
+	b, err := s.store.Branch(ctx, repoID, name)
+	if err != nil {
+		return Branch{}, failed(span, "reading the branch", err)
+	}
+	return b, nil
+}
+
 // rank puts the default branch before the others.
 func rank(b Branch) int {
 	if b.Name == git.DefaultBranch {

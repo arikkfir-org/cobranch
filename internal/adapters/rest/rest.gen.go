@@ -43,6 +43,54 @@ func (e AnnotationStatus) Valid() bool {
 	}
 }
 
+// Defines values for BranchCheckKind.
+const (
+	BranchCheckKindAnnotation    BranchCheckKind = "annotation"
+	BranchCheckKindLinearHistory BranchCheckKind = "linear_history"
+	BranchCheckKindUpToDate      BranchCheckKind = "up_to_date"
+)
+
+// Valid indicates whether the value is a known member of the BranchCheckKind enum.
+func (e BranchCheckKind) Valid() bool {
+	switch e {
+	case BranchCheckKindAnnotation:
+		return true
+	case BranchCheckKindLinearHistory:
+		return true
+	case BranchCheckKindUpToDate:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for BranchStatus.
+const (
+	Blocked    BranchStatus = "blocked"
+	Empty      BranchStatus = "empty"
+	Merged     BranchStatus = "merged"
+	Processing BranchStatus = "processing"
+	Ready      BranchStatus = "ready"
+)
+
+// Valid indicates whether the value is a known member of the BranchStatus enum.
+func (e BranchStatus) Valid() bool {
+	switch e {
+	case Blocked:
+		return true
+	case Empty:
+		return true
+	case Merged:
+		return true
+	case Processing:
+		return true
+	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FileKind.
 const (
 	FileKindBlob    FileKind = "blob"
@@ -276,8 +324,20 @@ type ApiKeySecret struct {
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
 }
 
-// Branch One of a repository's live branches and the commit it is at.
+// Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, checks, ahead and behind.
 type Branch struct {
+	// Ahead How many commits it has that its base lacks; left out until a push works it out.
+	Ahead *int `json:"ahead,omitempty"`
+
+	// Base The branch it merges into, main.
+	Base *string `json:"base,omitempty"`
+
+	// Behind How many commits its base has that it lacks; left out until a push works it out.
+	Behind *int `json:"behind,omitempty"`
+
+	// Checks How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	Checks []BranchCheck `json:"checks"`
+
 	// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
 	Commit    *Commit   `json:"commit,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -288,9 +348,37 @@ type Branch struct {
 	// Name Its name, without refs/heads/.
 	Name string `json:"name"`
 
+	// Requirements What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
+	Requirements *MergeRequirements `json:"requirements,omitempty"`
+
+	// Status Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
+	Status *BranchStatus `json:"status,omitempty"`
+
 	// UpdatedAt When a push last moved it.
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// BranchCheck One of a branch's merge requirements and how it stands.
+type BranchCheck struct {
+	// Count For linear_history, the merges among its commits to merge; for up_to_date, the commits of its base it lacks.
+	Count *int `json:"count,omitempty"`
+
+	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; up_to_date, its base's tip in it.
+	Kind BranchCheckKind `json:"kind"`
+	Met  bool            `json:"met"`
+
+	// Name The required annotation's name; only for annotation.
+	Name *string `json:"name,omitempty"`
+
+	// Status Where an annotation stands, in any order its principal sets them.
+	Status *AnnotationStatus `json:"status,omitempty"`
+}
+
+// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; up_to_date, its base's tip in it.
+type BranchCheckKind string
+
+// BranchStatus Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
+type BranchStatus string
 
 // Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
 type Commit struct {
@@ -388,6 +476,15 @@ type Member struct {
 	JoinedAt    time.Time          `json:"joinedAt"`
 	Roles       []Role             `json:"roles"`
 	UserId      openapi_types.UUID `json:"userId"`
+}
+
+// MergeRequirements What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
+type MergeRequirements struct {
+	// Annotations The annotations the incoming head must carry, Successful.
+	Annotations []string `json:"annotations"`
+
+	// LinearHistory Whether no merge commit may come in.
+	LinearHistory bool `json:"linearHistory"`
 }
 
 // Organization An organization, with what the viewer may do there.
@@ -717,6 +814,9 @@ type Version struct {
 
 // Name defines model for annotation.
 type Name = string
+
+// BranchName defines model for branch.
+type BranchName = string
 
 // Id defines model for id.
 type Id = openapi_types.UUID
@@ -1056,9 +1156,12 @@ type ServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
-	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
+	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
@@ -2357,6 +2460,50 @@ func (siw *ServerInterfaceWrapper) ListBranches(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// GetBranch operation middleware
+func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBranch(w, r, org, repo, branchName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCommits operation middleware
 func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Request) {
 
@@ -3320,6 +3467,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles", wrapper.GrantRepositoryRole)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
@@ -6887,6 +7035,77 @@ func (response ListBranchesdefaultApplicationProblemPlusJSONResponse) VisitListB
 	return err
 }
 
+type GetBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+}
+
+type GetBranchResponseObject interface {
+	VisitGetBranchResponse(w http.ResponseWriter) error
+}
+
+type GetBranch200JSONResponse Branch
+
+func (response GetBranch200JSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranch401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetBranch401ApplicationProblemPlusJSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranch404ApplicationProblemPlusJSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBranchdefaultApplicationProblemPlusJSONResponse) VisitGetBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListCommitsRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -8514,9 +8733,12 @@ type StrictServerInterface interface {
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
-	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(ctx context.Context, request ListBranchesRequestObject) (ListBranchesResponseObject, error)
+	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
+	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
 	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
@@ -9818,6 +10040,34 @@ func (sh *strictHandler) ListBranches(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListBranchesResponseObject); ok {
 		if err := validResponse.VisitListBranchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBranch operation middleware
+func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request GetBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBranch(ctx, request.(GetBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBranchResponseObject); ok {
+		if err := validResponse.VisitGetBranchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -17,6 +17,7 @@ import (
 // Code is what the API needs of the code's service.
 type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
+	Branch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
@@ -55,11 +56,39 @@ func annotation(a code.Annotation) Annotation {
 	return out
 }
 
+// branch is b as the API shows it: every branch but main with its base, status, checks and facts, and any branch
+// /cobranch.yaml names with what a merge into it needs.
 func branch(b code.Branch) Branch {
-	out := Branch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt}
+	out := Branch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt, Checks: mapAll(b.Checks, check)}
 	if b.Commit != nil {
 		c := commit(*b.Commit)
 		out.Commit = &c
+	}
+	if b.Base != "" {
+		status := BranchStatus(b.Status)
+		out.Base, out.Status = &b.Base, &status
+	}
+	if b.Facts != nil {
+		out.Ahead, out.Behind = &b.Facts.Ahead, &b.Facts.Behind
+	}
+	if r := b.Requirements; r != nil {
+		out.Requirements = &MergeRequirements{Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
+	}
+	return out
+}
+
+// check is one of a branch's checks as the API shows it, each field only where its kind has it.
+func check(c code.Check) BranchCheck {
+	out := BranchCheck{Kind: BranchCheckKind(c.Kind), Met: c.Met}
+	switch c.Kind {
+	case code.CheckAnnotation:
+		out.Name = &c.Name
+		if c.Status != "" {
+			status := AnnotationStatus(c.Status)
+			out.Status = &status
+		}
+	default:
+		out.Count = &c.Count
 	}
 	return out
 }
@@ -90,6 +119,23 @@ func (a api) ListBranches(ctx context.Context, req ListBranchesRequestObject) (L
 		return nil, fail(err, "repository")
 	}
 	return ListBranches200JSONResponse{Branches: mapAll(list, branch)}, nil
+}
+
+// GetBranch finds one of the repository's live branches.
+func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	b, err := a.code.Branch(ctx, v, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, fail(err, "branch")
+	}
+	return GetBranch200JSONResponse(branch(b)), nil
 }
 
 // ListCommits lists a page of a branch's first-parent history, and links the next.
