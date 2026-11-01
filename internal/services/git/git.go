@@ -108,6 +108,9 @@ type Push struct {
 	Brought []Brought
 	// Bypass is whether the pusher holds repo.bypass, which pushes past merge requirements.
 	Bypass bool
+	// Merging is the branch a merge asked of Cobranch (TransportAPI) merges, at the head it merges: it must be Ready
+	// there, whatever its base requires, unless the pusher holds repo.bypass. nil for a client's push.
+	Merging *Head
 }
 
 // Merges are the branches whose heads the push brings into the default branch when it moves it on from a commit: the

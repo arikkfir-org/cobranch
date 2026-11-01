@@ -35,8 +35,9 @@ const mergeConflicts = 5
 // snapshot and records it as a push of its base for its requester, transport api, through the same transaction and
 // checks as a client's push (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
 // "By asking Cobranch"). Its requester is the viewer whose token the caller sends on, who must hold repo.merge, and
-// repo.bypass for a merge past main's requirements. It answers 200 once the push is committed, 403 for a merge the
-// viewer may not ask for, 404 for a repository they can't see, and 409 for a merge Cobranch won't make.
+// repo.bypass for a merge past main's requirements or of a branch that isn't Ready. It answers 200 once the push is
+// committed, 403 for a merge the viewer may not ask for, 404 for a repository they can't see, and 409 for a merge
+// Cobranch won't make.
 func (s *Server) mergeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		viewer, ok := s.internalViewer(w, r)
@@ -262,7 +263,7 @@ func (s *Server) mergePush(ctx context.Context, dir string, repoID uuid.UUID, re
 	}
 	return git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: repoID, PusherID: req.By.ID, Transport: git.TransportAPI, Updates: updates,
 		Pack: pack, Commits: commits, ReceivedAt: time.Now(), Requirements: branches.requirements, Facts: branches.facts,
-		Tips: branches.tips, Brought: branches.brought, Bypass: req.Bypass}, nil
+		Tips: branches.tips, Brought: branches.brought, Bypass: req.Bypass, Merging: &git.Head{Branch: req.Branch, SHA: req.Head}}, nil
 }
 
 // mergePack packs the objects merge commit brings that its parents lack, and uploads the pack.

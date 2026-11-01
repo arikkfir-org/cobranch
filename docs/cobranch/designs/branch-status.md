@@ -233,7 +233,8 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
   `main`'s requirements, and merges only for that requester. It builds the merge in a throwaway repository of one
   snapshot, `git merge-tree --write-tree` and `git commit-tree`, then a pack of the new commit, uploaded as a push's
   would be. It records a push of `main` for the requester, transport `api`, through the same transaction and the same
-  checks as a client's push, and answers once it is committed.
+  checks as a client's push, which also hold the branch to being Ready at the head it merges, even where `main` requires
+  nothing, unless the requester holds `repo.bypass`; it answers once the push is committed.
 - **Then as any push:** the push worker records the merge, and the branch turns Merged. Code-browsing
   ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)) builds the internal call; this slice adds the merge to it.
 
@@ -245,7 +246,7 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
 | 409 `branch.nothing_to_merge` | `main` holds every commit of the branch |
 | 409 `merge.not_fast_forward` | A fast-forward of a branch that lacks some of `main`'s commits |
 | 409 `merge.conflict` | A merge commit of changes Git can't merge, naming up to five paths |
-| 409 `merge.refused` | The push the merge records breaks a rule, such as a `/cobranch.yaml` that doesn't parse |
+| 409 `merge.refused` | The push the merge records breaks a rule, such as a `/cobranch.yaml` that doesn't parse, or a branch that turned Blocked while the Git server built the merge |
 | 503 `git.unavailable` | The installation runs no Git server |
 
 ## The Console

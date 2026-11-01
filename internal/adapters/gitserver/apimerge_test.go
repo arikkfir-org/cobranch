@@ -42,7 +42,9 @@ type apiMergeCase struct {
 func apiMergeCases() []apiMergeCase {
 	refused := func(c string) error { return &code.MergeError{Code: c} }
 	return []apiMergeCase{
-		{name: "a merge commit", mainFile: "main.txt", method: code.MethodMerge, wantParents: 2},
+		{name: "a merge commit past a branch behind main", mainFile: "main.txt", method: code.MethodMerge, bypass: true, wantParents: 2},
+		{name: "a branch behind main, which is Blocked, without repo.bypass", mainFile: "main.txt", method: code.MethodMerge,
+			wantErr: refused(code.MergeRefused)},
 		{name: "a merge commit of a branch main is in", method: code.MethodMerge, wantParents: 2},
 		{name: "a fast-forward", method: code.MethodFastForward},
 		{name: "a fast-forward of a branch behind main", mainFile: "main.txt", method: code.MethodFastForward, wantErr: refused(code.MergeNotFastForward)},
