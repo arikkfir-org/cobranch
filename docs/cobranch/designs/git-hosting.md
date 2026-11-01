@@ -1,7 +1,7 @@
 # Cobranch Git hosting
 
 > **Snapshot.** This design lives in its [Git hosting page](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Proposed 2026-10-31 · [ENG-198](https://linear.app/arikkfir/issue/ENG-198) · Builds the [architecture’s Git
@@ -28,7 +28,7 @@ them, and names what it adds.
 Every later slice reads what a push records here: its commits, branches and principals, written in the push’s one
 transaction.
 
-Choices beyond the agreed designs are collected under [Decisions](#decisions), all Proposed.
+Choices beyond the agreed designs are collected under [Decisions](#decisions).
 
 ## Components
 
@@ -53,8 +53,8 @@ Kubernetes token.
 
 ## Repositories
 
-A repository belongs to one organization, which owns its rows, packs and refs. It has a slug for its URLs, a name, a
-description and a default branch.
+A repository belongs to one organization, which owns its rows, packs and refs. It has a slug for its URLs, a name and a
+description. Its default branch is `main`, in every repository, and nobody changes it.
 
 **A repository starts empty and private; its first push gives it refs**
 
@@ -68,9 +68,8 @@ A rename, in either state, keeps the old slug as a redirect until another reposi
   not ending in `.git`, and may not be one of the Console's pages under an organization (`members`, `roles`, `api-keys`,
   `settings`, `repos`, `new`). A rename keeps the old slug as a redirect, in the API, the Console and Git's URLs alike,
   until another repository of the organization takes it.
-- **Empty until pushed.** A new repository has no refs and no packs; cloning it gives an empty repository. Its default
-  branch is `main` unless its creator names another; when the first push into it creates branches but not that one, the
-  first branch it creates becomes the default.
+- **Empty until pushed.** A new repository has no refs and no packs; cloning it gives an empty repository. Git's `HEAD`
+  names `refs/heads/main` from the start, whatever the first push creates.
 - **SHA-1 for now.** The schema keeps SHAs as `bytea` and each repository's object format, so SHA-256 repositories
   arrive without a migration of the data.
 - **Deleting one** comes later, with its packs' clean-up.
@@ -331,26 +330,30 @@ Nothing of an installation is in the product: an operator routes the Git server 
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | Two workloads join: the Git server, two replicas with a pack cache, and the push worker, two replicas behind an internal secret and a NetworkPolicy | The architecture's split, with nothing of either exposed but the Git server | Proposed |
-| A repository's permissions are its grants' and the repository permissions of the viewer's organization roles, read in one query | A grant reaches everything inside its scope; Owners reach every repository | Proposed |
-| Repository slugs keep old ones as redirects, in Git's URLs too, and avoid the Console's organization pages | Renames break no clone; one URL space for the Console | Proposed |
-| Personal tokens `cbp_` list permissions, expire within a year, and are made only from a session | HTTPS needs a password; a token holds no more than it must | Proposed |
-| Git over HTTPS takes a token as a Basic password or a bearer, never the cookie; `401` without a credential, `404` without read | Git asks for credentials; no page pushes for its visitor; nobody learns what exists | Proposed |
+| Every repository's default branch is `main`, and nobody changes it | One name for the branch whose settings, triggers and reviewer instructions count | Agreed |
+| A repository's permissions are its grants' and the repository permissions of the viewer's organization roles, read in one query | A grant reaches everything inside its scope; Owners reach every repository | Agreed |
+| Repository slugs keep old ones as redirects, in Git's URLs too, and avoid the Console's organization pages | Renames break no clone; one URL space for the Console | Agreed |
+| Personal tokens `cbp_` list permissions, expire within a year, and are made only from a session | HTTPS needs a password; a token holds no more than it must | Agreed |
+| Git over HTTPS takes a token as a Basic password or a bearer, never the cookie; `401` without a credential, `404` without read | Git asks for credentials; no page pushes for its visitor; nobody learns what exists | Agreed |
 | The pre-receive hook posts to its own Git server process on loopback, which builds the manifest and calls the push worker | One process holds the credentials, the configuration and the trace | Proposed |
 | Throwaway repositories hard-link the snapshot's packs from the cache instead of using alternates | The cache evicts any time without counting readers | Changed |
-| Pushes may write `refs/heads/*` and `refs/tags/*` only, none under `cobranch/`, all or nothing | Branches and tags are what Cobranch models | Proposed |
+| Pushes may write `refs/heads/*` and `refs/tags/*` only, none under `cobranch/`, all or nothing | Branches and tags are what Cobranch models | Agreed |
 | The push worker serializes a repository's pushes by locking its row and caches each push's answer by its ID | Atomic, compare-and-swap pushes; a lost answer is asked again | Proposed |
-| Unknown authors become login-less users holding their email unverified; a new identity with that email verified adopts the login-less user | Commits have principals at once, and become their author's without rewriting | Proposed |
-| The Console shows first-parent history from PostgreSQL; live updates come with the web app | The push is recorded before Git returns; the graph view can wait | Proposed |
-| Maintenance compacts past 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Proposed |
-| SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Proposed |
-| Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Proposed |
+| Unknown authors become login-less users holding their email unverified; a new identity with that email verified adopts the login-less user | Commits have principals at once, and become their author's without rewriting | Agreed |
+| The Console shows first-parent history from PostgreSQL; live updates come with the web app | The push is recorded before Git returns; the graph view can wait | Agreed |
+| Maintenance compacts past 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Agreed |
+| SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Agreed |
+| Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Agreed |
 
 ## Open questions
 
-1. **Personal tokens narrowed to permissions only, for now?** Recommended: yes, with organization and repository scopes
-   later, since a Git token's common case is `repo.read` and `repo.push` everywhere its user reaches. The other way,
-   this slice also narrows tokens to chosen organizations.
-2. **First-parent history in the Console for now?** Recommended: yes; the full graph needs the Git server to walk
-   history, which belongs with the code browsing that follows.
+1. **Personal tokens narrowed to permissions only, for now?** Settled on 2026-11-01: yes, with organization and
+   repository scopes later, since a Git token's common case is `repo.read` and `repo.push` everywhere its user reaches.
+2. **First-parent history in the Console for now?** Settled on 2026-11-01: yes; the full graph needs the Git server to
+   walk history, which belongs with the code browsing that follows.
+3. **Does the push worker stay on the push's path?** Open since 2026-11-01: a synchronous call keeps the push worker
+   from scaling to zero and fails every push while it is down. Recommended: the Git server commits the push's refs, pack
+   and commits itself, with a task the push worker claims later, so only what can wait (authors' principals, then branch
+   status, events and jobs) waits for it.
 
 Cobranch is a Kfirs project, created by Arik Kfir.

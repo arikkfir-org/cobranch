@@ -1,7 +1,7 @@
 # Cobranch technical architecture
 
 > **Snapshot.** This design lives in its [architecture page](https://claude.ai/artifact/L6NYy7k4ep31FEPAxQiPjv), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-30, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Agreed 2026-10-27 · [ENG-193](https://linear.app/arikkfir/issue/ENG-193) ·
