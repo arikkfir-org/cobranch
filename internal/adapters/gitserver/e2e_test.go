@@ -182,7 +182,7 @@ func (s *stack) token(user uuid.UUID, permissions ...string) string {
 	now := time.Now()
 	if err := postgres.NewAuthStore(s.pool).CreateToken(context.Background(), auth.Credential{
 		ID: uuid.Must(uuid.NewV7()), Kind: auth.CredentialPersonalToken, PrincipalID: user, Hint: auth.Hint(secret), CreatedAt: now, CreatedBy: user,
-		ExpiresAt: now.Add(time.Hour), Name: "test", Permissions: permissions,
+		ExpiresAt: now.Add(time.Hour), Name: "test", Permissions: permissions, Issuer: "https://idp.example.com", Subject: user.String(),
 	}, auth.Hash(secret)); err != nil {
 		s.t.Fatal(err)
 	}
