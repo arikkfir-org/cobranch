@@ -92,3 +92,25 @@ UPDATE pushes SET processed_at = now(), error = '' WHERE id = $1;
 -- name: FailPush :exec
 UPDATE pushes SET attempts = attempts + 1, error = @message, retry_at = now() + make_interval(secs => @delay::float8)
 WHERE id = @id AND processed_at IS NULL;
+
+-- CrowdedRepositories lists the repositories that have at least threshold active packs, for compaction.
+-- name: CrowdedRepositories :many
+SELECT repo_id FROM packs WHERE state = 'active' GROUP BY repo_id HAVING count(*) >= @threshold::bigint ORDER BY repo_id;
+
+-- SupersedePacks marks the repository's active packs named superseded, once compaction listed the pack that holds
+-- their objects.
+-- name: SupersedePacks :execrows
+UPDATE packs SET state = 'superseded', superseded_at = now()
+WHERE repo_id = @repo_id AND state = 'active' AND name = ANY(@names::text[]);
+
+-- SupersededPacks lists the packs superseded before the time, whose files maintenance deletes.
+-- name: SupersededPacks :many
+SELECT repo_id, name, upload FROM packs WHERE state = 'superseded' AND superseded_at < @before::timestamptz ORDER BY superseded_at;
+
+-- ForgetPack deletes a superseded pack's row, once its files are gone, unless a push made it active again.
+-- name: ForgetPack :exec
+DELETE FROM packs WHERE repo_id = @repo_id AND name = @name AND upload = @upload AND state = 'superseded';
+
+-- PackUploads lists every upload a pack's row names, whatever its state.
+-- name: PackUploads :many
+SELECT upload FROM packs;

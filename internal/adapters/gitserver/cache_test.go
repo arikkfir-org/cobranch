@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	gocloudblob "gocloud.dev/blob"
@@ -147,4 +148,57 @@ func TestCacheAtOnce(t *testing.T) {
 	if c.size != 10 {
 		t.Errorf("the cache counts %d bytes after eight links at once, want the pack's 10", c.size)
 	}
+}
+
+func TestParsePackKey(t *testing.T) {
+	repo, upload := uuid.New(), uuid.New()
+	tests := []struct {
+		name   string
+		key    string
+		wantOK bool
+	}{
+		{name: "a pack's index", key: packKey(repo, upload, "pack-1.idx"), wantOK: true},
+		{name: "a pack", key: packKey(repo, upload, "pack-1.pack"), wantOK: true},
+		{name: "an upload without a file", key: packKey(repo, upload, "")},
+		{name: "a file deeper down", key: packKey(repo, upload, "x/pack-1.pack")},
+		{name: "a repository's directory", key: "git/" + repo.String() + "/pack-1.pack"},
+		{name: "an upload that isn't one", key: "git/" + repo.String() + "/upload/pack-1.pack"},
+		{name: "a repository that isn't one", key: "git/website/" + upload.String() + "/pack-1.pack"},
+		{name: "another prefix", key: "blobs/" + repo.String() + "/" + upload.String() + "/pack-1.pack"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotRepo, gotUpload, ok := parsePackKey(tt.key)
+			if ok != tt.wantOK || (ok && (gotRepo != repo || gotUpload != upload)) {
+				t.Errorf("parsePackKey(%q) = %s, %s, %t, want %s, %s, %t", tt.key, gotRepo, gotUpload, ok, repo, upload, tt.wantOK)
+			}
+		})
+	}
+}
+
+// TestCacheRetain drops the packs a snapshot no longer lists, once compaction superseded them, and keeps the ones
+// it took after the snapshot was read.
+func TestCacheRetain(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	c, _ := newTestCache(t, 1<<20, map[uuid.UUID][]string{a: {"pack-1", "pack-2", "pack-3"}, b: {"pack-4"}})
+	linkInto(t, c, a, "pack-1")
+	linkInto(t, c, a, "pack-2")
+	linkInto(t, c, b, "pack-4")
+	read := time.Now()
+	linkInto(t, c, a, "pack-3")
+	c.retain(a, []git.Pack{testPack("pack-2")}, read)
+	c.retain(uuid.New(), nil, time.Now())
+	for pack, want := range map[string]bool{"pack-1": false, "pack-2": true, "pack-3": true} {
+		if got := c.repos[a].holds(pack); got != want {
+			t.Errorf("the cache holds %s: %t, want %t", pack, got, want)
+		}
+		if _, err := os.Stat(c.path(a, pack+".pack")); (err == nil) != want {
+			t.Errorf("%s is on disk: %v, want %t", pack, err, want)
+		}
+	}
+	if !c.repos[b].holds("pack-4") || c.size != 30 || c.repos[a].size != 20 {
+		t.Errorf("the cache counts %d bytes, %d of them a's, and holds b's pack: %t; want 30, 20 and true", c.size, c.repos[a].size, c.repos[b].holds("pack-4"))
+	}
+	// A request with an older snapshot links the dropped pack again, from the bucket.
+	linkInto(t, c, a, "pack-1")
 }

@@ -35,10 +35,13 @@ type Store interface {
 	Process(ctx context.Context, retry func(attempts int) time.Duration) (uuid.UUID, error)
 }
 
-// Service serves Git hosting's domain: snapshots and the record of pushes for the Git server, and what follows a push
-// for the push worker. It checks no permission: the Git server checks the pusher's before a push reaches it.
+// Service serves Git hosting's domain: snapshots and the record of pushes for the Git server, what follows a push for
+// the push worker, and the packs' compaction and deletion for the maintenance job (WithPacks). It checks no
+// permission: the Git server checks the pusher's before a push reaches it, and maintenance acts for nobody.
 type Service struct {
-	store Store
+	store     Store
+	packStore PackStore
+	packs     Packs
 }
 
 // NewService returns a Service over store.

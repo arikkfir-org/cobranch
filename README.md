@@ -14,7 +14,7 @@ Cobranch is a Kfirs project, created by Arik Kfir, and is released under the [MI
 
 ## Status
 
-Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions, organizations with their members, invitations and join requests, their roles, built in and custom, with the grants of them, and their API keys, which scripts send as bearer tokens, are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)). Git hosting has begun: an organization's repositories, with the grants of their roles, and personal tokens, which act as their user narrowed to the permissions they list, through the APIs and the Console; and the Git server, which clones, fetches and takes pushes over HTTPS with a personal token, recording each push before it answers, with the push worker, which then maps each push's commits to their authors; and a repository's code through the APIs and the Console: its branches, a branch's first-parent history and its commits, with the users behind them and the pushes that brought them. Pack compaction and SSH come next ([ENG-198](https://linear.app/arikkfir/issue/ENG-198), [the design](docs/cobranch/designs/git-hosting.md)). The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them.
+Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions, organizations with their members, invitations and join requests, their roles, built in and custom, with the grants of them, and their API keys, which scripts send as bearer tokens, are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)). Git hosting has begun: an organization's repositories, with the grants of their roles, and personal tokens, which act as their user narrowed to the permissions they list, through the APIs and the Console; and the Git server, which clones, fetches and takes pushes over HTTPS with a personal token, recording each push before it answers, with the push worker, which then maps each push's commits to their authors; and a repository's code through the APIs and the Console: its branches, a branch's first-parent history and its commits, with the users behind them and the pushes that brought them. Pack compaction is in too, and SSH comes next ([ENG-198](https://linear.app/arikkfir/issue/ENG-198), [the design](docs/cobranch/designs/git-hosting.md)). The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them.
 
 ## Layout
 
@@ -69,14 +69,14 @@ COBRANCH_HTTP_ADDR=:8083 COBRANCH_BACK_OFFICE_URL=http://localhost:3001 \
 
 `auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
 (`COBRANCH_SEED=true` with `migrate`, then with `auth-server`, lets the sign-in page sign in as a demo user);
-`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits:
+`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given the bucket, it also deletes the packs nobody lists any more and compacts the repositories that have too many, working in `COBRANCH_GIT_DATA_DIR`:
 
 ```bash
 export COBRANCH_CONSOLE_URL=http://localhost:3000 COBRANCH_AUTH_URL=http://localhost:8082
 export COBRANCH_AUTH_PROVIDERS='[{"id":"google","name":"Google","preset":"google","clientId":"…"}]'
 export COBRANCH_AUTH_CLIENT_SECRET_GOOGLE='…'          # the redirect URI is $COBRANCH_AUTH_URL/callback
 COBRANCH_HTTP_ADDR=:8082 bin/cobranch auth-server        # :8082: /providers, /sign-in, /callback, /sign-out
-bin/cobranch maintenance
+COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
 ```
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces

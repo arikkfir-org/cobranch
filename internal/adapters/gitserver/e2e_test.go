@@ -57,8 +57,10 @@ type stack struct {
 	t      *testing.T
 	pool   *pgxpool.Pool
 	bucket *gocloudblob.Bucket
-	base   string
-	store  git.Store
+	// bucketDir is the directory that holds the bucket's objects.
+	bucketDir string
+	base      string
+	store     git.Store
 	// record, when set, stands between the Git server's domain and its store's Record.
 	record func(ctx context.Context, push git.Push, next git.Store) error
 }
@@ -75,12 +77,13 @@ func newStack(t *testing.T) *stack {
 	}
 	t.Cleanup(pool.Close)
 	migrate(t, pool)
-	bucket, err := blob.Open(ctx, "file://"+t.TempDir())
+	bucketDir := t.TempDir()
+	bucket, err := blob.Open(ctx, "file://"+bucketDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = bucket.Close() })
-	s := &stack{t: t, pool: pool, bucket: bucket, store: postgres.NewGitStore(pool)}
+	s := &stack{t: t, pool: pool, bucket: bucket, bucketDir: bucketDir, store: postgres.NewGitStore(pool)}
 	s.base = s.serve(t.TempDir())
 	return s
 }

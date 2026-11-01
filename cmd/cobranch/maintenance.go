@@ -2,20 +2,27 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"cobranch.dev/internal/adapters/blob"
+	"cobranch.dev/internal/adapters/gitserver"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, once, and exits. The chart runs it as an hourly
-// CronJob.
+// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, and, given the bucket,
+// deletes the packs nobody lists any more and compacts the repositories that have too many, once, and exits. The chart
+// runs it as an hourly CronJob. A failure of either part leaves the other to run, and fails the run.
 func runMaintenance(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "maintenance", buildinfo.Version())
 	if err != nil {
@@ -31,8 +38,16 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("connecting to the database: %w", err)
 	}
 	defer pool.Close()
-	service := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
-	flows, sessions, err := service.DeleteExpired(ctx)
+	expired := deleteExpired(ctx, pool)
+	if cfg.BlobURL == "" {
+		return expired
+	}
+	return errors.Join(expired, maintainPacks(ctx, cfg, pool))
+}
+
+// deleteExpired deletes the sign-in flows, sessions, invitations and join requests that expired.
+func deleteExpired(ctx context.Context, pool *pgxpool.Pool) error {
+	flows, sessions, err := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{}).DeleteExpired(ctx)
 	if err != nil {
 		return fmt.Errorf("maintaining the database: %w", err)
 	}
@@ -43,4 +58,25 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 	}
 	slog.InfoContext(ctx, "Deleted what expired", "signInFlows", flows, "sessions", sessions, "invitations", invitations, "joinRequests", requests)
 	return nil
+}
+
+// maintainPacks deletes the packs nobody lists any more, then compacts the repositories with cfg.CompactAt active packs
+// or more, each past the others' failures.
+func maintainPacks(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Pool) error {
+	bucket, err := blob.Open(ctx, cfg.BlobURL)
+	if err != nil {
+		return fmt.Errorf("opening the bucket %s: %w", cfg.BlobURL, err)
+	}
+	defer func() { _ = bucket.Close() }() // every upload closed already
+	packs, err := gitserver.NewPacks(cfg.GitDataDir, "", bucket)
+	if err != nil {
+		return fmt.Errorf("preparing to repack: %w", err)
+	}
+	store := postgres.NewGitStore(pool)
+	service := git.NewService(store).WithPacks(store, packs)
+	swept, sweepErr := service.Sweep(ctx)
+	slog.InfoContext(ctx, "Deleted the packs nobody lists", "superseded", swept.Superseded, "unlisted", swept.Unlisted)
+	compacted, compactErr := service.Compact(ctx, cfg.CompactAt)
+	slog.InfoContext(ctx, "Compacted the repositories' packs", "repositories", compacted, "compactAt", cfg.CompactAt)
+	return errors.Join(sweepErr, compactErr)
 }

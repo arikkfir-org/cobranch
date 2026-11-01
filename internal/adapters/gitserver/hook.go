@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gocloud.dev/blob"
 
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
@@ -293,37 +294,46 @@ func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (
 	}
 	name := strings.TrimSuffix(filepath.Base(found[0]), ".pack")
 	at := func(file string) string { return filepath.Join(quarantine, "pack", file) }
-	objects, err := idxObjects(at(name + ".idx"))
+	pack, stored, err := putPack(ctx, s.bucket, p.repo.ID, name, at)
 	if err != nil {
 		return nil, err
 	}
-	upload := uuid.Must(uuid.NewV7())
-	var size int64
-	for _, suffix := range packFiles {
-		n, err := s.upload(ctx, packKey(p.repo.ID, upload, name+suffix), at(name+suffix))
-		if err != nil {
-			return nil, err
-		}
-		size += n
-	}
-	if err := s.cache.add(p.repo.ID, name, size, at, os.Link); err != nil {
+	if err := s.cache.add(p.repo.ID, name, stored, at, os.Link); err != nil {
 		slog.WarnContext(ctx, "Caching a pushed pack failed; a fetch downloads it", "pack", name, "error", err)
 	}
-	info, err := os.Stat(at(name + ".pack"))
+	return &pack, nil
+}
+
+// putPack uploads pack name's files, where at says they are, to the bucket as an upload of their own, the index
+// first, and returns the pack and how many bytes its files hold.
+func putPack(ctx context.Context, bucket *blob.Bucket, repoID uuid.UUID, name string, at func(file string) string) (git.Pack, int64, error) {
+	objects, err := idxObjects(at(name + ".idx"))
 	if err != nil {
-		return nil, fmt.Errorf("reading the pack's size: %w", err)
+		return git.Pack{}, 0, err
 	}
-	return &git.Pack{Name: name, Upload: upload, Size: info.Size(), Objects: objects}, nil
+	pack := git.Pack{Name: name, Upload: uuid.Must(uuid.NewV7()), Objects: objects}
+	var stored int64
+	for _, suffix := range packFiles {
+		n, err := upload(ctx, bucket, packKey(repoID, pack.Upload, name+suffix), at(name+suffix))
+		if err != nil {
+			return git.Pack{}, 0, err
+		}
+		stored += n
+		if suffix == ".pack" {
+			pack.Size = n
+		}
+	}
+	return pack, stored, nil
 }
 
 // upload copies file to the bucket's object key, and returns its size.
-func (s *Server) upload(ctx context.Context, key, file string) (int64, error) {
+func upload(ctx context.Context, bucket *blob.Bucket, key, file string) (int64, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return 0, fmt.Errorf("opening %s: %w", file, err)
 	}
 	defer func() { _ = f.Close() }() // only read
-	w, err := s.bucket.NewWriter(ctx, key, nil)
+	w, err := bucket.NewWriter(ctx, key, nil)
 	if err != nil {
 		return 0, fmt.Errorf("writing %s to the bucket: %w", key, err)
 	}

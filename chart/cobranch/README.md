@@ -44,7 +44,7 @@ lists every value, and `values.schema.json` checks them at install.
   calls it, so it has no Service. Keep `gitServer.storage.sizeLimit`, the Git server's disk, above
   `gitServer.cache.size` by a few `gitServer.maxPushSize`. Set `pushWorker.replicas` to null to leave its count to an
   autoscaler, which may scale it to zero while no push waits: KEDA's PostgreSQL scaler, for one, counting
-  `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`
+  `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`. The maintenance CronJob compacts a repository's packs into one once it has `maintenance.compaction.packs` (8), on a disk of `maintenance.storage.sizeLimit` and with the servers' ServiceAccount for the bucket, and deletes what compaction replaced a day later; null leaves packs alone, as a `blob.volume` that is an `emptyDir` does, since only each server's own pod holds that bucket
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md)).
 - **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
   with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the

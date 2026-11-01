@@ -500,6 +500,9 @@
       "additionalProperties": false,
       "required": [
         "schedule",
+        "activeDeadlineSeconds",
+        "compaction",
+        "storage",
         "resources"
       ],
       "properties": {
@@ -507,6 +510,39 @@
           "type": "string",
           "minLength": 9,
           "description": "A cron schedule; hourly by default."
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "description": "How long a run may take, in seconds, after which it fails."
+        },
+        "compaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "packs": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 2,
+              "description": "With urls.git, compacts the packs of every repository that has this many into one; null leaves packs alone."
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sizeLimit"
+          ],
+          "properties": {
+            "sizeLimit": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pod's emptyDir while it compacts, as a Kubernetes quantity: above twice the largest repository's packs."
+            }
+          }
         },
         "resources": {
           "$ref": "#/definitions/resources"

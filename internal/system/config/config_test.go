@@ -11,7 +11,7 @@ import (
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
-	"GIT_MAX_PUSH_SIZE", "HOOK_URL", "HOOK_TOKEN"}
+	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "HOOK_URL", "HOOK_TOKEN"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -269,10 +269,27 @@ func TestLoadMigrate(t *testing.T) {
 }
 
 func TestLoadMaintenance(t *testing.T) {
-	clean(t, map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"})
-	got, err := LoadMaintenance()
-	if err != nil || got.DatabaseURL != "postgres://db/cobranch" {
-		t.Errorf("LoadMaintenance() = %+v, %v", got, err)
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    Maintenance
+		wantErr bool
+	}{
+		{name: "the database alone", env: map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"},
+			want: Maintenance{DatabaseURL: "postgres://db/cobranch", GitDataDir: "/var/lib/cobranch/git", CompactAt: 8}},
+		{name: "the packs too", env: map[string]string{"COBRANCH_BLOB_URL": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "4", "COBRANCH_GIT_DATA_DIR": "/data"},
+			want: Maintenance{BlobURL: "gs://objects", GitDataDir: "/data", CompactAt: 4}},
+		{name: "a threshold that compacts nothing", env: map[string]string{"COBRANCH_BLOB_URL": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "1"}, wantErr: true},
+		{name: "a threshold that isn't a number", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "eight"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadMaintenance()
+			if (err != nil) != tt.wantErr || got != tt.want {
+				t.Errorf("LoadMaintenance() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
 	}
 }
 
