@@ -918,6 +918,7 @@
       }
       const start = (firstOnly) => path + "/commits?" + new URLSearchParams({ ref, parents: firstOnly ? "first" : "all" });
       let shown;
+      const needsGit = () => panel.append(h("p", {}, "A tag's history needs the Git server too: pick a branch or a commit."));
       try {
         shown = await load(start(first));
       } catch (err) {
@@ -930,9 +931,12 @@
             shown = await load(start(true));
           } catch (again) {
             if (again.code !== "git.unavailable") throw again;
-            panel.append(h("p", {}, "A tag's history needs the Git server too: pick a branch or a commit."));
+            needsGit();
             return panel;
           }
+        } else if (err.code === "git.unavailable") {
+          needsGit();
+          return panel;
         } else if (err.code === "ref.not_found" || err.code === "ref.invalid") {
           panel.append(h("p", {}, "This repository has no branch, tag or commit ", h("code", {}, ref), "."));
           return panel;
