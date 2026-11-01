@@ -52,7 +52,9 @@ const (
 	PermManage = "repo.manage"
 	// PermPush pushes to a repository: its Git server checks it before it reads a push.
 	PermPush = "repo.push"
-	// PermBypass pushes past a branch's merge requirements.
+	// PermMerge asks Cobranch to merge a Ready branch into its base.
+	PermMerge = "repo.merge"
+	// PermBypass pushes past a branch's merge requirements, and merges a branch that isn't Ready.
 	PermBypass = "repo.bypass"
 )
 

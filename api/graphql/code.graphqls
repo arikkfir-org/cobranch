@@ -96,6 +96,34 @@ extend type Mutation {
   setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!, expectedVersion: Int): Annotation!
   "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
+  "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
+  mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
+}
+
+"How to merge a branch into its base."
+input MergeInput {
+  "The head the requester saw; the merge is refused once the branch moved from it."
+  head: String
+  "How the merge moves its base; left out, FAST_FORWARD where the base requires linear history, which allows only that, and MERGE otherwise."
+  method: MergeMethod
+}
+
+"How a merge moves its base."
+enum MergeMethod {
+  "A merge commit, Merge branch '<name>', authored and committed by the requester."
+  MERGE
+  "A fast-forward, which writes nothing."
+  FAST_FORWARD
+}
+
+"A merge Cobranch recorded as a push of its base."
+type MergeResult {
+  "The branch merged into, main."
+  base: String!
+  "The head merged."
+  head: String!
+  "The commit the base is at now, the merge commit or, for a fast-forward, the head."
+  commit: String!
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -263,7 +291,7 @@ type Push {
   id: ID!
   "Who pushed; null once they are gone."
   pusher: CommitPrincipal
-  "https or ssh."
+  "https or ssh, or api for a merge asked of Cobranch."
   transport: String!
   "When Cobranch recorded it."
   at: Time!

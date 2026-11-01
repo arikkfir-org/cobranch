@@ -42,8 +42,8 @@ whenever it runs the Git server.
 
 - **The internal call arrives.** The [architecture](architecture.md#components) planned it: the REST and GraphQL servers
   ask the Git server over plain HTTP with JSON, on a port of its own that no route names. This slice builds it, for
-  trees, blobs and history walks; merges through the API ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)) join it
-  later.
+  trees, blobs and history walks; merges through the API ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)) use it
+  too ([by asking Cobranch](branch-status.md#by-asking-cobranch)).
 - **The Git server reads; the API servers decide.** The internal call takes a repository's ID, a ref and a path, and
   answers what Git holds there. The REST and GraphQL servers check `repo.read` first, pick a directory's README, render
   Markdown and add PostgreSQL's commits and principals. The Git server checks the viewer too: its callers send on the
@@ -60,6 +60,7 @@ whenever it runs the Git server.
 | `GET /internal/v1/repos/{id}/blob?ref=&path=&limit=` | The commit, the blob at the path, its mode and size, and up to `limit` bytes of it |
 | `GET /internal/v1/repos/{id}/raw?ref=&path=` | The blob's bytes, streamed, with its commit and object in headers |
 | `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=` | The commits reachable from the ref, every parent followed, newest first: their names only |
+| `POST /internal/v1/repos/{id}/merge` | Merges a branch into its base for its requester, by a merge commit or a fast-forward, recorded as a push ([by asking Cobranch](branch-status.md#by-asking-cobranch)) |
 
 - **Its own port and Service.** The Git server listens on `8081` beside Git's `8080`, behind a Service of its own,
   `<release>-git-server-internal`; routes name only `<release>-git-server`, so nothing outside reaches it. The REST and

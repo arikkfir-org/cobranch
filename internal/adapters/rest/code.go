@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -27,6 +28,7 @@ type Code interface {
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
+	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
 }
 
 func principal(p *code.Principal) *Principal {
@@ -139,6 +141,47 @@ func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBran
 		return nil, fail(err, "branch")
 	}
 	return GetBranch200JSONResponse(branch(b)), nil
+}
+
+// MergeBranch merges a branch into its base for the viewer.
+func (a api) MergeBranch(ctx context.Context, req MergeBranchRequestObject) (MergeBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	var in code.MergeInput
+	if req.Body != nil {
+		if req.Body.Head != nil {
+			in.Head = *req.Body.Head
+		}
+		if req.Body.Method != nil {
+			in.Method = code.MergeMethod(*req.Body.Method)
+		}
+	}
+	merged, err := a.code.Merge(ctx, v, repo.ID, req.BranchName, in)
+	if err != nil {
+		return nil, mergeFail(err)
+	}
+	return MergeBranch200JSONResponse(MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}), nil
+}
+
+// mergeFail is fail for merges: 409 for a branch that moved and a merge Cobranch won't make, and 503 without a Git
+// server.
+func mergeFail(err error) error {
+	var refused *code.MergeError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(http.StatusConflict, "branch.moved", "The branch or its base moved since you read them: read them again.")
+	case errors.As(err, &refused):
+		return refuse(http.StatusConflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(http.StatusServiceUnavailable, "git.unavailable", "This installation runs no Git server to merge with.")
+	}
+	return fail(err, "branch")
 }
 
 // ListCommits lists a page of a branch's first-parent history, and links the next.
