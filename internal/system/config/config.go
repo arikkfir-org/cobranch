@@ -5,9 +5,11 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -233,4 +235,89 @@ func LoadMaintenance() (Maintenance, error) {
 		return Maintenance{}, fmt.Errorf("reading the maintenance job's configuration from the COBRANCH_ variables: %w", err)
 	}
 	return c, nil
+}
+
+// GitServer configures git-server, which serves Git's smart HTTP protocol.
+type GitServer struct {
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
+	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
+	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// BlobURL is the bucket's Go Cloud URL, as the servers'.
+	BlobURL string `envconfig:"BLOB_URL" required:"true"`
+	// DataDir holds the pack cache and the throwaway repositories, on one filesystem.
+	DataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
+	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.
+	CacheSize Size `envconfig:"GIT_CACHE_SIZE" default:"10Gi"`
+	// MaxPushSize is the largest pack a push may send, such as 2Gi.
+	MaxPushSize     Size          `envconfig:"GIT_MAX_PUSH_SIZE" default:"2Gi"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
+}
+
+// LoadGitServer reads git-server's configuration from the environment.
+func LoadGitServer() (GitServer, error) {
+	var c GitServer
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return GitServer{}, fmt.Errorf("reading git-server's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// PushWorker configures push-worker, which processes the pushes the Git server recorded.
+type PushWorker struct {
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
+	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
+	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// PollInterval is how often it looks for waiting pushes without being woken, in case it missed a notification.
+	PollInterval    time.Duration `envconfig:"PUSH_POLL_INTERVAL" default:"30s"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
+}
+
+// LoadPushWorker reads push-worker's configuration from the environment.
+func LoadPushWorker() (PushWorker, error) {
+	var c PushWorker
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return PushWorker{}, fmt.Errorf("reading push-worker's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// Hook configures git-hook, a push's pre-receive hook, from what its Git server gives receive-pack.
+type Hook struct {
+	URL   string `envconfig:"HOOK_URL" required:"true"`
+	Token string `envconfig:"HOOK_TOKEN" required:"true"`
+}
+
+// LoadHook reads git-hook's configuration from the environment.
+func LoadHook() (Hook, error) {
+	var c Hook
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return Hook{}, fmt.Errorf("reading git-hook's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// Size is a number of bytes, written as Kubernetes writes quantities: a number, with Ki, Mi, Gi or Ti after it.
+type Size int64
+
+// sizeUnits are the suffixes a Size may carry, and what each multiplies by.
+var sizeUnits = []struct {
+	suffix string
+	factor int64
+}{{"Ti", 1 << 40}, {"Gi", 1 << 30}, {"Mi", 1 << 20}, {"Ki", 1 << 10}}
+
+// Decode reads value, such as 10Gi or 1048576.
+func (s *Size) Decode(value string) error {
+	number, factor := strings.TrimSpace(value), int64(1)
+	for _, u := range sizeUnits {
+		if trimmed, ok := strings.CutSuffix(number, u.suffix); ok {
+			number, factor = trimmed, u.factor
+			break
+		}
+	}
+	n, err := strconv.ParseInt(number, 10, 64)
+	if err != nil || n <= 0 || n > math.MaxInt64/factor {
+		return fmt.Errorf("%q is not a size, such as 10Gi", value)
+	}
+	*s = Size(n * factor)
+	return nil
 }

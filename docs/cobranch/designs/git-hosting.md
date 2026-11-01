@@ -4,49 +4,51 @@
 > with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
 > once Cobranch's shape settles.
 
-**Status**: Proposed 2026-10-31 · [ENG-198](https://linear.app/arikkfir/issue/ENG-198) · Builds the [architecture’s Git
+**Status**: Agreed 2026-11-01 · [ENG-198](https://linear.app/arikkfir/issue/ENG-198) · Builds the [architecture’s Git
 storage and pushes](architecture.md#git-storage-and-pushes) and [principals and
 permissions](principals-and-permissions.md) · Adds the Git server and the push worker to the chart · Built by
 [ENG-198](https://linear.app/arikkfir/issue/ENG-198), in six pull requests
 
 Organizations keep their code in Cobranch: a repository is packs in the bucket and refs in PostgreSQL, the Git server
-serves clone, fetch and push over HTTPS and then SSH, and a push returns only once the push worker has recorded its
-commits, branches and the principals behind them, so the Console shows it the moment Git returns.
+serves clone, fetch and push over HTTPS and then SSH, and a push returns only once the Git server has recorded its refs,
+commits and branches, so the Console shows it the moment Git returns; the push worker adds the principals behind them
+after.
 
 ## Scope
 
 How Cobranch hosts Git ([ENG-198](https://linear.app/arikkfir/issue/ENG-198)): repositories in organizations, the Git
-server that serves clone, fetch and push over HTTPS and then SSH, the push worker that records every push before the
-client returns, the principals behind commits and pushes, and the Console's first view of code. The
+server that serves clone, fetch and push over HTTPS and then SSH and records every push before the client returns, the
+push worker that does what follows, the principals behind commits and pushes, and the Console's first view of code. The
 [architecture](architecture.md#git-storage-and-pushes) already fixed the storage and the push path; this page builds
-them, and names what it adds.
+them, and names what it adds and changes.
 
 **This slice hosts repositories and records every push; branch status, jobs and settings build on it**
 
 ![This slice hosts repositories and records every push; branch status, jobs and settings build on it](git-hosting/scope.svg)
 
-Every later slice reads what a push records here: its commits, branches and principals, written in the push’s one
-transaction.
+Every later slice reads what a push records here: its commits and branches, written in the push’s one transaction, and
+their principals, which the push worker adds after.
 
 Choices beyond the agreed designs are collected under [Decisions](#decisions).
 
 ## Components
 
-**Two workloads join: the Git server, which clients reach, and the push worker, which only it reaches**
+**Two workloads join: the Git server, which clients reach, and the push worker, which nobody calls**
 
-![Two workloads join: the Git server, which clients reach, and the push worker, which only it reaches](git-hosting/components.svg)
+![Two workloads join: the Git server, which clients reach, and the push worker, which nobody calls](git-hosting/components.svg)
 
 Every workload runs image `cobranch` at the chart’s version, which already holds `git`. Neither new workload has a
-Kubernetes token.
+Kubernetes token, and the push worker has no Service: the two share only PostgreSQL.
 
 - **The Git server** (`cobranch git-server`) serves Git's smart HTTP protocol at `/<org>/<repo>.git`, and SSH in the
   last pull request. It reads PostgreSQL, keeps a pack cache on an ephemeral volume, reads and writes packs in the
   bucket, and runs the `git` CLI, which the `cobranch` image already holds. Two replicas, no Kubernetes token.
-- **The push worker** (`cobranch push-worker`) answers one internal call, `POST /v1/pushes`, on a Service no route
-  reaches, and is the only workload that writes refs. Two replicas, no bucket, no Kubernetes token.
-- **One internal secret.** The Git server calls the push worker with a bearer token from a Secret the chart generates,
-  or the operator's ([internal calls](architecture.md#components)). A NetworkPolicy of the chart's admits only the Git
-  server's pods to the push worker.
+- **The push worker** (`cobranch push-worker`) claims each push the Git server recorded, from PostgreSQL, and does what
+  can wait: in this slice, the principals behind its commits. Nobody calls it: no Service, no route, no bucket, no
+  Kubernetes token. Two replicas, or none while no push waits under an operator's autoscaler.
+- **No internal call.** The two share only PostgreSQL: a push's row is the push worker's task, and the push's
+  transaction notifies the push workers, so the Git server never waits on one, and neither holds a secret of the
+  other's. Changed from the architecture, whose push worker wrote every ref behind an internal call.
 - **The Git server serves as if it were alone,** at `/`; the operator mounts it at a host or a path prefix, which
   `urls.git` names. Git clients carry no cookie, so the Git server's URL needn't share the others' parent domain and
   doesn't take part in naming the session cookie.
@@ -154,27 +156,35 @@ day, so the second serves what the first advertised.
 
 ### A push
 
-**A push returns once the push worker has committed it; its hook calls back into the Git server**
+**A push returns once the Git server has committed it; the push worker does the rest later**
 
-![A push returns once the push worker has committed it; its hook calls back into the Git server](git-hosting/push.svg)
+![A push returns once the Git server has committed it; the push worker does the rest later](git-hosting/push.svg)
 
 The advertisement before the push, a `GET …/info/refs?service=git-receive-pack`, runs as a fetch’s does. A stale ref or
-a failure makes the hook exit 1 with a `remote:` line saying why, and nothing changes.
+a failure makes the hook exit 1 with a `remote:` line saying why, and nothing changes. A store call that failed, maybe
+after it committed, is asked again with the same push ID, which records nothing twice.
 
 - **Permission first.** `repo.push` is checked before a byte of the pack is read.
 - **Git quarantines and indexes,** with `receive.unpackLimit` 1 so every push keeps its objects as one pack,
   `index-pack --fix-thin` completing a thin one, and `receive.autogc` off.
 - **The hook calls home.** The `pre-receive` hook is `cobranch git-hook`, which posts its standard input to the Git
   server process that started it, on a loopback port with a token made for this push, and streams back the answer as
-  `remote:` lines. The manifest, the upload, the call to the push worker and the push's trace all stay in the Git
-  server, whose configuration and credentials the hook never holds.
+  `remote:` lines. The manifest, the upload, the push's transaction and its trace all stay in the Git server, whose
+  configuration and credentials the hook never holds.
 - **The manifest** holds the ref updates and every new commit: `git rev-list` of the new tips not reachable from any
   existing ref, each commit read with `git cat-file` and parsed in Go, so authors, committers, times with their zones,
   messages and signatures arrive whole. Annotated tags are refs to tag objects; their commits come in like any other.
-- **The push worker's one transaction** locks the repository's row, so pushes into one repository apply one at a time;
-  checks every ref's old SHA; lists the pack; inserts the push, the new commits and their principals; moves the refs;
-  creates, moves and deletes branches; and appends event `repo.pushed`. Its answer is cached by the push's ID: a hook
-  that lost the answer asks again and gets the same one ([failure modes](architecture.md#failure-modes)).
+- **The Git server's one transaction** locks the repository's row, so pushes into one repository apply one at a time;
+  checks every ref's old SHA; lists the pack; inserts the push, waiting for the push worker, and its new commits; moves
+  the refs; creates, moves and deletes branches; appends event `repo.pushed`; and notifies `cobranch_pushes`. A push is
+  recorded once by its ID: a store call that failed, maybe after it committed, is asked again with the same ID, up to
+  four times, and a push already recorded is accepted as it was ([failure modes](architecture.md#failure-modes)).
+- **Then the push worker,** in a transaction of its own: it claims the push that has waited longest,
+  `FOR UPDATE SKIP LOCKED`, so two replicas never take one push; maps its commits' authors and committers to principals;
+  and marks it processed. A push it fails keeps its error and waits for another try, due a second after the first
+  failure and twice as long after each, at most an hour, and taken at the push worker's next wake once due. `LISTEN`
+  wakes it, and a poll every 30 seconds catches a lost notification and a retry that came due; its span links the push's
+  trace, whose `traceparent` the push's row keeps. Until then a commit names its author's email but no principal.
 
 ### Which pushes are accepted
 
@@ -196,7 +206,7 @@ Merge requirements and path rules join this flow with branch status
 | `refs/heads/main moved since you fetched: fetch, merge or rebase, then push again` | Another push moved a ref first |
 | `Cobranch writes refs under cobranch/ itself` | A ref under `refs/heads/cobranch/` or `refs/tags/cobranch/` |
 | `Cobranch keeps branches and tags only: refs/notes/commits refused` | Any other ref |
-| `Cobranch could not record the push; nothing changed, so try again` | The bucket or the push worker failed |
+| `Cobranch could not record the push; nothing changed, so try again` | The bucket or the database failed |
 
 ## Principals behind a push
 
@@ -208,11 +218,11 @@ The commit keeps the name and email as written beside its principals. The pusher
 authenticated.
 
 - **The pusher** is whoever authenticated: a user through their personal token, or an API key. Every push row names it.
-- **Authors and committers by email.** The push worker resolves each commit's author and committer by lowercased email:
-  a user who holds it, verified, or else the login-less user who holds it, or else a new **login-less user**, named
-  after the commit, holding the email unverified ([emails](principals-and-permissions.md#emails-and-login-less-users)).
-  A login-less user is a user with no identity: it can't sign in and holds no grants. Commits keep the names and emails
-  as written too.
+- **Authors and committers by email.** The push worker resolves each commit's author and committer by lowercased email,
+  after the push: a user who holds it, verified, or else the login-less user who holds it, or else a new **login-less
+  user**, named after the commit, holding the email unverified
+  ([emails](principals-and-permissions.md#emails-and-login-less-users)). A login-less user is a user with no identity:
+  it can't sign in and holds no grants. Commits keep the names and emails as written too.
 - **Sign-up adopts a login-less user.** **Proposed:** a new identity whose verified email a login-less user holds signs
   in as that user, the email now verified, so their commits are theirs at once and nothing is rewritten. A user who
   already exists and later verifies such an email claims it through the background task the principals design describes,
@@ -234,8 +244,9 @@ An organization’s own pages (members, roles, API keys, settings) keep their pa
   **Settings** page renames it.
 - **A commit's page** shows its message, author and committer with the principals behind them, its parents, and the push
   that first brought it, with its pusher.
-- **As soon as the push returns.** The push's transaction committed before Git returned, so the next page load shows it.
-  Live updates of an open page come with the web app's build-out, over the NOTIFY the architecture describes.
+- **As soon as the push returns.** The push's transaction committed before Git returned, so the next page load shows it;
+  its commits' principals follow once the push worker has processed it. Live updates of an open page come with the web
+  app's build-out, over the NOTIFY the architecture describes.
 - **Personal tokens** have a page under the viewer's own settings: make, list and revoke.
 
 ## Storage and clean-up
@@ -250,9 +261,15 @@ active and every listed ref keeps its objects.
 - **Compaction.** The hourly maintenance job repacks a repository whose active packs pass a threshold (8 by default): it
   fetches them into a throwaway repository with the snapshot's refs, runs `git repack -a -d`, uploads the new pack, and
   in one transaction lists it and marks the snapshot's packs superseded. Packs pushed meanwhile stay active, untouched.
-- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and files under
-  `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes.
-- **The cache** is an `emptyDir` of `gitServer.cache.size`, evicting the least recently used repositories' packs first.
+- **An upload of its own.** Each upload of a pack's files has an ID, in its keys: `git/<repo-id>/<upload>/<pack>.pack`
+  and its `.idx`. A pack's name is its content's hash, so a push that brings back objects the repository holds, a
+  deleted branch pushed again, brings a pack it lists already: the listed pack keeps its upload while active, and one
+  compaction superseded turns active again with the new upload, so no file a row lists is ever one maintenance deletes.
+- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and uploads
+  under `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes, and of pushes that
+  brought a listed pack again.
+- **The cache** keeps up to `gitServer.cache.size` of packs, evicting the least recently used repositories' first, in
+  the pod's `emptyDir` of `gitServer.storage.sizeLimit`, beside the throwaway repositories of the requests in flight.
 
 ## SSH
 
@@ -263,7 +280,7 @@ active and every listed ref keeps its objects.
 A user adds SSH keys in the Console; a key acts as its user, as a session would.
 
 - **The same pipeline.** The Git server also listens for SSH, as user `git`, and runs `git-upload-pack` and
-  `git-receive-pack` for `<org>/<repo>.git` through the same snapshot, throwaway repository, hook and push worker.
+  `git-receive-pack` for `<org>/<repo>.git` through the same snapshot, throwaway repository, hook and transaction.
 - **Keys are a user's.** Users add SSH public keys in the Console; a key acts as its user, unnarrowed, as a session
   would; a fingerprint belongs to one user.
 - **Exposure is the operator's.** The chart renders a Service port for SSH and keeps the host key in a Secret it
@@ -275,10 +292,10 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 | Value | What it does |
 | --- | --- |
 | `urls.git` | Where Git clients reach the Git server, a host or a path prefix; the Console shows clone URLs under it |
-| `gitServer.replicas`, `pushWorker.replicas` | Two each |
-| `gitServer.cache.size` | The pack cache's `emptyDir` size limit, 10 GiB by default |
+| `gitServer.replicas`, `pushWorker.replicas` | Two each; `pushWorker.replicas` null leaves the push worker's count to an autoscaler, which may scale it to zero while no push waits |
+| `gitServer.cache.size` | How much of the bucket's packs a pod keeps before it evicts the least recently used repositories', 10 GiB by default |
+| `gitServer.storage.sizeLimit` | The pod's `emptyDir`, which holds the cache and the throwaway repositories of the requests in flight, 16 GiB by default: above `cache.size` by a few `maxPushSize` |
 | `gitServer.maxPushSize` | The largest pack a push may send, 2 GiB by default |
-| `internal.existingSecret` | A Secret of yours with the internal token under `token`; without one, the chart generates it and keeps it on upgrade, which needs the cluster at render time |
 | `gitServer.ssh.enabled`, `.port`, `.service`, `.hostKey.existingSecret` | SSH, from its pull request: off by default, then the Service the operator exposes and the host key |
 | `maintenance.compaction.packs` | The active packs that make a repository due for compaction, 8 by default |
 
@@ -291,7 +308,7 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
   refused, two concurrent pushes into one repository, a lost answer asked again, a refused ref, and a fetch across a
   compaction.
 - **The chart in CI** installs both workloads in kind, as it does the others, and its test pod clones an empty
-  repository.
+  repository, pushes to it, and finds the push in a fresh clone.
 
 ## Data model
 
@@ -313,8 +330,8 @@ Nothing of an installation is in the product: an operator routes the Git server 
 - **Each pull request keeps `main` working,** with its tests and its Console pages, and is Part of
   [ENG-198](https://linear.app/arikkfir/issue/ENG-198); the last closes it.
 - **An installation is the operator's,** configured through the chart alone: `urls.git` and a route to the Git server
-  from the third pull request, an internal secret where the chart can't generate one, and the SSH Service's exposure
-  from the sixth.
+  from the third pull request, an autoscaler for the push worker if it likes, and the SSH Service's exposure from the
+  sixth.
 
 ## Risks
 
@@ -324,24 +341,28 @@ Nothing of an installation is in the product: an operator routes the Git server 
   with no Kubernetes token, and cleans each throwaway repository when its request ends.
 - **First-parent history** hides a merge's second line in the Console's list until the full graph view arrives.
 - **Login-less users accumulate,** one per unknown email; they hold nothing and sign in nowhere, so they cost only rows.
+- **Principals lag a push** while no push worker runs, or while its pushes fail; the commits and branches are there, and
+  each push's error and attempts say why. An operator's autoscaler counts
+  `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`.
 
 ## Decisions
 
 | Proposal | Why | Decision |
 | --- | --- | --- |
-| Two workloads join: the Git server, two replicas with a pack cache, and the push worker, two replicas behind an internal secret and a NetworkPolicy | The architecture's split, with nothing of either exposed but the Git server | Proposed |
+| Two workloads join: the Git server, two replicas with a pack cache, and the push worker, which nobody calls | Only the Git server is exposed, and only it is on a push's path | Agreed |
 | Every repository's default branch is `main`, and nobody changes it | One name for the branch whose settings, triggers and reviewer instructions count | Agreed |
 | A repository's permissions are its grants' and the repository permissions of the viewer's organization roles, read in one query | A grant reaches everything inside its scope; Owners reach every repository | Agreed |
 | Repository slugs keep old ones as redirects, in Git's URLs too, and avoid the Console's organization pages | Renames break no clone; one URL space for the Console | Agreed |
 | Personal tokens `cbp_` list permissions, expire within a year, and are made only from a session | HTTPS needs a password; a token holds no more than it must | Agreed |
 | Git over HTTPS takes a token as a Basic password or a bearer, never the cookie; `401` without a credential, `404` without read | Git asks for credentials; no page pushes for its visitor; nobody learns what exists | Agreed |
-| The pre-receive hook posts to its own Git server process on loopback, which builds the manifest and calls the push worker | One process holds the credentials, the configuration and the trace | Proposed |
+| The pre-receive hook posts to its own Git server process on loopback, which builds the manifest and records the push | One process holds the credentials, the configuration and the trace | Agreed |
 | Throwaway repositories hard-link the snapshot's packs from the cache instead of using alternates | The cache evicts any time without counting readers | Changed |
 | Pushes may write `refs/heads/*` and `refs/tags/*` only, none under `cobranch/`, all or nothing | Branches and tags are what Cobranch models | Agreed |
-| The push worker serializes a repository's pushes by locking its row and caches each push's answer by its ID | Atomic, compare-and-swap pushes; a lost answer is asked again | Proposed |
+| The Git server commits each push in one transaction that locks the repository's row and moves refs by compare-and-swap, recording it once by its ID; the push worker claims it later from PostgreSQL, woken by NOTIFY | The push worker leaves the push's path and may scale to zero; a lost answer is asked again; no message broker | Changed |
 | Unknown authors become login-less users holding their email unverified; a new identity with that email verified adopts the login-less user | Commits have principals at once, and become their author's without rewriting | Agreed |
 | The Console shows first-parent history from PostgreSQL; live updates come with the web app | The push is recorded before Git returns; the graph view can wait | Agreed |
 | Maintenance compacts past 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Agreed |
+| Each upload of a pack's files has an ID of its own in its keys, and a pack's row names the upload it lists | A pack's name is its content's hash and comes back with a branch pushed again; maintenance never deletes the files a row lists | Changed |
 | SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Agreed |
 | Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Agreed |
 
@@ -351,9 +372,9 @@ Nothing of an installation is in the product: an operator routes the Git server 
    repository scopes later, since a Git token's common case is `repo.read` and `repo.push` everywhere its user reaches.
 2. **First-parent history in the Console for now?** Settled on 2026-11-01: yes; the full graph needs the Git server to
    walk history, which belongs with the code browsing that follows.
-3. **Does the push worker stay on the push's path?** Open since 2026-11-01: a synchronous call keeps the push worker
-   from scaling to zero and fails every push while it is down. Recommended: the Git server commits the push's refs, pack
-   and commits itself, with a task the push worker claims later, so only what can wait (authors' principals, then branch
-   status, events and jobs) waits for it.
+3. **Does the push worker stay on the push's path?** Settled on 2026-11-01: no. A synchronous call kept the push worker
+   from scaling to zero and failed every push while it was down, so the Git server commits the push's refs, pack and
+   commits itself, and the push worker claims the push later from PostgreSQL. Only what can wait (authors' principals,
+   then branch status, events and jobs) waits for it.
 
 Cobranch is a Kfirs project, created by Arik Kfir.

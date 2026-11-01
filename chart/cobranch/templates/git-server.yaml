@@ -1,0 +1,12 @@
+{{- if .Values.urls.git }}
+{{- include "cobranch.checkDatabase" . }}
+{{- $values := .Values.gitServer }}
+{{- $env := printf `- name: COBRANCH_GIT_DATA_DIR
+  value: /var/lib/cobranch/git
+- name: COBRANCH_GIT_CACHE_SIZE
+  value: %s
+- name: COBRANCH_GIT_MAX_PUSH_SIZE
+  value: %s` ($values.cache.size | quote) ($values.maxPushSize | quote) }}
+{{- $data := dict "name" "git" "mountPath" "/var/lib/cobranch/git" "emptyDir" (dict "sizeLimit" $values.storage.sizeLimit) }}
+{{- include "cobranch.server" (dict "root" . "component" "git-server" "values" $values "env" $env "volumes" (list $data)) }}
+{{- end }}

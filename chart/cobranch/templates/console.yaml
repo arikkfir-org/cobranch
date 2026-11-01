@@ -1,4 +1,5 @@
 {{- /* The Console's pages find the REST API (without its URL, at the root of their own host), the Auth server (without
-it, sign-in isn't set up) and themselves (without it, the root of their own host). */}}
+it, sign-in isn't set up), themselves (without it, the root of their own host) and the Git server, which clone URLs
+start with (without it, there are none). */}}
 {{- include "cobranch.site" (dict "root" . "component" "console" "values" .Values.console "image" .Values.images.console
-  "env" (dict "CONSOLE" .Values.urls.console "REST" .Values.urls.rest "AUTH" .Values.urls.auth)) }}
+  "env" (dict "CONSOLE" .Values.urls.console "REST" .Values.urls.rest "AUTH" .Values.urls.auth "GIT" .Values.urls.git)) }}

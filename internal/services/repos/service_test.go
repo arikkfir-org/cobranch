@@ -268,6 +268,49 @@ func TestGet(t *testing.T) {
 	})
 }
 
+func TestLocate(t *testing.T) {
+	// readOnly is Max's personal token that holds repo.read alone.
+	readOnly := func(ctx context.Context, f *fixture) context.Context {
+		return auth.WithViewer(ctx, auth.Authenticated{User: auth.User{Principal: f.max.Principal},
+			Credential: auth.Credential{Kind: auth.CredentialPersonalToken, PrincipalID: f.max.ID, Permissions: []string{"repo.read"}}})
+	}
+	runCases(t, []testCase{
+		{name: "by the organization's slug and an old one of the repository's", run: func(ctx context.Context, f *fixture) error {
+			repo, held, err := f.service.Locate(ctx, f.max, "acme", "site")
+			if err != nil {
+				return got(err)
+			}
+			if repo.ID != f.website.ID || !slices.Contains(held, repos.PermPush) {
+				return fmt.Errorf("got %s holding %v", repo.Slug, held)
+			}
+			return nil
+		}},
+		{name: "a token that holds repo.read alone, without org.read", run: func(ctx context.Context, f *fixture) error {
+			repo, held, err := f.service.Locate(readOnly(ctx, f), f.max, "acme", "website")
+			if err == nil && (repo.ID != f.website.ID || !slices.Equal(held, []string{"repo.read"})) {
+				return fmt.Errorf("got %s holding %v", repo.Slug, held)
+			}
+			return got(err)
+		}},
+		{name: "a repository the viewer doesn't read looks absent", run: func(ctx context.Context, f *fixture) error {
+			_, _, err := f.service.Locate(ctx, f.max, "acme", "secret")
+			return got(err)
+		}, wantErr: repos.ErrNotFound},
+		{name: "an outsider", run: func(ctx context.Context, f *fixture) error {
+			_, _, err := f.service.Locate(ctx, f.nia, "acme", "website")
+			return got(err)
+		}, wantErr: repos.ErrNotFound},
+		{name: "no such organization", run: func(ctx context.Context, f *fixture) error {
+			_, _, err := f.service.Locate(ctx, f.olivia, "globex", "website")
+			return got(err)
+		}, wantErr: repos.ErrNotFound},
+		{name: "no such repository", run: func(ctx context.Context, f *fixture) error {
+			_, _, err := f.service.Locate(ctx, f.olivia, "acme", "nope")
+			return got(err)
+		}, wantErr: repos.ErrNotFound},
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "a Maintainer renames it, keeping the old slug", run: func(ctx context.Context, f *fixture) error {

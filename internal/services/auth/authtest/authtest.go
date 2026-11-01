@@ -191,12 +191,40 @@ func (s *Store) EmailHolder(_ context.Context, email string) (uuid.UUID, string,
 	return uuid.Nil, "", auth.ErrNotFound
 }
 
-// SignUp records a new user.
+// LoginlessHolder finds the user with no identity who holds email unverified.
+func (s *Store) LoginlessHolder(_ context.Context, email string) (uuid.UUID, error) {
+	if s.Fail != nil {
+		return uuid.Nil, s.Fail
+	}
+	for id, u := range s.Users {
+		for _, e := range u.Emails {
+			if e.Email == email && !e.Verified && !s.signsIn(id) {
+				return id, nil
+			}
+		}
+	}
+	return uuid.Nil, auth.ErrNotFound
+}
+
+// signsIn reports whether the user has an identity.
+func (s *Store) signsIn(id uuid.UUID) bool {
+	for _, i := range s.Identities {
+		if i.UserID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// SignUp records a new user, or gives a login-less one the identity and verifies their email.
 func (s *Store) SignUp(_ context.Context, up auth.SignUp) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
 	u := auth.User{Principal: up.Principal, CreatedAt: up.Identity.LastSignInAt}
+	if up.Adopt {
+		u.CreatedAt = s.Users[up.Principal.ID].CreatedAt
+	}
 	if up.Identity.EmailVerified {
 		u.Emails = []auth.Email{{Email: up.Identity.Email, Verified: true}}
 	}

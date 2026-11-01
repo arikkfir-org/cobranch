@@ -79,6 +79,15 @@ func (s *Store) BySlug(ctx context.Context, orgID uuid.UUID, slug string) (repos
 	return s.shown(ctx, s.Repos[id]), nil
 }
 
+// ByPath finds a repository by any slug of its organization's and any of its own.
+func (s *Store) ByPath(ctx context.Context, orgSlug, slug string) (repos.Repository, error) {
+	orgID, ok := s.Orgs.Slugs[orgSlug]
+	if !ok {
+		return repos.Repository{}, repos.ErrNotFound
+	}
+	return s.BySlug(ctx, orgID, slug)
+}
+
 // ByID finds a repository.
 func (s *Store) ByID(ctx context.Context, id uuid.UUID) (repos.Repository, error) {
 	repo, ok := s.Repos[id]

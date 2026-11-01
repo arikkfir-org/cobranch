@@ -21,6 +21,8 @@ type Store interface {
 	Create(ctx context.Context, actor uuid.UUID, repo Repository) error
 	// BySlug finds one of the organization's repositories by any slug it has had there, or ErrNotFound.
 	BySlug(ctx context.Context, orgID uuid.UUID, slug string) (Repository, error)
+	// ByPath finds a repository by its organization's slug and its own, each one it has or had, or ErrNotFound.
+	ByPath(ctx context.Context, orgSlug, slug string) (Repository, error)
 	// ByID finds a repository, or ErrNotFound.
 	ByID(ctx context.Context, id uuid.UUID) (Repository, error)
 	// Among lists those of ids that are the organization's repositories, by slug.
@@ -48,6 +50,8 @@ const (
 	PermRead = "repo.read"
 	// PermManage changes a repository's settings.
 	PermManage = "repo.manage"
+	// PermPush pushes to a repository: its Git server checks it before it reads a push.
+	PermPush = "repo.push"
 )
 
 // Service runs repositories: every operation checks its viewer's permissions through the authorizer first.
@@ -168,6 +172,21 @@ func (s *Service) Get(ctx context.Context, v Viewer, orgID uuid.UUID, slug strin
 		return Repository{}, nil, err
 	}
 	repo, err := s.store.BySlug(ctx, orgID, slug)
+	if err != nil {
+		return Repository{}, nil, wrap("finding the repository", err)
+	}
+	held, err := s.read(ctx, v, repo)
+	if err != nil {
+		return Repository{}, nil, err
+	}
+	return repo, held, nil
+}
+
+// Locate finds the repository a Git URL names, by its organization's slug and its own (current or old), with what v
+// holds there, for a viewer with repo.read on it; anyone else gets ErrNotFound. Unlike Get, it asks nothing of the
+// organization: a Git client's personal token may hold repo.read alone.
+func (s *Service) Locate(ctx context.Context, v Viewer, orgSlug, slug string) (Repository, []string, error) {
+	repo, err := s.store.ByPath(ctx, orgSlug, slug)
 	if err != nil {
 		return Repository{}, nil, wrap("finding the repository", err)
 	}

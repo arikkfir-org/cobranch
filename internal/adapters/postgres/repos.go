@@ -110,6 +110,19 @@ func (s *RepoStore) BySlug(ctx context.Context, orgID uuid.UUID, slug string) (r
 	return repository(row.Repository, shared), nil
 }
 
+// ByPath finds a repository by its organization's slug and its own, each one it has or had.
+func (s *RepoStore) ByPath(ctx context.Context, orgSlug, slug string) (repos.Repository, error) {
+	row, err := s.q.RepositoryByPath(ctx, orgSlug, slug)
+	if err != nil {
+		return repos.Repository{}, wrapRepo("finding the repository", err)
+	}
+	shared, err := s.shared(ctx, row.Repository.OrgID)
+	if err != nil {
+		return repos.Repository{}, err
+	}
+	return repository(row.Repository, shared), nil
+}
+
 // ByID finds a repository.
 func (s *RepoStore) ByID(ctx context.Context, id uuid.UUID) (repos.Repository, error) {
 	row, err := s.q.RepositoryByID(ctx, id)

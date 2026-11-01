@@ -34,8 +34,9 @@ Seven constraints from the [product design](product.md#principles) decide most o
 - **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Agreed:** no message broker, no
   Redis, no search cluster in the foundations; phase 2's semantic search keeps its embeddings in PostgreSQL with
   pgvector ([phase 2](product.md#phase-2)).
-- **Synchronous pushes.** When `git push` returns, the commits, branches and their status are in PostgreSQL and on
-  screen.
+- **Synchronous pushes.** When `git push` returns, its commits and branches are in PostgreSQL and on screen. **Changed**
+  (2026-11-01, [Git hosting](git-hosting.md#a-push)): their principals and status follow from the push worker, so only
+  the Git server is on a push's path.
 - **Many organizations per installation.** Every row an organization owns carries its ID, and every query is scoped by
   it.
 - **One permission model.** REST, GraphQL, the Admin API and Git check the same grants through the same code.
@@ -44,15 +45,15 @@ Seven constraints from the [product design](product.md#principles) decide most o
 ## Components
 
 Ten workloads, plus the job and agent pods the controller creates and a migration Job per upgrade. Only the Git server
-reads Git objects, only the push worker moves refs, and only the controller makes and watches pods; the REST and GraphQL
-servers' one Kubernetes call reads a running job's logs.
+reads Git objects or moves refs, and only the controller makes and watches pods; the REST and GraphQL servers' one
+Kubernetes call reads a running job's logs.
 
 **All state lives in PostgreSQL and one bucket**
 
 ![All state lives in PostgreSQL and one bucket](architecture/components.svg)
 
-The **controller** is a workload the product design did not list: the push worker must stay fast, so the slow, retried
-and outward-facing work (pods, webhooks, model calls) gets a workload of its own.
+The **controller** is a workload the product design did not list: the push worker only records what follows a push, so
+the slow, retried and outward-facing work (pods, webhooks, model calls) gets a workload of its own.
 
 **Four API workloads.** **Changed** (review, 2026-10-27): the API server is now the Auth, GraphQL, REST and Admin
 servers, so the operator routes, scales and exposes each on its own ([Routes](#routes)). They share one service layer
@@ -60,9 +61,9 @@ and check the same grants. The [Helm chart](https://claude.ai/artifact/LyMHXgSoN
 ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)) brings the GraphQL and REST servers; the Auth server arrives with
 sign-in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197)), and the Admin server with the Back-office.
 
-**Internal calls** (the GraphQL and REST servers to the Git server, the Git server to the push worker) are plain HTTP
-with JSON on a port the chart never exposes, authenticated with a secret the chart generates. Every workload is the same
-Go binary, so both ends of a call share one Go type for its body.
+**Internal calls** (the GraphQL and REST servers to the Git server) are plain HTTP with JSON on a port the chart never
+exposes, authenticated with a secret the chart generates. Every workload is the same Go binary, so both ends of a call
+share one Go type for its body.
 
 ## Deployment
 
@@ -85,7 +86,7 @@ The `cobranch` image runs `cobranch <workload>`: `auth-server`, `graphql-server`
 | REST server | Deployment | 2 | None | Read `pods/log` in the job namespaces |
 | Admin server | Deployment | 1 | None | No token |
 | Git server | Deployment | 2 | Ephemeral volume, the pack cache | No token |
-| Push worker | Deployment | 2 | None | No token |
+| Push worker | Deployment | 2, or none while no push waits | None | No token |
 | Controller | Deployment | 2 | None | Create job namespaces and their policies; create, watch and delete pods and Secrets in them |
 | Maintenance | CronJob, hourly | 1 | Ephemeral volume, for repacking | No token |
 | Migration | Job, per upgrade | 1 | None | No token |
@@ -199,7 +200,9 @@ background work](#events-and-background-work).
 ## Git storage and pushes
 
 **Agreed:** a repository is immutable packs in blob storage plus its refs in PostgreSQL, and a Git server pod only
-caches packs. A push is accepted by a pre-receive hook that does not exit until the push worker has committed it.
+caches packs. A push is accepted by a pre-receive hook that does not exit until the Git server has committed it.
+**Changed** (2026-11-01): the Git server commits the push itself, and the push worker claims it afterwards ([Git
+hosting](git-hosting.md#a-push)).
 
 ### Storage
 
@@ -225,17 +228,19 @@ storage) was set aside for protocol coverage and speed on large repositories.
 
 ![A push returns only after PostgreSQL commits it](architecture/push.svg)
 
-While a large push is indexed, the hook writes progress to the client as `remote:` lines.
+While a large push is indexed, the hook writes progress to the client as `remote:` lines. Until the push worker has
+processed a push, its commits and branches show without their principals and status; a push it fails waits for a retry.
 
-Only what the screen must show is synchronous: jobs, AI review, webhooks, delivery and notifications start from the
-tasks the transaction queued, after the client has returned. **Agreed:** every push is atomic, all refs or none, as
-`git push --atomic` is; a pre-receive hook decides for the whole push anyway.
+Only what the screen must show is synchronous: the refs, commits and branches. The push worker adds principals and
+status, and jobs, AI review, webhooks, delivery and notifications start from the tasks it queues, after the client has
+returned. **Agreed:** every push is atomic, all refs or none, as `git push --atomic` is; a pre-receive hook decides for
+the whole push anyway.
 
 ### Merges and settings take the same road
 
-**Every ref, whoever moves it, goes through the push worker**
+**Every ref, whoever moves it, goes through the Git server’s push transaction**
 
-![Every ref, whoever moves it, goes through the push worker](architecture/ref-road.svg)
+![Every ref, whoever moves it, goes through the Git server’s push transaction](architecture/ref-road.svg)
 
 Repository and branch settings live in the default branch's `/cobranch.yaml`, so a change made in the Console takes
 effect when `cobranch/settings` merges, through the same merge requirements as any other branch.
@@ -259,9 +264,10 @@ the Ready branches the push must merge.
 
 | Failure | The client sees | Afterwards | Recovery |
 | --- | --- | --- | --- |
-| Push worker unreachable or failing | Push rejected: Cobranch could not record it | Nothing changed; an unlisted pack in the bucket | Retry; the pack is deleted after a day |
+| Recording the push fails | Push rejected: Cobranch could not record it | Nothing changed; an unlisted pack in the bucket | Retry; the pack is deleted after a day |
 | Another push moved a ref first | Push rejected: fetch first | Nothing changed | Fetch, merge or rebase, push again |
-| Push worker committed, its answer lost | Nothing yet: the hook asks again with the push ID | Committed | The push worker answers a known push ID with its result |
+| The push committed, its answer lost | Nothing yet: the Git server asks again with the push ID | Committed | A known push ID is accepted as it was |
+| Push worker down or failing | Push accepted | Commits and branches recorded; principals, status and jobs wait | A push worker that starts claims every waiting push; a failed one is retried, at most an hour apart |
 | Git server pod dies mid-push | Connection dropped | Nothing changed, or committed | The next fetch shows which; a retry is safe |
 | Blob storage unavailable | Push rejected; fetches only from cached packs | Nothing changed | Retry once the bucket is back |
 | PostgreSQL unavailable | Push and fetch rejected | Nothing changed | Everything waits for PostgreSQL |
@@ -329,8 +335,8 @@ to survive a crash between the two.
   change that rolled back. `NOTIFY` only wakes a listener sooner; a workload that was down claims the waiting rows when
   it starts, and a task whose claimant died is claimed again when its lease expires.
 - **Scale to zero.** The controller can scale to zero on the operator's autoscaler: KEDA's PostgreSQL trigger counts
-  open tasks, as its NATS trigger would count pending messages. Workloads that serve requests need an HTTP scaler either
-  way, and the push worker stays up, since every push waits for it.
+  open tasks, as its NATS trigger would count pending messages, and the push worker on the same trigger over waiting
+  pushes, since no push waits for it. Workloads that serve requests need an HTTP scaler either way.
 - **What it costs.** `NOTIFY` can serialize commits on one lock, so at thousands of writes a second Cobranch would batch
   its notifications. One PostgreSQL carries this far past a first installation's load, and the event and task stores are
   interfaces, so NATS JetStream can replace them without the services changing.
@@ -342,7 +348,7 @@ jobs and agents need from outside, secrets and models.
 
 - **In effect, and pending.** The Console shows the settings in effect, from the default branch's `/cobranch.yaml`, and
   the pending changes: every other branch whose `/cobranch.yaml` differs, each with its diff, however many there are.
-  The push worker records each tip's file, so listing them is one query.
+  Each push records each tip's file, so listing them is one query.
 - **A settings change merges like any branch.** **Agreed** (review, 2026-10-27): merge requirements gain path rules,
   which apply only when a branch changes matching paths, such as `/cobranch.yaml`. A path rule can require approval from
   named principals or groups, and refuse pushes that touch its paths from anyone else.
@@ -470,8 +476,8 @@ The probes are not traced. Webhooks carry `traceparent` too, so a receiver that 
   elsewhere, for a person; `COBRANCH_LOG_FORMAT` overrides either. Every record names its workload and version and,
   inside a request, its trace and span (`traceId`, `spanId`).
 - **Traces.** W3C Trace Context carries one trace across every hop: the Console's calls, the internal calls between
-  workloads, and the tasks in PostgreSQL, whose rows keep the `traceparent` of the transaction that queued them. Each
-  workload is a service named after itself, in namespace `cobranch`.
+  workloads, and the tasks and pushes in PostgreSQL, whose rows keep the `traceparent` of the transaction that queued
+  them. Each workload is a service named after itself, in namespace `cobranch`.
 - **Request IDs.** Every response names its request's ID (`X-Request-Id`): the caller's, when it sends one, and
   otherwise the trace ID, so the ID in an error report finds both the logs and the trace. Each span records it as
   `http.request.id`.
@@ -556,6 +562,7 @@ design, and settled the open questions.
 | A repository is immutable packs in the bucket plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless | Agreed |
 | The `git` CLI speaks the protocol, driven by Go | Every client works, at Git's own speed | Agreed |
 | A controller workload takes all asynchronous work | Keeps the push worker fast | Agreed |
+| The Git server commits each push; the push worker claims it from PostgreSQL afterwards, woken by `NOTIFY` | Only the Git server is on a push's path, and the push worker can scale to zero (2026-11-01, [Git hosting](git-hosting.md#decisions)) | Changed |
 | Every push is atomic: all refs or none | A pre-receive hook decides for the whole push anyway | Agreed |
 | A push into a protected branch must merge Ready branches, unless the pusher may bypass | Otherwise a direct push skips every requirement | Agreed |
 | Merge requirements are branch settings in the default branch's `/cobranch.yaml` | Repository and branch settings live in `/cobranch.yaml` | Agreed |
