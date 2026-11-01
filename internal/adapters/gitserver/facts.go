@@ -17,44 +17,50 @@ import (
 // maxSettings is the largest /cobranch.yaml a push may bring into the default branch.
 const maxSettings = 1 << 20
 
+// pushFacts is what a push's transaction stores of the repository's branches once the push applies, and the branches
+// it was counted from.
+type pushFacts struct {
+	requirements []git.Requirements
+	facts        []git.Facts
+	tips         map[string]string
+}
+
 // branchFacts works out what the push's transaction stores of the repository's branches once the push applies: the
 // merge requirements of /cobranch.yaml at the default branch's new tip when the push moves that branch, and, when it
-// moves any branch, every other live branch's facts against the default branch
+// moves any branch, every other live branch's facts against the default branch, with the tips they were counted from
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Graph facts"). A
 // /cobranch.yaml that doesn't parse refuses the push: refusal says why.
-func (s *Server) branchFacts(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (reqs []git.Requirements, facts []git.Facts, refusal string, err error) {
+func (s *Server) branchFacts(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (out pushFacts, refusal string, err error) {
 	moves := slices.ContainsFunc(updates, func(u git.RefUpdate) bool { _, ok := git.Branch(u.Name); return ok })
 	if !moves {
-		return nil, nil, "", nil
+		return pushFacts{}, "", nil
 	}
-	tips, err := s.branchTips(ctx, dir, updates)
-	if err != nil {
-		return nil, nil, "", err
+	if out.tips, err = s.branchTips(ctx, dir, updates); err != nil {
+		return pushFacts{}, "", err
 	}
-	head, hasDefault := tips[git.DefaultBranch]
-	push := git.Push{Updates: updates}
+	head, hasDefault := out.tips[git.DefaultBranch]
 	if hasDefault {
-		reqs, err = s.requirementsAt(ctx, dir, env, head)
+		out.requirements, err = s.requirementsAt(ctx, dir, env, head)
 		var bad *code.SettingsError
 		switch {
-		case errors.As(err, &bad) && push.MovesDefault():
-			return nil, nil, bad.Error(), nil
+		case errors.As(err, &bad) && (git.Push{Updates: updates}).MovesDefault():
+			return pushFacts{}, bad.Error(), nil
 		case errors.As(err, &bad):
 			// A file pushed before Cobranch read it: the requirements stay as they were, which named none.
-			reqs = nil
+			out.requirements = nil
 		case err != nil:
-			return nil, nil, "", err
+			return pushFacts{}, "", err
 		}
 	}
 	if !hasDefault {
-		facts, err = s.countAll(ctx, dir, env, tips)
+		out.facts, err = s.countAll(ctx, dir, env, out.tips)
 	} else {
-		facts, err = s.aheadBehind(ctx, dir, env, tips, head, linearHistory(reqs))
+		out.facts, err = s.aheadBehind(ctx, dir, env, out.tips, head, linearHistory(out.requirements))
 	}
 	if err != nil {
-		return nil, nil, "", err
+		return pushFacts{}, "", err
 	}
-	return reqs, facts, "", nil
+	return out, "", nil
 }
 
 // linearHistory reports whether reqs require linear history of merges into the default branch.

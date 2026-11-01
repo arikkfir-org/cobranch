@@ -150,6 +150,11 @@ A merge Cobranch builds goes through the same Git server and the same counting, 
 - **Every live branch, every push.** One `git for-each-ref` with `%(ahead-behind:<main>)` counts every branch against
   `main`'s new tip in a single walk, and `git rev-list --count --merges` counts merge commits only where `main` requires
   linear history.
+- **Counted from the push's snapshot, checked as it records.** Another push may record first, between this one's
+  snapshot and its record. The push's transaction keeps only the facts of branches still where they were counted, since
+  the other push stored its own against the same `main`. A `main` another push moved, or any branch that moved under a
+  push into `main`, would leave facts nobody counted: the push is refused with `refs/heads/<branch> moved while Cobranch
+  took your push; nothing changed, so push again`.
 - **Merged by this push.** When a push moves `main`, `git for-each-ref --merged=<new> --no-merged=<old>` lists the
   branches whose heads it brings into `main`; the push keeps them for the push worker, which records the merges.
 - **A branch whose facts change turns Processing** in the push's transaction, and names the push. The rest keep their
@@ -285,6 +290,8 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
   and every use of it is an event.
 - **The push worker gates every status.** While none runs, branches stay Processing and nothing can merge but by bypass;
   an operator's autoscaler must keep it able to start, as for principals today.
+- **Racing pushes refuse one of them.** A push into `main` and a push of any branch, or two into `main`, that record in
+  the same moments refuse the later one, which pushes again; two pushes of other branches both go through.
 - **A CI system that never reports** leaves a required annotation missing, so its branches stay Blocked; that is
   visible, branch by branch.
 
@@ -300,6 +307,7 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
 | A required annotation that is Pending or In progress makes the branch Processing, not Blocked | It is still running, as a job will be once [ENG-214](https://linear.app/arikkfir/issue/ENG-214) lands | Proposed |
 | Being behind `main` blocks only a branch with commits to merge; Merged is recorded for a head when a merge brings it into `main` | Git can't tell a fast-forwarded branch from an empty one; a merged branch is never Blocked | Changed |
 | The Git server counts ahead, behind and merge commits for every live branch on every push; the push worker computes the status, an annotation's own transaction recomputes it | The objects are only on the Git server; the agreed push worker owns what follows a push; a verdict shows at once | Proposed |
+| A push recorded after another moved a branch it counted keeps only the facts still true, or is refused when `main` moved or it moves `main`; the Git server doesn't count again | The facts it counted against an old tip are wrong, and counting again needs the other push's objects, which the Git server doesn't hold | Changed |
 | Every branch's base is `main` in this slice | No issue asks for another base yet; the column is there for one | Proposed |
 | An API merge is a merge commit or a fast-forward, never a rebase; linear history merges by fast-forward | A Ready branch contains its base's tip, so a fast-forward always keeps history linear | Changed |
 | A push into a branch with merge requirements must bring only Ready branches' commits, merges aside; `repo.bypass` skips it, with event `branch.bypassed` | The architecture's accepted pushes, now with the status to check | Agreed |

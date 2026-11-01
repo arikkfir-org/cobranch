@@ -99,6 +99,9 @@ type Push struct {
 	// Facts are every live branch's but the default's once the push applies, when it moves a branch; nil when it moves
 	// none.
 	Facts []Facts
+	// Tips are the branches Facts were counted from: every live branch once the push applies, by name, each with the
+	// commit it names; nil when the push moves no branch. Another push recorded since may have moved one.
+	Tips map[string]string
 }
 
 // MovesDefault reports whether the push moves the default branch: creates, moves or deletes it.
@@ -150,12 +153,18 @@ const (
 	messageReserved = "Cobranch writes refs under cobranch/ itself"
 )
 
-// StaleError is a push whose old value of Ref is no longer the ref's: another push moved it first.
+// StaleError is a push whose old value of Ref is no longer the ref's: another push moved it first. With During, Ref
+// is a branch the push doesn't move, which another push moved while this one was on its way, so the facts it counted
+// of the branches no longer hold.
 type StaleError struct {
-	Ref string
+	Ref    string
+	During bool
 }
 
 func (e *StaleError) Error() string {
+	if e.During {
+		return fmt.Sprintf("%s moved while Cobranch took your push; nothing changed, so push again", e.Ref)
+	}
 	return fmt.Sprintf("%s moved since you fetched: fetch, merge or rebase, then push again", e.Ref)
 }
 

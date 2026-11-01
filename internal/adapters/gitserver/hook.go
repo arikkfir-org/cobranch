@@ -115,7 +115,7 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 		slog.ErrorContext(ctx, "Reading a push's commits failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
-	reqs, facts, refusal, err := s.branchFacts(ctx, p.dir, objects.env, updates)
+	branches, refusal, err := s.branchFacts(ctx, p.dir, objects.env, updates)
 	if err != nil {
 		slog.ErrorContext(ctx, "Working out a push's branches failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
@@ -129,7 +129,8 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
 	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: p.transport,
-		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received, Requirements: reqs, Facts: facts})
+		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received,
+		Requirements: branches.requirements, Facts: branches.facts, Tips: branches.tips})
 	if err != nil {
 		slog.ErrorContext(ctx, "Recording a push failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}

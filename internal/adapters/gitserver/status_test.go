@@ -3,12 +3,15 @@ package gitserver_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/git"
 )
 
 // requireBuild is a /cobranch.yaml whose main requires ci/build and linear history.
@@ -185,4 +188,78 @@ func TestRequirementsFollowMain(t *testing.T) {
 	if got := requirements(); len(got) != 0 {
 		t.Errorf("after main dropped its branches, requirements = %v, want none", got)
 	}
+}
+
+// raceCase pushes branch outer, a commit further, from a clone of main and of branches feature-a and feature-b, each a
+// commit ahead of main, while another clone's push of branch other, a commit further too, records first: between the
+// outer push's snapshot and its record. It expects the outer push refused with refusal, or accepted and each branch to
+// be as far ahead as want says once the push worker processed both.
+type raceCase struct {
+	name    string
+	outer   string
+	other   string
+	refusal string
+	want    map[string]int
+}
+
+func TestRacingPushes(t *testing.T) {
+	const during = " moved while Cobranch took your push; nothing changed, so push again"
+	tests := []raceCase{
+		{name: "a branch another push moved keeps the facts that push counted", outer: "feature-a", other: "feature-b",
+			want: map[string]int{"feature-a": 2, "feature-b": 2}},
+		{name: "a main another push moved refuses the push", outer: "feature-a", other: "main", refusal: "refs/heads/main" + during},
+		{name: "a branch another push moved refuses a push into main", outer: "main", other: "feature-b", refusal: "refs/heads/feature-b" + during},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, dir := raceRepo(t, tt)
+			out, err := gitCmd(t, dir, "push", "origin", tt.outer)
+			if tt.refusal != "" {
+				if err == nil || !strings.Contains(out, "remote: "+tt.refusal) {
+					t.Fatalf("push = %v:\n%s\nwant it refused with %q", err, out, tt.refusal)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("push: %v\n%s", err, out)
+			}
+			s.process()
+			for name, ahead := range tt.want {
+				if got := branchStatus(t, s, name).Ahead; got != ahead {
+					t.Errorf("%s is %d ahead, want %d", name, got, ahead)
+				}
+			}
+		})
+	}
+}
+
+// raceRepo sets up tt's repository and the clone of it to push from, whose branch outer is a commit further, and has
+// the stack record another clone's push of branch other before it records the first push it takes.
+func raceRepo(t *testing.T, tt raceCase) (*stack, string) {
+	t.Helper()
+	s := newStack(t)
+	dir := clone(t, s.websiteURL(s.base, olivia))
+	mustGit(t, dir, "checkout", "-q", "-b", "main")
+	commit(t, dir, "README.md", "# Website\n")
+	for _, b := range []string{"feature-a", "feature-b"} {
+		mustGit(t, dir, "checkout", "-q", "-b", b, "main")
+		commit(t, dir, b+".txt", b+"\n")
+	}
+	mustGit(t, dir, "push", "-q", "origin", "main", "feature-a", "feature-b")
+	s.process()
+	other := clone(t, s.websiteURL(s.base, olivia))
+	mustGit(t, other, "checkout", "-q", tt.other)
+	commit(t, other, "other.txt", "from another clone\n")
+	var raced atomic.Bool
+	s.record = func(ctx context.Context, push git.Push, next git.Store) error {
+		if !raced.Swap(true) {
+			if out, err := gitCmd(t, other, "push", "origin", tt.other); err != nil {
+				return fmt.Errorf("pushing %s first: %w\n%s", tt.other, err, out)
+			}
+		}
+		return next.Record(ctx, push)
+	}
+	mustGit(t, dir, "checkout", "-q", tt.outer)
+	commit(t, dir, "outer.txt", "from this clone\n")
+	return s, dir
 }
