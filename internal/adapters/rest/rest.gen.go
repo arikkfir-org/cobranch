@@ -330,7 +330,7 @@ type File struct {
 	// Commit The commit the ref resolved to.
 	Commit string `json:"commit"`
 
-	// Html A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load this API's raw bytes at the commit, images from elsewhere become links, and its ids start with user-content-.
+	// Html A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load this API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-.
 	Html *string  `json:"html,omitempty"`
 	Kind FileKind `json:"kind"`
 

@@ -85,7 +85,7 @@ type File {
   truncated: Boolean!
   "Its text, up to 1 MiB; null when it is binary. A symlink's is its target."
   text: String
-  "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere become links, and its ids start with user-content-. Null for any other file."
+  "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
   html: String
 }
 

@@ -20,8 +20,8 @@ type Document struct {
 	Path   string
 }
 
-// Renderer renders a repository's Markdown as HTML that runs nothing and loads nothing from outside the installation:
-// the code browsing design's Markdown, which an adapter implements.
+// Renderer renders a repository's Markdown as HTML that runs nothing and loads nothing from outside the installation
+// but images, which the viewer's browser fetches: the code browsing design's Markdown, which an adapter implements.
 type Renderer interface {
 	Render(ctx context.Context, src []byte, doc Document) (string, error)
 }
