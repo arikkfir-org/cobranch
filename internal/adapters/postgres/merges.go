@@ -68,7 +68,7 @@ func checkMerges(ctx context.Context, q *queries.Queries, push git.Push) (map[st
 func violations(ctx context.Context, q *queries.Queries, push git.Push, name string, deletes bool) ([]string, error) {
 	reqs, err := q.MergeRequirementsOf(ctx, push.RepoID, name)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, nil
+		return mergingViolations(ctx, q, push, name)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reading the merge requirements of branch %s: %w", name, err)
@@ -85,6 +85,21 @@ func violations(ctx context.Context, q *queries.Queries, push git.Push, name str
 		return nil, err
 	}
 	return code.Violations(name, reqs.LinearHistory, &brought, live), nil
+}
+
+// mergingViolations lists what the push's move of branch name, which has no merge requirements, breaks of a merge asked
+// of Cobranch: its branch isn't Ready at the head it merges. A client's push into such a branch breaks nothing; with
+// requirements, Violations already holds every branch the move brings to being Ready.
+func mergingViolations(ctx context.Context, q *queries.Queries, push git.Push, name string) ([]string, error) {
+	if push.Merging == nil {
+		return nil, nil
+	}
+	brought := git.Brought{Branch: name, Heads: []git.Head{*push.Merging}}
+	live, err := incoming(ctx, q, push.RepoID, brought)
+	if err != nil {
+		return nil, err
+	}
+	return code.Violations(name, false, &brought, live), nil
 }
 
 // incoming finds the branches whose heads brought brings, as they stand before the push applies, by name.

@@ -109,8 +109,27 @@ func (e FileKind) Valid() bool {
 	}
 }
 
+// Defines values for MergeMethod.
+const (
+	FastForward MergeMethod = "fast_forward"
+	Merge       MergeMethod = "merge"
+)
+
+// Valid indicates whether the value is a known member of the MergeMethod enum.
+func (e MergeMethod) Valid() bool {
+	switch e {
+	case FastForward:
+		return true
+	case Merge:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PushTransport.
 const (
+	Api   PushTransport = "api"
 	Https PushTransport = "https"
 	Ssh   PushTransport = "ssh"
 )
@@ -118,6 +137,8 @@ const (
 // Valid indicates whether the value is a known member of the PushTransport enum.
 func (e PushTransport) Valid() bool {
 	switch e {
+	case Api:
+		return true
 	case Https:
 		return true
 	case Ssh:
@@ -496,6 +517,18 @@ type Member struct {
 	UserId      openapi_types.UUID `json:"userId"`
 }
 
+// MergeInput How to merge a branch into its base.
+type MergeInput struct {
+	// Head The head the requester saw; the merge is refused once the branch moved from it.
+	Head *string `json:"head,omitempty"`
+
+	// Method How a merge moves its base: with a merge commit, Merge branch '<name>', authored and committed by the requester, or by a fast-forward, which writes nothing. Left out, a fast-forward where the base requires linear history, which allows only that, and a merge commit otherwise.
+	Method *MergeMethod `json:"method,omitempty"`
+}
+
+// MergeMethod How a merge moves its base: with a merge commit, Merge branch '<name>', authored and committed by the requester, or by a fast-forward, which writes nothing. Left out, a fast-forward where the base requires linear history, which allows only that, and a merge commit otherwise.
+type MergeMethod string
+
 // MergeRequirements What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
 type MergeRequirements struct {
 	// Annotations The annotations the incoming head must carry, Successful.
@@ -503,6 +536,18 @@ type MergeRequirements struct {
 
 	// LinearHistory Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
+}
+
+// MergeResult A merge Cobranch recorded as a push of its base.
+type MergeResult struct {
+	// Base The branch merged into, main.
+	Base string `json:"base"`
+
+	// Commit The commit the base is at now, the merge commit or, for a fast-forward, the head.
+	Commit string `json:"commit"`
+
+	// Head The head merged.
+	Head string `json:"head"`
 }
 
 // Organization An organization, with what the viewer may do there.
@@ -621,11 +666,13 @@ type Push struct {
 	Id openapi_types.UUID `json:"id"`
 
 	// Pusher Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
-	Pusher    *Principal    `json:"pusher,omitempty"`
+	Pusher *Principal `json:"pusher,omitempty"`
+
+	// Transport How the push came; api for a merge asked of Cobranch.
 	Transport PushTransport `json:"transport"`
 }
 
-// PushTransport defines model for Push.Transport.
+// PushTransport How the push came; api for a merge asked of Cobranch.
 type PushTransport string
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -1040,6 +1087,9 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
 
+// MergeBranchJSONRequestBody defines body for MergeBranch for application/json ContentType.
+type MergeBranchJSONRequestBody = MergeInput
+
 // SetAnnotationJSONRequestBody defines body for SetAnnotation for application/json ContentType.
 type SetAnnotationJSONRequestBody = AnnotationInput
 
@@ -1183,6 +1233,9 @@ type ServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
+	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
@@ -2525,6 +2578,50 @@ func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// MergeBranch operation middleware
+func (siw *ServerInterfaceWrapper) MergeBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeBranch(w, r, org, repo, branchName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCommits operation middleware
 func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Request) {
 
@@ -3489,6 +3586,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/merge", wrapper.MergeBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
@@ -7127,6 +7225,134 @@ func (response GetBranchdefaultApplicationProblemPlusJSONResponse) VisitGetBranc
 	return err
 }
 
+type MergeBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Body       *MergeBranchJSONRequestBody
+}
+
+type MergeBranchResponseObject interface {
+	VisitMergeBranchResponse(w http.ResponseWriter) error
+}
+
+type MergeBranch200JSONResponse MergeResult
+
+func (response MergeBranch200JSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response MergeBranch400ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch401ApplicationProblemPlusJSONResponse Problem
+
+func (response MergeBranch401ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch403ApplicationProblemPlusJSONResponse Problem
+
+func (response MergeBranch403ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response MergeBranch404ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch409ApplicationProblemPlusJSONResponse Problem
+
+func (response MergeBranch409ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranch503ApplicationProblemPlusJSONResponse Problem
+
+func (response MergeBranch503ApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type MergeBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response MergeBranchdefaultApplicationProblemPlusJSONResponse) VisitMergeBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListCommitsRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -8764,6 +8990,9 @@ type StrictServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
+	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
+	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
 	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
@@ -10093,6 +10322,44 @@ func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org O
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBranchResponseObject); ok {
 		if err := validResponse.VisitGetBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// MergeBranch operation middleware
+func (sh *strictHandler) MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request MergeBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	var body MergeBranchJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		if !errors.Is(err, io.EOF) {
+			sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+			return
+		}
+	} else {
+		request.Body = &body
+	}
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.MergeBranch(ctx, request.(MergeBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "MergeBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(MergeBranchResponseObject); ok {
+		if err := validResponse.VisitMergeBranchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
