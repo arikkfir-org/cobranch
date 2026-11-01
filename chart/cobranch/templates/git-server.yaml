@@ -1,0 +1,64 @@
+{{- if .Values.urls.git }}
+{{- include "cobranch.checkDatabase" . }}
+{{- $values := .Values.gitServer }}
+{{- $env := printf `- name: COBRANCH_GIT_DATA_DIR
+  value: /var/lib/cobranch/git
+- name: COBRANCH_GIT_CACHE_SIZE
+  value: %s
+- name: COBRANCH_GIT_MAX_PUSH_SIZE
+  value: %s
+- name: COBRANCH_GIT_INTERNAL_ADDR
+  value: ":8081"` ($values.cache.size | quote) ($values.maxPushSize | quote) }}
+{{- $ports := list (dict "name" "internal" "containerPort" 8081) }}
+{{- if .Values.urls.gitSsh }}
+{{- $env = printf `%s
+- name: COBRANCH_GIT_SSH_ADDR
+  value: ":2222"
+- name: COBRANCH_GIT_SSH_HOST_KEY
+  valueFrom:
+    secretKeyRef:
+      name: %s
+      key: %s` $env (include "cobranch.gitSSHHostKey.secret" .) $values.ssh.hostKey.secretKey }}
+{{- $ports = append $ports (dict "name" "ssh" "containerPort" 2222) }}
+{{- end }}
+{{- $data := dict "name" "git" "mountPath" "/var/lib/cobranch/git" "emptyDir" (dict "sizeLimit" $values.storage.sizeLimit) }}
+{{- include "cobranch.server" (dict "root" . "component" "git-server" "values" $values "bucket" true "env" $env "volumes" (list $data) "ports" $ports) }}
+{{- $component := dict "root" . "component" "git-server" }}
+---
+# The internal call, the REST and GraphQL servers' reads of trees and files, which no route names.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cobranch.fullname" . }}-git-server-internal
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+spec:
+  selector:
+    {{- include "cobranch.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: internal
+      port: 80
+      targetPort: internal
+{{- if .Values.urls.gitSsh }}
+---
+# Git over SSH, which no route reaches: the operator exposes this Service, through its type or a TCP route of theirs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "cobranch.fullname" . }}-git-server-ssh
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+  {{- with $values.ssh.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ $values.ssh.service.type }}
+  selector:
+    {{- include "cobranch.selectorLabels" $component | nindent 4 }}
+  ports:
+    - name: ssh
+      port: {{ $values.ssh.service.port }}
+      targetPort: ssh
+{{- end }}
+{{- end }}

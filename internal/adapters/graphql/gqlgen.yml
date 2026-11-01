@@ -20,6 +20,8 @@ models:
   User:
     fields:
       sessions: { resolver: true }
+      personalTokens: { resolver: true }
+      sshKeys: { resolver: true }
       permissions: { resolver: true }
       organizations: { resolver: true }
       invitations: { resolver: true }
@@ -32,3 +34,17 @@ models:
       joinRequests: { resolver: true }
       roles: { resolver: true }
       apiKeys: { resolver: true }
+      repositories: { resolver: true }
+      repository: { resolver: true }
+  Repository:
+    fields:
+      viewerPermissions: { resolver: true }
+      access: { resolver: true }
+      roles: { resolver: true }
+      branches: { resolver: true }
+      branch: { resolver: true }
+      history: { resolver: true }
+      commit: { resolver: true }
+      tags: { resolver: true }
+      tree: { resolver: true }
+      blob: { resolver: true }

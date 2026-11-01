@@ -10,7 +10,9 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 )
 
 // Organizations is what the API needs of the organizations' service.
@@ -71,6 +73,8 @@ var conflicts = map[error]string{
 	orgs.ErrBuiltInRole:   "role.built_in",
 	orgs.ErrGranted:       "grant.exists",
 	orgs.ErrTwoSecrets:    "api_key.two_secrets",
+	repos.ErrSlugTaken:    "slug.taken",
+	repos.ErrGranted:      "grant.exists",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
@@ -86,12 +90,17 @@ func refuse(ctx context.Context, code, reason, message string) error {
 // internal, with what failed and nothing of why.
 func fail(ctx context.Context, err error, kind, what string) error {
 	var verr *orgs.ValidationError
+	var taken *code.TakenError
 	switch {
 	case errors.As(err, &verr):
 		return refuse(ctx, badUserInput, verr.Code, verr.Message)
+	case errors.As(err, &taken):
+		return refuse(ctx, conflict, "annotation.taken", taken.Error())
+	case errors.Is(err, code.ErrAnnotationChanged):
+		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(ctx, forbidden, "", "you lack the permission this takes")
-	case errors.Is(err, orgs.ErrNotFound):
+	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):
 		return refuse(ctx, notFound, kind+".not_found", "there is no such "+kind+", or you may not see it")
 	case errors.Is(err, orgs.ErrNotMember):
 		return refuse(ctx, notFound, "member.not_found", "you don't belong to this organization")

@@ -8,7 +8,60 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type Annotation struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	RepoID      uuid.UUID
+	Sha         string
+	Name        string
+	Status      string
+	Summary     string
+	Link        string
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	StartedAt   time.Time
+	CompletedAt *time.Time
+	Version     int64
+}
+
+type Blob struct {
+	Key                []byte
+	Content            pgtype.Uint32
+	Size               int64
+	Md5                []byte
+	ContentType        string
+	CacheControl       string
+	ContentDisposition string
+	ContentEncoding    string
+	ContentLanguage    string
+	Metadata           []byte
+	WrittenAt          time.Time
+}
+
+type Commit struct {
+	RepoID         uuid.UUID
+	Sha            string
+	OrgID          uuid.UUID
+	Tree           string
+	Parents        []string
+	Message        string
+	AuthorID       *uuid.UUID
+	AuthorName     string
+	AuthorEmail    string
+	AuthoredAt     time.Time
+	AuthorZone     string
+	CommitterID    *uuid.UUID
+	CommitterName  string
+	CommitterEmail string
+	CommittedAt    time.Time
+	CommitterZone  string
+	Signature      string
+	FirstPush      uuid.UUID
+}
 
 type Credential struct {
 	ID          uuid.UUID
@@ -21,6 +74,11 @@ type Credential struct {
 	ExpiresAt   *time.Time
 	LastUsedAt  *time.Time
 	RevokedAt   *time.Time
+	Name        string
+	Permissions []string
+	Issuer      string
+	Subject     string
+	PublicKey   string
 }
 
 type Identity struct {
@@ -106,6 +164,17 @@ type Principal struct {
 	CreatedAt   time.Time
 	OrgID       *uuid.UUID
 	CreatedBy   *uuid.UUID
+}
+
+type Repository struct {
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	Slug         string
+	Name         string
+	Description  string
+	ObjectFormat string
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
 }
 
 type Role struct {

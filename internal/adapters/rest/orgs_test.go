@@ -11,9 +11,15 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
+	"cobranch.dev/internal/services/repos"
+	"cobranch.dev/internal/services/repos/repostest"
 )
 
 // emptyOrgs returns the organizations' service over an empty store.
@@ -24,13 +30,22 @@ func emptyOrgs(t *testing.T) *orgs.Service {
 }
 
 // orgFixture is Acme, with Olivia its Owner and Max a Member, Nia outside it with a pending invitation and
-// permission to create organizations, over the organizations' service.
+// permission to create organizations, over the organizations' service; website is Acme's repository, which Olivia
+// created, over the repositories', with main at c after a ← b ← c and feature at d on a, all pushed by Olivia, over the
+// code's.
 type orgFixture struct {
 	store            *orgstest.Store
 	service          *orgs.Service
+	repoStore        *repostest.Store
+	repos            *repos.Service
 	acme             orgs.Organization
 	olivia, max, nia auth.Authenticated
 	invitation       orgs.Invitation
+	website          repos.Repository
+	codeStore        *codetest.Store
+	objects          *codetest.Objects
+	code             *code.Service
+	push             code.Push
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -55,17 +70,58 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.invitation = orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, OrgSlug: "acme", OrgName: "Acme", Email: "nia@example.com", RoleID: auth.RoleMember,
 		InvitedBy: f.olivia.User.ID, State: orgs.StatePending, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
 	store.Invites[f.invitation.ID] = f.invitation
+	f.repoStore = repostest.NewStore(store)
+	f.repos = repos.NewService(f.repoStore, auth.NewAuthorizer(store))
+	f.website = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "website", Name: "Website", ObjectFormat: "sha1",
+		CreatedBy: f.olivia.User.ID, CreatedAt: now}
+	if err := f.repoStore.Create(t.Context(), f.olivia.User.ID, f.website); err != nil {
+		t.Fatal(err)
+	}
+	f.codeStore, f.objects = codetest.NewStore(), codetest.NewObjects()
+	f.code = code.NewService(f.codeStore, f.objects, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
+	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
+	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
+	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))
+	f.codeStore.SetBranch(f.website.ID, "feature", shaOf("d"))
+	f.codeStore.SetBranch(f.website.ID, "feature/login", shaOf("c"))
+	f.codeStore.UpdateBranch(f.website.ID, "main", func(b *code.Branch) {
+		b.Requirements = &git.Requirements{Branch: "main", Annotations: []string{"ci/build"}}
+	})
+	f.codeStore.UpdateBranch(f.website.ID, "feature", func(b *code.Branch) {
+		b.Base, b.Status, b.Facts = "main", code.StatusBlocked, &git.Facts{Branch: "feature", Ahead: 1, Behind: 2}
+		b.Checks = []code.Check{{Kind: code.CheckAnnotation, Name: "ci/build"}, {Kind: code.CheckUpToDate, Count: 2}}
+		// Merged once at a, since moved on.
+		b.Merge = &code.Merge{Head: shaOf("a"), By: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, At: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
+	})
+	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
+	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
+	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
+		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
+	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
 	return f
 }
 
+// shaOf is the object name of 40 letter's.
+func shaOf(letter string) string { return strings.Repeat(letter, 40) }
+
 // call serves one request to the API as viewer and returns the recorder.
 func (f *orgFixture) call(viewer *auth.Authenticated, method, path, body string) *httptest.ResponseRecorder {
+	return f.callWith(viewer, method, path, body, nil)
+}
+
+// callWith calls the API as call does, with header's fields too.
+func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body string, header http.Header) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	for k, v := range header {
+		req.Header[k] = v
+	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
 	return rec
 }
 
@@ -75,9 +131,12 @@ type orgCase struct {
 	method     string
 	path       func(f *orgFixture) string
 	body       string
+	header     http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
+	// wantHeader holds fields the answer must carry, with their values.
+	wantHeader http.Header
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -89,9 +148,14 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.call(viewer, tt.method, tt.path(f), tt.body)
+			rec := f.callWith(viewer, tt.method, tt.path(f), tt.body, tt.header)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+			}
+			for k := range tt.wantHeader {
+				if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
+					t.Errorf("%s = %q, want %q", k, got, want)
+				}
 			}
 			if tt.wantCode != "" {
 				checkBody(t, rec, "", tt.wantCode)

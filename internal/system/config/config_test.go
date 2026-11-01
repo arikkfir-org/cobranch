@@ -10,7 +10,8 @@ import (
 // every names every variable the loaders read, to unset before each test.
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
-	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP"}
+	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
+	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "GIT_SSH_ADDR", "GIT_SSH_HOST_KEY", "HOOK_URL", "HOOK_TOKEN"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -40,15 +41,14 @@ func TestLoadServer(t *testing.T) {
 		want    func(t *testing.T) Server
 		wantErr bool
 	}{
-		{name: "defaults", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob"}, want: func(*testing.T) Server {
-			return Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}
+		{name: "defaults", env: map[string]string{}, want: func(*testing.T) Server {
+			return Server{HTTPAddr: ":8080", ShutdownTimeout: 20 * time.Second}
 		}},
 		{
 			name: "every variable",
 			env: map[string]string{
 				"COBRANCH_HTTP_ADDR":                ":9090",
 				"COBRANCH_DATABASE_URL":             "postgres://db/cobranch",
-				"COBRANCH_BLOB_URL":                 "gs://bucket",
 				"COBRANCH_SHUTDOWN_TIMEOUT":         "5s",
 				"COBRANCH_CONSOLE_URL":              "https://Console.Example.com/home/",
 				"COBRANCH_REST_URL":                 "https://api.example.com",
@@ -61,24 +61,25 @@ func TestLoadServer(t *testing.T) {
 				"COBRANCH_ORGANIZATIONS_SELF_SERVE": "false",
 				"COBRANCH_AUTH_PROVIDERS":           `[{"id":"google","name":"Google","preset":"google","clientId":"c1"}]`,
 				"COBRANCH_SECRETS_KEY":              "a secrets key of at least 32 characters",
+				"COBRANCH_GIT_INTERNAL_URL":         "http://cobranch-git-server-internal",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
-					HTTPAddr: ":9090", DatabaseURL: "postgres://db/cobranch", BlobURL: "gs://bucket", ShutdownTimeout: 5 * time.Second,
+					HTTPAddr: ":9090", DatabaseURL: "postgres://db/cobranch", ShutdownTimeout: 5 * time.Second,
 					URLs: URLs{Console: mustURL(t, "https://console.example.com/home"), REST: mustURL(t, "https://api.example.com"),
 						GraphQL: mustURL(t, "https://console.example.com/graphql"), Auth: mustURL(t, "https://console.example.com/auth"),
 						Admin: mustURL(t, "https://admin.example.com/v"), BackOffice: mustURL(t, "https://back-office.example.com")},
 					SignUpSettings: SignUpSettings{SignUp: "domains", SignUpDomains: []string{"example.com"}, SelfServe: &no},
 					Providers:      Providers{{ID: "google", Name: "Google", Preset: "google", ClientID: "c1"}}, SecretsKey: "a secrets key of at least 32 characters",
+					GitInternalURL: mustURL(t, "http://cobranch-git-server-internal"),
 				}
 			},
 		},
-		{name: "the Console set empty", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_CONSOLE_URL": ""}, want: func(*testing.T) Server {
-			return Server{HTTPAddr: ":8080", BlobURL: "file:///blob", ShutdownTimeout: 20 * time.Second}
+		{name: "the Console set empty", env: map[string]string{"COBRANCH_CONSOLE_URL": ""}, want: func(*testing.T) Server {
+			return Server{HTTPAddr: ":8080", ShutdownTimeout: 20 * time.Second}
 		}},
-		{name: "the Console without a scheme", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_CONSOLE_URL": "console"}, wantErr: true},
-		{name: "no bucket", env: map[string]string{}, wantErr: true},
-		{name: "bad duration", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_SHUTDOWN_TIMEOUT": "soon"}, wantErr: true},
+		{name: "the Console without a scheme", env: map[string]string{"COBRANCH_CONSOLE_URL": "console"}, wantErr: true},
+		{name: "bad duration", env: map[string]string{"COBRANCH_SHUTDOWN_TIMEOUT": "soon"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -268,10 +269,29 @@ func TestLoadMigrate(t *testing.T) {
 }
 
 func TestLoadMaintenance(t *testing.T) {
-	clean(t, map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"})
-	got, err := LoadMaintenance()
-	if err != nil || got.DatabaseURL != "postgres://db/cobranch" {
-		t.Errorf("LoadMaintenance() = %+v, %v", got, err)
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    Maintenance
+		wantErr bool
+	}{
+		{name: "the database alone", env: map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"},
+			want: Maintenance{DatabaseURL: "postgres://db/cobranch", GitDataDir: "/var/lib/cobranch/git"}},
+		{name: "the packs in the database", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "8"},
+			want: Maintenance{GitDataDir: "/var/lib/cobranch/git", CompactAt: 8}},
+		{name: "the packs in a bucket", env: map[string]string{"COBRANCH_BLOB_URL": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "4", "COBRANCH_GIT_DATA_DIR": "/data"},
+			want: Maintenance{BlobURL: "gs://objects", GitDataDir: "/data", CompactAt: 4}},
+		{name: "a threshold that compacts nothing", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "1"}, wantErr: true},
+		{name: "a threshold that isn't a number", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "eight"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadMaintenance()
+			if (err != nil) != tt.wantErr || got != tt.want {
+				t.Errorf("LoadMaintenance() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
 	}
 }
 
@@ -281,5 +301,112 @@ func unsetenv(t *testing.T, name string) {
 	t.Setenv(name, "") // records the value to restore
 	if err := os.Unsetenv(name); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadGitServer(t *testing.T) {
+	required := map[string]string{}
+	with := func(extra map[string]string) map[string]string {
+		env := map[string]string{}
+		for _, m := range []map[string]string{required, extra} {
+			for k, v := range m {
+				env[k] = v
+			}
+		}
+		return env
+	}
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    GitServer
+		wantErr bool
+	}{
+		{name: "defaults", env: required, want: GitServer{HTTPAddr: ":8080",
+			DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "sizes", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "512Mi", "COBRANCH_GIT_MAX_PUSH_SIZE": "1048576", "COBRANCH_GIT_DATA_DIR": "/data"}),
+			want: GitServer{HTTPAddr: ":8080",
+				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "the internal call's address", env: with(map[string]string{"COBRANCH_GIT_INTERNAL_ADDR": ":9000"}),
+			want: GitServer{HTTPAddr: ":8080",
+				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":9000", ShutdownTimeout: 20 * time.Second}},
+		{name: "a size that isn't one", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "10GB"}), wantErr: true},
+		{name: "SSH", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222", "COBRANCH_GIT_SSH_HOST_KEY": "-----BEGIN OPENSSH PRIVATE KEY-----"}),
+			want: GitServer{HTTPAddr: ":8080", DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30,
+				SSHAddr: ":2222", SSHHostKey: "-----BEGIN OPENSSH PRIVATE KEY-----", InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "SSH without a host key", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222"}), wantErr: true},
+		{name: "a bucket", env: with(map[string]string{"COBRANCH_BLOB_URL": "gs://objects"}),
+			want: GitServer{HTTPAddr: ":8080", BlobURL: "gs://objects",
+				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadGitServer()
+			if (err != nil) != tt.wantErr || got != tt.want {
+				t.Errorf("LoadGitServer() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadPushWorker(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    PushWorker
+		wantErr bool
+	}{
+		{name: "defaults", env: map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"},
+			want: PushWorker{HTTPAddr: ":8080", DatabaseURL: "postgres://db/cobranch", PollInterval: 30 * time.Second, ShutdownTimeout: 20 * time.Second}},
+		{name: "a poll interval", env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "5s"},
+			want: PushWorker{HTTPAddr: ":8080", PollInterval: 5 * time.Second, ShutdownTimeout: 20 * time.Second}},
+		{name: "a poll interval that isn't one", env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "often"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadPushWorker()
+			if (err != nil) != tt.wantErr || (!tt.wantErr && got != tt.want) {
+				t.Errorf("LoadPushWorker() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadHook(t *testing.T) {
+	clean(t, map[string]string{"COBRANCH_HOOK_URL": "http://127.0.0.1:1/pre-receive", "COBRANCH_HOOK_TOKEN": "t"})
+	if got, err := LoadHook(); err != nil || got != (Hook{URL: "http://127.0.0.1:1/pre-receive", Token: "t"}) {
+		t.Errorf("LoadHook() = %+v, %v", got, err)
+	}
+	clean(t, map[string]string{"COBRANCH_HOOK_URL": "http://127.0.0.1:1/pre-receive"})
+	if _, err := LoadHook(); err == nil {
+		t.Error("LoadHook() without a token succeeded")
+	}
+}
+
+func TestSizeDecode(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    Size
+		wantErr bool
+	}{
+		{value: "1048576", want: 1 << 20},
+		{value: "512Ki", want: 512 << 10},
+		{value: "10Gi", want: 10 << 30},
+		{value: " 2Ti ", want: 2 << 40},
+		{value: "8388607Ti", want: 8388607 << 40},
+		{value: "8388608Ti", wantErr: true},
+		{value: "0", wantErr: true},
+		{value: "-1Gi", wantErr: true},
+		{value: "1.5Gi", wantErr: true},
+		{value: "10G", wantErr: true},
+		{value: "Gi", wantErr: true},
+		{value: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		var got Size
+		if err := got.Decode(tt.value); (err != nil) != tt.wantErr || got != tt.want {
+			t.Errorf("Decode(%q) = %d, %v, want %d", tt.value, got, err, tt.want)
+		}
 	}
 }

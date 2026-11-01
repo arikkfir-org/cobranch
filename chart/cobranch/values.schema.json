@@ -116,6 +116,16 @@
           "type": "string",
           "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
           "description": "The Back-office's public URL, where an installation's administrators run it: a host, and a path the route strips if any. Such as https://admin.cobranch.example.com."
+        },
+        "git": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Git server's public URL, where Git clients clone, fetch and push over HTTPS: a host, and a path the route strips if any. With it, the chart runs the Git server and the push worker. Such as https://git.cobranch.example.com or https://cobranch.example.com/git."
+        },
+        "gitSsh": {
+          "type": "string",
+          "pattern": "^$|^ssh://[A-Za-z0-9._-]+@[A-Za-z0-9.-]+(:[0-9]+)?$",
+          "description": "The Git server's SSH address, where Git clients clone, fetch and push with an SSH key: a user, a host and a port if not 22, without a path. With it and git, the Git server also serves SSH. Such as ssh://git@git.cobranch.example.com or ssh://git@cobranch.example.com:2222."
         }
       }
     },
@@ -125,8 +135,8 @@
       "properties": {
         "url": {
           "type": "string",
-          "pattern": "^(s3|gs|azblob|file)://.+",
-          "description": "The bucket's Go Cloud URL: s3://, gs://, azblob:// or file://."
+          "pattern": "^$|^postgres://$|^(s3|gs|azblob|file)://.+",
+          "description": "Where the object store keeps Git's packs: empty (or postgres://) for the database's large objects, the default; s3://, gs:// or azblob:// for a cloud's bucket; file:// for a directory on blob.volume."
         },
         "envFromSecret": {
           "type": "string"
@@ -138,10 +148,7 @@
           "type": "string",
           "pattern": "^/"
         }
-      },
-      "required": [
-        "url"
-      ]
+      }
     },
     "serviceAccount": {
       "type": "object",
@@ -350,6 +357,169 @@
         }
       }
     },
+    "gitServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "cache",
+        "maxPushSize",
+        "storage",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "size"
+          ],
+          "properties": {
+            "size": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti)?$",
+              "description": "How much of the bucket's packs a pod keeps, such as 10Gi."
+            }
+          }
+        },
+        "maxPushSize": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti)?$",
+          "description": "The largest pack a push may send, such as 2Gi."
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sizeLimit"
+          ],
+          "properties": {
+            "sizeLimit": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pod's emptyDir, which holds the cache and the requests in flight, as a Kubernetes quantity: above cache.size by a few maxPushSize."
+            }
+          }
+        },
+        "ssh": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "service",
+            "hostKey"
+          ],
+          "properties": {
+            "service": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "port"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "ClusterIP",
+                    "NodePort",
+                    "LoadBalancer"
+                  ],
+                  "description": "The SSH Service's type: ClusterIP for a route of the operator's, LoadBalancer to reach it directly."
+                },
+                "port": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 65535,
+                  "description": "The SSH Service's port, which urls.gitSsh names unless it is 22."
+                },
+                "annotations": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "hostKey": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "secretKey"
+              ],
+              "properties": {
+                "existingSecret": {
+                  "type": "string",
+                  "description": "A Secret of the operator's that holds the SSH host key, a private key in PEM; empty, the chart generates one and keeps it."
+                },
+                "secretKey": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "The key of the Secret's entry that holds the host key."
+                }
+              }
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pushWorker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "migrate": {
       "type": "object",
       "additionalProperties": false,
@@ -390,6 +560,9 @@
       "additionalProperties": false,
       "required": [
         "schedule",
+        "activeDeadlineSeconds",
+        "compaction",
+        "storage",
         "resources"
       ],
       "properties": {
@@ -397,6 +570,39 @@
           "type": "string",
           "minLength": 9,
           "description": "A cron schedule; hourly by default."
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "description": "How long a run may take, in seconds, after which it fails."
+        },
+        "compaction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "packs": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 2,
+              "description": "With urls.git, compacts the packs of every repository that has this many into one; null leaves packs alone."
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sizeLimit"
+          ],
+          "properties": {
+            "sizeLimit": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pod's emptyDir while it compacts, as a Kubernetes quantity: above twice the largest repository's packs."
+            }
+          }
         },
         "resources": {
           "$ref": "#/definitions/resources"
@@ -428,7 +634,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "The migrate Job adds Cobranch's demo data (db/seeds) after migrating the schema."
+          "description": "The migrate Job adds Cobranch's demo data (db/seeds) after migrating the schema, and, with the Git server, a Job after each install and upgrade pushes a history to the demo organization's website unless it has one."
         }
       }
     },
@@ -765,7 +971,6 @@
     }
   },
   "required": [
-    "blob",
     "authServer",
     "restServer",
     "graphqlServer",

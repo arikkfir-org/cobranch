@@ -12,6 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const adoptPrincipal = `-- name: AdoptPrincipal :execrows
+UPDATE principals SET display_name = $2 WHERE id = $1 AND kind = 'user'
+`
+
+// AdoptPrincipal names a login-less user whom a new identity signs in as.
+func (q *Queries) AdoptPrincipal(ctx context.Context, iD uuid.UUID, displayName string) (int64, error) {
+	result, err := q.db.Exec(ctx, adoptPrincipal, iD, displayName)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const emailHolder = `-- name: EmailHolder :one
 SELECT e.principal_id,
     coalesce((SELECT i.issuer FROM identities i WHERE i.principal_id = e.principal_id
@@ -89,4 +102,30 @@ func (q *Queries) InsertPrincipal(ctx context.Context, arg InsertPrincipalParams
 		arg.CreatedAt,
 	)
 	return err
+}
+
+const loginlessHolder = `-- name: LoginlessHolder :one
+SELECT e.principal_id FROM principal_emails e
+WHERE e.email = $1 AND NOT e.verified AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.principal_id = e.principal_id)
+`
+
+// LoginlessHolder finds the login-less user who holds the email, unverified: a user with no identity, whom a push
+// made for a commit's author or committer.
+func (q *Queries) LoginlessHolder(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, loginlessHolder, email)
+	var principal_id uuid.UUID
+	err := row.Scan(&principal_id)
+	return principal_id, err
+}
+
+const verifyEmail = `-- name: VerifyEmail :execrows
+UPDATE principal_emails SET verified = true WHERE email = $1 AND principal_id = $2
+`
+
+func (q *Queries) VerifyEmail(ctx context.Context, email string, principalID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, verifyEmail, email, principalID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

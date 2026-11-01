@@ -1,6 +1,6 @@
 # Task chart of .tekton/ci.yaml: build the images and install the chart on a throwaway kind cluster, in a privileged
-# Docker daemon beside the steps; test the release, upgrade it, and test it again. Octomaton inlines it, and the step
-# it references, into the PipelineRun.
+# Docker daemon beside the steps; test the release, upgrade it, test it again, compact its packs and test it once more.
+# Octomaton inlines it, and the step it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -98,11 +98,18 @@ spec:
       command: [sh, .tekton/scripts/chart-install.sh, install]
     - name: test
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
-      command: [helm, test, cobranch, --namespace=cobranch, --logs, --timeout=3m]
+      command: [sh, .tekton/scripts/chart-test.sh]
     # Rolls every pod; the generated password stays, and no migration runs again.
     - name: upgrade
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
       command: [sh, .tekton/scripts/chart-install.sh, upgrade]
     - name: retest
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
-      command: [helm, test, cobranch, --namespace=cobranch, --logs, --timeout=3m]
+      command: [sh, .tekton/scripts/chart-test.sh]
+    # Compacts the website's packs, which the tests pushed, and tests the release on the compacted pack.
+    - name: maintenance
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/chart-maintenance.sh]
+    - name: test-compacted
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/chart-test.sh]

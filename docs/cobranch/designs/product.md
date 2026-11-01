@@ -1,7 +1,7 @@
 # The Cobranch product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced
+> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced
 > again once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -44,8 +44,11 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
 | [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
-| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Proposed |
-| [Git hosting](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
+| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Agreed |
+| [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Agreed |
+| [Branch status](branch-status.md) | Commit annotations, merge requirements, how a branch’s status is computed, and merges. | Proposed |
+| [Code browsing](code-browsing.md) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
+| [Git object storage](git-object-storage.md) | Where Git objects live: PostgreSQL by default, a bucket or local files by choice, and moving between them. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -62,7 +65,7 @@ Cobranch is opinionated: it picks one way to do each thing and makes that way co
 - **Everything is a principal.** Users, groups, agents, keys, apps, workload identities and jobs, granted the same
   permissions.
 - **Merging is explicit.** A branch never merges itself; whoever moves the base is the merging principal.
-- **Pushes are immediate.** A push returns only once Cobranch processed it, so the Console already shows it.
+- **Pushes are immediate.** A push returns only once Cobranch recorded it, so the Console already shows it.
 - **Kubernetes-native, cloud-agnostic.** Any cluster, one Helm chart; the operator brings the domain, ingress and
   scaling.
 - **The default branch is the boundary.** Phase 1 lets a branch add or override jobs; phase 2 lets the default branch
@@ -112,6 +115,8 @@ what may be overridden, as Octomaton trusts only the default branch’s definiti
 
 A branch is the request to merge into its base: there is no separate pull request. Each branch carries a real-time,
 threaded chat whose messages can point at a file and line range, which is how review comments point at code.
+Annotations, merge requirements, how a branch's status is computed and how a merge is recorded are in [Branch status and
+merges](branch-status.md).
 
 **A branch’s status is computed; the first rule that matches wins**
 
@@ -125,8 +130,8 @@ their paths.
 
 ![Merging is explicit: whoever moves the base is the merging principal](product/merge.svg)
 
-A branch never merges itself. Every ref, however it moves, goes through the [push
-worker](architecture.md#merges-and-settings-take-the-same-road).
+A branch never merges itself. Every ref change, however it starts, goes through the [Git server’s push
+transaction](architecture.md#merges-and-settings-take-the-same-road).
 
 ### Agents and AI review
 
@@ -164,11 +169,17 @@ are the first integration, Slack comes in phase 2 with several use cases still t
 
 ![One Helm chart installs Cobranch; the operator brings the cluster around it](product/deploy.svg)
 
-The [architecture](architecture.md#components) details each workload, and the [Helm
-chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) how the chart installs and upgrades them.
+The [architecture](architecture.md#components) details each workload, the [Helm
+chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) how the chart installs and upgrades them, and [Git object
+storage](git-object-storage.md) where Git objects live.
 
-A push is synchronous: the Git server does not return to the client until the push worker has finalized the push, so the
-Console already shows it.
+A push returns once the Git server has recorded it in one PostgreSQL transaction (its refs, pack, commits and branches),
+so a fetch and the Console already show it. The push worker, which nobody calls and which may scale to zero, picks the
+push up a moment later and derives the rest: its authors' principals, and later branch status, merges and jobs ([Git
+hosting](git-hosting.md#a-push)).
+
+Only the Git server reads Git objects: the Console's files, trees, history and rendered Markdown come from it through
+the API servers ([Code browsing](code-browsing.md)).
 
 ## Relation to the Kfirs hub
 
@@ -200,7 +211,7 @@ definitions, its default-branch trust boundary and its organization pipelines ar
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
 | Infrastructure as code | A Terraform provider for Cobranch's resources, a client of the REST API like any other, in [phase 2](#phase-2), once the roadmap's slices have landed |
-| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider and the Terraform provider |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, an MCP server with a Claude Code integration, continuous documentation, an AI side panel, and quotas |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -211,12 +222,13 @@ reconciliation are worked out in the subsystem designs.
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
-slice after the ones it waits for. The design and the installable foundations are done, and so are sign-in and
-organizations; the Back-office and Git hosting are in progress.
+slice after the ones it waits for. The design, the installable foundations, and identity and organizations (sign-in,
+organizations and the Back-office) are done, and so is Git hosting; branch status and browsing code in the Console are
+in progress.
 
-**The roadmap by milestone, as of 2026-10-31**
+**The roadmap by milestone, as of 2026-11-01**
 
-![The roadmap by milestone, as of 2026-10-31](product/roadmap.svg)
+![The roadmap by milestone, as of 2026-11-01](product/roadmap.svg)
 
 ### Phase 2
 
@@ -235,5 +247,27 @@ Planned after the foundations, each with a design of its own when its turn comes
   client of the REST API with no privileges of its own, authenticating as an API key or a personal token, so it can do
   exactly what its principal may; a new resource kind reaches it once the API serves it. It waits for the roadmap's
   slices to land: the API's shape has to settle before a provider pins it.
+- **Continuous Intelligence:** AI built into CI/CD that scans code continuously, beyond what each push changes, and
+  offers insights, suggestions and ready-made fixes, as part of the AI-first agenda. Its scope needs discussion first
+  ([ENG-229](https://linear.app/arikkfir/issue/ENG-229)).
+- **Repository hooks:** a repository declares hooks that run on every push and refuse commits that fail them, like local
+  commit hooks and ideally sharing their code, so a team shares and enforces its house rules and tests in the
+  repository. They run inside the push, before it is recorded, with the isolation jobs have. Their scope needs
+  discussion first ([ENG-230](https://linear.app/arikkfir/issue/ENG-230)).
+- **An MCP server and a Claude Code integration:** Cobranch serves its tools over MCP, so AI clients such as Claude Code
+  work with an installation directly, and a Claude Code integration adds that connection with skills for Cobranch's
+  workflows and mods that bring Cobranch into its interface. Like the Terraform provider, the MCP server is a client of
+  the APIs with no privileges of its own, and waits for their shape to settle
+  ([ENG-231](https://linear.app/arikkfir/issue/ENG-231)).
+- **Continuous documentation:** AI keeps scanning a repository's code and documents it in virtual READMEs, one for the
+  repository and one for every directory, covering its contents, the product or system it builds, its design and its
+  architecture, which the Console shows where it shows a README. The repository's settings give it context, guidelines
+  and instructions. A push regenerates only the docs it affects, one package's or several levels' when a change
+  underpins a rewrite, and the rest come from cache ([ENG-233](https://linear.app/arikkfir/issue/ENG-233)).
+- **An AI side panel:** whoever views a repository in the Console asks it questions about the repository and has it act
+  on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review)
+  ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
+- **Quotas:** administrators cap what each user and organization may store and push, so an installation open to anyone's
+  sign-up keeps its storage in check ([ENG-238](https://linear.app/arikkfir/issue/ENG-238)).
 
 Cobranch is a Kfirs project, created by Arik Kfir.

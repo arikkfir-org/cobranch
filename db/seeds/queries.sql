@@ -34,3 +34,9 @@ INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id,
 -- name: InsertSeedCredential :exec
 INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, revoked_at)
 VALUES (@id, 'api_key', @token_hash, @principal_id, @hint, now(), @created_by, @expires_at, @revoked_at);
+
+-- name: InsertSeedRepository :exec
+INSERT INTO repositories (id, org_id, slug, name, description, created_by) VALUES (@id, @org_id, @slug, @name, @description, @created_by);
+
+-- name: InsertSeedRepositorySlug :exec
+INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES ($1, $2, $3);

@@ -14,6 +14,8 @@ const (
 	PrefixSession = "cbs_"
 	// PrefixAPIKey starts an API key's secret.
 	PrefixAPIKey = "cbk_"
+	// PrefixPersonalToken starts a personal token.
+	PrefixPersonalToken = "cbp_"
 )
 
 const (

@@ -80,6 +80,138 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/tokens:
+    get:
+      operationId: listMyTokens
+      summary: The user's personal tokens that are not revoked, expired ones included, newest first.
+      responses:
+        "200":
+          description: The tokens.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tokens]
+                properties:
+                  tokens:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PersonalToken"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createMyToken
+      summary: Makes a personal token that acts as the user, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonalTokenInput"
+      responses:
+        "201":
+          description: The token and its secret, which is shown here and never again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PersonalTokenCreated"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/tokens/{id}:
+    delete:
+      operationId: revokeMyToken
+      summary: Revokes one of the user's personal tokens; the next request with it fails.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/ssh-keys:
+    get:
+      operationId: listMySSHKeys
+      summary: The user's SSH keys, newest first.
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sshKeys]
+                properties:
+                  sshKeys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SSHKey"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: addMySSHKey
+      summary: Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SSHKeyInput"
+      responses:
+        "201":
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SSHKey"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/ssh-keys/{id}:
+    delete:
+      operationId: deleteMySSHKey
+      summary: Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/organizations:
     get:
       operationId: listMyOrganizations
@@ -865,8 +997,656 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos:
+    get:
+      operationId: listRepositories
+      summary: The organization's repositories the viewer reads, by slug; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The repositories.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [repositories]
+                properties:
+                  repositories:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Repository"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createRepository
+      summary: Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositoryInput"
+      responses:
+        "201":
+          description: The repository.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}:
+    get:
+      operationId: getRepository
+      summary: A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The repository, with its current slug.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateRepository
+      summary: Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RepositorySettings"
+      responses:
+        "200":
+          description: The repository.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Repository"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/roles:
+    get:
+      operationId: listRepositoryRoles
+      summary: The roles the repository grants, each with the permissions it gives there; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The built-in repository roles, then the organization's own that give any repository permission.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [roles]
+                properties:
+                  roles:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Role"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/access:
+    get:
+      operationId: listRepositoryAccess
+      summary: Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The principals with grants on the repository, by display name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access]
+                properties:
+                  access:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/RepositoryAccess"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/access/{principal}/roles:
+    post:
+      operationId: grantRepositoryRole
+      summary: Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/principal"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roleId]
+              properties:
+                roleId:
+                  type: string
+                  format: uuid
+      responses:
+        "204":
+          description: Granted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/access/{principal}/roles/{role}:
+    delete:
+      operationId: revokeRepositoryRole
+      summary: Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/principal"
+        - $ref: "#/components/parameters/role"
+      responses:
+        "204":
+          description: Revoked.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches:
+    get:
+      operationId: listBranches
+      summary: The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branches]
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Branch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}:
+    get:
+      operationId: getBranch
+      summary: One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "200":
+          description: The branch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits:
+    get:
+      operationId: listCommits
+      summary: A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: branch
+          in: query
+          description: The branch whose history the page lists, without refs/heads/.
+          schema:
+            type: string
+            default: main
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the branch's head when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many commits the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's commits, nearest first, without their pushes.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [commits]
+                properties:
+                  commits:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Commit"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}:
+    get:
+      operationId: getCommit
+      summary: One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+      responses:
+        "200":
+          description: The commit, with its push.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Commit"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/annotations:
+    get:
+      operationId: listAnnotations
+      summary: The annotations principals set on one of the repository's commits, by name; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+      responses:
+        "200":
+          description: The annotations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [annotations]
+                properties:
+                  annotations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Annotation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}:
+    put:
+      operationId: setAnnotation
+      summary: Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/annotation"
+        - $ref: "#/components/parameters/ifMatchAnnotation"
+        - $ref: "#/components/parameters/ifNoneMatchAnnotation"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationInput"
+      responses:
+        "200":
+          description: The annotation as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteAnnotation
+      summary: Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/annotation"
+        - $ref: "#/components/parameters/ifMatchAnnotation"
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/tags:
+    get:
+      operationId: listTags
+      summary: The repository's tags, by name, each with the object it names; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tags]
+                properties:
+                  tags:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/tree:
+    get:
+      operationId: getTree
+      summary: >-
+        The directory at a path of the commit a ref names, its directories first and then its files, each by name, with
+        its README; takes repo.read. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - $ref: "#/components/parameters/path"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The directory.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tree"
+        "304":
+          description: The directory is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/blob:
+    get:
+      operationId: getBlob
+      summary: >-
+        The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to
+        1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The file.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+        "304":
+          description: The file is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/raw:
+    get:
+      operationId: getRaw
+      summary: >-
+        The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as
+        its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an
+        installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - name: download
+          in: query
+          description: Whether to answer the bytes as an attachment, whatever they are.
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The bytes.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/RawCacheControl"
+            Content-Disposition:
+              description: attachment, with the file's name, for anything but an image or text, or when download is true.
+              schema:
+                type: string
+            Content-Security-Policy:
+              description: Lets the bytes load images of their own origin and data URLs alone, and sandboxes them, so an HTML or SVG file runs nothing.
+              required: true
+              schema:
+                type: string
+            X-Content-Type-Options:
+              description: nosniff, so no browser takes the bytes for another type.
+              required: true
+              schema:
+                type: string
+            Cross-Origin-Resource-Policy:
+              description: same-site, so only the installation's own pages embed the bytes.
+              required: true
+              schema:
+                type: string
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The bytes are still those If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Cache-Control:
+              $ref: "#/components/headers/RawCacheControl"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
+    sha:
+      name: sha
+      in: path
+      required: true
+      description: The commit's full name, in lowercase hexadecimal.
+      x-go-name: SHA
+      schema:
+        type: string
+    branch:
+      name: branch
+      in: path
+      required: true
+      description: The branch's name, without refs/heads/, such as feature/login; a slash in it travels escaped, as feature%2Flogin.
+      x-go-name: BranchName
+      schema:
+        type: string
+    annotation:
+      name: name
+      in: path
+      required: true
+      description: The annotation's name, such as ci/build; a slash in it travels escaped, as ci%2Fbuild.
+      x-go-name: Name
+      schema:
+        type: string
+    ifMatchAnnotation:
+      name: If-Match
+      in: header
+      description: The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchAnnotation:
+      name: If-None-Match
+      in: header
+      description: "*, to set an annotation that isn't there: one the viewer set refuses with 412, and another principal's with 409, as every change of it does."
+      schema:
+        type: string
     org:
       name: org
       in: path
@@ -874,6 +1654,22 @@ components:
       description: The organization's slug, or an old slug of its.
       schema:
         type: string
+    repo:
+      name: repo
+      in: path
+      required: true
+      description: The repository's slug in its organization, or an old slug of its.
+      schema:
+        type: string
+    principal:
+      name: principal
+      in: path
+      required: true
+      description: One of the organization's members or API keys, by principal ID.
+      x-go-name: PrincipalID
+      schema:
+        type: string
+        format: uuid
     user:
       name: user
       in: path
@@ -916,6 +1712,41 @@ components:
       schema:
         type: string
         format: uuid
+    ref:
+      name: ref
+      in: query
+      description: >-
+        The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A
+        full name is tried first, then a branch, then a tag.
+      schema:
+        type: string
+        default: main
+    path:
+      name: path
+      in: query
+      description: The directory's path from the repository's root, as names separated by /; empty for the root.
+      schema:
+        type: string
+        default: ""
+    ifNoneMatch:
+      name: If-None-Match
+      in: header
+      description: The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+      schema:
+        type: string
+  headers:
+    ETag:
+      description: A strong entity tag of the answer.
+      required: true
+      schema:
+        type: string
+    RawCacheControl:
+      description: >-
+        private, max-age=31536000, immutable when the ref is the full name of the commit it resolved to, whose bytes
+        never change; private, no-cache, as every other answer, when it is a branch or a tag.
+      required: true
+      schema:
+        type: string
   responses:
     Problem:
       description: An error, as problem details (RFC 9457).
@@ -1057,6 +1888,315 @@ components:
           type: string
           format: uuid
           description: The organization a custom role belongs to; absent on a built-in role.
+    Repository:
+      type: object
+      description: One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
+      required: [id, orgId, slug, name, description, objectFormat, visibility, createdAt, viewerPermissions]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+          description: The current slug; a request by an old one gets the repository with this one.
+        name:
+          type: string
+        description:
+          type: string
+        objectFormat:
+          type: string
+          enum: [sha1, sha256]
+          description: The hash its history's objects are named by.
+        visibility:
+          type: string
+          enum: [private, internal]
+          description: Who reaches it, as its grants say. Private, its creator and the organization's Owners; internal, someone else too.
+        createdBy:
+          type: string
+          format: uuid
+          description: Who created it; absent once they are gone.
+        createdAt:
+          type: string
+          format: date-time
+        viewerPermissions:
+          type: array
+          description: The permissions the viewer holds on the repository.
+          items:
+            type: string
+    RepositoryInput:
+      type: object
+      description: What makes a repository.
+      required: [slug]
+      properties:
+        slug:
+          type: string
+          description: 1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit, not ending in .git, unique in the organization.
+        name:
+          type: string
+          description: The slug when left out.
+        description:
+          type: string
+    RepositorySettings:
+      type: object
+      description: What a maintainer changes; a field left out keeps its value.
+      properties:
+        slug:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+    RepositoryAccess:
+      type: object
+      description: A principal's grants on a repository.
+      required: [principalId, kind, displayName, roles]
+      properties:
+        principalId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [user, api_key]
+        displayName:
+          type: string
+        roles:
+          type: array
+          description: The roles it holds on the repository, each with the permissions it gives there.
+          items:
+            $ref: "#/components/schemas/Role"
+    Branch:
+      type: object
+      description: >-
+        One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into
+        its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
+      required: [name, head, createdAt, updatedAt, checks]
+      properties:
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        head:
+          type: string
+          description: The object it is at.
+        commit:
+          $ref: "#/components/schemas/Commit"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: When a push last moved it.
+        base:
+          type: string
+          description: The branch it merges into, main.
+        status:
+          $ref: "#/components/schemas/BranchStatus"
+        checks:
+          type: array
+          description: >-
+            How it meets its base's merge requirements, as its status last worked them out: each required annotation,
+            linear history when required, and being up to date. Empty for main.
+          items:
+            $ref: "#/components/schemas/BranchCheck"
+        ahead:
+          type: integer
+          description: How many commits it has that its base lacks; left out until a push works it out.
+        behind:
+          type: integer
+          description: How many commits its base has that it lacks; left out until a push works it out.
+        requirements:
+          $ref: "#/components/schemas/MergeRequirements"
+        merge:
+          $ref: "#/components/schemas/BranchMerge"
+    BranchMerge:
+      type: object
+      description: >-
+        The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is
+        merged while its head is the merge's.
+      required: [head, at]
+      properties:
+        head:
+          type: string
+          description: The head it brought into the base.
+        by:
+          $ref: "#/components/schemas/Principal"
+        at:
+          type: string
+          format: date-time
+          description: When Cobranch recorded the push.
+    BranchStatus:
+      type: string
+      description: >-
+        Where a branch stands as a request to merge into its base, the first that holds: processing while the push
+        worker hasn't worked out its last push, or a required annotation on its head is pending or in progress;
+        blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a
+        merge took its head into its base; ready otherwise.
+      enum: [processing, blocked, empty, merged, ready]
+    BranchCheck:
+      type: object
+      description: One of a branch's merge requirements and how it stands.
+      required: [kind, met]
+      properties:
+        kind:
+          type: string
+          description: >-
+            annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to
+            merge; up_to_date, its base's tip in it.
+          enum: [annotation, linear_history, up_to_date]
+        name:
+          type: string
+          description: The required annotation's name; only for annotation.
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        count:
+          type: integer
+          description: For linear_history, the merges among its commits to merge; for up_to_date, the commits of its base it lacks.
+        met:
+          type: boolean
+    MergeRequirements:
+      type: object
+      description: What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
+      required: [annotations, linearHistory]
+      properties:
+        annotations:
+          type: array
+          description: The annotations the incoming head must carry, Successful.
+          items:
+            type: string
+        linearHistory:
+          type: boolean
+          description: Whether no merge commit may come in.
+    Commit:
+      type: object
+      description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
+      required: [sha, tree, parents, message, author, committer, signature, annotations]
+      properties:
+        sha:
+          type: string
+        tree:
+          type: string
+        parents:
+          type: array
+          description: Its parents' names, the first of which its branch's history follows.
+          items:
+            type: string
+        message:
+          type: string
+        author:
+          $ref: "#/components/schemas/Person"
+        committer:
+          $ref: "#/components/schemas/Person"
+        signature:
+          type: string
+          description: Its signature as written, not checked yet; empty for an unsigned commit.
+        annotations:
+          type: array
+          description: The annotations principals set on it, by name.
+          items:
+            $ref: "#/components/schemas/Annotation"
+        push:
+          $ref: "#/components/schemas/Push"
+    Person:
+      type: object
+      description: A commit's author or committer as the commit writes them.
+      required: [name, email, at, zone]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        at:
+          type: string
+          format: date-time
+        zone:
+          type: string
+          description: The zone the commit wrote its time in, such as +0200.
+        principal:
+          $ref: "#/components/schemas/Principal"
+    Principal:
+      type: object
+      description: Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    Push:
+      type: object
+      description: The push that first brought a commit; getCommit alone answers it.
+      required: [id, transport, at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pusher:
+          $ref: "#/components/schemas/Principal"
+        transport:
+          type: string
+          enum: [https, ssh]
+        at:
+          type: string
+          format: date-time
+          description: When Cobranch recorded it.
+    Annotation:
+      type: object
+      description: A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
+      required: [id, name, status, summary, link, createdAt, updatedAt, startedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        summary:
+          type: string
+        link:
+          type: string
+          description: Where its details are; empty without one.
+        principal:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          description: When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
+        completedAt:
+          type: string
+          format: date-time
+          description: When it reached failed or successful; absent while it runs.
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    AnnotationStatus:
+      type: string
+      description: Where an annotation stands, in any order its principal sets them.
+      enum: [pending, in_progress, failed, successful]
+    AnnotationInput:
+      type: object
+      description: What a principal sets an annotation to.
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        summary:
+          type: string
+          description: At most 500 characters.
+        link:
+          type: string
+          description: Where its details are, an absolute http or https URL of at most 2048 bytes; none when left out or empty.
     RoleInput:
       type: object
       description: A custom role's definition.
@@ -1182,6 +2322,94 @@ components:
         revokedAt:
           type: string
           format: date-time
+    PersonalToken:
+      type: object
+      description: A personal token, as its user sees it; the token itself was shown once.
+      required: [id, name, hint, permissions, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        hint:
+          type: string
+          description: The token's last four characters.
+        permissions:
+          type: array
+          description: The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give.
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token stops working.
+        lastUsedAt:
+          type: string
+          format: date-time
+    PersonalTokenInput:
+      type: object
+      description: What makes a personal token.
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: What the token is for, 1 to 100 characters.
+        permissions:
+          type: array
+          description: The permissions the token may use, from the catalog; repo.read and repo.push when absent or empty.
+          items:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the token stops working, in the future and within a year; 30 days from now when absent.
+    PersonalTokenCreated:
+      type: object
+      description: A personal token and its secret, which is shown here and never again.
+      required: [token, secret]
+      properties:
+        token:
+          $ref: "#/components/schemas/PersonalToken"
+        secret:
+          type: string
+          description: The token, to give a Git client as its password or a script as its bearer token.
+    SSHKey:
+      type: object
+      description: An SSH key, as its user sees it.
+      required: [id, name, publicKey, fingerprint, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        publicKey:
+          type: string
+          description: The key's type and base64, as an authorized_keys line has them, without its comment.
+        fingerprint:
+          type: string
+          description: The key's SHA256 fingerprint, as ssh-keygen -l shows it.
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+    SSHKeyInput:
+      type: object
+      description: What adds an SSH key.
+      required: [publicKey]
+      properties:
+        name:
+          type: string
+          description: What the key is for, 1 to 100 characters; the key's comment when absent or empty.
+        publicKey:
+          type: string
+          description: One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
     SecretInput:
       type: object
       description: When a new secret stops working; a year from now when neither is given.
@@ -1249,6 +2477,107 @@ components:
         expiresAt:
           type: string
           format: date-time
+    Tag:
+      type: object
+      description: One of a repository's tags and the object it names, a commit or an annotated tag.
+      required: [name, target]
+      properties:
+        name:
+          type: string
+          description: Its name, without refs/tags/.
+        target:
+          type: string
+          description: The object it names.
+    Tree:
+      type: object
+      description: A directory at a commit.
+      required: [commit, path, sha, entries]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to, which every link to the directory's files may pin.
+        path:
+          type: string
+          description: Its path from the repository's root; empty for the root.
+        sha:
+          type: string
+          description: Its tree's object.
+        entries:
+          type: array
+          description: Its directories and submodules first, then its files and symlinks, each by name.
+          items:
+            $ref: "#/components/schemas/TreeEntry"
+        readme:
+          $ref: "#/components/schemas/File"
+          description: >-
+            Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown,
+            README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+    TreeEntry:
+      type: object
+      description: One of a directory's entries.
+      required: [name, path, kind, mode, sha]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+          description: Its path from the repository's root.
+        kind:
+          type: string
+          description: A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+          enum: [tree, blob, symlink, submodule]
+        mode:
+          type: string
+          description: Its mode as Git writes it, such as 100644, 100755 or 040000.
+        sha:
+          type: string
+          description: The object it names; a submodule's is the commit it pins.
+        size:
+          type: integer
+          format: int64
+          description: A file's or a symlink's size in bytes.
+    File:
+      type: object
+      description: A file or a symlink at a commit, and its text when it isn't binary.
+      required: [commit, path, name, kind, mode, sha, size, binary, truncated]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        path:
+          type: string
+          description: Its path from the repository's root.
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [blob, symlink]
+        mode:
+          type: string
+          description: Its mode as Git writes it, such as 100644 or 120000.
+        sha:
+          type: string
+          description: Its blob's object.
+        size:
+          type: integer
+          format: int64
+          description: Its size in bytes.
+        binary:
+          type: boolean
+          description: Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8.
+        truncated:
+          type: boolean
+          description: Whether its text stops at 1 MiB, short of its size.
+        text:
+          type: string
+          description: Its text, up to 1 MiB, when it isn't binary; a symlink's is its target.
+        html:
+          type: string
+          description: >-
+            A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms
+            or event handlers. Its relative links open the Console's pages at the same ref, its relative images load
+            this API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and
+            its ids start with user-content-.
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

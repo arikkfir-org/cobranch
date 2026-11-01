@@ -36,6 +36,9 @@ It answers through an HTTPRoute per workload, on your Gateway:
 {{- with .Values.urls.backOffice }}
   Back-office {{ . }}
 {{- end }}
+{{- with .Values.urls.git }}
+  Git       {{ . }}
+{{- end }}
 {{- else }}
 
 No route reaches it yet: route each workload's Service from your Gateway, turn on httpRoute, or forward a port to
@@ -51,4 +54,19 @@ Check it with: helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }
 The bundled PostgreSQL's password is generated and kept in Secret {{ include "cobranch.postgresql" . }}, which stays
 after an uninstall, as its volume does. Under Argo CD, or anything else that renders the chart without the cluster,
 set postgresql.auth.existingSecret instead: such a render can't find the Secret and would make a new password.
+{{- end }}
+{{- if .Values.urls.git }}
+
+Git clients clone, fetch and push at {{ .Values.urls.git }}/<organization>/<repository>.git, with a personal token as
+the password, which each user makes in the Console's settings.
+{{- with .Values.urls.gitSsh }}
+
+Over SSH, they do at {{ . }}/<organization>/<repository>.git, with an SSH key each
+user adds in the Console's settings. Service {{ include "cobranch.fullname" $ }}-git-server-ssh serves it, and no route
+reaches it: expose it yourself.
+{{- if not $.Values.gitServer.ssh.hostKey.existingSecret }} Its host key is generated and kept in Secret
+{{ include "cobranch.gitSSHHostKey.secret" $ }}: under Argo CD, set gitServer.ssh.hostKey.existingSecret instead, or
+every render makes a new one.
+{{- end }}
+{{- end }}
 {{- end }}
