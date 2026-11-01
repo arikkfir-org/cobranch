@@ -19,6 +19,30 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AnnotationStatus.
+const (
+	Failed     AnnotationStatus = "failed"
+	InProgress AnnotationStatus = "in_progress"
+	Pending    AnnotationStatus = "pending"
+	Successful AnnotationStatus = "successful"
+)
+
+// Valid indicates whether the value is a known member of the AnnotationStatus enum.
+func (e AnnotationStatus) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case InProgress:
+		return true
+	case Pending:
+		return true
+	case Successful:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FileKind.
 const (
 	FileKindBlob    FileKind = "blob"
@@ -163,6 +187,47 @@ func (e ListBuiltInRolesParamsScope) Valid() bool {
 	}
 }
 
+// Annotation A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
+type Annotation struct {
+	// CompletedAt When it reached failed or successful; absent while it runs.
+	CompletedAt *time.Time         `json:"completedAt,omitempty"`
+	CreatedAt   time.Time          `json:"createdAt"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Link Where its details are; empty without one.
+	Link string `json:"link"`
+	Name string `json:"name"`
+
+	// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+	Principal *Principal `json:"principal,omitempty"`
+
+	// StartedAt When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
+	StartedAt time.Time `json:"startedAt"`
+
+	// Status Where an annotation stands, in any order its principal sets them.
+	Status    AnnotationStatus `json:"status"`
+	Summary   string           `json:"summary"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// AnnotationInput What a principal sets an annotation to.
+type AnnotationInput struct {
+	// Link Where its details are, an absolute http or https URL of at most 2048 bytes; none when left out or empty.
+	Link *string `json:"link,omitempty"`
+
+	// Status Where an annotation stands, in any order its principal sets them.
+	Status AnnotationStatus `json:"status"`
+
+	// Summary At most 500 characters.
+	Summary *string `json:"summary,omitempty"`
+}
+
+// AnnotationStatus Where an annotation stands, in any order its principal sets them.
+type AnnotationStatus string
+
 // ApiKey An API key, a principal of the organization that a script acts as, with the roles it holds there and its secrets.
 type ApiKey struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -229,6 +294,9 @@ type Branch struct {
 
 // Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
 type Commit struct {
+	// Annotations The annotations principals set on it, by name.
+	Annotations []Annotation `json:"annotations"`
+
 	// Author A commit's author or committer as the commit writes them.
 	Author Person `json:"author"`
 
@@ -362,7 +430,7 @@ type Person struct {
 	Email string    `json:"email"`
 	Name  string    `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+	// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Zone The zone the commit wrote its time in, such as +0200.
@@ -407,7 +475,7 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
-// Principal Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
@@ -440,7 +508,7 @@ type Push struct {
 	At time.Time          `json:"at"`
 	Id openapi_types.UUID `json:"id"`
 
-	// Pusher Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+	// Pusher Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
 	Pusher    *Principal    `json:"pusher,omitempty"`
 	Transport PushTransport `json:"transport"`
 }
@@ -653,11 +721,20 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// Name defines model for annotation.
+type Name = string
+
 // Id defines model for id.
 type Id = openapi_types.UUID
 
+// IfMatchAnnotation defines model for ifMatchAnnotation.
+type IfMatchAnnotation = string
+
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
+
+// IfNoneMatchAnnotation defines model for ifNoneMatchAnnotation.
+type IfNoneMatchAnnotation = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
@@ -682,6 +759,9 @@ type RoleID = openapi_types.UUID
 
 // SecretID defines model for secret.
 type SecretID = openapi_types.UUID
+
+// SHA defines model for sha.
+type SHA = string
 
 // UserID defines model for user.
 type UserID = openapi_types.UUID
@@ -746,6 +826,21 @@ type ListCommitsParams struct {
 
 	// Limit How many commits the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteAnnotationParams defines parameters for DeleteAnnotation.
+type DeleteAnnotationParams struct {
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
+	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
+}
+
+// SetAnnotationParams defines parameters for SetAnnotation.
+type SetAnnotationParams struct {
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
+	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
+
+	// IfNoneMatch *, to set an annotation that isn't there: one the viewer set refuses with 412, and another principal's with 409, as every change of it does.
+	IfNoneMatch *IfNoneMatchAnnotation `json:"If-None-Match,omitempty"`
 }
 
 // GetRawParams defines parameters for GetRaw.
@@ -829,6 +924,9 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
+
+// SetAnnotationJSONRequestBody defines body for SetAnnotation for application/json ContentType.
+type SetAnnotationJSONRequestBody = AnnotationInput
 
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = RoleInput
@@ -972,7 +1070,16 @@ type ServerInterface interface {
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
-	GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha string)
+	GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
+	ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
+	DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams)
+	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
+	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
+	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
@@ -2358,7 +2465,7 @@ func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Requ
 	}
 
 	// ------------- Path parameter "sha" -------------
-	var sha string
+	var sha SHA
 
 	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
 	if err != nil {
@@ -2368,6 +2475,223 @@ func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCommit(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAnnotations operation middleware
+func (siw *ServerInterfaceWrapper) ListAnnotations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAnnotations(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAnnotation operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAnnotation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name Name
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteAnnotationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAnnotation(w, r, org, repo, sha, name, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAnnotation operation middleware
+func (siw *ServerInterfaceWrapper) SetAnnotation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "name" -------------
+	var name Name
+
+	err = runtime.BindStyledParameterWithOptions("simple", "name", r.PathValue("name"), &name, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAnnotationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAnnotation(w, r, org, repo, sha, name, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3004,6 +3328,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.DeleteAnnotation)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.SetAnnotation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -6664,9 +6991,9 @@ func (response ListCommitsdefaultApplicationProblemPlusJSONResponse) VisitListCo
 }
 
 type GetCommitRequestObject struct {
-	Org  Org    `json:"org"`
-	Repo Repo   `json:"repo"`
-	SHA  string `json:"sha"`
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	SHA  SHA  `json:"sha"`
 }
 
 type GetCommitResponseObject interface {
@@ -6737,6 +7064,368 @@ type GetCommitdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetCommitdefaultApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAnnotationsRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	SHA  SHA  `json:"sha"`
+}
+
+type ListAnnotationsResponseObject interface {
+	VisitListAnnotationsResponse(w http.ResponseWriter) error
+}
+
+type ListAnnotations200JSONResponse struct {
+	Annotations []Annotation `json:"annotations"`
+}
+
+func (response ListAnnotations200JSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAnnotations400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAnnotations400ApplicationProblemPlusJSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAnnotations401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAnnotations401ApplicationProblemPlusJSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAnnotations404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAnnotations404ApplicationProblemPlusJSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAnnotationsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAnnotationsdefaultApplicationProblemPlusJSONResponse) VisitListAnnotationsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotationRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Name   Name `json:"name"`
+	Params DeleteAnnotationParams
+}
+
+type DeleteAnnotationResponseObject interface {
+	VisitDeleteAnnotationResponse(w http.ResponseWriter) error
+}
+
+type DeleteAnnotation204Response struct {
+}
+
+func (response DeleteAnnotation204Response) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAnnotation400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAnnotation400ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotation401ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation401ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotation403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation403ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotation404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation404ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotation412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation412ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotation428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation428ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAnnotationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteAnnotationdefaultApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotationRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Name   Name `json:"name"`
+	Params SetAnnotationParams
+	Body   *SetAnnotationJSONRequestBody
+}
+
+type SetAnnotationResponseObject interface {
+	VisitSetAnnotationResponse(w http.ResponseWriter) error
+}
+
+type SetAnnotation200ResponseHeaders struct {
+	ETag string
+}
+
+type SetAnnotation200JSONResponse struct {
+	Body    Annotation
+	Headers SetAnnotation200ResponseHeaders
+}
+
+func (response SetAnnotation200JSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetAnnotation400ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation401ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation403ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation404ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation409ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation409ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation412ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation428ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotationdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetAnnotationdefaultApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -7844,6 +8533,15 @@ type StrictServerInterface interface {
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
 	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
+	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
+	ListAnnotations(ctx context.Context, request ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error)
+	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
+	DeleteAnnotation(ctx context.Context, request DeleteAnnotationRequestObject) (DeleteAnnotationResponseObject, error)
+	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
+	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
+	SetAnnotation(ctx context.Context, request SetAnnotationRequestObject) (SetAnnotationResponseObject, error)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(ctx context.Context, request GetRawRequestObject) (GetRawResponseObject, error)
@@ -9166,7 +9864,7 @@ func (sh *strictHandler) ListCommits(w http.ResponseWriter, r *http.Request, org
 }
 
 // GetCommit operation middleware
-func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha string) {
+func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
 	var request GetCommitRequestObject
 
 	request.Org = org
@@ -9186,6 +9884,101 @@ func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, org O
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetCommitResponseObject); ok {
 		if err := validResponse.VisitGetCommitResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAnnotations operation middleware
+func (sh *strictHandler) ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+	var request ListAnnotationsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAnnotations(ctx, request.(ListAnnotationsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAnnotations")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAnnotationsResponseObject); ok {
+		if err := validResponse.VisitListAnnotationsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAnnotation operation middleware
+func (sh *strictHandler) DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams) {
+	var request DeleteAnnotationRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+	request.Name = name
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAnnotation(ctx, request.(DeleteAnnotationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAnnotation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAnnotationResponseObject); ok {
+		if err := validResponse.VisitDeleteAnnotationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAnnotation operation middleware
+func (sh *strictHandler) SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams) {
+	var request SetAnnotationRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+	request.Name = name
+	request.Params = params
+
+	var body SetAnnotationJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAnnotation(ctx, request.(SetAnnotationRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAnnotation")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAnnotationResponseObject); ok {
+		if err := validResponse.VisitSetAnnotationResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

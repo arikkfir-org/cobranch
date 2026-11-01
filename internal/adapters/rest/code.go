@@ -2,8 +2,10 @@ package rest
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -17,6 +19,9 @@ type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
+	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
+	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
+	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
@@ -34,10 +39,20 @@ func person(p code.Person) Person {
 	return Person{Name: p.Name, Email: p.Email, At: p.At.UTC(), Zone: p.Zone, Principal: principal(p.Principal)}
 }
 
-// commit is c as the API shows it; a list's commits come without their pushes.
+// commit is c as the API shows it, with its annotations; a list's commits come without their pushes.
 func commit(c code.Commit) Commit {
 	return Commit{Sha: c.SHA, Tree: c.Tree, Parents: nonNil(c.Parents), Message: c.Message, Author: person(c.Author),
-		Committer: person(c.Committer), Signature: c.Signature}
+		Committer: person(c.Committer), Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation)}
+}
+
+func annotation(a code.Annotation) Annotation {
+	out := Annotation{Id: a.ID, Name: a.Name, Status: AnnotationStatus(a.Status), Summary: a.Summary, Link: a.Link, Principal: principal(a.Principal),
+		CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC(), Version: a.Version}
+	if a.CompletedAt != nil {
+		at := a.CompletedAt.UTC()
+		out.CompletedAt = &at
+	}
+	return out
 }
 
 func branch(b code.Branch) Branch {
@@ -131,4 +146,115 @@ func (a api) GetCommit(ctx context.Context, req GetCommitRequestObject) (GetComm
 	out := commit(c)
 	out.Push = &Push{Id: p.ID, Pusher: principal(p.Pusher), Transport: PushTransport(p.Transport), At: p.At.UTC()}
 	return GetCommit200JSONResponse(out), nil
+}
+
+// ListAnnotations lists the annotations on one of the repository's commits.
+func (a api) ListAnnotations(ctx context.Context, req ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.code.Annotations(ctx, v, repo.ID, req.SHA)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	return ListAnnotations200JSONResponse{Annotations: mapAll(list, annotation)}, nil
+}
+
+// SetAnnotation sets an annotation on one of the repository's commits for the viewer, or changes the viewer's own.
+func (a api) SetAnnotation(ctx context.Context, req SetAnnotationRequestObject) (SetAnnotationResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	match, err := setPrecondition(req.Params.IfMatch, req.Params.IfNoneMatch)
+	if err != nil {
+		return nil, err
+	}
+	in := code.AnnotationInput{Name: req.Name, Status: code.AnnotationStatus(req.Body.Status), Version: match}
+	if req.Body.Summary != nil {
+		in.Summary = *req.Body.Summary
+	}
+	if req.Body.Link != nil {
+		in.Link = *req.Body.Link
+	}
+	set, err := a.code.SetAnnotation(ctx, v, repo.ID, req.SHA, in)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	return SetAnnotation200JSONResponse{Body: annotation(set), Headers: SetAnnotation200ResponseHeaders{ETag: annotationTag(set)}}, nil
+}
+
+// DeleteAnnotation deletes an annotation from one of the repository's commits.
+func (a api) DeleteAnnotation(ctx context.Context, req DeleteAnnotationRequestObject) (DeleteAnnotationResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	match, err := ifMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	if match == 0 {
+		return nil, refuse(http.StatusPreconditionRequired, "precondition.required", "Name the annotation's ETag in If-Match.")
+	}
+	if err := a.code.DeleteAnnotation(ctx, v, repo.ID, req.SHA, req.Name, match); err != nil {
+		return nil, fail(err, "annotation")
+	}
+	return DeleteAnnotation204Response{}, nil
+}
+
+// annotationTag is a's ETag: its version, quoted.
+func annotationTag(a code.Annotation) string {
+	return `"` + strconv.FormatInt(a.Version, 10) + `"`
+}
+
+// setPrecondition is the version of an annotation that a PUT names: If-Match's, or code.NoAnnotation for If-None-Match
+// *. It refuses with 428 a PUT that names neither, and with 400 one that names both or another If-None-Match.
+func setPrecondition(ifMatchHeader, ifNoneMatch *string) (int64, error) {
+	match, err := ifMatch(ifMatchHeader)
+	none := ifNoneMatch != nil && strings.TrimSpace(*ifNoneMatch) != ""
+	switch {
+	case err != nil:
+		return 0, err
+	case none && match != 0:
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "Name If-Match to change the annotation or If-None-Match to set a new one, not both.")
+	case none && strings.TrimSpace(*ifNoneMatch) != "*":
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "If-None-Match takes * alone: set the annotation only if it isn't there.")
+	case none:
+		return code.NoAnnotation, nil
+	case match == 0:
+		return 0, refuse(http.StatusPreconditionRequired, "precondition.required",
+			"Name the annotation's ETag in If-Match to change it, or If-None-Match: * to set a new one.")
+	}
+	return match, nil
+}
+
+// ifMatch is the version of an annotation that If-Match names: 0 without the header, code.AnyVersion for *, and a
+// refusal with 412 for a tag that names no version, a weak one included, since If-Match compares strongly.
+func ifMatch(header *string) (int64, error) {
+	if header == nil || strings.TrimSpace(*header) == "" {
+		return 0, nil
+	}
+	tag := strings.TrimSpace(*header)
+	if tag == "*" {
+		return code.AnyVersion, nil
+	}
+	version, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), 10, 64)
+	if err != nil || version < 1 {
+		return 0, refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no version of the annotation.")
+	}
+	return version, nil
 }

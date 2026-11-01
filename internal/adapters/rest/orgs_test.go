@@ -97,9 +97,17 @@ func shaOf(letter string) string { return strings.Repeat(letter, 40) }
 
 // call serves one request to the API as viewer and returns the recorder.
 func (f *orgFixture) call(viewer *auth.Authenticated, method, path, body string) *httptest.ResponseRecorder {
+	return f.callWith(viewer, method, path, body, nil)
+}
+
+// callWith calls the API as call does, with header's fields too.
+func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body string, header http.Header) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	for k, v := range header {
+		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
 	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
@@ -112,9 +120,12 @@ type orgCase struct {
 	method     string
 	path       func(f *orgFixture) string
 	body       string
+	header     http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
+	// wantHeader holds fields the answer must carry, with their values.
+	wantHeader http.Header
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -126,9 +137,14 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.call(viewer, tt.method, tt.path(f), tt.body)
+			rec := f.callWith(viewer, tt.method, tt.path(f), tt.body, tt.header)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+			}
+			for k := range tt.wantHeader {
+				if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
+					t.Errorf("%s = %q, want %q", k, got, want)
+				}
 			}
 			if tt.wantCode != "" {
 				checkBody(t, rec, "", tt.wantCode)

@@ -1296,13 +1296,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
-        - name: sha
-          in: path
-          required: true
-          description: The commit's full name, in lowercase hexadecimal.
-          x-go-name: SHA
-          schema:
-            type: string
+        - $ref: "#/components/parameters/sha"
       responses:
         "200":
           description: The commit, with its push.
@@ -1315,6 +1309,104 @@ paths:
         "401":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/annotations:
+    get:
+      operationId: listAnnotations
+      summary: The annotations principals set on one of the repository's commits, by name; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+      responses:
+        "200":
+          description: The annotations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [annotations]
+                properties:
+                  annotations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Annotation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}:
+    put:
+      operationId: setAnnotation
+      summary: Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/annotation"
+        - $ref: "#/components/parameters/ifMatchAnnotation"
+        - $ref: "#/components/parameters/ifNoneMatchAnnotation"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnnotationInput"
+      responses:
+        "200":
+          description: The annotation as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Annotation"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteAnnotation
+      summary: Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/annotation"
+        - $ref: "#/components/parameters/ifMatchAnnotation"
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1498,6 +1590,34 @@ paths:
           $ref: "#/components/responses/Problem"
 components:
   parameters:
+    sha:
+      name: sha
+      in: path
+      required: true
+      description: The commit's full name, in lowercase hexadecimal.
+      x-go-name: SHA
+      schema:
+        type: string
+    annotation:
+      name: name
+      in: path
+      required: true
+      description: The annotation's name, such as ci/build; a slash in it travels escaped, as ci%2Fbuild.
+      x-go-name: Name
+      schema:
+        type: string
+    ifMatchAnnotation:
+      name: If-Match
+      in: header
+      description: The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchAnnotation:
+      name: If-None-Match
+      in: header
+      description: "*, to set an annotation that isn't there: one the viewer set refuses with 412, and another principal's with 409, as every change of it does."
+      schema:
+        type: string
     org:
       name: org
       in: path
@@ -1587,7 +1707,7 @@ components:
         type: string
   headers:
     ETag:
-      description: A strong entity tag of the answer, which the commit, the path and the answer's shape fix.
+      description: A strong entity tag of the answer.
       required: true
       schema:
         type: string
@@ -1841,7 +1961,7 @@ components:
     Commit:
       type: object
       description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
-      required: [sha, tree, parents, message, author, committer, signature]
+      required: [sha, tree, parents, message, author, committer, signature, annotations]
       properties:
         sha:
           type: string
@@ -1861,6 +1981,11 @@ components:
         signature:
           type: string
           description: Its signature as written, not checked yet; empty for an unsigned commit.
+        annotations:
+          type: array
+          description: The annotations principals set on it, by name.
+          items:
+            $ref: "#/components/schemas/Annotation"
         push:
           $ref: "#/components/schemas/Push"
     Person:
@@ -1882,7 +2007,7 @@ components:
           $ref: "#/components/schemas/Principal"
     Principal:
       type: object
-      description: Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+      description: Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
       required: [id, displayName]
       properties:
         id:
@@ -1907,6 +2032,60 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded it.
+    Annotation:
+      type: object
+      description: A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
+      required: [id, name, status, summary, link, createdAt, updatedAt, startedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        summary:
+          type: string
+        link:
+          type: string
+          description: Where its details are; empty without one.
+        principal:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+          description: When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
+        completedAt:
+          type: string
+          format: date-time
+          description: When it reached failed or successful; absent while it runs.
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    AnnotationStatus:
+      type: string
+      description: Where an annotation stands, in any order its principal sets them.
+      enum: [pending, in_progress, failed, successful]
+    AnnotationInput:
+      type: object
+      description: What a principal sets an annotation to.
+      required: [status]
+      properties:
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        summary:
+          type: string
+          description: At most 500 characters.
+        link:
+          type: string
+          description: Where its details are, an absolute http or https URL of at most 2048 bytes; none when left out or empty.
     RoleInput:
       type: object
       description: A custom role's definition.

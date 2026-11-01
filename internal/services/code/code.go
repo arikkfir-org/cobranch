@@ -1,8 +1,9 @@
 // Package code is the domain of a repository's code as people browse it: its branches, a branch's history and its
-// commits, with the principals behind them and the pushes that brought them, all as pushes recorded them. It knows
-// nothing of HTTP, Git's protocol or PostgreSQL: adapters bring those through its port, Store, and every permission
-// check goes through sign-in's authorizer
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console").
+// commits, with the principals behind them and the pushes that brought them, all as pushes recorded them, and the
+// annotations principals set on its commits. It knows nothing of HTTP, Git's protocol or PostgreSQL: adapters bring
+// those through its port, Store, and every permission check goes through sign-in's authorizer
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console", and
+// https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
 package code
 
 import (
@@ -34,16 +35,17 @@ type Person struct {
 
 // Commit is a commit a push brought, as the push recorded it: its tree, its parents (the first of which its branch's
 // history follows), its message and signature as written, its author and committer, and the push that first brought
-// it.
+// it; with the annotations principals set on it, by name.
 type Commit struct {
-	SHA       string
-	Tree      string
-	Parents   []string
-	Message   string
-	Author    Person
-	Committer Person
-	Signature string
-	FirstPush uuid.UUID
+	SHA         string
+	Tree        string
+	Parents     []string
+	Message     string
+	Author      Person
+	Committer   Person
+	Signature   string
+	FirstPush   uuid.UUID
+	Annotations []Annotation
 }
 
 // Push is a push that brought commits: who pushed, over which transport, and when Cobranch recorded it.
