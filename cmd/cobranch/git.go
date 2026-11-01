@@ -57,7 +57,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the server wrote
 	orgStore := postgres.NewOrgStore(pool)
-	gitServer, err := gitserver.New(gitserver.Config{DataDir: cfg.DataDir, CacheSize: int64(cfg.CacheSize), MaxPushSize: int64(cfg.MaxPushSize), Hook: []string{self, "git-hook"}},
+	gitServer, err := gitserver.New(ctx, gitserver.Config{DataDir: cfg.DataDir, CacheSize: int64(cfg.CacheSize), MaxPushSize: int64(cfg.MaxPushSize), Hook: []string{self, "git-hook"}},
 		auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{}),
 		repos.NewService(postgres.NewRepoStore(pool), auth.NewAuthorizer(orgStore)),
 		gitservice(pool), pushworker.NewClient(cfg.PushWorkerURL, cfg.InternalToken), bucket)

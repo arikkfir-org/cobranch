@@ -2,6 +2,7 @@ package gitserver_test
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -118,7 +119,7 @@ func (s *stack) serve(dataDir string) string {
 		s.t.Fatal(err)
 	}
 	orgStore := postgres.NewOrgStore(s.pool)
-	srv, err := gitserver.New(gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}},
+	srv, err := gitserver.New(context.Background(), gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}},
 		auth.NewService(postgres.NewAuthStore(s.pool), nil, auth.Settings{}), repos.NewService(postgres.NewRepoStore(s.pool), auth.NewAuthorizer(orgStore)),
 		git.NewService(postgres.NewGitStore(s.pool)), recorderFunc(s.recordPush), s.bucket)
 	if err != nil {
@@ -134,7 +135,11 @@ func (s *stack) recordPush(ctx context.Context, push git.Push) (git.Answer, erro
 	if s.record != nil {
 		return s.record(ctx, push, s.worker)
 	}
-	return s.worker.Record(ctx, push)
+	answer, err := s.worker.Record(ctx, push)
+	if err != nil {
+		return git.Answer{}, fmt.Errorf("recording through the push worker: %w", err)
+	}
+	return answer, nil
 }
 
 type recorderFunc func(ctx context.Context, push git.Push) (git.Answer, error)

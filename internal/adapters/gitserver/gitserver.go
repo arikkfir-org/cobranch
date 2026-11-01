@@ -93,8 +93,8 @@ type Server struct {
 }
 
 // New prepares a Git server: it empties cfg.DataDir, writes the hook there, and listens for hooks on a loopback
-// port, until Close.
-func New(cfg Config, a Authenticator, r Repositories, s Snapshots, recorder Recorder, bucket *blob.Bucket) (*Server, error) {
+// port, until Close. ctx carries what its log lines name.
+func New(ctx context.Context, cfg Config, a Authenticator, r Repositories, s Snapshots, recorder Recorder, bucket *blob.Bucket) (*Server, error) {
 	if cfg.Git == "" {
 		cfg.Git = "git"
 	}
@@ -106,15 +106,16 @@ func New(cfg Config, a Authenticator, r Repositories, s Snapshots, recorder Reco
 	if err := srv.prepare(); err != nil {
 		return nil, err
 	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return nil, fmt.Errorf("listening for hooks: %w", err)
 	}
 	srv.hookURL = "http://" + ln.Addr().String() + hookPath
 	srv.hooks = &http.Server{Handler: srv.hookHandler(), ReadHeaderTimeout: 10 * time.Second}
+	logCtx := context.WithoutCancel(ctx)
 	go func() {
 		if err := srv.hooks.Serve(ln); !errors.Is(err, http.ErrServerClosed) {
-			slog.ErrorContext(context.Background(), "Serving hooks failed", "error", err)
+			slog.ErrorContext(logCtx, "Serving hooks failed", "error", err)
 		}
 	}()
 	return srv, nil

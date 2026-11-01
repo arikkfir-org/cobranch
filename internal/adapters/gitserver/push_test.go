@@ -3,6 +3,7 @@ package gitserver_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -108,7 +109,7 @@ func TestRefusedPushes(t *testing.T) {
 		// Another push moves main first, as one that commits between this push's snapshot and its record would.
 		if _, err := next.Record(ctx, git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: push.RepoID, PusherID: olivia, Transport: git.TransportHTTPS,
 			Updates: []git.RefUpdate{{Name: "refs/heads/main", Old: push.Updates[0].Old, New: strings.Repeat("a", 40)}}, ReceivedAt: time.Now()}); err != nil {
-			return git.Answer{}, err
+			return git.Answer{}, fmt.Errorf("moving main first: %w", err)
 		}
 		return next.Record(ctx, push)
 	}

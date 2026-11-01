@@ -10,7 +10,8 @@ import (
 // every names every variable the loaders read, to unset before each test.
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
-	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP"}
+	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_WORKER_URL", "INTERNAL_TOKEN", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
+	"GIT_MAX_PUSH_SIZE", "HOOK_URL", "HOOK_TOKEN"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -281,5 +282,93 @@ func unsetenv(t *testing.T, name string) {
 	t.Setenv(name, "") // records the value to restore
 	if err := os.Unsetenv(name); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestLoadGitServer(t *testing.T) {
+	required := map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_PUSH_WORKER_URL": "http://push-worker", "COBRANCH_INTERNAL_TOKEN": "t"}
+	with := func(extra map[string]string) map[string]string {
+		env := map[string]string{}
+		for _, m := range []map[string]string{required, extra} {
+			for k, v := range m {
+				env[k] = v
+			}
+		}
+		return env
+	}
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    GitServer
+		wantErr bool
+	}{
+		{name: "defaults", env: required, want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", PushWorkerURL: "http://push-worker", InternalToken: "t",
+			DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, ShutdownTimeout: 20 * time.Second}},
+		{name: "sizes", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "512Mi", "COBRANCH_GIT_MAX_PUSH_SIZE": "1048576", "COBRANCH_GIT_DATA_DIR": "/data"}),
+			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", PushWorkerURL: "http://push-worker", InternalToken: "t",
+				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, ShutdownTimeout: 20 * time.Second}},
+		{name: "a size that isn't one", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "10GB"}), wantErr: true},
+		{name: "no push worker", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_INTERNAL_TOKEN": "t"}, wantErr: true},
+		{name: "no token", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_PUSH_WORKER_URL": "http://push-worker"}, wantErr: true},
+		{name: "no bucket", env: map[string]string{"COBRANCH_PUSH_WORKER_URL": "http://push-worker", "COBRANCH_INTERNAL_TOKEN": "t"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadGitServer()
+			if (err != nil) != tt.wantErr || got != tt.want {
+				t.Errorf("LoadGitServer() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadPushWorker(t *testing.T) {
+	clean(t, map[string]string{"COBRANCH_INTERNAL_TOKEN": "t", "COBRANCH_DATABASE_URL": "postgres://db/cobranch"})
+	got, err := LoadPushWorker()
+	if want := (PushWorker{HTTPAddr: ":8080", DatabaseURL: "postgres://db/cobranch", InternalToken: "t", ShutdownTimeout: 20 * time.Second}); err != nil || got != want {
+		t.Errorf("LoadPushWorker() = %+v, %v, want %+v", got, err, want)
+	}
+	clean(t, nil)
+	if _, err := LoadPushWorker(); err == nil {
+		t.Error("LoadPushWorker() without a token succeeded")
+	}
+}
+
+func TestLoadHook(t *testing.T) {
+	clean(t, map[string]string{"COBRANCH_HOOK_URL": "http://127.0.0.1:1/pre-receive", "COBRANCH_HOOK_TOKEN": "t"})
+	if got, err := LoadHook(); err != nil || got != (Hook{URL: "http://127.0.0.1:1/pre-receive", Token: "t"}) {
+		t.Errorf("LoadHook() = %+v, %v", got, err)
+	}
+	clean(t, map[string]string{"COBRANCH_HOOK_URL": "http://127.0.0.1:1/pre-receive"})
+	if _, err := LoadHook(); err == nil {
+		t.Error("LoadHook() without a token succeeded")
+	}
+}
+
+func TestSizeDecode(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    Size
+		wantErr bool
+	}{
+		{value: "1048576", want: 1 << 20},
+		{value: "512Ki", want: 512 << 10},
+		{value: "10Gi", want: 10 << 30},
+		{value: " 2Ti ", want: 2 << 40},
+		{value: "8388607Ti", want: 8388607 << 40},
+		{value: "8388608Ti", wantErr: true},
+		{value: "0", wantErr: true},
+		{value: "-1Gi", wantErr: true},
+		{value: "1.5Gi", wantErr: true},
+		{value: "10G", wantErr: true},
+		{value: "Gi", wantErr: true},
+		{value: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		var got Size
+		if err := got.Decode(tt.value); (err != nil) != tt.wantErr || got != tt.want {
+			t.Errorf("Decode(%q) = %d, %v, want %d", tt.value, got, err, tt.want)
+		}
 	}
 }

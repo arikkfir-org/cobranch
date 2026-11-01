@@ -15,7 +15,8 @@ var tracer = otel.Tracer("cobranch.dev/internal/services/git")
 
 // Store is what the database keeps of Git hosting.
 type Store interface {
-	// Snapshot reads the repository's refs and active packs in one statement, or ErrNotFound.
+	// Snapshot reads the repository's refs and active packs in one statement; a repository with neither, or none at
+	// all, has an empty one.
 	Snapshot(ctx context.Context, repoID uuid.UUID) (Snapshot, error)
 	// Record applies a push in one transaction that acts for its pusher: it locks the repository, so pushes into one
 	// repository apply one at a time; does nothing for a push whose ID it recorded already; checks every ref's old
