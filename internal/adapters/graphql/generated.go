@@ -183,6 +183,12 @@ type ComplexityRoot struct {
 		LinearHistory func(childComplexity int) int
 	}
 
+	MergeResult struct {
+		Base   func(childComplexity int) int
+		Commit func(childComplexity int) int
+		Head   func(childComplexity int) int
+	}
+
 	Mutation struct {
 		AcceptInvitation     func(childComplexity int, id string) int
 		AddSSHKey            func(childComplexity int, input SSHKeyInput) int
@@ -203,6 +209,7 @@ type ComplexityRoot struct {
 		GrantRole            func(childComplexity int, organizationID string, userID string, roleID string) int
 		InviteMember         func(childComplexity int, organizationID string, email string, roleID string) int
 		LeaveOrganization    func(childComplexity int, id string) int
+		MergeBranch          func(childComplexity int, repositoryID string, branch string, input *MergeInput) int
 		RemoveMember         func(childComplexity int, organizationID string, userID string) int
 		RequestToJoin        func(childComplexity int, slug string, note *string) int
 		RevokeAPIKeySecret   func(childComplexity int, organizationID string, id string, secretID string) int
@@ -378,6 +385,7 @@ type MutationResolver interface {
 	DeleteSSHKey(ctx context.Context, id string) (bool, error)
 	SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) (*Annotation, error)
 	DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string, expectedVersion *int) (bool, error)
+	MergeBranch(ctx context.Context, repositoryID string, branch string, input *MergeInput) (*MergeResult, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -1052,6 +1060,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.MergeRequirements.LinearHistory(childComplexity), true
 
+	case "MergeResult.base":
+		if e.ComplexityRoot.MergeResult.Base == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MergeResult.Base(childComplexity), true
+	case "MergeResult.commit":
+		if e.ComplexityRoot.MergeResult.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MergeResult.Commit(childComplexity), true
+	case "MergeResult.head":
+		if e.ComplexityRoot.MergeResult.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MergeResult.Head(childComplexity), true
+
 	case "Mutation.acceptInvitation":
 		if e.ComplexityRoot.Mutation.AcceptInvitation == nil {
 			break
@@ -1261,6 +1288,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.LeaveOrganization(childComplexity, args["id"].(string)), true
+	case "Mutation.mergeBranch":
+		if e.ComplexityRoot.Mutation.MergeBranch == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_mergeBranch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.MergeBranch(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["input"].(*MergeInput)), true
 	case "Mutation.removeMember":
 		if e.ComplexityRoot.Mutation.RemoveMember == nil {
 			break
@@ -2083,6 +2121,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		return graphql.NewInputUnmarshalerIndex(
 			graphql.NewInputUnmarshaler("AnnotationInput", ec.unmarshalInputAnnotationInput),
 			graphql.NewInputUnmarshaler("ApiKeyInput", ec.unmarshalInputApiKeyInput),
+			graphql.NewInputUnmarshaler("MergeInput", ec.unmarshalInputMergeInput),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
@@ -2271,6 +2310,34 @@ extend type Mutation {
   setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!, expectedVersion: Int): Annotation!
   "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
+  "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
+  mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
+}
+
+"How to merge a branch into its base."
+input MergeInput {
+  "The head the requester saw; the merge is refused once the branch moved from it."
+  head: String
+  "How the merge moves its base; left out, FAST_FORWARD where the base requires linear history, which allows only that, and MERGE otherwise."
+  method: MergeMethod
+}
+
+"How a merge moves its base."
+enum MergeMethod {
+  "A merge commit, Merge branch '<name>', authored and committed by the requester."
+  MERGE
+  "A fast-forward, which writes nothing."
+  FAST_FORWARD
+}
+
+"A merge Cobranch recorded as a push of its base."
+type MergeResult {
+  "The branch merged into, main."
+  base: String!
+  "The head merged."
+  head: String!
+  "The commit the base is at now, the merge commit or, for a fast-forward, the head."
+  commit: String!
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -2438,7 +2505,7 @@ type Push {
   id: ID!
   "Who pushed; null once they are gone."
   pusher: CommitPrincipal
-  "https or ssh."
+  "https or ssh, or api for a merge asked of Cobranch."
   transport: String!
   "When Cobranch recorded it."
   at: Time!
@@ -3122,6 +3189,18 @@ func (ec *executionContext) childFields_MergeRequirements(ctx context.Context, f
 		return ec.fieldContext_MergeRequirements_linearHistory(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MergeRequirements", field.Name)
+}
+
+func (ec *executionContext) childFields_MergeResult(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "base":
+		return ec.fieldContext_MergeResult_base(ctx, field)
+	case "head":
+		return ec.fieldContext_MergeResult_head(ctx, field)
+	case "commit":
+		return ec.fieldContext_MergeResult_commit(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MergeResult", field.Name)
 }
 
 func (ec *executionContext) childFields_Organization(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3935,6 +4014,36 @@ func (ec *executionContext) field_Mutation_leaveOrganization_args(ctx context.Co
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_mergeBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (*MergeInput, error) {
+			return ec.unmarshalOMergeInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
 	return args, nil
 }
 
@@ -6855,6 +6964,75 @@ func (ec *executionContext) fieldContext_MergeRequirements_linearHistory(_ conte
 	return graphql.NewScalarFieldContext("MergeRequirements", field, false, false, "Boolean")
 }
 
+func (ec *executionContext) _MergeResult_base(ctx context.Context, field graphql.CollectedField, obj *MergeResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MergeResult_base(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Base, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MergeResult_base(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MergeResult", field, false, false, "String")
+}
+
+func (ec *executionContext) _MergeResult_head(ctx context.Context, field graphql.CollectedField, obj *MergeResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MergeResult_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MergeResult_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MergeResult", field, false, false, "String")
+}
+
+func (ec *executionContext) _MergeResult_commit(ctx context.Context, field graphql.CollectedField, obj *MergeResult) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MergeResult_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MergeResult_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MergeResult", field, false, false, "String")
+}
+
 func (ec *executionContext) _Mutation_revokeSession(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7157,6 +7335,50 @@ func (ec *executionContext) fieldContext_Mutation_deleteAnnotation(ctx context.C
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteAnnotation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_mergeBranch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_mergeBranch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().MergeBranch(ctx, fc.Args["repositoryId"].(string), fc.Args["branch"].(string), fc.Args["input"].(*MergeInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MergeResult) graphql.Marshaler {
+			return ec.marshalNMergeResult2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeResult(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_mergeBranch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MergeResult(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_mergeBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -12268,6 +12490,55 @@ func UnmarshalApiKeyInput(ctx context.Context, raw any) (APIKeyInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputMergeInput(ctx context.Context, obj any) (MergeInput, error) {
+	var it MergeInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"head", "method"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "head":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("head"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Head = data
+		case "method":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("method"))
+			data, err := ec.unmarshalOMergeMethod2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeMethod(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Method = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalMergeInput unmarshals raw into the MergeInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalMergeInput(ctx context.Context, raw any) (MergeInput, error) {
+	var out MergeInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "MergeInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputOrganizationSettings(ctx context.Context, obj any) (OrganizationSettings, error) {
 	var it OrganizationSettings
 	if obj == nil {
@@ -13540,6 +13811,49 @@ func (ec *executionContext) _MergeRequirements(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var mergeResultImplementors = []string{"MergeResult"}
+
+func (ec *executionContext) _MergeResult(ctx context.Context, sel ast.SelectionSet, obj *MergeResult) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, mergeResultImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MergeResult")
+		case "base":
+			out.Values[i] = ec._MergeResult_base(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._MergeResult_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commit":
+			out.Values[i] = ec._MergeResult_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var mutationImplementors = []string{"Mutation"}
 
 func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet) graphql.Marshaler {
@@ -13604,6 +13918,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteAnnotation":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteAnnotation(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mergeBranch":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_mergeBranch(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -15519,6 +15840,14 @@ func (ec *executionContext) marshalNMember2ᚖcobranchᚗdevᚋinternalᚋadapte
 	return ec._Member(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMergeResult2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeResult(ctx context.Context, sel ast.SelectionSet, v *MergeResult) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "MergeResult!")
+		return graphql.Null
+	}
+	return ec._MergeResult(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNOrganization2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Organization) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -16126,6 +16455,30 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	_ = ctx
 	res := graphql.MarshalInt(*v)
 	return res
+}
+
+func (ec *executionContext) unmarshalOMergeInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeInput(ctx context.Context, v any) (*MergeInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalInputMergeInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalOMergeMethod2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeMethod(ctx context.Context, v any) (*MergeMethod, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(MergeMethod)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOMergeMethod2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeMethod(ctx context.Context, sel ast.SelectionSet, v *MergeMethod) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOMergeRequirements2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMergeRequirements(ctx context.Context, sel ast.SelectionSet, v *MergeRequirements) graphql.Marshaler {

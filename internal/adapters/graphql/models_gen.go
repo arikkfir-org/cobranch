@@ -225,12 +225,30 @@ type Member struct {
 	Roles       []*Role   `json:"roles"`
 }
 
+// How to merge a branch into its base.
+type MergeInput struct {
+	// The head the requester saw; the merge is refused once the branch moved from it.
+	Head *string `json:"head,omitempty"`
+	// How the merge moves its base; left out, FAST_FORWARD where the base requires linear history, which allows only that, and MERGE otherwise.
+	Method *MergeMethod `json:"method,omitempty"`
+}
+
 // What a merge into a branch needs, as main's /cobranch.yaml names it under branches.
 type MergeRequirements struct {
 	// The annotations the incoming head must carry, Successful.
 	Annotations []string `json:"annotations"`
 	// Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
+}
+
+// A merge Cobranch recorded as a push of its base.
+type MergeResult struct {
+	// The branch merged into, main.
+	Base string `json:"base"`
+	// The head merged.
+	Head string `json:"head"`
+	// The commit the base is at now, the merge commit or, for a fast-forward, the head.
+	Commit string `json:"commit"`
 }
 
 type Mutation struct {
@@ -322,7 +340,7 @@ type Push struct {
 	ID string `json:"id"`
 	// Who pushed; null once they are gone.
 	Pusher *CommitPrincipal `json:"pusher,omitempty"`
-	// https or ssh.
+	// https or ssh, or api for a merge asked of Cobranch.
 	Transport string `json:"transport"`
 	// When Cobranch recorded it.
 	At time.Time `json:"at"`
@@ -805,6 +823,64 @@ func (e *HistoryParents) UnmarshalJSON(b []byte) error {
 }
 
 func (e HistoryParents) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How a merge moves its base.
+type MergeMethod string
+
+const (
+	// A merge commit, Merge branch '<name>', authored and committed by the requester.
+	MergeMethodMerge MergeMethod = "MERGE"
+	// A fast-forward, which writes nothing.
+	MergeMethodFastForward MergeMethod = "FAST_FORWARD"
+)
+
+var AllMergeMethod = []MergeMethod{
+	MergeMethodMerge,
+	MergeMethodFastForward,
+}
+
+func (e MergeMethod) IsValid() bool {
+	switch e {
+	case MergeMethodMerge, MergeMethodFastForward:
+		return true
+	}
+	return false
+}
+
+func (e MergeMethod) String() string {
+	return string(e)
+}
+
+func (e *MergeMethod) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = MergeMethod(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid MergeMethod", str)
+	}
+	return nil
+}
+
+func (e MergeMethod) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *MergeMethod) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e MergeMethod) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

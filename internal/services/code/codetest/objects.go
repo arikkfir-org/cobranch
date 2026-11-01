@@ -16,12 +16,13 @@ import (
 // Objects is a code.Objects in memory, the Git server's objects for tests: the files of each commit, by path, the
 // branches and tags that name commits, and the walk of history from each commit, newest first. A path ending in
 // Symlink holds a symlink, and one in Submodule a submodule. Every repository holds the same objects. Fail, when set,
-// fails every read.
+// fails every read and merge. Merges lists the merges asked for; each answers its head as the commit its base is at.
 type Objects struct {
-	Files map[string]map[string]string
-	Refs  map[string]string
-	Logs  map[string][]code.LogEntry
-	Fail  error
+	Files  map[string]map[string]string
+	Refs   map[string]string
+	Logs   map[string][]code.LogEntry
+	Fail   error
+	Merges []code.MergeRequest
 }
 
 // The suffixes of the paths Objects holds a symlink or a submodule at.
@@ -179,4 +180,13 @@ func kind(path string) code.EntryKind {
 func name(content string) string {
 	sum := sha1.Sum([]byte(content))
 	return hex.EncodeToString(sum[:])
+}
+
+// Merge records req and answers its head as the commit its base is at, as a fast-forward would.
+func (o *Objects) Merge(_ context.Context, _ uuid.UUID, req code.MergeRequest) (code.Merged, error) {
+	if o.Fail != nil {
+		return code.Merged{}, o.Fail
+	}
+	o.Merges = append(o.Merges, req)
+	return code.Merged{Base: req.Base, Head: req.Head, Commit: req.Head}, nil
 }

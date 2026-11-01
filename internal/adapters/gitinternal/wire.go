@@ -8,12 +8,15 @@ package gitinternal
 import (
 	"errors"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
 )
 
 // ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
-// /raw, each with the query parameters ref and path, and blob with limit; and /log, with ref, skip and limit.
+// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit; and
+// POST <ReposPath>{id}/merge, with a MergeRequest.
 const ReposPath = "/internal/v1/repos/"
 
 // The headers of a raw answer, beside its Content-Length, which name what its bytes are.
@@ -82,6 +85,55 @@ func (l Log) Domain() code.Log {
 	}
 	return code.Log{Commit: l.Commit, Entries: entries}
 }
+
+// MergeRequest is a merge the internal call asks the Git server to build and record: code.MergeRequest.
+type MergeRequest struct {
+	Branch string `json:"branch"`
+	Head   string `json:"head"`
+	Base   string `json:"base"`
+	Method string `json:"method"`
+	By     Merger `json:"by"`
+	Bypass bool   `json:"bypass"`
+}
+
+// Merger is who asks for a merge: code.Merger.
+type Merger struct {
+	ID    uuid.UUID `json:"id"`
+	Name  string    `json:"name"`
+	Email string    `json:"email"`
+}
+
+// Merged is the answer of a merge the Git server recorded: code.Merged.
+type Merged struct {
+	Base   string `json:"base"`
+	Head   string `json:"head"`
+	Commit string `json:"commit"`
+}
+
+// MergeRequestOf is req as the internal call carries it.
+func MergeRequestOf(req code.MergeRequest) MergeRequest {
+	return MergeRequest{Branch: req.Branch, Head: req.Head, Base: req.Base, Method: string(req.Method),
+		By: Merger{ID: req.By.ID, Name: req.By.Name, Email: req.By.Email}, Bypass: req.Bypass}
+}
+
+// Domain is the domain's merge request.
+func (r MergeRequest) Domain() code.MergeRequest {
+	return code.MergeRequest{Branch: r.Branch, Head: r.Head, Base: r.Base, Method: code.MergeMethod(r.Method),
+		By: code.Merger{ID: r.By.ID, Name: r.By.Name, Email: r.By.Email}, Bypass: r.Bypass}
+}
+
+// MergedOf is m as the internal call carries it.
+func MergedOf(m code.Merged) Merged {
+	return Merged{Base: m.Base, Head: m.Head, Commit: m.Commit}
+}
+
+// Domain is the domain's merge.
+func (m Merged) Domain() code.Merged {
+	return code.Merged{Base: m.Base, Head: m.Head, Commit: m.Commit}
+}
+
+// CodeMoved is the code of the 409 of a merge whose branch or base moved; any other 409 carries a *code.MergeError's.
+const CodeMoved = "branch.moved"
 
 // Problem is the body of an answer other than 200: a code, for one that finds nothing, and what went wrong.
 type Problem struct {

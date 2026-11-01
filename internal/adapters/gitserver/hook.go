@@ -306,12 +306,17 @@ func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (
 		return nil, fmt.Errorf("the push left %d packs", len(found))
 	}
 	name := strings.TrimSuffix(filepath.Base(found[0]), ".pack")
-	at := func(file string) string { return filepath.Join(quarantine, "pack", file) }
-	pack, stored, err := putPack(ctx, s.bucket, p.repo.ID, name, at)
+	return s.keepPack(ctx, p.repo.ID, name, func(file string) string { return filepath.Join(quarantine, "pack", file) })
+}
+
+// keepPack uploads the repository's pack name, whose files at says where are, to the bucket as an upload of its own,
+// and keeps it in the cache.
+func (s *Server) keepPack(ctx context.Context, repoID uuid.UUID, name string, at func(file string) string) (*git.Pack, error) {
+	pack, stored, err := putPack(ctx, s.bucket, repoID, name, at)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.cache.add(p.repo.ID, name, stored, at, os.Link); err != nil {
+	if err := s.cache.add(repoID, name, stored, at, os.Link); err != nil {
 		slog.WarnContext(ctx, "Caching a pushed pack failed; a fetch downloads it", "pack", name, "error", err)
 	}
 	return &pack, nil

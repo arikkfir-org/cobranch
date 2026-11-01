@@ -1258,6 +1258,48 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/merge:
+    post:
+      operationId: mergeBranch
+      summary: >-
+        Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push
+        of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch,
+        and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved
+        from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with
+        nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts
+        with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on
+        the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MergeInput"
+      responses:
+        "200":
+          description: The merge, recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MergeResult"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/commits:
     get:
       operationId: listCommits
@@ -2065,6 +2107,36 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded the push.
+    MergeInput:
+      type: object
+      description: How to merge a branch into its base.
+      properties:
+        head:
+          type: string
+          description: The head the requester saw; the merge is refused once the branch moved from it.
+        method:
+          $ref: "#/components/schemas/MergeMethod"
+    MergeMethod:
+      type: string
+      description: >-
+        How a merge moves its base: with a merge commit, Merge branch '<name>', authored and committed by the requester,
+        or by a fast-forward, which writes nothing. Left out, a fast-forward where the base requires linear history,
+        which allows only that, and a merge commit otherwise.
+      enum: [merge, fast_forward]
+    MergeResult:
+      type: object
+      description: A merge Cobranch recorded as a push of its base.
+      required: [base, head, commit]
+      properties:
+        base:
+          type: string
+          description: The branch merged into, main.
+        head:
+          type: string
+          description: The head merged.
+        commit:
+          type: string
+          description: The commit the base is at now, the merge commit or, for a fast-forward, the head.
     BranchStatus:
       type: string
       description: >-
@@ -2176,7 +2248,8 @@ components:
           $ref: "#/components/schemas/Principal"
         transport:
           type: string
-          enum: [https, ssh]
+          description: How the push came; api for a merge asked of Cobranch.
+          enum: [https, ssh, api]
         at:
           type: string
           format: date-time

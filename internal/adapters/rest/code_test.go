@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 )
 
@@ -192,5 +193,59 @@ func TestCommitAPI(t *testing.T) {
 			wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "a token with repo.read alone reads it", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("c")),
 			wantStatus: 200},
+	})
+}
+
+// asked checks that the Git server was asked for one merge of feature at d, by method, for Olivia, past main's
+// requirements when bypass, and that the answer names main at d.
+func asked(method code.MergeMethod, bypass bool) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, f *orgFixture, body []byte) {
+		want := code.MergeRequest{Branch: "feature", Head: shaOf("d"), Base: "main", Method: method,
+			By: code.Merger{ID: f.olivia.User.ID, Name: "Olivia", Email: "olivia@example.com"}, Bypass: bypass}
+		if len(f.objects.Merges) != 1 || f.objects.Merges[0] != want {
+			t.Errorf("the Git server was asked for %+v, want %+v", f.objects.Merges, want)
+		}
+		if got := decode[MergeResult](t, body); got != (MergeResult{Base: "main", Head: shaOf("d"), Commit: shaOf("d")}) {
+			t.Errorf("merge = %s, want main at feature's head", body)
+		}
+	}
+}
+
+func TestMergeBranchAPI(t *testing.T) {
+	const feature = "/v1/orgs/acme/repos/website/branches/feature/merge"
+	// failingFor is Olivia once the Git server fails every merge with err.
+	failingFor := func(err error) func(f *orgFixture) *auth.Authenticated {
+		return func(f *orgFixture) *auth.Authenticated {
+			f.objects.Fail = err
+			return &f.olivia
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "an Owner merges a Blocked branch past main's requirements", viewer: olivia, method: "POST", path: fixed(feature), wantStatus: 200,
+			check: asked(code.MethodMerge, true)},
+		{name: "at the head the viewer saw, by a merge commit", viewer: olivia, method: "POST", path: fixed(feature),
+			body: `{"head":"` + shaOf("d") + `","method":"merge"}`, wantStatus: 200, check: asked(code.MethodMerge, true)},
+		{name: "a head the branch moved from", viewer: olivia, method: "POST", path: fixed(feature), body: `{"head":"` + shaOf("c") + `"}`,
+			wantStatus: 409, wantCode: "branch.moved"},
+		{name: "a fast-forward of a branch behind main", viewer: olivia, method: "POST", path: fixed(feature), body: `{"method":"fast_forward"}`,
+			wantStatus: 409, wantCode: code.MergeNotFastForward},
+		{name: "a method there is none of", viewer: olivia, method: "POST", path: fixed(feature), body: `{"method":"rebase"}`,
+			wantStatus: 400, wantCode: "method.invalid"},
+		{name: "a token without repo.bypass may not merge a Blocked branch", viewer: oliviaToken("repo.read", "repo.merge"), method: "POST",
+			path: fixed(feature), wantStatus: 409, wantCode: code.MergeNotReady},
+		{name: "a token without repo.merge may not merge", viewer: oliviaToken("repo.read"), method: "POST", path: fixed(feature),
+			wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "main merges into nothing", viewer: olivia, method: "POST", path: fixed("/v1/orgs/acme/repos/website/branches/main/merge"),
+			wantStatus: 400, wantCode: "branch.default"},
+		{name: "a branch that doesn't live", viewer: olivia, method: "POST", path: fixed("/v1/orgs/acme/repos/website/branches/gone/merge"),
+			wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a Member who doesn't read it finds no repository", viewer: maxim, method: "POST", path: fixed(feature),
+			wantStatus: 404, wantCode: "repository.not_found"},
+		{name: "a merge the Git server won't make", viewer: failingFor(&code.MergeError{Code: code.MergeConflict, Message: "feature and main both change README.md"}),
+			method: "POST", path: fixed(feature), wantStatus: 409, wantCode: code.MergeConflict},
+		{name: "a branch that moved while the Git server merged it", viewer: failingFor(code.ErrBranchMoved), method: "POST", path: fixed(feature),
+			wantStatus: 409, wantCode: "branch.moved"},
+		{name: "an installation without a Git server", viewer: failingFor(code.ErrUnavailable), method: "POST", path: fixed(feature),
+			wantStatus: 503, wantCode: "git.unavailable"},
 	})
 }

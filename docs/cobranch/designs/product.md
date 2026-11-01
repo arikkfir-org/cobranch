@@ -225,14 +225,14 @@ project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six mile
 slice after the ones it waits for. Where it stands:
 
 - **Done:** the design, the installable foundations, identity and organizations (sign-in, organizations and the
-  Back-office), and Git hosting.
-- **In review, merging one after another:** branch status and merges
-  ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)), browsing code and rendering Markdown in the Console
+  Back-office), Git hosting, and branch status and merges ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)).
+- **In review, merging one after another:** browsing code and rendering Markdown in the Console
   ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)), and Git objects in PostgreSQL by default
   ([ENG-237](https://linear.app/arikkfir/issue/ENG-237)).
-- **Next:** jobs from `/cobranch.yaml` ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)) once branch status lands,
-  and operators' metrics for page views, code reads and caches ([ENG-235](https://linear.app/arikkfir/issue/ENG-235)),
-  closing milestone 4. Then agents ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)) and the built-in AI reviewer
+- **Next:** jobs from `/cobranch.yaml` ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)), now that branch status
+  has landed, and operators' metrics for page views, code reads and caches
+  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235)), closing milestone 4. Then agents
+  ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)) and the built-in AI reviewer
   ([ENG-216](https://linear.app/arikkfir/issue/ENG-216)) in milestone 5, and issues linked to branches
   ([ENG-217](https://linear.app/arikkfir/issue/ENG-217)) and delivery through the built-in GitOps controller
   ([ENG-218](https://linear.app/arikkfir/issue/ENG-218)) in milestone 6.
