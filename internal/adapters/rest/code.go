@@ -56,8 +56,8 @@ func annotation(a code.Annotation) Annotation {
 	return out
 }
 
-// branch is b as the API shows it: every branch but main with its base, status, checks and facts, and any branch
-// /cobranch.yaml names with what a merge into it needs.
+// branch is b as the API shows it: every branch but main with its base, status, checks and facts, any branch
+// /cobranch.yaml names with what a merge into it needs, and any branch merged with its last merge.
 func branch(b code.Branch) Branch {
 	out := Branch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt, UpdatedAt: b.UpdatedAt, Checks: mapAll(b.Checks, check)}
 	if b.Commit != nil {
@@ -73,6 +73,9 @@ func branch(b code.Branch) Branch {
 	}
 	if r := b.Requirements; r != nil {
 		out.Requirements = &MergeRequirements{Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
+	}
+	if m := b.Merge; m != nil {
+		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
 	}
 	return out
 }

@@ -77,6 +77,16 @@ type Branch struct {
 	Facts *git.Facts
 	// Requirements are what a merge into it needs, when the default branch's /cobranch.yaml names it; nil otherwise.
 	Requirements *git.Requirements
+	// Merge is the last merge recorded of it into Base; nil when none was. It is Merged while its head is Merge's.
+	Merge *Merge
+}
+
+// Merge is a merge of a branch into its base that a push made: the head it brought in, who pushed it, nil once they
+// are gone, and when Cobranch recorded the push.
+type Merge struct {
+	Head string
+	By   *Principal
+	At   time.Time
 }
 
 // Page is a page of a branch's first-parent history, nearest first; Next is where the next page starts, empty after
