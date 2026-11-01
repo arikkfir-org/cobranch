@@ -78,6 +78,8 @@ type Transport string
 const (
 	TransportHTTPS Transport = "https"
 	TransportSSH   Transport = "ssh"
+	// TransportAPI is a merge a principal asked Cobranch for, which the Git server built.
+	TransportAPI Transport = "api"
 )
 
 // Push is a push's manifest, which the Git server records once Git has checked its objects: who pushed,
@@ -106,6 +108,9 @@ type Push struct {
 	Brought []Brought
 	// Bypass is whether the pusher holds repo.bypass, which pushes past merge requirements.
 	Bypass bool
+	// Merging is the branch a merge asked of Cobranch (TransportAPI) merges, at the head it merges: it must be Ready
+	// there, whatever its base requires, unless the pusher holds repo.bypass. nil for a client's push.
+	Merging *Head
 }
 
 // Merges are the branches whose heads the push brings into the default branch when it moves it on from a commit: the
@@ -188,10 +193,12 @@ type RefusedError struct {
 
 func (e *RefusedError) Error() string { return e.Message }
 
-// Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines.
+// Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines;
+// Stale when another push moved a ref first.
 type Answer struct {
 	Accepted bool
 	Message  string
+	Stale    bool
 }
 
 // The messages a client sees, as the design's table of accepted pushes words them.

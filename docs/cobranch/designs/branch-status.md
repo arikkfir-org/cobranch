@@ -228,12 +228,26 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
   fast-forward, which writes nothing. Where `main` requires linear history only a fast-forward is offered, and a Ready
   branch can always fast-forward, since `main`'s tip is in it. A branch merged past its requirements that is behind
   `main` takes a merge commit; with linear history required it can't be merged until it is brought up to date.
-- **The Git server builds it** on an [internal call](architecture.md#components) from the REST or GraphQL server: in a
-  throwaway repository of one snapshot, `git merge-tree --write-tree` and `git commit-tree`, then a pack of the new
-  commit, uploaded as a push's would be. It records a push of `main` for the requester, transport `api`, through the
-  same transaction and the same checks as a client's push, and answers once it is committed.
+- **The Git server builds it** on an [internal call](architecture.md#components) from the REST or GraphQL server, which
+  sends on the requester's own token: the Git server checks `repo.merge` itself, and `repo.bypass` for a merge past
+  `main`'s requirements, and merges only for that requester. It builds the merge in a throwaway repository of one
+  snapshot, `git merge-tree --write-tree` and `git commit-tree`, then a pack of the new commit, uploaded as a push's
+  would be. It records a push of `main` for the requester, transport `api`, through the same transaction and the same
+  checks as a client's push, which also hold the branch to being Ready at the head it merges, even where `main` requires
+  nothing, unless the requester holds `repo.bypass`; it answers once the push is committed.
 - **Then as any push:** the push worker records the merge, and the branch turns Merged. Code-browsing
   ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)) builds the internal call; this slice adds the merge to it.
+
+| The requester sees | When |
+| --- | --- |
+| 403 `auth.forbidden` | The requester lacks `repo.merge` |
+| 409 `branch.moved` | The branch moved from the head the request names, or it or `main` moved while the Git server built the merge |
+| 409 `branch.not_ready` | The branch isn't Ready, and the requester lacks `repo.bypass` |
+| 409 `branch.nothing_to_merge` | `main` holds every commit of the branch |
+| 409 `merge.not_fast_forward` | A fast-forward of a branch that lacks some of `main`'s commits |
+| 409 `merge.conflict` | A merge commit of changes Git can't merge, naming up to five paths |
+| 409 `merge.refused` | The push the merge records breaks a rule, such as a `/cobranch.yaml` that doesn't parse, or a branch that turned Blocked while the Git server built the merge |
+| 503 `git.unavailable` | The installation runs no Git server |
 
 ## The Console
 
@@ -247,7 +261,9 @@ Branch names carry `/`; the Console takes the rest of the path after `branches/`
   panel names `main`'s merge requirements, from `/cobranch.yaml`.
 - **A branch's page** says who wants to merge how many commits into `main`, why it is Blocked, requirement by
   requirement, its commits, and the annotations on its head. Its **Merge** button merges it for a principal with
-  `repo.merge` once it is Ready, and offers a principal with `repo.bypass` to merge it anyway.
+  `repo.merge` once it is Ready, and offers a principal with `repo.bypass` to merge it anyway, by a merge commit or a
+  fast-forward, whichever its base allows; it sends the head the page shows, so a branch that moved meanwhile isn't
+  merged.
 - **A commit's page** lists its annotations, each with its status, summary, link, principal and how long it ran, and
   offers to delete those the viewer may delete. History rows show their commits' annotations as icons.
 - **The status language** is the design system's: one word, one icon, one tone for each branch and annotation status, as
