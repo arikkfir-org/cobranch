@@ -46,6 +46,7 @@ type Credential struct {
 	Permissions []string
 	Issuer      string
 	Subject     string
+	PublicKey   string
 }
 
 type Identity struct {

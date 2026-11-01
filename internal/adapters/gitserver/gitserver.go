@@ -1,5 +1,6 @@
-// Package gitserver is the Git server: Git's smart HTTP protocol at /<org>/<repo>.git for clone, fetch and push, over
-// the git CLI. Each request serves a throwaway repository built from one snapshot of the repository's refs and packs,
+// Package gitserver is the Git server: Git's smart HTTP protocol at /<org>/<repo>.git for clone, fetch and push, and
+// SSH beside it, over the git CLI. Each request serves a throwaway repository built from one snapshot of the
+// repository's refs and packs,
 // its packs hard-linked from the pod's cache of the bucket. A push's pre-receive hook calls back into the server that
 // started it, which uploads the push's pack, builds its manifest and records the push, in one transaction, before Git
 // returns; the push worker does the rest later
@@ -28,9 +29,10 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Authenticator resolves a personal token or an API key's secret to who it acts as: auth.Service.
+// Authenticator resolves a personal token or an API key's secret, or an SSH key, to who it acts as: auth.Service.
 type Authenticator interface {
 	Authenticate(ctx context.Context, token string) (auth.Authenticated, error)
+	AuthenticateSSHKey(ctx context.Context, wire []byte) (auth.Authenticated, error)
 }
 
 // Repositories finds the repository a Git URL names, for a viewer who reads it: repos.Service.

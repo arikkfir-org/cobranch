@@ -147,7 +147,7 @@ func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
 }
 
-// CredentialKind is what a credential is: an API key's secret or a user's personal token.
+// CredentialKind is what a credential is: an API key's secret, or a user's personal token or SSH key.
 type CredentialKind string
 
 // The credential kinds.
@@ -156,28 +156,35 @@ const (
 	CredentialAPIKey CredentialKind = "api_key"
 	// CredentialPersonalToken is a personal token, which acts as the user who made it, narrowed to its permissions.
 	CredentialPersonalToken CredentialKind = "personal_token"
+	// CredentialSSHKey is an SSH public key, which acts as the user who added it, unnarrowed, as their session would.
+	CredentialSSHKey CredentialKind = "ssh_key"
 )
 
 // Credential is a secret that acts as a principal: an API key's or a user's personal token, shown once when made and
-// kept hashed. The Authorization header carries it as a bearer token, and a Git client as a password.
+// kept hashed. The Authorization header carries it as a bearer token, and a Git client as a password. A user's SSH key
+// is one too, whose secret is the private key its user keeps: a Git client proves it over SSH.
 type Credential struct {
 	ID          uuid.UUID
 	Kind        CredentialKind
 	PrincipalID uuid.UUID
-	// Hint is the secret's last four characters, which the Console shows.
+	// Hint is the secret's last four characters, which the Console shows; an SSH key's SHA256 fingerprint.
 	Hint      string
 	CreatedAt time.Time
 	CreatedBy uuid.UUID
-	// ExpiresAt is when the credential stops working; zero for one that never expires, which no personal token is.
+	// ExpiresAt is when the credential stops working; zero for one that never expires, which no personal token is and
+	// every SSH key is.
 	ExpiresAt  time.Time
 	LastUsedAt time.Time
 	RevokedAt  time.Time
-	// Name is what a personal token's user called it; an API key's secret has none.
+	// Name is what a personal token's or an SSH key's user called it; an API key's secret has none.
 	Name string
 	// Permissions are the permissions a personal token may use, sorted; nil for an API key's secret.
 	Permissions []string
 	// Issuer and Subject name the identity of the session that made a personal token; empty for an API key's secret.
 	Issuer, Subject string
+	// PublicKey is an SSH key's public half, its type and base64, as an authorized_keys line has it without a comment;
+	// empty for the others.
+	PublicKey string
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.
@@ -246,6 +253,8 @@ var (
 	ErrUnauthenticated = errors.New("the credential signs nobody in")
 	// ErrSeedOff is a seeded sign-in on an installation whose seeding is off.
 	ErrSeedOff = errors.New("seeded sign-in is off")
+	// ErrSSHKeyTaken is an SSH key a user holds already, its adder or another: a key names one user.
+	ErrSSHKeyTaken = errors.New("the SSH key is taken")
 )
 
 // ValidationError is input the domain refuses: Field names what, Code why, in the API's terms.

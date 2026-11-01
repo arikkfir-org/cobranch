@@ -296,6 +296,26 @@ type RoleInput struct {
 	Permissions []string `json:"permissions"`
 }
 
+// An SSH key, as its user sees it.
+type SSHKey struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// The key's type and base64, as an authorized_keys line has them, without its comment.
+	PublicKey string `json:"publicKey"`
+	// The key's SHA256 fingerprint, as ssh-keygen -l shows it.
+	Fingerprint string     `json:"fingerprint"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
+}
+
+// What adds an SSH key.
+type SSHKeyInput struct {
+	// What the key is for, 1 to 100 characters; the key's comment when null or empty.
+	Name *string `json:"name,omitempty"`
+	// One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
+	PublicKey string `json:"publicKey"`
+}
+
 // When a new secret stops working; a year from now when neither is given.
 type SecretInput struct {
 	// The end, in the future.
@@ -327,6 +347,8 @@ type User struct {
 	Sessions []*Session `json:"sessions"`
 	// The user's personal tokens that are not revoked, expired ones included, newest first.
 	PersonalTokens []*PersonalToken `json:"personalTokens"`
+	// The user's SSH keys, newest first.
+	SSHKeys []*SSHKey `json:"sshKeys"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.

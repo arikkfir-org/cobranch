@@ -107,10 +107,10 @@ func (s *Service) RevokeToken(ctx context.Context, userID, id uuid.UUID) error {
 	return nil
 }
 
-// authenticateCredential resolves a credential's secret of kind to whom it acts as: an API key's to the key, a
-// personal token to its user.
-func (s *Service) authenticateCredential(ctx context.Context, token string, kind CredentialKind) (Authenticated, error) {
-	credential, user, err := s.store.Credential(ctx, Hash(token))
+// authenticateCredential resolves a credential whose secret hashes to hash, of kind, to whom it acts as: an API key's
+// secret to the key, a personal token or an SSH key to its user.
+func (s *Service) authenticateCredential(ctx context.Context, hash []byte, kind CredentialKind) (Authenticated, error) {
+	credential, user, err := s.store.Credential(ctx, hash)
 	if errors.Is(err, ErrNotFound) {
 		return Authenticated{}, ErrUnauthenticated
 	}

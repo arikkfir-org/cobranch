@@ -3,8 +3,8 @@
 # its administrator among auth.admins, or upgrades it there rolling every workload, and waits for the migrate Job to
 # finish and every pod to be ready. The bucket is a file:// one on a volume every server mounts, so a pack one Git
 # server stored is every Git server's, across an upgrade too, and maintenance's, which compacts a repository's packs
-# once it has two. An upgrade must keep the generated database password,
-# and its migrate Job find nothing left to apply.
+# once it has two. The Git server serves SSH too. An upgrade must keep the generated database password and SSH host
+# key, and its migrate Job find nothing left to apply.
 set -eu
 action=$1
 ns=cobranch
@@ -28,9 +28,11 @@ set -- --namespace "$ns" --wait --wait-for-jobs --timeout 5m \
   --set blob.url=file:///var/lib/cobranch/blobs --set-json 'blob.volume={"persistentVolumeClaim":{"claimName":"blobs"}}' \
   --set urls.console=https://cobranch.test --set urls.rest=https://cobranch.test/api --set urls.auth=https://cobranch.test/auth \
   --set urls.admin=https://cobranch.test/admin --set urls.backOffice=https://cobranch.test/back-office \
-  --set urls.git=https://cobranch.test/git --set maintenance.compaction.packs=2 \
+  --set urls.git=https://cobranch.test/git --set urls.gitSsh=ssh://git@cobranch.test \
+  --set maintenance.compaction.packs=2 \
   --set seed.enabled=true --set 'auth.admins[0]=ada@cobranch.example'
 password() { kubectl -n "$ns" get secret cobranch-postgresql -o jsonpath='{.data.password}'; }
+hostKey() { kubectl -n "$ns" get secret cobranch-git-ssh-host-key -o jsonpath='{.data.key}'; }
 case "$action" in
 install)
   kubectl create namespace "$ns"
@@ -50,6 +52,7 @@ EOF
   ;;
 upgrade)
   before=$(password)
+  key=$(hostKey)
   now=$(date +%s)
   helm upgrade cobranch chart/cobranch "$@" \
     --set-string "restServer.podAnnotations.ci/rolled=$now" --set-string "graphqlServer.podAnnotations.ci/rolled=$now" \
@@ -58,6 +61,7 @@ upgrade)
     --set-string "backOffice.podAnnotations.ci/rolled=$now" --set-string "gitServer.podAnnotations.ci/rolled=$now" \
     --set-string "pushWorker.podAnnotations.ci/rolled=$now"
   [ "$(password)" = "$before" ] || { echo "The upgrade changed the database's password" >&2; exit 1; }
+  [ "$(hostKey)" = "$key" ] || { echo "The upgrade changed the Git server's SSH host key" >&2; exit 1; }
   jobs=$(kubectl -n "$ns" get jobs -l app.kubernetes.io/component=migrate -o name)
   # Helm deletes the Job the previous release named, and its new one is the only one left.
   [ -n "$jobs" ] && [ "$(echo "$jobs" | wc -l)" -eq 1 ] || { echo "The upgrade left these migrate Jobs: ${jobs:-none}" >&2; exit 1; }

@@ -18,6 +18,10 @@ type Mutation {
   createPersonalToken(input: PersonalTokenInput!): PersonalTokenCreated!
   "Revokes one of the viewer's personal tokens; the next request with it fails. False when the viewer has no such token."
   revokePersonalToken(id: ID!): Boolean!
+  "Adds an SSH key that acts as the viewer over SSH, as their session would; only from a session, never from a token or an API key."
+  addSSHKey(input: SSHKeyInput!): SSHKey!
+  "Deletes one of the viewer's SSH keys; the next connection with it fails. False when the viewer has no such key."
+  deleteSSHKey(id: ID!): Boolean!
 }
 
 "A person: a principal of kind user."
@@ -30,6 +34,8 @@ type User {
   sessions: [Session!]!
   "The user's personal tokens that are not revoked, expired ones included, newest first."
   personalTokens: [PersonalToken!]!
+  "The user's SSH keys, newest first."
+  sshKeys: [SSHKey!]!
 }
 
 type Email {
@@ -79,6 +85,26 @@ type PersonalTokenCreated {
   token: PersonalToken!
   "The token, to give a Git client as its password or a script as its bearer token."
   secret: String!
+}
+
+"An SSH key, as its user sees it."
+type SSHKey {
+  id: ID!
+  name: String!
+  "The key's type and base64, as an authorized_keys line has them, without its comment."
+  publicKey: String!
+  "The key's SHA256 fingerprint, as ssh-keygen -l shows it."
+  fingerprint: String!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
+"What adds an SSH key."
+input SSHKeyInput {
+  "What the key is for, 1 to 100 characters; the key's comment when null or empty."
+  name: String
+  "One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more."
+  publicKey: String!
 }
 
 "The scopes roles are granted at. Repositories come with their slice."

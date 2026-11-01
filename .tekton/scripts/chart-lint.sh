@@ -1,8 +1,8 @@
 #!/bin/sh
-# Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, Google and
-# traces, and with an external database, one host with a path per workload, another provider, an autoscaled push
-# worker and no traces. Writes the bundled PostgreSQL's image to
-# .ci/postgresql-image, for the cluster to load.
+# Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, SSH behind a
+# load balancer, Google and traces, and with an external database, one host with a path per workload, SSH with the
+# operator's host key, another provider, an autoscaled push worker and no traces. Writes the bundled PostgreSQL's
+# image to .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
 out=.ci/manifests
@@ -12,7 +12,8 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranc
   --set urls.console=https://cobranch.example.com --set urls.rest=https://api.cobranch.example.com \
   --set urls.graphql=https://graphql.cobranch.example.com --set urls.auth=https://auth.cobranch.example.com \
   --set urls.admin=https://admin-api.cobranch.example.com --set urls.backOffice=https://admin.cobranch.example.com \
-  --set urls.git=https://git.cobranch.example.com \
+  --set urls.git=https://git.cobranch.example.com --set urls.gitSsh=ssh://git@git.cobranch.example.com \
+  --set gitServer.ssh.service.type=LoadBalancer \
   --set 'auth.providers[0].id=google' --set 'auth.providers[0].name=Google' --set 'auth.providers[0].preset=google' \
   --set 'auth.providers[0].clientId=1234.apps.googleusercontent.com' \
   --set 'auth.providers[0].clientSecret.secretName=cobranch-google' --set 'auth.admins[0]=alice@example.com' \
@@ -26,6 +27,8 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranc
   --set urls.graphql=https://cobranch.example.com/graphql --set urls.auth=https://cobranch.example.com/auth \
   --set urls.admin=https://cobranch.example.com/admin --set urls.backOffice=https://cobranch.example.com/back-office \
   --set urls.git=https://cobranch.example.com/git --set pushWorker.replicas=null \
+  --set urls.gitSsh=ssh://git@cobranch.example.com:2222 --set gitServer.ssh.service.port=2222 \
+  --set gitServer.ssh.hostKey.existingSecret=cobranch-ssh-host-key \
   --set 'auth.providers[0].id=my-idp' --set 'auth.providers[0].issuer=https://idp.example.com' \
   --set 'auth.providers[0].clientId=cobranch' --set 'auth.providers[0].clientSecret.secretName=cobranch-idp' \
   --set 'auth.providers[0].clientSecret.key=secret' --set auth.signUp=domains --set 'auth.signUpDomains[0]=example.com' \

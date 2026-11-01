@@ -210,6 +210,11 @@ hosts the session cookie is set for. */}}
 {{ .Values.secretsKey.existingSecret | default (printf "%s-secrets-key" (include "cobranch.fullname" .)) }}
 {{- end -}}
 
+{{/* The Secret that holds the Git server's SSH host key: the operator's, or the one the chart generates. */}}
+{{- define "cobranch.gitSSHHostKey.secret" -}}
+{{ .Values.gitServer.ssh.hostKey.existingSecret | default (printf "%s-git-ssh-host-key" (include "cobranch.fullname" .)) }}
+{{- end -}}
+
 {{/* The secrets key, which the Auth and Admin servers read: it seals the Back-office's providers' client secrets. */}}
 {{- define "cobranch.secretsKeyEnv" -}}
 - name: COBRANCH_SECRETS_KEY

@@ -55,11 +55,12 @@ throwaway kind cluster. A privileged Docker daemon runs beside its steps and lis
 lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
 `cobranch`, `cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, and `cluster` creates
 the cluster there and loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the
-migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, and the
-Console and the Back-office serve their pages and the APIs' URLs. `upgrade` rolls every pod, and fails if the generated
-database password changed or its migrate Job applied anything; `retest` tests again. `maintenance` runs the maintenance
-CronJob once, which must compact the two packs the tests pushed, and `test-compacted` tests on the compacted pack. Both
-tasks clone the commit with one StepAction.
+migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, the Console
+and the Back-office serve their pages and the APIs' URLs, a seeded user clones a repository over HTTPS, pushes to it and
+finds the push, and the Git server's SSH Service answers. `upgrade` rolls every pod, and fails if the generated database
+password or the SSH host key changed or its migrate Job applied anything; `retest` tests again. `maintenance` runs the
+maintenance CronJob once, which must compact the two packs the tests pushed, and `test-compacted` tests on the compacted
+pack. Both tasks clone the commit with one StepAction.
 
 **Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
 

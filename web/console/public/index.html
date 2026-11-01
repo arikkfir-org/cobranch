@@ -6,9 +6,9 @@
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
        members, roles and settings under its slug, its repositories under theirs with their branches, history and
-       commits, and the viewer's own settings with their personal tokens. The design system's colours (docs/cobranch/designs/design-system), the REST
-       API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URL a
-       repository's clone URL starts with, when it names one. Caddy serves this page for
+       commits, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
+       API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
+       HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
        then the repository's page, then what that page shows: a branch's name or a commit's. -->
   <style>
@@ -138,7 +138,7 @@
     label { display: grid; gap: 4px; font-weight: 500; }
     label span { color: var(--color-fg-muted); font-weight: 400; font-size: 12px; }
     label.check { grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
-    input, select {
+    input, select, textarea {
       padding: 7px 10px;
       border-radius: 8px;
       border: 1px solid var(--color-border-default);
@@ -214,7 +214,7 @@
     };
     // The Console's own paths, which no organization's slug is.
     const reserved = ["sign-in", "new", "join", "invitations", "me", "settings"];
-    let config = { restUrl: "", authUrl: "", gitUrl: "" };
+    let config = { restUrl: "", authUrl: "", gitUrl: "", gitSshUrl: "" };
     let me = null;
     let orgs = [];
     let roles = []; // the roles the organization shown grants
@@ -280,7 +280,7 @@
     // The first load: where the APIs are, the version, and who the viewer is.
     // config.json sits beside the page's directory: for the Console's root without a trailing slash too.
     fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json()).then(async (c) => {
-      config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "", gitUrl: (c.gitUrl || "").replace(/\/$/, "") };
+      config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "", gitUrl: (c.gitUrl || "").replace(/\/$/, ""), gitSshUrl: (c.gitSshUrl || "").replace(/\/$/, "") };
       if (c.consoleUrl) base = new URL(c.consoleUrl).pathname.replace(/\/?$/, "/");
       try {
         me = await api("GET", "/me");
@@ -502,20 +502,31 @@
       ? [person.name, " ", h("span", { class: "chip", title: "The user who holds " + person.email }, person.principal.displayName)] : person.name;
 
     // repositoryCode is a repository's Code page: how to clone it, and push to it for a viewer who may, over HTTPS with
-    // a personal token as the password. An installation that names no Git server has nothing to clone yet.
+    // a personal token as the password, or over SSH with one of their SSH keys. An installation that names no Git
+    // server has nothing to clone yet.
     function repositoryCode(org, repo, push) {
       const facts = h("p", {}, "It opens on branch ", h("code", {}, "main"), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".");
-      if (!config.gitUrl) return h("section", { class: "panel" }, h("h3", {}, "Code"),
+      if (!config.gitUrl && !config.gitSshUrl) return h("section", { class: "panel" }, h("h3", {}, "Code"),
         h("p", {}, "This installation's Git server has no address yet, so its repositories can't be cloned. Its operator gives it one."), facts);
-      const url = config.gitUrl + "/" + org.slug + "/" + repo.slug + ".git";
+      const path = "/" + org.slug + "/" + repo.slug + ".git";
+      const settings = (text) => h("a", { href: base + "settings", "data-nav": "" }, text);
+      const ways = [];
+      if (config.gitUrl) ways.push(cloneURL("HTTPS", config.gitUrl + path),
+        h("p", {}, "Over HTTPS, Git asks for a password: give it a ", settings("personal token"), ", with any user name. ",
+          push ? "Pushing takes a token that may push, as tokens do unless you narrow them." : ""));
+      if (config.gitSshUrl) ways.push(cloneURL("SSH", config.gitSshUrl + path),
+        h("p", {}, "Over SSH, Git signs in with one of ", settings("your SSH keys"), ", which acts as you, unnarrowed."));
+      if (!push) ways.push(h("p", {}, "You may read this repository, but not push to it."));
+      return h("section", { class: "panel" }, h("h3", {}, "Clone"), ...ways, facts);
+    }
+
+    // cloneURL is one way to clone a repository: its name and URL, with a button that copies the URL.
+    function cloneURL(name, url) {
       const code = h("code", {}, url);
       const copy = h("button", { class: "button small", type: "button", onclick: () => {
         navigator.clipboard.writeText(url).then(() => { copy.textContent = "Copied"; }).catch(() => { getSelection().selectAllChildren(code); });
       } }, "Copy");
-      return h("section", { class: "panel" }, h("h3", {}, "Clone"), h("div", { class: "row" }, code, copy),
-        h("p", {}, "Git asks for a password: give it a ", h("a", { href: base + "settings", "data-nav": "" }, "personal token"), ", with any user name. ",
-          push ? "Pushing takes a token that may push, as tokens do unless you narrow them." : "You may read this repository, but not push to it."),
-        facts);
+      return h("div", { class: "row" }, h("span", { class: "chip" }, name), code, copy);
     }
 
     // repositoryHistory is a branch's first-parent history, nearest first, a page at a time, under a picker of the
@@ -744,10 +755,11 @@
     }
 
     // viewerLinks are the bar's links of the viewer's own: their settings, under their name, and signing out.
-    const viewerLinks = () => [h("a", { href: base + "settings", "data-nav": "", title: "Your settings and personal tokens" }, me.displayName),
+    const viewerLinks = () => [h("a", { href: base + "settings", "data-nav": "", title: "Your settings, personal tokens and SSH keys" }, me.displayName),
       h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out")];
 
-    // The viewer's own settings: their personal tokens, which act as them wherever a password or a bearer token goes.
+    // The viewer's own settings: their personal tokens, which act as them wherever a password or a bearer token goes,
+    // and their SSH keys, which act as them over SSH.
     async function showMySettings(shown = null) {
       const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"),
         h("nav", {}, h("a", { href: base + "settings", "data-nav": "", class: "current" }, "Your settings")), h("span", { class: "spacer" }), ...viewerLinks());
@@ -757,7 +769,7 @@
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = (created) => showMySettings(created || null).catch(fail);
-      const tokens = (await api("GET", "/me/tokens")).tokens;
+      const [tokens, keys] = await Promise.all([api("GET", "/me/tokens").then((d) => d.tokens), api("GET", "/me/ssh-keys").then((d) => d.sshKeys)]);
       const state = (t) => (new Date(t.expiresAt) <= Date.now() ? "expired " + when(t.expiresAt) : "expires " + when(t.expiresAt)) +
         (t.lastUsedAt ? ", last used " + when(t.lastUsedAt) : ", never used");
       const row = (t) => h("tr", {}, h("td", {}, t.name, h("p", {}, "made " + when(t.createdAt))),
@@ -782,7 +794,29 @@
         } }, h("label", {}, "Name", h("span", {}, "What it's for, so you know which to revoke."), name),
           h("label", {}, "Permissions", h("span", {}, "Reading and pushing to repositories is what Git needs."), h("div", { class: "picks" }, picks)), lifetime.el,
           h("div", {}, h("button", { class: "button primary", type: "submit" }, "Make the token")))));
+      sections.push(...sshKeySections(keys, refresh, fail));
       main.replaceChildren(...sections);
+    }
+
+    // sshKeySections are the settings' SSH keys: the viewer's, each with its fingerprint and a button that deletes it,
+    // and the form that adds one.
+    function sshKeySections(keys, refresh, fail) {
+      const row = (k) => h("tr", {}, h("td", {}, k.name, h("p", {}, "added " + when(k.createdAt))),
+        h("td", {}, h("code", {}, k.fingerprint), h("p", { class: "muted" }, k.lastUsedAt ? "last used " + when(k.lastUsedAt) : "never used")),
+        h("td", { class: "actions" }, h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/me/ssh-keys/" + k.id).then(() => refresh()).catch(fail) }, "Delete")));
+      const name = h("input", { name: "name", maxlength: 100, placeholder: "Laptop" });
+      const publicKey = h("textarea", { name: "publicKey", required: true, rows: 3, placeholder: "ssh-ed25519 AAAA… you@laptop" });
+      return [h("section", { class: "panel" }, h("h3", {}, "SSH keys"),
+        h("p", {}, "An SSH key acts as you over SSH, with everything your roles give: Git signs in with it instead of a password. It works until you delete it."),
+        keys.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Key"), h("th", {}, "Fingerprint"), h("th", {}))), h("tbody", {}, keys.map(row)))
+          : h("p", {}, "No SSH keys yet.")),
+      h("section", { class: "panel" }, h("h3", {}, "Add an SSH key"),
+        h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          api("POST", "/me/ssh-keys", { name: name.value, publicKey: publicKey.value }).then(() => refresh()).catch(fail);
+        } }, h("label", {}, "Public key", h("span", {}, "The line of your .pub file: Ed25519, ECDSA, or RSA of 2048 bits or more."), publicKey),
+          h("label", {}, "Name", h("span", {}, "What it's for; the key's comment when empty."), name),
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Add the key"))))];
     }
 
     // revealToken shows a personal token just made, which the API never shows again.

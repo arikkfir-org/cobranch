@@ -1,15 +1,19 @@
 // Package authtest holds fakes of the sign-in domain's ports, for the tests of its service and of the adapters that
-// serve it: a Provider that signs anyone in as fixed claims and a Store in memory.
+// serve it: a Provider that signs anyone in as fixed claims, a Store in memory, and SSH keys to add to it.
 package authtest
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"errors"
 	"slices"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/ssh"
 
 	"cobranch.dev/internal/services/auth"
 )
@@ -123,6 +127,47 @@ func (s *Store) RevokeToken(_ context.Context, userID, id uuid.UUID, at time.Tim
 		if c.ID == id && c.Kind == auth.CredentialPersonalToken && c.PrincipalID == userID && c.RevokedAt.IsZero() {
 			c.RevokedAt = at
 			s.Credentials[k] = c
+			return nil
+		}
+	}
+	return auth.ErrNotFound
+}
+
+// AddSSHKey records SSH key k by hash: auth.ErrSSHKeyTaken when a key of that hash is there.
+func (s *Store) AddSSHKey(_ context.Context, k auth.Credential, hash []byte) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	if _, ok := s.Credentials[string(hash)]; ok {
+		return auth.ErrSSHKeyTaken
+	}
+	s.Credentials[string(hash)] = k
+	return nil
+}
+
+// SSHKeys lists a user's SSH keys, newest first.
+func (s *Store) SSHKeys(_ context.Context, userID uuid.UUID) ([]auth.Credential, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []auth.Credential
+	for _, c := range s.Credentials {
+		if c.Kind == auth.CredentialSSHKey && c.PrincipalID == userID {
+			out = append(out, c)
+		}
+	}
+	slices.SortFunc(out, func(a, b auth.Credential) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
+}
+
+// DeleteSSHKey deletes a user's SSH key.
+func (s *Store) DeleteSSHKey(_ context.Context, userID, id uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	for k, c := range s.Credentials {
+		if c.ID == id && c.Kind == auth.CredentialSSHKey && c.PrincipalID == userID {
+			delete(s.Credentials, k)
 			return nil
 		}
 	}
@@ -374,4 +419,23 @@ func (s Sealer) Open(sealed []byte, about string) ([]byte, error) {
 		return nil, errors.New("doesn't open")
 	}
 	return sealed[len(prefix):], nil
+}
+
+// NewSSHKey is a new Ed25519 SSH key, for a test to add its public half and sign in with it.
+func NewSSHKey(t testing.TB) ssh.Signer {
+	t.Helper()
+	_, private, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer, err := ssh.NewSignerFromKey(private)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signer
+}
+
+// AuthorizedKey is key as an authorized_keys line has it, with comment.
+func AuthorizedKey(key ssh.PublicKey, comment string) string {
+	return strings.TrimSpace(strings.TrimSpace(string(ssh.MarshalAuthorizedKey(key))) + " " + comment)
 }

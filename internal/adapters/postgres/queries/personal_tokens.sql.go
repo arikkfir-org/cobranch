@@ -49,7 +49,7 @@ func (q *Queries) InsertPersonalToken(ctx context.Context, arg InsertPersonalTok
 }
 
 const personalTokens = `-- name: PersonalTokens :many
-SELECT id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, last_used_at, revoked_at, name, permissions, issuer, subject FROM credentials WHERE principal_id = $1 AND kind = 'personal_token' AND revoked_at IS NULL
+SELECT id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, last_used_at, revoked_at, name, permissions, issuer, subject, public_key FROM credentials WHERE principal_id = $1 AND kind = 'personal_token' AND revoked_at IS NULL
 ORDER BY created_at DESC, id
 `
 
@@ -78,6 +78,7 @@ func (q *Queries) PersonalTokens(ctx context.Context, principalID uuid.UUID) ([]
 			&i.Permissions,
 			&i.Issuer,
 			&i.Subject,
+			&i.PublicKey,
 		); err != nil {
 			return nil, err
 		}
