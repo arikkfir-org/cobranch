@@ -277,9 +277,9 @@ func (s *Server) output(ctx context.Context, env []string, stdin string, args ..
 	return string(out), nil
 }
 
-// storePack uploads the push's pack from its quarantine to the bucket, the pack's index first, and keeps it in the
-// cache: nil when the push brought no objects. The pack is listed only once the push is recorded, so a push that
-// fails leaves files no row lists, which maintenance deletes.
+// storePack uploads the push's pack from its quarantine to the bucket, as an upload of its own and the pack's index
+// first, and keeps it in the cache: nil when the push brought no objects. The pack is listed only once the push is
+// recorded, so a push that fails leaves files no row lists, which maintenance deletes.
 func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (*git.Pack, error) {
 	if quarantine == "" {
 		return nil, nil
@@ -297,9 +297,10 @@ func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (
 	if err != nil {
 		return nil, err
 	}
+	upload := uuid.Must(uuid.NewV7())
 	var size int64
 	for _, suffix := range packFiles {
-		n, err := s.upload(ctx, packKey(p.repo.ID, name+suffix), at(name+suffix))
+		n, err := s.upload(ctx, packKey(p.repo.ID, upload, name+suffix), at(name+suffix))
 		if err != nil {
 			return nil, err
 		}
@@ -312,7 +313,7 @@ func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (
 	if err != nil {
 		return nil, fmt.Errorf("reading the pack's size: %w", err)
 	}
-	return &git.Pack{Name: name, Size: info.Size(), Objects: objects}, nil
+	return &git.Pack{Name: name, Upload: upload, Size: info.Size(), Objects: objects}, nil
 }
 
 // upload copies file to the bucket's object key, and returns its size.

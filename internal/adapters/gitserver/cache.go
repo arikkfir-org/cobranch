@@ -14,18 +14,21 @@ import (
 	"github.com/google/uuid"
 	"gocloud.dev/blob"
 	"golang.org/x/sync/singleflight"
+
+	"cobranch.dev/internal/services/git"
 )
 
 // packFiles are the files of a pack, each named <pack><suffix>.
 var packFiles = []string{".idx", ".pack"}
 
-// packKey is where the bucket keeps a repository's pack file.
-func packKey(repoID uuid.UUID, file string) string {
-	return "git/" + repoID.String() + "/" + file
+// packKey is where the bucket keeps a file of one upload of a repository's pack.
+func packKey(repoID, upload uuid.UUID, file string) string {
+	return "git/" + repoID.String() + "/" + upload.String() + "/" + file
 }
 
 // cache keeps packs from the bucket on the pod's disk, a directory per repository, and evicts the least recently used
-// repositories' packs once they pass its limit. A fetch hard-links the packs it serves from the cache, so eviction may
+// repositories' packs once they pass its limit. It keeps a pack by its name, whichever upload it came from: a pack's
+// name is its content's hash. A fetch hard-links the packs it serves from the cache, so eviction may
 // delete any file at any time: a fetch in flight keeps the packs it linked.
 type cache struct {
 	dir    string
@@ -55,12 +58,12 @@ func (c *cache) path(repoID uuid.UUID, file string) string {
 
 // link hard-links pack's files into dir, fetching them from the bucket first when the cache lacks them, and again
 // when an eviction deleted them in between.
-func (c *cache) link(ctx context.Context, repoID uuid.UUID, pack, dir string) error {
+func (c *cache) link(ctx context.Context, repoID uuid.UUID, pack git.Pack, dir string) error {
 	for attempt := 0; ; attempt++ {
 		if err := c.ensure(ctx, repoID, pack); err != nil {
 			return err
 		}
-		err := linkFiles(func(file string) string { return c.path(repoID, file) }, pack, dir)
+		err := linkFiles(func(file string) string { return c.path(repoID, file) }, pack.Name, dir)
 		if err == nil || !errors.Is(err, fs.ErrNotExist) || attempt > 0 {
 			return err
 		}
@@ -78,26 +81,26 @@ func linkFiles(from func(file string) string, pack, dir string) error {
 }
 
 // ensure makes the cache hold pack, downloading it once however many requests want it at once.
-func (c *cache) ensure(ctx context.Context, repoID uuid.UUID, pack string) error {
+func (c *cache) ensure(ctx context.Context, repoID uuid.UUID, pack git.Pack) error {
 	c.mu.Lock()
 	r := c.repos[repoID]
-	if r != nil && r.packs[pack] {
+	if r != nil && r.packs[pack.Name] {
 		r.used = time.Now()
 		c.mu.Unlock()
 		return nil
 	}
 	c.mu.Unlock()
-	_, err, _ := c.flight.Do(repoID.String()+"/"+pack, func() (any, error) {
+	_, err, _ := c.flight.Do(repoID.String()+"/"+pack.Name, func() (any, error) {
 		return nil, c.download(context.WithoutCancel(ctx), repoID, pack)
 	})
 	if err != nil {
-		return fmt.Errorf("fetching pack %s of repository %s: %w", pack, repoID, err)
+		return fmt.Errorf("fetching pack %s of repository %s: %w", pack.Name, repoID, err)
 	}
 	return nil
 }
 
 // download fetches pack's files from the bucket into the cache's incoming directory, then moves them in.
-func (c *cache) download(ctx context.Context, repoID uuid.UUID, pack string) error {
+func (c *cache) download(ctx context.Context, repoID uuid.UUID, pack git.Pack) error {
 	incoming, err := os.MkdirTemp(filepath.Join(c.dir, incomingDir), "pack-")
 	if err != nil {
 		return fmt.Errorf("making a directory to download into: %w", err)
@@ -105,13 +108,13 @@ func (c *cache) download(ctx context.Context, repoID uuid.UUID, pack string) err
 	defer func() { _ = os.RemoveAll(incoming) }() // emptied by the move, or left from a failure
 	var size int64
 	for _, suffix := range packFiles {
-		n, err := c.fetch(ctx, packKey(repoID, pack+suffix), filepath.Join(incoming, pack+suffix))
+		n, err := c.fetch(ctx, packKey(repoID, pack.Upload, pack.Name+suffix), filepath.Join(incoming, pack.Name+suffix))
 		if err != nil {
 			return err
 		}
 		size += n
 	}
-	return c.add(repoID, pack, size, func(file string) string { return filepath.Join(incoming, file) }, os.Rename)
+	return c.add(repoID, pack.Name, size, func(file string) string { return filepath.Join(incoming, file) }, os.Rename)
 }
 
 // fetch copies the bucket's object key into file, and returns its size.

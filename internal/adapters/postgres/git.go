@@ -43,7 +43,13 @@ func (s *GitStore) Snapshot(ctx context.Context, repoID uuid.UUID) (git.Snapshot
 	if len(row.RefNames) != len(row.RefShas) {
 		return git.Snapshot{}, fmt.Errorf("reading the snapshot: %d refs with %d objects", len(row.RefNames), len(row.RefShas))
 	}
-	snapshot := git.Snapshot{Packs: row.Packs}
+	if len(row.Packs) != len(row.PackUploads) {
+		return git.Snapshot{}, fmt.Errorf("reading the snapshot: %d packs, %d uploads", len(row.Packs), len(row.PackUploads))
+	}
+	snapshot := git.Snapshot{}
+	for i, name := range row.Packs {
+		snapshot.Packs = append(snapshot.Packs, git.Pack{Name: name, Upload: row.PackUploads[i]})
+	}
 	for i, name := range row.RefNames {
 		snapshot.Refs = append(snapshot.Refs, git.Ref{Name: name, SHA: row.RefShas[i]})
 	}
@@ -115,7 +121,8 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	pack := ""
 	if push.Pack != nil {
 		pack = push.Pack.Name
-		if err := q.InsertPack(ctx, queries.InsertPackParams{RepoID: push.RepoID, Name: pack, OrgID: orgID, Size: push.Pack.Size, Objects: push.Pack.Objects}); err != nil {
+		if err := q.InsertPack(ctx, queries.InsertPackParams{RepoID: push.RepoID, Name: pack, OrgID: orgID, Upload: push.Pack.Upload,
+			Size: push.Pack.Size, Objects: push.Pack.Objects}); err != nil {
 			return fmt.Errorf("listing the pack: %w", err)
 		}
 	}

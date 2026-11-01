@@ -50,7 +50,7 @@ func person(name, email string) git.Person {
 func pushOf(repo uuid.UUID, pusher uuid.UUID, pack string, updates []git.RefUpdate, commits ...git.Commit) git.Push {
 	p := git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: repo, PusherID: pusher, Transport: git.TransportHTTPS, Updates: updates, Commits: commits, ReceivedAt: now}
 	if pack != "" {
-		p.Pack = &git.Pack{Name: pack, Size: 100, Objects: int64(len(commits)) * 3}
+		p.Pack = &git.Pack{Name: pack, Upload: uuid.Must(uuid.NewV7()), Size: 100, Objects: int64(len(commits)) * 3}
 	}
 	return p
 }
@@ -92,7 +92,7 @@ func TestGitStoreRecord(t *testing.T) {
 		t.Errorf("the push worker processed %d pushes, want 1", n)
 	}
 	snapshot, err := f.g.Snapshot(ctx, f.website.ID)
-	if err != nil || len(snapshot.Refs) != 1 || snapshot.Refs[0] != (git.Ref{Name: "refs/heads/main", SHA: shaA}) || len(snapshot.Packs) != 1 || snapshot.Packs[0] != "pack-1" {
+	if err != nil || len(snapshot.Refs) != 1 || snapshot.Refs[0] != (git.Ref{Name: "refs/heads/main", SHA: shaA}) || len(snapshot.Packs) != 1 || snapshot.Packs[0] != (git.Pack{Name: "pack-1", Upload: first.Pack.Upload}) {
 		t.Errorf("Snapshot() = %+v, %v", snapshot, err)
 	}
 	for query, want := range map[string]int{
@@ -156,6 +156,49 @@ func TestGitStoreRecordStale(t *testing.T) {
 	}
 }
 
+// TestGitStorePackAgain records pushes that bring a pack the repository lists already: the same objects, under the
+// same name, in an upload of their own.
+func TestGitStorePackAgain(t *testing.T) {
+	f := newGitFixture(t)
+	ctx := context.Background()
+	first := pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/feature", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com")))
+	again := pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/other", Old: git.ZeroSHA, New: shaA}})
+	steps := []struct {
+		name       string
+		push       git.Push
+		supersede  bool
+		wantUpload uuid.UUID
+	}{
+		{name: "a first push", push: first, wantUpload: first.Pack.Upload},
+		{name: "deleting the branch", push: pushOf(f.website.ID, f.olivia, "", []git.RefUpdate{{Name: "refs/heads/feature", Old: shaA, New: git.ZeroSHA}}),
+			wantUpload: first.Pack.Upload},
+		// The active pack keeps the upload it lists, whose files fetches may be reading; the new upload's go unlisted.
+		{name: "pushing it again", push: pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/feature", Old: git.ZeroSHA, New: shaA}}),
+			wantUpload: first.Pack.Upload},
+		// A pack compaction superseded turns active again with the new upload: maintenance may be deleting the old one's
+		// files.
+		{name: "pushing a superseded pack", push: again, supersede: true, wantUpload: again.Pack.Upload},
+	}
+	for _, step := range steps {
+		if step.supersede {
+			if _, err := f.pool.Exec(ctx, "UPDATE packs SET state = 'superseded', superseded_at = now() WHERE repo_id = $1", f.website.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := f.g.Record(ctx, step.push); err != nil {
+			t.Fatalf("%s: Record() = %v", step.name, err)
+		}
+		snapshot, err := f.g.Snapshot(ctx, f.website.ID)
+		if err != nil || len(snapshot.Packs) != 1 || snapshot.Packs[0] != (git.Pack{Name: "pack-1", Upload: step.wantUpload}) {
+			t.Errorf("%s: Snapshot() = %+v, %v, want pack-1 active in upload %s", step.name, snapshot, err, step.wantUpload)
+		}
+	}
+	if got := count(t, f.pool, "SELECT count(*) FROM packs WHERE repo_id = $1 AND state = 'active' AND superseded_at IS NULL", f.website.ID); got != 1 {
+		t.Errorf("%d active packs, want pack-1 alone", got)
+	}
+}
+
 func TestGitStoreBranches(t *testing.T) {
 	f := newGitFixture(t)
 	ctx := context.Background()
@@ -175,7 +218,7 @@ func TestGitStoreBranches(t *testing.T) {
 	f.process(t)
 	snapshot, err := f.g.Snapshot(ctx, f.website.ID)
 	want := []git.Ref{{Name: "refs/heads/feature", SHA: shaB}, {Name: "refs/heads/main", SHA: shaB}, {Name: "refs/tags/v1", SHA: shaA}}
-	if err != nil || len(snapshot.Refs) != len(want) || len(snapshot.Packs) != 2 || snapshot.Packs[0] != "pack-1" {
+	if err != nil || len(snapshot.Refs) != len(want) || len(snapshot.Packs) != 2 || snapshot.Packs[0].Name != "pack-1" {
 		t.Fatalf("Snapshot() = %+v, %v", snapshot, err)
 	}
 	for i := range want {

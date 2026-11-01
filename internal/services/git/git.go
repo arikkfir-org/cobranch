@@ -27,15 +27,18 @@ type Ref struct {
 }
 
 // Snapshot is what a fetch serves from: a repository's refs and its active packs, read at one moment, so every ref's
-// objects are in a pack it lists.
+// objects are in a pack it lists. Its packs carry their Name and Upload.
 type Snapshot struct {
 	Refs  []Ref
-	Packs []string
+	Packs []Pack
 }
 
-// Pack is a pack a push brought, as the bucket holds it: git/<repo-id>/<Name>.pack and its .idx.
+// Pack is a pack of a repository's objects as the bucket holds it: git/<repo-id>/<Upload>/<Name>.pack and its .idx. A
+// pack's name is its content's hash, so a push that brings the same objects again brings a pack of the same name; each
+// upload of a pack's files has an ID of its own, so maintenance deletes only an upload no row lists.
 type Pack struct {
 	Name    string
+	Upload  uuid.UUID
 	Size    int64
 	Objects int64
 }

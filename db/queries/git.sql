@@ -4,7 +4,8 @@
 SELECT
     coalesce((SELECT array_agg(f.name ORDER BY f.name) FROM refs f WHERE f.repo_id = $1), '{}')::text[] AS ref_names,
     coalesce((SELECT array_agg(f.sha ORDER BY f.name) FROM refs f WHERE f.repo_id = $1), '{}')::text[] AS ref_shas,
-    coalesce((SELECT array_agg(p.name ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::text[] AS packs;
+    coalesce((SELECT array_agg(p.name ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::text[] AS packs,
+    coalesce((SELECT array_agg(p.upload ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::uuid[] AS pack_uploads;
 
 -- LockRepository locks a repository's row for a push, so pushes into one repository apply one at a time.
 -- name: LockRepository :one
@@ -16,8 +17,13 @@ SELECT EXISTS (SELECT 1 FROM pushes WHERE id = $1);
 -- name: RefsOf :many
 SELECT name, sha FROM refs WHERE repo_id = $1;
 
+-- InsertPack lists a pack. A pack the repository lists already, which a push brought again, keeps its upload while
+-- active; one compaction superseded turns active again, with this upload's files, as maintenance may be deleting the
+-- old upload's.
 -- name: InsertPack :exec
-INSERT INTO packs (repo_id, name, org_id, size, objects) VALUES (@repo_id, @name, @org_id, @size, @objects);
+INSERT INTO packs (repo_id, name, org_id, upload, size, objects) VALUES (@repo_id, @name, @org_id, @upload, @size, @objects)
+ON CONFLICT (repo_id, name) DO UPDATE SET upload = EXCLUDED.upload, state = 'active', superseded_at = NULL
+WHERE packs.state <> 'active';
 
 -- name: InsertPush :exec
 INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent)

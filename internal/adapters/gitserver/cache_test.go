@@ -10,7 +10,16 @@ import (
 	gocloudblob "gocloud.dev/blob"
 
 	"cobranch.dev/internal/adapters/blob"
+	"cobranch.dev/internal/services/git"
 )
+
+// testUpload is the upload every test pack's files are in.
+var testUpload = uuid.MustParse("01a19711-0000-7000-8000-000000000001")
+
+// testPack is the test pack of that name.
+func testPack(name string) git.Pack {
+	return git.Pack{Name: name, Upload: testUpload}
+}
 
 // newTestCache is a cache of limit bytes over a file:// bucket that holds packs, each of its repositories' packs
 // named there, 10 bytes in all.
@@ -24,7 +33,7 @@ func newTestCache(t *testing.T, limit int64, packs map[uuid.UUID][]string) (*cac
 	for repo, names := range packs {
 		for _, name := range names {
 			for suffix, content := range map[string]string{".idx": "index", ".pack": "packs"} {
-				if err := bucket.WriteAll(t.Context(), packKey(repo, name+suffix), []byte(content), nil); err != nil {
+				if err := bucket.WriteAll(t.Context(), packKey(repo, testUpload, name+suffix), []byte(content), nil); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -41,7 +50,7 @@ func newTestCache(t *testing.T, limit int64, packs map[uuid.UUID][]string) (*cac
 func linkInto(t *testing.T, c *cache, repo uuid.UUID, pack string) {
 	t.Helper()
 	dir := t.TempDir()
-	if err := c.link(t.Context(), repo, pack, dir); err != nil {
+	if err := c.link(t.Context(), repo, testPack(pack), dir); err != nil {
 		t.Fatalf("link(%s): %v", pack, err)
 	}
 	for _, suffix := range packFiles {
@@ -57,7 +66,7 @@ func TestCacheLink(t *testing.T) {
 	linkInto(t, c, a, "pack-1")
 	// Once cached, a pack no longer needs the bucket.
 	for _, suffix := range packFiles {
-		if err := bucket.Delete(t.Context(), packKey(a, "pack-1"+suffix)); err != nil {
+		if err := bucket.Delete(t.Context(), packKey(a, testUpload, "pack-1"+suffix)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -65,7 +74,7 @@ func TestCacheLink(t *testing.T) {
 	if c.size != 10 || c.repos[a].size != 10 {
 		t.Errorf("the cache counts %d bytes, %d of them the repository's; want 10", c.size, c.repos[a].size)
 	}
-	if err := c.link(t.Context(), a, "pack-2", t.TempDir()); err == nil {
+	if err := c.link(t.Context(), a, testPack("pack-2"), t.TempDir()); err == nil {
 		t.Error("link() of a pack the bucket lacks succeeded")
 	}
 }

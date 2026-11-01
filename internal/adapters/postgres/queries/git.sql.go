@@ -122,22 +122,29 @@ func (q *Queries) InsertBranch(ctx context.Context, arg InsertBranchParams) erro
 }
 
 const insertPack = `-- name: InsertPack :exec
-INSERT INTO packs (repo_id, name, org_id, size, objects) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO packs (repo_id, name, org_id, upload, size, objects) VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (repo_id, name) DO UPDATE SET upload = EXCLUDED.upload, state = 'active', superseded_at = NULL
+WHERE packs.state <> 'active'
 `
 
 type InsertPackParams struct {
 	RepoID  uuid.UUID
 	Name    string
 	OrgID   uuid.UUID
+	Upload  uuid.UUID
 	Size    int64
 	Objects int64
 }
 
+// InsertPack lists a pack. A pack the repository lists already, which a push brought again, keeps its upload while
+// active; one compaction superseded turns active again, with this upload's files, as maintenance may be deleting the
+// old upload's.
 func (q *Queries) InsertPack(ctx context.Context, arg InsertPackParams) error {
 	_, err := q.db.Exec(ctx, insertPack,
 		arg.RepoID,
 		arg.Name,
 		arg.OrgID,
+		arg.Upload,
 		arg.Size,
 		arg.Objects,
 	)
@@ -345,13 +352,15 @@ const snapshot = `-- name: Snapshot :one
 SELECT
     coalesce((SELECT array_agg(f.name ORDER BY f.name) FROM refs f WHERE f.repo_id = $1), '{}')::text[] AS ref_names,
     coalesce((SELECT array_agg(f.sha ORDER BY f.name) FROM refs f WHERE f.repo_id = $1), '{}')::text[] AS ref_shas,
-    coalesce((SELECT array_agg(p.name ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::text[] AS packs
+    coalesce((SELECT array_agg(p.name ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::text[] AS packs,
+    coalesce((SELECT array_agg(p.upload ORDER BY p.created_at, p.name) FROM packs p WHERE p.repo_id = $1 AND p.state = 'active'), '{}')::uuid[] AS pack_uploads
 `
 
 type SnapshotRow struct {
-	RefNames []string
-	RefShas  []string
-	Packs    []string
+	RefNames    []string
+	RefShas     []string
+	Packs       []string
+	PackUploads []uuid.UUID
 }
 
 // Snapshot reads a repository's refs and its active packs in one statement, so a fetch never sees a ref without the
@@ -359,6 +368,11 @@ type SnapshotRow struct {
 func (q *Queries) Snapshot(ctx context.Context, repoID uuid.UUID) (SnapshotRow, error) {
 	row := q.db.QueryRow(ctx, snapshot, repoID)
 	var i SnapshotRow
-	err := row.Scan(&i.RefNames, &i.RefShas, &i.Packs)
+	err := row.Scan(
+		&i.RefNames,
+		&i.RefShas,
+		&i.Packs,
+		&i.PackUploads,
+	)
 	return i, err
 }

@@ -209,3 +209,26 @@ func TestConcurrentPushes(t *testing.T) {
 		t.Errorf("%d of two pushes into main at once were accepted, want one", accepted)
 	}
 }
+
+// TestPushAgain pushes a branch, deletes it and pushes it again: the second push of the branch brings the same
+// objects, in a pack of the same name, which the repository lists already.
+func TestPushAgain(t *testing.T) {
+	s := newStack(t)
+	dir := clone(t, s.websiteURL(s.base, olivia))
+	commit(t, dir, "README.md", "# Website\n")
+	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	feature := commit(t, dir, "index.html", "<h1>Acme</h1>\n")
+	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/feature")
+	mustGit(t, dir, "push", "-q", "origin", ":refs/heads/feature")
+	if out, err := gitCmd(t, dir, "push", "origin", "HEAD:refs/heads/feature"); err != nil {
+		t.Fatalf("pushing feature again: %v\n%s", err, out)
+	}
+	if got := query[string](t, s.pool, "SELECT sha FROM refs WHERE repo_id = $1 AND name = 'refs/heads/feature'", website); got != feature {
+		t.Errorf("feature = %s, want %s", got, feature)
+	}
+	other := clone(t, s.websiteURL(s.serve(t.TempDir()), gwen))
+	mustGit(t, other, "checkout", "-q", "feature")
+	if got := strings.TrimSpace(mustGit(t, other, "rev-parse", "HEAD")); got != feature {
+		t.Errorf("a fresh clone's feature is at %s, want %s", got, feature)
+	}
+}

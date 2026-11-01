@@ -21,7 +21,8 @@ type Store interface {
 	Snapshot(ctx context.Context, repoID uuid.UUID) (Snapshot, error)
 	// Record applies a push in one transaction that acts for its pusher: it locks the repository, so pushes into one
 	// repository apply one at a time; does nothing for a push whose ID it recorded already; checks every ref's old
-	// value, returning a *StaleError for the first that moved; lists the pack; records the push, waiting for the push
+	// value, returning a *StaleError for the first that moved; lists the pack (one the repository lists already keeps
+	// its upload while active); records the push, waiting for the push
 	// worker, and its commits; moves the refs; creates, moves and deletes the branches; records event repo.pushed; and
 	// notifies the push workers. ErrNotFound when the repository is gone.
 	Record(ctx context.Context, push Push) error

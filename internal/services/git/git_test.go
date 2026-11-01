@@ -141,7 +141,7 @@ func TestServiceRecord(t *testing.T) {
 }
 
 func TestServiceSnapshot(t *testing.T) {
-	want := git.Snapshot{Refs: []git.Ref{{Name: "refs/heads/main", SHA: a}}, Packs: []string{"pack-" + b}}
+	want := git.Snapshot{Refs: []git.Ref{{Name: "refs/heads/main", SHA: a}}, Packs: []git.Pack{{Name: "pack-" + b, Upload: uuid.New()}}}
 	got, err := git.NewService(&store{snapshot: want}).Snapshot(t.Context(), uuid.New())
 	if err != nil || len(got.Refs) != 1 || got.Refs[0] != want.Refs[0] || len(got.Packs) != 1 || got.Packs[0] != want.Packs[0] {
 		t.Errorf("Snapshot() = %+v, %v, want %+v", got, err, want)

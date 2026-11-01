@@ -15,12 +15,15 @@ CREATE TABLE refs (
     PRIMARY KEY (repo_id, name)
 );
 
--- A pack of a repository's objects, at git/<repo_id>/<name>.pack in the bucket with its .idx beside it: active while
--- fetches list it, superseded once compaction replaces it, and its files deleted a day after that.
+-- A pack of a repository's objects, at git/<repo_id>/<upload>/<name>.pack in the bucket with its .idx beside it: active
+-- while fetches list it, superseded once compaction replaces it, and its files deleted a day after that. A pack's name
+-- is its content's hash, so a push that brings the same objects again brings a pack of the same name; each upload of
+-- its files has an ID of its own, and the row names the upload it lists, so maintenance deletes only files no row lists.
 CREATE TABLE packs (
     repo_id uuid NOT NULL REFERENCES repositories (id) ON DELETE CASCADE,
     name text NOT NULL,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+    upload uuid NOT NULL,
     size bigint NOT NULL,
     objects bigint NOT NULL,
     state text NOT NULL DEFAULT 'active' CHECK (state IN ('active', 'superseded')),

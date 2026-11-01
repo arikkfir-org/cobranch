@@ -261,8 +261,13 @@ active and every listed ref keeps its objects.
 - **Compaction.** The hourly maintenance job repacks a repository whose active packs pass a threshold (8 by default): it
   fetches them into a throwaway repository with the snapshot's refs, runs `git repack -a -d`, uploads the new pack, and
   in one transaction lists it and marks the snapshot's packs superseded. Packs pushed meanwhile stay active, untouched.
-- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and files under
-  `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes.
+- **An upload of its own.** Each upload of a pack's files has an ID, in its keys: `git/<repo-id>/<upload>/<pack>.pack`
+  and its `.idx`. A pack's name is its content's hash, so a push that brings back objects the repository holds, a
+  deleted branch pushed again, brings a pack it lists already: the listed pack keeps its upload while active, and one
+  compaction superseded turns active again with the new upload, so no file a row lists is ever one maintenance deletes.
+- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and uploads
+  under `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes, and of pushes that
+  brought a listed pack again.
 - **The cache** is an `emptyDir` of `gitServer.cache.size`, evicting the least recently used repositories' packs first.
 
 ## SSH
@@ -355,6 +360,7 @@ Nothing of an installation is in the product: an operator routes the Git server 
 | Unknown authors become login-less users holding their email unverified; a new identity with that email verified adopts the login-less user | Commits have principals at once, and become their author's without rewriting | Agreed |
 | The Console shows first-parent history from PostgreSQL; live updates come with the web app | The push is recorded before Git returns; the graph view can wait | Agreed |
 | Maintenance compacts past 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Agreed |
+| Each upload of a pack's files has an ID of its own in its keys, and a pack's row names the upload it lists | A pack's name is its content's hash and comes back with a branch pushed again; maintenance never deletes the files a row lists | Changed |
 | SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Agreed |
 | Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Agreed |
 
