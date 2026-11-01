@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	gocloudblob "gocloud.dev/blob"
 
+	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/gitserver"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
@@ -195,4 +196,54 @@ func TestRestoredDatabaseServesTheRepository(t *testing.T) {
 	pool := connect(t, restoredURL)
 	restored := &stack{t: t, databaseURL: restoredURL, pool: pool, store: postgres.NewGitStore(pool), bucket: openStore(t, "", pool)}
 	restored.checkServes("the restored database", restored.serve(t.TempDir()), head, feature)
+}
+
+// TestMoveBetweenStores moves an installation's packs from a directory into the database while it runs: a Git server
+// over both serves the directory's packs and pushes into the database, maintenance compacts through both and copies
+// the directory over, and a Git server over the database alone then serves the repository whole. The directory keeps
+// every object: nothing deletes the old store.
+func TestMoveBetweenStores(t *testing.T) {
+	ctx := context.Background()
+	s := newStackIn(t, inFiles)
+	dir := clone(t, s.websiteURL(s.base, olivia))
+	_, feature := pushPacks(t, dir)
+	oldKeys := s.bucketKeys()
+
+	stores, err := blob.OpenStores(ctx, "", "file://"+s.bucketDir, s.pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = stores.Close() })
+	moving := &stack{t: t, databaseURL: s.databaseURL, pool: s.pool, store: s.store, bucket: stores.Bucket}
+	base := moving.serve(t.TempDir())
+	mustGit(t, dir, "remote", "set-url", "origin", moving.websiteURL(base, olivia))
+	head := commit(t, dir, "about.html", "<h1>About</h1>\n")
+	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	moving.checkServes("a server over both stores", base, head, feature)
+	if got, err := moving.maintenance().Compact(ctx, 2); got != 1 || err != nil {
+		t.Fatalf("Compact() over both stores = %d, %v, want 1", got, err)
+	}
+	moving.checkServes("a server over both stores, after compaction", moving.serve(t.TempDir()), head, feature)
+
+	if moved, err := stores.Move(ctx); moved.Copied != len(oldKeys) || moved.Left != 0 || err != nil {
+		t.Fatalf("Move() = %+v, %v; want the directory's %d objects copied", moved, err, len(oldKeys))
+	}
+	alone := &stack{t: t, databaseURL: s.databaseURL, pool: s.pool, store: s.store, bucket: openStore(t, "", s.pool)}
+	if keys := alone.bucketKeys(); !isSubset(oldKeys, keys) {
+		t.Errorf("the database holds %v, want the directory's %v among them", keys, oldKeys)
+	}
+	alone.checkServes("a server over the database alone", alone.serve(t.TempDir()), head, feature)
+	if got := s.bucketKeys(); !slices.Equal(got, oldKeys) {
+		t.Errorf("the directory holds %v after the move, want %v as before", got, oldKeys)
+	}
+}
+
+// isSubset reports whether every key of sub is in keys, both sorted.
+func isSubset(sub, keys []string) bool {
+	for _, k := range sub {
+		if _, ok := slices.BinarySearch(keys, k); !ok {
+			return false
+		}
+	}
+	return true
 }

@@ -4,9 +4,10 @@
 {{- $volume := .Values.blob.volume | default dict }}
 {{- $files := hasPrefix "file:" .Values.blob.url }}
 {{- $packs := and .Values.urls.git (not (kindIs "invalid" ($values.compaction | default dict).packs)) (not (and $files (hasKey $volume "emptyDir"))) }}
+{{- $store := or $packs (and .Values.urls.git .Values.blob.moveFrom) }}
 # Deletes what expired, sign-in flows and sessions, every hour; with urls.git, also compacts repositories' packs and
-# deletes what compaction replaced. One run at a time; a run that misses its hour is skipped, since the next one does
-# the same work.
+# deletes what compaction replaced, and copies the store packs move from (blob.moveFrom) over. One run at a time; a run
+# that misses its hour is skipped, since the next one does the same work.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -35,7 +36,7 @@ spec:
           {{- end }}
         spec:
           restartPolicy: Never
-          {{- if $packs }}
+          {{- if $store }}
           serviceAccountName: {{ include "cobranch.serviceAccount" . }}
           {{- end }}
           automountServiceAccountToken: false
@@ -53,15 +54,21 @@ spec:
               env:
                 {{- include "cobranch.telemetryEnv" . | nindent 16 }}
                 {{- include "cobranch.databaseEnv" . | nindent 16 }}
-                {{- if $packs }}
+                {{- if $store }}
                 - name: COBRANCH_BLOB_URL
                   value: {{ .Values.blob.url | quote }}
+                {{- with .Values.blob.moveFrom }}
+                - name: COBRANCH_BLOB_MOVE_FROM
+                  value: {{ . | quote }}
+                {{- end }}
                 - name: COBRANCH_GIT_DATA_DIR
                   value: /var/lib/cobranch/git
+                {{- end }}
+                {{- if $packs }}
                 - name: COBRANCH_GIT_COMPACT_AT
                   value: {{ $values.compaction.packs | quote }}
                 {{- end }}
-              {{- if $packs }}
+              {{- if $store }}
               {{- with .Values.blob.envFromSecret }}
               envFrom:
                 - secretRef:
@@ -72,7 +79,7 @@ spec:
                 {{- toYaml $values.resources | nindent 16 }}
               securityContext:
                 {{- include "cobranch.containerSecurityContext" . | nindent 16 }}
-              {{- if $packs }}
+              {{- if $store }}
               volumeMounts:
                 - name: tmp
                   mountPath: /tmp
@@ -83,7 +90,7 @@ spec:
                   mountPath: {{ .Values.blob.mountPath }}
                 {{- end }}
               {{- end }}
-          {{- if $packs }}
+          {{- if $store }}
           volumes:
             - name: tmp
               emptyDir: {}

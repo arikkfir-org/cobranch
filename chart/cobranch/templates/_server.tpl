@@ -73,6 +73,10 @@ spec:
             {{- if $bucket }}
             - name: COBRANCH_BLOB_URL
               value: {{ $root.Values.blob.url | quote }}
+            {{- with $root.Values.blob.moveFrom }}
+            - name: COBRANCH_BLOB_MOVE_FROM
+              value: {{ . | quote }}
+            {{- end }}
             {{- end }}
             {{- if eq .component "admin-server" }}
             {{- with include "cobranch.signUpEnv" $root | trim }}

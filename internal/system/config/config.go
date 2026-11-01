@@ -231,6 +231,8 @@ type Maintenance struct {
 	DatabaseURL string `envconfig:"DATABASE_URL"`
 	// BlobURL names the object store, as the Git server's.
 	BlobURL string `envconfig:"BLOB_URL"`
+	// BlobMoveFrom names the store objects move from, as the Git server's; maintenance copies it over each run.
+	BlobMoveFrom string `envconfig:"BLOB_MOVE_FROM"`
 	// GitDataDir holds the throwaway repositories it compacts in.
 	GitDataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
 	// CompactAt is how many active packs make a repository due for compaction, 2 or more; 0, unset, leaves every pack
@@ -258,6 +260,9 @@ type GitServer struct {
 	// BlobURL names the object store, which holds the packs: empty or postgres:// for the database's large objects,
 	// s3://, gs:// or azblob:// for a cloud's bucket, file:// for a directory.
 	BlobURL string `envconfig:"BLOB_URL"`
+	// BlobMoveFrom names the store objects move from, in BlobURL's terms, while an installation moves them to BlobURL's;
+	// empty when nothing moves. Reads fall back to it, and deletes reach it too.
+	BlobMoveFrom string `envconfig:"BLOB_MOVE_FROM"`
 	// DataDir holds the pack cache and the throwaway repositories, on one filesystem.
 	DataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
 	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.

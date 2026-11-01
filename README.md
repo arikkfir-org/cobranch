@@ -55,7 +55,8 @@ bin/cobranch version
 
 The workloads read `COBRANCH_` variables. `migrate` brings a database's schema to the build's version and exits; each
 server needs the database, and turns ready once the schema is at that version. The Git server and maintenance keep
-Git's packs in it too, unless `COBRANCH_BLOB_URL` names a bucket or a directory:
+Git's packs in it too, unless `COBRANCH_BLOB_URL` names a bucket or a directory, and, while packs move from another
+store, read that one too, which `COBRANCH_BLOB_MOVE_FROM` names:
 
 ```bash
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
