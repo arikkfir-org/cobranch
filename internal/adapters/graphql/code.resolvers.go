@@ -55,6 +55,22 @@ func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*
 	return mapAll(list, branch), nil
 }
 
+// Branch is the resolver for the branch field.
+func (r *repositoryResolver) Branch(ctx context.Context, obj *Repository, name string) (*Branch, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.Code.Branch(ctx, v, repoID, name)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fail(ctx, err, "branch", "reading the branch")
+	}
+	return branch(b), nil
+}
+
 // History is the resolver for the history field.
 func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, first int, after *string) (*CommitPage, error) {
 	v, repoID, err := repoOf(ctx, obj)

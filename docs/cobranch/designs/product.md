@@ -47,7 +47,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Agreed |
 | [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Agreed |
 | [Branch status](branch-status.md) | Commit annotations, merge requirements, how a branch’s status is computed, and merges. | Proposed |
-| [Code browsing](https://claude.ai/artifact/8VJGfvZ8WDMyvu6iSC88qB) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
+| [Code browsing](code-browsing.md) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -177,7 +177,7 @@ push up a moment later and derives the rest: its authors' principals, and later 
 hosting](git-hosting.md#a-push)).
 
 Only the Git server reads Git objects: the Console's files, trees, history and rendered Markdown come from it through
-the API servers ([Code browsing](https://claude.ai/artifact/8VJGfvZ8WDMyvu6iSC88qB)).
+the API servers ([Code browsing](code-browsing.md)).
 
 ## Relation to the Kfirs hub
 
@@ -209,7 +209,7 @@ definitions, its default-branch trust boundary and its organization pipelines ar
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
 | Infrastructure as code | A Terraform provider for Cobranch's resources, a client of the REST API like any other, in [phase 2](#phase-2), once the roadmap's slices have landed |
-| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, and an MCP server with a Claude Code integration |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, an MCP server with a Claude Code integration, continuous documentation and an AI side panel |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -257,5 +257,13 @@ Planned after the foundations, each with a design of its own when its turn comes
   workflows and mods that bring Cobranch into its interface. Like the Terraform provider, the MCP server is a client of
   the APIs with no privileges of its own, and waits for their shape to settle
   ([ENG-231](https://linear.app/arikkfir/issue/ENG-231)).
+- **Continuous documentation:** AI keeps scanning a repository's code and documents it in virtual READMEs, one for the
+  repository and one for every directory, covering its contents, the product or system it builds, its design and its
+  architecture, which the Console shows where it shows a README. The repository's settings give it context, guidelines
+  and instructions. A push regenerates only the docs it affects, one package's or several levels' when a change
+  underpins a rewrite, and the rest come from cache ([ENG-233](https://linear.app/arikkfir/issue/ENG-233)).
+- **An AI side panel:** whoever views a repository in the Console asks it questions about the repository and has it act
+  on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review)
+  ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
 
 Cobranch is a Kfirs project, created by Arik Kfir.

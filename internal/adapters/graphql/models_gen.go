@@ -92,6 +92,30 @@ type Branch struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// When a push last moved it.
 	UpdatedAt time.Time `json:"updatedAt"`
+	// The branch it merges into, main; null for main.
+	Base *string `json:"base,omitempty"`
+	// Where it stands as a request to merge into its base; null for main.
+	Status *BranchStatus `json:"status,omitempty"`
+	// How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	Checks []*BranchCheck `json:"checks"`
+	// How many commits it has that its base lacks; null for main, and until a push works it out.
+	Ahead *int `json:"ahead,omitempty"`
+	// How many commits its base has that it lacks; null for main, and until a push works it out.
+	Behind *int `json:"behind,omitempty"`
+	// What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch.
+	Requirements *MergeRequirements `json:"requirements,omitempty"`
+}
+
+// One of a branch's merge requirements and how it stands.
+type BranchCheck struct {
+	Kind BranchCheckKind `json:"kind"`
+	// The required annotation's name; null unless kind is ANNOTATION.
+	Name *string `json:"name,omitempty"`
+	// The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION.
+	Status *AnnotationStatus `json:"status,omitempty"`
+	// For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION.
+	Count *int `json:"count,omitempty"`
+	Met   bool `json:"met"`
 }
 
 // A commit a push brought, as the push recorded it.
@@ -185,6 +209,14 @@ type Member struct {
 	DisplayName string    `json:"displayName"`
 	JoinedAt    time.Time `json:"joinedAt"`
 	Roles       []*Role   `json:"roles"`
+}
+
+// What a merge into a branch needs, as main's /cobranch.yaml names it under branches.
+type MergeRequirements struct {
+	// The annotations the incoming head must carry, Successful.
+	Annotations []string `json:"annotations"`
+	// Whether no merge commit may come in.
+	LinearHistory bool `json:"linearHistory"`
 }
 
 type Mutation struct {
@@ -305,8 +337,10 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
-	// The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	Branches []*Branch `json:"branches"`
+	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
+	Branch *Branch `json:"branch,omitempty"`
 	// A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
@@ -509,6 +543,134 @@ func (e *AnnotationStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e AnnotationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What one of a branch's checks is of.
+type BranchCheckKind string
+
+const (
+	// An annotation its head must carry, Successful.
+	BranchCheckKindAnnotation BranchCheckKind = "ANNOTATION"
+	// No merge among its commits to merge.
+	BranchCheckKindLinearHistory BranchCheckKind = "LINEAR_HISTORY"
+	// Its base's tip in it.
+	BranchCheckKindUpToDate BranchCheckKind = "UP_TO_DATE"
+)
+
+var AllBranchCheckKind = []BranchCheckKind{
+	BranchCheckKindAnnotation,
+	BranchCheckKindLinearHistory,
+	BranchCheckKindUpToDate,
+}
+
+func (e BranchCheckKind) IsValid() bool {
+	switch e {
+	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindUpToDate:
+		return true
+	}
+	return false
+}
+
+func (e BranchCheckKind) String() string {
+	return string(e)
+}
+
+func (e *BranchCheckKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = BranchCheckKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid BranchCheckKind", str)
+	}
+	return nil
+}
+
+func (e BranchCheckKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *BranchCheckKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e BranchCheckKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a branch stands as a request to merge into its base, the first that holds.
+type BranchStatus string
+
+const (
+	// The push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress.
+	BranchStatusProcessing BranchStatus = "PROCESSING"
+	// It has commits to merge, and a requirement holds them back.
+	BranchStatusBlocked BranchStatus = "BLOCKED"
+	// It has nothing to merge, and no merge took its head into its base.
+	BranchStatusEmpty BranchStatus = "EMPTY"
+	// A merge took its head into its base.
+	BranchStatusMerged BranchStatus = "MERGED"
+	// It has commits to merge, and nothing holds them back.
+	BranchStatusReady BranchStatus = "READY"
+)
+
+var AllBranchStatus = []BranchStatus{
+	BranchStatusProcessing,
+	BranchStatusBlocked,
+	BranchStatusEmpty,
+	BranchStatusMerged,
+	BranchStatusReady,
+}
+
+func (e BranchStatus) IsValid() bool {
+	switch e {
+	case BranchStatusProcessing, BranchStatusBlocked, BranchStatusEmpty, BranchStatusMerged, BranchStatusReady:
+		return true
+	}
+	return false
+}
+
+func (e BranchStatus) String() string {
+	return string(e)
+}
+
+func (e *BranchStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = BranchStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid BranchStatus", str)
+	}
+	return nil
+}
+
+func (e BranchStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *BranchStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e BranchStatus) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

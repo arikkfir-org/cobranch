@@ -96,6 +96,33 @@ func TestBranches(t *testing.T) {
 	}
 }
 
+func TestBranch(t *testing.T) {
+	tests := []struct {
+		name     string
+		viewer   func(*fixture) code.Viewer
+		branch   string
+		wantHead string
+		wantErr  error
+	}{
+		{name: "a branch named with a slash", viewer: func(f *fixture) code.Viewer { return f.max }, branch: "feature/x", wantHead: sha(6)},
+		{name: "a branch that isn't there", viewer: func(f *fixture) code.Viewer { return f.max }, branch: "gone", wantErr: repos.ErrNotFound},
+		{name: "a viewer who doesn't read the repository finds none", viewer: func(f *fixture) code.Viewer { return f.nia }, branch: "main",
+			wantErr: repos.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture()
+			got, err := f.service.Branch(t.Context(), tt.viewer(f), f.repo, tt.branch)
+			if !sameError(err, tt.wantErr) {
+				t.Fatalf("got error %v, want %v", err, tt.wantErr)
+			}
+			if got.Head != tt.wantHead {
+				t.Errorf("head = %s, want %s", got.Head, tt.wantHead)
+			}
+		})
+	}
+}
+
 // sameError reports whether err is want: the same domain error, or one whose message holds want's.
 func sameError(err, want error) bool {
 	if err == nil || want == nil {

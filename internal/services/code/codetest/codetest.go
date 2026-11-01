@@ -56,6 +56,16 @@ func (s *Store) SetBranch(repoID uuid.UUID, name, head string) {
 	s.BranchList[repoID] = append(s.BranchList[repoID], b)
 }
 
+// UpdateBranch changes the repository's live branch name with change, as a push and its processing would: its status,
+// checks and facts, or what a merge into it needs.
+func (s *Store) UpdateBranch(repoID uuid.UUID, name string, change func(b *code.Branch)) {
+	for i := range s.BranchList[repoID] {
+		if s.BranchList[repoID][i].Name == name {
+			change(&s.BranchList[repoID][i])
+		}
+	}
+}
+
 // Branches lists the repository's branches in the order they were set.
 func (s *Store) Branches(_ context.Context, repoID uuid.UUID) ([]code.Branch, error) {
 	if s.Fail != nil {

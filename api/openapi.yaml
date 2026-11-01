@@ -1214,7 +1214,7 @@ paths:
   /orgs/{org}/repos/{repo}/branches:
     get:
       operationId: listBranches
-      summary: The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+      summary: The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -1231,6 +1231,27 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Branch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}:
+    get:
+      operationId: getBranch
+      summary: One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "200":
+          description: The branch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Branch"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -1594,6 +1615,14 @@ components:
       x-go-name: SHA
       schema:
         type: string
+    branch:
+      name: branch
+      in: path
+      required: true
+      description: The branch's name, without refs/heads/, such as feature/login; a slash in it travels escaped, as feature%2Flogin.
+      x-go-name: BranchName
+      schema:
+        type: string
     annotation:
       name: name
       in: path
@@ -1929,8 +1958,10 @@ components:
             $ref: "#/components/schemas/Role"
     Branch:
       type: object
-      description: One of a repository's live branches and the commit it is at.
-      required: [name, head, createdAt, updatedAt]
+      description: >-
+        One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into
+        its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
+      required: [name, head, createdAt, updatedAt, checks]
       properties:
         name:
           type: string
@@ -1947,6 +1978,68 @@ components:
           type: string
           format: date-time
           description: When a push last moved it.
+        base:
+          type: string
+          description: The branch it merges into, main.
+        status:
+          $ref: "#/components/schemas/BranchStatus"
+        checks:
+          type: array
+          description: >-
+            How it meets its base's merge requirements, as its status last worked them out: each required annotation,
+            linear history when required, and being up to date. Empty for main.
+          items:
+            $ref: "#/components/schemas/BranchCheck"
+        ahead:
+          type: integer
+          description: How many commits it has that its base lacks; left out until a push works it out.
+        behind:
+          type: integer
+          description: How many commits its base has that it lacks; left out until a push works it out.
+        requirements:
+          $ref: "#/components/schemas/MergeRequirements"
+    BranchStatus:
+      type: string
+      description: >-
+        Where a branch stands as a request to merge into its base, the first that holds: processing while the push
+        worker hasn't worked out its last push, or a required annotation on its head is pending or in progress;
+        blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a
+        merge took its head into its base; ready otherwise.
+      enum: [processing, blocked, empty, merged, ready]
+    BranchCheck:
+      type: object
+      description: One of a branch's merge requirements and how it stands.
+      required: [kind, met]
+      properties:
+        kind:
+          type: string
+          description: >-
+            annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to
+            merge; up_to_date, its base's tip in it.
+          enum: [annotation, linear_history, up_to_date]
+        name:
+          type: string
+          description: The required annotation's name; only for annotation.
+        status:
+          $ref: "#/components/schemas/AnnotationStatus"
+        count:
+          type: integer
+          description: For linear_history, the merges among its commits to merge; for up_to_date, the commits of its base it lacks.
+        met:
+          type: boolean
+    MergeRequirements:
+      type: object
+      description: What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
+      required: [annotations, linearHistory]
+      properties:
+        annotations:
+          type: array
+          description: The annotations the incoming head must carry, Successful.
+          items:
+            type: string
+        linearHistory:
+          type: boolean
+          description: Whether no merge commit may come in.
     Commit:
       type: object
       description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.

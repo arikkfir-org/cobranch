@@ -136,14 +136,25 @@ func (q *Queries) FirstParents(ctx context.Context, repoID uuid.UUID, sha string
 }
 
 const liveBranch = `-- name: LiveBranch :one
-SELECT name, head, created_at, updated_at FROM branches WHERE repo_id = $1 AND name = $2 AND deleted_at IS NULL
+SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history
+FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL
 `
 
 type LiveBranchRow struct {
-	Name      string
-	Head      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Name                string
+	Head                string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Base                *string
+	Ahead               *int32
+	Behind              *int32
+	Merges              *int32
+	Status              *string
+	Checks              []byte
+	RequiredAnnotations []string
+	LinearHistory       *bool
 }
 
 func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string) (LiveBranchRow, error) {
@@ -154,22 +165,44 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 		&i.Head,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Base,
+		&i.Ahead,
+		&i.Behind,
+		&i.Merges,
+		&i.Status,
+		&i.Checks,
+		&i.RequiredAnnotations,
+		&i.LinearHistory,
 	)
 	return i, err
 }
 
 const liveBranches = `-- name: LiveBranches :many
-SELECT name, head, created_at, updated_at FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY name
+SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history
+FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+WHERE b.repo_id = $1 AND b.deleted_at IS NULL
+ORDER BY b.name
 `
 
 type LiveBranchesRow struct {
-	Name      string
-	Head      string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Name                string
+	Head                string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	Base                *string
+	Ahead               *int32
+	Behind              *int32
+	Merges              *int32
+	Status              *string
+	Checks              []byte
+	RequiredAnnotations []string
+	LinearHistory       *bool
 }
 
-// LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it.
+// LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it,
+// each with its status as a request to merge into its base, and what a merge into it needs, when /cobranch.yaml names
+// it.
 func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBranchesRow, error) {
 	rows, err := q.db.Query(ctx, liveBranches, repoID)
 	if err != nil {
@@ -184,6 +217,14 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 			&i.Head,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Base,
+			&i.Ahead,
+			&i.Behind,
+			&i.Merges,
+			&i.Status,
+			&i.Checks,
+			&i.RequiredAnnotations,
+			&i.LinearHistory,
 		); err != nil {
 			return nil, err
 		}

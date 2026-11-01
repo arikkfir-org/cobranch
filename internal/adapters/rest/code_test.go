@@ -2,6 +2,7 @@ package rest
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -31,10 +32,42 @@ func TestBranchesAPI(t *testing.T) {
 		{name: "the branches, main first", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[struct{ Branches []Branch }](t, body).Branches
-				if len(got) != 2 || got[0].Name != "main" || got[0].Commit == nil || got[0].Commit.Sha != shaOf("c") || got[1].Name != "feature" {
+				if len(got) != 3 || got[0].Name != "main" || got[0].Commit == nil || got[0].Commit.Sha != shaOf("c") || got[1].Name != "feature" ||
+					got[2].Name != "feature/login" {
 					t.Errorf("branches = %s", body)
 				}
 			}},
+		{name: "main, with what a merge into it needs", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/main"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				const want = `"checks":[],"commit":`
+				if !strings.Contains(string(body), want) || !strings.Contains(string(body), `"requirements":{"annotations":["ci/build"],"linearHistory":false}`) ||
+					strings.Contains(string(body), `"status"`) || strings.Contains(string(body), `"base"`) {
+					t.Errorf("main = %s, want its requirements and no status", body)
+				}
+			}},
+		{name: "a branch with its status, checks and facts", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/feature"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				for _, want := range []string{`"base":"main"`, `"status":"blocked"`, `"ahead":1`, `"behind":2`,
+					`"checks":[{"kind":"annotation","met":false,"name":"ci/build"},{"count":2,"kind":"up_to_date","met":false}]`} {
+					if !strings.Contains(string(body), want) {
+						t.Errorf("feature = %s, want %s", body, want)
+					}
+				}
+				if strings.Contains(string(body), `"requirements"`) {
+					t.Errorf("feature = %s, want no requirements, as /cobranch.yaml names none", body)
+				}
+			}},
+		{name: "a branch named with a slash, escaped, that no push has worked out", viewer: olivia, method: "GET",
+			path: fixed("/v1/orgs/acme/repos/website/branches/feature%2Flogin"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if b := decode[Branch](t, body); b.Name != "feature/login" || b.Status == nil || *b.Status != Processing || b.Ahead != nil {
+					t.Errorf("feature/login = %s, want it processing, with no facts", body)
+				}
+			}},
+		{name: "a branch that doesn't live", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/gone"),
+			wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a Member who doesn't read it sees no branch", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/main"),
+			wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "a Member who doesn't read it sees no branches", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches"),
 			wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "a token with repo.read alone lists them", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches"),
