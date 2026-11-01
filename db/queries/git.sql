@@ -87,7 +87,8 @@ UPDATE commits SET author_id = @author_id, committer_id = @committer_id WHERE re
 -- name: MarkPushProcessed :exec
 UPDATE pushes SET processed_at = now(), error = '' WHERE id = $1;
 
--- FailPush keeps a push the push worker failed waiting, for another try after delay seconds.
+-- FailPush keeps a push the push worker failed waiting, for another try after delay seconds, unless another push worker
+-- processed it once the failed transaction let go of it.
 -- name: FailPush :exec
 UPDATE pushes SET attempts = attempts + 1, error = @message, retry_at = now() + make_interval(secs => @delay::float8)
-WHERE id = @id;
+WHERE id = @id AND processed_at IS NULL;

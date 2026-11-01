@@ -414,6 +414,31 @@ func TestGitStoreProcessRetries(t *testing.T) {
 	}
 }
 
+// TestGitStoreProcessLosesARace fails a push that another push worker claims and processes once the failed
+// transaction let go of it: the push stays processed, with no failure recorded.
+func TestGitStoreProcessLosesARace(t *testing.T) {
+	f := newGitFixture(t)
+	ctx := context.Background()
+	if _, err := f.pool.Exec(ctx, "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'the disk is full'; END $$; "+
+		"CREATE TRIGGER refuse BEFORE UPDATE ON commits FOR EACH ROW EXECUTE FUNCTION refuse()"); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := f.recordTwo(t)
+	// Process asks when to retry after the rollback, before it records the failure: another worker wins meanwhile.
+	retry := func(int) time.Duration {
+		if _, err := f.pool.Exec(ctx, "UPDATE pushes SET processed_at = now() WHERE id = $1", first.ID); err != nil {
+			t.Fatal(err)
+		}
+		return time.Hour
+	}
+	if id, err := f.g.Process(ctx, retry); id != first.ID || err == nil {
+		t.Errorf("Process() of a push that fails = %s, %v, want the first push and its error", id, err)
+	}
+	if got := count(t, f.pool, "SELECT count(*) FROM pushes WHERE id = $1 AND processed_at IS NOT NULL AND attempts = 0 AND error = ''", first.ID); got != 1 {
+		t.Error("a push another worker processed is recorded as failed")
+	}
+}
+
 func TestGitStoreProcessLinksTrace(t *testing.T) {
 	tests := []struct {
 		name      string

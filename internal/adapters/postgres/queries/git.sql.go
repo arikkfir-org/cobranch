@@ -86,10 +86,11 @@ func (q *Queries) EmailPrincipal(ctx context.Context, email string) (EmailPrinci
 
 const failPush = `-- name: FailPush :exec
 UPDATE pushes SET attempts = attempts + 1, error = $1, retry_at = now() + make_interval(secs => $2::float8)
-WHERE id = $3
+WHERE id = $3 AND processed_at IS NULL
 `
 
-// FailPush keeps a push the push worker failed waiting, for another try after delay seconds.
+// FailPush keeps a push the push worker failed waiting, for another try after delay seconds, unless another push worker
+// processed it once the failed transaction let go of it.
 func (q *Queries) FailPush(ctx context.Context, message string, delay float64, iD uuid.UUID) error {
 	_, err := q.db.Exec(ctx, failPush, message, delay, iD)
 	return err
