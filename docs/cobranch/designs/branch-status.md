@@ -235,6 +235,16 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
 - **Then as any push:** the push worker records the merge, and the branch turns Merged. Code-browsing
   ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)) builds the internal call; this slice adds the merge to it.
 
+| The requester sees | When |
+| --- | --- |
+| 409 `branch.moved` | The branch moved from the head the request names, or it or `main` moved while the Git server built the merge |
+| 409 `branch.not_ready` | The branch isn't Ready, and the requester lacks `repo.bypass` |
+| 409 `branch.nothing_to_merge` | `main` holds every commit of the branch |
+| 409 `merge.not_fast_forward` | A fast-forward of a branch that lacks some of `main`'s commits |
+| 409 `merge.conflict` | A merge commit of changes Git can't merge, naming up to five paths |
+| 409 `merge.refused` | The push the merge records breaks a rule, such as a `/cobranch.yaml` that doesn't parse |
+| 503 `git.unavailable` | The installation runs no Git server |
+
 ## The Console
 
 **The Console shows status where branches are listed, and why on each branch’s page**
@@ -247,7 +257,9 @@ Branch names carry `/`; the Console takes the rest of the path after `branches/`
   panel names `main`'s merge requirements, from `/cobranch.yaml`.
 - **A branch's page** says who wants to merge how many commits into `main`, why it is Blocked, requirement by
   requirement, its commits, and the annotations on its head. Its **Merge** button merges it for a principal with
-  `repo.merge` once it is Ready, and offers a principal with `repo.bypass` to merge it anyway.
+  `repo.merge` once it is Ready, and offers a principal with `repo.bypass` to merge it anyway, by a merge commit or a
+  fast-forward, whichever its base allows; it sends the head the page shows, so a branch that moved meanwhile isn't
+  merged.
 - **A commit's page** lists its annotations, each with its status, summary, link, principal and how long it ran, and
   offers to delete those the viewer may delete. History rows show their commits' annotations as icons.
 - **The status language** is the design system's: one word, one icon, one tone for each branch and annotation status, as
