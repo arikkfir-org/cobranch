@@ -70,7 +70,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	}
 	defer func() { _ = gitServer.Close() }() // no push runs once the server stopped
 	handler := server.Handler("/", gitServer.Handler(), map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)})
-	internal := server.Handler(gitinternal.ReposPath, gitServer.InternalHandler(gitinternal.NewToken(postgres.NewInternalTokens(pool).Read)), nil)
+	internal := server.Handler(gitinternal.ReposPath, gitServer.InternalHandler(), nil)
 	servers := []func(context.Context) error{
 		func(ctx context.Context) error { return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler) },
 		func(ctx context.Context) error {

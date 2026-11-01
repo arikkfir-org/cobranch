@@ -3,8 +3,8 @@ package gitserver
 import (
 	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/adapters/gitinternal"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 )
 
@@ -29,14 +30,14 @@ const (
 	modeSubmodule = "160000"
 )
 
-// InternalHandler serves the internal call (package gitinternal) to callers that send token as a bearer token: the
-// REST and GraphQL servers' reads of a repository's trees and files, each from one snapshot. It checks no viewer,
-// since its callers checked theirs, and nothing outside the cluster reaches its port.
-func (s *Server) InternalHandler(token *gitinternal.Token) http.Handler {
+// InternalHandler serves the internal call (package gitinternal): the REST and GraphQL servers' reads of a
+// repository's trees and files, each from one snapshot. Its callers send on their viewer's token, and it serves only
+// what that viewer may read, as Git's own port does, so it holds up whoever calls it.
+func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/tree", s.internal(token, "tree", s.readTree))
-	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blob", s.internal(token, "blob", s.readBlob))
-	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal(token, "raw", s.readRaw))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/tree", s.internal("tree", s.readTree))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blob", s.internal("blob", s.readBlob))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal("raw", s.readRaw))
 	return mux
 }
 
@@ -48,11 +49,12 @@ type objects struct {
 	path   string
 }
 
-// internal checks the request's token, ref and path, builds its repository from a snapshot read now and resolves its
-// ref, then serves read with them.
-func (s *Server) internal(token *gitinternal.Token, read string, next func(w http.ResponseWriter, r *http.Request, o objects) error) http.HandlerFunc {
+// internal checks the request's viewer, ref and path, and that the viewer reads the repository, builds its
+// repository from a snapshot read now and resolves its ref, then serves read with them.
+func (s *Server) internal(read string, next func(w http.ResponseWriter, r *http.Request, o objects) error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r, token) {
+		viewer, ok := s.internalViewer(w, r)
+		if !ok {
 			return
 		}
 		id, err := uuid.Parse(r.PathValue("id"))
@@ -61,9 +63,13 @@ func (s *Server) internal(token *gitinternal.Token, read string, next func(w htt
 			problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "a repository's ID, and a ref and a path the API takes"})
 			return
 		}
-		ctx, span := tracer.Start(r.Context(), "gitserver.internal "+read, trace.WithAttributes(attribute.String("cobranch.repository.id", id.String()),
-			attribute.String("cobranch.ref", ref), attribute.String("cobranch.path", path)))
+		ctx, span := tracer.Start(auth.WithViewer(r.Context(), viewer), "gitserver.internal "+read, trace.WithAttributes(
+			attribute.String("cobranch.repository.id", id.String()), attribute.String("cobranch.ref", ref), attribute.String("cobranch.path", path)))
 		defer span.End()
+		if _, _, err := s.repos.ByID(ctx, viewer.User, id); err != nil {
+			answer(ctx, w, span, read, err)
+			return
+		}
 		dir, remove, err := s.snapshotWorkspace(ctx, id)
 		if err != nil {
 			answer(ctx, w, span, read, err)
@@ -81,21 +87,32 @@ func (s *Server) internal(token *gitinternal.Token, read string, next func(w htt
 	}
 }
 
-// authorized reports whether the request sends the internal call's token, or answers 401, or 503 while the token
-// can't be read.
-func authorized(w http.ResponseWriter, r *http.Request, token *gitinternal.Token) bool {
-	want, err := token.Get(r.Context())
+// internalViewer resolves who the internal call reads for: the viewer whose token the caller sends on as a bearer
+// token, or Anonymous when it sends none. A session's token works here, unlike on Git's port, since only Cobranch's
+// own workloads reach this one, and the API servers guard their cookies. It answers 401 for a credential that acts as
+// nobody or isn't a bearer token, and 500 when the credential can't be checked.
+func (s *Server) internalViewer(w http.ResponseWriter, r *http.Request) (auth.Authenticated, bool) {
+	header := r.Header.Get("Authorization")
+	if header == "" {
+		return auth.Authenticated{}, true
+	}
+	scheme, token, _ := strings.Cut(header, " ")
+	token = strings.TrimSpace(token)
+	if !strings.EqualFold(scheme, "Bearer") || token == "" {
+		problem(w, http.StatusUnauthorized, gitinternal.Problem{Message: "the internal call takes the viewer's token as a bearer token"})
+		return auth.Authenticated{}, false
+	}
+	viewer, err := s.auth.Authenticate(r.Context(), token)
+	if errors.Is(err, auth.ErrUnauthenticated) {
+		problem(w, http.StatusUnauthorized, gitinternal.Problem{Message: "the credential acts as nobody: it is unknown, expired or revoked"})
+		return auth.Authenticated{}, false
+	}
 	if err != nil {
-		slog.ErrorContext(r.Context(), "Reading the internal call's token failed", "error", err)
-		problem(w, http.StatusServiceUnavailable, gitinternal.Problem{Message: "the internal call's token could not be read"})
-		return false
+		slog.ErrorContext(r.Context(), "Checking the internal call's credential failed", "error", err)
+		problem(w, http.StatusInternalServerError, gitinternal.Problem{Message: "the credential could not be checked"})
+		return auth.Authenticated{}, false
 	}
-	scheme, got, _ := strings.Cut(r.Header.Get("Authorization"), " ")
-	if !strings.EqualFold(scheme, "Bearer") || subtle.ConstantTimeCompare([]byte(strings.TrimSpace(got)), []byte(want)) != 1 {
-		problem(w, http.StatusUnauthorized, gitinternal.Problem{Message: "the internal call needs its token"})
-		return false
-	}
-	return true
+	return viewer, true
 }
 
 // answer answers a read that failed: 404 with the code of what it didn't find, or 500, logged, for anything else.

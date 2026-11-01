@@ -174,19 +174,3 @@ func TestCodeStoreSlugs(t *testing.T) {
 		t.Errorf("Slugs() of no repository: %v, want repos.ErrNotFound", err)
 	}
 }
-
-func TestInternalTokens(t *testing.T) {
-	f := newCodeFixture(t)
-	tokens := NewInternalTokens(f.pool)
-	first, err := tokens.Read(context.Background(), "git-server")
-	if err != nil || len(first) != 64 || strings.Trim(first, "0123456789abcdef") != "" {
-		t.Errorf("Read(git-server) = %q, %v, want 64 hexadecimal digits", first, err)
-	}
-	other := newCodeFixture(t)
-	if second, err := NewInternalTokens(other.pool).Read(context.Background(), "git-server"); err != nil || second == first {
-		t.Errorf("another database's token = %q, %v, want one of its own", second, err)
-	}
-	if _, err := tokens.Read(context.Background(), "nothing"); err == nil {
-		t.Error("Read(nothing) found a token")
-	}
-}
