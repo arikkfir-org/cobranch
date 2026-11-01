@@ -53,7 +53,7 @@ func Bucket(pool *pgxpool.Pool) *blob.Bucket {
 	return blob.NewBucket(&blobStore{pool: pool, q: queries.New(pool)})
 }
 
-// blobStore is Go Cloud's driver over table blobs (db/migrations/00016_blobs.sql). A write runs in one transaction,
+// blobStore is Go Cloud's driver over table blobs (db/migrations/00017_blobs.sql). A write runs in one transaction,
 // which creates the large object a chunk at a time and names it by its key, so an object is either whole or absent; a
 // read reads the large object a chunk at a time outside any transaction, since an object never changes once written.
 type blobStore struct {
