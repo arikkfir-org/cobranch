@@ -8,8 +8,9 @@
 [ENG-203](https://linear.app/arikkfir/issue/ENG-203) · Revised after review, 2026-10-27 · Builds on the [product
 design](product.md#architecture) · Detailed by the [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8)
 
-Cobranch runs as a handful of Go workloads over two stores, PostgreSQL and one bucket, and a Git push returns only after
-PostgreSQL has committed it. Everything else here follows from those two choices.
+Cobranch runs as a handful of Go workloads over one store, PostgreSQL, which keeps Git’s packs too unless the operator
+names a bucket, and a Git push returns only after PostgreSQL has committed it. Everything else here follows from those
+two choices.
 
 ## Scope
 
@@ -29,11 +30,12 @@ Seven constraints from the [product design](product.md#principles) decide most o
 
 - **One Helm chart, any cluster.** No cloud's API is called directly; the operator brings the domain, ingress, TLS and
   autoscaling.
-- **Stateless workloads.** Any pod can be killed at any time. State lives only in PostgreSQL and blob storage; a pod's
-  disk is a cache.
-- **Few moving parts.** An operator runs PostgreSQL and a bucket and nothing else. **Agreed:** no message broker, no
-  Redis, no search cluster in the foundations; phase 2's semantic search keeps its embeddings in PostgreSQL with
-  pgvector ([phase 2](product.md#phase-2)).
+- **Stateless workloads.** Any pod can be killed at any time. State lives only in PostgreSQL and the object store; a
+  pod's disk is a cache.
+- **Few moving parts.** An operator runs PostgreSQL and nothing else; **Changed** (2026-11-01, [Git object
+  storage](git-object-storage.md)): the object store is PostgreSQL's large objects unless they name a bucket.
+  **Agreed:** no message broker, no Redis, no search cluster in the foundations; phase 2's semantic search keeps its
+  embeddings in PostgreSQL with pgvector ([phase 2](product.md#phase-2)).
 - **Synchronous pushes.** When `git push` returns, its commits and branches are in PostgreSQL and on screen. **Changed**
   (2026-11-01, [Git hosting](git-hosting.md#a-push)): their principals and status follow from the push worker, so only
   the Git server is on a push's path.
@@ -48,9 +50,9 @@ Ten workloads, plus the job and agent pods the controller creates and a migratio
 reads Git objects or moves refs, and only the controller makes and watches pods; the REST and GraphQL servers' one
 Kubernetes call reads a running job's logs.
 
-**All state lives in PostgreSQL and one bucket**
+**All state lives in PostgreSQL and the object store, itself PostgreSQL by default**
 
-![All state lives in PostgreSQL and one bucket](architecture/components.svg)
+![All state lives in PostgreSQL and the object store, itself PostgreSQL by default](architecture/components.svg)
 
 The **controller** is a workload the product design did not list: the push worker only records what follows a push, so
 the slow, retried and outward-facing work (pods, webhooks, model calls) gets a workload of its own.
@@ -137,8 +139,8 @@ chart’s role that lets the REST and GraphQL servers read its pods’ logs.
 
 ![The operator brings the stores, the sign-in and the routes in; the chart makes its own secrets](architecture/dependencies.svg)
 
-The bucket’s credentials come from the cloud’s workload identity or a Secret. The chart never rotates the secrets it
-generated.
+Without a bucket, the objects live in PostgreSQL ([Git object storage](git-object-storage.md)); a bucket’s credentials
+come from the cloud’s workload identity or a Secret. The chart never rotates the secrets it generated.
 
 ### Upgrades
 
@@ -164,7 +166,7 @@ chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job ru
 
 ## Data model
 
-PostgreSQL holds every fact Cobranch shows, Git refs included; blob storage holds only bytes. One database and one
+PostgreSQL holds every fact Cobranch shows, Git refs included; the object store holds only bytes. One database and one
 schema serve every organization.
 
 **Agreed:** primary keys are UUIDv7, which sort by creation time. The API shows them with a type prefix (`org_…`,
@@ -200,16 +202,17 @@ background work](#events-and-background-work).
 
 ## Git storage and pushes
 
-**Agreed:** a repository is immutable packs in blob storage plus its refs in PostgreSQL, and a Git server pod only
-caches packs. A push is accepted by a pre-receive hook that does not exit until the Git server has committed it.
-**Changed** (2026-11-01): the Git server commits the push itself, and the push worker claims it afterwards ([Git
-hosting](git-hosting.md#a-push)).
+**Agreed:** a repository is immutable packs in the object store plus its refs in PostgreSQL, and a Git server pod only
+caches packs. **Changed** (2026-11-01): the object store is PostgreSQL's large objects by default, a bucket or a
+directory if the operator names one ([Git object storage](git-object-storage.md)). A push is accepted by a pre-receive
+hook that does not exit until the Git server has committed it. **Changed** (2026-11-01): the Git server commits the push
+itself, and the push worker claims it afterwards ([Git hosting](git-hosting.md#a-push)).
 
 ### Storage
 
-**PostgreSQL holds the refs and the bucket the packs; a Git server pod only caches**
+**PostgreSQL holds the refs and the object store the packs; a Git server pod only caches**
 
-![PostgreSQL holds the refs and the bucket the packs; a Git server pod only caches](architecture/storage.svg)
+![PostgreSQL holds the refs and the object store the packs; a Git server pod only caches](architecture/storage.svg)
 
 A pack and the refs that need it are recorded in one transaction, so a ref never points at an object no listed pack
 holds. Every push adds a pack, so the maintenance CronJob repacks a repository whose pack count passes a threshold and
@@ -265,12 +268,12 @@ the Ready branches the push must merge.
 
 | Failure | The client sees | Afterwards | Recovery |
 | --- | --- | --- | --- |
-| Recording the push fails | Push rejected: Cobranch could not record it | Nothing changed; an unlisted pack in the bucket | Retry; the pack is deleted after a day |
+| Recording the push fails | Push rejected: Cobranch could not record it | Nothing changed; an unlisted pack in the object store | Retry; the pack is deleted after a day |
 | Another push moved a ref first | Push rejected: fetch first | Nothing changed | Fetch, merge or rebase, push again |
 | The push committed, its answer lost | Nothing yet: the Git server asks again with the push ID | Committed | A known push ID is accepted as it was |
 | Push worker down or failing | Push accepted | Commits and branches recorded; principals, status and jobs wait | A push worker that starts claims every waiting push; a failed one is retried, at most an hour apart |
 | Git server pod dies mid-push | Connection dropped | Nothing changed, or committed | The next fetch shows which; a retry is safe |
-| Blob storage unavailable | Push rejected; fetches only from cached packs | Nothing changed | Retry once the bucket is back |
+| A bucket unavailable | Push rejected; fetches only from cached packs | Nothing changed | Retry once the bucket is back |
 | PostgreSQL unavailable | Push and fetch rejected | Nothing changed | Everything waits for PostgreSQL |
 | Push into a protected branch merges no Ready branch | Push rejected, naming the requirement | Nothing changed | Merge a Ready branch, or use the bypass |
 
@@ -281,7 +284,7 @@ the Ready branches the push must merge.
 ![A fetch reads one snapshot of the refs and the packs](architecture/fetch.svg)
 
 A compaction that commits during a fetch does not disturb it: its new pack holds every object of the packs it replaced,
-and those stay in the bucket for a day.
+and those stay in the object store for a day.
 
 ## Events and background work
 
@@ -315,7 +318,7 @@ controller gives it a review task on every push.
 
 - **Live updates.** A client that reconnects passes the last event ID it saw, and the GraphQL server replays from
   `events`.
-- **Maintenance.** The hourly CronJob compacts packs, deletes unreferenced blobs, applies log retention, and drops
+- **Maintenance.** The hourly CronJob compacts packs, deletes unreferenced objects, applies log retention, and drops
   expired sessions and tokens.
 - **Day-one events** (2026-10-27): `branch.created`, `branch.pushed`, `branch.merged`, `branch.deleted`, `tag.pushed`,
   `review.submitted` and `annotation.changed`. Jobs also take cron and manual triggers.
@@ -442,8 +445,11 @@ origins only, and cookie sessions can only send mutations as JSON bodies, which 
 
 ## Blob storage
 
-One bucket, reached only through Go Cloud's `blob` package, holds every large or binary object; PostgreSQL holds the
-keys and decides who may read them. Keys are built from IDs, never names, so a rename moves nothing.
+One object store, reached only through Go Cloud's `blob` package, holds every large or binary object; PostgreSQL holds
+the keys and decides who may read them. **Changed** (2026-11-01): the store is PostgreSQL's large objects by default, so
+a backup of the database holds everything, or a cloud's bucket or a directory if the operator names one ([Git object
+storage](git-object-storage.md)); only the workloads that read or write objects take its URL. Keys are built from IDs,
+never names, so a rename moves nothing.
 
 | Prefix | Holds | Written by | Kept |
 | --- | --- | --- | --- |
@@ -458,9 +464,9 @@ keys and decides who may read them. Keys are built from IDs, never names, so a r
 ![Every read of a stored file passes a permission check first](architecture/blob-read.svg)
 
 - **Objects are written whole.** A running job's logs come from the Kubernetes API while its pod lives, and from the
-  bucket once the controller has archived them.
+  object store once the controller has archived them.
 - **Deletion follows ownership.** Deleting a repository or an organization queues a task that deletes its prefixes.
-- **Encryption at rest is the bucket's,** configured by the operator.
+- **Encryption at rest is the store's,** the database's or the bucket's, configured by the operator.
 
 ## Observability
 
@@ -521,7 +527,7 @@ code is generated from them.
 | GraphQL | Schema written first; `gqlgen` | Typed resolvers from the schema |
 | PostgreSQL | `pgx`; `sqlc` from SQL queries; `goose` SQL and Go migrations, run by `cobranch migrate` | SQL stays SQL, checked at build time |
 | Git | The `git` CLI in the image; `golang.org/x/crypto/ssh` | Wire compatibility and Git's own speed |
-| Blob storage | `gocloud.dev/blob` | One API over every cloud's buckets and a directory |
+| Blob storage | `gocloud.dev/blob`, with Cobranch's own driver over PostgreSQL's large objects | One API over the database, every cloud's buckets and a directory |
 | Kubernetes | `client-go`, in the controller and for log reads | The only two places that touch the cluster |
 | Models | One interface in the agent harness, an adapter per provider | Each agent runs on its own provider and model |
 | Sign-in | `go-oidc` with `golang.org/x/oauth2` | Standard OpenID Connect |
@@ -531,7 +537,7 @@ code is generated from them.
 | Web data | GraphQL Code Generator types, through urql | Typed queries; subscriptions for live updates |
 | Web components | Headless primitives styled with the [design system's](design-system.md) CSS variables | Settled with [ENG-194](https://linear.app/arikkfir/issue/ENG-194) |
 | SDKs | Generated from the OpenAPI document: Go, Python, TypeScript | One contract, three languages |
-| Tests | Table-driven Go tests; integration on a real PostgreSQL and a `file://` bucket; end to end on kind with real `git` | The push path is only proven end to end |
+| Tests | Table-driven Go tests; integration on a real PostgreSQL, its large objects and a `file://` bucket; end to end on kind with real `git` | The push path is only proven end to end |
 
 ```
 go.mod                        one module: cobranch.dev
@@ -559,8 +565,8 @@ design, and settled the open questions.
 
 | Choice | Why | Decision |
 | --- | --- | --- |
-| PostgreSQL and one bucket are the only stateful dependencies; `NOTIFY` and a task table stand in for a broker | One less system for every operator; a change and its reactions commit together | Agreed |
-| A repository is immutable packs in the bucket plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless | Agreed |
+| PostgreSQL is the only stateful dependency, objects included unless the operator names a bucket; `NOTIFY` and a task table stand in for a broker | One less system for every operator; a change and its reactions commit together; one backup holds everything (2026-11-01, [Git object storage](git-object-storage.md#decisions)) | Changed |
+| A repository is immutable packs in the object store plus refs in PostgreSQL; Git server pods only cache | Keeps the Git server stateless | Agreed |
 | The `git` CLI speaks the protocol, driven by Go | Every client works, at Git's own speed | Agreed |
 | A controller workload takes all asynchronous work | Keeps the push worker fast | Agreed |
 | The Git server commits each push; the push worker claims it from PostgreSQL afterwards, woken by `NOTIFY` | Only the Git server is on a push's path, and the push worker can scale to zero (2026-11-01, [Git hosting](git-hosting.md#decisions)) | Changed |

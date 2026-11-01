@@ -1,9 +1,9 @@
 #!/bin/sh
 # Installs chart/cobranch on the throwaway cluster as release cobranch, seeded with the demo data so the test signs in,
 # its administrator among auth.admins, or upgrades it there rolling every workload, and waits for the migrate Job to
-# finish and every pod to be ready. The bucket is a file:// one on a volume every server mounts, so a pack one Git
-# server stored is every Git server's, across an upgrade too, and maintenance's, which compacts a repository's packs
-# once it has two. The Git server serves SSH too. An upgrade must keep the generated database password and SSH host
+# finish and every pod to be ready. The packs live in the database, the chart's default, so a pack one Git server
+# stored is every Git server's, across an upgrade too, and maintenance's, which compacts a repository's packs once it
+# has two. The Git server serves SSH too. An upgrade must keep the generated database password and SSH host
 # key, and its migrate Job find nothing left to apply.
 set -eu
 action=$1
@@ -25,7 +25,6 @@ set -- --namespace "$ns" --wait --wait-for-jobs --timeout 5m \
   --set images.console.pullPolicy=Never \
   --set images.backOffice.repository=cobranch-back-office --set-string "images.backOffice.tag=$VERSION" \
   --set images.backOffice.pullPolicy=Never --set postgresql.image.pullPolicy=Never \
-  --set blob.url=file:///var/lib/cobranch/blobs --set-json 'blob.volume={"persistentVolumeClaim":{"claimName":"blobs"}}' \
   --set urls.console=https://cobranch.test --set urls.rest=https://cobranch.test/api --set urls.auth=https://cobranch.test/auth \
   --set urls.admin=https://cobranch.test/admin --set urls.backOffice=https://cobranch.test/back-office \
   --set urls.git=https://cobranch.test/git --set urls.gitSsh=ssh://git@cobranch.test \
@@ -36,18 +35,6 @@ hostKey() { kubectl -n "$ns" get secret cobranch-git-ssh-host-key -o jsonpath='{
 case "$action" in
 install)
   kubectl create namespace "$ns"
-  # The cluster's one node mounts the claim in every pod that names it.
-  kubectl -n "$ns" apply -f - <<EOF
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: blobs
-spec:
-  accessModes: [ReadWriteOnce]
-  resources:
-    requests:
-      storage: 1Gi
-EOF
   helm install cobranch chart/cobranch "$@"
   ;;
 upgrade)

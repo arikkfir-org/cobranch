@@ -81,8 +81,6 @@ type Server struct {
 	// DatabaseURL is PostgreSQL's connection URL. When empty, pgx reads libpq's variables (PGHOST, PGPASSWORD and so
 	// on), as the chart sets them for its own PostgreSQL.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// BlobURL is the bucket's Go Cloud URL: s3://, gs://, azblob:// or file://.
-	BlobURL string `envconfig:"BLOB_URL" required:"true"`
 	// ShutdownTimeout bounds how long the server waits for requests in flight once asked to stop. It must end before
 	// the pod's grace period does.
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
@@ -226,17 +224,18 @@ func LoadMigrate() (Migrate, error) {
 	return c, nil
 }
 
-// Maintenance configures the maintenance CronJob, which deletes what expired and, given the bucket, compacts the
+// Maintenance configures the maintenance CronJob, which deletes what expired and, given CompactAt, compacts the
 // repositories' packs and deletes those nobody lists any more.
 type Maintenance struct {
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// BlobURL is the bucket's Go Cloud URL, as the Git server's; empty leaves every pack alone.
+	// BlobURL names the object store, as the Git server's.
 	BlobURL string `envconfig:"BLOB_URL"`
 	// GitDataDir holds the throwaway repositories it compacts in.
 	GitDataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
-	// CompactAt is how many active packs make a repository due for compaction, 2 or more.
-	CompactAt int `envconfig:"GIT_COMPACT_AT" default:"8"`
+	// CompactAt is how many active packs make a repository due for compaction, 2 or more; 0, unset, leaves every pack
+	// alone, as in an installation whose Git servers each keep their packs on a disk of their own.
+	CompactAt int `envconfig:"GIT_COMPACT_AT"`
 }
 
 // LoadMaintenance reads the maintenance CronJob's configuration from the environment.
@@ -245,7 +244,7 @@ func LoadMaintenance() (Maintenance, error) {
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return Maintenance{}, fmt.Errorf("reading the maintenance job's configuration from the COBRANCH_ variables: %w", err)
 	}
-	if c.BlobURL != "" && c.CompactAt < 2 {
+	if c.CompactAt != 0 && c.CompactAt < 2 {
 		return Maintenance{}, fmt.Errorf("COBRANCH_GIT_COMPACT_AT is %d: compacting takes 2 packs or more", c.CompactAt)
 	}
 	return c, nil
@@ -256,8 +255,9 @@ type GitServer struct {
 	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// BlobURL is the bucket's Go Cloud URL, as the servers'.
-	BlobURL string `envconfig:"BLOB_URL" required:"true"`
+	// BlobURL names the object store, which holds the packs: empty or postgres:// for the database's large objects,
+	// s3://, gs:// or azblob:// for a cloud's bucket, file:// for a directory.
+	BlobURL string `envconfig:"BLOB_URL"`
 	// DataDir holds the pack cache and the throwaway repositories, on one filesystem.
 	DataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
 	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.

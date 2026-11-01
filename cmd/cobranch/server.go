@@ -9,7 +9,6 @@ import (
 
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/adminapi"
-	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
 	"cobranch.dev/internal/adapters/markdown"
@@ -86,11 +85,6 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
-	bucket, err := blob.Open(ctx, cfg.BlobURL)
-	if err != nil {
-		return fmt.Errorf("opening the bucket %s: %w", cfg.BlobURL, err)
-	}
-	defer func() { _ = bucket.Close() }() // nothing is left to write
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to the database: %w", err)
@@ -121,7 +115,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	pages := a.pages(cfg.URLs).Origin()
 	handler := server.AllowOrigin([]string{pages}, server.Handler(a.pattern,
 		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, domain)),
-		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)}))
+		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 	slog.InfoContext(ctx, "Starting the server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("serving: %w", err)

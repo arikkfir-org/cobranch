@@ -117,7 +117,6 @@ func startServer(t *testing.T, a api) string {
 	addr := freeAddr(t)
 	t.Setenv("COBRANCH_HTTP_ADDR", addr)
 	t.Setenv("COBRANCH_DATABASE_URL", postgrestest.Database(t))
-	t.Setenv("COBRANCH_BLOB_URL", "file://"+t.TempDir())
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- runServer(ctx, io.Discard, a) }()

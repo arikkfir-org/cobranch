@@ -54,10 +54,10 @@ bin/cobranch version
 ```
 
 The workloads read `COBRANCH_` variables. `migrate` brings a database's schema to the build's version and exits; each
-server needs a bucket and the database, and turns ready once the schema is at that version:
+server needs the database, and turns ready once the schema is at that version. The Git server and maintenance keep
+Git's packs in it too, unless `COBRANCH_BLOB_URL` names a bucket or a directory:
 
 ```bash
-export COBRANCH_BLOB_URL='file:///tmp/cobranch-blobs?create_dir=true'
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
 export COBRANCH_SECRETS_KEY="$(openssl rand -hex 24)"    # keep it: it seals the providers' secrets the Admin server adds
 bin/cobranch migrate
@@ -69,14 +69,14 @@ COBRANCH_HTTP_ADDR=:8083 COBRANCH_BACK_OFFICE_URL=http://localhost:3001 \
 
 `auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
 (`COBRANCH_SEED=true` with `migrate`, then with `auth-server`, lets the sign-in page sign in as a demo user);
-`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given the bucket, it also deletes the packs nobody lists any more and compacts the repositories that have too many, working in `COBRANCH_GIT_DATA_DIR`:
+`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given `COBRANCH_GIT_COMPACT_AT`, it also deletes the packs nobody lists any more and compacts the repositories that have that many packs or more, working in `COBRANCH_GIT_DATA_DIR`:
 
 ```bash
 export COBRANCH_CONSOLE_URL=http://localhost:3000 COBRANCH_AUTH_URL=http://localhost:8082
 export COBRANCH_AUTH_PROVIDERS='[{"id":"google","name":"Google","preset":"google","clientId":"…"}]'
 export COBRANCH_AUTH_CLIENT_SECRET_GOOGLE='…'          # the redirect URI is $COBRANCH_AUTH_URL/callback
 COBRANCH_HTTP_ADDR=:8082 bin/cobranch auth-server        # :8082: /providers, /sign-in, /callback, /sign-out
-COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
+COBRANCH_GIT_COMPACT_AT=8 COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
 ```
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces
@@ -92,7 +92,7 @@ Install a version of the chart, which is published beside its images; its guide,
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 helm test cobranch --namespace cobranch
 ```
 
@@ -107,7 +107,7 @@ built. To follow `main`, install the chart from a checkout with its commit's ima
 helm install cobranch chart/cobranch --namespace cobranch --create-namespace \
   --set-string images.cobranch.tag=$(git rev-parse HEAD | cut -c1-7) \
   --set-string images.console.tag=$(git rev-parse HEAD | cut -c1-7) \
-  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7) --set blob.url='gs://my-cobranch-bucket'
+  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7)
 ```
 
 For a commit of your own, build the images, push them where your cluster pulls from, and install with those

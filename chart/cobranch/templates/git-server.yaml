@@ -22,7 +22,7 @@
 {{- $ports = append $ports (dict "name" "ssh" "containerPort" 2222) }}
 {{- end }}
 {{- $data := dict "name" "git" "mountPath" "/var/lib/cobranch/git" "emptyDir" (dict "sizeLimit" $values.storage.sizeLimit) }}
-{{- include "cobranch.server" (dict "root" . "component" "git-server" "values" $values "env" $env "volumes" (list $data) "ports" $ports) }}
+{{- include "cobranch.server" (dict "root" . "component" "git-server" "values" $values "bucket" true "env" $env "volumes" (list $data) "ports" $ports) }}
 {{- $component := dict "root" . "component" "git-server" }}
 ---
 # The internal call, the REST and GraphQL servers' reads of trees and files, which no route names.
