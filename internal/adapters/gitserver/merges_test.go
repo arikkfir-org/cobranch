@@ -70,7 +70,7 @@ func merged(feature string) mergeRow {
 
 // mergeCases are TestMergeByPush's cases.
 func mergeCases() []mergeCase {
-	return []mergeCase{
+	return append([]mergeCase{
 		{name: "nothing required: a push merges by fast-forward", push: pushMain("feature"), want: merged},
 		{name: "a Ready branch merges by fast-forward", settings: requireAnnotation, annotate: true, push: pushMain("feature"), want: merged},
 		{name: "a Ready branch merges by a merge commit", settings: requireAnnotation, annotate: true,
@@ -114,6 +114,17 @@ func mergeCases() []mergeCase {
 			push: func(t *testing.T, s *stack, dir string) (string, error) {
 				return gitCmd(t, dir, "push", s.url(s.base, s.token(olivia, "repo.read", "repo.push", "repo.bypass"), "acme/website.git"), "feature:main")
 			}, want: merged},
+		{name: "a branch moved back to main's tip is Empty, not Merged",
+			push: func(t *testing.T, _ *stack, dir string) (string, error) {
+				return gitCmd(t, dir, "push", "origin", "main:feature", "--force")
+			},
+			want: func(string) mergeRow { return mergeRow{Status: "empty"} }},
+	}, otherBranchCases()...)
+}
+
+// otherBranchCases are TestMergeByPush's cases of pushes into a branch with merge requirements besides main.
+func otherBranchCases() []mergeCase {
+	return []mergeCase{
 		{name: "main's history moves another branch with merge requirements on", settings: requireAnnotation + "  release:\n    requires:\n      annotations: [ci/build]\n",
 			annotate: true, push: func(t *testing.T, s *stack, dir string) (string, error) {
 				mustGit(t, dir, "push", "-q", "origin", "main:release")
@@ -121,11 +132,17 @@ func mergeCases() []mergeCase {
 				s.process()
 				return gitCmd(t, dir, "push", "origin", "feature:release")
 			}, want: merged},
-		{name: "a branch moved back to main's tip is Empty, not Merged",
-			push: func(t *testing.T, _ *stack, dir string) (string, error) {
-				return gitCmd(t, dir, "push", "origin", "main:feature", "--force")
-			},
-			want: func(string) mergeRow { return mergeRow{Status: "empty"} }},
+		{name: "linear history refuses a Ready branch's merge commits into another branch", settings: "branches:\n  release:\n    requires:\n      linearHistory: true\n",
+			push: func(t *testing.T, s *stack, dir string) (string, error) {
+				mustGit(t, dir, "push", "-q", "origin", "main:release")
+				mustGit(t, dir, "checkout", "-q", "-b", "side", "main")
+				commit(t, dir, "side.txt", "beside the feature\n")
+				mustGit(t, dir, "checkout", "-q", "feature")
+				mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "Merge side", "side")
+				mustGit(t, dir, "push", "-q", "origin", "feature")
+				s.process()
+				return gitCmd(t, dir, "push", "origin", "feature:release")
+			}, refusal: "release requires linear history: the push adds 1 merge commit"},
 	}
 }
 

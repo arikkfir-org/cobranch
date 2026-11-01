@@ -197,8 +197,8 @@ current) still come first.
   and the push appends event `branch.bypassed`, naming what didn't hold.
 - **Its own merge commits merge cleanly.** A merge commit the push adds that no brought branch holds must have two
   parents and the tree `git merge-tree` writes for them, so a conflict resolved by hand or a change slipped into a merge
-  comes from no Ready branch and is refused. Where the branch requires linear history, the push adds no merge commit of
-  its own: Ready branches merge by fast-forward.
+  comes from no Ready branch and is refused. Where the branch requires linear history, the push adds no merge commit at
+  all, not even one a Ready branch holds, except those already in `main`: Ready branches merge by fast-forward.
 - **Creating such a branch** adds the commits `main` lacks, so a branch created at `main`'s tip brings nothing, and one
   created at a Ready branch's head brings that branch. Commits already in `main` never count against a push into another
   branch.
@@ -210,7 +210,7 @@ current) still come first.
 | `main requires its commits to come from Ready branches: 3 commits come from none` | The push adds commits no merged branch holds |
 | `main requires feature/login to be Ready: ci/test failed on 9f3c2e1` | A branch it merges isn't Ready |
 | `main requires merge commits to merge cleanly: 9f3c2e1 holds changes of its own; make them in a Ready branch` | A merge commit of its own resolves a conflict, changes more than its parents merge, or has more than two parents |
-| `main requires linear history: the push adds 1 merge commit` | `main` requires linear history and the push adds a merge commit of its own |
+| `main requires linear history: the push adds 1 merge commit` | `main` requires linear history and the push adds a merge commit, even one a Ready branch holds |
 | `/cobranch.yaml: line 4: annotations must be a list of names` | `main`'s new `/cobranch.yaml` doesn't parse |
 
 ### By asking Cobranch

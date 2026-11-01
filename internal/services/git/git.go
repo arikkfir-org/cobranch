@@ -174,9 +174,9 @@ type Brought struct {
 	Branch  string
 	Heads   []Head
 	Orphans int
-	// Merges counts the merge commits it adds that none of those branches nor the default branch holds, and Unclean
-	// lists those whose tree isn't what Git merges their parents into: a conflict resolved by hand, changes of their
-	// own, or more than two parents. Only a move of a branch with merge requirements counts them.
+	// Merges counts the merge commits it adds that the default branch doesn't hold, and Unclean lists those of them none
+	// of those branches holds whose tree isn't what Git merges their parents into: a conflict resolved by hand, changes
+	// of their own, or more than two parents. Only a move of a branch with merge requirements counts them.
 	Merges  int
 	Unclean []string
 }

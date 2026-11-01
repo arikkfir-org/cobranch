@@ -127,9 +127,9 @@ func (s *Server) brought(ctx context.Context, refs, dir string, env []string, ti
 		if !ok || u.New == git.ZeroSHA {
 			continue
 		}
-		b, revs, err := s.bringing(ctx, refs, dir, env, tips, name, u)
+		b, added, err := s.bringing(ctx, refs, dir, env, tips, name, u)
 		if err == nil && protected[name] {
-			b.Merges, b.Unclean, err = s.mergesAdded(ctx, dir, env, revs)
+			b.Merges, b.Unclean, err = s.mergesAdded(ctx, dir, env, added, b.Heads)
 		}
 		if err != nil {
 			return nil, err
@@ -142,8 +142,8 @@ func (s *Server) brought(ctx context.Context, refs, dir string, env []string, ti
 // bringing works out what u's move of branch name brings into it: the live branches, besides it and the default, whose
 // tips its new tip holds and its start lacked, and, for a branch besides the default, the default lacks too; and how
 // many of the commits it adds, merges aside, none of those nor the default branch holds. Its start is its old tip, or,
-// for a branch it creates, the default branch's tip. It also returns git rev-list's arguments for those commits,
-// merges included.
+// for a branch it creates, the default branch's tip. It also returns git rev-list's arguments for the commits it adds
+// that, for a branch besides the default, the default lacks.
 func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, tips map[string]string, name string, u git.RefUpdate) (git.Brought, []string, error) {
 	main, hasDefault := tips[git.DefaultBranch]
 	start := u.Old
@@ -168,6 +168,7 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 	if err != nil {
 		return git.Brought{}, nil, err
 	}
+	added := slices.Clone(revs)
 	b := git.Brought{Branch: name}
 	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
 		branch, sha, ok := strings.Cut(line, " ")
@@ -180,33 +181,60 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 	if b.Orphans, err = s.count(ctx, dir, env, append([]string{"--no-merges"}, revs...)...); err != nil {
 		return git.Brought{}, nil, err
 	}
-	return b, revs, nil
+	return b, added, nil
 }
 
-// mergesAdded counts the merge commits git rev-list lists for revs, and lists those whose tree isn't what Git merges
-// their parents into (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "By a
-// push").
-func (s *Server) mergesAdded(ctx context.Context, dir string, env []string, revs []string) (int, []string, error) {
-	listed, err := s.output(ctx, env, "", append([]string{"--git-dir=" + dir, "rev-list", "--merges", "--no-commit-header", "--format=%H %T %P"}, revs...)...)
+// mergesAdded counts the merge commits git rev-list lists for added, the commits a move adds, and lists those of
+// them that none of heads holds whose tree isn't what Git merges their parents into
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "By a push"). A Ready
+// branch's own merge commits count towards linear history, but its status already stands for their trees.
+func (s *Server) mergesAdded(ctx context.Context, dir string, env []string, added []string, heads []git.Head) (int, []string, error) {
+	all, err := s.mergeCommits(ctx, dir, env, added)
 	if err != nil {
 		return 0, nil, err
 	}
-	merges, unclean := 0, []string(nil)
-	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 4 {
-			continue
+	unheld := all
+	if len(heads) > 0 {
+		revs := slices.Clone(added)
+		for _, h := range heads {
+			revs = append(revs, "^"+h.SHA)
 		}
-		merges++
-		clean, err := s.mergesCleanly(ctx, dir, env, fields[1], fields[2:])
+		if unheld, err = s.mergeCommits(ctx, dir, env, revs); err != nil {
+			return 0, nil, err
+		}
+	}
+	var unclean []string
+	for _, m := range unheld {
+		clean, err := s.mergesCleanly(ctx, dir, env, m.tree, m.parents)
 		if err != nil {
 			return 0, nil, err
 		}
 		if !clean {
-			unclean = append(unclean, fields[0])
+			unclean = append(unclean, m.sha)
 		}
 	}
-	return merges, unclean, nil
+	return len(all), unclean, nil
+}
+
+// mergeCommit is a merge commit: its SHA, its tree's and its parents'.
+type mergeCommit struct {
+	sha, tree string
+	parents   []string
+}
+
+// mergeCommits lists the merge commits git rev-list lists for revs.
+func (s *Server) mergeCommits(ctx context.Context, dir string, env []string, revs []string) ([]mergeCommit, error) {
+	listed, err := s.output(ctx, env, "", append([]string{"--git-dir=" + dir, "rev-list", "--merges", "--no-commit-header", "--format=%H %T %P"}, revs...)...)
+	if err != nil {
+		return nil, err
+	}
+	var out []mergeCommit
+	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
+		if fields := strings.Fields(line); len(fields) >= 4 {
+			out = append(out, mergeCommit{sha: fields[0], tree: fields[1], parents: fields[2:]})
+		}
+	}
+	return out, nil
 }
 
 // mergesCleanly reports whether tree is what Git merges parents into, with no conflict to resolve by hand: never for
