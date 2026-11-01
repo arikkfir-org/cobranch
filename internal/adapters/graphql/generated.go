@@ -31,6 +31,7 @@ type ResolverRoot interface {
 	Mutation() MutationResolver
 	Organization() OrganizationResolver
 	Query() QueryResolver
+	Repository() RepositoryResolver
 	User() UserResolver
 }
 
@@ -99,27 +100,31 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AcceptInvitation   func(childComplexity int, id string) int
-		ApproveJoinRequest func(childComplexity int, organizationID string, id string, roleID string) int
-		CancelInvitation   func(childComplexity int, organizationID string, id string) int
-		CreateAPIKey       func(childComplexity int, organizationID string, input APIKeyInput) int
-		CreateOrganization func(childComplexity int, slug string, name string) int
-		CreateRole         func(childComplexity int, organizationID string, input RoleInput) int
-		DeclineInvitation  func(childComplexity int, id string) int
-		DeclineJoinRequest func(childComplexity int, organizationID string, id string) int
-		DeleteAPIKey       func(childComplexity int, organizationID string, id string) int
-		DeleteRole         func(childComplexity int, organizationID string, id string) int
-		GrantRole          func(childComplexity int, organizationID string, userID string, roleID string) int
-		InviteMember       func(childComplexity int, organizationID string, email string, roleID string) int
-		LeaveOrganization  func(childComplexity int, id string) int
-		RemoveMember       func(childComplexity int, organizationID string, userID string) int
-		RequestToJoin      func(childComplexity int, slug string, note *string) int
-		RevokeAPIKeySecret func(childComplexity int, organizationID string, id string, secretID string) int
-		RevokeRole         func(childComplexity int, organizationID string, userID string, roleID string) int
-		RevokeSession      func(childComplexity int, id string) int
-		RotateAPIKey       func(childComplexity int, organizationID string, id string, input *SecretInput) int
-		UpdateOrganization func(childComplexity int, id string, input OrganizationSettings) int
-		UpdateRole         func(childComplexity int, organizationID string, id string, input RoleInput) int
+		AcceptInvitation     func(childComplexity int, id string) int
+		ApproveJoinRequest   func(childComplexity int, organizationID string, id string, roleID string) int
+		CancelInvitation     func(childComplexity int, organizationID string, id string) int
+		CreateAPIKey         func(childComplexity int, organizationID string, input APIKeyInput) int
+		CreateOrganization   func(childComplexity int, slug string, name string) int
+		CreateRepository     func(childComplexity int, organizationID string, input RepositoryInput) int
+		CreateRole           func(childComplexity int, organizationID string, input RoleInput) int
+		DeclineInvitation    func(childComplexity int, id string) int
+		DeclineJoinRequest   func(childComplexity int, organizationID string, id string) int
+		DeleteAPIKey         func(childComplexity int, organizationID string, id string) int
+		DeleteRole           func(childComplexity int, organizationID string, id string) int
+		GrantRepositoryRole  func(childComplexity int, repositoryID string, principalID string, roleID string) int
+		GrantRole            func(childComplexity int, organizationID string, userID string, roleID string) int
+		InviteMember         func(childComplexity int, organizationID string, email string, roleID string) int
+		LeaveOrganization    func(childComplexity int, id string) int
+		RemoveMember         func(childComplexity int, organizationID string, userID string) int
+		RequestToJoin        func(childComplexity int, slug string, note *string) int
+		RevokeAPIKeySecret   func(childComplexity int, organizationID string, id string, secretID string) int
+		RevokeRepositoryRole func(childComplexity int, repositoryID string, principalID string, roleID string) int
+		RevokeRole           func(childComplexity int, organizationID string, userID string, roleID string) int
+		RevokeSession        func(childComplexity int, id string) int
+		RotateAPIKey         func(childComplexity int, organizationID string, id string, input *SecretInput) int
+		UpdateOrganization   func(childComplexity int, id string, input OrganizationSettings) int
+		UpdateRepository     func(childComplexity int, id string, input RepositoryInput) int
+		UpdateRole           func(childComplexity int, organizationID string, id string, input RoleInput) int
 	}
 
 	Organization struct {
@@ -133,6 +138,8 @@ type ComplexityRoot struct {
 		MembershipRoleID    func(childComplexity int) int
 		Name                func(childComplexity int) int
 		Providers           func(childComplexity int) int
+		Repositories        func(childComplexity int) int
+		Repository          func(childComplexity int, slug string) int
 		Roles               func(childComplexity int) int
 		Slug                func(childComplexity int) int
 		ViewerPermissions   func(childComplexity int) int
@@ -144,6 +151,28 @@ type ComplexityRoot struct {
 		Roles        func(childComplexity int, scope RoleScope) int
 		Version      func(childComplexity int) int
 		Viewer       func(childComplexity int) int
+	}
+
+	Repository struct {
+		Access            func(childComplexity int) int
+		CreatedAt         func(childComplexity int) int
+		CreatedBy         func(childComplexity int) int
+		Description       func(childComplexity int) int
+		ID                func(childComplexity int) int
+		Name              func(childComplexity int) int
+		ObjectFormat      func(childComplexity int) int
+		OrganizationID    func(childComplexity int) int
+		Roles             func(childComplexity int) int
+		Slug              func(childComplexity int) int
+		ViewerPermissions func(childComplexity int) int
+		Visibility        func(childComplexity int) int
+	}
+
+	RepositoryAccess struct {
+		DisplayName func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		PrincipalID func(childComplexity int) int
+		Roles       func(childComplexity int) int
 	}
 
 	Role struct {
@@ -183,6 +212,10 @@ type ComplexityRoot struct {
 
 type MutationResolver interface {
 	RevokeSession(ctx context.Context, id string) (bool, error)
+	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
+	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
+	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
+	RevokeRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
 	CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error)
 	UpdateOrganization(ctx context.Context, id string, input OrganizationSettings) (*Organization, error)
 	InviteMember(ctx context.Context, organizationID string, email string, roleID string) (*Invitation, error)
@@ -211,6 +244,8 @@ type OrganizationResolver interface {
 	JoinRequests(ctx context.Context, obj *Organization) ([]*JoinRequest, error)
 	Roles(ctx context.Context, obj *Organization) ([]*Role, error)
 	APIKeys(ctx context.Context, obj *Organization) ([]*APIKey, error)
+	Repositories(ctx context.Context, obj *Organization) ([]*Repository, error)
+	Repository(ctx context.Context, obj *Organization, slug string) (*Repository, error)
 }
 type QueryResolver interface {
 	Version(ctx context.Context) (string, error)
@@ -218,6 +253,11 @@ type QueryResolver interface {
 	Organization(ctx context.Context, slug string) (*Organization, error)
 	Permissions(ctx context.Context, scope RoleScope) ([]string, error)
 	Roles(ctx context.Context, scope RoleScope) ([]*Role, error)
+}
+type RepositoryResolver interface {
+	ViewerPermissions(ctx context.Context, obj *Repository) ([]string, error)
+	Access(ctx context.Context, obj *Repository) ([]*RepositoryAccess, error)
+	Roles(ctx context.Context, obj *Repository) ([]*Role, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -541,6 +581,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateOrganization(childComplexity, args["slug"].(string), args["name"].(string)), true
+	case "Mutation.createRepository":
+		if e.ComplexityRoot.Mutation.CreateRepository == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createRepository_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateRepository(childComplexity, args["organizationId"].(string), args["input"].(RepositoryInput)), true
 	case "Mutation.createRole":
 		if e.ComplexityRoot.Mutation.CreateRole == nil {
 			break
@@ -596,6 +647,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteRole(childComplexity, args["organizationId"].(string), args["id"].(string)), true
+	case "Mutation.grantRepositoryRole":
+		if e.ComplexityRoot.Mutation.GrantRepositoryRole == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_grantRepositoryRole_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.GrantRepositoryRole(childComplexity, args["repositoryId"].(string), args["principalId"].(string), args["roleId"].(string)), true
 	case "Mutation.grantRole":
 		if e.ComplexityRoot.Mutation.GrantRole == nil {
 			break
@@ -662,6 +724,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeAPIKeySecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["secretId"].(string)), true
+	case "Mutation.revokeRepositoryRole":
+		if e.ComplexityRoot.Mutation.RevokeRepositoryRole == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeRepositoryRole_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeRepositoryRole(childComplexity, args["repositoryId"].(string), args["principalId"].(string), args["roleId"].(string)), true
 	case "Mutation.revokeRole":
 		if e.ComplexityRoot.Mutation.RevokeRole == nil {
 			break
@@ -706,6 +779,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateOrganization(childComplexity, args["id"].(string), args["input"].(OrganizationSettings)), true
+	case "Mutation.updateRepository":
+		if e.ComplexityRoot.Mutation.UpdateRepository == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateRepository_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateRepository(childComplexity, args["id"].(string), args["input"].(RepositoryInput)), true
 	case "Mutation.updateRole":
 		if e.ComplexityRoot.Mutation.UpdateRole == nil {
 			break
@@ -778,6 +862,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Providers(childComplexity), true
+	case "Organization.repositories":
+		if e.ComplexityRoot.Organization.Repositories == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Repositories(childComplexity), true
+	case "Organization.repository":
+		if e.ComplexityRoot.Organization.Repository == nil {
+			break
+		}
+
+		args, err := ec.field_Organization_repository_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Organization.Repository(childComplexity, args["slug"].(string)), true
 	case "Organization.roles":
 		if e.ComplexityRoot.Organization.Roles == nil {
 			break
@@ -842,6 +943,104 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Query.Viewer(childComplexity), true
+
+	case "Repository.access":
+		if e.ComplexityRoot.Repository.Access == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Access(childComplexity), true
+	case "Repository.createdAt":
+		if e.ComplexityRoot.Repository.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.CreatedAt(childComplexity), true
+	case "Repository.createdBy":
+		if e.ComplexityRoot.Repository.CreatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.CreatedBy(childComplexity), true
+	case "Repository.description":
+		if e.ComplexityRoot.Repository.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Description(childComplexity), true
+	case "Repository.id":
+		if e.ComplexityRoot.Repository.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.ID(childComplexity), true
+	case "Repository.name":
+		if e.ComplexityRoot.Repository.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Name(childComplexity), true
+	case "Repository.objectFormat":
+		if e.ComplexityRoot.Repository.ObjectFormat == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.ObjectFormat(childComplexity), true
+	case "Repository.organizationId":
+		if e.ComplexityRoot.Repository.OrganizationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.OrganizationID(childComplexity), true
+	case "Repository.roles":
+		if e.ComplexityRoot.Repository.Roles == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Roles(childComplexity), true
+	case "Repository.slug":
+		if e.ComplexityRoot.Repository.Slug == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Slug(childComplexity), true
+	case "Repository.viewerPermissions":
+		if e.ComplexityRoot.Repository.ViewerPermissions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.ViewerPermissions(childComplexity), true
+	case "Repository.visibility":
+		if e.ComplexityRoot.Repository.Visibility == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Visibility(childComplexity), true
+
+	case "RepositoryAccess.displayName":
+		if e.ComplexityRoot.RepositoryAccess.DisplayName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryAccess.DisplayName(childComplexity), true
+	case "RepositoryAccess.kind":
+		if e.ComplexityRoot.RepositoryAccess.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryAccess.Kind(childComplexity), true
+	case "RepositoryAccess.principalId":
+		if e.ComplexityRoot.RepositoryAccess.PrincipalID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryAccess.PrincipalID(childComplexity), true
+	case "RepositoryAccess.roles":
+		if e.ComplexityRoot.RepositoryAccess.Roles == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryAccess.Roles(childComplexity), true
 
 	case "Role.builtIn":
 		if e.ComplexityRoot.Role.BuiltIn == nil {
@@ -983,6 +1182,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 		return graphql.NewInputUnmarshalerIndex(
 			graphql.NewInputUnmarshaler("ApiKeyInput", ec.unmarshalInputApiKeyInput),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
+			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 		)
@@ -1061,6 +1261,76 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
+	{Name: "../../../api/graphql/repositories.graphqls", Input: `# Repositories: an organization's Git repositories, their settings and the grants that reach them
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "Repositories").
+
+"Who reaches a repository, as its grants say: nobody sets it."
+enum RepositoryVisibility {
+  "Its creator and the organization's Owners alone."
+  PRIVATE
+  "Someone else too, through a grant on it or a role at the organization."
+  INTERNAL
+}
+
+extend type Organization {
+  "The repositories the viewer reads, by slug; takes org.read."
+  repositories: [Repository!]!
+  "A repository by its slug, current or former: null unless the viewer reads it."
+  repository(slug: String!): Repository
+}
+
+extend type Mutation {
+  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create."
+  createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
+  "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
+  updateRepository(id: ID!, input: RepositoryInput!): Repository!
+  "Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there."
+  grantRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
+  "Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there."
+  revokeRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
+}
+
+"One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes."
+type Repository {
+  id: ID!
+  organizationId: ID!
+  "The current slug; a lookup by an old one finds the repository with this one."
+  slug: String!
+  name: String!
+  description: String!
+  "The hash its history's objects are named by: sha1, or sha256 later."
+  objectFormat: String!
+  visibility: RepositoryVisibility!
+  "Who created it; null once they are gone."
+  createdBy: ID
+  createdAt: Time!
+  "The permissions the viewer holds on the repository."
+  viewerPermissions: [String!]!
+  "Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too."
+  access: [RepositoryAccess!]!
+  "The roles the repository grants, each with the permissions it gives there; takes repo.read."
+  roles: [Role!]!
+}
+
+"A principal's grants on a repository."
+type RepositoryAccess {
+  principalId: ID!
+  "user or api_key."
+  kind: String!
+  displayName: String!
+  "The roles it holds on the repository, each with the permissions it gives there."
+  roles: [Role!]!
+}
+
+"What makes or changes a repository. updateRepository takes every field as the repository's new value."
+input RepositoryInput {
+  "1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit, not ending in .git, unique in the organization."
+  slug: String!
+  "The slug when null or empty."
+  name: String
+  description: String
+}
+`, BuiltIn: false},
 	{Name: "../../../api/graphql/schema.graphqls", Input: `# Cobranch's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
 # Console's surface (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md, "API conventions").
 
@@ -1468,8 +1738,56 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_roles(ctx, field)
 	case "apiKeys":
 		return ec.fieldContext_Organization_apiKeys(ctx, field)
+	case "repositories":
+		return ec.fieldContext_Organization_repositories(ctx, field)
+	case "repository":
+		return ec.fieldContext_Organization_repository(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
+}
+
+func (ec *executionContext) childFields_Repository(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Repository_id(ctx, field)
+	case "organizationId":
+		return ec.fieldContext_Repository_organizationId(ctx, field)
+	case "slug":
+		return ec.fieldContext_Repository_slug(ctx, field)
+	case "name":
+		return ec.fieldContext_Repository_name(ctx, field)
+	case "description":
+		return ec.fieldContext_Repository_description(ctx, field)
+	case "objectFormat":
+		return ec.fieldContext_Repository_objectFormat(ctx, field)
+	case "visibility":
+		return ec.fieldContext_Repository_visibility(ctx, field)
+	case "createdBy":
+		return ec.fieldContext_Repository_createdBy(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Repository_createdAt(ctx, field)
+	case "viewerPermissions":
+		return ec.fieldContext_Repository_viewerPermissions(ctx, field)
+	case "access":
+		return ec.fieldContext_Repository_access(ctx, field)
+	case "roles":
+		return ec.fieldContext_Repository_roles(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Repository", field.Name)
+}
+
+func (ec *executionContext) childFields_RepositoryAccess(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "principalId":
+		return ec.fieldContext_RepositoryAccess_principalId(ctx, field)
+	case "kind":
+		return ec.fieldContext_RepositoryAccess_kind(ctx, field)
+	case "displayName":
+		return ec.fieldContext_RepositoryAccess_displayName(ctx, field)
+	case "roles":
+		return ec.fieldContext_RepositoryAccess_roles(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RepositoryAccess", field.Name)
 }
 
 func (ec *executionContext) childFields_Role(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -1758,6 +2076,28 @@ func (ec *executionContext) field_Mutation_createOrganization_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createRepository_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RepositoryInput, error) {
+			return ec.unmarshalNRepositoryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1857,6 +2197,36 @@ func (ec *executionContext) field_Mutation_deleteRole_args(ctx context.Context, 
 		return nil, err
 	}
 	args["id"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_grantRepositoryRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "roleId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roleId"] = arg2
 	return args, nil
 }
 
@@ -2008,6 +2378,36 @@ func (ec *executionContext) field_Mutation_revokeApiKeySecret_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_revokeRepositoryRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "roleId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["roleId"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_revokeRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2104,6 +2504,28 @@ func (ec *executionContext) field_Mutation_updateOrganization_args(ctx context.C
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateRepository_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (RepositoryInput, error) {
+			return ec.unmarshalNRepositoryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -2131,6 +2553,20 @@ func (ec *executionContext) field_Mutation_updateRole_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Organization_repository_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "slug",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["slug"] = arg0
 	return args, nil
 }
 
@@ -3235,6 +3671,182 @@ func (ec *executionContext) fieldContext_Mutation_revokeSession(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_revokeSession_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createRepository(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createRepository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateRepository(ctx, fc.Args["organizationId"].(string), fc.Args["input"].(RepositoryInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Repository) graphql.Marshaler {
+			return ec.marshalNRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createRepository(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Repository(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createRepository_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateRepository(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateRepository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateRepository(ctx, fc.Args["id"].(string), fc.Args["input"].(RepositoryInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Repository) graphql.Marshaler {
+			return ec.marshalNRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateRepository(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Repository(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateRepository_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_grantRepositoryRole(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_grantRepositoryRole(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().GrantRepositoryRole(ctx, fc.Args["repositoryId"].(string), fc.Args["principalId"].(string), fc.Args["roleId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_grantRepositoryRole(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_grantRepositoryRole_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeRepositoryRole(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeRepositoryRole(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeRepositoryRole(ctx, fc.Args["repositoryId"].(string), fc.Args["principalId"].(string), fc.Args["roleId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeRepositoryRole(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeRepositoryRole_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -4465,6 +5077,82 @@ func (ec *executionContext) fieldContext_Organization_apiKeys(_ context.Context,
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_repositories(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_repositories(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().Repositories(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Repository) graphql.Marshaler {
+			return ec.marshalNRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_repositories(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Repository(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Organization_repository(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_repository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Organization().Repository(ctx, obj, fc.Args["slug"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Repository) graphql.Marshaler {
+			return ec.marshalORepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_repository(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Repository(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Organization_repository_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Query_version(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -4723,6 +5411,401 @@ func (ec *executionContext) fieldContext_Query___schema(_ context.Context, field
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields___Schema(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_id(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Repository_organizationId(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_organizationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OrganizationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_organizationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Repository_slug(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_slug(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Slug, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_slug(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
+}
+
+func (ec *executionContext) _Repository_name(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
+}
+
+func (ec *executionContext) _Repository_description(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
+}
+
+func (ec *executionContext) _Repository_objectFormat(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_objectFormat(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ObjectFormat, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_objectFormat(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
+}
+
+func (ec *executionContext) _Repository_visibility(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_visibility(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Visibility, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v RepositoryVisibility) graphql.Marshaler {
+			return ec.marshalNRepositoryVisibility2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryVisibility(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_visibility(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "RepositoryVisibility")
+}
+
+func (ec *executionContext) _Repository_createdBy(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_createdBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Repository_createdAt(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Repository_viewerPermissions(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_viewerPermissions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().ViewerPermissions(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_viewerPermissions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Repository", field, true, true, "String")
+}
+
+func (ec *executionContext) _Repository_access(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_access(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().Access(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RepositoryAccess) graphql.Marshaler {
+			return ec.marshalNRepositoryAccess2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryAccessᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_access(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RepositoryAccess(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_roles(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_roles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().Roles(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Role) graphql.Marshaler {
+			return ec.marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_roles(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Role(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RepositoryAccess_principalId(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryAccess_principalId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PrincipalID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryAccess_principalId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryAccess", field, false, false, "ID")
+}
+
+func (ec *executionContext) _RepositoryAccess_kind(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryAccess_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryAccess_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryAccess", field, false, false, "String")
+}
+
+func (ec *executionContext) _RepositoryAccess_displayName(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryAccess_displayName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DisplayName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryAccess_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryAccess", field, false, false, "String")
+}
+
+func (ec *executionContext) _RepositoryAccess_roles(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryAccess_roles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Roles, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Role) graphql.Marshaler {
+			return ec.marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryAccess_roles(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RepositoryAccess",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Role(ctx, field)
 		},
 	}
 	return fc, nil
@@ -6462,6 +7545,62 @@ func UnmarshalOrganizationSettings(ctx context.Context, raw any) (OrganizationSe
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputRepositoryInput(ctx context.Context, obj any) (RepositoryInput, error) {
+	var it RepositoryInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"slug", "name", "description"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "slug":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("slug"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Slug = data
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalRepositoryInput unmarshals raw into the RepositoryInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalRepositoryInput(ctx context.Context, raw any) (RepositoryInput, error) {
+	var out RepositoryInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "RepositoryInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputRoleInput(ctx context.Context, obj any) (RoleInput, error) {
 	var it RoleInput
 	if obj == nil {
@@ -6992,6 +8131,34 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createRepository":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createRepository(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateRepository":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateRepository(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grantRepositoryRole":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_grantRepositoryRole(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeRepositoryRole":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeRepositoryRole(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createOrganization":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createOrganization(ctx, field)
@@ -7231,6 +8398,18 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_apiKeys(ctx, field, obj)
 				})
+		case "repositories":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_repositories(ctx, field, obj)
+				})
+		case "repository":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_repository(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -7310,6 +8489,145 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 			})
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var repositoryImplementors = []string{"Repository"}
+
+func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSet, obj *Repository) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, repositoryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Repository")
+		case "id":
+			out.Values[i] = ec._Repository_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "organizationId":
+			out.Values[i] = ec._Repository_organizationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "slug":
+			out.Values[i] = ec._Repository_slug(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "name":
+			out.Values[i] = ec._Repository_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "description":
+			out.Values[i] = ec._Repository_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "objectFormat":
+			out.Values[i] = ec._Repository_objectFormat(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "visibility":
+			out.Values[i] = ec._Repository_visibility(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdBy":
+			out.Values[i] = ec._Repository_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdAt":
+			out.Values[i] = ec._Repository_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "viewerPermissions":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_viewerPermissions(ctx, field, obj)
+				})
+		case "access":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_access(ctx, field, obj)
+				})
+		case "roles":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_roles(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var repositoryAccessImplementors = []string{"RepositoryAccess"}
+
+func (ec *executionContext) _RepositoryAccess(ctx context.Context, sel ast.SelectionSet, obj *RepositoryAccess) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, repositoryAccessImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RepositoryAccess")
+		case "principalId":
+			out.Values[i] = ec._RepositoryAccess_principalId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._RepositoryAccess_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._RepositoryAccess_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "roles":
+			out.Values[i] = ec._RepositoryAccess_roles(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -8127,6 +9445,69 @@ func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinte
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNRepository2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryᚄ(ctx context.Context, sel ast.SelectionSet, v []*Repository) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx context.Context, sel ast.SelectionSet, v *Repository) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Repository!")
+		return graphql.Null
+	}
+	return ec._Repository(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRepositoryAccess2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryAccessᚄ(ctx context.Context, sel ast.SelectionSet, v []*RepositoryAccess) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRepositoryAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryAccess(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRepositoryAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryAccess(ctx context.Context, sel ast.SelectionSet, v *RepositoryAccess) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "RepositoryAccess!")
+		return graphql.Null
+	}
+	return ec._RepositoryAccess(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRepositoryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryInput(ctx context.Context, v any) (RepositoryInput, error) {
+	res, err := ec.unmarshalInputRepositoryInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNRepositoryVisibility2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryVisibility(ctx context.Context, v any) (RepositoryVisibility, error) {
+	var res RepositoryVisibility
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRepositoryVisibility2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryVisibility(ctx context.Context, sel ast.SelectionSet, v RepositoryVisibility) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx context.Context, sel ast.SelectionSet, v []*Role) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -8442,6 +9823,13 @@ func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 		return graphql.Null
 	}
 	return ec._Organization(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalORepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx context.Context, sel ast.SelectionSet, v *Repository) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Repository(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretInput(ctx context.Context, v any) (*SecretInput, error) {

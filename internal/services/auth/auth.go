@@ -26,13 +26,18 @@ const (
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
 var AnonymousID = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 
-// The built-in roles a sign-in grants, by the IDs the first migration gives them.
+// The built-in roles, by the IDs migration 2 gives them: those a sign-in grants, the organizations' and the
+// repositories'.
 var (
 	RoleInstallationAdmin = uuid.MustParse("00000000-0000-7000-8000-000000000101")
 	RoleInstallationUser  = uuid.MustParse("00000000-0000-7000-8000-000000000102")
 	RoleOwner             = uuid.MustParse("00000000-0000-7000-8000-000000000201")
 	RoleMember            = uuid.MustParse("00000000-0000-7000-8000-000000000202")
 	RoleGuest             = uuid.MustParse("00000000-0000-7000-8000-000000000203")
+	RoleReader            = uuid.MustParse("00000000-0000-7000-8000-000000000301")
+	RoleDeveloper         = uuid.MustParse("00000000-0000-7000-8000-000000000302")
+	RoleMaintainer        = uuid.MustParse("00000000-0000-7000-8000-000000000303")
+	RoleAutomation        = uuid.MustParse("00000000-0000-7000-8000-000000000304")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.

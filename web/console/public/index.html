@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
-  <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), and an organization's home,
-       members, roles and settings under its slug. The design system's colours (docs/cobranch/designs/design-system), the REST
+  <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
+       members, roles and settings under its slug, and its repositories under theirs. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, and the Auth server at the other URL it names. Caddy serves this page for
-       every path, and it routes on the path: the organization's slug first, then its page. -->
+       every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
+       then the repository's page. -->
   <style>
     :root {
       color-scheme: light;
@@ -156,8 +157,11 @@
     header.bar .brand { font-weight: 600; letter-spacing: -0.2px; text-decoration: none; color: var(--color-fg-default); }
     header.bar select { width: auto; }
     header.bar nav { display: flex; gap: 4px; }
-    header.bar nav a { padding: 5px 10px; border-radius: 8px; color: var(--color-fg-muted); text-decoration: none; font-weight: 500; }
-    header.bar nav a.current { background: var(--color-bg-raised); color: var(--color-fg-default); border: 1px solid var(--color-border-default); }
+    header.bar nav a, nav.tabs a { padding: 5px 10px; border-radius: 8px; color: var(--color-fg-muted); text-decoration: none; font-weight: 500; }
+    header.bar nav a.current, nav.tabs a.current { background: var(--color-bg-raised); color: var(--color-fg-default); border: 1px solid var(--color-border-default); }
+    nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+    .heading { display: grid; gap: 8px; }
+    .heading .row { justify-content: flex-start; }
     header.bar .spacer { flex: 1; }
     main.page { width: min(880px, 100%); margin: 0 auto; padding: 24px; display: grid; gap: 24px; }
     section.panel { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); }
@@ -236,7 +240,8 @@
       history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
       render();
     }
-    // route is the page's path under the Console's root: [] for its home, [slug] or [slug, page] for an organization's.
+    // route is the page's path under the Console's root: [] for its home, [slug] or [slug, page] for an organization's,
+    // [slug, repository] or [slug, repository, page] for a repository's.
     function route() {
       const rest = location.pathname.slice(base.length).replace(/\/$/, "");
       return rest ? rest.split("/") : [];
@@ -280,7 +285,7 @@
       }
       if (parts[0] === "new") return showWelcome();
       if (reserved.includes(parts[0])) return showWelcome();
-      return showOrganization(parts[0], parts[1] || "");
+      return showOrganization(parts[0], parts[1] || "", parts[2] || "");
     }
 
     async function showSignIn() {
@@ -347,8 +352,17 @@
     }
     const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
 
-    // An organization's pages: its home, members and settings, under a bar with the switcher and the navigation.
-    async function showOrganization(slug, page) {
+    // An organization's own pages, which no repository's slug is: the repositories' reserved slugs.
+    const orgPages = ["members", "roles", "api-keys", "settings", "repos", "new"];
+    // What a repository's visibility means, as the API names it.
+    const visibilities = {
+      private: { name: "Private", title: "Only those granted a role on it, and the organization's Owners, read it." },
+      internal: { name: "Internal", title: "Others of the organization read it too, through a grant on it or an organization role." },
+    };
+
+    // An organization's pages: its home with its repositories, members, roles, API keys and settings, and its
+    // repositories' pages, under a bar with the switcher and the navigation.
+    async function showOrganization(slug, page, sub) {
       let org;
       try {
         org = await api("GET", "/orgs/" + encodeURIComponent(slug));
@@ -356,13 +370,14 @@
         if (err.status === 404) return notFound(slug);
         throw err;
       }
-      if (org.slug !== slug) return go("/" + org.slug + (page ? "/" + page : ""), true);
+      if (org.slug !== slug) return go("/" + [org.slug, page, sub].filter(Boolean).join("/"), true);
       try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
       roles = (await api("GET", "/orgs/" + org.slug + "/roles")).roles;
       const can = (p) => org.viewerPermissions.includes(p);
       const pages = [["", "Home"], ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"]];
       if (can("org.manage")) pages.push(["settings", "Settings"]);
-      const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === page ? "current" : "" }, label);
+      const current = orgPages.includes(page) ? page : "";
+      const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, label);
       const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
         orgs.map((o) => h("option", { value: o.slug, selected: o.slug === org.slug }, o.name)), h("option", { value: "+" }, "Create or join…"));
       const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), switcher, h("nav", {}, pages.map(link)),
@@ -374,10 +389,130 @@
       if (page === "roles") return showRoles(org, main, can);
       if (page === "api-keys") return showApiKeys(org, main, can);
       if (page === "settings" && can("org.manage")) return showSettings(org, main);
-      if (page) return go("/" + org.slug);
+      if (page === "new" && can("repos.create")) return showNewRepository(org, main);
+      if (orgPages.includes(page)) return go("/" + org.slug);
+      if (page) return showRepository(org, main, can, page, sub);
+      const list = (await api("GET", "/orgs/" + org.slug + "/repos")).repositories;
+      const repoRow = (r) => h("tr", {}, h("td", {}, h("a", { href: base + org.slug + "/" + r.slug, "data-nav": "" }, r.name), r.description ? h("p", {}, r.description) : null),
+        h("td", {}, h("code", {}, r.slug)), h("td", {}, h("span", { class: "chip", title: visibilities[r.visibility].title }, visibilities[r.visibility].name)), h("td", {}, when(r.createdAt)));
       main.append(h("h1", {}, org.name), h("p", {}, h("code", {}, org.slug), org.acceptsJoinRequests ? " · accepts join requests" : ""),
-        h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, org.viewerPermissions.map((p) => h("code", {}, p)))),
-        h("section", { class: "panel" }, h("h3", {}, "Next"), h("p", {}, "Repositories, agents and the rest arrive with their slices. For now, manage ", h("a", { href: base + org.slug + "/members", "data-nav": "" }, "its members"), ", ", h("a", { href: base + org.slug + "/roles", "data-nav": "" }, "its roles"), " and ", h("a", { href: base + org.slug + "/api-keys", "data-nav": "" }, "its API keys"), ".")));
+        h("section", { class: "panel" }, h("div", { class: "row" }, h("h3", {}, "Repositories"),
+          can("repos.create") ? h("a", { class: "button small primary", href: base + org.slug + "/new", "data-nav": "" }, "New repository") : null),
+          list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", {}, "Slug"), h("th", {}, "Visibility"), h("th", {}, "Created"))), h("tbody", {}, list.map(repoRow)))
+            : h("p", {}, can("repos.create") ? "No repositories you may read yet. Make the first." : "No repositories you may read yet.")),
+        h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, org.viewerPermissions.map((p) => h("code", {}, p)))));
+    }
+
+    // A repository's slug in a form: 1 to 100 lowercase letters, digits, dots, underscores and hyphens, from a letter
+    // or digit. The API refuses the rest: a slug ending in .git, and the organization's own pages.
+    const repoSlugInput = (value) => h("input", { name: "slug", required: true, value, placeholder: "website", pattern: "[a-z0-9][a-z0-9._\\-]*", maxlength: 100 });
+
+    // The form that makes a repository, whose creator becomes its Maintainer.
+    function showNewRepository(org, main) {
+      const error = h("p", { class: "alert", hidden: true });
+      const slug = repoSlugInput("");
+      const name = h("input", { name: "name", maxlength: 100, placeholder: "Website" });
+      const description = h("input", { name: "description", maxlength: 500 });
+      main.replaceChildren(h("h1", {}, "New repository"), error, h("section", { class: "panel" },
+        h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          api("POST", "/orgs/" + org.slug + "/repos", { slug: slug.value, name: name.value || undefined, description: description.value })
+            .then((r) => go("/" + org.slug + "/" + r.slug)).catch((err) => { error.textContent = err.message; error.hidden = false; });
+        } },
+          h("label", {}, "Slug", h("span", {}, "Its URL, in " + org.name + ": lowercase letters, digits, dots, underscores and hyphens."), slug),
+          h("label", {}, "Name", h("span", {}, "Its slug unless you name it."), name),
+          h("label", {}, "Description", description),
+          h("p", {}, "You become its Maintainer. Others of " + org.name + " read it once you grant them a role on it, or through an organization role that reads every repository."),
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
+    }
+
+    // A repository's pages: its code, who holds grants on it, and, with repo.manage, its settings.
+    async function showRepository(org, main, orgCan, slug, sub) {
+      let repo;
+      try {
+        repo = await api("GET", "/orgs/" + org.slug + "/repos/" + encodeURIComponent(slug));
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return main.replaceChildren(h("h1", {}, "No such repository"), h("p", {}, "There is no repository ", h("code", {}, org.slug + "/" + slug), " that you may read."),
+          h("div", {}, h("a", { class: "button", href: base + org.slug, "data-nav": "" }, "Back to " + org.name)));
+      }
+      if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub].filter(Boolean).join("/"), true);
+      const can = (p) => repo.viewerPermissions.includes(p);
+      const tabs = [["", "Code"], ["access", "Access"]];
+      if (can("repo.manage")) tabs.push(["settings", "Settings"]);
+      if (!tabs.some(([t]) => t === sub)) return go("/" + org.slug + "/" + repo.slug, true);
+      const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
+      const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === sub ? "current" : "" }, label);
+      const visibility = visibilities[repo.visibility];
+      const heading = h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug, "data-nav": "" }, org.name), " / ", h("code", {}, repo.slug)),
+        h("div", { class: "row" }, h("h1", {}, repo.name), h("span", { class: "chip", title: visibility.title }, visibility.name)),
+        repo.description ? h("p", {}, repo.description) : null, h("nav", { class: "tabs" }, tabs.map(tab)));
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      let sections;
+      if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
+      else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
+      else sections = [h("section", { class: "panel" }, h("h3", {}, "Code"),
+          h("p", {}, "Nothing is pushed here yet: cloning and pushing arrive with the Git server. Until then a repository holds its settings and who may reach it."),
+          h("p", {}, "It opens on branch ", h("code", {}, "main"), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".")),
+        h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p))))];
+      main.replaceChildren(heading, error, ...sections);
+    }
+
+    // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants
+    // and revokes them: roles of the repository, to the organization's members and API keys.
+    async function repositoryAccess(org, repo, path, manage, fail) {
+      const [access, repoRoles, members, keys] = await Promise.all([
+        api("GET", path + "/access").then((d) => d.access),
+        api("GET", path + "/roles").then((d) => d.roles),
+        manage ? api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members) : [],
+        manage ? api("GET", "/orgs/" + org.slug + "/api-keys").then((d) => d.apiKeys) : [],
+      ]);
+      const chip = (a, r) => h("span", { class: "chip" }, r.name, manage
+        ? h("button", { type: "button", title: "Revoke " + r.name, onclick: () => api("DELETE", path + "/access/" + a.principalId + "/roles/" + r.id).then(render).catch(fail) }, "×") : null);
+      const row = (a) => h("tr", {}, h("td", {}, a.displayName, a.kind === "api_key" ? h("span", { class: "chip" }, "API key") : null, a.principalId === me.id ? h("span", { class: "chip" }, "you") : null),
+        h("td", {}, a.roles.map((r) => chip(a, r))));
+      const sections = [h("section", { class: "panel" }, h("p", {}, visibilities[repo.visibility].title + " Organization roles that hold repository permissions reach every repository of " + org.name + " too: see ",
+          h("a", { href: base + org.slug + "/roles", "data-nav": "" }, "its roles"), "."),
+        access.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "Roles on this repository"))), h("tbody", {}, access.map(row)))
+          : h("p", {}, "Nobody holds a role on it."))];
+      if (manage) {
+        const principal = h("select", { name: "principalId", required: true },
+          h("optgroup", { label: "Members" }, members.map((m) => h("option", { value: m.userId }, m.displayName))),
+          keys.length ? h("optgroup", { label: "API keys" }, keys.map((k) => h("option", { value: k.id }, k.name))) : null);
+        const role = h("select", { name: "roleId" }, repoRoles.map((r) => h("option", { value: r.id }, r.name)));
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Grant a role"), h("p", {}, "Only roles whose every permission you hold on this repository yourself."),
+          h("form", { class: "inline with-role", onsubmit: (e) => { e.preventDefault(); api("POST", path + "/access/" + principal.value + "/roles", { roleId: role.value }).then(render).catch(fail); } },
+            h("label", {}, "Who", principal), h("label", {}, "Role", role), h("button", { class: "button primary", type: "submit" }, "Grant"))));
+      }
+      sections.push(h("section", { class: "panel" }, h("h3", {}, "Repository roles"),
+        h("table", {}, h("tbody", {}, repoRoles.map((r) => h("tr", {}, h("td", {}, r.name, r.builtIn ? h("span", { class: "chip" }, "built in") : null, r.description ? h("p", {}, r.description) : null),
+          h("td", {}, h("div", { class: "perms" }, r.permissions.map((p) => h("code", {}, p))))))))));
+      return sections;
+    }
+
+    // repositorySettings changes repo's slug, name and description.
+    function repositorySettings(org, repo, path, fail) {
+      const saved = h("p", { class: "notice", hidden: true }, "Saved.");
+      const slug = repoSlugInput(repo.slug);
+      const name = h("input", { name: "name", required: true, maxlength: 100, value: repo.name });
+      const description = h("input", { name: "description", maxlength: 500, value: repo.description });
+      const form = h("form", { onsubmit: async (e) => {
+        e.preventDefault();
+        saved.hidden = true;
+        try {
+          const updated = await api("PATCH", path, { slug: slug.value, name: name.value, description: description.value });
+          if (updated.slug !== repo.slug) return go("/" + org.slug + "/" + updated.slug + "/settings");
+          saved.hidden = false;
+        } catch (err) {
+          fail(err);
+        }
+      } },
+        h("label", {}, "Name", name),
+        h("label", {}, "Slug", h("span", {}, "Its URL. The old slug keeps pointing here until another repository of " + org.name + " takes it."), slug),
+        h("label", {}, "Description", description),
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
+      return [saved, h("section", { class: "panel" }, form)];
     }
 
     function notFound(slug) {

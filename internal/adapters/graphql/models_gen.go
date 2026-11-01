@@ -118,6 +118,10 @@ type Organization struct {
 	Roles []*Role `json:"roles"`
 	// The API keys, with their roles and secrets, by name; takes org.read.
 	APIKeys []*APIKey `json:"apiKeys"`
+	// The repositories the viewer reads, by slug; takes org.read.
+	Repositories []*Repository `json:"repositories"`
+	// A repository by its slug, current or former: null unless the viewer reads it.
+	Repository *Repository `json:"repository,omitempty"`
 }
 
 type OrganizationSettings struct {
@@ -130,6 +134,47 @@ type OrganizationSettings struct {
 }
 
 type Query struct {
+}
+
+// One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes.
+type Repository struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// The current slug; a lookup by an old one finds the repository with this one.
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// The hash its history's objects are named by: sha1, or sha256 later.
+	ObjectFormat string               `json:"objectFormat"`
+	Visibility   RepositoryVisibility `json:"visibility"`
+	// Who created it; null once they are gone.
+	CreatedBy *string   `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// The permissions the viewer holds on the repository.
+	ViewerPermissions []string `json:"viewerPermissions"`
+	// Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too.
+	Access []*RepositoryAccess `json:"access"`
+	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
+	Roles []*Role `json:"roles"`
+}
+
+// A principal's grants on a repository.
+type RepositoryAccess struct {
+	PrincipalID string `json:"principalId"`
+	// user or api_key.
+	Kind        string `json:"kind"`
+	DisplayName string `json:"displayName"`
+	// The roles it holds on the repository, each with the permissions it gives there.
+	Roles []*Role `json:"roles"`
+}
+
+// What makes or changes a repository. updateRepository takes every field as the repository's new value.
+type RepositoryInput struct {
+	// 1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit, not ending in .git, unique in the organization.
+	Slug string `json:"slug"`
+	// The slug when null or empty.
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // A role granted at an organization: built in, or the organization's own.
@@ -188,6 +233,64 @@ type User struct {
 	Invitations []*Invitation `json:"invitations"`
 	// The viewer's pending requests to join organizations.
 	JoinRequests []*JoinRequest `json:"joinRequests"`
+}
+
+// Who reaches a repository, as its grants say: nobody sets it.
+type RepositoryVisibility string
+
+const (
+	// Its creator and the organization's Owners alone.
+	RepositoryVisibilityPrivate RepositoryVisibility = "PRIVATE"
+	// Someone else too, through a grant on it or a role at the organization.
+	RepositoryVisibilityInternal RepositoryVisibility = "INTERNAL"
+)
+
+var AllRepositoryVisibility = []RepositoryVisibility{
+	RepositoryVisibilityPrivate,
+	RepositoryVisibilityInternal,
+}
+
+func (e RepositoryVisibility) IsValid() bool {
+	switch e {
+	case RepositoryVisibilityPrivate, RepositoryVisibilityInternal:
+		return true
+	}
+	return false
+}
+
+func (e RepositoryVisibility) String() string {
+	return string(e)
+}
+
+func (e *RepositoryVisibility) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RepositoryVisibility(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RepositoryVisibility", str)
+	}
+	return nil
+}
+
+func (e RepositoryVisibility) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RepositoryVisibility) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RepositoryVisibility) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // The scopes roles are granted at. Repositories come with their slice.

@@ -44,8 +44,8 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Architecture](architecture.md) | Workloads, stores, the push path, events, the API and the stack. | Agreed |
 | [Principals and permissions](principals-and-permissions.md) | Who acts, how each signs in, and what grants let them do. | Agreed |
 | [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
-| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Proposed |
-| [Git hosting](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
+| [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Agreed |
+| [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -211,8 +211,8 @@ reconciliation are worked out in the subsystem designs.
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
-slice after the ones it waits for. The design and the installable foundations are done, and so are sign-in and
-organizations; the Back-office and Git hosting are in progress.
+slice after the ones it waits for. The design, the installable foundations, and identity and organizations (sign-in,
+organizations and the Back-office) are done; Git hosting is in progress.
 
 **The roadmap by milestone, as of 2026-10-31**
 
