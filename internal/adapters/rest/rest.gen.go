@@ -224,6 +224,44 @@ type OrganizationSettings struct {
 	Slug      *string   `json:"slug,omitempty"`
 }
 
+// PersonalToken A personal token, as its user sees it; the token itself was shown once.
+type PersonalToken struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// ExpiresAt When the token stops working.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Hint The token's last four characters.
+	Hint       string             `json:"hint"`
+	Id         openapi_types.UUID `json:"id"`
+	LastUsedAt *time.Time         `json:"lastUsedAt,omitempty"`
+	Name       string             `json:"name"`
+
+	// Permissions The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give.
+	Permissions []string `json:"permissions"`
+}
+
+// PersonalTokenCreated A personal token and its secret, which is shown here and never again.
+type PersonalTokenCreated struct {
+	// Secret The token, to give a Git client as its password or a script as its bearer token.
+	Secret string `json:"secret"`
+
+	// Token A personal token, as its user sees it; the token itself was shown once.
+	Token PersonalToken `json:"token"`
+}
+
+// PersonalTokenInput What makes a personal token.
+type PersonalTokenInput struct {
+	// ExpiresAt When the token stops working, in the future and within a year; 30 days from now when absent.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// Name What the token is for, 1 to 100 characters.
+	Name string `json:"name"`
+
+	// Permissions The permissions the token may use, from the catalog; repo.read and repo.push when absent or empty.
+	Permissions *[]string `json:"permissions,omitempty"`
+}
+
 // Problem Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
 type Problem struct {
 	// Code The stable error code, such as route.not_found.
@@ -456,6 +494,9 @@ type ListBuiltInRolesParams struct {
 // ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
 type ListBuiltInRolesParamsScope string
 
+// CreateMyTokenJSONRequestBody defines body for CreateMyToken for application/json ContentType.
+type CreateMyTokenJSONRequestBody = PersonalTokenInput
+
 // CreateOrganizationJSONRequestBody defines body for CreateOrganization for application/json ContentType.
 type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 
@@ -521,6 +562,15 @@ type ServerInterface interface {
 	// RevokeMySession Revokes one of the user's sessions; the next request with its cookie fails.
 	// (DELETE /me/sessions/{id})
 	RevokeMySession(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
+	// (GET /me/tokens)
+	ListMyTokens(w http.ResponseWriter, r *http.Request)
+	// CreateMyToken Makes a personal token that acts as the user, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key.
+	// (POST /me/tokens)
+	CreateMyToken(w http.ResponseWriter, r *http.Request)
+	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
+	// (DELETE /me/tokens/{id})
+	RevokeMyToken(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
 	// (POST /orgs)
 	CreateOrganization(w http.ResponseWriter, r *http.Request)
@@ -778,6 +828,60 @@ func (siw *ServerInterfaceWrapper) RevokeMySession(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeMySession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMyTokens operation middleware
+func (siw *ServerInterfaceWrapper) ListMyTokens(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMyTokens(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateMyToken operation middleware
+func (siw *ServerInterfaceWrapper) CreateMyToken(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateMyToken(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeMyToken operation middleware
+func (siw *ServerInterfaceWrapper) RevokeMyToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeMyToken(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2009,6 +2113,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{id}", wrapper.RevokeMySession)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/tokens", wrapper.ListMyTokens)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/tokens", wrapper.CreateMyToken)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/tokens/{id}", wrapper.RevokeMyToken)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/organizations", wrapper.ListMyOrganizations)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/accept", wrapper.AcceptInvitation)
@@ -2530,6 +2637,208 @@ type RevokeMySessiondefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeMySessiondefaultApplicationProblemPlusJSONResponse) VisitRevokeMySessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTokensRequestObject struct {
+}
+
+type ListMyTokensResponseObject interface {
+	VisitListMyTokensResponse(w http.ResponseWriter) error
+}
+
+type ListMyTokens200JSONResponse struct {
+	Tokens []PersonalToken `json:"tokens"`
+}
+
+func (response ListMyTokens200JSONResponse) VisitListMyTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTokens401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMyTokens401ApplicationProblemPlusJSONResponse) VisitListMyTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMyTokensdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMyTokensdefaultApplicationProblemPlusJSONResponse) VisitListMyTokensResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMyTokenRequestObject struct {
+	Body *CreateMyTokenJSONRequestBody
+}
+
+type CreateMyTokenResponseObject interface {
+	VisitCreateMyTokenResponse(w http.ResponseWriter) error
+}
+
+type CreateMyToken201JSONResponse PersonalTokenCreated
+
+func (response CreateMyToken201JSONResponse) VisitCreateMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMyToken400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateMyToken400ApplicationProblemPlusJSONResponse) VisitCreateMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMyToken401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMyToken401ApplicationProblemPlusJSONResponse) VisitCreateMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMyToken403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateMyToken403ApplicationProblemPlusJSONResponse) VisitCreateMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateMyTokendefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateMyTokendefaultApplicationProblemPlusJSONResponse) VisitCreateMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeMyTokenRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type RevokeMyTokenResponseObject interface {
+	VisitRevokeMyTokenResponse(w http.ResponseWriter) error
+}
+
+type RevokeMyToken204Response struct {
+}
+
+func (response RevokeMyToken204Response) VisitRevokeMyTokenResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeMyToken401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeMyToken401ApplicationProblemPlusJSONResponse) VisitRevokeMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeMyToken404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeMyToken404ApplicationProblemPlusJSONResponse) VisitRevokeMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeMyTokendefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeMyTokendefaultApplicationProblemPlusJSONResponse) VisitRevokeMyTokenResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -5647,6 +5956,15 @@ type StrictServerInterface interface {
 	// RevokeMySession Revokes one of the user's sessions; the next request with its cookie fails.
 	// (DELETE /me/sessions/{id})
 	RevokeMySession(ctx context.Context, request RevokeMySessionRequestObject) (RevokeMySessionResponseObject, error)
+	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
+	// (GET /me/tokens)
+	ListMyTokens(ctx context.Context, request ListMyTokensRequestObject) (ListMyTokensResponseObject, error)
+	// CreateMyToken Makes a personal token that acts as the user, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key.
+	// (POST /me/tokens)
+	CreateMyToken(ctx context.Context, request CreateMyTokenRequestObject) (CreateMyTokenResponseObject, error)
+	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
+	// (DELETE /me/tokens/{id})
+	RevokeMyToken(ctx context.Context, request RevokeMyTokenRequestObject) (RevokeMyTokenResponseObject, error)
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
 	// (POST /orgs)
 	CreateOrganization(ctx context.Context, request CreateOrganizationRequestObject) (CreateOrganizationResponseObject, error)
@@ -5986,6 +6304,87 @@ func (sh *strictHandler) RevokeMySession(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeMySessionResponseObject); ok {
 		if err := validResponse.VisitRevokeMySessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMyTokens operation middleware
+func (sh *strictHandler) ListMyTokens(w http.ResponseWriter, r *http.Request) {
+	var request ListMyTokensRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMyTokens(ctx, request.(ListMyTokensRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMyTokens")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMyTokensResponseObject); ok {
+		if err := validResponse.VisitListMyTokensResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateMyToken operation middleware
+func (sh *strictHandler) CreateMyToken(w http.ResponseWriter, r *http.Request) {
+	var request CreateMyTokenRequestObject
+
+	var body CreateMyTokenJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateMyToken(ctx, request.(CreateMyTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateMyToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateMyTokenResponseObject); ok {
+		if err := validResponse.VisitCreateMyTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeMyToken operation middleware
+func (sh *strictHandler) RevokeMyToken(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request RevokeMyTokenRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeMyToken(ctx, request.(RevokeMyTokenRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeMyToken")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeMyTokenResponseObject); ok {
+		if err := validResponse.VisitRevokeMyTokenResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -36,6 +36,16 @@ func (r *mutationResolver) RevokeSession(ctx context.Context, id string) (bool, 
 	return true, nil
 }
 
+// CreatePersonalToken is the resolver for the createPersonalToken field.
+func (r *mutationResolver) CreatePersonalToken(ctx context.Context, input PersonalTokenInput) (*PersonalTokenCreated, error) {
+	return r.createPersonalToken(ctx, input)
+}
+
+// RevokePersonalToken is the resolver for the revokePersonalToken field.
+func (r *mutationResolver) RevokePersonalToken(ctx context.Context, id string) (bool, error) {
+	return r.revokePersonalToken(ctx, id)
+}
+
 // CreateOrganization is the resolver for the createOrganization field.
 func (r *mutationResolver) CreateOrganization(ctx context.Context, slug string, name string) (*Organization, error) {
 	v, err := viewer(ctx)
@@ -448,6 +458,11 @@ func (r *userResolver) Sessions(ctx context.Context, obj *User) ([]*Session, err
 		return nil, err
 	}
 	return sessions, nil
+}
+
+// PersonalTokens is the resolver for the personalTokens field.
+func (r *userResolver) PersonalTokens(ctx context.Context, obj *User) ([]*PersonalToken, error) {
+	return r.personalTokens(ctx)
 }
 
 // Permissions is the resolver for the permissions field.

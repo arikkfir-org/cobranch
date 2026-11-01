@@ -5,6 +5,7 @@ package authtest
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
@@ -49,7 +50,8 @@ type Store struct {
 	Users      map[uuid.UUID]auth.User
 	Grants     map[uuid.UUID][]auth.Grant
 	ByToken    map[string]auth.Session // by token hash
-	// Credentials are the API keys' secrets by token hash, and Principals the principals they act as.
+	// Credentials are the API keys' secrets and the personal tokens by token hash, and Principals the API keys they
+	// act as (a token acts as one of Users).
 	Credentials map[string]auth.Credential
 	Principals  map[uuid.UUID]auth.Principal
 	// Installation is the settings the Back-office changes, and Stored the providers it added, by ID.
@@ -65,24 +67,66 @@ func NewStore() *Store {
 		Credentials: map[string]auth.Credential{}, Principals: map[uuid.UUID]auth.Principal{}}
 }
 
-// AddCredential registers secret as a credential acting as principal, with expiresAt (zero never).
+// AddCredential registers secret as an API key's secret acting as principal, with expiresAt (zero never).
 func (s *Store) AddCredential(secret string, principal auth.Principal, expiresAt time.Time) auth.Credential {
-	c := auth.Credential{ID: uuid.New(), PrincipalID: principal.ID, Hint: auth.Hint(secret), ExpiresAt: expiresAt}
+	c := auth.Credential{ID: uuid.New(), Kind: auth.CredentialAPIKey, PrincipalID: principal.ID, Hint: auth.Hint(secret), ExpiresAt: expiresAt}
 	s.Credentials[string(auth.Hash(secret))] = c
 	s.Principals[principal.ID] = principal
 	return c
 }
 
-// Credential finds a credential by its token's hash, with its principal.
-func (s *Store) Credential(_ context.Context, tokenHash []byte) (auth.Credential, auth.Principal, error) {
+// Credential finds a credential by its token's hash, with the user or the API key it acts as.
+func (s *Store) Credential(_ context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
 	if s.Fail != nil {
-		return auth.Credential{}, auth.Principal{}, s.Fail
+		return auth.Credential{}, auth.User{}, s.Fail
 	}
 	c, ok := s.Credentials[string(tokenHash)]
 	if !ok {
-		return auth.Credential{}, auth.Principal{}, auth.ErrNotFound
+		return auth.Credential{}, auth.User{}, auth.ErrNotFound
 	}
-	return c, s.Principals[c.PrincipalID], nil
+	if u, ok := s.Users[c.PrincipalID]; ok {
+		return c, u, nil
+	}
+	return c, auth.User{Principal: s.Principals[c.PrincipalID]}, nil
+}
+
+// CreateToken records personal token t by hash.
+func (s *Store) CreateToken(_ context.Context, t auth.Credential, hash []byte) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	s.Credentials[string(hash)] = t
+	return nil
+}
+
+// Tokens lists a user's personal tokens that are not revoked, newest first.
+func (s *Store) Tokens(_ context.Context, userID uuid.UUID) ([]auth.Credential, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []auth.Credential
+	for _, c := range s.Credentials {
+		if c.Kind == auth.CredentialPersonalToken && c.PrincipalID == userID && c.RevokedAt.IsZero() {
+			out = append(out, c)
+		}
+	}
+	slices.SortFunc(out, func(a, b auth.Credential) int { return b.CreatedAt.Compare(a.CreatedAt) })
+	return out, nil
+}
+
+// RevokeToken revokes a user's personal token.
+func (s *Store) RevokeToken(_ context.Context, userID, id uuid.UUID, at time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	for k, c := range s.Credentials {
+		if c.ID == id && c.Kind == auth.CredentialPersonalToken && c.PrincipalID == userID && c.RevokedAt.IsZero() {
+			c.RevokedAt = at
+			s.Credentials[k] = c
+			return nil
+		}
+	}
+	return auth.ErrNotFound
 }
 
 // TouchCredential marks credential id used at usedAt.

@@ -79,7 +79,7 @@ func (q *Queries) CountLiveCredentials(ctx context.Context, principalID uuid.UUI
 }
 
 const credentialByToken = `-- name: CredentialByToken :one
-SELECT c.id, c.kind, c.token_hash, c.principal_id, c.hint, c.created_at, c.created_by, c.expires_at, c.last_used_at, c.revoked_at, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE c.token_hash = $1
+SELECT c.id, c.kind, c.token_hash, c.principal_id, c.hint, c.created_at, c.created_by, c.expires_at, c.last_used_at, c.revoked_at, c.name, c.permissions, c.issuer, c.subject, p.id, p.kind, p.display_name, p.suspended, p.created_at, p.org_id, p.created_by FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE c.token_hash = $1
 `
 
 type CredentialByTokenRow struct {
@@ -102,6 +102,10 @@ func (q *Queries) CredentialByToken(ctx context.Context, tokenHash []byte) (Cred
 		&i.Credential.ExpiresAt,
 		&i.Credential.LastUsedAt,
 		&i.Credential.RevokedAt,
+		&i.Credential.Name,
+		&i.Credential.Permissions,
+		&i.Credential.Issuer,
+		&i.Credential.Subject,
 		&i.Principal.ID,
 		&i.Principal.Kind,
 		&i.Principal.DisplayName,
@@ -178,7 +182,7 @@ func (q *Queries) InsertCredential(ctx context.Context, arg InsertCredentialPara
 }
 
 const organizationCredentials = `-- name: OrganizationCredentials :many
-SELECT c.id, c.kind, c.token_hash, c.principal_id, c.hint, c.created_at, c.created_by, c.expires_at, c.last_used_at, c.revoked_at FROM credentials c JOIN principals p ON p.id = c.principal_id
+SELECT c.id, c.kind, c.token_hash, c.principal_id, c.hint, c.created_at, c.created_by, c.expires_at, c.last_used_at, c.revoked_at, c.name, c.permissions, c.issuer, c.subject FROM credentials c JOIN principals p ON p.id = c.principal_id
 WHERE p.org_id = $1::uuid ORDER BY c.created_at, c.id
 `
 
@@ -203,6 +207,10 @@ func (q *Queries) OrganizationCredentials(ctx context.Context, orgID uuid.UUID) 
 			&i.ExpiresAt,
 			&i.LastUsedAt,
 			&i.RevokedAt,
+			&i.Name,
+			&i.Permissions,
+			&i.Issuer,
+			&i.Subject,
 		); err != nil {
 			return nil, err
 		}

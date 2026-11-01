@@ -4,6 +4,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/auth"
 )
 
@@ -51,7 +53,24 @@ func TestRepositoriesAPI(t *testing.T) {
 					t.Errorf("the old slug answers %d: %s", rec.Code, rec.Body)
 				}
 			}},
+		{name: "an Owner's token holds only what it lists", viewer: oliviaToken("org.read", "repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if r := decode[Repository](t, body); !slices.Equal(r.ViewerPermissions, []string{"repo.read"}) {
+					t.Errorf("repository = %s, want repo.read alone", body)
+				}
+			}},
+		{name: "an Owner's token that only reads renames nothing", viewer: oliviaToken("org.read", "repo.read"), method: "PATCH", path: fixed("/v1/orgs/acme/repos/website"),
+			body: `{"slug":"www"}`, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "an Owner's token without org.read finds no organization", viewer: oliviaToken("repo.read", "repo.push"), method: "GET", path: fixed("/v1/orgs/acme/repos"),
+			wantStatus: 404, wantCode: "organization.not_found"},
 	})
+}
+
+// oliviaToken is Olivia under a personal token that lists permissions.
+func oliviaToken(permissions ...string) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		return &auth.Authenticated{User: f.olivia.User, Credential: auth.Credential{ID: uuid.New(), Kind: auth.CredentialPersonalToken, Permissions: permissions}}
+	}
 }
 
 func TestRepositoryAccessAPI(t *testing.T) {

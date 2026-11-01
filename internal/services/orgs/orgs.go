@@ -268,14 +268,9 @@ var (
 	ErrTwoSecrets = errors.New("the key already holds two live secrets; revoke one first")
 )
 
-// ValidationError is input the domain refuses: Field names what, Code why, in the API's terms.
-type ValidationError struct {
-	Field, Code, Message string
-}
-
-func (e *ValidationError) Error() string {
-	return fmt.Sprintf("%s: %s", e.Field, e.Message)
-}
+// ValidationError is input the domain refuses, as sign-in's domain names it: the organizations', the repositories'
+// and personal tokens' refusals are one type for the APIs to map.
+type ValidationError = auth.ValidationError
 
 // slugPattern is 2 to 39 lowercase letters, digits and single hyphens, neither first nor last.
 var slugPattern = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

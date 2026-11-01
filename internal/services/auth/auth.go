@@ -147,19 +147,37 @@ func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
 }
 
-// Credential is a secret that acts as a principal: an API key's, shown once when made and kept hashed. The
-// Authorization header carries it as a bearer token.
+// CredentialKind is what a credential is: an API key's secret or a user's personal token.
+type CredentialKind string
+
+// The credential kinds.
+const (
+	// CredentialAPIKey is an API key's secret, which acts as the key and holds what the key's grants give.
+	CredentialAPIKey CredentialKind = "api_key"
+	// CredentialPersonalToken is a personal token, which acts as the user who made it, narrowed to its permissions.
+	CredentialPersonalToken CredentialKind = "personal_token"
+)
+
+// Credential is a secret that acts as a principal: an API key's or a user's personal token, shown once when made and
+// kept hashed. The Authorization header carries it as a bearer token, and a Git client as a password.
 type Credential struct {
 	ID          uuid.UUID
+	Kind        CredentialKind
 	PrincipalID uuid.UUID
 	// Hint is the secret's last four characters, which the Console shows.
 	Hint      string
 	CreatedAt time.Time
 	CreatedBy uuid.UUID
-	// ExpiresAt is when the credential stops working; zero for one that never expires.
+	// ExpiresAt is when the credential stops working; zero for one that never expires, which no personal token is.
 	ExpiresAt  time.Time
 	LastUsedAt time.Time
 	RevokedAt  time.Time
+	// Name is what a personal token's user called it; an API key's secret has none.
+	Name string
+	// Permissions are the permissions a personal token may use, sorted; nil for an API key's secret.
+	Permissions []string
+	// Issuer and Subject name the identity of the session that made a personal token; empty for an API key's secret.
+	Issuer, Subject string
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.
@@ -226,6 +244,15 @@ var (
 	// ErrSeedOff is a seeded sign-in on an installation whose seeding is off.
 	ErrSeedOff = errors.New("seeded sign-in is off")
 )
+
+// ValidationError is input the domain refuses: Field names what, Code why, in the API's terms.
+type ValidationError struct {
+	Field, Code, Message string
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
 
 // EmailTakenError is a new identity whose verified email another user already holds; Issuer names the provider that
 // user signs in with, for the page to say.

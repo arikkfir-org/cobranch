@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
-       members, roles and settings under its slug, and its repositories under theirs. The design system's colours (docs/cobranch/designs/design-system), the REST
+       members, roles and settings under its slug, its repositories under theirs, and the viewer's own settings with
+       their personal tokens. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, and the Auth server at the other URL it names. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
        then the repository's page. -->
@@ -284,6 +285,7 @@
         return showWelcome();
       }
       if (parts[0] === "new") return showWelcome();
+      if (parts[0] === "settings") return showMySettings();
       if (reserved.includes(parts[0])) return showWelcome();
       return showOrganization(parts[0], parts[1] || "", parts[2] || "");
     }
@@ -319,7 +321,8 @@
       const [invitations, requests] = await Promise.all([api("GET", "/me/invitations").then((d) => d.invitations), api("GET", "/me/join-requests").then((d) => d.joinRequests)]);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-      const sections = [h("div", { class: "row" }, h("h2", {}, "Welcome, " + me.displayName), h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out")), error];
+      const sections = [h("div", { class: "row" }, h("h2", {}, "Welcome, " + me.displayName),
+        h("div", {}, h("a", { class: "button small", href: base + "settings", "data-nav": "" }, "Your settings"), " ", h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out"))), error];
       if (orgs.length) sections.push(h("p", {}, "You belong to ", orgs.map((o, i) => [i ? ", " : "", h("a", { href: base + o.slug, "data-nav": "" }, o.name)]), "."));
       if (invitations.length) {
         sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"), ...invitations.map((inv) => h("div", { class: "row" },
@@ -381,7 +384,7 @@
       const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
         orgs.map((o) => h("option", { value: o.slug, selected: o.slug === org.slug }, o.name)), h("option", { value: "+" }, "Create or join…"));
       const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), switcher, h("nav", {}, pages.map(link)),
-        h("span", { class: "spacer" }), h("span", {}, me.displayName), h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out"));
+        h("span", { class: "spacer" }), ...viewerLinks());
       const main = h("main", { class: "page" });
       document.body.className = "";
       app.replaceChildren(bar, main);
@@ -607,6 +610,74 @@
       if (manage) sections.push(h("section", { class: "panel" }, h("h3", {}, "Define a role"), h("p", {}, "A role of this organization alone, to grant beside the built-in ones. Changing it changes every grant of it."),
         roleForm(null, (body) => api("POST", "/orgs/" + org.slug + "/roles", body), null)));
       main.replaceChildren(...sections);
+    }
+
+    // viewerLinks are the bar's links of the viewer's own: their settings, under their name, and signing out.
+    const viewerLinks = () => [h("a", { href: base + "settings", "data-nav": "", title: "Your settings and personal tokens" }, me.displayName),
+      h("button", { class: "button small", type: "button", onclick: signOut }, "Sign out")];
+
+    // The viewer's own settings: their personal tokens, which act as them wherever a password or a bearer token goes.
+    async function showMySettings(shown = null) {
+      const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"),
+        h("nav", {}, h("a", { href: base + "settings", "data-nav": "", class: "current" }, "Your settings")), h("span", { class: "spacer" }), ...viewerLinks());
+      const main = h("main", { class: "page" });
+      document.body.className = "";
+      app.replaceChildren(bar, main);
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const refresh = (created) => showMySettings(created || null).catch(fail);
+      const tokens = (await api("GET", "/me/tokens")).tokens;
+      const state = (t) => (new Date(t.expiresAt) <= Date.now() ? "expired " + when(t.expiresAt) : "expires " + when(t.expiresAt)) +
+        (t.lastUsedAt ? ", last used " + when(t.lastUsedAt) : ", never used");
+      const row = (t) => h("tr", {}, h("td", {}, t.name, h("p", {}, "made " + when(t.createdAt))),
+        h("td", {}, h("div", { class: "perms" }, t.permissions.map((p) => h("code", {}, p)))),
+        h("td", {}, h("code", {}, "…" + t.hint), h("p", { class: "muted" }, state(t))),
+        h("td", { class: "actions" }, h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/me/tokens/" + t.id).then(() => refresh()).catch(fail) }, "Revoke")));
+      const sections = [h("h1", {}, "Your settings"), error];
+      if (shown) sections.push(revealToken(shown));
+      sections.push(h("section", { class: "panel" }, h("h3", {}, "Personal tokens"),
+        h("p", {}, "A personal token acts as you, narrowed to the permissions it lists: it holds only what both its list and your roles give. Git asks for one as your password over HTTPS, and scripts send it as ", h("code", {}, "Authorization: Bearer …"), ". Every token ends within a year; revoke one the moment you stop using it."),
+        tokens.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Token"), h("th", {}, "Permissions"), h("th", {}, "Secret"), h("th", {}))), h("tbody", {}, tokens.map(row)))
+          : h("p", {}, "No personal tokens yet.")));
+      const name = h("input", { name: "name", required: true, maxlength: 100, placeholder: "Laptop's Git" });
+      const picks = permissions.map((p) => h("label", {}, h("input", { type: "checkbox", value: p, checked: p === "repo.read" || p === "repo.push" }), h("code", {}, p)));
+      const lifetime = tokenLifetime();
+      sections.push(h("section", { class: "panel" }, h("h3", {}, "Make a token"),
+        h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          const chosen = picks.map((l) => l.firstChild).filter((c) => c.checked).map((c) => c.value);
+          if (chosen.length === 0) return fail(new Error("Pick at least one permission for the token."));
+          api("POST", "/me/tokens", { name: name.value, permissions: chosen, ...lifetime.value() }).then(refresh).catch(fail);
+        } }, h("label", {}, "Name", h("span", {}, "What it's for, so you know which to revoke."), name),
+          h("label", {}, "Permissions", h("span", {}, "Reading and pushing to repositories is what Git needs."), h("div", { class: "picks" }, picks)), lifetime.el,
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Make the token")))));
+      main.replaceChildren(...sections);
+    }
+
+    // revealToken shows a personal token just made, which the API never shows again.
+    function revealToken(created) {
+      const code = h("code", {}, created.secret);
+      const copy = h("button", { class: "button small", type: "button", onclick: () => {
+        navigator.clipboard.writeText(created.secret).then(() => { copy.textContent = "Copied"; }).catch(() => { getSelection().selectAllChildren(code); });
+      } }, "Copy");
+      return h("section", { class: "panel notice" }, h("h3", {}, "Your new token"),
+        h("p", {}, "Copy ", h("strong", {}, created.token.name), " now: it is shown here and never again. Give it to Git as your password, with any user name."),
+        h("div", { class: "row" }, code, copy));
+    }
+
+    // tokenLifetime chooses when a personal token ends: in 30 days (the default), 7 or 90 days, a year, or on a date
+    // within a year.
+    function tokenLifetime() {
+      const day = 24 * 60 * 60 * 1000;
+      const local = (t) => { const d = new Date(t); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
+      const date = h("input", { type: "date", hidden: true, min: local(Date.now() + day), max: local(Date.now() + 365 * day) });
+      const pick = h("select", { onchange: () => { date.hidden = pick.value !== "date"; date.required = !date.hidden; } },
+        h("option", { value: "30" }, "Expires in 30 days"), h("option", { value: "7" }, "Expires in 7 days"), h("option", { value: "90" }, "Expires in 90 days"),
+        h("option", { value: "365" }, "Expires in a year"), h("option", { value: "date" }, "Expires on a date…"));
+      const el = h("label", {}, "Expiry", pick, date);
+      const value = () => pick.value === "30" ? {} : pick.value === "date" ? { expiresAt: new Date(date.value + "T00:00:00").toISOString() }
+        : { expiresAt: new Date(Date.now() + Number(pick.value) * day).toISOString() };
+      return { el, value };
     }
 
     // expiryPicker chooses when a new secret stops working: in a year (the default), never, or on a date.

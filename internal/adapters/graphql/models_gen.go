@@ -133,6 +133,37 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 }
 
+// A personal token, as its user sees it; the token itself was shown once.
+type PersonalToken struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// The token's last four characters.
+	Hint string `json:"hint"`
+	// The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give.
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"createdAt"`
+	// When the token stops working.
+	ExpiresAt  time.Time  `json:"expiresAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+}
+
+// A personal token and its secret, which is shown here and never again.
+type PersonalTokenCreated struct {
+	Token *PersonalToken `json:"token"`
+	// The token, to give a Git client as its password or a script as its bearer token.
+	Secret string `json:"secret"`
+}
+
+// What makes a personal token.
+type PersonalTokenInput struct {
+	// What the token is for, 1 to 100 characters.
+	Name string `json:"name"`
+	// The permissions the token may use, from the catalog; repo.read and repo.push when null or empty.
+	Permissions []string `json:"permissions,omitempty"`
+	// When the token stops working, in the future and within a year; 30 days from now when null.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+}
+
 type Query struct {
 }
 
@@ -225,6 +256,8 @@ type User struct {
 	Emails []*Email `json:"emails"`
 	// The user's live sessions, newest first.
 	Sessions []*Session `json:"sessions"`
+	// The user's personal tokens that are not revoked, expired ones included, newest first.
+	PersonalTokens []*PersonalToken `json:"personalTokens"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.
