@@ -43,3 +43,7 @@ WHERE p.repo_id = $1 AND p.id = $2;
 SELECT substr(name, length('refs/tags/') + 1)::text AS name, sha FROM refs
 WHERE repo_id = $1 AND starts_with(name, 'refs/tags/')
 ORDER BY name COLLATE "C";
+
+-- Slugs finds a repository's slug and its organization's, which its rendered Markdown's links name.
+-- name: Slugs :one
+SELECT o.slug AS org, r.slug AS repo FROM repositories r JOIN organizations o ON o.id = r.org_id WHERE r.id = $1;

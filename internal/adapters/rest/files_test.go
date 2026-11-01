@@ -43,6 +43,20 @@ func TestTreeAPI(t *testing.T) {
 			check: listing("docs:tree", "vendor:tree", "README.md:blob", "latest.link:symlink", "logo.png:blob")},
 		{name: "a directory", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?ref=main&path=docs"), wantStatus: 200,
 			check: listing("deep:tree", "guide.md:blob")},
+		{name: "the root's README, rendered", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				r := decode[Tree](t, body).Readme
+				if r == nil || r.Path != "README.md" || r.Text == nil || *r.Text != "# Website\n" || r.Html == nil ||
+					*r.Html != `<h1 id="user-content-website">Website</h1>`+"\n" {
+					t.Errorf("tree = %s, want README.md rendered", body)
+				}
+			}},
+		{name: "a directory without a README", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?path=docs"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if decode[Tree](t, body).Readme != nil {
+					t.Errorf("tree = %s, want no README", body)
+				}
+			}},
 		{name: "a submodule sorts with the directories", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?path=vendor"), wantStatus: 200,
 			check: listing("lib.module:submodule")},
 		{name: "at a commit's full name", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?ref=" + shaOf("c") + "&path=docs/deep"),
@@ -79,13 +93,14 @@ func TestBlobAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "a text file", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/blob?path=docs/guide.md"), wantStatus: 200,
 			check: file(func(t *testing.T, f File) {
-				if f.Name != "guide.md" || f.Kind != FileKindBlob || f.Binary || f.Text == nil || *f.Text != "Read me.\n" || f.Size != 9 || f.Commit != shaOf("c") {
+				if f.Name != "guide.md" || f.Kind != FileKindBlob || f.Binary || f.Text == nil || *f.Text != "Read me.\n" || f.Size != 9 || f.Commit != shaOf("c") ||
+					f.Html == nil || *f.Html != "<p>Read me.</p>\n" {
 					t.Errorf("file = %+v", f)
 				}
 			})},
 		{name: "a binary file has no text", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/blob?path=logo.png"), wantStatus: 200,
 			check: file(func(t *testing.T, f File) {
-				if !f.Binary || f.Text != nil {
+				if !f.Binary || f.Text != nil || f.Html != nil {
 					t.Errorf("file = %+v, want binary without text", f)
 				}
 			})},
@@ -190,7 +205,7 @@ func TestFilesConditional(t *testing.T) {
 // branches.
 func TestFilesWithoutGitServer(t *testing.T) {
 	f := newOrgFixture(t)
-	f.code = code.NewService(f.codeStore, nil, auth.NewAuthorizer(f.store))
+	f.code = code.NewService(f.codeStore, nil, nil, auth.NewAuthorizer(f.store))
 	if rec := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/tree", ""); rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("tree: status %d, want 503: %s", rec.Code, rec.Body)
 	} else {

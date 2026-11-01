@@ -100,7 +100,7 @@ meanwhile changes nothing of the answer.
 ![A directory is one request: its listing from the Git server, its README rendered by the REST server](code-browsing/read.svg)
 
 The README’s blob comes from a second internal call, in the same request. A conditional request whose ETag still matches
-skips the render and the body.
+answers 304 without a body.
 
 - **A tree** lists directories first and then files, each by name, with its mode, its kind (directory, file, symlink,
   submodule), its object and a file's size. A submodule names the commit it pins; the Console shows it, and browsing
@@ -191,8 +191,8 @@ on.
 ## Caching
 
 - **ETags from the commit.** A tree's, a file's and a history page's answer is fixed by the commit its ref resolved to,
-  its path and the renderer's version, so its ETag is their hash; a matching `If-None-Match` answers `304` before
-  rendering. Every answer sends `Cache-Control: private, no-cache`, as the house rules ask.
+  its path and the renderer's version, so its ETag is their hash; a matching `If-None-Match` answers `304` without a
+  body. Every answer sends `Cache-Control: private, no-cache`, as the house rules ask.
 - **Raw bytes at a commit are immutable.** **Proposed:** `…/raw` asked at a full commit name, as the Console's images
   always are, answers `Cache-Control: private, max-age=31536000, immutable`, so a README's images aren't asked again on
   every view; asked at a branch or a tag, it stays `no-cache`.

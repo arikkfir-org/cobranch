@@ -12,20 +12,21 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a code.Store in memory: each repository's commits by name, branches, tags and pushes. Fail, when set,
-// fails every listing.
+// Store is a code.Store in memory: each repository's commits by name, branches, tags, pushes and slugs, the
+// organization's then its own. Fail, when set, fails every listing.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
 	TagList    map[uuid.UUID][]code.Tag
 	Pushes     map[uuid.UUID]code.Push
+	SlugList   map[uuid.UUID][2]string
 	Fail       error
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
 	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
-		Pushes: map[uuid.UUID]code.Push{}}
+		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -74,6 +75,15 @@ func (s *Store) Tags(_ context.Context, repoID uuid.UUID) ([]code.Tag, error) {
 		return nil, s.Fail
 	}
 	return slices.Clone(s.TagList[repoID]), nil
+}
+
+// Slugs finds the repository's slugs, or repos.ErrNotFound.
+func (s *Store) Slugs(_ context.Context, repoID uuid.UUID) (org, repo string, err error) {
+	slugs, ok := s.SlugList[repoID]
+	if !ok {
+		return "", "", repos.ErrNotFound
+	}
+	return slugs[0], slugs[1], nil
 }
 
 // FirstParents walks the repository's commits from sha along first parents.

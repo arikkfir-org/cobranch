@@ -19,7 +19,7 @@ import (
 
 // shape is the version of the shape of a tree's and a file's answers, which their ETags hold beside the commit and the
 // path: a change of what the API answers for them bumps it, so no client keeps an answer of the old shape.
-const shape = "1"
+const shape = "2"
 
 // rawPolicy is raw bytes' Content Security Policy: they load images of their own origin and data URLs alone, and run
 // nothing, so an HTML or SVG file opened on the API's origin, which holds the session cookie, can't act for its
@@ -116,6 +116,10 @@ func (a api) GetTree(ctx context.Context, req GetTreeRequestObject) (GetTreeResp
 		return GetTree304Response{Headers: GetTree304ResponseHeaders{ETag: tag}}, nil
 	}
 	body := Tree{Commit: tree.Commit, Path: tree.Path, Sha: tree.SHA, Entries: mapAll(tree.Entries, entry)}
+	if tree.README != nil {
+		readme := fileOf(*tree.README)
+		body.Readme = &readme
+	}
 	return GetTree200JSONResponse{Body: body, Headers: GetTree200ResponseHeaders{ETag: tag}}, nil
 }
 
@@ -142,12 +146,20 @@ func (a api) GetBlob(ctx context.Context, req GetBlobRequestObject) (GetBlobResp
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetBlob304Response{Headers: GetBlob304ResponseHeaders{ETag: tag}}, nil
 	}
-	body := File{Commit: f.Commit, Path: f.Path, Name: f.Name, Kind: FileKind(f.Kind), Mode: f.Mode, Sha: f.SHA, Size: f.Size,
+	return GetBlob200JSONResponse{Body: fileOf(f), Headers: GetBlob200ResponseHeaders{ETag: tag}}, nil
+}
+
+// fileOf is f on the wire: its text unless it is binary, and its HTML when it rendered.
+func fileOf(f code.File) File {
+	out := File{Commit: f.Commit, Path: f.Path, Name: f.Name, Kind: FileKind(f.Kind), Mode: f.Mode, Sha: f.SHA, Size: f.Size,
 		Binary: f.Binary, Truncated: f.Truncated}
 	if !f.Binary {
-		body.Text = &f.Text
+		out.Text = &f.Text
 	}
-	return GetBlob200JSONResponse{Body: body, Headers: GetBlob200ResponseHeaders{ETag: tag}}, nil
+	if f.HTML != "" {
+		out.Html = &f.HTML
+	}
+	return out
 }
 
 // GetRaw streams the bytes of the file or symlink at a path of the commit a ref names, as nothing that runs, or

@@ -121,10 +121,12 @@ spec:
           git -C website push origin HEAD:refs/heads/main
           git clone -q "$url" fresh
           [ "$(git -C fresh rev-parse HEAD)" = "$(git -C website rev-parse HEAD)" ]
-          # The REST API reads the pushed files from the Git server's internal port: main's root lists the README, whose
-          # bytes are the commit's.
-          wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/tree" | tee /dev/stderr \
-            | grep -q "\"commit\":\"$(git -C website rev-parse HEAD)\""
+          # The REST API reads the pushed files from the Git server's internal port: main's root lists the README and
+          # renders it, and its bytes are the commit's.
+          tree="$(wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/tree")"
+          echo "$tree" >&2
+          echo "$tree" | grep -q "\"commit\":\"$(git -C website rev-parse HEAD)\""
+          echo "$tree" | grep -qF '"html":"\u003cp\u003ePushed by helm test'
           wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/raw?path=README.md" | grep -q 'Pushed by helm test'
           {{- end }}
           {{- end }}

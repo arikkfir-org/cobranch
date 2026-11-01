@@ -100,6 +100,7 @@ type ComplexityRoot struct {
 	File struct {
 		Binary    func(childComplexity int) int
 		Commit    func(childComplexity int) int
+		HTML      func(childComplexity int) int
 		Kind      func(childComplexity int) int
 		Mode      func(childComplexity int) int
 		Name      func(childComplexity int) int
@@ -294,6 +295,7 @@ type ComplexityRoot struct {
 		Commit  func(childComplexity int) int
 		Entries func(childComplexity int) int
 		Path    func(childComplexity int) int
+		Readme  func(childComplexity int) int
 		Sha     func(childComplexity int) int
 	}
 
@@ -635,6 +637,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.File.Commit(childComplexity), true
+	case "File.html":
+		if e.ComplexityRoot.File.HTML == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.HTML(childComplexity), true
 	case "File.kind":
 		if e.ComplexityRoot.File.Kind == nil {
 			break
@@ -1695,6 +1703,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Tree.Path(childComplexity), true
+	case "Tree.readme":
+		if e.ComplexityRoot.Tree.Readme == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tree.Readme(childComplexity), true
 	case "Tree.sha":
 		if e.ComplexityRoot.Tree.Sha == nil {
 			break
@@ -1906,7 +1920,7 @@ extend type Repository {
   commit(sha: String!): Commit
   "The repository's tags, by name, each with the object it names; takes repo.read."
   tags: [Tag!]!
-  "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
+  "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
   tree(ref: String! = "main", path: String! = ""): Tree
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
@@ -1930,6 +1944,8 @@ type Tree {
   sha: String!
   "Its directories and submodules first, then its files and symlinks, each by name."
   entries: [TreeEntry!]!
+  "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
+  readme: File
 }
 
 "What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository."
@@ -1975,6 +1991,8 @@ type File {
   truncated: Boolean!
   "Its text, up to 1 MiB; null when it is binary. A symlink's is its target."
   text: String
+  "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere become links, and its ids start with user-content-. Null for any other file."
+  html: String
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -2570,6 +2588,8 @@ func (ec *executionContext) childFields_File(ctx context.Context, field graphql.
 		return ec.fieldContext_File_truncated(ctx, field)
 	case "text":
 		return ec.fieldContext_File_text(ctx, field)
+	case "html":
+		return ec.fieldContext_File_html(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
 }
@@ -2864,6 +2884,8 @@ func (ec *executionContext) childFields_Tree(ctx context.Context, field graphql.
 		return ec.fieldContext_Tree_sha(ctx, field)
 	case "entries":
 		return ec.fieldContext_Tree_entries(ctx, field)
+	case "readme":
+		return ec.fieldContext_Tree_readme(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Tree", field.Name)
 }
@@ -4987,6 +5009,29 @@ func (ec *executionContext) _File_text(ctx context.Context, field graphql.Collec
 	)
 }
 func (ec *executionContext) fieldContext_File_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_html(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_html(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HTML, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_File_html(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("File", field, false, false, "String")
 }
 
@@ -9124,6 +9169,38 @@ func (ec *executionContext) fieldContext_Tree_entries(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Tree_readme(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tree_readme(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Readme, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *File) graphql.Marshaler {
+			return ec.marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFile(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Tree_readme(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Tree",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_File(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _TreeEntry_name(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -11490,6 +11567,11 @@ func (ec *executionContext) _File(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "html":
+			out.Values[i] = ec._File_html(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -12754,6 +12836,11 @@ func (ec *executionContext) _Tree(ctx context.Context, sel ast.SelectionSet, obj
 		case "entries":
 			out.Values[i] = ec._Tree_entries(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "readme":
+			out.Values[i] = ec._Tree_readme(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:

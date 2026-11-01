@@ -65,6 +65,9 @@ func file(f code.File) *File {
 	if !f.Binary {
 		out.Text = &f.Text
 	}
+	if f.HTML != "" {
+		out.HTML = &f.HTML
+	}
 	return out
 }
 

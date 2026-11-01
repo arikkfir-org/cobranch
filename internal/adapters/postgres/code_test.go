@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
@@ -158,6 +160,18 @@ func TestCodeStoreTags(t *testing.T) {
 	}
 	if other, err := f.c.Tags(ctx, f.secret.ID); err != nil || len(other) != 0 {
 		t.Errorf("another repository's Tags() = %v, %v", other, err)
+	}
+}
+
+func TestCodeStoreSlugs(t *testing.T) {
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	org, repo, err := f.c.Slugs(ctx, f.website.ID)
+	if err != nil || org != "acme" || repo != "website" {
+		t.Errorf("Slugs() = %q, %q, %v, want acme, website", org, repo, err)
+	}
+	if _, _, err := f.c.Slugs(ctx, uuid.New()); !errors.Is(err, repos.ErrNotFound) {
+		t.Errorf("Slugs() of no repository: %v, want repos.ErrNotFound", err)
 	}
 }
 

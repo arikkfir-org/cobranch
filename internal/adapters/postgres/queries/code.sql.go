@@ -223,6 +223,23 @@ func (q *Queries) PushOf(ctx context.Context, repoID uuid.UUID, iD uuid.UUID) (P
 	return i, err
 }
 
+const slugs = `-- name: Slugs :one
+SELECT o.slug AS org, r.slug AS repo FROM repositories r JOIN organizations o ON o.id = r.org_id WHERE r.id = $1
+`
+
+type SlugsRow struct {
+	Org  string
+	Repo string
+}
+
+// Slugs finds a repository's slug and its organization's, which its rendered Markdown's links name.
+func (q *Queries) Slugs(ctx context.Context, id uuid.UUID) (SlugsRow, error) {
+	row := q.db.QueryRow(ctx, slugs, id)
+	var i SlugsRow
+	err := row.Scan(&i.Org, &i.Repo)
+	return i, err
+}
+
 const tags = `-- name: Tags :many
 SELECT substr(name, length('refs/tags/') + 1)::text AS name, sha FROM refs
 WHERE repo_id = $1 AND starts_with(name, 'refs/tags/')

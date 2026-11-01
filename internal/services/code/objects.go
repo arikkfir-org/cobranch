@@ -32,13 +32,14 @@ type Entry struct {
 	Size int64
 }
 
-// Tree is a directory at a commit: the commit its ref resolved to, its path (empty for the root), its own object and
-// its entries.
+// Tree is a directory at a commit: the commit its ref resolved to, its path (empty for the root), its own object, its
+// entries and its README, when it holds one.
 type Tree struct {
 	Commit  string
 	Path    string
 	SHA     string
 	Entries []Entry
+	README  *File
 }
 
 // Blob is a file or a symlink at a commit, as the Git server reads it: the commit its ref resolved to, its path, kind,
@@ -63,8 +64,8 @@ type Raw struct {
 	Body   io.ReadCloser
 }
 
-// File is a file or a symlink as people read it: a Blob's facts, whether it is binary, and its text, when it is not
-// binary, up to MaxText; a symlink's text is its target.
+// File is a file or a symlink as people read it: a Blob's facts, whether it is binary, its text, when it is not
+// binary, up to MaxText, and a Markdown file's text rendered as HTML; a symlink's text is its target.
 type File struct {
 	Commit    string
 	Path      string
@@ -76,6 +77,7 @@ type File struct {
 	Binary    bool
 	Truncated bool
 	Text      string
+	HTML      string
 }
 
 // Tag is one of a repository's tags and the object its ref names: a commit, or an annotated tag that names one.

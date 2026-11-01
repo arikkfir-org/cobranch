@@ -1348,8 +1348,8 @@ paths:
     get:
       operationId: getTree
       summary: >-
-        The directory at a path of the commit a ref names, its directories first and then its files, each by name;
-        takes repo.read. It reads the Git server: an installation without one answers 503.
+        The directory at a path of the commit a ref names, its directories first and then its files, each by name, with
+        its README; takes repo.read. It reads the Git server: an installation without one answers 503.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -2206,6 +2206,11 @@ components:
           description: Its directories and submodules first, then its files and symlinks, each by name.
           items:
             $ref: "#/components/schemas/TreeEntry"
+        readme:
+          $ref: "#/components/schemas/File"
+          description: >-
+            Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown,
+            README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
     TreeEntry:
       type: object
       description: One of a directory's entries.
@@ -2265,6 +2270,13 @@ components:
         text:
           type: string
           description: Its text, up to 1 MiB, when it isn't binary; a symlink's is its target.
+        html:
+          type: string
+          description: >-
+            A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms
+            or event handlers. Its relative links open the Console's pages at the same ref, its relative images load
+            this API's raw bytes at the commit, images from elsewhere become links, and its ids start with
+            user-content-.
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
