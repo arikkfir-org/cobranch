@@ -33,7 +33,8 @@ func TestRun(t *testing.T) {
 			wantStderr: "cobranch migrate: connecting to the database: parsing the database's connection settings: they are not a valid URL or keyword list\n",
 		},
 		{name: "Git server without a bucket", args: []string{"git-server"}, wantCode: 1, wantStderr: "cobranch git-server: configuring: reading git-server's configuration from the COBRANCH_ variables: required key BLOB_URL missing value\n"},
-		{name: "push worker without its token", args: []string{"push-worker"}, wantCode: 1, wantStderr: "cobranch push-worker: configuring: reading push-worker's configuration from the COBRANCH_ variables: required key INTERNAL_TOKEN missing value\n"},
+		{name: "push worker polling at no interval", args: []string{"push-worker"}, env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "often"}, wantCode: 1,
+			wantStderr: "cobranch push-worker: configuring: reading push-worker's configuration from the COBRANCH_ variables: envconfig.Process: assigning COBRANCH_PUSH_POLL_INTERVAL to PollInterval: converting 'often' to type time.Duration. details: time: invalid duration \"often\"\n"},
 		{name: "a hook outside a push", args: []string{"git-hook"}, wantCode: 1, wantStderr: git.MessageNotRecorded + "\n"},
 		{name: "extra arguments", args: []string{"version", "now"}, wantCode: 2, wantStderr: usage + "\n"},
 	}

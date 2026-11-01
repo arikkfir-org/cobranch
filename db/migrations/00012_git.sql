@@ -1,7 +1,8 @@
 -- Git hosting: a repository's refs, its packs in the bucket, the pushes that brought them, their commits and the
 -- branches they move (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "A
--- push"). Only the push worker writes them, a push in one transaction, so a ref never names an object no listed pack
--- holds. Every row carries its repository's org_id. A push's rows are their own record, named by the push and its
+-- push"). The Git server writes them, a push in one transaction, so a ref never names an object no listed pack holds;
+-- the push worker then processes each push and fills in what follows from it. Every row carries its repository's
+-- org_id. A push's rows are their own record, named by the push and its
 -- pusher, so none carries trigger audit().
 -- +goose Up
 
@@ -29,7 +30,9 @@ CREATE TABLE packs (
 );
 
 -- A push that moved a repository's refs: its ID, with which a Git server that lost the answer asks again; who pushed,
--- over which transport; the refs it moved, as {name, old, new}; and its pack, empty for a push that only deletes.
+-- over which transport; the refs it moved, as {name, old, new}; its pack, empty for a push that only deletes; and
+-- whether the push worker processed it: a push waits until processed_at is set, and after a failure until retry_at,
+-- with the attempts and the last error kept.
 CREATE TABLE pushes (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
@@ -39,12 +42,18 @@ CREATE TABLE pushes (
     ref_updates jsonb NOT NULL,
     pack text NOT NULL DEFAULT '',
     received_at timestamptz NOT NULL,
-    committed_at timestamptz NOT NULL DEFAULT now()
+    committed_at timestamptz NOT NULL DEFAULT now(),
+    processed_at timestamptz,
+    attempts integer NOT NULL DEFAULT 0,
+    retry_at timestamptz NOT NULL DEFAULT now(),
+    error text NOT NULL DEFAULT ''
 );
 CREATE INDEX pushes_repo ON pushes (repo_id, committed_at);
+CREATE INDEX pushes_waiting ON pushes (retry_at, committed_at) WHERE processed_at IS NULL;
 
 -- A commit a push brought: its tree, parents, message and signature as written; its author and committer as written,
--- with their times' zones, and the principals behind them; and the push that first brought it.
+-- with their times' zones, and the principals behind them, which the push worker fills in; and the push that first
+-- brought it.
 CREATE TABLE commits (
     repo_id uuid NOT NULL REFERENCES repositories (id) ON DELETE CASCADE,
     sha text NOT NULL,
@@ -68,6 +77,7 @@ CREATE TABLE commits (
 );
 CREATE INDEX commits_author ON commits (author_id);
 CREATE INDEX commits_committer ON commits (committer_id);
+CREATE INDEX commits_first_push ON commits (first_push);
 
 -- A branch, refs/heads/<name> while it lives, and the commit it is at. Deleting it keeps its row, so what refers to it
 -- keeps its history, and the name may live again as another branch.

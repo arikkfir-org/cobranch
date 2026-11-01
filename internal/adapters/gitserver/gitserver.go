@@ -1,7 +1,8 @@
 // Package gitserver is the Git server: Git's smart HTTP protocol at /<org>/<repo>.git for clone, fetch and push, over
 // the git CLI. Each request serves a throwaway repository built from one snapshot of the repository's refs and packs,
 // its packs hard-linked from the pod's cache of the bucket. A push's pre-receive hook calls back into the server that
-// started it, which uploads the push's pack, builds its manifest and has the push worker record it before Git returns
+// started it, which uploads the push's pack, builds its manifest and records the push, in one transaction, before Git
+// returns; the push worker does the rest later
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "Git over HTTPS").
 package gitserver
 
@@ -42,7 +43,7 @@ type Snapshots interface {
 	Snapshot(ctx context.Context, repoID uuid.UUID) (git.Snapshot, error)
 }
 
-// Recorder records a push before its client returns: the push worker's client.
+// Recorder records a push before its client returns: git.Service.
 type Recorder interface {
 	Record(ctx context.Context, push git.Push) (git.Answer, error)
 }

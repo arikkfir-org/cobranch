@@ -12,6 +12,35 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimPush = `-- name: ClaimPush :one
+SELECT id, repo_id, received_at, attempts FROM pushes
+WHERE processed_at IS NULL AND retry_at <= now()
+ORDER BY retry_at, committed_at
+LIMIT 1
+FOR UPDATE SKIP LOCKED
+`
+
+type ClaimPushRow struct {
+	ID         uuid.UUID
+	RepoID     uuid.UUID
+	ReceivedAt time.Time
+	Attempts   int32
+}
+
+// ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
+// push worker holds.
+func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
+	row := q.db.QueryRow(ctx, claimPush)
+	var i ClaimPushRow
+	err := row.Scan(
+		&i.ID,
+		&i.RepoID,
+		&i.ReceivedAt,
+		&i.Attempts,
+	)
+	return i, err
+}
+
 const deleteBranch = `-- name: DeleteBranch :execrows
 UPDATE branches SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz WHERE repo_id = $2 AND name = $3 AND deleted_at IS NULL
 `
@@ -51,6 +80,17 @@ func (q *Queries) EmailPrincipal(ctx context.Context, email string) (EmailPrinci
 	var i EmailPrincipalRow
 	err := row.Scan(&i.PrincipalID, &i.Verified, &i.SignsIn)
 	return i, err
+}
+
+const failPush = `-- name: FailPush :exec
+UPDATE pushes SET attempts = attempts + 1, error = $1, retry_at = now() + make_interval(secs => $2::float8)
+WHERE id = $3
+`
+
+// FailPush keeps a push the push worker failed waiting, for another try after delay seconds.
+func (q *Queries) FailPush(ctx context.Context, message string, delay float64, iD uuid.UUID) error {
+	_, err := q.db.Exec(ctx, failPush, message, delay, iD)
+	return err
 }
 
 const insertBranch = `-- name: InsertBranch :exec
@@ -132,6 +172,16 @@ func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
 	return err
 }
 
+const listenPushes = `-- name: ListenPushes :exec
+LISTEN cobranch_pushes
+`
+
+// ListenPushes has the connection hear NotifyPush's notifications.
+func (q *Queries) ListenPushes(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, listenPushes)
+	return err
+}
+
 const lockRepository = `-- name: LockRepository :one
 SELECT org_id FROM repositories WHERE id = $1 FOR UPDATE
 `
@@ -142,6 +192,15 @@ func (q *Queries) LockRepository(ctx context.Context, id uuid.UUID) (uuid.UUID, 
 	var org_id uuid.UUID
 	err := row.Scan(&org_id)
 	return org_id, err
+}
+
+const markPushProcessed = `-- name: MarkPushProcessed :exec
+UPDATE pushes SET processed_at = now(), error = '' WHERE id = $1
+`
+
+func (q *Queries) MarkPushProcessed(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markPushProcessed, id)
+	return err
 }
 
 const moveBranch = `-- name: MoveBranch :execrows
@@ -166,6 +225,54 @@ func (q *Queries) MoveBranch(ctx context.Context, arg MoveBranchParams) (int64, 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const notifyPush = `-- name: NotifyPush :exec
+SELECT pg_notify('cobranch_pushes', $1::text)
+`
+
+// NotifyPush wakes the push workers that listen, once the push's transaction commits.
+func (q *Queries) NotifyPush(ctx context.Context, pushID string) error {
+	_, err := q.db.Exec(ctx, notifyPush, pushID)
+	return err
+}
+
+const pushCommits = `-- name: PushCommits :many
+SELECT sha, author_name, author_email, committer_name, committer_email FROM commits WHERE first_push = $1
+`
+
+type PushCommitsRow struct {
+	Sha            string
+	AuthorName     string
+	AuthorEmail    string
+	CommitterName  string
+	CommitterEmail string
+}
+
+func (q *Queries) PushCommits(ctx context.Context, firstPush uuid.UUID) ([]PushCommitsRow, error) {
+	rows, err := q.db.Query(ctx, pushCommits, firstPush)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PushCommitsRow
+	for rows.Next() {
+		var i PushCommitsRow
+		if err := rows.Scan(
+			&i.Sha,
+			&i.AuthorName,
+			&i.AuthorEmail,
+			&i.CommitterName,
+			&i.CommitterEmail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const pushRecorded = `-- name: PushRecorded :one

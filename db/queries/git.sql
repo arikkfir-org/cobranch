@@ -23,12 +23,13 @@ INSERT INTO packs (repo_id, name, org_id, size, objects) VALUES (@repo_id, @name
 INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at)
 VALUES (@id, @org_id, @repo_id, @pusher_id, @transport, @ref_updates, @pack, @received_at);
 
--- InsertCommit records a commit a push brought, unless another push brought it first.
+-- InsertCommit records a commit a push brought, unless another push brought it first; the push worker fills in its
+-- author's and committer's principals.
 -- name: InsertCommit :batchexec
-INSERT INTO commits (repo_id, sha, org_id, tree, parents, message, author_id, author_name, author_email, authored_at,
-    author_zone, committer_id, committer_name, committer_email, committed_at, committer_zone, signature, first_push)
-VALUES (@repo_id, @sha, @org_id, @tree, @parents, @message, @author_id, @author_name, @author_email, @authored_at,
-    @author_zone, @committer_id, @committer_name, @committer_email, @committed_at, @committer_zone, @signature, @first_push)
+INSERT INTO commits (repo_id, sha, org_id, tree, parents, message, author_name, author_email, authored_at, author_zone,
+    committer_name, committer_email, committed_at, committer_zone, signature, first_push)
+VALUES (@repo_id, @sha, @org_id, @tree, @parents, @message, @author_name, @author_email, @authored_at, @author_zone,
+    @committer_name, @committer_email, @committed_at, @committer_zone, @signature, @first_push)
 ON CONFLICT (repo_id, sha) DO NOTHING;
 
 -- EmailPrincipal finds who holds an email, whether verified, and whether they sign in: a principal with no identity is
@@ -53,3 +54,34 @@ UPDATE branches SET head = @head, updated_at = @at WHERE repo_id = @repo_id AND 
 
 -- name: DeleteBranch :execrows
 UPDATE branches SET deleted_at = @at::timestamptz, updated_at = @at::timestamptz WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL;
+
+-- NotifyPush wakes the push workers that listen, once the push's transaction commits.
+-- name: NotifyPush :exec
+SELECT pg_notify('cobranch_pushes', @push_id::text);
+
+-- ListenPushes has the connection hear NotifyPush's notifications.
+-- name: ListenPushes :exec
+LISTEN cobranch_pushes;
+
+-- ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
+-- push worker holds.
+-- name: ClaimPush :one
+SELECT id, repo_id, received_at, attempts FROM pushes
+WHERE processed_at IS NULL AND retry_at <= now()
+ORDER BY retry_at, committed_at
+LIMIT 1
+FOR UPDATE SKIP LOCKED;
+
+-- name: PushCommits :many
+SELECT sha, author_name, author_email, committer_name, committer_email FROM commits WHERE first_push = $1;
+
+-- name: SetCommitPrincipals :batchexec
+UPDATE commits SET author_id = @author_id, committer_id = @committer_id WHERE repo_id = @repo_id AND sha = @sha;
+
+-- name: MarkPushProcessed :exec
+UPDATE pushes SET processed_at = now(), error = '' WHERE id = $1;
+
+-- FailPush keeps a push the push worker failed waiting, for another try after delay seconds.
+-- name: FailPush :exec
+UPDATE pushes SET attempts = attempts + 1, error = @message, retry_at = now() + make_interval(secs => @delay::float8)
+WHERE id = @id;

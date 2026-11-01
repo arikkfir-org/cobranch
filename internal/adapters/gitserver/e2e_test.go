@@ -23,7 +23,6 @@ import (
 	"cobranch.dev/internal/adapters/gitserver"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
-	"cobranch.dev/internal/adapters/pushworker"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
@@ -52,17 +51,16 @@ var (
 	website = uuid.MustParse("00000000-0000-7000-8000-00000000d201")
 )
 
-// stack is a Git server and a push worker in process over a database with the seeds and a file:// bucket.
+// stack is a Git server in process over a database with the seeds and a file:// bucket, and the push worker's
+// processing, which a test runs when it wants it.
 type stack struct {
 	t      *testing.T
 	pool   *pgxpool.Pool
 	bucket *gocloudblob.Bucket
 	base   string
-	// record, when set, stands between the Git server and the push worker.
-	record func(ctx context.Context, push git.Push, next gitserver.Recorder) (git.Answer, error)
-	worker gitserver.Recorder
-	// workerURL is the push worker's, which a test may put a proxy in front of.
-	workerURL string
+	store  git.Store
+	// record, when set, stands between the Git server's domain and its store's Record.
+	record func(ctx context.Context, push git.Push, next git.Store) error
 }
 
 func newStack(t *testing.T) *stack {
@@ -82,10 +80,7 @@ func newStack(t *testing.T) *stack {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = bucket.Close() })
-	s := &stack{t: t, pool: pool, bucket: bucket}
-	worker := httptest.NewServer(pushworker.Handler("internal", git.NewService(postgres.NewGitStore(pool))))
-	t.Cleanup(worker.Close)
-	s.worker, s.workerURL = pushworker.NewClient(worker.URL, "internal"), worker.URL
+	s := &stack{t: t, pool: pool, bucket: bucket, store: postgres.NewGitStore(pool)}
 	s.base = s.serve(t.TempDir())
 	return s
 }
@@ -119,9 +114,10 @@ func (s *stack) serve(dataDir string) string {
 		s.t.Fatal(err)
 	}
 	orgStore := postgres.NewOrgStore(s.pool)
+	domain := git.NewService(hookedStore{s})
 	srv, err := gitserver.New(context.Background(), gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}},
 		auth.NewService(postgres.NewAuthStore(s.pool), nil, auth.Settings{}), repos.NewService(postgres.NewRepoStore(s.pool), auth.NewAuthorizer(orgStore)),
-		git.NewService(postgres.NewGitStore(s.pool)), recorderFunc(s.recordPush), s.bucket)
+		domain, domain, s.bucket)
 	if err != nil {
 		s.t.Fatal(err)
 	}
@@ -131,21 +127,49 @@ func (s *stack) serve(dataDir string) string {
 	return server.URL
 }
 
-func (s *stack) recordPush(ctx context.Context, push git.Push) (git.Answer, error) {
-	if s.record != nil {
-		return s.record(ctx, push, s.worker)
-	}
-	answer, err := s.worker.Record(ctx, push)
+// hookedStore is the stack's store, with its record hook in front of Record.
+type hookedStore struct{ s *stack }
+
+func (h hookedStore) Snapshot(ctx context.Context, repoID uuid.UUID) (git.Snapshot, error) {
+	snapshot, err := h.s.store.Snapshot(ctx, repoID)
 	if err != nil {
-		return git.Answer{}, fmt.Errorf("recording through the push worker: %w", err)
+		return snapshot, fmt.Errorf("the store's snapshot: %w", err)
 	}
-	return answer, nil
+	return snapshot, nil
 }
 
-type recorderFunc func(ctx context.Context, push git.Push) (git.Answer, error)
+func (h hookedStore) Record(ctx context.Context, push git.Push) error {
+	record := func(ctx context.Context, push git.Push, next git.Store) error { return next.Record(ctx, push) }
+	if h.s.record != nil {
+		record = h.s.record
+	}
+	if err := record(ctx, push, h.s.store); err != nil {
+		return fmt.Errorf("the store's record: %w", err)
+	}
+	return nil
+}
 
-func (f recorderFunc) Record(ctx context.Context, push git.Push) (git.Answer, error) {
-	return f(ctx, push)
+func (h hookedStore) Process(ctx context.Context, retry func(attempts int) time.Duration) (uuid.UUID, error) {
+	id, err := h.s.store.Process(ctx, retry)
+	if err != nil {
+		return id, fmt.Errorf("the store's process: %w", err)
+	}
+	return id, nil
+}
+
+// process runs the push worker's processing until no push waits.
+func (s *stack) process() {
+	s.t.Helper()
+	domain := git.NewService(s.store)
+	for {
+		processed, err := domain.Process(context.Background())
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		if !processed {
+			return
+		}
+	}
 }
 
 // token makes a personal token of user's holding permissions, and returns its secret.

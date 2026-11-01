@@ -74,9 +74,15 @@ func (s *GitStore) Record(ctx context.Context, push git.Push) error {
 		if err := moveRefs(ctx, q, orgID, push); err != nil {
 			return err
 		}
-		return orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
+		if err := orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
 			"push": push.ID, "refs": updatesJSON(push.Updates), "commits": len(push.Commits),
-		})
+		}); err != nil {
+			return err
+		}
+		if err := q.NotifyPush(ctx, push.ID.String()); err != nil {
+			return fmt.Errorf("notifying the push workers: %w", err)
+		}
+		return nil
 	})
 }
 
@@ -102,7 +108,7 @@ func checkRefs(ctx context.Context, q *queries.Queries, push git.Push) error {
 	return nil
 }
 
-// insertPush lists the push's pack and records the push and its commits, with the principals behind them.
+// insertPush lists the push's pack and records the push and its commits.
 func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
 	pack := ""
 	if push.Pack != nil {
@@ -121,29 +127,20 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	}); err != nil {
 		return fmt.Errorf("recording the push: %w", err)
 	}
-	return s.insertCommits(ctx, q, orgID, push)
+	return insertCommits(ctx, q, orgID, push)
 }
 
-// insertCommits records the push's commits in one batch, after resolving their authors and committers.
-func (s *GitStore) insertCommits(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+// insertCommits records the push's commits in one batch; the push worker resolves their authors and committers.
+func insertCommits(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
 	if len(push.Commits) == 0 {
 		return nil
 	}
-	principals := map[string]*uuid.UUID{}
 	rows := make([]queries.InsertCommitParams, 0, len(push.Commits))
 	for _, c := range push.Commits {
-		author, err := s.principalOf(ctx, q, principals, c.Author, push.ReceivedAt)
-		if err != nil {
-			return err
-		}
-		committer, err := s.principalOf(ctx, q, principals, c.Committer, push.ReceivedAt)
-		if err != nil {
-			return err
-		}
 		rows = append(rows, queries.InsertCommitParams{
 			RepoID: push.RepoID, Sha: c.SHA, OrgID: orgID, Tree: c.Tree, Parents: nonNil(c.Parents), Message: c.Message,
-			AuthorID: author, AuthorName: c.Author.Name, AuthorEmail: c.Author.Email, AuthoredAt: c.Author.At, AuthorZone: c.Author.Zone,
-			CommitterID: committer, CommitterName: c.Committer.Name, CommitterEmail: c.Committer.Email, CommittedAt: c.Committer.At,
+			AuthorName: c.Author.Name, AuthorEmail: c.Author.Email, AuthoredAt: c.Author.At, AuthorZone: c.Author.Zone,
+			CommitterName: c.Committer.Name, CommitterEmail: c.Committer.Email, CommittedAt: c.Committer.At,
 			CommitterZone: c.Committer.Zone, Signature: c.Signature, FirstPush: push.ID,
 		})
 	}
@@ -156,11 +153,73 @@ func (s *GitStore) insertCommits(ctx context.Context, q *queries.Queries, orgID 
 	return failed
 }
 
+// Process claims the push that has waited longest and processes it in one transaction (git.Store). A push it fails
+// is kept waiting in a transaction of its own, the failed one rolled back.
+func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Duration) (uuid.UUID, error) {
+	var claimed queries.ClaimPushRow
+	err := transact(ctx, s.pool, s.q, "processing a push", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		var err error
+		claimed, err = q.ClaimPush(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("claiming a push: %w", err)
+		}
+		if err := s.attribute(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
+			return fmt.Errorf("marking the push processed: %w", err)
+		}
+		return nil
+	})
+	if err == nil || claimed.ID == uuid.Nil {
+		return claimed.ID, err
+	}
+	delay := retry(int(claimed.Attempts) + 1)
+	if failed := s.q.FailPush(ctx, err.Error(), delay.Seconds(), claimed.ID); failed != nil {
+		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
+	}
+	return claimed.ID, err
+}
+
+// attribute resolves the authors and committers of the commits the claimed push first brought to their principals.
+func (s *GitStore) attribute(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	commits, err := q.PushCommits(ctx, claimed.ID)
+	if err != nil {
+		return fmt.Errorf("reading the push's commits: %w", err)
+	}
+	if len(commits) == 0 {
+		return nil
+	}
+	principals := map[string]*uuid.UUID{}
+	rows := make([]queries.SetCommitPrincipalsParams, 0, len(commits))
+	for _, c := range commits {
+		author, err := s.principalOf(ctx, q, principals, c.AuthorName, c.AuthorEmail, claimed.ReceivedAt)
+		if err != nil {
+			return err
+		}
+		committer, err := s.principalOf(ctx, q, principals, c.CommitterName, c.CommitterEmail, claimed.ReceivedAt)
+		if err != nil {
+			return err
+		}
+		rows = append(rows, queries.SetCommitPrincipalsParams{AuthorID: author, CommitterID: committer, RepoID: claimed.RepoID, Sha: c.Sha})
+	}
+	var failed error
+	q.SetCommitPrincipals(ctx, rows).Exec(func(i int, err error) {
+		if err != nil && failed == nil {
+			failed = fmt.Errorf("attributing commit %s: %w", rows[i].Sha, err)
+		}
+	})
+	return failed
+}
+
 // principalOf resolves who a commit's author or committer is, by lowercased email: the user who holds it verified, or
 // else the login-less user who holds it, or else a new login-less user holding it unverified, named after the commit.
 // An empty email, or one a user holds unverified, is nobody. resolved remembers each email's answer for the push.
-func (s *GitStore) principalOf(ctx context.Context, q *queries.Queries, resolved map[string]*uuid.UUID, p git.Person, at time.Time) (*uuid.UUID, error) {
-	email := strings.ToLower(strings.TrimSpace(p.Email))
+func (s *GitStore) principalOf(ctx context.Context, q *queries.Queries, resolved map[string]*uuid.UUID, name, email string, at time.Time) (*uuid.UUID, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return nil, nil
 	}
@@ -169,7 +228,7 @@ func (s *GitStore) principalOf(ctx context.Context, q *queries.Queries, resolved
 	}
 	id, err := holder(ctx, q, email)
 	if errors.Is(err, pgx.ErrNoRows) {
-		id, err = s.loginless(ctx, q, email, p.Name, at)
+		id, err = s.loginless(ctx, q, email, name, at)
 	}
 	if err != nil {
 		return nil, err

@@ -10,13 +10,12 @@ import (
 )
 
 // TestRunGitWorkloads runs a push worker and a Git server on one database, and checks that both turn ready once it
-// is migrated and that the Git server asks a client without a credential for one.
+// is migrated, that the Git server asks a client without a credential for one, and that the push worker takes no
+// calls.
 func TestRunGitWorkloads(t *testing.T) {
 	worker, gitServer := freeAddr(t), freeAddr(t)
 	t.Setenv("COBRANCH_DATABASE_URL", postgrestest.Database(t))
 	t.Setenv("COBRANCH_BLOB_URL", "file://"+t.TempDir())
-	t.Setenv("COBRANCH_INTERNAL_TOKEN", "internal")
-	t.Setenv("COBRANCH_PUSH_WORKER_URL", "http://"+worker)
 	t.Setenv("COBRANCH_GIT_DATA_DIR", t.TempDir())
 	t.Setenv("COBRANCH_HTTP_ADDR", worker)
 	start(t, "push-worker", runPushWorker)
@@ -36,8 +35,8 @@ func TestRunGitWorkloads(t *testing.T) {
 	if status, body := get(gitServer, "GET", "/acme/website.git/info/refs?service=git-upload-pack", ""); status != 401 || !strings.Contains(body, "personal token") {
 		t.Errorf("a fetch without a credential = %d %q, want 401", status, body)
 	}
-	if status, _ := get(worker, "POST", "/v1/pushes", "{}"); status != 401 {
-		t.Errorf("a push without the internal token = %d, want 401", status)
+	if status, _ := get(worker, "POST", "/v1/pushes", "{}"); status != 404 {
+		t.Errorf("a push sent to the push worker = %d, want 404: it serves only its health", status)
 	}
 }
 

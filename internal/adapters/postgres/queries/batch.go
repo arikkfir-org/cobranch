@@ -19,10 +19,10 @@ var (
 )
 
 const insertCommit = `-- name: InsertCommit :batchexec
-INSERT INTO commits (repo_id, sha, org_id, tree, parents, message, author_id, author_name, author_email, authored_at,
-    author_zone, committer_id, committer_name, committer_email, committed_at, committer_zone, signature, first_push)
+INSERT INTO commits (repo_id, sha, org_id, tree, parents, message, author_name, author_email, authored_at, author_zone,
+    committer_name, committer_email, committed_at, committer_zone, signature, first_push)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12, $13, $14, $15, $16, $17, $18)
+    $11, $12, $13, $14, $15, $16)
 ON CONFLICT (repo_id, sha) DO NOTHING
 `
 
@@ -39,12 +39,10 @@ type InsertCommitParams struct {
 	Tree           string
 	Parents        []string
 	Message        string
-	AuthorID       *uuid.UUID
 	AuthorName     string
 	AuthorEmail    string
 	AuthoredAt     time.Time
 	AuthorZone     string
-	CommitterID    *uuid.UUID
 	CommitterName  string
 	CommitterEmail string
 	CommittedAt    time.Time
@@ -53,7 +51,8 @@ type InsertCommitParams struct {
 	FirstPush      uuid.UUID
 }
 
-// InsertCommit records a commit a push brought, unless another push brought it first.
+// InsertCommit records a commit a push brought, unless another push brought it first; the push worker fills in its
+// author's and committer's principals.
 func (q *Queries) InsertCommit(ctx context.Context, arg []InsertCommitParams) *InsertCommitBatchResults {
 	batch := &pgx.Batch{}
 	for _, a := range arg {
@@ -64,12 +63,10 @@ func (q *Queries) InsertCommit(ctx context.Context, arg []InsertCommitParams) *I
 			a.Tree,
 			a.Parents,
 			a.Message,
-			a.AuthorID,
 			a.AuthorName,
 			a.AuthorEmail,
 			a.AuthoredAt,
 			a.AuthorZone,
-			a.CommitterID,
 			a.CommitterName,
 			a.CommitterEmail,
 			a.CommittedAt,
@@ -100,6 +97,59 @@ func (b *InsertCommitBatchResults) Exec(f func(int, error)) {
 }
 
 func (b *InsertCommitBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const setCommitPrincipals = `-- name: SetCommitPrincipals :batchexec
+UPDATE commits SET author_id = $1, committer_id = $2 WHERE repo_id = $3 AND sha = $4
+`
+
+type SetCommitPrincipalsBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type SetCommitPrincipalsParams struct {
+	AuthorID    *uuid.UUID
+	CommitterID *uuid.UUID
+	RepoID      uuid.UUID
+	Sha         string
+}
+
+func (q *Queries) SetCommitPrincipals(ctx context.Context, arg []SetCommitPrincipalsParams) *SetCommitPrincipalsBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.AuthorID,
+			a.CommitterID,
+			a.RepoID,
+			a.Sha,
+		}
+		batch.Queue(setCommitPrincipals, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &SetCommitPrincipalsBatchResults{br, len(arg), false}
+}
+
+func (b *SetCommitPrincipalsBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *SetCommitPrincipalsBatchResults) Close() error {
 	b.closed = true
 	return b.br.Close()
 }

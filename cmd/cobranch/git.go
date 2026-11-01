@@ -60,7 +60,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	gitServer, err := gitserver.New(ctx, gitserver.Config{DataDir: cfg.DataDir, CacheSize: int64(cfg.CacheSize), MaxPushSize: int64(cfg.MaxPushSize), Hook: []string{self, "git-hook"}},
 		auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{}),
 		repos.NewService(postgres.NewRepoStore(pool), auth.NewAuthorizer(orgStore)),
-		gitservice(pool), pushworker.NewClient(cfg.PushWorkerURL, cfg.InternalToken), bucket)
+		gitservice(pool), gitservice(pool), bucket)
 	if err != nil {
 		return fmt.Errorf("preparing the Git server: %w", err)
 	}
@@ -69,7 +69,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)}))
 }
 
-// runPushWorker records the Git server's pushes, and serves the health endpoints, until ctx ends.
+// runPushWorker processes the pushes the Git server recorded, and serves the health endpoints, until ctx ends.
 func runPushWorker(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "push-worker", buildinfo.Version())
 	if err != nil {
@@ -90,7 +90,13 @@ func runPushWorker(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the worker wrote
-	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", pushworker.Handler(cfg.InternalToken, gitservice(pool)),
+	worked := make(chan struct{})
+	go func() {
+		defer close(worked)
+		pushworker.Run(ctx, gitservice(pool), postgres.ListenPushes(ctx, pool), cfg.PollInterval)
+	}()
+	defer func() { <-worked }() // the push in hand commits or rolls back before the pool closes
+	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", http.NotFoundHandler(),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 

@@ -10,7 +10,7 @@ import (
 // every names every variable the loaders read, to unset before each test.
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
-	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_WORKER_URL", "INTERNAL_TOKEN", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
+	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
 	"GIT_MAX_PUSH_SIZE", "HOOK_URL", "HOOK_TOKEN"}
 
 // clean unsets every variable, then sets env.
@@ -286,7 +286,7 @@ func unsetenv(t *testing.T, name string) {
 }
 
 func TestLoadGitServer(t *testing.T) {
-	required := map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_PUSH_WORKER_URL": "http://push-worker", "COBRANCH_INTERNAL_TOKEN": "t"}
+	required := map[string]string{"COBRANCH_BLOB_URL": "file:///blob"}
 	with := func(extra map[string]string) map[string]string {
 		env := map[string]string{}
 		for _, m := range []map[string]string{required, extra} {
@@ -302,15 +302,13 @@ func TestLoadGitServer(t *testing.T) {
 		want    GitServer
 		wantErr bool
 	}{
-		{name: "defaults", env: required, want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", PushWorkerURL: "http://push-worker", InternalToken: "t",
+		{name: "defaults", env: required, want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
 			DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, ShutdownTimeout: 20 * time.Second}},
 		{name: "sizes", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "512Mi", "COBRANCH_GIT_MAX_PUSH_SIZE": "1048576", "COBRANCH_GIT_DATA_DIR": "/data"}),
-			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", PushWorkerURL: "http://push-worker", InternalToken: "t",
+			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
 				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, ShutdownTimeout: 20 * time.Second}},
 		{name: "a size that isn't one", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "10GB"}), wantErr: true},
-		{name: "no push worker", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_INTERNAL_TOKEN": "t"}, wantErr: true},
-		{name: "no token", env: map[string]string{"COBRANCH_BLOB_URL": "file:///blob", "COBRANCH_PUSH_WORKER_URL": "http://push-worker"}, wantErr: true},
-		{name: "no bucket", env: map[string]string{"COBRANCH_PUSH_WORKER_URL": "http://push-worker", "COBRANCH_INTERNAL_TOKEN": "t"}, wantErr: true},
+		{name: "no bucket", env: map[string]string{}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -324,14 +322,26 @@ func TestLoadGitServer(t *testing.T) {
 }
 
 func TestLoadPushWorker(t *testing.T) {
-	clean(t, map[string]string{"COBRANCH_INTERNAL_TOKEN": "t", "COBRANCH_DATABASE_URL": "postgres://db/cobranch"})
-	got, err := LoadPushWorker()
-	if want := (PushWorker{HTTPAddr: ":8080", DatabaseURL: "postgres://db/cobranch", InternalToken: "t", ShutdownTimeout: 20 * time.Second}); err != nil || got != want {
-		t.Errorf("LoadPushWorker() = %+v, %v, want %+v", got, err, want)
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    PushWorker
+		wantErr bool
+	}{
+		{name: "defaults", env: map[string]string{"COBRANCH_DATABASE_URL": "postgres://db/cobranch"},
+			want: PushWorker{HTTPAddr: ":8080", DatabaseURL: "postgres://db/cobranch", PollInterval: 30 * time.Second, ShutdownTimeout: 20 * time.Second}},
+		{name: "a poll interval", env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "5s"},
+			want: PushWorker{HTTPAddr: ":8080", PollInterval: 5 * time.Second, ShutdownTimeout: 20 * time.Second}},
+		{name: "a poll interval that isn't one", env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "often"}, wantErr: true},
 	}
-	clean(t, nil)
-	if _, err := LoadPushWorker(); err == nil {
-		t.Error("LoadPushWorker() without a token succeeded")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadPushWorker()
+			if (err != nil) != tt.wantErr || (!tt.wantErr && got != tt.want) {
+				t.Errorf("LoadPushWorker() = %+v, %v, want %+v", got, err, tt.want)
+			}
+		})
 	}
 }
 

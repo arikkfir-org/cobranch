@@ -1,7 +1,7 @@
 // Package git is the domain of Git hosting: a repository's refs and packs, the pushes that move them, the commits they
 // bring and the principals behind those, and which pushes Cobranch accepts. It knows nothing of Git's protocol, the
-// git CLI, HTTP or PostgreSQL: the Git server reads snapshots and builds push manifests, and the push worker records
-// them, through its port, Store
+// git CLI, HTTP or PostgreSQL: the Git server reads snapshots and records push manifests, and the push worker
+// processes them, through its port, Store
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "A push").
 package git
 
@@ -77,7 +77,7 @@ const (
 	TransportSSH   Transport = "ssh"
 )
 
-// Push is a push's manifest, which the Git server sends the push worker once Git has checked its objects: who pushed,
+// Push is a push's manifest, which the Git server records once Git has checked its objects: who pushed,
 // the refs it moves, its pack (nil when it only deletes) and every commit it brings that the repository's refs didn't
 // reach.
 type Push struct {
@@ -100,7 +100,7 @@ type Answer struct {
 
 // The messages a client sees, as the design's table of accepted pushes words them.
 const (
-	// MessageNotRecorded is a push that the bucket or the push worker failed.
+	// MessageNotRecorded is a push that the bucket or the database failed.
 	MessageNotRecorded = "Cobranch could not record the push; nothing changed, so try again"
 	// messageReserved is a ref under cobranch/.
 	messageReserved = "Cobranch writes refs under cobranch/ itself"

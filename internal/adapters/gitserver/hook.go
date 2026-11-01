@@ -91,8 +91,8 @@ func (s *Server) hookHandler() http.Handler {
 	return mux
 }
 
-// receive checks a push's refs, builds its manifest, uploads its pack and has the push worker record it, or refuses
-// it with the reason. A failure of the bucket or the push worker refuses it, unchanged.
+// receive checks a push's refs, builds its manifest, uploads its pack and records the push, or refuses it with the
+// reason. A failure of the bucket or the database refuses it, unchanged.
 func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 	ctx := p.ctx
 	updates, err := parseUpdates(hr.Updates)
@@ -246,8 +246,8 @@ func (s *Server) output(ctx context.Context, env []string, stdin string, args ..
 }
 
 // storePack uploads the push's pack from its quarantine to the bucket, the pack's index first, and keeps it in the
-// cache: nil when the push brought no objects. The pack is listed only when the push worker records the push, so a
-// push that fails leaves files no row lists, which maintenance deletes.
+// cache: nil when the push brought no objects. The pack is listed only once the push is recorded, so a push that
+// fails leaves files no row lists, which maintenance deletes.
 func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (*git.Pack, error) {
 	if quarantine == "" {
 		return nil, nil

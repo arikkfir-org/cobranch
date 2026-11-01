@@ -244,10 +244,6 @@ type GitServer struct {
 	DatabaseURL string `envconfig:"DATABASE_URL"`
 	// BlobURL is the bucket's Go Cloud URL, as the servers'.
 	BlobURL string `envconfig:"BLOB_URL" required:"true"`
-	// PushWorkerURL is where the push worker answers, inside the cluster.
-	PushWorkerURL string `envconfig:"PUSH_WORKER_URL" required:"true"`
-	// InternalToken is what the Git server bears to call the push worker.
-	InternalToken string `envconfig:"INTERNAL_TOKEN" required:"true"`
 	// DataDir holds the pack cache and the throwaway repositories, on one filesystem.
 	DataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
 	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.
@@ -266,13 +262,13 @@ func LoadGitServer() (GitServer, error) {
 	return c, nil
 }
 
-// PushWorker configures push-worker, which records pushes.
+// PushWorker configures push-worker, which processes the pushes the Git server recorded.
 type PushWorker struct {
 	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// InternalToken is what the Git server bears to call it.
-	InternalToken   string        `envconfig:"INTERNAL_TOKEN" required:"true"`
+	// PollInterval is how often it looks for waiting pushes without being woken, in case it missed a notification.
+	PollInterval    time.Duration `envconfig:"PUSH_POLL_INTERVAL" default:"30s"`
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
 }
 

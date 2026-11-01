@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,8 +12,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"cobranch.dev/internal/adapters/gitserver"
-	"cobranch.dev/internal/adapters/pushworker"
 	"cobranch.dev/internal/services/git"
 )
 
@@ -40,6 +35,14 @@ func TestCloneAndPush(t *testing.T) {
 	if got := query[uuid.UUID](t, s.pool, "SELECT pusher_id FROM pushes WHERE repo_id = $1", website); got != olivia {
 		t.Errorf("the pusher = %s, want Olivia", got)
 	}
+	// The push returned with its commit recorded, and waits for the push worker to name who wrote it.
+	if got := query[int](t, s.pool, "SELECT count(*) FROM commits WHERE repo_id = $1 AND sha = $2 AND author_id IS NULL AND committer_id IS NULL", website, first); got != 1 {
+		t.Error("the commit isn't recorded, unattributed, once the push returned")
+	}
+	if got := query[int](t, s.pool, "SELECT count(*) FROM pushes WHERE repo_id = $1 AND processed_at IS NULL", website); got != 1 {
+		t.Error("the push doesn't wait for the push worker")
+	}
+	s.process()
 	checkCommit(t, s, first)
 
 	// A second Git server, with an empty cache, serves the push from the bucket.
@@ -105,27 +108,27 @@ func TestTagsAndDeletes(t *testing.T) {
 }
 
 func TestRefusedPushes(t *testing.T) {
-	moved := func(ctx context.Context, push git.Push, next gitserver.Recorder) (git.Answer, error) {
+	moved := func(ctx context.Context, push git.Push, next git.Store) error {
 		// Another push moves main first, as one that commits between this push's snapshot and its record would.
-		if _, err := next.Record(ctx, git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: push.RepoID, PusherID: olivia, Transport: git.TransportHTTPS,
+		if err := next.Record(ctx, git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: push.RepoID, PusherID: olivia, Transport: git.TransportHTTPS,
 			Updates: []git.RefUpdate{{Name: "refs/heads/main", Old: push.Updates[0].Old, New: strings.Repeat("a", 40)}}, ReceivedAt: time.Now()}); err != nil {
-			return git.Answer{}, fmt.Errorf("moving main first: %w", err)
+			return fmt.Errorf("moving main first: %w", err)
 		}
 		return next.Record(ctx, push)
 	}
-	failing := func(context.Context, git.Push, gitserver.Recorder) (git.Answer, error) {
-		return git.Answer{}, errors.New("the push worker is down")
+	failing := func(context.Context, git.Push, git.Store) error {
+		return errors.New("the database is down")
 	}
 	tests := []struct {
 		name, ref string
-		record    func(ctx context.Context, push git.Push, next gitserver.Recorder) (git.Answer, error)
+		record    func(ctx context.Context, push git.Push, next git.Store) error
 		want      string
 	}{
 		{name: "a note", ref: "refs/notes/commits", want: "Cobranch keeps branches and tags only: refs/notes/commits refused"},
 		{name: "a branch under cobranch/", ref: "refs/heads/cobranch/settings", want: "Cobranch writes refs under cobranch/ itself"},
 		{name: "a tag under cobranch/", ref: "refs/tags/cobranch/v1", want: "Cobranch writes refs under cobranch/ itself"},
 		{name: "a ref another push moved", ref: "refs/heads/main", record: moved, want: "refs/heads/main moved since you fetched: fetch, merge or rebase, then push again"},
-		{name: "a push worker that fails", ref: "refs/heads/main", record: failing, want: git.MessageNotRecorded},
+		{name: "a database that fails", ref: "refs/heads/main", record: failing, want: git.MessageNotRecorded},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -149,38 +152,20 @@ func TestRefusedPushes(t *testing.T) {
 func TestLostAnswer(t *testing.T) {
 	s := newStack(t)
 	var calls atomic.Int32
-	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		forward, err := http.NewRequestWithContext(r.Context(), r.Method, s.workerURL+r.URL.Path, r.Body)
-		if err != nil {
-			t.Error(err)
-			return
+	s.record = func(ctx context.Context, push git.Push, next git.Store) error {
+		if err := next.Record(ctx, push); err != nil {
+			return fmt.Errorf("recording: %w", err)
 		}
-		forward.Header = r.Header.Clone()
-		resp, err := http.DefaultClient.Do(forward)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadGateway)
-			return
+		if calls.Add(1) > 1 {
+			return nil
 		}
-		defer func() { _ = resp.Body.Close() }()
-		if calls.Add(1) == 1 {
-			// The push worker committed, and its answer is lost on the way.
-			conn, _, _ := http.NewResponseController(w).Hijack()
-			_ = conn.Close()
-			return
-		}
-		w.WriteHeader(resp.StatusCode)
-		_, _ = io.Copy(w, resp.Body)
-	}))
-	defer proxy.Close()
-	proxied := pushworker.NewClient(proxy.URL, "internal")
-	s.record = func(ctx context.Context, push git.Push, _ gitserver.Recorder) (git.Answer, error) {
-		return proxied.Record(ctx, push)
+		return errors.New("the push committed, and the answer is lost on the way") // as a connection that drops at COMMIT
 	}
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	commit(t, dir, "README.md", "# Website\n")
 	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
 	if got := calls.Load(); got != 2 {
-		t.Errorf("the Git server asked the push worker %d times, want twice", got)
+		t.Errorf("the Git server recorded the push %d times, want twice", got)
 	}
 	if got := query[int](t, s.pool, "SELECT count(*) FROM pushes WHERE repo_id = $1", website); got != 1 {
 		t.Errorf("%d pushes recorded, want one", got)
