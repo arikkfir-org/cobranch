@@ -2401,7 +2401,7 @@ type Person {
   principal: CommitPrincipal
 }
 
-"Who is behind a commit's author or committer, a push or an annotation: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
+"Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
 type CommitPrincipal {
   id: ID!
   displayName: String!
