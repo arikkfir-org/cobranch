@@ -234,6 +234,8 @@
     .why p { color: inherit; }
     .why strong { font-weight: 600; }
     select.ref { width: auto; max-width: 240px; }
+    form.merge { justify-content: flex-start; }
+    form.merge select { width: auto; }
     code.crumbs { overflow-wrap: anywhere; }
     .spacer { flex: 1; }
     details.clone { position: relative; }
@@ -948,9 +950,9 @@
         others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
     }
 
-    // repositoryBranch is a branch's page: whose commits it would merge into main and how many, why it is Blocked,
-    // requirement by requirement, its commits, and the annotations on its head. main's page names what merges into it
-    // need instead.
+    // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button for a
+    // viewer who may, why it is Blocked, requirement by requirement, its commits, and the annotations on its head. main's
+    // page names what merges into it need instead.
     async function repositoryBranch(path, at, name, can, fail) {
       let b;
       try {
@@ -962,7 +964,7 @@
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "History"));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
-      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)))];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
@@ -1032,6 +1034,32 @@
       panel.append(h("table", { class: "commits" }, h("tbody", {}, page.data.commits.map(commitRow(at)))));
       if (b.ahead > limit) panel.append(h("div", {}, h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "All its history")));
       return panel;
+    }
+
+    // mergeControl offers to merge b into its base, at the head the page shows, for a viewer who may: Merge once it is
+    // Ready, with repo.merge, and Merge anyway otherwise, with repo.bypass too. A merge commit or a fast-forward, where
+    // the base requires linear history a fast-forward alone, and none for a branch behind its base.
+    function mergeControl(path, b, can, fail) {
+      const ready = b.status === "ready";
+      if (b.ahead === 0 || !can("repo.merge") || (!ready && !can("repo.bypass"))) return null;
+      // Until the push worker counts a branch's commits, Cobranch picks the method main allows.
+      const known = b.ahead != null;
+      const linear = b.checks.some((c) => c.kind === "linear_history");
+      const methods = !known ? [] : [["merge", "Merge commit"], ["fast_forward", "Fast-forward"]].filter(([m]) => (m === "merge" ? !linear : !b.behind));
+      if (known && !methods.length) return null;
+      const method = methods.length > 1 ? h("select", { "aria-label": "How to merge" }, methods.map(([m, label]) => h("option", { value: m }, label))) : null;
+      const how = methods.length > 1 ? null : h("span", { class: "muted" }, !known ? "Cobranch picks how, as " + b.base + " allows."
+        : linear ? "By fast-forward: " + b.base + " requires linear history."
+        : "By a merge commit: it is " + plural(b.behind, "commit") + " behind " + b.base + ".");
+      const button = h("button", { class: "button " + (ready ? "primary" : "danger"), type: "submit" }, ready ? "Merge" : "Merge anyway");
+      const merge = (e) => {
+        e.preventDefault();
+        if (!ready && !confirm("Merge " + b.name + " into " + b.base + " though it is " + branchStatuses[b.status].word + "?")) return;
+        button.disabled = true;
+        api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/merge", { head: b.head, method: method ? method.value : methods.length ? methods[0][0] : undefined })
+          .then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      return h("form", { class: "row merge", onsubmit: merge }, method, button, how);
     }
 
     // wantsToMerge says what b would merge into its base: how many commits, after the author of its head.

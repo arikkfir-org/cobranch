@@ -46,6 +46,19 @@ func (r *mutationResolver) DeleteAnnotation(ctx context.Context, repositoryID st
 	return true, nil
 }
 
+// MergeBranch is the resolver for the mergeBranch field.
+func (r *mutationResolver) MergeBranch(ctx context.Context, repositoryID string, branch string, input *MergeInput) (*MergeResult, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	merged, err := r.Code.Merge(ctx, v, repoID, branch, mergeInput(input))
+	if err != nil {
+		return nil, mergeFail(ctx, err)
+	}
+	return &MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}, nil
+}
+
 // Branches is the resolver for the branches field.
 func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*Branch, error) {
 	list, err := resolveRepo(ctx, obj, r.Code.Branches, "listing the branches")
