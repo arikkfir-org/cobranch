@@ -5,12 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
-       members, roles and settings under its slug, its repositories under theirs with their branches, history and
+       members, roles and settings under its slug, its repositories under theirs with their files, branches, history and
        commits, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
        HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
-       then the repository's page, then what that page shows: a branch's name or a commit's. -->
+       then the repository's page, then what that page shows: a branch's name or a commit's, or a ref and a path. -->
   <style>
     :root {
       color-scheme: light;
@@ -192,6 +192,21 @@
     dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
     dl.facts dt { color: var(--color-fg-muted); }
     dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    select.ref { width: auto; max-width: 240px; }
+    code.crumbs { overflow-wrap: anywhere; }
+    .spacer { flex: 1; }
+    details.clone { position: relative; }
+    details.clone summary { list-style: none; }
+    details.clone summary::-webkit-details-marker { display: none; }
+    details.clone[open] > section { position: absolute; right: 0; z-index: 1; width: min(560px, calc(100vw - 48px)); margin-top: 6px; background: var(--color-bg-raised); }
+    .files td.name { width: 60%; overflow-wrap: anywhere; }
+    .files td.size { text-align: right; white-space: nowrap; }
+    .source { display: grid; grid-template-columns: max-content 1fr; border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); overflow: hidden; }
+    .source pre { margin: 0; padding: 8px 12px; font: 13px/20px var(--font-mono); }
+    .source pre.ln { text-align: right; color: var(--color-fg-muted); user-select: none; border-right: 1px solid var(--color-border-default); }
+    .source pre.text { overflow-x: auto; tab-size: 4; }
+    .image { display: grid; place-items: center; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); }
+    .image img { max-width: 100%; }
   </style>
 </head>
 <body class="centered">
@@ -465,9 +480,9 @@
       const can = (p) => repo.viewerPermissions.includes(p);
       const tabs = [["", "Code"], ["branches", "Branches"], ["access", "Access"]];
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
-      // A branch's history and a commit are the Code tab's.
-      const tabOf = sub === "commits" || sub === "commit" ? "" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "commits" && !rest.length)) return go("/" + org.slug + "/" + repo.slug, true);
+      // A directory, a file, a branch's history and a commit are the Code tab's.
+      const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub;
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -482,17 +497,24 @@
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0]);
-      else sections = [repositoryCode(org, repo, can("repo.push")), await repositoryHistory(path, at, sub === "commits" ? rest.join("/") : "main", fail),
-        h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p))))];
+      else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
+      else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
+      if (!sub) sections.push(h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p)))));
       main.replaceChildren(heading, error, ...sections);
     }
 
-    // repoLinks makes the links of a repository's code: to a branch's history and to a commit.
+    // repoLinks makes the links of a repository's code: to a branch's history, to a commit, to a directory or a file at
+    // a ref, and to a file's bytes, which the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
+      const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
       return {
-        branch: (name) => root + "/commits/" + name.split("/").map(encodeURIComponent).join("/"),
+        branch: (name) => root + "/commits/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
+        tree: (ref, path) => root + "/tree/" + parts(ref, path),
+        blob: (ref, path) => root + "/blob/" + parts(ref, path),
+        raw: (commit, path, download) => config.restUrl + "/v1/orgs/" + org.slug + "/repos/" + repo.slug + "/raw?" +
+          new URLSearchParams(download ? { ref: commit, path, download: "true" } : { ref: commit, path }),
       };
     }
     const shortSha = (sha) => sha.slice(0, 7);
@@ -518,6 +540,137 @@
         h("p", {}, "Over SSH, Git signs in with one of ", settings("your SSH keys"), ", which acts as you, unnarrowed."));
       if (!push) ways.push(h("p", {}, "You may read this repository, but not push to it."));
       return h("section", { class: "panel" }, h("h3", {}, "Clone"), ...ways, facts);
+    }
+
+    // repositoryFiles is the Code tab's directory or file: under a picker of the repository's branches and tags and the
+    // path's breadcrumb, a directory lists its directories first and then its files, and a file shows its text, its
+    // image, or its size, with links to its bytes. Its URL's parts after tree/ or blob/ are a ref, then a path: the
+    // longest branch or tag name they start with, or else their first part, a commit's full name. A repository nothing
+    // was pushed to shows how to push its first commit.
+    async function repositoryFiles(org, repo, path, at, isFile, rest, push) {
+      const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
+      if (!branches.length) return [repositoryCode(org, repo, push), h("section", { class: "panel" }, h("h3", {}, "Files"),
+        h("p", {}, "Nothing has been pushed yet: push ", h("code", {}, "main"), " to see its files."))];
+      const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
+      const toolbar = h("div", { class: "row" }, refPicker(branches, tags, ref, (r) => go((isFile ? at.blob(r, file) : at.tree(r, file)).slice(base.length - 1))),
+        breadcrumb(repo, at, ref, file), h("span", { class: "spacer" }), clone(org, repo, push));
+      const shown = isFile ? await repositoryFile(path, at, ref, file) : await repositoryTree(path, at, ref, file, branches);
+      return [toolbar, ...shown];
+    }
+
+    // splitRef splits the parts of a directory's or a file's URL into its ref and its path: by the longest branch or
+    // tag name of names that its first parts make, or else its first part, main when there is none.
+    function splitRef(parts, names) {
+      for (let n = parts.length; n > 0; n--) {
+        const ref = parts.slice(0, n).join("/");
+        if (names.includes(ref)) return [ref, parts.slice(n).join("/")];
+      }
+      return [parts[0] || "main", parts.slice(1).join("/")];
+    }
+
+    // refPicker picks a branch or a tag, and shows a commit's full name, which neither is, as its own.
+    function refPicker(branches, tags, ref, pick) {
+      const known = branches.some((b) => b.name === ref) || tags.some((t) => t.name === ref);
+      return h("select", { "aria-label": "Branch or tag", class: "ref", onchange: (e) => pick(e.target.value) },
+        known ? null : h("option", { value: ref, selected: true }, /^[0-9a-f]{40,64}$/.test(ref) ? shortSha(ref) : ref),
+        h("optgroup", { label: "Branches" }, branches.map((b) => h("option", { value: b.name, selected: b.name === ref }, b.name))),
+        tags.length ? h("optgroup", { label: "Tags" }, tags.map((t) => h("option", { value: t.name, selected: t.name === ref }, t.name))) : null);
+    }
+
+    // breadcrumb links the repository's root and each directory on the way to path.
+    function breadcrumb(repo, at, ref, path) {
+      const names = path ? path.split("/") : [];
+      const crumbs = [h("a", { href: at.tree(ref, ""), "data-nav": "" }, repo.slug)];
+      names.forEach((name, i) => crumbs.push(" / ", i === names.length - 1 ? h("strong", {}, name)
+        : h("a", { href: at.tree(ref, names.slice(0, i + 1).join("/")), "data-nav": "" }, name)));
+      return h("code", { class: "crumbs" }, crumbs);
+    }
+
+    // clone is the Clone button, which opens the repository's clone URLs.
+    function clone(org, repo, push) {
+      return h("details", { class: "clone" }, h("summary", { class: "button small" }, "Clone"), repositoryCode(org, repo, push));
+    }
+
+    // size is a file's size as people read it.
+    function size(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      const units = ["KiB", "MiB", "GiB", "TiB"];
+      let n = bytes / 1024, u = 0;
+      while (n >= 1024 && u < units.length - 1) { n /= 1024; u++; }
+      return n.toFixed(n < 10 ? 1 : 0) + " " + units[u];
+    }
+
+    // missing is what a page shows for a ref or a path the API found nothing at, or null for any other error.
+    function missing(err, ref, path) {
+      const what = { "ref.not_found": ["No branch, tag or commit is named ", h("code", {}, ref), "."],
+        "path.not_found": ["There is nothing at ", h("code", {}, path), " in ", h("code", {}, ref), "."],
+        "path.submodule": [h("code", {}, path), " is a submodule, whose files are another repository's."] }[err.code];
+      return what ? [h("section", { class: "panel" }, h("p", {}, what))] : null;
+    }
+
+    // repositoryTree lists the directory at path of ref, under the commit it is at, with a link to a branch's
+    // history. A file's path goes to its file's page.
+    async function repositoryTree(path, at, ref, dir, branches) {
+      let tree;
+      try {
+        tree = await api("GET", path + "/tree?" + new URLSearchParams({ ref, path: dir }));
+      } catch (err) {
+        if (err.code === "path.file") return go(at.blob(ref, dir).slice(base.length - 1), true), [];
+        const shown = missing(err, ref, dir);
+        if (shown) return shown;
+        throw err;
+      }
+      const latest = await api("GET", path + "/commits/" + tree.commit).catch(() => null);
+      const branch = branches.find((b) => b.name === ref);
+      const head = h("div", { class: "row" }, latest ? h("div", {}, h("a", { class: "subject", href: at.commit(latest.sha), "data-nav": "" }, subject(latest.message)),
+        h("p", {}, who(latest.author), " · ", whenExactly(latest.author.at))) : h("p", {}, "At ", h("code", {}, shortSha(tree.commit))),
+        h("div", { class: "row" }, h("a", { href: at.commit(tree.commit), "data-nav": "" }, h("code", {}, shortSha(tree.commit))),
+          branch ? h("a", { class: "button small", href: at.branch(branch.name), "data-nav": "" }, "History") : null));
+      const row = (e) => {
+        const name = e.kind === "tree" ? h("a", { href: at.tree(ref, e.path), "data-nav": "" }, e.name + "/")
+          : e.kind === "submodule" ? [e.name, " ", h("span", { class: "muted" }, "@ " + shortSha(e.sha))]
+            : h("a", { href: at.blob(ref, e.path), "data-nav": "" }, e.name);
+        const kind = { tree: "Directory", submodule: "Submodule", symlink: "Symlink" }[e.kind] || (e.mode === "100755" ? "Executable" : "");
+        return h("tr", {}, h("td", { class: "name" }, name), h("td", { class: "muted" }, kind), h("td", { class: "size muted" }, e.size === undefined ? "" : size(e.size)));
+      };
+      const up = dir ? h("tr", {}, h("td", { colspan: 3 }, h("a", { href: at.tree(ref, dir.split("/").slice(0, -1).join("/")), "data-nav": "" }, ".."))) : null;
+      return [h("section", { class: "panel" }, head, h("table", { class: "files" }, h("tbody", {}, up, tree.entries.map(row))),
+        tree.entries.length ? null : h("p", {}, "This directory is empty."))];
+    }
+
+    // imageFile reports whether a file's name is an image's, which its page shows from its bytes.
+    const imageFile = (name) => /\.(png|jpe?g|gif|webp|avif|bmp|ico|svg)$/i.test(name);
+
+    // repositoryFile shows the file at path of ref: its text with line numbers, its image, or its size, with links to
+    // its bytes at the commit ref is at. A symlink shows its target; a directory's path goes to its directory's page.
+    async function repositoryFile(path, at, ref, file) {
+      let f;
+      try {
+        f = await api("GET", path + "/blob?" + new URLSearchParams({ ref, path: file }));
+      } catch (err) {
+        if (err.code === "path.directory") return go(at.tree(ref, file).slice(base.length - 1), true), [];
+        const shown = missing(err, ref, file);
+        if (shown) return shown;
+        throw err;
+      }
+      const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.raw(f.commit, f.path), target: "_blank", rel: "noopener" }, "Raw"),
+        h("a", { class: "button small", href: at.raw(f.commit, f.path, true) }, "Download"));
+      const facts = [size(f.size), f.mode === "100755" ? "executable" : null, f.kind === "symlink" ? "symlink" : null].filter(Boolean).join(" · ");
+      const head = h("div", { class: "row" }, h("div", {}, h("h2", {}, f.name), h("p", {}, facts)), links);
+      let body;
+      if (f.kind === "symlink") {
+        const target = f.path.split("/").slice(0, -1).concat(f.text.split("/")).reduce((p, n) => (n === ".." ? p.slice(0, -1) : n === "." || !n ? p : [...p, n]), []).join("/");
+        body = h("p", {}, "A symlink to ", h("a", { href: at.blob(ref, target), "data-nav": "" }, h("code", {}, f.text)), ".");
+      } else if (imageFile(f.name)) body = h("div", { class: "image" }, h("img", { src: at.raw(f.commit, f.path), alt: f.name }));
+      else if (f.binary) body = h("p", {}, "A binary file of " + size(f.size) + ": download it to open it.");
+      else body = source(f.text);
+      return [h("section", { class: "panel" }, head, f.truncated ? h("p", { class: "notice" }, "This shows the file's first 1 MiB. The rest is in its raw bytes.") : null, body)];
+    }
+
+    // source is a text with its lines numbered.
+    function source(text) {
+      const lines = text.replace(/\n$/, "").split("\n");
+      return h("div", { class: "source" }, h("pre", { class: "ln", "aria-hidden": "true" }, lines.map((_, i) => i + 1).join("\n")), h("pre", { class: "text" }, lines.join("\n")));
     }
 
     // cloneURL is one way to clone a repository: its name and URL, with a button that copies the URL.
