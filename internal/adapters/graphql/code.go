@@ -18,6 +18,7 @@ type Code interface {
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
+	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
@@ -200,4 +201,37 @@ func check(c code.Check) *BranchCheck {
 		out.Count = &c.Count
 	}
 	return out
+}
+
+// mergeMethods maps the schema's merge methods to the domain's.
+var mergeMethods = map[MergeMethod]code.MergeMethod{MergeMethodMerge: code.MethodMerge, MergeMethodFastForward: code.MethodFastForward}
+
+// mergeInput is in as the domain takes it; nil asks for the defaults.
+func mergeInput(in *MergeInput) code.MergeInput {
+	var out code.MergeInput
+	if in == nil {
+		return out
+	}
+	if in.Head != nil {
+		out.Head = *in.Head
+	}
+	if in.Method != nil {
+		out.Method = mergeMethods[*in.Method]
+	}
+	return out
+}
+
+// mergeFail is fail for merges: CONFLICT for a branch that moved and a merge Cobranch won't make, and UNAVAILABLE
+// without a Git server.
+func mergeFail(ctx context.Context, err error) error {
+	var refused *code.MergeError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(ctx, conflict, "branch.moved", code.ErrBranchMoved.Error())
+	case errors.As(err, &refused):
+		return refuse(ctx, conflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
+	}
+	return fail(ctx, err, "branch", "merging the branch")
 }
