@@ -70,10 +70,11 @@ func (c *cache) link(ctx context.Context, repoID uuid.UUID, pack git.Pack, dir s
 	}
 }
 
-// linkFiles hard-links pack's files from where from says into dir.
+// linkFiles hard-links pack's files from where from says into dir. A file dir holds already is the same pack's, which
+// an attempt that an eviction cut short linked: a pack's name is its content's hash.
 func linkFiles(from func(file string) string, pack, dir string) error {
 	for _, suffix := range packFiles {
-		if err := os.Link(from(pack+suffix), filepath.Join(dir, pack+suffix)); err != nil {
+		if err := os.Link(from(pack+suffix), filepath.Join(dir, pack+suffix)); err != nil && !errors.Is(err, fs.ErrExist) {
 			return fmt.Errorf("linking %s%s: %w", pack, suffix, err)
 		}
 	}

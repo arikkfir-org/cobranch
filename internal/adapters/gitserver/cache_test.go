@@ -79,6 +79,34 @@ func TestCacheLink(t *testing.T) {
 	}
 }
 
+// TestCacheLinkAfterAPartialLink links a pack again after an eviction deleted its files halfway through a link,
+// which had linked the index alone.
+func TestCacheLinkAfterAPartialLink(t *testing.T) {
+	a := uuid.New()
+	c, _ := newTestCache(t, 1<<20, map[uuid.UUID][]string{a: {"pack-1"}})
+	linkInto(t, c, a, "pack-1")
+	dir := t.TempDir()
+	if err := os.Link(c.path(a, "pack-1.idx"), filepath.Join(dir, "pack-1.idx")); err != nil {
+		t.Fatal(err)
+	}
+	c.mu.Lock()
+	c.limit = 0 // as another repository's pack, just added, would
+	c.evict(uuid.Nil)
+	c.limit = 1 << 20
+	c.mu.Unlock()
+	if _, ok := c.repos[a]; ok {
+		t.Fatal("the eviction kept the repository")
+	}
+	if err := c.link(t.Context(), a, testPack("pack-1"), dir); err != nil {
+		t.Fatalf("link() after a partial link = %v", err)
+	}
+	for _, suffix := range packFiles {
+		if _, err := os.Stat(filepath.Join(dir, "pack-1"+suffix)); err != nil {
+			t.Errorf("link() left no %s: %v", suffix, err)
+		}
+	}
+}
+
 func TestCacheEvicts(t *testing.T) {
 	a, b := uuid.New(), uuid.New()
 	c, _ := newTestCache(t, 25, map[uuid.UUID][]string{a: {"pack-1", "pack-2"}, b: {"pack-3"}})
