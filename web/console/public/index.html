@@ -600,12 +600,14 @@
       return n.toFixed(n < 10 ? 1 : 0) + " " + units[u];
     }
 
-    // missing is what a page shows for a ref or a path the API found nothing at, or null for any other error.
-    function missing(err, ref, path) {
+    // unreadable is what a page shows when the API couldn't read a directory or a file: what a ref or a path found
+    // nothing at, an installation without a Git server, or any other failure.
+    function unreadable(err, ref, path) {
       const what = { "ref.not_found": ["No branch, tag or commit is named ", h("code", {}, ref), "."],
         "path.not_found": ["There is nothing at ", h("code", {}, path), " in ", h("code", {}, ref), "."],
-        "path.submodule": [h("code", {}, path), " is a submodule, whose files are another repository's."] }[err.code];
-      return what ? [h("section", { class: "panel" }, h("p", {}, what))] : null;
+        "path.submodule": [h("code", {}, path), " is a submodule, whose files are another repository's."],
+        "git.unavailable": ["This installation runs no Git server, so its files can't be shown."] }[err.code];
+      return [h("section", { class: "panel" + (what ? "" : " notice") }, h("p", {}, what || ["The files couldn't be read: " + err.message]))];
     }
 
     // repositoryTree lists the directory at path of ref, under the commit it is at, with a link to a branch's
@@ -616,9 +618,7 @@
         tree = await api("GET", path + "/tree?" + new URLSearchParams({ ref, path: dir }));
       } catch (err) {
         if (err.code === "path.file") return go(at.blob(ref, dir).slice(base.length - 1), true), [];
-        const shown = missing(err, ref, dir);
-        if (shown) return shown;
-        throw err;
+        return unreadable(err, ref, dir);
       }
       const latest = await api("GET", path + "/commits/" + tree.commit).catch(() => null);
       const branch = branches.find((b) => b.name === ref);
@@ -649,9 +649,7 @@
         f = await api("GET", path + "/blob?" + new URLSearchParams({ ref, path: file }));
       } catch (err) {
         if (err.code === "path.directory") return go(at.tree(ref, file).slice(base.length - 1), true), [];
-        const shown = missing(err, ref, file);
-        if (shown) return shown;
-        throw err;
+        return unreadable(err, ref, file);
       }
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.raw(f.commit, f.path), target: "_blank", rel: "noopener" }, "Raw"),
         h("a", { class: "button small", href: at.raw(f.commit, f.path, true) }, "Download"));

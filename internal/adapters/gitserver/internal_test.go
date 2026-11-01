@@ -156,6 +156,7 @@ func TestInternalBlob(t *testing.T) {
 		{name: "a star is a name", path: "docs/*.md", limit: 100, wantKind: code.KindBlob, wantMode: "100644", wantContent: "A star\n"},
 		{name: "a symlink's content is its target", path: "link", limit: 100, wantKind: code.KindSymlink, wantMode: "120000", wantContent: "docs/guide.md"},
 		{name: "up to the limit", path: "big.txt", limit: 5, wantKind: code.KindBlob, wantMode: "100644", wantContent: "xxxxx", wantTruncated: true},
+		{name: "exactly the limit", path: "docs/guide.md", limit: 9, wantKind: code.KindBlob, wantMode: "100644", wantContent: "Read me.\n"},
 		{name: "a directory", path: "docs", limit: 100, wantErr: code.ErrNotBlob},
 		{name: "the root", path: "", limit: 100, wantErr: code.ErrNotBlob},
 		{name: "a submodule", path: "vendor/lib", limit: 100, wantErr: code.ErrSubmodule},

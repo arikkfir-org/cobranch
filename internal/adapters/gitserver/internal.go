@@ -316,7 +316,9 @@ func (s *Server) content(ctx context.Context, dir string, e code.Entry, limit in
 		return nil, fmt.Errorf("reading blob %s: %w", e.SHA, err)
 	}
 	content, readErr := io.ReadAll(io.LimitReader(out, limit))
-	stop() // a blob larger than limit has more to give, which nobody wants
+	if e.Size > limit {
+		stop() // the blob has more to give, which nobody wants; one that fits ends on its own
+	}
 	waitErr := cmd.Wait()
 	if readErr != nil {
 		return nil, fmt.Errorf("reading blob %s: %w", e.SHA, readErr)
