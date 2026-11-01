@@ -103,8 +103,9 @@ func (s *Server) brought(ctx context.Context, refs, dir string, env []string, ti
 }
 
 // bringing works out what u's move of branch name brings into it: the live branches, besides it and the default, whose
-// tips its new tip holds and its start lacked, and how many of the commits it adds, merges aside, none of those nor
-// the default branch holds. Its start is its old tip, or, for a branch it creates, the default branch's tip.
+// tips its new tip holds and its start lacked, and, for a branch besides the default, the default lacks too; and how
+// many of the commits it adds, merges aside, none of those nor the default branch holds. Its start is its old tip, or,
+// for a branch it creates, the default branch's tip.
 func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, tips map[string]string, name string, u git.RefUpdate) (git.Brought, error) {
 	main, hasDefault := tips[git.DefaultBranch]
 	start := u.Old
@@ -121,6 +122,8 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 		revs = append(revs, "^"+start)
 	}
 	if hasDefault && name != git.DefaultBranch {
+		// A branch already in the default brings only commits it holds, which never count against another branch.
+		list = append(list, "--no-merged="+main)
 		revs = append(revs, "^"+main)
 	}
 	listed, err := s.output(ctx, env, "", append(list, "refs/heads/")...)

@@ -91,6 +91,13 @@ func mergeCases() []mergeCase {
 			push: func(t *testing.T, s *stack, dir string) (string, error) {
 				return gitCmd(t, dir, "push", s.url(s.base, s.token(olivia, "repo.read", "repo.push", "repo.bypass"), "acme/website.git"), "feature:main")
 			}, want: merged},
+		{name: "main's history moves another branch with merge requirements on", settings: requireAnnotation + "  release:\n    requires:\n      annotations: [ci/build]\n",
+			annotate: true, push: func(t *testing.T, s *stack, dir string) (string, error) {
+				mustGit(t, dir, "push", "-q", "origin", "main:release")
+				mustGit(t, dir, "push", "-q", "origin", "feature:main")
+				s.process()
+				return gitCmd(t, dir, "push", "origin", "feature:release")
+			}, want: merged},
 		{name: "a branch moved back to main's tip is Empty, not Merged",
 			push: func(t *testing.T, _ *stack, dir string) (string, error) {
 				return gitCmd(t, dir, "push", "origin", "main:feature", "--force")
