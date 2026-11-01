@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"io"
+	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
 )
@@ -52,4 +54,28 @@ func start(t *testing.T, workload string, run func(ctx context.Context, logs io.
 			t.Errorf("%s = %v after it was asked to stop", workload, err)
 		}
 	})
+}
+
+// TestPushWorkerStopsWhenItCantServe runs a push worker on an address another listener holds: it returns the error
+// instead of processing pushes without its health endpoints.
+func TestPushWorkerStopsWhenItCantServe(t *testing.T) {
+	held, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.Close() }()
+	t.Setenv("COBRANCH_DATABASE_URL", postgrestest.Database(t))
+	t.Setenv("COBRANCH_HTTP_ADDR", held.Addr().String())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- runPushWorker(ctx, io.Discard) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Error("runPushWorker() on a held address = nil, want its error")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("runPushWorker() on a held address didn't return")
+	}
 }

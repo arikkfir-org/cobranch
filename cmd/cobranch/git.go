@@ -90,12 +90,15 @@ func runPushWorker(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the worker wrote
+	work, stop := context.WithCancel(ctx)
 	worked := make(chan struct{})
 	go func() {
 		defer close(worked)
-		pushworker.Run(ctx, gitservice(pool), postgres.ListenPushes(ctx, pool), cfg.PollInterval)
+		pushworker.Run(work, gitservice(pool), postgres.ListenPushes(work, pool), cfg.PollInterval)
 	}()
-	defer func() { <-worked }() // the push in hand commits or rolls back before the pool closes
+	// The worker stops with the server, even one that failed before ctx ended, and the push in hand commits or rolls
+	// back before the pool closes.
+	defer func() { stop(); <-worked }()
 	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", http.NotFoundHandler(),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
