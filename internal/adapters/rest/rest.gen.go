@@ -324,7 +324,7 @@ type ApiKeySecret struct {
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
 }
 
-// Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, checks, ahead and behind.
+// Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
 type Branch struct {
 	// Ahead How many commits it has that its base lacks; left out until a push works it out.
 	Ahead *int `json:"ahead,omitempty"`

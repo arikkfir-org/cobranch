@@ -1960,7 +1960,7 @@ components:
       type: object
       description: >-
         One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into
-        its base, main, and carries its status; main carries none of base, status, checks, ahead and behind.
+        its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
       required: [name, head, createdAt, updatedAt, checks]
       properties:
         name:
