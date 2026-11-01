@@ -6,7 +6,7 @@
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
        members, roles and settings under its slug, its repositories under theirs with their files, branches, history and
-       commits, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
+       commits with their annotations, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
        HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
@@ -31,6 +31,12 @@
       --color-status-danger-fg: #a1262b;
       --color-status-danger-bg: #fff1f1;
       --color-status-danger-border: #f7b8bb;
+      --color-status-neutral-fg: #4a5158;
+      --color-status-neutral-bg: #f1f3f5;
+      --color-status-neutral-border: #e4e7ea;
+      --color-status-info-fg: #1e45ab;
+      --color-status-info-bg: #eef4ff;
+      --color-status-info-border: #bcd3ff;
       --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
       --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     }
@@ -54,6 +60,12 @@
         --color-status-danger-fg: #ff8a8e;
         --color-status-danger-bg: #3a0d0f;
         --color-status-danger-border: #7a2024;
+        --color-status-neutral-fg: #d3d8dc;
+        --color-status-neutral-bg: #23272b;
+        --color-status-neutral-border: #4a5158;
+        --color-status-info-fg: #8db4ff;
+        --color-status-info-bg: #0f1d40;
+        --color-status-info-border: #1c3a85;
       }
     }
     * { box-sizing: border-box; }
@@ -192,6 +204,19 @@
     dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
     dl.facts dt { color: var(--color-fg-muted); }
     dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+    /* The design system's status language: one word, one icon and one tone per status. */
+    .tone-neutral { --tone-fg: var(--color-status-neutral-fg); --tone-bg: var(--color-status-neutral-bg); --tone-border: var(--color-status-neutral-border); }
+    .tone-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); }
+    .tone-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); }
+    .tone-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; border: 1px solid var(--tone-border);
+      background: var(--tone-bg); color: var(--tone-fg); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
+    .icon { display: inline-flex; color: var(--tone-fg); vertical-align: -3px; }
+    .icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .badge .icon svg { width: 14px; height: 14px; }
+    .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
+    .annotations td { vertical-align: top; }
+    .annotations td.state { width: 1%; white-space: nowrap; }
     select.ref { width: auto; max-width: 240px; }
     code.crumbs { overflow-wrap: anywhere; }
     .spacer { flex: 1; }
@@ -236,8 +261,8 @@
     let permissions = []; // what a role at an organization may hold
 
     // api calls the REST API with the session cookie, and rejects with the problem it answered.
-    async function api(method, path, body) {
-      const options = { method, credentials: "include", headers: { Accept: "application/json" } };
+    async function api(method, path, body, headers = {}) {
+      const options = { method, credentials: "include", headers: { Accept: "application/json", ...headers } };
       if (body !== undefined) {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
@@ -496,7 +521,7 @@
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
-      else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0]);
+      else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
       else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
       if (!sub) sections.push(h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p)))));
@@ -516,6 +541,42 @@
         raw: (commit, path, download) => config.restUrl + "/v1/orgs/" + org.slug + "/repos/" + repo.slug + "/raw?" +
           new URLSearchParams(download ? { ref: commit, path, download: "true" } : { ref: commit, path }),
       };
+    }
+    // The annotation statuses as the design system draws them: a word, a Lucide icon (ISC licence) and a tone.
+    const annotationStatuses = {
+      pending: { word: "Pending", icon: "clock", tone: "neutral" },
+      in_progress: { word: "In progress", icon: "loader-circle", tone: "info" },
+      failed: { word: "Failed", icon: "circle-x", tone: "danger" },
+      successful: { word: "Successful", icon: "circle-check", tone: "success" },
+    };
+    const iconPaths = {
+      "clock": '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+      "loader-circle": '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
+      "circle-x": '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
+      "circle-check": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+    };
+    // icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone.
+    function icon(name, label) {
+      const el = h("span", { class: "icon", role: label ? "img" : null, "aria-label": label || null, "aria-hidden": label ? null : "true", title: label || null });
+      el.innerHTML = '<svg viewBox="0 0 24 24">' + iconPaths[name] + "</svg>";
+      return el;
+    }
+    // annotationBadge is an annotation's status as a badge: its icon and word, in its tone.
+    function annotationBadge(status) {
+      const s = annotationStatuses[status];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
+    const annotationIcons = (annotations) => annotations.length ? h("span", { class: "icons" }, annotations.map((a) => {
+      const s = annotationStatuses[a.status];
+      return h("span", { class: "tone-" + s.tone }, icon(s.icon, a.name + ": " + s.word));
+    })) : null;
+    // took says how long an annotation's run took, or since when it runs.
+    function took(a) {
+      if (!a.completedAt) return "Since " + whenExactly(a.startedAt);
+      const seconds = Math.max(0, Math.round((new Date(a.completedAt) - new Date(a.startedAt)) / 1000));
+      const parts = [[Math.floor(seconds / 3600), "h"], [Math.floor(seconds / 60) % 60, "m"], [seconds % 60, "s"]].filter(([n], i, all) => n || i === all.length - 1);
+      return "Took " + parts.map(([n, unit]) => n + unit).join(" ");
     }
     const shortSha = (sha) => sha.slice(0, 7);
     const subject = (message) => message.split("\n")[0] || "(no message)";
@@ -696,7 +757,8 @@
         return panel;
       }
       const row = (c) => h("tr", {}, h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, subject(c.message)),
-        h("p", {}, who(c.author), " · ", whenExactly(c.author.at))), h("td", { class: "sha" }, h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
+        h("p", {}, who(c.author), " · ", whenExactly(c.author.at))),
+        h("td", { class: "sha" }, annotationIcons(c.annotations), h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
       const rows = h("tbody");
       let next = null;
       const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older commits");
@@ -731,8 +793,9 @@
     }
 
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,
-    // and the push that first brought it, with its pusher.
-    async function repositoryCommit(path, at, sha) {
+    // the push that first brought it, with its pusher, and the annotations principals set on it, each deletable by a
+    // viewer who may: its principal with annotations.write, anyone with annotations.delete_any.
+    async function repositoryCommit(path, at, sha, can, fail) {
       let c;
       try {
         c = await api("GET", path + "/commits/" + encodeURIComponent(sha));
@@ -752,7 +815,25 @@
         h("dt", {}, "Committer"), h("dd", {}, person(c.committer)),
         h("dt", {}, "Pushed"), h("dd", {}, "By " + pusher + " over " + c.push.transport.toUpperCase() + ", " + whenExactly(c.push.at)),
         c.signature ? [h("dt", {}, "Signature"), h("dd", {}, "Signed. Cobranch doesn't check signatures yet.")] : null);
-      return [h("section", { class: "panel" }, h("h2", {}, first || "(no message)"), body ? h("pre", { class: "message" }, body) : null, facts)];
+      return [h("section", { class: "panel" }, h("h2", {}, first || "(no message)"), body ? h("pre", { class: "message" }, body) : null, facts),
+        commitAnnotations(path, c, can, fail)];
+    }
+
+    // commitAnnotations lists a commit's annotations, by name, with their status, summary, link, principal and run.
+    function commitAnnotations(path, c, can, fail) {
+      const deletable = (a) => can("annotations.delete_any") || (can("annotations.write") && a.principal && a.principal.id === me.id);
+      // It deletes the version it shows: one changed meanwhile is refused, saying so.
+      const remove = (a) => api("DELETE", path + "/commits/" + c.sha + "/annotations/" + encodeURIComponent(a.name), undefined, { "If-Match": `"${a.version}"` })
+        .then(render).catch(fail);
+      const row = (a) => h("tr", {},
+        h("td", { class: "state" }, annotationBadge(a.status)),
+        h("td", {}, h("code", {}, a.name), a.summary ? h("p", {}, a.summary) : null,
+          h("p", { class: "muted" }, (a.principal ? a.principal.displayName : "A principal since gone") + " · " + took(a))),
+        h("td", { class: "actions" }, a.link ? h("a", { class: "button small", href: a.link, target: "_blank", rel: "noopener noreferrer" }, "Details") : null,
+          deletable(a) ? [" ", h("button", { class: "button small danger", type: "button", title: "Delete " + a.name, onclick: () => remove(a) }, "Delete")] : null));
+      return h("section", { class: "panel" }, h("h3", {}, "Annotations"),
+        c.annotations.length ? h("table", { class: "annotations" }, h("tbody", {}, c.annotations.map(row)))
+          : h("p", {}, "No annotations yet. Principals holding ", h("code", {}, "annotations.write"), " set them through the API, such as a CI system's verdict on this commit."));
     }
 
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants

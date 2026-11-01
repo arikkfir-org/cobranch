@@ -26,7 +26,7 @@ func AllowOrigin(origins []string, h http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Expose-Headers", RequestIDHeader+", Link, ETag")
 		if r.Method == http.MethodOptions && r.Header.Get("Access-Control-Request-Method") != "" {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, If-Match, If-None-Match, "+RequestIDHeader+", traceparent, tracestate")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)

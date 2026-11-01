@@ -10,6 +10,36 @@ import (
 	"time"
 )
 
+// A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
+type Annotation struct {
+	ID string `json:"id"`
+	// 1 to 100 lowercase letters, digits, '-', '_', '.' and '/', starting with a letter or digit, such as ci/build.
+	Name    string           `json:"name"`
+	Status  AnnotationStatus `json:"status"`
+	Summary string           `json:"summary"`
+	// Where its details are; empty without one.
+	Link string `json:"link"`
+	// Who set it; null once they are gone.
+	Principal *CommitPrincipal `json:"principal,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// When its run started: when it was set, or when it last went back from FAILED or SUCCESSFUL to PENDING or IN_PROGRESS.
+	StartedAt time.Time `json:"startedAt"`
+	// When it reached FAILED or SUCCESSFUL; null while it runs.
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What a principal sets an annotation to.
+type AnnotationInput struct {
+	Status AnnotationStatus `json:"status"`
+	// At most 500 characters.
+	Summary string `json:"summary"`
+	// Where its details are, an absolute http or https URL of at most 2048 bytes; none when empty.
+	Link string `json:"link"`
+}
+
 // An API key: a principal of the organization that a script acts as, with the roles it holds there and its secrets.
 type APIKey struct {
 	ID             string `json:"id"`
@@ -75,6 +105,8 @@ type Commit struct {
 	Committer *Person  `json:"committer"`
 	// Its signature as written, not checked yet; empty for an unsigned commit.
 	Signature string `json:"signature"`
+	// The annotations principals set on it, by name.
+	Annotations []*Annotation `json:"annotations"`
 	// The push that first brought it; Repository.commit alone answers it, and null elsewhere.
 	Push *Push `json:"push,omitempty"`
 }
@@ -86,7 +118,7 @@ type CommitPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// Who is behind a commit's author or committer, or a push: a user, perhaps one with no login whom a push made for an unknown email.
+// Who is behind a commit's author or committer, a push or an annotation: a user, perhaps one with no login whom a push made for an unknown email, or an API key.
 type CommitPrincipal struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
@@ -420,6 +452,66 @@ type User struct {
 	Invitations []*Invitation `json:"invitations"`
 	// The viewer's pending requests to join organizations.
 	JoinRequests []*JoinRequest `json:"joinRequests"`
+}
+
+// Where an annotation stands, in any order its principal sets them.
+type AnnotationStatus string
+
+const (
+	AnnotationStatusPending    AnnotationStatus = "PENDING"
+	AnnotationStatusInProgress AnnotationStatus = "IN_PROGRESS"
+	AnnotationStatusFailed     AnnotationStatus = "FAILED"
+	AnnotationStatusSuccessful AnnotationStatus = "SUCCESSFUL"
+)
+
+var AllAnnotationStatus = []AnnotationStatus{
+	AnnotationStatusPending,
+	AnnotationStatusInProgress,
+	AnnotationStatusFailed,
+	AnnotationStatusSuccessful,
+}
+
+func (e AnnotationStatus) IsValid() bool {
+	switch e {
+	case AnnotationStatusPending, AnnotationStatusInProgress, AnnotationStatusFailed, AnnotationStatusSuccessful:
+		return true
+	}
+	return false
+}
+
+func (e AnnotationStatus) String() string {
+	return string(e)
+}
+
+func (e *AnnotationStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AnnotationStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AnnotationStatus", str)
+	}
+	return nil
+}
+
+func (e AnnotationStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AnnotationStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AnnotationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository.
