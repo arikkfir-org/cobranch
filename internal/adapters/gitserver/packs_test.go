@@ -16,6 +16,7 @@ import (
 
 	"cobranch.dev/internal/adapters/gitserver"
 	"cobranch.dev/internal/adapters/postgres"
+	"cobranch.dev/internal/adapters/postgres/postgrestest"
 	"cobranch.dev/internal/services/git"
 )
 
@@ -103,7 +104,13 @@ func (s *stack) aGraceLater() {
 		s.t.Fatal(err)
 	}
 	old := time.Now().Add(-2 * git.Grace)
-	if err := os.Chtimes(filepath.Join(s.bucketDir, filepath.FromSlash(stray)), old, old); err != nil {
+	var err error
+	if s.bucketDir != "" {
+		err = os.Chtimes(filepath.Join(s.bucketDir, filepath.FromSlash(stray)), old, old)
+	} else {
+		_, err = s.pool.Exec(ctx, "UPDATE blobs SET written_at = $1 WHERE key = $2", old, []byte(stray))
+	}
+	if err != nil {
 		s.t.Fatal(err)
 	}
 	if _, err := s.pool.Exec(ctx, "UPDATE packs SET superseded_at = $1 WHERE state = 'superseded'", old); err != nil {
@@ -112,10 +119,17 @@ func (s *stack) aGraceLater() {
 }
 
 // TestCompactAndSweep compacts the website's packs, from four pushes and a deleted branch, into one, and sweeps what
-// it replaced a Grace later: a fresh Git server and one that cached the old packs serve the repository throughout,
-// the deleted branch's commit included.
+// it replaced a Grace later, in each object store: a fresh Git server and one that cached the old packs serve the
+// repository throughout, the deleted branch's commit included. In the database, no large object outlives its object.
 func TestCompactAndSweep(t *testing.T) {
-	s := newStack(t)
+	for _, store := range []string{inDatabase, inFiles} {
+		t.Run(store, func(t *testing.T) {
+			compactAndSweep(t, newStackIn(t, store))
+		})
+	}
+}
+
+func compactAndSweep(t *testing.T, s *stack) {
 	ctx := context.Background()
 	cached := t.TempDir()
 	base := s.serve(cached)
@@ -157,4 +171,28 @@ func TestCompactAndSweep(t *testing.T) {
 		t.Errorf("the bucket holds %v, want the compacted pack's files and the last push's", keys)
 	}
 	s.checkServes("a server after the sweep", s.serve(t.TempDir()), next, feature)
+	if s.bucketDir == "" {
+		if got := query[int](t, s.pool, "SELECT count(*) FROM pg_largeobject_metadata"); got != len(keys) {
+			t.Errorf("the database holds %d large objects, want one per object, %d", got, len(keys))
+		}
+	}
+}
+
+// TestRestoredDatabaseServesTheRepository copies the database, as restoring a backup of it would, after pushes and a
+// compaction, and serves the copy from a Git server with an empty cache: the database alone holds the repository
+// whole, every pack included, the deleted branch's commit too.
+func TestRestoredDatabaseServesTheRepository(t *testing.T) {
+	s := newStack(t)
+	dir := clone(t, s.websiteURL(s.base, olivia))
+	_, feature := pushPacks(t, dir)
+	if got, err := s.maintenance().Compact(context.Background(), 2); got != 1 || err != nil {
+		t.Fatalf("Compact() = %d, %v, want 1", got, err)
+	}
+	head := commit(t, dir, "about.html", "<h1>About</h1>\n")
+	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+
+	restoredURL := postgrestest.Copy(t, s.databaseURL)
+	pool := connect(t, restoredURL)
+	restored := &stack{t: t, databaseURL: restoredURL, pool: pool, store: postgres.NewGitStore(pool), bucket: openStore(t, "", pool)}
+	restored.checkServes("the restored database", restored.serve(t.TempDir()), head, feature)
 }

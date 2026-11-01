@@ -16,14 +16,13 @@ import (
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
 )
 
-// TestRunGitWorkloads runs a push worker and a Git server on one database, and checks that both turn ready once it
-// is migrated, that the Git server asks a client without a credential for one, over HTTPS and over SSH with its host
-// key, and that the push worker takes no calls.
+// TestRunGitWorkloads runs a push worker and a Git server on one database, which keeps the packs too, and checks that
+// both turn ready once it is migrated, that the Git server asks a client without a credential for one, over HTTPS and
+// over SSH with its host key, and that the push worker takes no calls.
 func TestRunGitWorkloads(t *testing.T) {
 	worker, gitServer, sshAddr := freeAddr(t), freeAddr(t), freeAddr(t)
 	hostKey := hostKeyPEM(t)
 	t.Setenv("COBRANCH_DATABASE_URL", postgrestest.Database(t))
-	t.Setenv("COBRANCH_BLOB_URL", "file://"+t.TempDir())
 	t.Setenv("COBRANCH_GIT_DATA_DIR", t.TempDir())
 	t.Setenv("COBRANCH_GIT_SSH_ADDR", sshAddr)
 	t.Setenv("COBRANCH_GIT_SSH_HOST_KEY", string(pem.EncodeToMemory(hostKey.block)))

@@ -54,13 +54,15 @@ var (
 	website = uuid.MustParse("00000000-0000-7000-8000-00000000d201")
 )
 
-// stack is a Git server in process over a database with the seeds and a file:// bucket, and the push worker's
+// stack is a Git server in process over a database with the seeds and an object store, and the push worker's
 // processing, which a test runs when it wants it.
 type stack struct {
-	t      *testing.T
-	pool   *pgxpool.Pool
-	bucket *gocloudblob.Bucket
-	// bucketDir is the directory that holds the bucket's objects.
+	t *testing.T
+	// databaseURL is the database's URL, which pool connects to.
+	databaseURL string
+	pool        *pgxpool.Pool
+	bucket      *gocloudblob.Bucket
+	// bucketDir is the directory that holds the objects of a file:// store, empty for the database's.
 	bucketDir string
 	base      string
 	store     git.Store
@@ -68,27 +70,58 @@ type stack struct {
 	record func(ctx context.Context, push git.Push, next git.Store) error
 }
 
+// The object stores a stack's packs may live in: the database's large objects, the default, or a directory.
+const (
+	inDatabase = "the database"
+	inFiles    = "files"
+)
+
+// newStack returns a stack whose packs live in the database, as an installation's do by default.
 func newStack(t *testing.T) *stack {
+	t.Helper()
+	return newStackIn(t, inDatabase)
+}
+
+// newStackIn returns a stack whose packs live in store, inDatabase or inFiles.
+func newStackIn(t *testing.T, store string) *stack {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("these tests drive the git CLI, which isn't installed")
 	}
-	ctx := context.Background()
-	pool, err := postgres.Connect(ctx, postgrestest.Database(t))
+	databaseURL := postgrestest.Database(t)
+	pool := connect(t, databaseURL)
+	migrate(t, pool)
+	s := &stack{t: t, databaseURL: databaseURL, pool: pool, store: postgres.NewGitStore(pool)}
+	url := ""
+	if store == inFiles {
+		s.bucketDir = t.TempDir()
+		url = "file://" + s.bucketDir
+	}
+	s.bucket = openStore(t, url, pool)
+	s.base = s.serve(t.TempDir())
+	return s
+}
+
+// connect returns a pool connected to the database at databaseURL, closed when the test ends.
+func connect(t *testing.T, databaseURL string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := postgres.Connect(context.Background(), databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	migrate(t, pool)
-	bucketDir := t.TempDir()
-	bucket, err := blob.Open(ctx, "file://"+bucketDir)
+	return pool
+}
+
+// openStore opens the object store url names, the database's when it is empty, closed when the test ends.
+func openStore(t *testing.T, url string, pool *pgxpool.Pool) *gocloudblob.Bucket {
+	t.Helper()
+	bucket, err := blob.Open(context.Background(), url, pool)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = bucket.Close() })
-	s := &stack{t: t, pool: pool, bucket: bucket, bucketDir: bucketDir, store: postgres.NewGitStore(pool)}
-	s.base = s.serve(t.TempDir())
-	return s
+	return bucket
 }
 
 // migrate brings pool's database to the schema and adds the seeds.

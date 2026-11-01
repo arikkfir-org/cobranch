@@ -1,8 +1,8 @@
 # Cobranch's Helm chart
 
 Installs Cobranch on your Kubernetes cluster: its Auth, REST, GraphQL and Admin servers, the Console and the
-Back-office, a Job that migrates the database before each rollout, an hourly maintenance CronJob, and a PostgreSQL unless you bring yours. You bring a
-bucket and an identity provider. Cobranch's designs and
+Back-office, a Job that migrates the database before each rollout, an hourly maintenance CronJob, and a PostgreSQL unless you bring yours. You bring an
+identity provider, and a bucket only if you choose one. Cobranch's designs and
 source: <https://github.com/arikkfir-org/cobranch>.
 
 ## Install
@@ -13,13 +13,20 @@ beside its images; the chart's version, its app version and its images' tag are 
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 helm test cobranch --namespace cobranch
 ```
 
-`blob.url` is the only required value: a Go Cloud URL (`s3://`, `gs://`, `azblob://` or `file://`), with its
-credentials from `blob.envFromSecret` or the servers' workload identity (`serviceAccount.annotations`). `values.yaml`
-lists every value, and `values.schema.json` checks them at install.
+Every value has a default: `values.yaml` lists them, and `values.schema.json` checks them at install.
+
+- **Git's packs** live in the database by default, each a large object, so PostgreSQL is the one store to run and a
+  backup of the database holds every repository whole; give `postgresql.storage.size` room for them. For packs that
+  outgrow it, set `blob.url` to a cloud's bucket (`s3://`, `gs://` or `azblob://`), with its credentials from
+  `blob.envFromSecret` or the Git server's workload identity (`serviceAccount.annotations`); to try Cobranch out, to a
+  directory (`file://`) on `blob.volume`, a volume that lasts and that every Git server and maintenance mount
+  ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-object-storage.md)). Back
+  the database up with `pg_dump`, which takes the large objects with it unless you name schemas or tables, or with your
+  operator's snapshots, and restore it as the role Cobranch connects as, which owns the large objects.
 
 - **Routes.** Every workload serves as if it were alone, so you choose where each lives: a host each, or paths on one
   host (`https://cobranch.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
@@ -44,7 +51,7 @@ lists every value, and `values.schema.json` checks them at install.
   calls it, so it has no Service. Keep `gitServer.storage.sizeLimit`, the Git server's disk, above
   `gitServer.cache.size` by a few `gitServer.maxPushSize`. Set `pushWorker.replicas` to null to leave its count to an
   autoscaler, which may scale it to zero while no push waits: KEDA's PostgreSQL scaler, for one, counting
-  `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`. The maintenance CronJob compacts a repository's packs into one once it has `maintenance.compaction.packs` (8), on a disk of `maintenance.storage.sizeLimit` and with the servers' ServiceAccount for the bucket, and deletes what compaction replaced a day later; null leaves packs alone, as a `blob.volume` that is an `emptyDir` does, since only each server's own pod holds that bucket. Set `urls.gitSsh` too, such as `ssh://git@git.cobranch.example.com`, for Git over SSH with the SSH keys users add in the Console: the Git server also listens on port 2222, behind Service `<fullname>-git-server-ssh` (`<fullname>` is the release's name when it holds `cobranch`, and `<release>-cobranch` otherwise; `gitServer.ssh.service`: ClusterIP on port 22 by default, or LoadBalancer with your cloud's annotations), which no route reaches, so expose it yourself and name its port in `urls.gitSsh` unless it is 22. Its host key is a Secret the chart generates on install and keeps; under Argo CD, or anything else that renders without the cluster, set `gitServer.ssh.hostKey.existingSecret`, a Secret holding a private key in PEM under `key` (`gitServer.ssh.hostKey.secretKey`), such as `ssh-keygen -t ed25519 -N '' -f host_key` writes
+  `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`. The maintenance CronJob compacts a repository's packs into one once it has `maintenance.compaction.packs` (8), on a disk of `maintenance.storage.sizeLimit` and with the Git server's ServiceAccount for a bucket, and deletes what compaction replaced a day later; null leaves packs alone, as a `file://` URL on a `blob.volume` that is an `emptyDir` does, since only each Git server's own pod holds that directory. Set `urls.gitSsh` too, such as `ssh://git@git.cobranch.example.com`, for Git over SSH with the SSH keys users add in the Console: the Git server also listens on port 2222, behind Service `<fullname>-git-server-ssh` (`<fullname>` is the release's name when it holds `cobranch`, and `<release>-cobranch` otherwise; `gitServer.ssh.service`: ClusterIP on port 22 by default, or LoadBalancer with your cloud's annotations), which no route reaches, so expose it yourself and name its port in `urls.gitSsh` unless it is 22. Its host key is a Secret the chart generates on install and keeps; under Argo CD, or anything else that renders without the cluster, set `gitServer.ssh.hostKey.existingSecret`, a Secret holding a private key in PEM under `key` (`gitServer.ssh.hostKey.secretKey`), such as `ssh-keygen -t ed25519 -N '' -f host_key` writes
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md)). The REST and GraphQL servers read repositories' trees and files from the Git server's port 8081, behind Service `<fullname>-git-server-internal`, which no route names, with a token the migrations keep in the database; if your NetworkPolicies select the Git server's pods, admit the REST and GraphQL servers' pods to that port ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md)).
 - **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
   with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the

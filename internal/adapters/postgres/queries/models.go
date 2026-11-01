@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Annotation struct {
@@ -25,6 +26,20 @@ type Annotation struct {
 	StartedAt   time.Time
 	CompletedAt *time.Time
 	Version     int64
+}
+
+type Blob struct {
+	Key                []byte
+	Content            pgtype.Uint32
+	Size               int64
+	Md5                []byte
+	ContentType        string
+	CacheControl       string
+	ContentDisposition string
+	ContentEncoding    string
+	ContentLanguage    string
+	Metadata           []byte
+	WrittenAt          time.Time
 }
 
 type Commit struct {

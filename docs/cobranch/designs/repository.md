@@ -107,11 +107,12 @@ which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a 
 isn't on `main` and one whose chart doesn't default to the images published here, waits up to 15 minutes for `main`'s
 images of the commit, adds `1.2.3` to each, and only then packages the commit's chart at `1.2.3`, its app version the
 same, and pushes it beside them as `charts/cobranch`. So one version names the chart and every image it runs, and an
-operator installs it with nothing but a bucket:
+operator installs it with nothing else: Git's packs live in the chart's database by default, and `blob.url` names a
+bucket only for an installation that wants one ([Git object storage](git-object-storage.md#choosing-an-adapter)):
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 ```
 
 **A version retags main’s images of a commit and publishes the chart at that version**
