@@ -98,11 +98,11 @@ spec:
       command: [sh, .tekton/scripts/chart-install.sh, install]
     - name: test
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
-      command: [helm, test, cobranch, --namespace=cobranch, --logs, --timeout=3m]
+      command: [sh, .tekton/scripts/chart-test.sh]
     # Rolls every pod; the generated password stays, and no migration runs again.
     - name: upgrade
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
       command: [sh, .tekton/scripts/chart-install.sh, upgrade]
     - name: retest
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
-      command: [helm, test, cobranch, --namespace=cobranch, --logs, --timeout=3m]
+      command: [sh, .tekton/scripts/chart-test.sh]
