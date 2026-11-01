@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,9 +66,9 @@ type Stores struct {
 
 // OpenStores opens the store rawURL names and, given fromURL, the store objects move from, as Open opens each: then
 // Bucket reads either and writes the new one alone, until Move has copied the old one over and the operator stops
-// naming it. A store can't move to itself.
+// naming it. A store can't move to itself, however its two URLs write it.
 func OpenStores(ctx context.Context, rawURL, fromURL string, pool *pgxpool.Pool) (*Stores, error) {
-	if fromURL != "" && Name(fromURL) == Name(rawURL) {
+	if fromURL != "" && storeOf(fromURL) == storeOf(rawURL) {
 		return nil, fmt.Errorf("objects can't move from %s to itself", Name(rawURL))
 	}
 	to, err := Open(ctx, rawURL, pool)
@@ -125,6 +126,20 @@ func Name(rawURL string) string {
 		return "the database"
 	}
 	return rawURL
+}
+
+// storeOf is the store rawURL names, written one way for every URL that names it: InDatabase for the database, or the
+// URL's scheme, host and path, the path's trailing slash and dot segments aside, without the query, whose options
+// (a region, whether to create a directory) change how a driver reaches a store, not which store it reaches.
+func storeOf(rawURL string) string {
+	if rawURL == "" || rawURL == InDatabase {
+		return InDatabase
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL // Open refuses it
+	}
+	return u.Scheme + "://" + u.Host + path.Clean("/"+u.Path)
 }
 
 // Check returns a readiness check that the store exists and its credentials reach it.

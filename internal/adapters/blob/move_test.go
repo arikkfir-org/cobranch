@@ -340,6 +340,8 @@ func TestOpenStores(t *testing.T) {
 		{name: "from the database to itself", url: InDatabase, from: InDatabase, wantErr: true},
 		{name: "from the database to itself, named two ways", from: InDatabase, wantErr: true},
 		{name: "from a directory to itself", url: "file://" + oldDir, from: "file://" + oldDir, wantErr: true},
+		{name: "from a directory to itself, named two ways", url: "file://" + oldDir, from: "file://" + oldDir + "/./?create_dir=true", wantErr: true},
+		{name: "from a bucket to itself, its options aside", url: "s3://cobranch-objects", from: "s3://cobranch-objects/?region=eu-west-1", wantErr: true},
 		{name: "from a store that won't open", from: "ftp://bucket", wantErr: true},
 	}
 	for i, tt := range tests {

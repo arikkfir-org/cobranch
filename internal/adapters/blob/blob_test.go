@@ -153,3 +153,24 @@ func TestName(t *testing.T) {
 		}
 	}
 }
+
+func TestStoreOf(t *testing.T) {
+	tests := []struct {
+		a, b string
+		same bool
+	}{
+		{a: "", b: InDatabase, same: true},
+		{a: "file:///data", b: "file:///data/", same: true},
+		{a: "file:///data", b: "file:///data/./?create_dir=true", same: true},
+		{a: "s3://objects", b: "s3://objects?region=eu-west-1", same: true},
+		{a: "s3://objects", b: "gs://objects"},
+		{a: "s3://objects", b: "s3://other"},
+		{a: "file:///data", b: "file:///data/git"},
+		{a: InDatabase, b: "file:///data"},
+	}
+	for _, tt := range tests {
+		if same := storeOf(tt.a) == storeOf(tt.b); same != tt.same {
+			t.Errorf("%q and %q name one store: %t, want %t", tt.a, tt.b, same, tt.same)
+		}
+	}
+}
