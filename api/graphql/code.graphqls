@@ -6,8 +6,10 @@
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
 
 extend type Repository {
-  "The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read."
+  "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
   branches: [Branch!]!
+  "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
+  branch(name: String!): Branch
   "A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100."
   history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
@@ -107,6 +109,62 @@ type Branch {
   createdAt: Time!
   "When a push last moved it."
   updatedAt: Time!
+  "The branch it merges into, main; null for main."
+  base: String
+  "Where it stands as a request to merge into its base; null for main."
+  status: BranchStatus
+  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main."
+  checks: [BranchCheck!]!
+  "How many commits it has that its base lacks; null for main, and until a push works it out."
+  ahead: Int
+  "How many commits its base has that it lacks; null for main, and until a push works it out."
+  behind: Int
+  "What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch."
+  requirements: MergeRequirements
+}
+
+"Where a branch stands as a request to merge into its base, the first that holds."
+enum BranchStatus {
+  "The push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress."
+  PROCESSING
+  "It has commits to merge, and a requirement holds them back."
+  BLOCKED
+  "It has nothing to merge, and no merge took its head into its base."
+  EMPTY
+  "A merge took its head into its base."
+  MERGED
+  "It has commits to merge, and nothing holds them back."
+  READY
+}
+
+"What one of a branch's checks is of."
+enum BranchCheckKind {
+  "An annotation its head must carry, Successful."
+  ANNOTATION
+  "No merge among its commits to merge."
+  LINEAR_HISTORY
+  "Its base's tip in it."
+  UP_TO_DATE
+}
+
+"One of a branch's merge requirements and how it stands."
+type BranchCheck {
+  kind: BranchCheckKind!
+  "The required annotation's name; null unless kind is ANNOTATION."
+  name: String
+  "The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION."
+  status: AnnotationStatus
+  "For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION."
+  count: Int
+  met: Boolean!
+}
+
+"What a merge into a branch needs, as main's /cobranch.yaml names it under branches."
+type MergeRequirements {
+  "The annotations the incoming head must carry, Successful."
+  annotations: [String!]!
+  "Whether no merge commit may come in."
+  linearHistory: Boolean!
 }
 
 "A page of a branch's history, nearest first."

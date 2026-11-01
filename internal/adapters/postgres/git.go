@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -73,32 +75,50 @@ func (s *GitStore) Record(ctx context.Context, push git.Push) error {
 		if recorded {
 			return nil
 		}
-		if err := checkRefs(ctx, q, push); err != nil {
-			return err
-		}
-		if err := s.insertPush(ctx, q, orgID, push); err != nil {
-			return err
-		}
-		if err := moveRefs(ctx, q, orgID, push); err != nil {
-			return err
-		}
-		if err := orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
-			"push": push.ID, "refs": updatesJSON(push.Updates), "commits": len(push.Commits),
-		}); err != nil {
-			return err
-		}
-		if err := q.NotifyPush(ctx, push.ID.String()); err != nil {
-			return fmt.Errorf("notifying the push workers: %w", err)
-		}
-		return nil
+		return s.apply(ctx, q, orgID, push)
 	})
 }
 
-// checkRefs returns a *git.StaleError for the first ref the push would move from a value it no longer has.
-func checkRefs(ctx context.Context, q *queries.Queries, push git.Push) error {
+// apply records a push no transaction recorded before: once its refs prove to be where it found them, and the
+// branches its facts were counted from leave facts that hold, it locks the repository's branches, stores the push,
+// moves its refs and stores the branches' facts, then tells the push workers.
+func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+	after, err := checkRefs(ctx, q, push)
+	if err != nil {
+		return err
+	}
+	if push.Facts, err = freshFacts(push, after); err != nil {
+		return err
+	}
+	if err := q.LockLiveBranches(ctx, push.RepoID); err != nil {
+		return fmt.Errorf("locking the branches: %w", err)
+	}
+	if err := s.insertPush(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := moveRefs(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := recordFacts(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
+		"push": push.ID, "refs": updatesJSON(push.Updates), "commits": len(push.Commits),
+	}); err != nil {
+		return err
+	}
+	if err := q.NotifyPush(ctx, push.ID.String()); err != nil {
+		return fmt.Errorf("notifying the push workers: %w", err)
+	}
+	return nil
+}
+
+// checkRefs returns a *git.StaleError for the first ref the push would move from a value it no longer has, and
+// otherwise the repository's branches once the push applies, by name, each with the commit it names.
+func checkRefs(ctx context.Context, q *queries.Queries, push git.Push) (map[string]string, error) {
 	rows, err := q.RefsOf(ctx, push.RepoID)
 	if err != nil {
-		return fmt.Errorf("reading the refs: %w", err)
+		return nil, fmt.Errorf("reading the refs: %w", err)
 	}
 	current := map[string]string{}
 	for _, r := range rows {
@@ -110,10 +130,65 @@ func checkRefs(ctx context.Context, q *queries.Queries, push git.Push) error {
 			now = git.ZeroSHA
 		}
 		if now != u.Old {
-			return &git.StaleError{Ref: u.Name}
+			return nil, &git.StaleError{Ref: u.Name}
+		}
+		if u.New == git.ZeroSHA {
+			delete(current, u.Name)
+		} else {
+			current[u.Name] = u.New
 		}
 	}
-	return nil
+	after := map[string]string{}
+	for ref, sha := range current {
+		if name, ok := git.Branch(ref); ok {
+			after[name] = sha
+		}
+	}
+	return after, nil
+}
+
+// freshFacts are those of the push's facts that hold once it applies, after: the Git server counted them from the
+// branches as the push's snapshot had them, its Tips, and a push recorded since may have moved one. A branch another
+// push moved keeps the facts that push stored, counted against the same default branch. A default branch another push
+// moved, or any branch that moved under a push that moves the default branch, would leave facts nobody counted: that
+// refuses the push with a *git.StaleError, and its client pushes again.
+func freshFacts(push git.Push, after map[string]string) ([]git.Facts, error) {
+	if push.Tips == nil {
+		return push.Facts, nil
+	}
+	if after[git.DefaultBranch] != push.Tips[git.DefaultBranch] {
+		return nil, &git.StaleError{Ref: "refs/heads/" + git.DefaultBranch, During: true}
+	}
+	if push.MovesDefault() {
+		if name := movedBranch(push.Tips, after); name != "" {
+			return nil, &git.StaleError{Ref: "refs/heads/" + name, During: true}
+		}
+		return push.Facts, nil
+	}
+	facts := make([]git.Facts, 0, len(push.Facts))
+	for _, f := range push.Facts {
+		if after[f.Branch] == push.Tips[f.Branch] {
+			facts = append(facts, f)
+		}
+	}
+	return facts, nil
+}
+
+// movedBranch names the first branch, by name, that tips and after disagree on, or "" when they agree on every one.
+func movedBranch(tips, after map[string]string) string {
+	names := slices.Collect(maps.Keys(tips))
+	for name := range after {
+		if _, ok := tips[name]; !ok {
+			names = append(names, name)
+		}
+	}
+	slices.Sort(names)
+	for _, name := range names {
+		if tips[name] != after[name] {
+			return name
+		}
+	}
+	return ""
 }
 
 // insertPush lists the push's pack and records the push and its commits.
@@ -177,6 +252,9 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		}
 		linkPush(ctx, claimed.Traceparent)
 		if err := s.attribute(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {

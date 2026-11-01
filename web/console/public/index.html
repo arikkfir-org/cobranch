@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
-       members, roles and settings under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches, history and
-       commits with their annotations, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
+       members, roles and settings under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches
+       with their status, history and commits with their annotations, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
        HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
@@ -37,6 +37,8 @@
       --color-status-info-fg: #1e45ab;
       --color-status-info-bg: #eef4ff;
       --color-status-info-border: #bcd3ff;
+      --color-bg-inverse: #1a1d20;
+      --color-fg-inverse: #ffffff;
       --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
       --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     }
@@ -66,6 +68,8 @@
         --color-status-info-fg: #8db4ff;
         --color-status-info-bg: #0f1d40;
         --color-status-info-border: #1c3a85;
+        --color-bg-inverse: #f8f9fa;
+        --color-fg-inverse: #131517;
       }
     }
     * { box-sizing: border-box; }
@@ -209,6 +213,7 @@
     .tone-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); }
     .tone-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); }
     .tone-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); }
+    .tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); }
     .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; border: 1px solid var(--tone-border);
       background: var(--tone-bg); color: var(--tone-fg); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
     .icon { display: inline-flex; color: var(--tone-fg); vertical-align: -3px; }
@@ -217,6 +222,17 @@
     .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
     .annotations td { vertical-align: top; }
     .annotations td.state { width: 1%; white-space: nowrap; }
+    .branches td.counts { white-space: nowrap; }
+    .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .title h2 code { font-size: 18px; overflow-wrap: anywhere; }
+    .checks { list-style: none; margin: 0; padding: 0; display: grid; }
+    .checks li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+    .checks li:first-child { border-top: 0; }
+    .checks li .detail { margin-left: auto; color: var(--color-fg-muted); font-size: 13px; text-align: right; }
+    section.panel.blocked { border-color: var(--color-status-danger-border); }
+    .why { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border-radius: 8px; border: 1px solid var(--tone-border); background: var(--tone-bg); color: var(--tone-fg); }
+    .why p { color: inherit; }
+    .why strong { font-weight: 600; }
     select.ref { width: auto; max-width: 240px; }
     code.crumbs { overflow-wrap: anywhere; }
     .spacer { flex: 1; }
@@ -496,8 +512,8 @@
           h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
     }
 
-    // A repository's pages: its code (how to clone it, and a branch's history), its branches, a commit, who holds grants
-    // on it, and, with repo.manage, its settings.
+    // A repository's pages: its code (how to clone it, and a branch's history), its branches and each one's page, a
+    // commit, who holds grants on it, and, with repo.manage, its settings.
     async function showRepository(org, main, orgCan, slug, sub, rest) {
       let repo;
       try {
@@ -526,6 +542,7 @@
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
+      else if (sub === "branches" && rest.length) sections = await repositoryBranch(path, at, rest.join("/"), can, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
@@ -534,13 +551,14 @@
       main.replaceChildren(heading, error, ...sections);
     }
 
-    // repoLinks makes the links of a repository's code: to a branch's history, to a commit, to a directory or a file at
+    // repoLinks makes the links of a repository's code: to a branch's history and its page, to a commit, to a directory or a file at
     // a ref, and to a file's bytes, which the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
       return {
         branch: (name) => root + "/commits/" + parts(name),
+        branchPage: (name) => root + "/branches/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
         blob: (ref, path) => root + "/blob/" + parts(ref, path),
@@ -560,6 +578,21 @@
       "loader-circle": '<path d="M21 12a9 9 0 1 1-6.219-8.56"/>',
       "circle-x": '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>',
       "circle-check": '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>',
+      "circle": '<circle cx="12" cy="12" r="10"/>',
+      "circle-dashed": '<path d="M10.1 2.182a10 10 0 0 1 3.8 0"/><path d="M13.9 21.818a10 10 0 0 1-3.8 0"/><path d="M17.609 3.721a10 10 0 0 1 2.69 2.7"/>' +
+        '<path d="M2.182 13.9a10 10 0 0 1 0-3.8"/><path d="M20.279 17.609a10 10 0 0 1-2.7 2.69"/><path d="M21.818 10.1a10 10 0 0 1 0 3.8"/>' +
+        '<path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/>',
+      "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
+      "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+      "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+    };
+    // The branch statuses as the design system draws them, the same way.
+    const branchStatuses = {
+      processing: { word: "Processing", icon: "loader-circle", tone: "info" },
+      blocked: { word: "Blocked", icon: "octagon-alert", tone: "danger" },
+      empty: { word: "Empty", icon: "circle-dashed", tone: "neutral" },
+      merged: { word: "Merged", icon: "git-merge", tone: "inverse" },
+      ready: { word: "Ready", icon: "circle-check", tone: "success" },
     };
     // icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone.
     function icon(name, label) {
@@ -570,6 +603,11 @@
     // annotationBadge is an annotation's status as a badge: its icon and word, in its tone.
     function annotationBadge(status) {
       const s = annotationStatuses[status];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // branchBadge is a branch's status as a badge, as annotationBadge draws an annotation's.
+    function branchBadge(status) {
+      const s = branchStatuses[status];
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
@@ -849,9 +887,7 @@
           : h("p", {}, "There is no branch ", h("code", {}, branch), " any more."));
         return panel;
       }
-      const row = (c) => h("tr", {}, h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, subject(c.message)),
-        h("p", {}, who(c.author), " · ", whenExactly(c.author.at))),
-        h("td", { class: "sha" }, annotationIcons(c.annotations), h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
+      const row = commitRow(at);
       const rows = h("tbody");
       let next = null;
       const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older commits");
@@ -873,16 +909,136 @@
       return panel;
     }
 
-    // repositoryBranches lists the repository's live branches, main first, each with the commit it is at.
+    // commitRow makes a history row of a commit: its subject, author and time, and its annotations' icons by its name.
+    const commitRow = (at) => (c) => h("tr", {}, h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, subject(c.message)),
+      h("p", {}, who(c.author), " · ", whenExactly(c.author.at))),
+      h("td", { class: "sha" }, annotationIcons(c.annotations), h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
+
+    // repositoryBranches lists the repository's live branches, main first, each with its status as a request to merge
+    // into main, how far ahead of and behind main it is, and the commit it is at; then what merges need.
     async function repositoryBranches(path, at) {
       const branches = (await api("GET", path + "/branches")).branches;
-      const row = (b) => h("tr", {}, h("td", {}, h("a", { href: at.branch(b.name), "data-nav": "" }, h("code", {}, b.name)), b.name === "main" ? [" ", h("span", { class: "chip" }, "default")] : null),
+      const counts = (b) => b.ahead === undefined ? h("p", { class: "muted" }, "Not worked out yet") : h("p", {}, b.ahead + " ahead · " + b.behind + " behind");
+      const row = (b) => h("tr", {}, h("td", {}, h("a", { href: at.branchPage(b.name), "data-nav": "" }, h("code", {}, b.name)), " ", b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("td", {}, b.commit ? [h("a", { class: "subject", href: at.commit(b.head), "data-nav": "" }, subject(b.commit.message)), h("p", {}, who(b.commit.author), " · ", whenExactly(b.commit.author.at))]
           : h("p", {}, "At ", h("code", {}, shortSha(b.head)), ", no commit a push recorded.")),
+        h("td", { class: "counts" }, b.status ? counts(b) : null),
         h("td", {}, when(b.updatedAt)));
+      if (!branches.length) return [h("section", { class: "panel" }, h("h3", {}, "Branches"), h("p", {}, "No branches yet: nothing has been pushed."))];
       return [h("section", { class: "panel" }, h("h3", {}, "Branches"),
-        branches.length ? h("table", { class: "commits" }, h("thead", {}, h("tr", {}, h("th", {}, "Branch"), h("th", {}, "Last commit"), h("th", {}, "Updated"))), h("tbody", {}, branches.map(row)))
-          : h("p", {}, "No branches yet: nothing has been pushed."))];
+        h("table", { class: "commits branches" }, h("thead", {}, h("tr", {}, h("th", {}, "Branch"), h("th", {}, "Last commit"), h("th", {}, "Against main"), h("th", {}, "Updated"))),
+          h("tbody", {}, branches.map(row)))), mergeRequirements(branches)];
+    }
+
+    // mergeRequirements names what a merge into main needs: always a branch up to date with it, and whatever main's
+    // /cobranch.yaml requires under branches; and the other branches the file names, with theirs.
+    function mergeRequirements(branches) {
+      const main = branches.find((b) => b.name === "main");
+      const others = branches.filter((b) => b.name !== "main" && b.requirements);
+      const needs = (r) => [...r.annotations.map((n) => h("li", {}, "Annotation ", h("code", {}, n), " Successful on its head")),
+        r.linearHistory ? h("li", {}, "No merge commit among its commits to merge") : null];
+      const named = (b) => h("li", {}, h("code", {}, b.name), ": ", [...b.requirements.annotations.map((n) => h("code", {}, n)), b.requirements.linearHistory ? "linear history" : null]
+        .filter(Boolean).flatMap((x, i) => i ? [", ", x] : [x]), b.requirements.annotations.length || b.requirements.linearHistory ? null : "named, with no requirements");
+      const file = () => h("code", {}, "/cobranch.yaml");
+      return h("section", { class: "panel" }, h("h3", {}, "Merge requirements"),
+        h("p", {}, "A branch merges into ", h("code", {}, "main"), " once it is up to date with it", main && main.requirements ? ", and needs:" : "."),
+        main && main.requirements ? h("ul", {}, needs(main.requirements)) : null,
+        main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations or linear history."),
+        others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
+    }
+
+    // repositoryBranch is a branch's page: whose commits it would merge into main and how many, why it is Blocked,
+    // requirement by requirement, its commits, and the annotations on its head. main's page names what merges into it
+    // need instead.
+    async function repositoryBranch(path, at, name, can, fail) {
+      let b;
+      try {
+        b = await api("GET", path + "/branches/" + encodeURIComponent(name));
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Branch"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
+      }
+      const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
+        h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "History"));
+      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b))), branchChecks(b)];
+      if (b.commit) sections.push(await branchCommits(path, at, b), commitAnnotations(path, b.commit, can, fail));
+      return sections;
+    }
+
+    // branchChecks lists how b meets each merge requirement, as its status last worked them out, under why it is
+    // Blocked or Processing, as the design system's branch screen does.
+    function branchChecks(b) {
+      const panel = h("section", { class: "panel" + (b.status === "blocked" ? " blocked" : "") }, h("h3", {}, "Merge requirements"));
+      if (!b.checks.length) {
+        panel.append(h("p", {}, "Cobranch works them out once it has processed the push that last moved the branch."));
+        return panel;
+      }
+      const reason = whyNot(b);
+      const s = branchStatuses[b.status];
+      if (reason) panel.append(h("div", { class: "why tone-" + s.tone }, icon(s.icon), h("p", {}, h("strong", {}, s.word + ": "), reason)));
+      const items = b.checks.map((c) => checkItem(b, c));
+      if (!b.checks.some((c) => c.kind === "linear_history")) items.push(checkLine("circle", "neutral", "Linear history", "Not required"));
+      panel.append(h("ul", { class: "checks" }, items));
+      return panel;
+    }
+    // checkLine is a line of a branch's merge requirements: an icon in its tone, what is required, and how it stands.
+    const checkLine = (iconName, tone, label, detail) => h("li", {}, h("span", { class: "tone-" + tone }, icon(iconName)), h("span", {}, label), h("span", { class: "detail" }, detail));
+    const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
+    // checkItem is one of b's checks as a line: a required annotation as it stands on b's head, linear history, and
+    // being up to date with b's base.
+    function checkItem(b, c) {
+      const on = " on " + shortSha(b.head);
+      const met = c.met ? ["circle-check", "success"] : ["circle-x", "danger"];
+      if (c.kind === "annotation") {
+        const label = ["Annotation ", h("code", {}, c.name)];
+        if (!c.status) return checkLine("circle-x", "danger", label, "Not" + on + " yet");
+        const s = annotationStatuses[c.status];
+        return checkLine(s.icon, s.tone, label, s.word + on);
+      }
+      if (c.kind === "linear_history") return checkLine(...met, "Linear history", c.met ? "No merge commits" : c.count ? plural(c.count, "merge commit") : "Not worked out yet");
+      return checkLine(...met, ["Up to date with ", h("code", {}, b.base)], plural(c.count, "commit") + " behind");
+    }
+    // whyNot says, in a line, what holds b back when it is Blocked or Processing: the first requirement it fails, or
+    // what it waits for.
+    function whyNot(b) {
+      if (b.status === "processing") {
+        const running = b.checks.find((c) => c.kind === "annotation" && (c.status === "pending" || c.status === "in_progress"));
+        return running ? [h("code", {}, running.name), " is " + annotationStatuses[running.status].word.toLowerCase() + " on its head."]
+          : "Cobranch is processing the push that last moved it.";
+      }
+      const c = b.status === "blocked" && b.checks.find((c) => !c.met);
+      if (!c) return null;
+      if (c.kind === "annotation") return [h("code", {}, c.name), c.status ? " failed on its head." : " isn't on its head yet."];
+      if (c.kind === "linear_history") return [h("code", {}, b.base), " requires linear history, and ", c.count ? plural(c.count, "merge commit") : "a merge commit", " is among its commits."];
+      return ["It is ", plural(c.count, "commit"), " behind ", h("code", {}, b.base), ": bring it up to date."];
+    }
+
+    // branchCommits lists the commits b would merge: the first of its first-parent history, as many as it is ahead of
+    // its base, which are exactly those while none of them is a merge; at most a page of them.
+    async function branchCommits(path, at, b) {
+      const panel = h("section", { class: "panel" }, h("div", { class: "row" }, h("h3", {}, "Commits"),
+        b.ahead === undefined ? null : h("span", { class: "muted" }, b.ahead + " ahead of " + b.base + " · " + b.behind + " behind")));
+      if (!b.ahead) {
+        panel.append(h("p", {}, b.ahead === 0 ? "None to merge." : "Cobranch counts them once it has processed the push that last moved the branch."));
+        return panel;
+      }
+      const limit = Math.min(b.ahead, 100);
+      const page = await apiPage(path + "/commits?" + new URLSearchParams({ branch: b.name, limit }));
+      panel.append(h("table", { class: "commits" }, h("tbody", {}, page.data.commits.map(commitRow(at)))));
+      if (b.ahead > limit) panel.append(h("div", {}, h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "All its history")));
+      return panel;
+    }
+
+    // wantsToMerge says what b would merge into its base: how many commits, after the author of its head.
+    function wantsToMerge(b) {
+      const into = [" into ", h("code", {}, b.base)];
+      const updated = [" · updated ", when(b.updatedAt)];
+      if (b.ahead === undefined) return ["Cobranch is still working out what it would merge", ...into, "."];
+      if (b.status === "merged") return ["Merged", ...into, ...updated];
+      if (!b.ahead) return ["Nothing to merge: every commit of it is in ", h("code", {}, b.base), " already", ...updated];
+      const commits = b.ahead === 1 ? "1 commit" : b.ahead + " commits";
+      return [b.commit ? [who(b.commit.author), " wants to merge "] : "It would merge ", commits, ...into, ...updated];
     }
 
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,

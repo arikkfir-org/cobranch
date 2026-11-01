@@ -30,7 +30,8 @@ func NewCodeStore(pool *pgxpool.Pool) *CodeStore {
 
 var _ code.Store = (*CodeStore)(nil)
 
-// Branches lists the repository's live branches, each with its head commit when a push recorded it (code.Store).
+// Branches lists the repository's live branches, each with its head commit when a push recorded it, its status and
+// what a merge into it needs (code.Store).
 func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Branch, error) {
 	rows, err := s.q.LiveBranches(ctx, repoID)
 	if err != nil {
@@ -39,7 +40,11 @@ func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Bran
 	out := make([]code.Branch, 0, len(rows))
 	heads := make([]string, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt})
+		b, err := branchFrom(r)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
 		heads = append(heads, r.Head)
 	}
 	commits, err := s.commitsAt(ctx, repoID, heads)
@@ -54,13 +59,17 @@ func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Bran
 	return out, nil
 }
 
-// Branch finds one of the repository's live branches, with its head commit, or repos.ErrNotFound (code.Store).
+// Branch finds one of the repository's live branches, with its head commit, its status and what a merge into it
+// needs, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (code.Branch, error) {
 	r, err := s.q.LiveBranch(ctx, repoID, name)
 	if err != nil {
 		return code.Branch{}, wrapRepo("finding the branch", err)
 	}
-	b := code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	b, err := branchFrom(queries.LiveBranchesRow(r))
+	if err != nil {
+		return code.Branch{}, err
+	}
 	commits, err := s.commitsAt(ctx, repoID, []string{r.Head})
 	if err != nil {
 		return code.Branch{}, err
@@ -68,6 +77,35 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 	if c, ok := commits[r.Head]; ok {
 		b.Commit = &c
 	}
+	return b, nil
+}
+
+// branchFrom is the domain's view of a branch's row: every branch but the default merges into it, and shows
+// Processing until a push works out its status.
+func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
+	b := code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	if r.LinearHistory != nil {
+		b.Requirements = &git.Requirements{Branch: r.Name, Annotations: r.RequiredAnnotations, LinearHistory: *r.LinearHistory}
+	}
+	if r.Name == git.DefaultBranch {
+		return b, nil
+	}
+	b.Base, b.Status = git.DefaultBranch, code.StatusProcessing
+	if r.Status != nil {
+		b.Status = code.BranchStatus(*r.Status)
+	}
+	if r.Ahead != nil && r.Behind != nil {
+		b.Facts = &git.Facts{Branch: r.Name, Ahead: int(*r.Ahead), Behind: int(*r.Behind)}
+		if r.Merges != nil {
+			merges := int(*r.Merges)
+			b.Facts.Merges = &merges
+		}
+	}
+	checks, err := checksOf(r.Checks)
+	if err != nil {
+		return code.Branch{}, err
+	}
+	b.Checks = checks
 	return b, nil
 }
 

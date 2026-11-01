@@ -1,9 +1,18 @@
--- LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it.
+-- LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it,
+-- each with its status as a request to merge into its base, and what a merge into it needs, when /cobranch.yaml names
+-- it.
 -- name: LiveBranches :many
-SELECT name, head, created_at, updated_at FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY name;
+SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history
+FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+WHERE b.repo_id = $1 AND b.deleted_at IS NULL
+ORDER BY b.name;
 
 -- name: LiveBranch :one
-SELECT name, head, created_at, updated_at FROM branches WHERE repo_id = $1 AND name = $2 AND deleted_at IS NULL;
+SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history
+FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
 
 -- CommitsAt finds those of a repository's commits that shas name, with the display names of the principals behind
 -- their authors and committers.

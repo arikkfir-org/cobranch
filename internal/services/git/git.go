@@ -81,8 +81,8 @@ const (
 )
 
 // Push is a push's manifest, which the Git server records once Git has checked its objects: who pushed,
-// the refs it moves, its pack (nil when it only deletes) and every commit it brings that the repository's refs didn't
-// reach.
+// the refs it moves, its pack (nil when it only deletes), every commit it brings that the repository's refs didn't
+// reach, and what its refs say of the branches once it applies.
 type Push struct {
 	// ID names the push: the Git server asks again with it when it lost the answer.
 	ID         uuid.UUID
@@ -93,6 +93,50 @@ type Push struct {
 	Pack       *Pack
 	Commits    []Commit
 	ReceivedAt time.Time
+	// Requirements replace the repository's merge requirements when the push moves the default branch: those of
+	// SettingsFile at its new tip, none without one or when the push deletes the branch.
+	Requirements []Requirements
+	// Facts are every live branch's but the default's once the push applies, when it moves a branch; nil when it moves
+	// none.
+	Facts []Facts
+	// Tips are the branches Facts were counted from: every live branch once the push applies, by name, each with the
+	// commit it names; nil when the push moves no branch. Another push recorded since may have moved one.
+	Tips map[string]string
+}
+
+// MovesDefault reports whether the push moves the default branch: creates, moves or deletes it.
+func (p Push) MovesDefault() bool {
+	for _, u := range p.Updates {
+		if u.Name == "refs/heads/"+DefaultBranch {
+			return true
+		}
+	}
+	return false
+}
+
+// SettingsFile is the path of a repository's settings in its default branch, whose branches key names its branches'
+// merge requirements (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
+// "Merge requirements").
+const SettingsFile = "cobranch.yaml"
+
+// Requirements are what a merge into a branch needs, as SettingsFile names them under branches: the annotations the
+// incoming head must carry, Successful, and whether history stays linear. A branch named there has requirements even
+// when they list nothing.
+type Requirements struct {
+	Branch        string
+	Annotations   []string
+	LinearHistory bool
+}
+
+// Facts are what Git's objects say of a live branch against the default branch: how many commits it has that the
+// default branch lacks (Ahead), how many the default branch has that it lacks (Behind), and how many of those it has
+// are merges (Merges), counted only while the default branch requires linear history; nil otherwise. Without a
+// default branch, Ahead counts all of its commits.
+type Facts struct {
+	Branch string
+	Ahead  int
+	Behind int
+	Merges *int
 }
 
 // Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines.
@@ -109,12 +153,18 @@ const (
 	messageReserved = "Cobranch writes refs under cobranch/ itself"
 )
 
-// StaleError is a push whose old value of Ref is no longer the ref's: another push moved it first.
+// StaleError is a push whose old value of Ref is no longer the ref's: another push moved it first. With During, Ref
+// is a branch the push doesn't move, which another push moved while this one was on its way, so the facts it counted
+// of the branches no longer hold.
 type StaleError struct {
-	Ref string
+	Ref    string
+	During bool
 }
 
 func (e *StaleError) Error() string {
+	if e.During {
+		return fmt.Sprintf("%s moved while Cobranch took your push; nothing changed, so push again", e.Ref)
+	}
 	return fmt.Sprintf("%s moved since you fetched: fetch, merge or rebase, then push again", e.Ref)
 }
 

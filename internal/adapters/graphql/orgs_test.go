@@ -80,6 +80,15 @@ func newOrgFixture() *orgFixture {
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
 	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))
 	f.codeStore.SetBranch(f.website.ID, "feature", shaOf("d"))
+	f.codeStore.SetBranch(f.website.ID, "feature/login", shaOf("c"))
+	f.codeStore.UpdateBranch(f.website.ID, "main", func(b *code.Branch) {
+		b.Requirements = &git.Requirements{Branch: "main", Annotations: []string{"ci/build"}}
+	})
+	f.codeStore.UpdateBranch(f.website.ID, "feature", func(b *code.Branch) {
+		b.Base, b.Status, b.Facts = "main", code.StatusBlocked, &git.Facts{Branch: "feature", Ahead: 1, Behind: 2}
+		b.Checks = []code.Check{{Kind: code.CheckAnnotation, Name: "ci/build"}, {Kind: code.CheckUpToDate, Count: 2}}
+	})
+	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",

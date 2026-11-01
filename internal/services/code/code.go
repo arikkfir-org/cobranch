@@ -1,9 +1,11 @@
 // Package code is the domain of a repository's code as people browse it: its branches, a branch's history and its
-// commits, with the principals behind them and the pushes that brought them, all as pushes recorded them, and the
-// annotations principals set on its commits. It knows nothing of HTTP, Git's protocol or PostgreSQL: adapters bring
-// those through its port, Store, and every permission check goes through sign-in's authorizer
+// commits, with the principals behind them and the pushes that brought them, all as pushes recorded them, the
+// annotations principals set on its commits, and each branch's status as a request to merge. It knows nothing of
+// HTTP, Git's protocol or PostgreSQL: adapters bring those through its port, Store, and every permission check goes
+// through sign-in's authorizer
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console", and
-// https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
+// https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations" and "Branch
+// status").
 package code
 
 import (
@@ -58,13 +60,23 @@ type Push struct {
 }
 
 // Branch is one of a repository's live branches and the commit it is at: Commit is nil while its head names an
-// object no push recorded as a commit.
+// object no push recorded as a commit. Every branch but the default is a request to merge into its base.
 type Branch struct {
 	Name      string
 	Head      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	Commit    *Commit
+	// Base is the branch it merges into, the default branch; "" for the default branch itself.
+	Base string
+	// Status is where it stands as a request to merge into Base, with the Checks behind it: StatusProcessing until a
+	// push works it out; "" for the default branch.
+	Status BranchStatus
+	Checks []Check
+	// Facts are what Git's objects say of it against Base; nil for the default branch, and until a push works them out.
+	Facts *git.Facts
+	// Requirements are what a merge into it needs, when the default branch's /cobranch.yaml names it; nil otherwise.
+	Requirements *git.Requirements
 }
 
 // Page is a page of a branch's first-parent history, nearest first; Next is where the next page starts, empty after

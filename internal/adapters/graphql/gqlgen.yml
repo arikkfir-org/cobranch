@@ -42,6 +42,7 @@ models:
       access: { resolver: true }
       roles: { resolver: true }
       branches: { resolver: true }
+      branch: { resolver: true }
       history: { resolver: true }
       commit: { resolver: true }
       tags: { resolver: true }

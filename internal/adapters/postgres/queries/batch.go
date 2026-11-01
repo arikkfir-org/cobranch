@@ -101,6 +101,129 @@ func (b *InsertCommitBatchResults) Close() error {
 	return b.br.Close()
 }
 
+const insertMergeRequirements = `-- name: InsertMergeRequirements :batchexec
+INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertMergeRequirementsBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertMergeRequirementsParams struct {
+	RepoID        uuid.UUID
+	Branch        string
+	OrgID         uuid.UUID
+	Annotations   []string
+	LinearHistory bool
+}
+
+func (q *Queries) InsertMergeRequirements(ctx context.Context, arg []InsertMergeRequirementsParams) *InsertMergeRequirementsBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.RepoID,
+			a.Branch,
+			a.OrgID,
+			a.Annotations,
+			a.LinearHistory,
+		}
+		batch.Queue(insertMergeRequirements, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertMergeRequirementsBatchResults{br, len(arg), false}
+}
+
+func (b *InsertMergeRequirementsBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertMergeRequirementsBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const setBranchFacts = `-- name: SetBranchFacts :batchexec
+UPDATE branches SET base = $1::text, ahead = $2::integer, behind = $3::integer, merges = $4::integer,
+    status = 'processing', waits_for = $5::uuid
+WHERE repo_id = $6 AND name = $7 AND deleted_at IS NULL
+  AND ($8::boolean OR status IS NULL OR ahead IS DISTINCT FROM $2::integer OR behind IS DISTINCT FROM $3::integer
+       OR merges IS DISTINCT FROM $4::integer)
+`
+
+type SetBranchFactsBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type SetBranchFactsParams struct {
+	Base   string
+	Ahead  int32
+	Behind int32
+	Merges *int32
+	PushID uuid.UUID
+	RepoID uuid.UUID
+	Name   string
+	Force  bool
+}
+
+// SetBranchFacts stores what a push's objects say of a live branch against its base, and has it wait for the push,
+// when the push moved it or its base (force), or the facts changed, or none were stored before.
+func (q *Queries) SetBranchFacts(ctx context.Context, arg []SetBranchFactsParams) *SetBranchFactsBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Base,
+			a.Ahead,
+			a.Behind,
+			a.Merges,
+			a.PushID,
+			a.RepoID,
+			a.Name,
+			a.Force,
+		}
+		batch.Queue(setBranchFacts, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &SetBranchFactsBatchResults{br, len(arg), false}
+}
+
+func (b *SetBranchFactsBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *SetBranchFactsBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const setCommitPrincipals = `-- name: SetCommitPrincipals :batchexec
 UPDATE commits SET author_id = $1, committer_id = $2 WHERE repo_id = $3 AND sha = $4
 `
