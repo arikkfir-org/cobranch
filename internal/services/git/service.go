@@ -127,7 +127,8 @@ func (s *Service) record(ctx context.Context, push Push) error {
 			return nil
 		}
 		var stale *StaleError
-		if errors.As(err, &stale) || errors.Is(err, ErrNotFound) {
+		var refused *RefusedError
+		if errors.As(err, &stale) || errors.As(err, &refused) || errors.Is(err, ErrNotFound) {
 			return fmt.Errorf("the store refused it: %w", err)
 		}
 	}
