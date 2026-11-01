@@ -5,10 +5,10 @@ package blob
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"net/url"
-	"path"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,7 +68,7 @@ type Stores struct {
 // Bucket reads either and writes the new one alone, until Move has copied the old one over and the operator stops
 // naming it. A store can't move to itself, however its two URLs write it.
 func OpenStores(ctx context.Context, rawURL, fromURL string, pool *pgxpool.Pool) (*Stores, error) {
-	if fromURL != "" && storeOf(fromURL) == storeOf(rawURL) {
+	if fromURL != "" && Name(fromURL) == Name(rawURL) {
 		return nil, fmt.Errorf("objects can't move from %s to itself", Name(rawURL))
 	}
 	to, err := Open(ctx, rawURL, pool)
@@ -83,7 +83,35 @@ func OpenStores(ctx context.Context, rawURL, fromURL string, pool *pgxpool.Pool)
 		_ = to.Close() // nothing written to it yet
 		return nil, fmt.Errorf("opening %s, which objects move from: %w", Name(fromURL), err)
 	}
+	same, err := sameStore(ctx, to, from)
+	if err == nil && same {
+		err = fmt.Errorf("objects can't move from %s to itself", Name(fromURL))
+	}
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("moving from %s to %s: %w", Name(fromURL), Name(rawURL), err), to.Close(), from.Close())
+	}
 	return &Stores{Bucket: blob.NewBucket(&moving{to: to, from: from}), to: to, from: from}, nil
+}
+
+// probePrefix is where sameStore writes its probe objects, apart from every key Cobranch writes.
+const probePrefix = ".cobranch-probe/"
+
+// sameStore reports whether to and from reach one store's objects. Their URLs can't tell: a driver may ignore parts of
+// one (a bucket's path, a directory's host) and heed others (a query's prefix or endpoint), so it writes an empty
+// probe object through to, looks for it through from, and deletes it.
+func sameStore(ctx context.Context, to, from *blob.Bucket) (bool, error) {
+	key := probePrefix + rand.Text()
+	if err := to.WriteAll(ctx, key, nil, nil); err != nil {
+		return false, fmt.Errorf("writing a probe object to tell the stores apart: %w", err)
+	}
+	same, err := from.Exists(ctx, key)
+	if err != nil {
+		err = fmt.Errorf("looking for the probe object in the store objects move from: %w", err)
+	}
+	if delErr := to.Delete(ctx, key); delErr != nil {
+		err = errors.Join(err, fmt.Errorf("deleting the probe object %s: %w", key, delErr))
+	}
+	return same, err
 }
 
 // Check checks that each store exists and its credentials reach it, as Check does.
@@ -126,20 +154,6 @@ func Name(rawURL string) string {
 		return "the database"
 	}
 	return rawURL
-}
-
-// storeOf is the store rawURL names, written one way for every URL that names it: InDatabase for the database, or the
-// URL's scheme, host and path, the path's trailing slash and dot segments aside, without the query, whose options
-// (a region, whether to create a directory) change how a driver reaches a store, not which store it reaches.
-func storeOf(rawURL string) string {
-	if rawURL == "" || rawURL == InDatabase {
-		return InDatabase
-	}
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return rawURL // Open refuses it
-	}
-	return u.Scheme + "://" + u.Host + path.Clean("/"+u.Path)
 }
 
 // Check returns a readiness check that the store exists and its credentials reach it.

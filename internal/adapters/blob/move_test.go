@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gocloud.dev/blob"
 	"gocloud.dev/blob/driver"
 	"gocloud.dev/blob/drivertest"
@@ -331,27 +332,28 @@ func TestOpenStores(t *testing.T) {
 	tests := []struct {
 		name       string
 		url, from  string
-		wantErr    bool
+		wantErr    string
 		wantMoving bool
 	}{
 		{name: "the database alone"},
 		{name: "from a directory to the database", from: "file://" + oldDir, wantMoving: true},
 		{name: "from the database to a directory", url: "file://" + newDir, from: InDatabase, wantMoving: true},
-		{name: "from the database to itself", url: InDatabase, from: InDatabase, wantErr: true},
-		{name: "from the database to itself, named two ways", from: InDatabase, wantErr: true},
-		{name: "from a directory to itself", url: "file://" + oldDir, from: "file://" + oldDir, wantErr: true},
-		{name: "from a directory to itself, named two ways", url: "file://" + oldDir, from: "file://" + oldDir + "/./?create_dir=true", wantErr: true},
-		{name: "from a bucket to itself, its options aside", url: "s3://cobranch-objects", from: "s3://cobranch-objects/?region=eu-west-1", wantErr: true},
-		{name: "from a store that won't open", from: "ftp://bucket", wantErr: true},
+		{name: "from the database to itself", url: InDatabase, from: InDatabase, wantErr: "to itself"},
+		{name: "from the database to itself, named two ways", from: InDatabase, wantErr: "to itself"},
+		{name: "from a directory to itself", url: "file://" + oldDir, from: "file://" + oldDir, wantErr: "to itself"},
+		{name: "from a directory to itself, named two ways", url: "file://" + oldDir, from: "file://" + oldDir + "/./?create_dir=true", wantErr: "to itself"},
+		{name: "from a directory to itself, through a host the driver ignores", url: "file://" + oldDir, from: "file://localhost" + oldDir, wantErr: "to itself"},
+		{name: "from one prefix of a directory to another", url: "file://" + oldDir + "?prefix=new/", from: "file://" + oldDir + "?prefix=old/", wantMoving: true},
+		{name: "from a store that won't open", from: "ftp://bucket", wantErr: "opening ftp://bucket"},
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			stores, err := OpenStores(ctx, tt.url, tt.from, pool)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("OpenStores(%q, %q) = %v, want error %t", tt.url, tt.from, err, tt.wantErr)
-			}
-			if err != nil {
+			if err != nil || tt.wantErr != "" {
+				if err == nil || tt.wantErr == "" || !strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("OpenStores(%q, %q) = %v, want an error naming %q", tt.url, tt.from, err, tt.wantErr)
+				}
 				return
 			}
 			defer func() {
@@ -364,6 +366,24 @@ func TestOpenStores(t *testing.T) {
 			}
 			checkStores(ctx, t, stores, fmt.Sprintf("git/%d.pack", i))
 		})
+	}
+	for _, rawURL := range []string{InDatabase, "file://" + oldDir, "file://" + newDir} {
+		checkNoProbes(t, rawURL, pool)
+	}
+}
+
+// checkNoProbes checks that telling stores apart left no probe object in the store rawURL names.
+func checkNoProbes(t *testing.T, rawURL string, pool *pgxpool.Pool) {
+	t.Helper()
+	ctx := context.Background()
+	bucket, err := Open(ctx, rawURL, pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = bucket.Close() }()
+	probes, err := bucket.List(&blob.ListOptions{Prefix: probePrefix}).Next(ctx)
+	if !errors.Is(err, io.EOF) {
+		t.Errorf("%s keeps probe object %v (%v)", Name(rawURL), probes, err)
 	}
 }
 
