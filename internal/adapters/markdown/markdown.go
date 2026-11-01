@@ -1,5 +1,6 @@
 // Package markdown renders a repository's Markdown as GitHub-flavoured Markdown, into HTML that runs nothing and loads
-// nothing from outside the installation: code.Renderer, which the code service renders Markdown files and READMEs with
+// nothing from outside the installation but images from other hosts, which the viewer's browser loads: code.Renderer,
+// which the code service renders Markdown files and READMEs with
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Markdown").
 package markdown
 
@@ -35,7 +36,7 @@ const idPrefix = "user-content-"
 var dataImage = regexp.MustCompile(`^data:image/(png|jpeg|gif|webp);base64,`)
 
 // Renderer renders Markdown with goldmark and GitHub's extensions, keeps its raw HTML, points its relative links at
-// the Console's pages and its relative images at the REST API's raw bytes, turns images from elsewhere into links,
+// the Console's pages and its relative images at the REST API's raw bytes, keeps images from elsewhere at their URLs,
 // then sanitizes what is left with an allow-list in the spirit of GitHub's.
 type Renderer struct {
 	console string
@@ -164,8 +165,8 @@ func (r *Renderer) element(e *html.Node, doc code.Document) {
 	r.walk(e, doc)
 }
 
-// image points img's source at the REST API's raw bytes when it is in the repository, keeps it when it is an inline
-// image, and replaces img with a link to its source, labelled with its alternative text, when it is from elsewhere.
+// image points img's source at the REST API's raw bytes when it is in the repository, and keeps it when it is an
+// inline image or from elsewhere.
 func (r *Renderer) image(img *html.Node, doc code.Document) {
 	src, _ := attr(img, "src")
 	u, err := url.Parse(strings.TrimSpace(src))
@@ -189,8 +190,8 @@ func (r *Renderer) image(img *html.Node, doc code.Document) {
 	}
 }
 
-// outside replaces img, an image from elsewhere, with a link to it labelled with its alternative text, or its URL,
-// so that the page loads nothing from outside; only an http or https URL makes a link.
+// outside keeps img, an image from elsewhere, for the viewer's browser to load from its host, which says how long
+// it may be kept: at https when its URL names a host alone; only an http or https URL stays.
 func (r *Renderer) outside(img *html.Node, u *url.URL) {
 	if u.Scheme == "" {
 		u.Scheme = "https"
@@ -199,19 +200,12 @@ func (r *Renderer) outside(img *html.Node, u *url.URL) {
 		img.Parent.RemoveChild(img)
 		return
 	}
-	label, _ := attr(img, "alt")
-	if strings.TrimSpace(label) == "" {
-		label = u.String()
-	}
-	a := &html.Node{Type: html.ElementNode, Data: "a", DataAtom: atom.A, Attr: []html.Attribute{{Key: "href", Val: u.String()}}}
-	a.AppendChild(&html.Node{Type: html.TextNode, Data: label})
-	img.Parent.InsertBefore(a, img)
-	img.Parent.RemoveChild(img)
+	setOrRemove(img, "src", u.String())
 }
 
 // link is where href, a link of doc, points: a URL of http, https or mailto as it is, at https when it names a host
-// alone; an anchor of the document with idPrefix; a path in the repository, relative to doc or from the root, at the Console's page of it at doc's ref, its
-// tree's when it ends in a slash; "" for anything else.
+// alone; an anchor of the document with idPrefix; a path in the repository, relative to doc or from the root, at the
+// Console's page of it at doc's ref, its tree's when it ends in a slash; "" for anything else.
 func (r *Renderer) link(href string, doc code.Document) string {
 	u, err := url.Parse(strings.TrimSpace(href))
 	switch {

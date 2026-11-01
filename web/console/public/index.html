@@ -667,14 +667,13 @@
       "padding:0 4px;border:1px solid var(--color-border-default);border-radius:4px}";
 
     // rendered shows a document's HTML, which the API rendered and sanitized, in a frame that runs nothing and loads
-    // only the REST API's images: sandboxed without scripts and under its own Content Security Policy, as a second
-    // guard behind the sanitizer. The Console sizes the frame to its content and follows its links: its own pages
+    // only images, the REST API's and other hosts': sandboxed without scripts and under its own Content Security
+    // Policy, as a second guard behind the sanitizer. The Console sizes the frame to its content and follows its links: its own pages
     // within the Console, anchors by scrolling to them, anything else in a new tab.
     function rendered(html) {
       const style = getComputedStyle(document.documentElement);
       const tokens = frameTokens.map((t) => t + ":" + style.getPropertyValue(t)).join(";") + ";color-scheme:" + style.colorScheme;
-      const images = new URL(config.restUrl || location.origin, location.href).origin;
-      const policy = "default-src 'none'; img-src " + images + " data:; style-src 'unsafe-inline'";
+      const policy = "default-src 'none'; img-src * data:; style-src 'unsafe-inline'";
       const frame = h("iframe", { class: "markdown", sandbox: "allow-same-origin", title: "Rendered document",
         srcdoc: '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="' + policy + '">' +
           "<style>:root{" + tokens + "}" + frameStyle + "</style><body>" + html });
