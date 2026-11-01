@@ -24,6 +24,7 @@ type Annotation struct {
 	UpdatedAt   time.Time
 	StartedAt   time.Time
 	CompletedAt *time.Time
+	Version     int64
 }
 
 type Commit struct {

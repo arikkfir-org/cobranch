@@ -35,7 +35,18 @@ func TestAnnotationMutations(t *testing.T) {
 	set := func(name, input string) func(*orgFixture) string {
 		return func(f *orgFixture) string {
 			return `mutation { setAnnotation(repositoryId: "` + f.website.ID.String() + `", sha: "` + shaOf("c") + `", name: "` + name + `", input: ` + input +
-				`) { name status summary link principal { displayName } completedAt } }`
+				`) { name status summary link principal { displayName } completedAt version } }`
+		}
+	}
+	setFrom := func(version string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			return `mutation { setAnnotation(repositoryId: "` + f.website.ID.String() + `", sha: "` + shaOf("c") + `", name: "ci/build", input: {status: SUCCESSFUL}, expectedVersion: ` +
+				version + `) { version } }`
+		}
+	}
+	delFrom := func(version string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			return `mutation { deleteAnnotation(repositoryId: "` + f.website.ID.String() + `", sha: "` + shaOf("c") + `", name: "ci/build", expectedVersion: ` + version + `) }`
 		}
 	}
 	del := func(f *orgFixture) string {
@@ -43,7 +54,13 @@ func TestAnnotationMutations(t *testing.T) {
 	}
 	runOrgCases(t, []orgCase{
 		{name: "a Developer sets one", viewer: maxHolding(auth.RoleDeveloper), document: set("ci/build", `{status: IN_PROGRESS, summary: "Building"}`),
-			want: []string{`"setAnnotation":{"name":"ci/build","status":"IN_PROGRESS","summary":"Building","link":"","principal":{"displayName":"Max"},"completedAt":null}`}},
+			want: []string{`"setAnnotation":{"name":"ci/build","status":"IN_PROGRESS","summary":"Building","link":"","principal":{"displayName":"Max"},"completedAt":null,"version":1}`}},
+		{name: "its principal changes the version it read", viewer: annotatedByOlivia(olivia), document: setFrom("1"), want: []string{`"setAnnotation":{"version":2}`}},
+		{name: "a version since changed", viewer: annotatedByOlivia(olivia), document: setFrom("2"), wantCode: conflict, wantReason: "precondition.failed"},
+		{name: "a version of one that isn't there", viewer: olivia, document: setFrom("1"), wantCode: conflict, wantReason: "precondition.failed"},
+		{name: "a version that can't be one", viewer: annotatedByOlivia(olivia), document: setFrom("0"), wantCode: badUserInput, wantReason: "version.invalid"},
+		{name: "its principal deletes the version it read", viewer: annotatedByOlivia(olivia), document: delFrom("1"), want: []string{`"deleteAnnotation":true`}},
+		{name: "a deletion from a version since changed", viewer: annotatedByOlivia(olivia), document: delFrom("3"), wantCode: conflict, wantReason: "precondition.failed"},
 		{name: "another principal's is refused, naming them", viewer: annotatedByOlivia(maxHolding(auth.RoleDeveloper)),
 			document: set("ci/build", `{status: SUCCESSFUL}`), wantCode: conflict, wantReason: "annotation.taken",
 			want: []string{`Olivia set annotation ci/build on this commit`}},

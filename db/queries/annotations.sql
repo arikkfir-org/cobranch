@@ -19,12 +19,13 @@ WHERE a.repo_id = $1 AND a.sha = $2 AND a.name = $3
 FOR UPDATE OF a;
 
 -- InsertAnnotation sets an annotation that isn't there yet, its run starting now and completed now when its status
--- ends one: none when another transaction set it first.
+-- ends one: none when one is there, which it locks until the transaction ends instead, without changing it. Waiting for
+-- a transaction that sets or deletes the one there, it answers one of the two whatever that transaction did.
 -- name: InsertAnnotation :one
 INSERT INTO annotations (id, org_id, repo_id, sha, name, status, summary, link, created_by, completed_at)
 VALUES (@id, @org_id, @repo_id, @sha, @name, @status, @summary, @link, @created_by,
         CASE WHEN @status::text IN ('failed', 'successful') THEN now() END)
-ON CONFLICT (repo_id, sha, name) DO NOTHING
+ON CONFLICT (repo_id, sha, name) DO UPDATE SET name = EXCLUDED.name WHERE false
 RETURNING *;
 
 -- UpdateAnnotation changes an annotation: a run starts again when it goes back from failed or successful to pending or

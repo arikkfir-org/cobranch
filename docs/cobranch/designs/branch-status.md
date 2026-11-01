@@ -46,7 +46,8 @@ it was set to when it last reached either.
 
 - **One per name on a commit.** A commit holds at most one annotation of each name. Its principal sets it and changes it
   at will, in any order of the four statuses: Pending, In progress, Failed and Successful. Another principal setting the
-  same name is refused, naming whose it is.
+  same name is refused, naming whose it is. Of two principals setting a name at once, one sets it and the other is
+  refused; a set that meets a deletion of the name waits for it, then sets its own.
 - **What it says.** A name of 1 to 100 lowercase letters, digits and `-`, `_`, `.`, `/`, starting with a letter or
   digit, such as `ci/build`; a status; a summary of at most 500 characters; and a link to its details, an absolute
   `https` or `http` URL, optional. Cobranch keeps who set it, when, when its run started (when it was set, or last sent
@@ -57,8 +58,13 @@ it was set to when it last reached either.
   Developers and Automation set them; Maintainers also delete others'. A deleted annotation frees its name on the
   commit.
 - **On any commit the repository holds,** pushed before or after; an unknown commit is not found. Each change appends
-  event `annotation.set` or `annotation.deleted`, and the table carries trigger `audit()`, so a deletion of someone
-  else's annotation is on record; setting it again as it is changes nothing.
+  the [architecture](architecture.md#events-and-background-work)'s event `annotation.changed`, its details saying
+  whether it was set or deleted, and the table carries trigger `audit()`, so a deletion of someone else's annotation is
+  on record; setting it again as it is changes nothing.
+- **A version, its ETag.** Each change bumps an annotation's version. A change may name the version it was made from,
+  `If-Match` in REST and `expectedVersion` in GraphQL, to refuse one made meanwhile, or one deleted meanwhile (412, or
+  CONFLICT `precondition.failed`); `If-Match: *` changes whichever is there. Without one, its principal's change applies
+  to the annotation as it is: only they change it, and a CI run reports without reading it first.
 
 **Every role reads annotations; Developers and Automation set them; Maintainers also delete others’**
 
@@ -286,6 +292,8 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | Annotations belong to the commit, one per name, changed only by their principal and deleted by them or `annotations.delete_any` | The catalog's two permissions; a verdict on a commit holds for every branch at it | Proposed |
+| An annotation's version is its ETag, and naming it is optional: `If-Match` in REST (412 when it changed), `expectedVersion` in GraphQL (CONFLICT) | Only its principal changes it, and a CI run reports without reading first; a principal who reads first can still refuse a change made meanwhile | Proposed |
+| Setting or deleting an annotation appends the architecture's `annotation.changed`, its details naming which | The day-one event the architecture agreed; one kind for a job to follow | Agreed |
 | Merge requirements come from the default branch's `/cobranch.yaml`, `branches.<name>.requires`, read by the Git server when a push moves `main`; a file that doesn't parse refuses the push | Settings live in Git; the requirements in effect always match the file | Proposed |
 | `merge_requirements` is keyed by the branch's name, not its ID | A requirement may name a branch before it exists, and outlives one deleted and pushed again | Changed |
 | A required annotation that is Pending or In progress makes the branch Processing, not Blocked | It is still running, as a job will be once [ENG-214](https://linear.app/arikkfir/issue/ENG-214) lands | Proposed |

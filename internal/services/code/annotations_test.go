@@ -52,17 +52,33 @@ func build(status code.AnnotationStatus) code.AnnotationInput {
 	return code.AnnotationInput{Name: "ci/build", Status: status, Summary: "Built", Link: "https://ci.example.com/runs/7"}
 }
 
+// from is in, made from version of the annotation.
+func from(version int64, in code.AnnotationInput) code.AnnotationInput {
+	in.Version = version
+	return in
+}
+
+// twice is CI setting ci/build on commit 3 at version 2.
+func twice(f *annotators) {
+	f.set(f.ci, sha(3), build(code.AnnotationPending))
+	f.set(f.ci, sha(3), build(code.AnnotationInProgress))
+}
+
+// setCase sets in on commit sha, 3 by default, as viewer, Dev by default, after before.
+type setCase struct {
+	name    string
+	before  func(*annotators)
+	viewer  func(*annotators) code.Viewer
+	sha     string
+	in      code.AnnotationInput
+	wantErr error
+	taken   string
+}
+
+func invalid(code string) error { return &orgs.ValidationError{Code: code} }
+
 func TestSetAnnotation(t *testing.T) {
-	invalid := func(code string) error { return &orgs.ValidationError{Code: code} }
-	tests := []struct {
-		name    string
-		before  func(*annotators)
-		viewer  func(*annotators) code.Viewer
-		sha     string
-		in      code.AnnotationInput
-		wantErr error
-		taken   string
-	}{
+	runSetCases(t, []setCase{
 		{name: "Automation sets one", viewer: func(f *annotators) code.Viewer { return f.ci }, in: build(code.AnnotationPending)},
 		{name: "a Developer sets one", viewer: func(f *annotators) code.Viewer { return f.dev }, in: build(code.AnnotationSuccessful)},
 		{name: "its principal changes it", before: func(f *annotators) { f.set(f.ci, sha(3), build(code.AnnotationInProgress)) },
@@ -88,7 +104,27 @@ func TestSetAnnotation(t *testing.T) {
 		{name: "a link of another scheme", in: code.AnnotationInput{Name: "ci", Status: code.AnnotationFailed, Link: "javascript:alert(1)"}, wantErr: invalid("link.invalid")},
 		{name: "an http link", in: code.AnnotationInput{Name: "ci", Status: code.AnnotationFailed, Link: "http://ci.example.com/7"}},
 		{name: "the store's failure", before: func(f *annotators) { f.store.Fail = errors.New("down") }, in: build(code.AnnotationPending), wantErr: errors.New("down")},
-	}
+	})
+}
+
+func TestSetAnnotationVersions(t *testing.T) {
+	runSetCases(t, []setCase{
+		{name: "its principal changes the version it read", before: twice, viewer: func(f *annotators) code.Viewer { return f.ci },
+			in: from(2, build(code.AnnotationSuccessful))},
+		{name: "a version since changed is refused", before: twice, viewer: func(f *annotators) code.Viewer { return f.ci },
+			in: from(1, build(code.AnnotationSuccessful)), wantErr: code.ErrAnnotationChanged},
+		{name: "any version changes the one there", before: twice, viewer: func(f *annotators) code.Viewer { return f.ci },
+			in: from(code.AnyVersion, build(code.AnnotationSuccessful))},
+		{name: "a version of one that isn't there is refused", in: from(1, build(code.AnnotationPending)), wantErr: code.ErrAnnotationChanged},
+		{name: "any version of one that isn't there is refused", in: from(code.AnyVersion, build(code.AnnotationPending)), wantErr: code.ErrAnnotationChanged},
+		{name: "another principal's is refused first, whatever the version", before: twice,
+			in: from(1, build(code.AnnotationSuccessful)), wantErr: code.ErrAnnotationTaken, taken: "CI"},
+		{name: "a version that can't be one", in: from(-2, build(code.AnnotationPending)), wantErr: invalid("version.invalid")},
+	})
+}
+
+func runSetCases(t *testing.T, tests []setCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newAnnotators()
@@ -145,18 +181,22 @@ func TestAnnotationRuns(t *testing.T) {
 		after         time.Duration
 		wantStarted   time.Duration
 		wantCompleted time.Duration // -1: none
+		wantVersion   int64
 	}{
-		{status: code.AnnotationPending, wantCompleted: -1},
-		{status: code.AnnotationInProgress, after: time.Minute, wantCompleted: -1},
-		{status: code.AnnotationSuccessful, after: 3 * time.Minute, wantCompleted: 3 * time.Minute},
-		{status: code.AnnotationSuccessful, after: 4 * time.Minute, wantCompleted: 3 * time.Minute},
-		{status: code.AnnotationPending, after: 5 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: -1},
-		{status: code.AnnotationFailed, after: 6 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: 6 * time.Minute},
-		{status: code.AnnotationSuccessful, after: 7 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: 7 * time.Minute},
+		{status: code.AnnotationPending, wantCompleted: -1, wantVersion: 1},
+		{status: code.AnnotationInProgress, after: time.Minute, wantCompleted: -1, wantVersion: 2},
+		{status: code.AnnotationSuccessful, after: 3 * time.Minute, wantCompleted: 3 * time.Minute, wantVersion: 3},
+		{status: code.AnnotationSuccessful, after: 4 * time.Minute, wantCompleted: 3 * time.Minute, wantVersion: 3}, // unchanged
+		{status: code.AnnotationPending, after: 5 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: -1, wantVersion: 4},
+		{status: code.AnnotationFailed, after: 6 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: 6 * time.Minute, wantVersion: 5},
+		{status: code.AnnotationSuccessful, after: 7 * time.Minute, wantStarted: 5 * time.Minute, wantCompleted: 7 * time.Minute, wantVersion: 6},
 	}
 	for _, tt := range tests {
 		later(tt.after)
 		a := step(tt.status)
+		if a.Version != tt.wantVersion {
+			t.Errorf("%s after %s: version %d, want %d", tt.status, tt.after, a.Version, tt.wantVersion)
+		}
 		if !a.StartedAt.Equal(now.Add(tt.wantStarted)) {
 			t.Errorf("%s after %s: started at %s, want %s", tt.status, tt.after, a.StartedAt, now.Add(tt.wantStarted))
 		}
@@ -174,9 +214,14 @@ func TestDeleteAnnotation(t *testing.T) {
 		name    string
 		viewer  func(*annotators) code.Viewer
 		annName string
+		version int64
 		wantErr error
 	}{
 		{name: "its principal deletes it", viewer: func(f *annotators) code.Viewer { return f.ci }},
+		{name: "at the version it read", viewer: func(f *annotators) code.Viewer { return f.ci }, version: 1},
+		{name: "at any version", viewer: func(f *annotators) code.Viewer { return f.mia }, version: code.AnyVersion},
+		{name: "a version since changed is refused", viewer: func(f *annotators) code.Viewer { return f.ci }, version: 2, wantErr: code.ErrAnnotationChanged},
+		{name: "a version that can't be one", viewer: func(f *annotators) code.Viewer { return f.ci }, version: -2, wantErr: &orgs.ValidationError{Code: "version.invalid"}},
 		{name: "a Maintainer deletes another's", viewer: func(f *annotators) code.Viewer { return f.mia }},
 		{name: "a Developer may not delete another's", viewer: func(f *annotators) code.Viewer { return f.dev }, wantErr: auth.ErrForbidden},
 		{name: "a Reader may not", viewer: func(f *annotators) code.Viewer { return f.rae }, wantErr: auth.ErrForbidden},
@@ -192,7 +237,7 @@ func TestDeleteAnnotation(t *testing.T) {
 			if tt.annName != "" {
 				name = tt.annName
 			}
-			err := f.service.DeleteAnnotation(t.Context(), tt.viewer(f), f.repo, sha(3), name)
+			err := f.service.DeleteAnnotation(t.Context(), tt.viewer(f), f.repo, sha(3), name, tt.version)
 			if !sameError(err, tt.wantErr) {
 				t.Fatalf("got error %v, want %v", err, tt.wantErr)
 			}
@@ -210,7 +255,7 @@ func TestDeleteAnnotation(t *testing.T) {
 func TestDeletedAnnotationFreesItsName(t *testing.T) {
 	f := newAnnotators()
 	f.set(f.ci, sha(3), build(code.AnnotationFailed))
-	if err := f.service.DeleteAnnotation(t.Context(), f.mia, f.repo, sha(3), "ci/build"); err != nil {
+	if err := f.service.DeleteAnnotation(t.Context(), f.mia, f.repo, sha(3), "ci/build", 0); err != nil {
 		t.Fatal(err)
 	}
 	a, err := f.service.SetAnnotation(t.Context(), f.dev, f.repo, sha(3), build(code.AnnotationSuccessful))

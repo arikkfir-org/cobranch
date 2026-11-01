@@ -37,11 +37,13 @@ type Store interface {
 	Annotations(ctx context.Context, repoID uuid.UUID, sha string) ([]Annotation, error)
 	// SetAnnotation sets the annotation in names on one of the repository's commits for actor, or changes the one
 	// actor set there before, records the change unless it changes nothing, and answers the annotation as it now is:
-	// repos.ErrNotFound when the repository holds no such commit, a *TakenError when another principal set it.
+	// repos.ErrNotFound when the repository holds no such commit, a *TakenError when another principal set it, and
+	// ErrAnnotationChanged when it is at another version than in names, or isn't there while in names one.
 	SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in AnnotationInput) (Annotation, error)
 	// DeleteAnnotation deletes the annotation of name from one of the repository's commits and records it, when actor
-	// set it or anyone is true: repos.ErrNotFound when there is none, a *TakenError when another principal set it.
-	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, anyone bool) error
+	// set it or anyone is true: repos.ErrNotFound when there is none, a *TakenError when another principal set it, and
+	// ErrAnnotationChanged when it is at another version than version names, unless that is 0 or AnyVersion.
+	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
@@ -179,7 +181,8 @@ func failed(span trace.Span, what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrAnnotationTaken):
+	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrAnnotationTaken),
+		errors.Is(err, ErrAnnotationChanged):
 		return err
 	}
 	span.RecordError(err)

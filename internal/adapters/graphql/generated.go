@@ -50,6 +50,7 @@ type ComplexityRoot struct {
 		Status      func(childComplexity int) int
 		Summary     func(childComplexity int) int
 		UpdatedAt   func(childComplexity int) int
+		Version     func(childComplexity int) int
 	}
 
 	ApiKey struct {
@@ -155,7 +156,7 @@ type ComplexityRoot struct {
 		DeclineInvitation    func(childComplexity int, id string) int
 		DeclineJoinRequest   func(childComplexity int, organizationID string, id string) int
 		DeleteAPIKey         func(childComplexity int, organizationID string, id string) int
-		DeleteAnnotation     func(childComplexity int, repositoryID string, sha string, name string) int
+		DeleteAnnotation     func(childComplexity int, repositoryID string, sha string, name string, expectedVersion *int) int
 		DeleteRole           func(childComplexity int, organizationID string, id string) int
 		DeleteSSHKey         func(childComplexity int, id string) int
 		GrantRepositoryRole  func(childComplexity int, repositoryID string, principalID string, roleID string) int
@@ -170,7 +171,7 @@ type ComplexityRoot struct {
 		RevokeRole           func(childComplexity int, organizationID string, userID string, roleID string) int
 		RevokeSession        func(childComplexity int, id string) int
 		RotateAPIKey         func(childComplexity int, organizationID string, id string, input *SecretInput) int
-		SetAnnotation        func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput) int
+		SetAnnotation        func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
 		UpdateOrganization   func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRepository     func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole           func(childComplexity int, organizationID string, id string, input RoleInput) int
@@ -309,8 +310,8 @@ type MutationResolver interface {
 	RevokePersonalToken(ctx context.Context, id string) (bool, error)
 	AddSSHKey(ctx context.Context, input SSHKeyInput) (*SSHKey, error)
 	DeleteSSHKey(ctx context.Context, id string) (bool, error)
-	SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput) (*Annotation, error)
-	DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string) (bool, error)
+	SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) (*Annotation, error)
+	DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string, expectedVersion *int) (bool, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -449,6 +450,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Annotation.UpdatedAt(childComplexity), true
+	case "Annotation.version":
+		if e.ComplexityRoot.Annotation.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Annotation.Version(childComplexity), true
 
 	case "ApiKey.createdAt":
 		if e.ComplexityRoot.ApiKey.CreatedAt == nil {
@@ -945,7 +952,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.DeleteAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string)), true
+		return e.ComplexityRoot.Mutation.DeleteAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.deleteRole":
 		if e.ComplexityRoot.Mutation.DeleteRole == nil {
 			break
@@ -1110,7 +1117,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.SetAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["input"].(AnnotationInput)), true
+		return e.ComplexityRoot.Mutation.SetAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["input"].(AnnotationInput), args["expectedVersion"].(*int)), true
 	case "Mutation.updateOrganization":
 		if e.ComplexityRoot.Mutation.UpdateOrganization == nil {
 			break
@@ -1811,10 +1818,10 @@ extend type Repository {
 }
 
 extend type Mutation {
-  "Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before, and answers it as it now is; takes annotations.write. An annotation of that name that another principal set is refused (CONFLICT, annotation.taken), naming them, until it is deleted."
-  setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!): Annotation!
-  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's."
-  deleteAnnotation(repositoryId: ID!, sha: String!, name: String!): Boolean!
+  "Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before, and answers it as it now is; takes annotations.write. An annotation of that name that another principal set is refused (CONFLICT, annotation.taken), naming them, until it is deleted. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
+  setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!, expectedVersion: Int): Annotation!
+  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version is refused (CONFLICT, precondition.failed)."
+  deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -1871,6 +1878,8 @@ type Annotation {
   startedAt: Time!
   "When it reached FAILED or SUCCESSFUL; null while it runs."
   completedAt: Time
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
 }
 
 "Where an annotation stands, in any order its principal sets them."
@@ -2332,6 +2341,8 @@ func (ec *executionContext) childFields_Annotation(ctx context.Context, field gr
 		return ec.fieldContext_Annotation_startedAt(ctx, field)
 	case "completedAt":
 		return ec.fieldContext_Annotation_completedAt(ctx, field)
+	case "version":
+		return ec.fieldContext_Annotation_version(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Annotation", field.Name)
 }
@@ -3105,6 +3116,14 @@ func (ec *executionContext) field_Mutation_deleteAnnotation_args(ctx context.Con
 		return nil, err
 	}
 	args["name"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
 	return args, nil
 }
 
@@ -3497,6 +3516,14 @@ func (ec *executionContext) field_Mutation_setAnnotation_args(ctx context.Contex
 		return nil, err
 	}
 	args["input"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg4
 	return args, nil
 }
 
@@ -3999,6 +4026,29 @@ func (ec *executionContext) _Annotation_completedAt(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_Annotation_completedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Annotation", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Annotation_version(ctx context.Context, field graphql.CollectedField, obj *Annotation) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Annotation_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Annotation_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Annotation", field, false, false, "Int")
 }
 
 func (ec *executionContext) _ApiKey_id(ctx context.Context, field graphql.CollectedField, obj *APIKey) (ret graphql.Marshaler) {
@@ -5632,7 +5682,7 @@ func (ec *executionContext) _Mutation_setAnnotation(ctx context.Context, field g
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().SetAnnotation(ctx, fc.Args["repositoryId"].(string), fc.Args["sha"].(string), fc.Args["name"].(string), fc.Args["input"].(AnnotationInput))
+			return ec.Resolvers.Mutation().SetAnnotation(ctx, fc.Args["repositoryId"].(string), fc.Args["sha"].(string), fc.Args["name"].(string), fc.Args["input"].(AnnotationInput), fc.Args["expectedVersion"].(*int))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *Annotation) graphql.Marshaler {
@@ -5676,7 +5726,7 @@ func (ec *executionContext) _Mutation_deleteAnnotation(ctx context.Context, fiel
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().DeleteAnnotation(ctx, fc.Args["repositoryId"].(string), fc.Args["sha"].(string), fc.Args["name"].(string))
+			return ec.Resolvers.Mutation().DeleteAnnotation(ctx, fc.Args["repositoryId"].(string), fc.Args["sha"].(string), fc.Args["name"].(string), fc.Args["expectedVersion"].(*int))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
@@ -10739,6 +10789,11 @@ func (ec *executionContext) _Annotation(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "version":
+			out.Values[i] = ec._Annotation_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -13588,6 +13643,24 @@ func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.Se
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalID(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalInt(*v)
 	return res
 }
 

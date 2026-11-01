@@ -13,12 +13,16 @@ import (
 )
 
 // SetAnnotation is the resolver for the setAnnotation field.
-func (r *mutationResolver) SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput) (*Annotation, error) {
+func (r *mutationResolver) SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) (*Annotation, error) {
 	v, repoID, err := codeRepo(ctx, repositoryID)
 	if err != nil {
 		return nil, err
 	}
-	set, err := r.Code.SetAnnotation(ctx, v, repoID, sha, annotationInput(name, input))
+	in := annotationInput(name, input)
+	if in.Version, err = expected(expectedVersion); err != nil {
+		return nil, fail(ctx, err, "commit", "setting the annotation")
+	}
+	set, err := r.Code.SetAnnotation(ctx, v, repoID, sha, in)
 	if err != nil {
 		return nil, fail(ctx, err, "commit", "setting the annotation")
 	}
@@ -26,12 +30,16 @@ func (r *mutationResolver) SetAnnotation(ctx context.Context, repositoryID strin
 }
 
 // DeleteAnnotation is the resolver for the deleteAnnotation field.
-func (r *mutationResolver) DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string) (bool, error) {
+func (r *mutationResolver) DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string, expectedVersion *int) (bool, error) {
 	v, repoID, err := codeRepo(ctx, repositoryID)
 	if err != nil {
 		return false, err
 	}
-	if err := r.Code.DeleteAnnotation(ctx, v, repoID, sha, name); err != nil {
+	version, err := expected(expectedVersion)
+	if err == nil {
+		err = r.Code.DeleteAnnotation(ctx, v, repoID, sha, name, version)
+	}
+	if err != nil {
 		return false, fail(ctx, err, "annotation", "deleting the annotation")
 	}
 	return true, nil

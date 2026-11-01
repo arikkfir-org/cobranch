@@ -5,7 +5,8 @@
 -- An annotation on a commit: at most one of each name there, set and changed only by its principal (created_by), in
 -- any order of its four statuses, and deleted by its principal or by one holding annotations.delete_any, which frees
 -- its name. Its run starts when it is set, and again when it goes back from failed or successful to pending or
--- in_progress; completed_at is when it last reached failed or successful, null while it runs.
+-- in_progress; completed_at is when it last reached failed or successful, null while it runs. Each change bumps its
+-- version, which is its ETag: a change may name it to refuse one made meanwhile.
 CREATE TABLE annotations (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
@@ -20,12 +21,14 @@ CREATE TABLE annotations (
     updated_at timestamptz NOT NULL DEFAULT now(),
     started_at timestamptz NOT NULL DEFAULT now(),
     completed_at timestamptz,
+    version bigint NOT NULL DEFAULT 1,
     FOREIGN KEY (repo_id, sha) REFERENCES commits (repo_id, sha) ON DELETE CASCADE,
     UNIQUE (repo_id, sha, name)
 );
 CREATE INDEX annotations_created_by ON annotations (created_by);
 
 CREATE TRIGGER audit AFTER INSERT OR UPDATE OR DELETE ON annotations FOR EACH ROW EXECUTE FUNCTION audit();
+CREATE TRIGGER bump_version BEFORE UPDATE ON annotations FOR EACH ROW EXECUTE FUNCTION bump_version();
 
 -- +goose Down
 -- Rolling back forgets every annotation; the audit log keeps what they were.

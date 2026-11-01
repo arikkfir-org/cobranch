@@ -46,7 +46,7 @@ func (s *CodeStore) annotationsOf(ctx context.Context, repoID uuid.UUID, shas []
 }
 
 // SetAnnotation sets the annotation on the repository's commit for actor, or changes the one actor set there before,
-// in one transaction that acts for actor: it appends event annotation.set unless it changes nothing (code.Store).
+// in one transaction that acts for actor: it appends event annotation.changed unless it changes nothing (code.Store).
 func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error) {
 	var out code.Annotation
 	err := transact(ctx, s.pool, s.q, "setting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -57,16 +57,16 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		if err != nil {
 			return fmt.Errorf("finding commit %s: %w", sha, err)
 		}
-		row, created, err := s.insertAnnotation(ctx, q, actor, orgID, repoID, sha, in)
-		if err != nil || created {
-			out = row
+		row, created, err := lockAnnotation(ctx, q, actor, orgID, repoID, sha, in)
+		out = row
+		switch {
+		case err != nil || created:
 			return err
-		}
-		if row.Principal == nil || row.Principal.ID != actor {
+		case row.Principal == nil || row.Principal.ID != actor:
 			return &code.TakenError{Name: in.Name, By: row.Principal}
-		}
-		if row.Status == in.Status && row.Summary == in.Summary && row.Link == in.Link {
-			out = row
+		case code.Stale(in.Version, row.Version):
+			return code.ErrAnnotationChanged
+		case row.Status == in.Status && row.Summary == in.Summary && row.Link == in.Link:
 			return nil
 		}
 		updated, err := q.UpdateAnnotation(ctx, queries.UpdateAnnotationParams{Status: string(in.Status), Summary: in.Summary, Link: in.Link, ID: row.ID})
@@ -74,30 +74,33 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 			return fmt.Errorf("changing annotation %s: %w", in.Name, err)
 		}
 		out = annotationOf(updated, &row.Principal.DisplayName)
-		return annotationEvent(ctx, q, orgID, actor, "annotation.set", repoID, out)
+		return annotationEvent(ctx, q, orgID, actor, "set", repoID, out)
 	})
 	return out, err
 }
 
-// insertAnnotation sets the annotation unless it is there, and appends its event, answering it and true; or answers
-// the one there, locked until the transaction ends, and false.
-func (s *CodeStore) insertAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, bool, error) {
-	if row, err := q.AnnotationForUpdate(ctx, repoID, sha, in.Name); err == nil {
-		return annotationOf(row.Annotation, row.PrincipalDisplayName), false, nil
-	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return code.Annotation{}, false, fmt.Errorf("finding annotation %s: %w", in.Name, err)
-	}
-	id, err := uuid.NewV7()
-	if err != nil {
-		return code.Annotation{}, false, fmt.Errorf("naming the annotation: %w", err)
-	}
-	_, err = q.InsertAnnotation(ctx, queries.InsertAnnotationParams{ID: id, OrgID: orgID, RepoID: repoID, Sha: sha, Name: in.Name,
-		Status: string(in.Status), Summary: in.Summary, Link: in.Link, CreatedBy: &actor})
-	created := err == nil
-	if err != nil && !errors.Is(err, pgx.ErrNoRows) { // no row: another transaction set it first, and it is there now
-		return code.Annotation{}, false, fmt.Errorf("setting annotation %s: %w", in.Name, err)
+// lockAnnotation answers the annotation in.Name on the commit, locked until the transaction ends, and false; or, when
+// there is none and in names no version, sets it for actor, appends its event and answers it and true. Its insert
+// locks the annotation there instead of setting one, waiting for a transaction that sets or deletes it, so it answers
+// one whatever runs beside it. A version named of one that isn't there is code.ErrAnnotationChanged.
+func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, bool, error) {
+	created := false
+	if in.Version == 0 {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return code.Annotation{}, false, fmt.Errorf("naming the annotation: %w", err)
+		}
+		_, err = q.InsertAnnotation(ctx, queries.InsertAnnotationParams{ID: id, OrgID: orgID, RepoID: repoID, Sha: sha, Name: in.Name,
+			Status: string(in.Status), Summary: in.Summary, Link: in.Link, CreatedBy: &actor})
+		created = err == nil
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) { // no row: one is there, which the insert locked
+			return code.Annotation{}, false, fmt.Errorf("setting annotation %s: %w", in.Name, err)
+		}
 	}
 	row, err := q.AnnotationForUpdate(ctx, repoID, sha, in.Name)
+	if errors.Is(err, pgx.ErrNoRows) && in.Version != 0 {
+		return code.Annotation{}, false, code.ErrAnnotationChanged
+	}
 	if err != nil {
 		return code.Annotation{}, false, fmt.Errorf("finding annotation %s: %w", in.Name, err)
 	}
@@ -105,12 +108,13 @@ func (s *CodeStore) insertAnnotation(ctx context.Context, q *queries.Queries, ac
 	if !created {
 		return a, false, nil
 	}
-	return a, true, annotationEvent(ctx, q, orgID, actor, "annotation.set", repoID, a)
+	return a, true, annotationEvent(ctx, q, orgID, actor, "set", repoID, a)
 }
 
-// DeleteAnnotation deletes the annotation of name from the repository's commit, when actor set it or anyone is true,
-// in one transaction that acts for actor, and appends event annotation.deleted (code.Store).
-func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, anyone bool) error {
+// DeleteAnnotation deletes the annotation of name from the repository's commit, when actor set it or anyone is true
+// and it is at the version that version names, in one transaction that acts for actor, and appends event
+// annotation.changed (code.Store).
+func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error {
 	return transact(ctx, s.pool, s.q, "deleting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.AnnotationForUpdate(ctx, repoID, sha, name)
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -123,25 +127,29 @@ func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoI
 		if !anyone && (a.Principal == nil || a.Principal.ID != actor) {
 			return &code.TakenError{Name: name, By: a.Principal}
 		}
+		if code.Stale(version, a.Version) {
+			return code.ErrAnnotationChanged
+		}
 		if err := q.DeleteAnnotation(ctx, a.ID); err != nil {
 			return fmt.Errorf("deleting annotation %s: %w", name, err)
 		}
-		return annotationEvent(ctx, q, row.Annotation.OrgID, actor, "annotation.deleted", repoID, a)
+		return annotationEvent(ctx, q, row.Annotation.OrgID, actor, "deleted", repoID, a)
 	})
 }
 
-// annotationEvent appends event kind about annotation a on the repository, as actor.
-func annotationEvent(ctx context.Context, q *queries.Queries, orgID, actor uuid.UUID, kind string, repoID uuid.UUID, a code.Annotation) error {
-	details := map[string]any{"repo": repoID, "name": a.Name, "status": a.Status}
+// annotationEvent appends event annotation.changed about annotation a on the repository, as actor, saying whether a
+// was set (or changed) or deleted.
+func annotationEvent(ctx context.Context, q *queries.Queries, orgID, actor uuid.UUID, action string, repoID uuid.UUID, a code.Annotation) error {
+	details := map[string]any{"repo": repoID, "name": a.Name, "action": action, "status": a.Status, "version": a.Version}
 	if a.Principal != nil && a.Principal.ID != actor {
 		details["setBy"] = a.Principal.ID
 	}
-	return orgEvent(ctx, q, &orgID, actor, kind, a.ID, details)
+	return orgEvent(ctx, q, &orgID, actor, "annotation.changed", a.ID, details)
 }
 
 // annotationOf is the domain's view of an annotations row, with the display name of the principal who set it.
 func annotationOf(a queries.Annotation, displayName *string) code.Annotation {
 	return code.Annotation{ID: a.ID, Name: a.Name, Status: code.AnnotationStatus(a.Status), Summary: a.Summary, Link: a.Link,
 		Principal: principalOf(a.CreatedBy, displayName), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, StartedAt: a.StartedAt,
-		CompletedAt: a.CompletedAt}
+		CompletedAt: a.CompletedAt, Version: a.Version}
 }

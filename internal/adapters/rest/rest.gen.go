@@ -166,6 +166,9 @@ type Annotation struct {
 	Status    AnnotationStatus `json:"status"`
 	Summary   string           `json:"summary"`
 	UpdatedAt time.Time        `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	Version int64 `json:"version"`
 }
 
 // AnnotationInput What a principal sets an annotation to.
@@ -598,6 +601,9 @@ type Name = string
 // Id defines model for id.
 type Id = openapi_types.UUID
 
+// IfMatchAnnotation defines model for ifMatchAnnotation.
+type IfMatchAnnotation = string
+
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
 
@@ -670,6 +676,18 @@ type ListCommitsParams struct {
 
 	// Limit How many commits the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteAnnotationParams defines parameters for DeleteAnnotation.
+type DeleteAnnotationParams struct {
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there. Without it, the change applies to the annotation as it is.
+	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
+}
+
+// SetAnnotationParams defines parameters for SetAnnotation.
+type SetAnnotationParams struct {
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there. Without it, the change applies to the annotation as it is.
+	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
 }
 
 // ListPermissionsParams defines parameters for ListPermissions.
@@ -875,10 +893,10 @@ type ServerInterface interface {
 	ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
 	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's.
 	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
-	DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name)
+	DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams)
 	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
-	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name)
+	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -2275,8 +2293,32 @@ func (siw *ServerInterfaceWrapper) DeleteAnnotation(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteAnnotationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteAnnotation(w, r, org, repo, sha, name)
+		siw.Handler.DeleteAnnotation(w, r, org, repo, sha, name, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2328,8 +2370,32 @@ func (siw *ServerInterfaceWrapper) SetAnnotation(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAnnotationParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetAnnotation(w, r, org, repo, sha, name)
+		siw.Handler.SetAnnotation(w, r, org, repo, sha, name, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -6458,10 +6524,11 @@ func (response ListAnnotationsdefaultApplicationProblemPlusJSONResponse) VisitLi
 }
 
 type DeleteAnnotationRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
-	SHA  SHA  `json:"sha"`
-	Name Name `json:"name"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Name   Name `json:"name"`
+	Params DeleteAnnotationParams
 }
 
 type DeleteAnnotationResponseObject interface {
@@ -6534,6 +6601,20 @@ func (response DeleteAnnotation404ApplicationProblemPlusJSONResponse) VisitDelet
 	return err
 }
 
+type DeleteAnnotation412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation412ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteAnnotationdefaultApplicationProblemPlusJSONResponse struct {
 	Body       Problem
 	StatusCode int
@@ -6552,26 +6633,35 @@ func (response DeleteAnnotationdefaultApplicationProblemPlusJSONResponse) VisitD
 }
 
 type SetAnnotationRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
-	SHA  SHA  `json:"sha"`
-	Name Name `json:"name"`
-	Body *SetAnnotationJSONRequestBody
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Name   Name `json:"name"`
+	Params SetAnnotationParams
+	Body   *SetAnnotationJSONRequestBody
 }
 
 type SetAnnotationResponseObject interface {
 	VisitSetAnnotationResponse(w http.ResponseWriter) error
 }
 
-type SetAnnotation200JSONResponse Annotation
+type SetAnnotation200ResponseHeaders struct {
+	ETag string
+}
+
+type SetAnnotation200JSONResponse struct {
+	Body    Annotation
+	Headers SetAnnotation200ResponseHeaders
+}
 
 func (response SetAnnotation200JSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
@@ -6645,6 +6735,20 @@ func (response SetAnnotation409ApplicationProblemPlusJSONResponse) VisitSetAnnot
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation412ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8776,13 +8880,14 @@ func (sh *strictHandler) ListAnnotations(w http.ResponseWriter, r *http.Request,
 }
 
 // DeleteAnnotation operation middleware
-func (sh *strictHandler) DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name) {
+func (sh *strictHandler) DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams) {
 	var request DeleteAnnotationRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.SHA = sha
 	request.Name = name
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.DeleteAnnotation(ctx, request.(DeleteAnnotationRequestObject))
@@ -8805,13 +8910,14 @@ func (sh *strictHandler) DeleteAnnotation(w http.ResponseWriter, r *http.Request
 }
 
 // SetAnnotation operation middleware
-func (sh *strictHandler) SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name) {
+func (sh *strictHandler) SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams) {
 	var request SetAnnotationRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.SHA = sha
 	request.Name = name
+	request.Params = params
 
 	var body SetAnnotationJSONRequestBody
 	if err := runtime.BindJSONBody(r, &body); err != nil {

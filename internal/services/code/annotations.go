@@ -63,6 +63,8 @@ type Annotation struct {
 	StartedAt time.Time
 	// CompletedAt is when it reached Failed or Successful; nil while it runs.
 	CompletedAt *time.Time
+	// Version counts its changes from 1: it is its ETag, which a change names to refuse one made meanwhile.
+	Version int64
 }
 
 // AnnotationInput is what a principal sets an annotation to.
@@ -71,6 +73,18 @@ type AnnotationInput struct {
 	Status  AnnotationStatus
 	Summary string
 	Link    string
+	// Version is the version of the annotation the change was made from, which refuses one made meanwhile, or one that
+	// isn't there, with ErrAnnotationChanged: 0 names none, and AnyVersion whichever is there.
+	Version int64
+}
+
+// AnyVersion is a version a change names to change whichever version of an annotation is there, but not set one that
+// isn't (If-Match: *).
+const AnyVersion int64 = -1
+
+// Stale reports whether a change that names version want is refused by an annotation at version got.
+func Stale(want, got int64) bool {
+	return want > 0 && want != got
 }
 
 // MaxAnnotationSummary is the longest summary an annotation takes, in characters.
@@ -82,6 +96,9 @@ const maxAnnotationLink = 2048
 // ErrAnnotationTaken is an annotation another principal set: only they change it, and only they or a principal
 // holding annotations.delete_any delete it. A *TakenError, which names them, matches it.
 var ErrAnnotationTaken = errors.New("another principal set this annotation")
+
+// ErrAnnotationChanged is a change that names a version of an annotation it no longer is, or of one that isn't there.
+var ErrAnnotationChanged = errors.New("the annotation changed since it was read")
 
 // TakenError refuses a change to an annotation that another principal set, naming them.
 type TakenError struct {
@@ -126,6 +143,9 @@ func ValidateAnnotation(in AnnotationInput) error {
 	if !utf8.ValidString(in.Summary) || utf8.RuneCountInString(in.Summary) > MaxAnnotationSummary {
 		return &orgs.ValidationError{Field: "summary", Code: "summary.invalid", Message: "at most 500 characters"}
 	}
+	if in.Version < AnyVersion {
+		return &orgs.ValidationError{Field: "version", Code: "version.invalid", Message: "a version of the annotation, from 1"}
+	}
 	if in.Link == "" {
 		return nil
 	}
@@ -156,8 +176,9 @@ func (s *Service) Annotations(ctx context.Context, v Viewer, repoID uuid.UUID, s
 }
 
 // SetAnnotation sets an annotation on one of the repository's commits for v, or changes the one v set there before,
-// and answers it as it now is; it takes annotations.write. An annotation another principal set is a *TakenError, and
-// a commit the repository doesn't hold is repos.ErrNotFound.
+// and answers it as it now is; it takes annotations.write. An annotation another principal set is a *TakenError, one
+// at another version than in names is ErrAnnotationChanged, and a commit the repository doesn't hold is
+// repos.ErrNotFound.
 func (s *Service) SetAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID, sha string, in AnnotationInput) (Annotation, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.SetAnnotation")
 	defer span.End()
@@ -184,8 +205,9 @@ func (s *Service) SetAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID,
 }
 
 // DeleteAnnotation deletes an annotation from one of the repository's commits, which frees its name there: v's own
-// with annotations.write, any principal's with annotations.delete_any. One that isn't there is repos.ErrNotFound.
-func (s *Service) DeleteAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID, sha, name string) error {
+// with annotations.write, any principal's with annotations.delete_any. A version other than 0 or AnyVersion refuses
+// it at any other with ErrAnnotationChanged; one that isn't there is repos.ErrNotFound.
+func (s *Service) DeleteAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID, sha, name string, version int64) error {
 	ctx, span := tracer.Start(ctx, "code.Service.DeleteAnnotation")
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.commit.sha", sha),
@@ -201,10 +223,10 @@ func (s *Service) DeleteAnnotation(ctx context.Context, v Viewer, repoID uuid.UU
 	if err := ValidateSHA("sha", sha); err != nil {
 		return err
 	}
-	if err := ValidateAnnotationName(name); err != nil {
+	if err := ValidateAnnotation(AnnotationInput{Name: name, Status: AnnotationPending, Version: version}); err != nil {
 		return err
 	}
-	err = s.store.DeleteAnnotation(ctx, v.ID, repoID, sha, name, anyone)
+	err = s.store.DeleteAnnotation(ctx, v.ID, repoID, sha, name, version, anyone)
 	if errors.Is(err, ErrAnnotationTaken) {
 		return fmt.Errorf("%w: %s on the repository, to delete another principal's annotation", auth.ErrForbidden, PermDeleteAnyAnnotation)
 	}

@@ -157,21 +157,20 @@ func (s *Store) SetAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UU
 	}
 	list := s.Notes[repoID][sha]
 	i := slices.IndexFunc(list, func(a code.Annotation) bool { return a.Name == in.Name })
-	if i < 0 {
-		a := code.Annotation{ID: uuid.New(), Name: in.Name, Status: in.Status, Summary: in.Summary, Link: in.Link,
-			Principal: &code.Principal{ID: actor, DisplayName: s.Names[actor]}, CreatedAt: s.Now, UpdatedAt: s.Now, StartedAt: s.Now}
-		if in.Status.Done() {
-			at := s.Now
-			a.CompletedAt = &at
-		}
-		list = append(list, a)
-		slices.SortFunc(list, func(a, b code.Annotation) int { return strings.Compare(a.Name, b.Name) })
-		s.Notes[repoID][sha] = list
-		return a, nil
+	switch {
+	case i < 0 && in.Version != 0:
+		return code.Annotation{}, code.ErrAnnotationChanged
+	case i < 0:
+		return s.insertAnnotation(actor, repoID, sha, in), nil
 	}
 	a := &list[i]
-	if a.Principal == nil || a.Principal.ID != actor {
+	switch {
+	case a.Principal == nil || a.Principal.ID != actor:
 		return code.Annotation{}, &code.TakenError{Name: in.Name, By: a.Principal}
+	case code.Stale(in.Version, a.Version):
+		return code.Annotation{}, code.ErrAnnotationChanged
+	case a.Status == in.Status && a.Summary == in.Summary && a.Link == in.Link:
+		return *a, nil
 	}
 	if a.Status.Done() && !in.Status.Done() {
 		a.StartedAt = s.Now
@@ -184,11 +183,26 @@ func (s *Store) SetAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UU
 		a.CompletedAt = &at
 	}
 	a.Status, a.Summary, a.Link, a.UpdatedAt = in.Status, in.Summary, in.Link, s.Now
+	a.Version++
 	return *a, nil
 }
 
+// insertAnnotation sets the annotation, at version 1, that the repository's commit doesn't hold yet.
+func (s *Store) insertAnnotation(actor uuid.UUID, repoID uuid.UUID, sha string, in code.AnnotationInput) code.Annotation {
+	a := code.Annotation{ID: uuid.New(), Name: in.Name, Status: in.Status, Summary: in.Summary, Link: in.Link,
+		Principal: &code.Principal{ID: actor, DisplayName: s.Names[actor]}, CreatedAt: s.Now, UpdatedAt: s.Now, StartedAt: s.Now, Version: 1}
+	if in.Status.Done() {
+		at := s.Now
+		a.CompletedAt = &at
+	}
+	list := append(s.Notes[repoID][sha], a)
+	slices.SortFunc(list, func(a, b code.Annotation) int { return strings.Compare(a.Name, b.Name) })
+	s.Notes[repoID][sha] = list
+	return a
+}
+
 // DeleteAnnotation deletes the annotation from the repository's commit, as code.Store does.
-func (s *Store) DeleteAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, anyone bool) error {
+func (s *Store) DeleteAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
@@ -199,6 +213,8 @@ func (s *Store) DeleteAnnotation(_ context.Context, actor uuid.UUID, repoID uuid
 	}
 	if a := list[i]; !anyone && (a.Principal == nil || a.Principal.ID != actor) {
 		return &code.TakenError{Name: name, By: a.Principal}
+	} else if code.Stale(version, a.Version) {
+		return code.ErrAnnotationChanged
 	}
 	s.Notes[repoID][sha] = slices.Delete(list, i, i+1)
 	return nil

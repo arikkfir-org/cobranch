@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/orgs"
 )
 
 // Code is what the API needs of the code's service.
@@ -14,7 +15,7 @@ type Code interface {
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
-	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string) error
+	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 }
 
 func commitPrincipal(p *code.Principal) *CommitPrincipal {
@@ -46,7 +47,8 @@ var annotationStatuses = map[code.AnnotationStatus]AnnotationStatus{
 
 func annotation(a code.Annotation) *Annotation {
 	out := &Annotation{ID: a.ID.String(), Name: a.Name, Status: annotationStatuses[a.Status], Summary: a.Summary, Link: a.Link,
-		Principal: commitPrincipal(a.Principal), CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC()}
+		Principal: commitPrincipal(a.Principal), CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC(),
+		Version: int(a.Version)}
 	if a.CompletedAt != nil {
 		at := a.CompletedAt.UTC()
 		out.CompletedAt = &at
@@ -63,6 +65,17 @@ func annotationInput(name string, in AnnotationInput) code.AnnotationInput {
 		}
 	}
 	return out
+}
+
+// expected is the version of an annotation that expectedVersion names, from 1: 0 without one.
+func expected(expectedVersion *int) (int64, error) {
+	if expectedVersion == nil {
+		return 0, nil
+	}
+	if *expectedVersion < 1 {
+		return 0, &orgs.ValidationError{Field: "expectedVersion", Code: "version.invalid", Message: "a version of the annotation, from 1"}
+	}
+	return int64(*expectedVersion), nil
 }
 
 // codeRepo is the viewer and the repository a mutation of its code names.

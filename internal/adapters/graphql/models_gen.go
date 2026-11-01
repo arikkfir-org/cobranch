@@ -27,6 +27,8 @@ type Annotation struct {
 	StartedAt time.Time `json:"startedAt"`
 	// When it reached FAILED or SUCCESSFUL; null while it runs.
 	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
 }
 
 // What a principal sets an annotation to.

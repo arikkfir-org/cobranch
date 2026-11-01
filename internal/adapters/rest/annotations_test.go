@@ -59,7 +59,22 @@ func TestSetAnnotationAPI(t *testing.T) {
 					t.Errorf("annotation = %s", body)
 				}
 			}},
-		{name: "its principal changes it", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`, wantStatus: 200},
+		{name: "its principal changes it", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`, wantStatus: 200,
+			wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if a := decode[Annotation](t, body); a.Version != 2 {
+					t.Errorf("annotation = %s, want version 2", body)
+				}
+			}},
+		{name: "its principal changes the version it read", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: http.Header{"If-Match": {`"1"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"2"`}}},
+		{name: "any version of the one there", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: http.Header{"If-Match": {"*"}}, wantStatus: 200},
+		{name: "a version since changed", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: http.Header{"If-Match": {`"2"`}}, wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "a weak tag matches nothing", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: http.Header{"If-Match": {`W/"1"`}}, wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "any version of one that isn't there", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+			header: http.Header{"If-Match": {"*"}}, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "another principal's is refused, naming them", viewer: then(oliviaAnnotated, maxDeveloping), method: http.MethodPut, path: fixed(buildPath),
 			body: `{"status":"successful"}`, wantStatus: 409, wantCode: "annotation.taken",
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
@@ -114,6 +129,10 @@ func TestDeleteAnnotationAPI(t *testing.T) {
 					t.Errorf("annotations left = %+v", left)
 				}
 			}},
+		{name: "at the version it read", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath),
+			header: http.Header{"If-Match": {`"1"`}}, wantStatus: 204},
+		{name: "a version since changed", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath),
+			header: http.Header{"If-Match": {`"7"`}}, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "a Developer may not delete another's", viewer: then(oliviaAnnotated, maxDeveloping), method: http.MethodDelete, path: fixed(buildPath),
 			wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a Maintainer deletes another's", viewer: then(oliviaAnnotated, func(f *orgFixture) *auth.Authenticated {

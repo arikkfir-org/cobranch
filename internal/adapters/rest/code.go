@@ -2,8 +2,10 @@ package rest
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -19,7 +21,7 @@ type Code interface {
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
-	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string) error
+	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 }
 
 func principal(p *code.Principal) *Principal {
@@ -41,7 +43,7 @@ func commit(c code.Commit) Commit {
 
 func annotation(a code.Annotation) Annotation {
 	out := Annotation{Id: a.ID, Name: a.Name, Status: AnnotationStatus(a.Status), Summary: a.Summary, Link: a.Link, Principal: principal(a.Principal),
-		CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC()}
+		CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC(), Version: a.Version}
 	if a.CompletedAt != nil {
 		at := a.CompletedAt.UTC()
 		out.CompletedAt = &at
@@ -169,7 +171,11 @@ func (a api) SetAnnotation(ctx context.Context, req SetAnnotationRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	in := code.AnnotationInput{Name: req.Name, Status: code.AnnotationStatus(req.Body.Status)}
+	match, err := ifMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	in := code.AnnotationInput{Name: req.Name, Status: code.AnnotationStatus(req.Body.Status), Version: match}
 	if req.Body.Summary != nil {
 		in.Summary = *req.Body.Summary
 	}
@@ -180,7 +186,7 @@ func (a api) SetAnnotation(ctx context.Context, req SetAnnotationRequestObject) 
 	if err != nil {
 		return nil, fail(err, "commit")
 	}
-	return SetAnnotation200JSONResponse(annotation(set)), nil
+	return SetAnnotation200JSONResponse{Body: annotation(set), Headers: SetAnnotation200ResponseHeaders{ETag: annotationTag(set)}}, nil
 }
 
 // DeleteAnnotation deletes an annotation from one of the repository's commits.
@@ -193,8 +199,34 @@ func (a api) DeleteAnnotation(ctx context.Context, req DeleteAnnotationRequestOb
 	if err != nil {
 		return nil, err
 	}
-	if err := a.code.DeleteAnnotation(ctx, v, repo.ID, req.SHA, req.Name); err != nil {
+	match, err := ifMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.code.DeleteAnnotation(ctx, v, repo.ID, req.SHA, req.Name, match); err != nil {
 		return nil, fail(err, "annotation")
 	}
 	return DeleteAnnotation204Response{}, nil
+}
+
+// annotationTag is a's ETag: its version, quoted.
+func annotationTag(a code.Annotation) string {
+	return `"` + strconv.FormatInt(a.Version, 10) + `"`
+}
+
+// ifMatch is the version of an annotation that If-Match names: 0 without the header, code.AnyVersion for *, and a
+// refusal with 412 for a tag that names no version, a weak one included, since If-Match compares strongly.
+func ifMatch(header *string) (int64, error) {
+	if header == nil || strings.TrimSpace(*header) == "" {
+		return 0, nil
+	}
+	tag := strings.TrimSpace(*header)
+	if tag == "*" {
+		return code.AnyVersion, nil
+	}
+	version, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), 10, 64)
+	if err != nil || version < 1 {
+		return 0, refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no version of the annotation.")
+	}
+	return version, nil
 }

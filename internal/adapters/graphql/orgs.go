@@ -96,6 +96,8 @@ func fail(ctx context.Context, err error, kind, what string) error {
 		return refuse(ctx, badUserInput, verr.Code, verr.Message)
 	case errors.As(err, &taken):
 		return refuse(ctx, conflict, "annotation.taken", taken.Error())
+	case errors.Is(err, code.ErrAnnotationChanged):
+		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(ctx, forbidden, "", "you lack the permission this takes")
 	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):

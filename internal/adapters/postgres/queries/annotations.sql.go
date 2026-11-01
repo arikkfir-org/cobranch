@@ -12,7 +12,7 @@ import (
 )
 
 const annotationForUpdate = `-- name: AnnotationForUpdate :one
-SELECT a.id, a.org_id, a.repo_id, a.sha, a.name, a.status, a.summary, a.link, a.created_by, a.created_at, a.updated_at, a.started_at, a.completed_at, p.display_name AS principal_display_name
+SELECT a.id, a.org_id, a.repo_id, a.sha, a.name, a.status, a.summary, a.link, a.created_by, a.created_at, a.updated_at, a.started_at, a.completed_at, a.version, p.display_name AS principal_display_name
 FROM annotations a LEFT JOIN principals p ON p.id = a.created_by
 WHERE a.repo_id = $1 AND a.sha = $2 AND a.name = $3
 FOR UPDATE OF a
@@ -42,13 +42,14 @@ func (q *Queries) AnnotationForUpdate(ctx context.Context, repoID uuid.UUID, sha
 		&i.Annotation.UpdatedAt,
 		&i.Annotation.StartedAt,
 		&i.Annotation.CompletedAt,
+		&i.Annotation.Version,
 		&i.PrincipalDisplayName,
 	)
 	return i, err
 }
 
 const annotationsOf = `-- name: AnnotationsOf :many
-SELECT a.id, a.org_id, a.repo_id, a.sha, a.name, a.status, a.summary, a.link, a.created_by, a.created_at, a.updated_at, a.started_at, a.completed_at, p.display_name AS principal_display_name
+SELECT a.id, a.org_id, a.repo_id, a.sha, a.name, a.status, a.summary, a.link, a.created_by, a.created_at, a.updated_at, a.started_at, a.completed_at, a.version, p.display_name AS principal_display_name
 FROM annotations a LEFT JOIN principals p ON p.id = a.created_by
 WHERE a.repo_id = $1 AND a.sha = ANY ($2::text[])
 ORDER BY a.sha, a.name
@@ -84,6 +85,7 @@ func (q *Queries) AnnotationsOf(ctx context.Context, repoID uuid.UUID, shas []st
 			&i.Annotation.UpdatedAt,
 			&i.Annotation.StartedAt,
 			&i.Annotation.CompletedAt,
+			&i.Annotation.Version,
 			&i.PrincipalDisplayName,
 		); err != nil {
 			return nil, err
@@ -121,8 +123,8 @@ const insertAnnotation = `-- name: InsertAnnotation :one
 INSERT INTO annotations (id, org_id, repo_id, sha, name, status, summary, link, created_by, completed_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9,
         CASE WHEN $6::text IN ('failed', 'successful') THEN now() END)
-ON CONFLICT (repo_id, sha, name) DO NOTHING
-RETURNING id, org_id, repo_id, sha, name, status, summary, link, created_by, created_at, updated_at, started_at, completed_at
+ON CONFLICT (repo_id, sha, name) DO UPDATE SET name = EXCLUDED.name WHERE false
+RETURNING id, org_id, repo_id, sha, name, status, summary, link, created_by, created_at, updated_at, started_at, completed_at, version
 `
 
 type InsertAnnotationParams struct {
@@ -138,7 +140,8 @@ type InsertAnnotationParams struct {
 }
 
 // InsertAnnotation sets an annotation that isn't there yet, its run starting now and completed now when its status
-// ends one: none when another transaction set it first.
+// ends one: none when one is there, which it locks until the transaction ends instead, without changing it. Waiting for
+// a transaction that sets or deletes the one there, it answers one of the two whatever that transaction did.
 func (q *Queries) InsertAnnotation(ctx context.Context, arg InsertAnnotationParams) (Annotation, error) {
 	row := q.db.QueryRow(ctx, insertAnnotation,
 		arg.ID,
@@ -166,6 +169,7 @@ func (q *Queries) InsertAnnotation(ctx context.Context, arg InsertAnnotationPara
 		&i.UpdatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.Version,
 	)
 	return i, err
 }
@@ -180,7 +184,7 @@ UPDATE annotations SET
         ELSE completed_at
     END
 WHERE id = $4
-RETURNING id, org_id, repo_id, sha, name, status, summary, link, created_by, created_at, updated_at, started_at, completed_at
+RETURNING id, org_id, repo_id, sha, name, status, summary, link, created_by, created_at, updated_at, started_at, completed_at, version
 `
 
 type UpdateAnnotationParams struct {
@@ -214,6 +218,7 @@ func (q *Queries) UpdateAnnotation(ctx context.Context, arg UpdateAnnotationPara
 		&i.UpdatedAt,
 		&i.StartedAt,
 		&i.CompletedAt,
+		&i.Version,
 	)
 	return i, err
 }
