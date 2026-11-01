@@ -19,6 +19,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for PushTransport.
+const (
+	Https PushTransport = "https"
+	Ssh   PushTransport = "ssh"
+)
+
+// Valid indicates whether the value is a known member of the PushTransport enum.
+func (e PushTransport) Valid() bool {
+	switch e {
+	case Https:
+		return true
+	case Ssh:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RepositoryObjectFormat.
 const (
 	Sha1   RepositoryObjectFormat = "sha1"
@@ -151,6 +169,43 @@ type ApiKeySecret struct {
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
 }
 
+// Branch One of a repository's live branches and the commit it is at.
+type Branch struct {
+	// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
+	Commit    *Commit   `json:"commit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Head The object it is at.
+	Head string `json:"head"`
+
+	// Name Its name, without refs/heads/.
+	Name string `json:"name"`
+
+	// UpdatedAt When a push last moved it.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
+type Commit struct {
+	// Author A commit's author or committer as the commit writes them.
+	Author Person `json:"author"`
+
+	// Committer A commit's author or committer as the commit writes them.
+	Committer Person `json:"committer"`
+	Message   string `json:"message"`
+
+	// Parents Its parents' names, the first of which its branch's history follows.
+	Parents []string `json:"parents"`
+
+	// Push The push that first brought a commit; getCommit alone answers it.
+	Push *Push  `json:"push,omitempty"`
+	Sha  string `json:"sha"`
+
+	// Signature Its signature as written, not checked yet; empty for an unsigned commit.
+	Signature string `json:"signature"`
+	Tree      string `json:"tree"`
+}
+
 // Email defines model for Email.
 type Email struct {
 	Email    string `json:"email"`
@@ -224,6 +279,19 @@ type OrganizationSettings struct {
 	Slug      *string   `json:"slug,omitempty"`
 }
 
+// Person A commit's author or committer as the commit writes them.
+type Person struct {
+	At    time.Time `json:"at"`
+	Email string    `json:"email"`
+	Name  string    `json:"name"`
+
+	// Principal Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+	Principal *Principal `json:"principal,omitempty"`
+
+	// Zone The zone the commit wrote its time in, such as +0200.
+	Zone string `json:"zone"`
+}
+
 // PersonalToken A personal token, as its user sees it; the token itself was shown once.
 type PersonalToken struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -262,6 +330,12 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
+// Principal Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+type Principal struct {
+	DisplayName string             `json:"displayName"`
+	Id          openapi_types.UUID `json:"id"`
+}
+
 // Problem Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
 type Problem struct {
 	// Code The stable error code, such as route.not_found.
@@ -282,6 +356,20 @@ type Problem struct {
 	// Type A URI that names the problem's type; "about:blank" when the status says it all.
 	Type string `json:"type"`
 }
+
+// Push The push that first brought a commit; getCommit alone answers it.
+type Push struct {
+	// At When Cobranch recorded it.
+	At time.Time          `json:"at"`
+	Id openapi_types.UUID `json:"id"`
+
+	// Pusher Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+	Pusher    *Principal    `json:"pusher,omitempty"`
+	Transport PushTransport `json:"transport"`
+}
+
+// PushTransport defines model for Push.Transport.
+type PushTransport string
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
@@ -478,6 +566,18 @@ type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
 }
 
+// ListCommitsParams defines parameters for ListCommits.
+type ListCommitsParams struct {
+	// Branch The branch whose history the page lists, without refs/heads/.
+	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
+
+	// Cursor Where the page starts, as the previous page's Link names it; the branch's head when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many commits the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // ListPermissionsParams defines parameters for ListPermissions.
 type ListPermissionsParams struct {
 	Scope ListPermissionsParamsScope `form:"scope" json:"scope"`
@@ -652,6 +752,15 @@ type ServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID, roleID RoleID)
+	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches)
+	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+	// (GET /orgs/{org}/repos/{repo}/commits)
+	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
+	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
+	GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha string)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -1752,6 +1861,162 @@ func (siw *ServerInterfaceWrapper) RevokeRepositoryRole(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListBranches operation middleware
+func (siw *ServerInterfaceWrapper) ListBranches(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListBranches(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCommits operation middleware
+func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCommitsParams
+
+	// ------------- Optional query parameter "branch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "branch", r.URL.Query(), &params.Branch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "branch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCommits(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCommit operation middleware
+func (siw *ServerInterfaceWrapper) GetCommit(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCommit(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryRoles operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryRoles(w http.ResponseWriter, r *http.Request) {
 
@@ -2155,6 +2420,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access", wrapper.ListRepositoryAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles", wrapper.GrantRepositoryRole)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 
 	return m
 }
@@ -5304,6 +5572,260 @@ func (response RevokeRepositoryRoledefaultApplicationProblemPlusJSONResponse) Vi
 	return err
 }
 
+type ListBranchesRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListBranchesResponseObject interface {
+	VisitListBranchesResponse(w http.ResponseWriter) error
+}
+
+type ListBranches200JSONResponse struct {
+	Branches []Branch `json:"branches"`
+}
+
+func (response ListBranches200JSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBranches401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListBranches401ApplicationProblemPlusJSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBranches404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListBranches404ApplicationProblemPlusJSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListBranchesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListBranchesdefaultApplicationProblemPlusJSONResponse) VisitListBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommitsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListCommitsParams
+}
+
+type ListCommitsResponseObject interface {
+	VisitListCommitsResponse(w http.ResponseWriter) error
+}
+
+type ListCommits200ResponseHeaders struct {
+	Link *string
+}
+
+type ListCommits200JSONResponse struct {
+	Body struct {
+		Commits []Commit `json:"commits"`
+	}
+	Headers ListCommits200ResponseHeaders
+}
+
+func (response ListCommits200JSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommits400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListCommits400ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommits401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListCommits401ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommits404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListCommits404ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommitsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListCommitsdefaultApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitRequestObject struct {
+	Org  Org    `json:"org"`
+	Repo Repo   `json:"repo"`
+	SHA  string `json:"sha"`
+}
+
+type GetCommitResponseObject interface {
+	VisitGetCommitResponse(w http.ResponseWriter) error
+}
+
+type GetCommit200JSONResponse Commit
+
+func (response GetCommit200JSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetCommit400ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit401ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommit404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommit404ApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCommitdefaultApplicationProblemPlusJSONResponse) VisitGetCommitResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryRolesRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -6046,6 +6568,15 @@ type StrictServerInterface interface {
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
 	// (DELETE /orgs/{org}/repos/{repo}/access/{principal}/roles/{role})
 	RevokeRepositoryRole(ctx context.Context, request RevokeRepositoryRoleRequestObject) (RevokeRepositoryRoleResponseObject, error)
+	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches)
+	ListBranches(ctx context.Context, request ListBranchesRequestObject) (ListBranchesResponseObject, error)
+	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+	// (GET /orgs/{org}/repos/{repo}/commits)
+	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
+	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha})
+	GetCommit(ctx context.Context, request GetCommitRequestObject) (GetCommitResponseObject, error)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
@@ -7187,6 +7718,89 @@ func (sh *strictHandler) RevokeRepositoryRole(w http.ResponseWriter, r *http.Req
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeRepositoryRoleResponseObject); ok {
 		if err := validResponse.VisitRevokeRepositoryRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListBranches operation middleware
+func (sh *strictHandler) ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListBranchesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListBranches(ctx, request.(ListBranchesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListBranches")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListBranchesResponseObject); ok {
+		if err := validResponse.VisitListBranchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListCommits operation middleware
+func (sh *strictHandler) ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams) {
+	var request ListCommitsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListCommits(ctx, request.(ListCommitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListCommits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListCommitsResponseObject); ok {
+		if err := validResponse.VisitListCommitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetCommit operation middleware
+func (sh *strictHandler) GetCommit(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha string) {
+	var request GetCommitRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCommit(ctx, request.(GetCommitRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCommit")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCommitResponseObject); ok {
+		if err := validResponse.VisitGetCommitResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

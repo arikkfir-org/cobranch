@@ -73,7 +73,7 @@ func TestMe(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			as(tt.viewer, NewHandler("v1", service, emptyOrgs(t), nil)).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
+			as(tt.viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil)).ServeHTTP(rec, httptest.NewRequest(tt.method, tt.path, nil))
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

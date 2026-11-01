@@ -51,6 +51,47 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
+// One of a repository's live branches and the commit it is at.
+type Branch struct {
+	// Its name, without refs/heads/.
+	Name string `json:"name"`
+	// The object it is at.
+	Head string `json:"head"`
+	// The commit it is at; null while its head is no commit a push recorded.
+	Commit    *Commit   `json:"commit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// When a push last moved it.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// A commit a push brought, as the push recorded it.
+type Commit struct {
+	Sha  string `json:"sha"`
+	Tree string `json:"tree"`
+	// Its parents' names, the first of which its branch's history follows.
+	Parents   []string `json:"parents"`
+	Message   string   `json:"message"`
+	Author    *Person  `json:"author"`
+	Committer *Person  `json:"committer"`
+	// Its signature as written, not checked yet; empty for an unsigned commit.
+	Signature string `json:"signature"`
+	// The push that first brought it; Repository.commit alone answers it, and null elsewhere.
+	Push *Push `json:"push,omitempty"`
+}
+
+// A page of a branch's history, nearest first.
+type CommitPage struct {
+	Commits []*Commit `json:"commits"`
+	// Where the next page starts, as history's after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// Who is behind a commit's author or committer, or a push: a user, perhaps one with no login whom a push made for an unknown email.
+type CommitPrincipal struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
@@ -133,6 +174,17 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 }
 
+// A commit's author or committer as the commit writes them.
+type Person struct {
+	Name  string    `json:"name"`
+	Email string    `json:"email"`
+	At    time.Time `json:"at"`
+	// The zone the commit wrote its time in, such as +0200.
+	Zone string `json:"zone"`
+	// Who is behind them; null until the push worker maps their email.
+	Principal *CommitPrincipal `json:"principal,omitempty"`
+}
+
 // A personal token, as its user sees it; the token itself was shown once.
 type PersonalToken struct {
 	ID   string `json:"id"`
@@ -164,6 +216,17 @@ type PersonalTokenInput struct {
 	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
 }
 
+// The push that first brought a commit.
+type Push struct {
+	ID string `json:"id"`
+	// Who pushed; null once they are gone.
+	Pusher *CommitPrincipal `json:"pusher,omitempty"`
+	// https or ssh.
+	Transport string `json:"transport"`
+	// When Cobranch recorded it.
+	At time.Time `json:"at"`
+}
+
 type Query struct {
 }
 
@@ -187,6 +250,12 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
+	// The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+	Branches []*Branch `json:"branches"`
+	// A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100.
+	History *CommitPage `json:"history"`
+	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
+	Commit *Commit `json:"commit,omitempty"`
 }
 
 // A principal's grants on a repository.

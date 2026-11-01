@@ -1144,6 +1144,113 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches:
+    get:
+      operationId: listBranches
+      summary: The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branches]
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Branch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits:
+    get:
+      operationId: listCommits
+      summary: A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: branch
+          in: query
+          description: The branch whose history the page lists, without refs/heads/.
+          schema:
+            type: string
+            default: main
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the branch's head when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many commits the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's commits, nearest first, without their pushes.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [commits]
+                properties:
+                  commits:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Commit"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}:
+    get:
+      operationId: getCommit
+      summary: One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: sha
+          in: path
+          required: true
+          description: The commit's full name, in lowercase hexadecimal.
+          x-go-name: SHA
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The commit, with its push.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Commit"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     org:
@@ -1431,6 +1538,95 @@ components:
           description: The roles it holds on the repository, each with the permissions it gives there.
           items:
             $ref: "#/components/schemas/Role"
+    Branch:
+      type: object
+      description: One of a repository's live branches and the commit it is at.
+      required: [name, head, createdAt, updatedAt]
+      properties:
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        head:
+          type: string
+          description: The object it is at.
+        commit:
+          $ref: "#/components/schemas/Commit"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+          description: When a push last moved it.
+    Commit:
+      type: object
+      description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
+      required: [sha, tree, parents, message, author, committer, signature]
+      properties:
+        sha:
+          type: string
+        tree:
+          type: string
+        parents:
+          type: array
+          description: Its parents' names, the first of which its branch's history follows.
+          items:
+            type: string
+        message:
+          type: string
+        author:
+          $ref: "#/components/schemas/Person"
+        committer:
+          $ref: "#/components/schemas/Person"
+        signature:
+          type: string
+          description: Its signature as written, not checked yet; empty for an unsigned commit.
+        push:
+          $ref: "#/components/schemas/Push"
+    Person:
+      type: object
+      description: A commit's author or committer as the commit writes them.
+      required: [name, email, at, zone]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        at:
+          type: string
+          format: date-time
+        zone:
+          type: string
+          description: The zone the commit wrote its time in, such as +0200.
+        principal:
+          $ref: "#/components/schemas/Principal"
+    Principal:
+      type: object
+      description: Who is behind a commit's author or committer, or a push; absent from a person until the push worker maps their email, and from a push once its pusher is gone.
+      required: [id, displayName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+    Push:
+      type: object
+      description: The push that first brought a commit; getCommit alone answers it.
+      required: [id, transport, at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        pusher:
+          $ref: "#/components/schemas/Principal"
+        transport:
+          type: string
+          enum: [https, ssh]
+        at:
+          type: string
+          format: date-time
+          description: When Cobranch recorded it.
     RoleInput:
       type: object
       description: A custom role's definition.

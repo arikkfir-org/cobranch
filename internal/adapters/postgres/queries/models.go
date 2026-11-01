@@ -10,6 +10,27 @@ import (
 	"github.com/google/uuid"
 )
 
+type Commit struct {
+	RepoID         uuid.UUID
+	Sha            string
+	OrgID          uuid.UUID
+	Tree           string
+	Parents        []string
+	Message        string
+	AuthorID       *uuid.UUID
+	AuthorName     string
+	AuthorEmail    string
+	AuthoredAt     time.Time
+	AuthorZone     string
+	CommitterID    *uuid.UUID
+	CommitterName  string
+	CommitterEmail string
+	CommittedAt    time.Time
+	CommitterZone  string
+	Signature      string
+	FirstPush      uuid.UUID
+}
+
 type Credential struct {
 	ID          uuid.UUID
 	Kind        string

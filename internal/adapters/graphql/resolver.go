@@ -28,4 +28,6 @@ type Resolver struct {
 	Orgs Organizations
 	// Repos is the repositories' service.
 	Repos Repositories
+	// Code is the service of the repositories' code.
+	Code Code
 }

@@ -73,7 +73,7 @@ func runTokenCases(t *testing.T, tests []tokenCase) {
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(tt.method, tt.path(token.ID), strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
-			as(viewer, NewHandler("v1", service, emptyOrgs(t), nil)).ServeHTTP(rec, req)
+			as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil)).ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

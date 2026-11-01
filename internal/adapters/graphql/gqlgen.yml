@@ -40,3 +40,6 @@ models:
       viewerPermissions: { resolver: true }
       access: { resolver: true }
       roles: { resolver: true }
+      branches: { resolver: true }
+      history: { resolver: true }
+      commit: { resolver: true }
