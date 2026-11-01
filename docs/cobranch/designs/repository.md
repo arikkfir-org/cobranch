@@ -1,7 +1,7 @@
 # The Cobranch repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
@@ -57,8 +57,9 @@ lints the chart and validates what it renders, both with a host per workload and
 the cluster there and loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the
 migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, and the
 Console and the Back-office serve their pages and the APIs' URLs. `upgrade` rolls every pod, and fails if the generated
-database password changed or its migrate Job applied anything; `retest` tests again. Both tasks clone the commit with
-one StepAction.
+database password changed or its migrate Job applied anything; `retest` tests again. `maintenance` runs the maintenance
+CronJob once, which must compact the two packs the tests pushed, and `test-compacted` tests on the compacted pack. Both
+tasks clone the commit with one StepAction.
 
 **Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
 
