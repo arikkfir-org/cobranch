@@ -14,6 +14,9 @@ import (
 	"github.com/google/uuid"
 )
 
+// DefaultBranch is every repository's default branch, which its HEAD names; nobody changes it.
+const DefaultBranch = "main"
+
 // ZeroSHA is the object name Git gives a ref that a push creates (its old value) or deletes (its new one).
 const ZeroSHA = "0000000000000000000000000000000000000000"
 

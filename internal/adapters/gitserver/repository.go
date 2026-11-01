@@ -15,7 +15,7 @@ import (
 )
 
 // workspace builds a throwaway bare repository of repo from snapshot: its refs in packed-refs, its packs hard-linked
-// from the cache, and HEAD at its default branch. It returns the repository's directory and what removes it, which
+// from the cache, and HEAD at main. It returns the repository's directory and what removes it, which
 // the request calls when it ends.
 func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot git.Snapshot) (string, func(), error) {
 	dir, err := os.MkdirTemp(filepath.Join(s.cfg.DataDir, workDir), "repo-")
@@ -23,7 +23,7 @@ func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot 
 		return "", nil, fmt.Errorf("making a throwaway repository: %w", err)
 	}
 	remove := func() { _ = os.RemoveAll(dir) } // the pod's end empties the directory anyway
-	if err := s.layout(dir, repo, snapshot); err != nil {
+	if err := s.layout(dir, snapshot); err != nil {
 		remove()
 		return "", nil, err
 	}
@@ -37,7 +37,7 @@ func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot 
 }
 
 // layout writes a bare repository's files into dir: its configuration, HEAD and packed-refs.
-func (s *Server) layout(dir string, repo repos.Repository, snapshot git.Snapshot) error {
+func (s *Server) layout(dir string, snapshot git.Snapshot) error {
 	for _, sub := range []string{"objects/pack", "objects/info", "refs/heads", "refs/tags"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o700); err != nil {
 			return fmt.Errorf("laying the repository out: %w", err)
@@ -52,7 +52,7 @@ func (s *Server) layout(dir string, repo repos.Repository, snapshot git.Snapshot
 		packed.WriteString(r.SHA + " " + r.Name + "\n")
 	}
 	files := map[string]string{
-		"HEAD":        "ref: refs/heads/" + repo.DefaultBranch + "\n",
+		"HEAD":        "ref: refs/heads/" + git.DefaultBranch + "\n",
 		"config":      s.repoConfig(),
 		"packed-refs": packed.String(),
 	}
