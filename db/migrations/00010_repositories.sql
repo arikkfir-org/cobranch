@@ -4,15 +4,14 @@
 -- refs, packs and pushes come with the Git server. Every row a repository owns carries its org_id.
 -- +goose Up
 
--- A repository: a slug for its URLs, unique in its organization, a name, a description, the branch it opens on, and
--- the object format of its history, so SHA-256 repositories need no migration of the data.
+-- A repository: a slug for its URLs, unique in its organization, a name, a description, and the object format of its
+-- history, so SHA-256 repositories need no migration of the data. Every repository opens on main.
 CREATE TABLE repositories (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
     slug text NOT NULL,
     name text NOT NULL,
     description text NOT NULL DEFAULT '',
-    default_branch text NOT NULL DEFAULT 'main',
     object_format text NOT NULL DEFAULT 'sha1' CHECK (object_format IN ('sha1', 'sha256')),
     created_by uuid REFERENCES principals (id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),

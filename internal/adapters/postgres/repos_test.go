@@ -24,7 +24,7 @@ func newRepoFixture(t *testing.T) *repoFixture {
 	f := &repoFixture{orgFixture: newOrgFixture(t)}
 	f.r = NewRepoStore(f.pool)
 	for _, r := range []*repos.Repository{&f.website, &f.secret} {
-		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", DefaultBranch: "main", ObjectFormat: "sha1", CreatedBy: f.olivia, CreatedAt: now}
+		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", ObjectFormat: "sha1", CreatedBy: f.olivia, CreatedAt: now}
 	}
 	f.website.Slug, f.secret.Slug = "website", "secret"
 	for _, r := range []repos.Repository{f.website, f.secret} {
@@ -68,12 +68,12 @@ func TestRepoStoreUpdate(t *testing.T) {
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	renamed := f.website
-	renamed.Slug, renamed.Name, renamed.DefaultBranch = "www", "WWW", "trunk"
+	renamed.Slug, renamed.Name, renamed.Description = "www", "WWW", "The site"
 	if err := f.r.Update(ctx, f.olivia, renamed); err != nil {
 		t.Fatal(err)
 	}
 	for _, slug := range []string{"www", "website"} {
-		if got, err := f.r.BySlug(ctx, f.acme.ID, slug); err != nil || got.ID != f.website.ID || got.Slug != "www" || got.DefaultBranch != "trunk" {
+		if got, err := f.r.BySlug(ctx, f.acme.ID, slug); err != nil || got.ID != f.website.ID || got.Slug != "www" || got.Description != "The site" {
 			t.Errorf("BySlug(%s) = %+v, %v", slug, got, err)
 		}
 	}

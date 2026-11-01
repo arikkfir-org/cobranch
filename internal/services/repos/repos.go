@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/google/uuid"
 
@@ -34,31 +33,26 @@ const (
 // migration of the data.
 const ObjectFormatSHA1 = "sha1"
 
-// DefaultBranch is the branch a repository opens on unless its creator names another.
-const DefaultBranch = "main"
-
-// Repository is one of an organization's Git repositories: a slug for its URLs, unique in the organization, a name,
-// a description and the branch it opens on.
+// Repository is one of an organization's Git repositories: a slug for its URLs, unique in the organization, a name
+// and a description. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
-	ID            uuid.UUID
-	OrgID         uuid.UUID
-	Slug          string
-	Name          string
-	Description   string
-	DefaultBranch string
-	ObjectFormat  string
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	Slug         string
+	Name         string
+	Description  string
+	ObjectFormat string
 	// CreatedBy is who created it; uuid.Nil once they are gone.
 	CreatedBy  uuid.UUID
 	CreatedAt  time.Time
 	Visibility Visibility
 }
 
-// Input is what makes or changes a repository. An empty Name is the slug; an empty DefaultBranch is DefaultBranch.
+// Input is what makes or changes a repository. An empty Name is the slug.
 type Input struct {
-	Slug          string
-	Name          string
-	Description   string
-	DefaultBranch string
+	Slug        string
+	Name        string
+	Description string
 }
 
 // Principal is who may hold grants on an organization's repositories: one of its members, or one of its API keys.
@@ -104,49 +98,18 @@ func ValidateSlug(slug string) error {
 	return nil
 }
 
-// ValidateBranch reports whether branch may name a branch, as git check-ref-format says of refs/heads/<branch>.
-func ValidateBranch(branch string) error {
-	if !validBranch(branch) {
-		return &orgs.ValidationError{Field: "defaultBranch", Code: "branch.invalid", Message: "not a branch name Git accepts"}
-	}
-	return nil
-}
-
-// validBranch applies git check-ref-format's rules to a branch's name, at most 255 bytes long.
-func validBranch(b string) bool {
-	if b == "" || len(b) > 255 || b == "@" || strings.HasPrefix(b, "-") || strings.HasSuffix(b, ".") ||
-		strings.HasPrefix(b, "/") || strings.HasSuffix(b, "/") ||
-		strings.Contains(b, "..") || strings.Contains(b, "//") || strings.Contains(b, "@{") {
-		return false
-	}
-	for _, r := range b {
-		if r < 0x20 || r == 0x7f || unicode.IsSpace(r) || strings.ContainsRune(`~^:?*[\`, r) {
-			return false
-		}
-	}
-	for part := range strings.SplitSeq(b, "/") {
-		if strings.HasPrefix(part, ".") || strings.HasSuffix(part, ".lock") {
-			return false
-		}
-	}
-	return true
-}
-
-// Validate normalizes in, or refuses it: its slug, a name of 1 to 100 characters (the slug when empty), a
-// description of at most 500 and a valid default branch (DefaultBranch when empty).
+// Validate normalizes in, or refuses it: its slug, a name of 1 to 100 characters (the slug when empty) and a
+// description of at most 500.
 func Validate(in Input) (Input, error) {
-	in.Name, in.Description, in.DefaultBranch = strings.TrimSpace(in.Name), strings.TrimSpace(in.Description), strings.TrimSpace(in.DefaultBranch)
+	in.Name, in.Description = strings.TrimSpace(in.Name), strings.TrimSpace(in.Description)
 	if in.Name == "" {
 		in.Name = in.Slug
-	}
-	if in.DefaultBranch == "" {
-		in.DefaultBranch = DefaultBranch
 	}
 	var description error
 	if len(in.Description) > 500 {
 		description = &orgs.ValidationError{Field: "description", Code: "description.invalid", Message: "a description is at most 500 characters"}
 	}
-	if err := errors.Join(ValidateSlug(in.Slug), orgs.ValidateName(in.Name), description, ValidateBranch(in.DefaultBranch)); err != nil {
+	if err := errors.Join(ValidateSlug(in.Slug), orgs.ValidateName(in.Name), description); err != nil {
 		return in, err
 	}
 	return in, nil

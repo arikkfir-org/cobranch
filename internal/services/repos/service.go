@@ -129,8 +129,8 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	if err != nil {
 		return Repository{}, fmt.Errorf("making an ID: %w", err)
 	}
-	repo := Repository{ID: id, OrgID: orgID, Slug: in.Slug, Name: in.Name, Description: in.Description, DefaultBranch: in.DefaultBranch,
-		ObjectFormat: ObjectFormatSHA1, CreatedBy: v.ID, CreatedAt: s.now()}
+	repo := Repository{ID: id, OrgID: orgID, Slug: in.Slug, Name: in.Name, Description: in.Description, ObjectFormat: ObjectFormatSHA1,
+		CreatedBy: v.ID, CreatedAt: s.now()}
 	if err := s.store.Create(ctx, v.ID, repo); err != nil {
 		return Repository{}, wrap("creating the repository", err)
 	}
@@ -183,7 +183,7 @@ func (s *Service) ByID(ctx context.Context, v Viewer, repoID uuid.UUID) (Reposit
 	return s.require(ctx, v, repoID, PermRead)
 }
 
-// Update changes the repository's slug, name, description or default branch; it takes repo.manage. A new slug keeps
+// Update changes the repository's slug, name or description; it takes repo.manage. A new slug keeps
 // the old one as a redirect.
 func (s *Service) Update(ctx context.Context, v Viewer, repoID uuid.UUID, in Input) (Repository, error) {
 	repo, _, err := s.require(ctx, v, repoID, PermManage)
@@ -194,7 +194,7 @@ func (s *Service) Update(ctx context.Context, v Viewer, repoID uuid.UUID, in Inp
 	if err != nil {
 		return Repository{}, err
 	}
-	repo.Slug, repo.Name, repo.Description, repo.DefaultBranch = in.Slug, in.Name, in.Description, in.DefaultBranch
+	repo.Slug, repo.Name, repo.Description = in.Slug, in.Name, in.Description
 	if err := s.store.Update(ctx, v.ID, repo); err != nil {
 		return Repository{}, wrap("updating the repository", err)
 	}

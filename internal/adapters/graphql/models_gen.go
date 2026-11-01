@@ -136,7 +136,7 @@ type OrganizationSettings struct {
 type Query struct {
 }
 
-// One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name, a description and the branch it opens on.
+// One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
 	ID             string `json:"id"`
 	OrganizationID string `json:"organizationId"`
@@ -144,8 +144,6 @@ type Repository struct {
 	Slug        string `json:"slug"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	// The branch the repository opens on.
-	DefaultBranch string `json:"defaultBranch"`
 	// The hash its history's objects are named by: sha1, or sha256 later.
 	ObjectFormat string               `json:"objectFormat"`
 	Visibility   RepositoryVisibility `json:"visibility"`
@@ -177,8 +175,6 @@ type RepositoryInput struct {
 	// The slug when null or empty.
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
-	// main when null or empty.
-	DefaultBranch *string `json:"defaultBranch,omitempty"`
 }
 
 // A role granted at an organization: built in, or the organization's own.

@@ -26,7 +26,7 @@ type Repositories interface {
 // repository is r as the API shows it; its lazy fields resolve on their own.
 func repository(r repos.Repository) *Repository {
 	out := &Repository{ID: r.ID.String(), OrganizationID: r.OrgID.String(), Slug: r.Slug, Name: r.Name, Description: r.Description,
-		DefaultBranch: r.DefaultBranch, ObjectFormat: r.ObjectFormat, Visibility: RepositoryVisibility(strings.ToUpper(string(r.Visibility))),
+		ObjectFormat: r.ObjectFormat, Visibility: RepositoryVisibility(strings.ToUpper(string(r.Visibility))),
 		CreatedAt: r.CreatedAt}
 	if r.CreatedBy != uuid.Nil {
 		id := r.CreatedBy.String()
@@ -43,7 +43,7 @@ func repositoryAccess(a repos.Access) *RepositoryAccess {
 // repositoryInput is input as the domain takes it.
 func repositoryInput(input RepositoryInput) repos.Input {
 	in := repos.Input{Slug: input.Slug}
-	for field, value := range map[*string]*string{&in.Name: input.Name, &in.Description: input.Description, &in.DefaultBranch: input.DefaultBranch} {
+	for field, value := range map[*string]*string{&in.Name: input.Name, &in.Description: input.Description} {
 		if value != nil {
 			*field = *value
 		}

@@ -942,7 +942,7 @@ paths:
           $ref: "#/components/responses/Problem"
     patch:
       operationId: updateRepository
-      summary: Changes a repository's slug, name, description or default branch; takes repo.manage. A new slug keeps the old one as a redirect.
+      summary: Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -1289,8 +1289,8 @@ components:
           description: The organization a custom role belongs to; absent on a built-in role.
     Repository:
       type: object
-      description: One of an organization's Git repositories, with what the viewer may do there.
-      required: [id, orgId, slug, name, description, defaultBranch, objectFormat, visibility, createdAt, viewerPermissions]
+      description: One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
+      required: [id, orgId, slug, name, description, objectFormat, visibility, createdAt, viewerPermissions]
       properties:
         id:
           type: string
@@ -1305,9 +1305,6 @@ components:
           type: string
         description:
           type: string
-        defaultBranch:
-          type: string
-          description: The branch the repository opens on.
         objectFormat:
           type: string
           enum: [sha1, sha256]
@@ -1341,9 +1338,6 @@ components:
           description: The slug when left out.
         description:
           type: string
-        defaultBranch:
-          type: string
-          description: main when left out.
     RepositorySettings:
       type: object
       description: What a maintainer changes; a field left out keeps its value.
@@ -1353,8 +1347,6 @@ components:
         name:
           type: string
         description:
-          type: string
-        defaultBranch:
           type: string
     RepositoryAccess:
       type: object

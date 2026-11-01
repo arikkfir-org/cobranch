@@ -109,15 +109,14 @@ type Principal struct {
 }
 
 type Repository struct {
-	ID            uuid.UUID
-	OrgID         uuid.UUID
-	Slug          string
-	Name          string
-	Description   string
-	DefaultBranch string
-	ObjectFormat  string
-	CreatedBy     *uuid.UUID
-	CreatedAt     time.Time
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	Slug         string
+	Name         string
+	Description  string
+	ObjectFormat string
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
 }
 
 type Role struct {

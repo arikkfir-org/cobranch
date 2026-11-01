@@ -9,8 +9,8 @@ import (
 func TestRepositoryQueries(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "an Owner's repositories, with their lazy fields", viewer: olivia,
-			document: fixed(`{ organization(slug: "acme") { repositories { slug name visibility defaultBranch objectFormat viewerPermissions access { displayName kind roles { name } } roles { name } } } }`),
-			want: []string{`"slug":"website"`, `"visibility":"PRIVATE"`, `"defaultBranch":"main"`, `"objectFormat":"sha1"`, `"repo.manage"`,
+			document: fixed(`{ organization(slug: "acme") { repositories { slug name visibility objectFormat viewerPermissions access { displayName kind roles { name } } roles { name } } } }`),
+			want: []string{`"slug":"website"`, `"visibility":"PRIVATE"`, `"objectFormat":"sha1"`, `"repo.manage"`,
 				`"access":[{"displayName":"Olivia","kind":"user","roles":[{"name":"Maintainer"}]}]`, `{"name":"Reader"},{"name":"Developer"}`}},
 		{name: "a Member reads none", viewer: maxim, document: fixed(`{ organization(slug: "acme") { repositories { slug } } }`),
 			want: []string{`"repositories":[]`}},
@@ -40,9 +40,9 @@ func TestRepositoryMutations(t *testing.T) {
 			wantCode: notFound, wantReason: "organization.not_found"},
 		{name: "a Maintainer renames it", viewer: olivia,
 			document: func(f *orgFixture) string {
-				return `mutation { updateRepository(id: "` + f.website.ID.String() + `", input: {slug: "www", name: "WWW", defaultBranch: "trunk"}) { slug name defaultBranch } }`
+				return `mutation { updateRepository(id: "` + f.website.ID.String() + `", input: {slug: "www", name: "WWW", description: "The site"}) { slug name description } }`
 			},
-			want: []string{`"slug":"www","name":"WWW","defaultBranch":"trunk"`}},
+			want: []string{`"slug":"www","name":"WWW","description":"The site"`}},
 		{name: "a Member may not see it to rename it", viewer: maxim,
 			document: func(f *orgFixture) string {
 				return `mutation { updateRepository(id: "` + f.website.ID.String() + `", input: {slug: "www"}) { slug } }`

@@ -61,7 +61,7 @@ func newFixture(t *testing.T) *fixture {
 	o.Keys[f.deploy.ID] = f.deploy
 	o.Grant(f.deploy.ID, auth.RoleGuest, auth.ScopeOrganization, f.acme.ID)
 	for _, r := range []*repos.Repository{&f.website, &f.secret} {
-		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", DefaultBranch: "main", ObjectFormat: repos.ObjectFormatSHA1, CreatedBy: f.olivia.ID, CreatedAt: now}
+		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", ObjectFormat: repos.ObjectFormatSHA1, CreatedBy: f.olivia.ID, CreatedAt: now}
 	}
 	f.website.Slug, f.secret.Slug = "website", "secret"
 	for _, r := range []repos.Repository{f.website, f.secret} {
@@ -121,7 +121,7 @@ func TestCreate(t *testing.T) {
 			if err != nil {
 				return got(err)
 			}
-			if repo.Name != "tools" || repo.Description != "Scripts" || repo.DefaultBranch != "main" || repo.ObjectFormat != "sha1" ||
+			if repo.Name != "tools" || repo.Description != "Scripts" || repo.ObjectFormat != "sha1" ||
 				repo.CreatedBy != f.max.ID || repo.Visibility != repos.VisibilityInternal || !repo.CreatedAt.Equal(now) {
 				return fmt.Errorf("created %+v", repo)
 			}
@@ -136,13 +136,6 @@ func TestCreate(t *testing.T) {
 			repo, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools"})
 			if err == nil && repo.Visibility != repos.VisibilityPrivate {
 				return fmt.Errorf("visibility %s", repo.Visibility)
-			}
-			return got(err)
-		}, wantEvents: []string{"repo.created"}},
-		{name: "another default branch", run: func(ctx context.Context, f *fixture) error {
-			repo, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools", Name: "Tools", DefaultBranch: "trunk"})
-			if err == nil && repo.DefaultBranch != "trunk" {
-				return fmt.Errorf("default branch %q", repo.DefaultBranch)
 			}
 			return got(err)
 		}, wantEvents: []string{"repo.created"}},
@@ -166,10 +159,6 @@ func TestCreate(t *testing.T) {
 			_, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools.git"})
 			return got(err)
 		}, wantCode: "slug.invalid"},
-		{name: "a branch Git refuses", run: func(ctx context.Context, f *fixture) error {
-			_, err := f.service.Create(ctx, f.max, f.acme.ID, repos.Input{Slug: "tools", DefaultBranch: "a..b"})
-			return got(err)
-		}, wantCode: "branch.invalid"},
 	})
 }
 
@@ -184,22 +173,6 @@ func TestValidateSlug(t *testing.T) {
 	} {
 		if err := repos.ValidateSlug(tt.slug); (err == nil) != tt.ok {
 			t.Errorf("ValidateSlug(%q) = %v, want ok %v", tt.slug, err, tt.ok)
-		}
-	}
-}
-
-func TestValidateBranch(t *testing.T) {
-	for _, tt := range []struct {
-		branch string
-		ok     bool
-	}{
-		{"main", true}, {"release/1.0", true}, {"feature/x-y_z", true}, {"v1.0", true},
-		{"", false}, {"@", false}, {"-x", false}, {"x.", false}, {"/x", false}, {"x/", false}, {"a..b", false},
-		{"a//b", false}, {"a@{b", false}, {"a b", false}, {"a~b", false}, {"a^b", false}, {"a:b", false}, {"a?b", false},
-		{"a*b", false}, {"a[b", false}, {`a\b`, false}, {"a/.b", false}, {"a.lock", false}, {"a.lock/b", false}, {"a\x01b", false},
-	} {
-		if err := repos.ValidateBranch(tt.branch); (err == nil) != tt.ok {
-			t.Errorf("ValidateBranch(%q) = %v, want ok %v", tt.branch, err, tt.ok)
 		}
 	}
 }
@@ -298,12 +271,12 @@ func TestGet(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "a Maintainer renames it, keeping the old slug", run: func(ctx context.Context, f *fixture) error {
-			repo, err := f.service.Update(ctx, f.olivia, f.website.ID, repos.Input{Slug: "www", Name: "WWW", Description: "The site", DefaultBranch: "trunk"})
+			repo, err := f.service.Update(ctx, f.olivia, f.website.ID, repos.Input{Slug: "www", Name: "WWW", Description: "The site"})
 			if err != nil {
 				return got(err)
 			}
 			for _, slug := range []string{"www", "website", "site"} {
-				if r, _, err := f.service.Get(ctx, f.olivia, f.acme.ID, slug); err != nil || r.ID != repo.ID || r.Slug != "www" || r.DefaultBranch != "trunk" {
+				if r, _, err := f.service.Get(ctx, f.olivia, f.acme.ID, slug); err != nil || r.ID != repo.ID || r.Slug != "www" || r.Description != "The site" {
 					return fmt.Errorf("%s found %+v (%w)", slug, r, err)
 				}
 			}

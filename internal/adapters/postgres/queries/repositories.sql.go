@@ -74,20 +74,19 @@ func (q *Queries) Grantee(ctx context.Context, principalID uuid.UUID, orgID uuid
 }
 
 const insertRepository = `-- name: InsertRepository :exec
-INSERT INTO repositories (id, org_id, slug, name, description, default_branch, object_format, created_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO repositories (id, org_id, slug, name, description, object_format, created_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertRepositoryParams struct {
-	ID            uuid.UUID
-	OrgID         uuid.UUID
-	Slug          string
-	Name          string
-	Description   string
-	DefaultBranch string
-	ObjectFormat  string
-	CreatedBy     *uuid.UUID
-	CreatedAt     time.Time
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	Slug         string
+	Name         string
+	Description  string
+	ObjectFormat string
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
 }
 
 func (q *Queries) InsertRepository(ctx context.Context, arg InsertRepositoryParams) error {
@@ -97,7 +96,6 @@ func (q *Queries) InsertRepository(ctx context.Context, arg InsertRepositoryPara
 		arg.Slug,
 		arg.Name,
 		arg.Description,
-		arg.DefaultBranch,
 		arg.ObjectFormat,
 		arg.CreatedBy,
 		arg.CreatedAt,
@@ -106,7 +104,7 @@ func (q *Queries) InsertRepository(ctx context.Context, arg InsertRepositoryPara
 }
 
 const repositoriesAmong = `-- name: RepositoriesAmong :many
-SELECT id, org_id, slug, name, description, default_branch, object_format, created_by, created_at FROM repositories WHERE org_id = $1 AND id = ANY ($2::uuid[]) ORDER BY slug
+SELECT id, org_id, slug, name, description, object_format, created_by, created_at FROM repositories WHERE org_id = $1 AND id = ANY ($2::uuid[]) ORDER BY slug
 `
 
 // RepositoriesAmong lists those of ids that are the organization's repositories, by slug.
@@ -125,7 +123,6 @@ func (q *Queries) RepositoriesAmong(ctx context.Context, orgID uuid.UUID, ids []
 			&i.Slug,
 			&i.Name,
 			&i.Description,
-			&i.DefaultBranch,
 			&i.ObjectFormat,
 			&i.CreatedBy,
 			&i.CreatedAt,
@@ -174,7 +171,7 @@ func (q *Queries) RepositoriesWith(ctx context.Context, orgID uuid.UUID, princip
 }
 
 const repositoryByID = `-- name: RepositoryByID :one
-SELECT id, org_id, slug, name, description, default_branch, object_format, created_by, created_at FROM repositories WHERE id = $1
+SELECT id, org_id, slug, name, description, object_format, created_by, created_at FROM repositories WHERE id = $1
 `
 
 func (q *Queries) RepositoryByID(ctx context.Context, id uuid.UUID) (Repository, error) {
@@ -186,7 +183,6 @@ func (q *Queries) RepositoryByID(ctx context.Context, id uuid.UUID) (Repository,
 		&i.Slug,
 		&i.Name,
 		&i.Description,
-		&i.DefaultBranch,
 		&i.ObjectFormat,
 		&i.CreatedBy,
 		&i.CreatedAt,
@@ -195,7 +191,7 @@ func (q *Queries) RepositoryByID(ctx context.Context, id uuid.UUID) (Repository,
 }
 
 const repositoryBySlug = `-- name: RepositoryBySlug :one
-SELECT r.id, r.org_id, r.slug, r.name, r.description, r.default_branch, r.object_format, r.created_by, r.created_at FROM repositories r JOIN repository_slugs s ON s.repo_id = r.id WHERE s.org_id = $1 AND s.slug = $2
+SELECT r.id, r.org_id, r.slug, r.name, r.description, r.object_format, r.created_by, r.created_at FROM repositories r JOIN repository_slugs s ON s.repo_id = r.id WHERE s.org_id = $1 AND s.slug = $2
 `
 
 type RepositoryBySlugRow struct {
@@ -212,7 +208,6 @@ func (q *Queries) RepositoryBySlug(ctx context.Context, orgID uuid.UUID, slug st
 		&i.Repository.Slug,
 		&i.Repository.Name,
 		&i.Repository.Description,
-		&i.Repository.DefaultBranch,
 		&i.Repository.ObjectFormat,
 		&i.Repository.CreatedBy,
 		&i.Repository.CreatedAt,
@@ -365,16 +360,15 @@ func (q *Queries) SharedRepositories(ctx context.Context, orgID uuid.UUID, owner
 }
 
 const updateRepository = `-- name: UpdateRepository :execrows
-UPDATE repositories SET slug = $1, name = $2, description = $3, default_branch = $4
-WHERE id = $5
+UPDATE repositories SET slug = $1, name = $2, description = $3
+WHERE id = $4
 `
 
 type UpdateRepositoryParams struct {
-	Slug          string
-	Name          string
-	Description   string
-	DefaultBranch string
-	ID            uuid.UUID
+	Slug        string
+	Name        string
+	Description string
+	ID          uuid.UUID
 }
 
 func (q *Queries) UpdateRepository(ctx context.Context, arg UpdateRepositoryParams) (int64, error) {
@@ -382,7 +376,6 @@ func (q *Queries) UpdateRepository(ctx context.Context, arg UpdateRepositoryPara
 		arg.Slug,
 		arg.Name,
 		arg.Description,
-		arg.DefaultBranch,
 		arg.ID,
 	)
 	if err != nil {

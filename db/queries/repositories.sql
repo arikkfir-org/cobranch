@@ -1,6 +1,6 @@
 -- name: InsertRepository :exec
-INSERT INTO repositories (id, org_id, slug, name, description, default_branch, object_format, created_by, created_at)
-VALUES (@id, @org_id, @slug, @name, @description, @default_branch, @object_format, @created_by, @created_at);
+INSERT INTO repositories (id, org_id, slug, name, description, object_format, created_by, created_at)
+VALUES (@id, @org_id, @slug, @name, @description, @object_format, @created_by, @created_at);
 
 -- ClaimRepositorySlug gives the repository the slug in its organization, taking it from the repository that had it
 -- before, whose old slug stops redirecting; repositories' own unique slug refuses one another repository has now.
@@ -17,7 +17,7 @@ SELECT sqlc.embed(r) FROM repositories r JOIN repository_slugs s ON s.repo_id = 
 SELECT * FROM repositories WHERE id = $1;
 
 -- name: UpdateRepository :execrows
-UPDATE repositories SET slug = @slug, name = @name, description = @description, default_branch = @default_branch
+UPDATE repositories SET slug = @slug, name = @name, description = @description
 WHERE id = @id;
 
 -- RepositoriesAmong lists those of ids that are the organization's repositories, by slug.

@@ -24,7 +24,7 @@ type Repositories interface {
 
 // repository is r as the API shows it, with what the viewer holds there.
 func repository(r repos.Repository, held []string) Repository {
-	out := Repository{Id: r.ID, OrgId: r.OrgID, Slug: r.Slug, Name: r.Name, Description: r.Description, DefaultBranch: r.DefaultBranch,
+	out := Repository{Id: r.ID, OrgId: r.OrgID, Slug: r.Slug, Name: r.Name, Description: r.Description,
 		ObjectFormat: RepositoryObjectFormat(r.ObjectFormat), Visibility: RepositoryVisibility(r.Visibility), CreatedAt: r.CreatedAt,
 		ViewerPermissions: nonNil(held)}
 	if r.CreatedBy != uuid.Nil {
@@ -89,7 +89,7 @@ func (a api) CreateRepository(ctx context.Context, req CreateRepositoryRequestOb
 	}
 	b := req.Body
 	in := repos.Input{Slug: b.Slug}
-	for field, value := range map[*string]*string{&in.Name: b.Name, &in.Description: b.Description, &in.DefaultBranch: b.DefaultBranch} {
+	for field, value := range map[*string]*string{&in.Name: b.Name, &in.Description: b.Description} {
 		if value != nil {
 			*field = *value
 		}
@@ -128,9 +128,9 @@ func (a api) UpdateRepository(ctx context.Context, req UpdateRepositoryRequestOb
 	if err != nil {
 		return nil, err
 	}
-	in := repos.Input{Slug: repo.Slug, Name: repo.Name, Description: repo.Description, DefaultBranch: repo.DefaultBranch}
+	in := repos.Input{Slug: repo.Slug, Name: repo.Name, Description: repo.Description}
 	b := req.Body
-	for field, value := range map[*string]*string{&in.Slug: b.Slug, &in.Name: b.Name, &in.Description: b.Description, &in.DefaultBranch: b.DefaultBranch} {
+	for field, value := range map[*string]*string{&in.Slug: b.Slug, &in.Name: b.Name, &in.Description: b.Description} {
 		if value != nil {
 			*field = *value
 		}

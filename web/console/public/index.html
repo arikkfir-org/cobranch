@@ -413,17 +413,15 @@
       const slug = repoSlugInput("");
       const name = h("input", { name: "name", maxlength: 100, placeholder: "Website" });
       const description = h("input", { name: "description", maxlength: 500 });
-      const branch = h("input", { name: "defaultBranch", placeholder: "main" });
       main.replaceChildren(h("h1", {}, "New repository"), error, h("section", { class: "panel" },
         h("form", { onsubmit: (e) => {
           e.preventDefault();
-          api("POST", "/orgs/" + org.slug + "/repos", { slug: slug.value, name: name.value || undefined, description: description.value, defaultBranch: branch.value || undefined })
+          api("POST", "/orgs/" + org.slug + "/repos", { slug: slug.value, name: name.value || undefined, description: description.value })
             .then((r) => go("/" + org.slug + "/" + r.slug)).catch((err) => { error.textContent = err.message; error.hidden = false; });
         } },
           h("label", {}, "Slug", h("span", {}, "Its URL, in " + org.name + ": lowercase letters, digits, dots, underscores and hyphens."), slug),
           h("label", {}, "Name", h("span", {}, "Its slug unless you name it."), name),
           h("label", {}, "Description", description),
-          h("label", {}, "Default branch", h("span", {}, "The branch it opens on: main unless you name another."), branch),
           h("p", {}, "You become its Maintainer. Others of " + org.name + " read it once you grant them a role on it, or through an organization role that reads every repository."),
           h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
     }
@@ -456,7 +454,7 @@
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else sections = [h("section", { class: "panel" }, h("h3", {}, "Code"),
           h("p", {}, "Nothing is pushed here yet: cloning and pushing arrive with the Git server. Until then a repository holds its settings and who may reach it."),
-          h("p", {}, "It opens on branch ", h("code", {}, repo.defaultBranch), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".")),
+          h("p", {}, "It opens on branch ", h("code", {}, "main"), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".")),
         h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p))))];
       main.replaceChildren(heading, error, ...sections);
     }
@@ -493,18 +491,17 @@
       return sections;
     }
 
-    // repositorySettings changes repo's slug, name, description and default branch.
+    // repositorySettings changes repo's slug, name and description.
     function repositorySettings(org, repo, path, fail) {
       const saved = h("p", { class: "notice", hidden: true }, "Saved.");
       const slug = repoSlugInput(repo.slug);
       const name = h("input", { name: "name", required: true, maxlength: 100, value: repo.name });
       const description = h("input", { name: "description", maxlength: 500, value: repo.description });
-      const branch = h("input", { name: "defaultBranch", required: true, value: repo.defaultBranch });
       const form = h("form", { onsubmit: async (e) => {
         e.preventDefault();
         saved.hidden = true;
         try {
-          const updated = await api("PATCH", path, { slug: slug.value, name: name.value, description: description.value, defaultBranch: branch.value });
+          const updated = await api("PATCH", path, { slug: slug.value, name: name.value, description: description.value });
           if (updated.slug !== repo.slug) return go("/" + org.slug + "/" + updated.slug + "/settings");
           saved.hidden = false;
         } catch (err) {
@@ -514,7 +511,6 @@
         h("label", {}, "Name", name),
         h("label", {}, "Slug", h("span", {}, "Its URL. The old slug keeps pointing here until another repository of " + org.name + " takes it."), slug),
         h("label", {}, "Description", description),
-        h("label", {}, "Default branch", h("span", {}, "The branch it opens on."), branch),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
       return [saved, h("section", { class: "panel" }, form)];
     }

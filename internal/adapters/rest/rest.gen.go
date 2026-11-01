@@ -245,18 +245,15 @@ type Problem struct {
 	Type string `json:"type"`
 }
 
-// Repository One of an organization's Git repositories, with what the viewer may do there.
+// Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CreatedBy Who created it; absent once they are gone.
-	CreatedBy *openapi_types.UUID `json:"createdBy,omitempty"`
-
-	// DefaultBranch The branch the repository opens on.
-	DefaultBranch string             `json:"defaultBranch"`
-	Description   string             `json:"description"`
-	Id            openapi_types.UUID `json:"id"`
-	Name          string             `json:"name"`
+	CreatedBy   *openapi_types.UUID `json:"createdBy,omitempty"`
+	Description string              `json:"description"`
+	Id          openapi_types.UUID  `json:"id"`
+	Name        string              `json:"name"`
 
 	// ObjectFormat The hash its history's objects are named by.
 	ObjectFormat RepositoryObjectFormat `json:"objectFormat"`
@@ -293,9 +290,7 @@ type RepositoryAccessKind string
 
 // RepositoryInput What makes a repository.
 type RepositoryInput struct {
-	// DefaultBranch main when left out.
-	DefaultBranch *string `json:"defaultBranch,omitempty"`
-	Description   *string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty"`
 
 	// Name The slug when left out.
 	Name *string `json:"name,omitempty"`
@@ -306,10 +301,9 @@ type RepositoryInput struct {
 
 // RepositorySettings What a maintainer changes; a field left out keeps its value.
 type RepositorySettings struct {
-	DefaultBranch *string `json:"defaultBranch,omitempty"`
-	Description   *string `json:"description,omitempty"`
-	Name          *string `json:"name,omitempty"`
-	Slug          *string `json:"slug,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Slug        *string `json:"slug,omitempty"`
 }
 
 // Role A role granted at the organization, built in or its own.
@@ -596,7 +590,7 @@ type ServerInterface interface {
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
 	// (GET /orgs/{org}/repos/{repo})
 	GetRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// UpdateRepository Changes a repository's slug, name, description or default branch; takes repo.manage. A new slug keeps the old one as a redirect.
+	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
@@ -5722,7 +5716,7 @@ type StrictServerInterface interface {
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
 	// (GET /orgs/{org}/repos/{repo})
 	GetRepository(ctx context.Context, request GetRepositoryRequestObject) (GetRepositoryResponseObject, error)
-	// UpdateRepository Changes a repository's slug, name, description or default branch; takes repo.manage. A new slug keeps the old one as a redirect.
+	// UpdateRepository Changes a repository's slug, name or description; takes repo.manage. A new slug keeps the old one as a redirect.
 	// (PATCH /orgs/{org}/repos/{repo})
 	UpdateRepository(ctx context.Context, request UpdateRepositoryRequestObject) (UpdateRepositoryResponseObject, error)
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.

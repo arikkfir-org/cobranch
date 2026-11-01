@@ -63,7 +63,7 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	store.Invites[f.invitation.ID] = f.invitation
 	f.repoStore = repostest.NewStore(store)
 	f.repos = repos.NewService(f.repoStore, auth.NewAuthorizer(store))
-	f.website = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "website", Name: "Website", DefaultBranch: "main", ObjectFormat: "sha1",
+	f.website = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "website", Name: "Website", ObjectFormat: "sha1",
 		CreatedBy: f.olivia.User.ID, CreatedAt: now}
 	if err := f.repoStore.Create(t.Context(), f.olivia.User.ID, f.website); err != nil {
 		t.Fatal(err)

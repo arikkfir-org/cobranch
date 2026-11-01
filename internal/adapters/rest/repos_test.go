@@ -27,7 +27,7 @@ func TestRepositoriesAPI(t *testing.T) {
 		{name: "a Member creates one", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/repos"), body: `{"slug":"tools","description":"Scripts"}`, wantStatus: 201,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
 				r := decode[Repository](t, body)
-				if r.Slug != "tools" || r.Name != "tools" || r.DefaultBranch != "main" || r.ObjectFormat != "sha1" || r.CreatedBy == nil || *r.CreatedBy != f.max.User.ID ||
+				if r.Slug != "tools" || r.Name != "tools" || r.ObjectFormat != "sha1" || r.CreatedBy == nil || *r.CreatedBy != f.max.User.ID ||
 					!slices.Contains(r.ViewerPermissions, "repo.manage") {
 					t.Errorf("repository = %s", body)
 				}
@@ -44,14 +44,13 @@ func TestRepositoriesAPI(t *testing.T) {
 		{name: "a Member doesn't see it", viewer: maxim, method: "GET", path: fixed("/v1/orgs/acme/repos/website"), wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "rename, keeping the rest", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme/repos/website"), body: `{"slug":"www"}`, wantStatus: 200,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
-				if r := decode[Repository](t, body); r.Slug != "www" || r.Name != "Website" || r.DefaultBranch != "main" {
+				if r := decode[Repository](t, body); r.Slug != "www" || r.Name != "Website" {
 					t.Errorf("repository = %s", body)
 				}
 				if rec := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website", ""); rec.Code != 200 || decode[Repository](t, rec.Body.Bytes()).Slug != "www" {
 					t.Errorf("the old slug answers %d: %s", rec.Code, rec.Body)
 				}
 			}},
-		{name: "a bad branch", viewer: olivia, method: "PATCH", path: fixed("/v1/orgs/acme/repos/website"), body: `{"defaultBranch":"a b"}`, wantStatus: 400, wantCode: "branch.invalid"},
 	})
 }
 

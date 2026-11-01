@@ -157,7 +157,6 @@ type ComplexityRoot struct {
 		Access            func(childComplexity int) int
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
-		DefaultBranch     func(childComplexity int) int
 		Description       func(childComplexity int) int
 		ID                func(childComplexity int) int
 		Name              func(childComplexity int) int
@@ -963,12 +962,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.CreatedBy(childComplexity), true
-	case "Repository.defaultBranch":
-		if e.ComplexityRoot.Repository.DefaultBranch == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Repository.DefaultBranch(childComplexity), true
 	case "Repository.description":
 		if e.ComplexityRoot.Repository.Description == nil {
 			break
@@ -1289,7 +1282,7 @@ extend type Organization {
 extend type Mutation {
   "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create."
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
-  "Changes a repository's slug, name, description and default branch; takes repo.manage. A new slug keeps the old one as a redirect."
+  "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
   "Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there."
   grantRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
@@ -1297,7 +1290,7 @@ extend type Mutation {
   revokeRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
 }
 
-"One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name, a description and the branch it opens on."
+"One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes."
 type Repository {
   id: ID!
   organizationId: ID!
@@ -1305,8 +1298,6 @@ type Repository {
   slug: String!
   name: String!
   description: String!
-  "The branch the repository opens on."
-  defaultBranch: String!
   "The hash its history's objects are named by: sha1, or sha256 later."
   objectFormat: String!
   visibility: RepositoryVisibility!
@@ -1338,8 +1329,6 @@ input RepositoryInput {
   "The slug when null or empty."
   name: String
   description: String
-  "main when null or empty."
-  defaultBranch: String
 }
 `, BuiltIn: false},
 	{Name: "../../../api/graphql/schema.graphqls", Input: `# Cobranch's GraphQL schema, written first: internal/adapters/graphql generates its resolvers' types from it. It is the
@@ -1769,8 +1758,6 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_name(ctx, field)
 	case "description":
 		return ec.fieldContext_Repository_description(ctx, field)
-	case "defaultBranch":
-		return ec.fieldContext_Repository_defaultBranch(ctx, field)
 	case "objectFormat":
 		return ec.fieldContext_Repository_objectFormat(ctx, field)
 	case "visibility":
@@ -5544,29 +5531,6 @@ func (ec *executionContext) fieldContext_Repository_description(_ context.Contex
 	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
 }
 
-func (ec *executionContext) _Repository_defaultBranch(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Repository_defaultBranch(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.DefaultBranch, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Repository_defaultBranch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Repository", field, false, false, "String")
-}
-
 func (ec *executionContext) _Repository_objectFormat(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7592,7 +7556,7 @@ func (ec *executionContext) unmarshalInputRepositoryInput(ctx context.Context, o
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"slug", "name", "description", "defaultBranch"}
+	fieldsInOrder := [...]string{"slug", "name", "description"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -7620,13 +7584,6 @@ func (ec *executionContext) unmarshalInputRepositoryInput(ctx context.Context, o
 				return it, err
 			}
 			it.Description = data
-		case "defaultBranch":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("defaultBranch"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.DefaultBranch = data
 		}
 	}
 	return it, nil
@@ -8583,11 +8540,6 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 			}
 		case "description":
 			out.Values[i] = ec._Repository_description(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
-		case "defaultBranch":
-			out.Values[i] = ec._Repository_defaultBranch(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}

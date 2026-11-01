@@ -57,7 +57,7 @@ func wrapRepo(what string, err error) error {
 // repository is the domain's view of a repositories row, Internal when shared lists it.
 func repository(r queries.Repository, shared []uuid.UUID) repos.Repository {
 	out := repos.Repository{ID: r.ID, OrgID: r.OrgID, Slug: r.Slug, Name: r.Name, Description: r.Description,
-		DefaultBranch: r.DefaultBranch, ObjectFormat: r.ObjectFormat, CreatedAt: r.CreatedAt, Visibility: repos.VisibilityPrivate}
+		ObjectFormat: r.ObjectFormat, CreatedAt: r.CreatedAt, Visibility: repos.VisibilityPrivate}
 	if r.CreatedBy != nil {
 		out.CreatedBy = *r.CreatedBy
 	}
@@ -81,7 +81,7 @@ func (s *RepoStore) Create(ctx context.Context, actor uuid.UUID, repo repos.Repo
 	return s.transact(ctx, "creating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertRepository(ctx, queries.InsertRepositoryParams{
 			ID: repo.ID, OrgID: repo.OrgID, Slug: repo.Slug, Name: repo.Name, Description: repo.Description,
-			DefaultBranch: repo.DefaultBranch, ObjectFormat: repo.ObjectFormat, CreatedBy: &repo.CreatedBy, CreatedAt: repo.CreatedAt,
+			ObjectFormat: repo.ObjectFormat, CreatedBy: &repo.CreatedBy, CreatedAt: repo.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("inserting the repository: %w", err)
 		}
@@ -144,7 +144,7 @@ func (s *RepoStore) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 func (s *RepoStore) Update(ctx context.Context, actor uuid.UUID, repo repos.Repository) error {
 	return s.transact(ctx, "updating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.UpdateRepository(ctx, queries.UpdateRepositoryParams{
-			ID: repo.ID, Slug: repo.Slug, Name: repo.Name, Description: repo.Description, DefaultBranch: repo.DefaultBranch,
+			ID: repo.ID, Slug: repo.Slug, Name: repo.Name, Description: repo.Description,
 		})
 		if err != nil {
 			return fmt.Errorf("updating the repository: %w", err)
