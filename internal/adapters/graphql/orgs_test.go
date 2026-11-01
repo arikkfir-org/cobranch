@@ -86,6 +86,8 @@ func newOrgFixture() *orgFixture {
 	f.codeStore.UpdateBranch(f.website.ID, "feature", func(b *code.Branch) {
 		b.Base, b.Status, b.Facts = "main", code.StatusBlocked, &git.Facts{Branch: "feature", Ahead: 1, Behind: 2}
 		b.Checks = []code.Check{{Kind: code.CheckAnnotation, Name: "ci/build"}, {Kind: code.CheckUpToDate, Count: 2}}
+		// Merged once at a, since moved on.
+		b.Merge = &code.Merge{Head: shaOf("a"), By: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, At: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
 	})
 	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}

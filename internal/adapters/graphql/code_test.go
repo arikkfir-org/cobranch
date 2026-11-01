@@ -21,8 +21,10 @@ func TestCodeQueries(t *testing.T) {
 			document: repo(`branch(name: "feature") { base status ahead behind checks { kind name status count met } requirements { annotations } }`),
 			want: []string{`"branch":{"base":"main","status":"BLOCKED","ahead":1,"behind":2,"checks":[{"kind":"ANNOTATION","name":"ci/build","status":null,"count":null,"met":false},` +
 				`{"kind":"UP_TO_DATE","name":null,"status":null,"count":2,"met":false}],"requirements":null}`}},
-		{name: "a branch no push has worked out", viewer: olivia, document: repo(`branch(name: "feature/login") { status ahead }`),
-			want: []string{`"branch":{"status":"PROCESSING","ahead":null}`}},
+		{name: "a branch no push has worked out", viewer: olivia, document: repo(`branch(name: "feature/login") { status ahead merge { head } }`),
+			want: []string{`"branch":{"status":"PROCESSING","ahead":null,"merge":null}`}},
+		{name: "a branch's last merge", viewer: olivia, document: repo(`branch(name: "feature") { merge { head by { displayName } at } }`),
+			want: []string{`"merge":{"head":"` + shaOf("a") + `","by":{"displayName":"Olivia"},"at":"2026-11-01T09:00:00Z"}`}},
 		{name: "a branch that doesn't live is null", viewer: olivia, document: repo(`branch(name: "gone") { name }`),
 			want: []string{`"branch":null`}},
 		{name: "a page of main's history and where the next starts", viewer: olivia, document: repo(`history(first: 2) { commits { sha push { id } } nextCursor }`),

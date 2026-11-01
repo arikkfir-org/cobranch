@@ -117,6 +117,18 @@ type Branch {
   behind: Int
   "What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch."
   requirements: MergeRequirements
+  "The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's."
+  merge: BranchMerge
+}
+
+"A merge of a branch into its base that a push made."
+type BranchMerge {
+  "The head it brought into the base."
+  head: String!
+  "Who pushed it; null once they are gone."
+  by: CommitPrincipal
+  "When Cobranch recorded the push."
+  at: Time!
 }
 
 "Where a branch stands as a request to merge into its base, the first that holds."

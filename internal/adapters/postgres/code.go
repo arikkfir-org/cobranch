@@ -87,6 +87,12 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 	if r.LinearHistory != nil {
 		b.Requirements = &git.Requirements{Branch: r.Name, Annotations: r.RequiredAnnotations, LinearHistory: *r.LinearHistory}
 	}
+	if r.MergedHead != nil && r.MergedAt != nil {
+		b.Merge = &code.Merge{Head: *r.MergedHead, At: *r.MergedAt}
+		if r.MergedBy != nil && r.MergedByName != nil {
+			b.Merge.By = &code.Principal{ID: *r.MergedBy, DisplayName: *r.MergedByName}
+		}
+	}
 	if r.Name == git.DefaultBranch {
 		return b, nil
 	}

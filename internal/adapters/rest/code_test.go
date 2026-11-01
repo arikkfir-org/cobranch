@@ -45,10 +45,11 @@ func TestBranchesAPI(t *testing.T) {
 					t.Errorf("main = %s, want its requirements and no status", body)
 				}
 			}},
-		{name: "a branch with its status, checks and facts", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/feature"), wantStatus: 200,
-			check: func(t *testing.T, _ *orgFixture, body []byte) {
+		{name: "a branch with its status, checks, facts and last merge", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/feature"),
+			wantStatus: 200, check: func(t *testing.T, f *orgFixture, body []byte) {
 				for _, want := range []string{`"base":"main"`, `"status":"blocked"`, `"ahead":1`, `"behind":2`,
-					`"checks":[{"kind":"annotation","met":false,"name":"ci/build"},{"count":2,"kind":"up_to_date","met":false}]`} {
+					`"checks":[{"kind":"annotation","met":false,"name":"ci/build"},{"count":2,"kind":"up_to_date","met":false}]`,
+					`"merge":{"at":"2026-11-01T09:00:00Z","by":{"displayName":"Olivia","id":"` + f.olivia.User.ID.String() + `"},"head":"` + shaOf("a") + `"}`} {
 					if !strings.Contains(string(body), want) {
 						t.Errorf("feature = %s, want %s", body, want)
 					}
