@@ -1,8 +1,9 @@
 {{/*
 A server of one API: its Deployment, Service and budget. Pass a dict of the root context, the component, which names
 the subcommand too, and the server's values; and, for the Git workloads, bucket (false for one that never reads it),
-service (false for one nobody calls), env (more of the container's variables, as YAML) and volumes (more emptyDirs: a
-name, a mountPath and the emptyDir each). Values without replicas leave the count to an autoscaler.
+service (false for one nobody calls), env (more of the container's variables, as YAML), volumes (more emptyDirs: a
+name, a mountPath and the emptyDir each) and ports (more of the container's: a name and a containerPort each). Values
+without replicas leave the count to an autoscaler.
 */}}
 {{- define "cobranch.server" -}}
 {{- $root := .root }}
@@ -64,6 +65,10 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            {{- range .ports }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+            {{- end }}
           env:
             - name: COBRANCH_HTTP_ADDR
               value: ":8080"

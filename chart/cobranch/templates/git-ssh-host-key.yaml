@@ -1,0 +1,22 @@
+{{- if and .Values.urls.git .Values.urls.gitSsh (not .Values.gitServer.ssh.hostKey.existingSecret) }}
+{{- $name := include "cobranch.gitSSHHostKey.secret" . }}
+{{- $key := .Values.gitServer.ssh.hostKey.secretKey }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name }}
+# The Git server's SSH host key, generated once: SSH clients trust the key they first saw, so upgrades keep it.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "cobranch.labels" (dict "root" . "component" "git-server") | nindent 4 }}
+  annotations:
+    # Kept on uninstall: a reinstall serves the key its clients know.
+    helm.sh/resource-policy: keep
+type: Opaque
+data:
+  {{- if and $existing (hasKey $existing.data $key) }}
+  {{ $key }}: {{ index $existing.data $key }}
+  {{- else }}
+  {{ $key }}: {{ genPrivateKey "ed25519" | b64enc }}
+  {{- end }}
+{{- end }}

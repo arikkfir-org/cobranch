@@ -145,6 +145,73 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/ssh-keys:
+    get:
+      operationId: listMySSHKeys
+      summary: The user's SSH keys, newest first.
+      responses:
+        "200":
+          description: The keys.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sshKeys]
+                properties:
+                  sshKeys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SSHKey"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: addMySSHKey
+      summary: Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SSHKeyInput"
+      responses:
+        "201":
+          description: The key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SSHKey"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/ssh-keys/{id}:
+    delete:
+      operationId: deleteMySSHKey
+      summary: Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/organizations:
     get:
       operationId: listMyOrganizations
@@ -1807,6 +1874,39 @@ components:
         secret:
           type: string
           description: The token, to give a Git client as its password or a script as its bearer token.
+    SSHKey:
+      type: object
+      description: An SSH key, as its user sees it.
+      required: [id, name, publicKey, fingerprint, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        publicKey:
+          type: string
+          description: The key's type and base64, as an authorized_keys line has them, without its comment.
+        fingerprint:
+          type: string
+          description: The key's SHA256 fingerprint, as ssh-keygen -l shows it.
+        createdAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+    SSHKeyInput:
+      type: object
+      description: What adds an SSH key.
+      required: [publicKey]
+      properties:
+        name:
+          type: string
+          description: What the key is for, 1 to 100 characters; the key's comment when absent or empty.
+        publicKey:
+          type: string
+          description: One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
     SecretInput:
       type: object
       description: When a new secret stops working; a year from now when neither is given.

@@ -287,13 +287,17 @@ active and every listed ref keeps its objects.
 
 A user adds SSH keys in the Console; a key acts as its user, as a session would.
 
-- **The same pipeline.** The Git server also listens for SSH, as user `git`, and runs `git-upload-pack` and
-  `git-receive-pack` for `<org>/<repo>.git` through the same snapshot, throwaway repository, hook and transaction.
-- **Keys are a user's.** Users add SSH public keys in the Console; a key acts as its user, unnarrowed, as a session
-  would; a fingerprint belongs to one user.
-- **Exposure is the operator's.** The chart renders a Service port for SSH and keeps the host key in a Secret it
-  generates, or the operator's; a load balancer, a node port or a TCP route, and the host name, are the operator's
-  choice.
+- **The same pipeline.** The Git server also listens for SSH, with any user name as over HTTPS (its URLs say `git`), and
+  runs `git-upload-pack` and `git-receive-pack` for `<org>/<repo>.git` through the same snapshot, throwaway repository,
+  hook and transaction; `GIT_PROTOCOL` passes through, so fetches speak protocol v2. A shell gets a greeting and ends.
+- **Keys are a user's.** Users add and delete SSH public keys in the Console, from a session only, so no token narrowed
+  to reading takes its user's SSH access away: Ed25519, ECDSA, or RSA of 2048 bits or more, named by their comment
+  unless given a name. A key is a credential of kind `ssh_key`, found by the SHA-256 of its wire form, so a key belongs
+  to one user; it acts as its user, unnarrowed, as a session would, and never expires. Deleting one deletes its row, so
+  its user may add it again.
+- **Exposure is the operator's.** With `urls.gitSsh`, the chart gives the Git server a Service of its own for SSH and
+  keeps the host key in a Secret it generates, or the operator's; a load balancer, a node port or a TCP route, and the
+  host name, are the operator's choice.
 
 ## Configuration
 
@@ -304,7 +308,9 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 | `gitServer.cache.size` | How much of the bucket's packs a pod keeps before it evicts the least recently used repositories', 10 GiB by default |
 | `gitServer.storage.sizeLimit` | The pod's `emptyDir`, which holds the cache and the throwaway repositories of the requests in flight, 16 GiB by default: above `cache.size` by a few `maxPushSize` |
 | `gitServer.maxPushSize` | The largest pack a push may send, 2 GiB by default |
-| `gitServer.ssh.enabled`, `.port`, `.service`, `.hostKey.existingSecret` | SSH, from its pull request: off by default, then the Service the operator exposes and the host key |
+| `urls.gitSsh` | Where Git clients reach the Git server over SSH, such as `ssh://git@git.example.com:2222`; with it, the Git server serves SSH, and the Console shows clone URLs under it too |
+| `gitServer.ssh.service.type`, `.port`, `.annotations` | The Service SSH clients reach the Git server through: ClusterIP on port 22 by default, LoadBalancer with the cloud's annotations to reach it directly |
+| `gitServer.ssh.hostKey.existingSecret`, `.secretKey` | The operator's Secret that holds the host key; empty, the chart generates an Ed25519 key and keeps it, which a render without the cluster can't |
 | `maintenance.compaction.packs` | The active packs that make a repository due for compaction, 8 by default; null leaves packs alone |
 | `maintenance.storage.sizeLimit` | The maintenance pod's `emptyDir`, which holds the packs of the repository it compacts, 16 GiB by default: above twice the largest repository's packs |
 | `maintenance.activeDeadlineSeconds` | How long a maintenance run may take, 50 minutes by default, so it ends before the next hour's |
@@ -316,16 +322,18 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 - **End to end with the real `git`.** Go tests start the Git server and the push worker in process over PostgreSQL and a
   `file://` bucket, and drive `git clone`, `fetch` and `push` against them: an empty clone, a first push, a stale push
   refused, two concurrent pushes into one repository, a lost answer asked again, a refused ref, and fetches across a
-  compaction and the sweep a day later, a deleted branch's commit kept.
+  compaction and the sweep a day later, a deleted branch's commit kept. Over SSH, with this test binary as Git's SSH
+  client: a clone and a push by a key's user, a reader's push refused, a repository its user can't read, a key nobody
+  added, and a shell.
 - **The chart in CI** installs both workloads in kind, as it does the others, and its test pod clones an empty
-  repository, pushes to it, and finds the push in a fresh clone; it runs again once maintenance compacted the packs its
-  runs pushed.
+  repository, pushes to it, and finds the push in a fresh clone, and reads the SSH Service's banner; it runs again once
+  maintenance compacted the packs its runs pushed, and the upgrade keeps the host key.
 
 ## Data model
 
-**This slice’s tables: repositories and their Git data, and personal tokens among credentials**
+**This slice’s tables: repositories and their Git data, and personal tokens and SSH keys among credentials**
 
-![This slice’s tables: repositories and their Git data, and personal tokens among credentials](git-hosting/er.svg)
+![This slice’s tables: repositories and their Git data, and personal tokens and SSH keys among credentials](git-hosting/er.svg)
 
 Every new table carries `org_id`. Repositories and their slugs carry trigger `audit()`; a push’s rows are their own
 record, named by the push and its pusher.
@@ -376,6 +384,7 @@ Nothing of an installation is in the product: an operator routes the Git server 
 | Compaction keeps unreachable objects, and nothing prunes them yet | A push that began before the snapshot may build on a branch deleted since; pruning them safely needs a grace of its own, which a later slice can add | Changed |
 | Each upload of a pack's files has an ID of its own in its keys, and a pack's row names the upload it lists | A pack's name is its content's hash and comes back with a branch pushed again; maintenance never deletes the files a row lists | Changed |
 | SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Agreed |
+| SSH takes any user name, as HTTPS does, rather than only `git` | The key alone names its user, so a name could only refuse a client the key admits | Changed |
 | Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Agreed |
 
 ## Open questions

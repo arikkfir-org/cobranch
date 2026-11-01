@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/ssh"
 
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/blob"
@@ -25,8 +27,9 @@ import (
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runGitServer serves Git's smart HTTP protocol and the health endpoints until ctx ends. Its pushes' hook runs this
-// binary as git-hook. It turns ready once its stores answer and the schema is at this build's version.
+// runGitServer serves Git's smart HTTP protocol, SSH given an address, and the health endpoints until ctx ends. Its
+// pushes' hook runs this binary as git-hook. It turns ready once its stores answer and the schema is at this build's
+// version.
 func runGitServer(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "git-server", buildinfo.Version())
 	if err != nil {
@@ -65,8 +68,34 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("preparing the Git server: %w", err)
 	}
 	defer func() { _ = gitServer.Close() }() // no push runs once the server stopped
-	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", gitServer.Handler(),
-		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)}))
+	handler := server.Handler("/", gitServer.Handler(), map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)})
+	if cfg.SSHAddr == "" {
+		return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler)
+	}
+	return serveWithSSH(ctx, cfg, gitServer, schema, handler)
+}
+
+// serveWithSSH serves Git over SSH at cfg.SSHAddr beside serve's HTTP, until ctx ends or either fails, which stops the
+// other.
+func serveWithSSH(ctx context.Context, cfg config.GitServer, gitServer *gitserver.Server, schema *postgres.Schema, handler http.Handler) error {
+	hostKey, err := ssh.ParsePrivateKey([]byte(cfg.SSHHostKey))
+	if err != nil {
+		return fmt.Errorf("reading COBRANCH_GIT_SSH_HOST_KEY: %w", err)
+	}
+	ln, err := server.Listen(ctx, cfg.SSHAddr)
+	if err != nil {
+		return fmt.Errorf("listening for SSH: %w", err)
+	}
+	work, stop := context.WithCancel(ctx)
+	defer stop()
+	served := make(chan error, 1)
+	go func() {
+		defer stop()
+		served <- gitServer.ServeSSH(work, ln, hostKey, cfg.ShutdownTimeout)
+	}()
+	err = serve(work, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler)
+	stop()
+	return errors.Join(err, <-served)
 }
 
 // runPushWorker processes the pushes the Git server recorded, and serves the health endpoints, until ctx ends.

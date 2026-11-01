@@ -460,6 +460,29 @@ type RoleInput struct {
 	Permissions []string `json:"permissions"`
 }
 
+// SSHKey An SSH key, as its user sees it.
+type SSHKey struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Fingerprint The key's SHA256 fingerprint, as ssh-keygen -l shows it.
+	Fingerprint string             `json:"fingerprint"`
+	Id          openapi_types.UUID `json:"id"`
+	LastUsedAt  *time.Time         `json:"lastUsedAt,omitempty"`
+	Name        string             `json:"name"`
+
+	// PublicKey The key's type and base64, as an authorized_keys line has them, without its comment.
+	PublicKey string `json:"publicKey"`
+}
+
+// SSHKeyInput What adds an SSH key.
+type SSHKeyInput struct {
+	// Name What the key is for, 1 to 100 characters; the key's comment when absent or empty.
+	Name *string `json:"name,omitempty"`
+
+	// PublicKey One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
+	PublicKey string `json:"publicKey"`
+}
+
 // SecretInput When a new secret stops working; a year from now when neither is given.
 type SecretInput struct {
 	// ExpiresAt The end, in the future.
@@ -594,6 +617,9 @@ type ListBuiltInRolesParams struct {
 // ListBuiltInRolesParamsScope defines parameters for ListBuiltInRoles.
 type ListBuiltInRolesParamsScope string
 
+// AddMySSHKeyJSONRequestBody defines body for AddMySSHKey for application/json ContentType.
+type AddMySSHKeyJSONRequestBody = SSHKeyInput
+
 // CreateMyTokenJSONRequestBody defines body for CreateMyToken for application/json ContentType.
 type CreateMyTokenJSONRequestBody = PersonalTokenInput
 
@@ -662,6 +688,15 @@ type ServerInterface interface {
 	// RevokeMySession Revokes one of the user's sessions; the next request with its cookie fails.
 	// (DELETE /me/sessions/{id})
 	RevokeMySession(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// ListMySSHKeys The user's SSH keys, newest first.
+	// (GET /me/ssh-keys)
+	ListMySSHKeys(w http.ResponseWriter, r *http.Request)
+	// AddMySSHKey Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
+	// (POST /me/ssh-keys)
+	AddMySSHKey(w http.ResponseWriter, r *http.Request)
+	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
+	// (DELETE /me/ssh-keys/{id})
+	DeleteMySSHKey(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(w http.ResponseWriter, r *http.Request)
@@ -937,6 +972,60 @@ func (siw *ServerInterfaceWrapper) RevokeMySession(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeMySession(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMySSHKeys operation middleware
+func (siw *ServerInterfaceWrapper) ListMySSHKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMySSHKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddMySSHKey operation middleware
+func (siw *ServerInterfaceWrapper) AddMySSHKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddMySSHKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteMySSHKey operation middleware
+func (siw *ServerInterfaceWrapper) DeleteMySSHKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "id" -------------
+	var id openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteMySSHKey(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2381,6 +2470,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/tokens", wrapper.ListMyTokens)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/tokens", wrapper.CreateMyToken)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/tokens/{id}", wrapper.RevokeMyToken)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/ssh-keys", wrapper.ListMySSHKeys)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/ssh-keys", wrapper.AddMySSHKey)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/ssh-keys/{id}", wrapper.DeleteMySSHKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/organizations", wrapper.ListMyOrganizations)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/accept", wrapper.AcceptInvitation)
@@ -2905,6 +2997,222 @@ type RevokeMySessiondefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeMySessiondefaultApplicationProblemPlusJSONResponse) VisitRevokeMySessionResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMySSHKeysRequestObject struct {
+}
+
+type ListMySSHKeysResponseObject interface {
+	VisitListMySSHKeysResponse(w http.ResponseWriter) error
+}
+
+type ListMySSHKeys200JSONResponse struct {
+	SshKeys []SSHKey `json:"sshKeys"`
+}
+
+func (response ListMySSHKeys200JSONResponse) VisitListMySSHKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMySSHKeys401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListMySSHKeys401ApplicationProblemPlusJSONResponse) VisitListMySSHKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListMySSHKeysdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListMySSHKeysdefaultApplicationProblemPlusJSONResponse) VisitListMySSHKeysResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMySSHKeyRequestObject struct {
+	Body *AddMySSHKeyJSONRequestBody
+}
+
+type AddMySSHKeyResponseObject interface {
+	VisitAddMySSHKeyResponse(w http.ResponseWriter) error
+}
+
+type AddMySSHKey201JSONResponse SSHKey
+
+func (response AddMySSHKey201JSONResponse) VisitAddMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMySSHKey400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AddMySSHKey400ApplicationProblemPlusJSONResponse) VisitAddMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMySSHKey401ApplicationProblemPlusJSONResponse Problem
+
+func (response AddMySSHKey401ApplicationProblemPlusJSONResponse) VisitAddMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMySSHKey403ApplicationProblemPlusJSONResponse Problem
+
+func (response AddMySSHKey403ApplicationProblemPlusJSONResponse) VisitAddMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AddMySSHKeydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AddMySSHKeydefaultApplicationProblemPlusJSONResponse) VisitAddMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMySSHKeyRequestObject struct {
+	Id openapi_types.UUID `json:"id"`
+}
+
+type DeleteMySSHKeyResponseObject interface {
+	VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error
+}
+
+type DeleteMySSHKey204Response struct {
+}
+
+func (response DeleteMySSHKey204Response) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteMySSHKey401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteMySSHKey401ApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMySSHKey403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMySSHKey403ApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMySSHKey404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMySSHKey404ApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMySSHKeydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteMySSHKeydefaultApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -6478,6 +6786,15 @@ type StrictServerInterface interface {
 	// RevokeMySession Revokes one of the user's sessions; the next request with its cookie fails.
 	// (DELETE /me/sessions/{id})
 	RevokeMySession(ctx context.Context, request RevokeMySessionRequestObject) (RevokeMySessionResponseObject, error)
+	// ListMySSHKeys The user's SSH keys, newest first.
+	// (GET /me/ssh-keys)
+	ListMySSHKeys(ctx context.Context, request ListMySSHKeysRequestObject) (ListMySSHKeysResponseObject, error)
+	// AddMySSHKey Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
+	// (POST /me/ssh-keys)
+	AddMySSHKey(ctx context.Context, request AddMySSHKeyRequestObject) (AddMySSHKeyResponseObject, error)
+	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
+	// (DELETE /me/ssh-keys/{id})
+	DeleteMySSHKey(ctx context.Context, request DeleteMySSHKeyRequestObject) (DeleteMySSHKeyResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(ctx context.Context, request ListMyTokensRequestObject) (ListMyTokensResponseObject, error)
@@ -6835,6 +7152,87 @@ func (sh *strictHandler) RevokeMySession(w http.ResponseWriter, r *http.Request,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeMySessionResponseObject); ok {
 		if err := validResponse.VisitRevokeMySessionResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListMySSHKeys operation middleware
+func (sh *strictHandler) ListMySSHKeys(w http.ResponseWriter, r *http.Request) {
+	var request ListMySSHKeysRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListMySSHKeys(ctx, request.(ListMySSHKeysRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListMySSHKeys")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListMySSHKeysResponseObject); ok {
+		if err := validResponse.VisitListMySSHKeysResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AddMySSHKey operation middleware
+func (sh *strictHandler) AddMySSHKey(w http.ResponseWriter, r *http.Request) {
+	var request AddMySSHKeyRequestObject
+
+	var body AddMySSHKeyJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AddMySSHKey(ctx, request.(AddMySSHKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AddMySSHKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AddMySSHKeyResponseObject); ok {
+		if err := validResponse.VisitAddMySSHKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteMySSHKey operation middleware
+func (sh *strictHandler) DeleteMySSHKey(w http.ResponseWriter, r *http.Request, id openapi_types.UUID) {
+	var request DeleteMySSHKeyRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteMySSHKey(ctx, request.(DeleteMySSHKeyRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteMySSHKey")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteMySSHKeyResponseObject); ok {
+		if err := validResponse.VisitDeleteMySSHKeyResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

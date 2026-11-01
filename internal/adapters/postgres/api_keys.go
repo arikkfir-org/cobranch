@@ -15,7 +15,7 @@ import (
 // credential is the domain's view of a credentials row.
 func credential(c queries.Credential) auth.Credential {
 	out := auth.Credential{ID: c.ID, Kind: auth.CredentialKind(c.Kind), PrincipalID: c.PrincipalID, Hint: c.Hint, CreatedAt: c.CreatedAt,
-		Name: c.Name, Permissions: c.Permissions, Issuer: c.Issuer, Subject: c.Subject}
+		Name: c.Name, Permissions: c.Permissions, Issuer: c.Issuer, Subject: c.Subject, PublicKey: c.PublicKey}
 	out.CreatedBy = orNil(c.CreatedBy)
 	out.ExpiresAt, out.LastUsedAt, out.RevokedAt = orZero(c.ExpiresAt), orZero(c.LastUsedAt), orZero(c.RevokedAt)
 	return out

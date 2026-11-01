@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -97,7 +98,8 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request, req request
 		return
 	}
 	defer remove()
-	token := s.expect(&pending{ctx: r.Context(), id: id, repo: req.repo, pusher: req.viewer.User.ID, dir: dir, received: time.Now()})
+	token := s.expect(&pending{ctx: r.Context(), id: id, repo: req.repo, pusher: req.viewer.User.ID, dir: dir, received: time.Now(),
+		transport: git.TransportHTTPS})
 	defer s.forget(token)
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 	noCache(w)
@@ -113,24 +115,31 @@ func mayPush(w http.ResponseWriter, req request) bool {
 	return false
 }
 
-// serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500. The cache then
-// drops the repository's packs the snapshot no longer lists.
+// serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500.
 func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req request) (string, func(), bool) {
-	read := time.Now()
-	snapshot, err := s.snaps.Snapshot(r.Context(), req.repo.ID)
-	if err != nil {
-		slog.ErrorContext(r.Context(), "Reading a repository's snapshot failed", "repository", req.repo.ID, "error", err)
-		http.Error(w, "the repository could not be read", http.StatusInternalServerError)
-		return "", nil, false
-	}
-	dir, remove, err := s.workspace(r.Context(), req.repo, snapshot)
+	dir, remove, err := s.snapshotWorkspace(r.Context(), req.repo)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Building a repository failed", "repository", req.repo.ID, "error", err)
 		http.Error(w, "the repository could not be read", http.StatusInternalServerError)
 		return "", nil, false
 	}
-	s.cache.retain(req.repo.ID, snapshot.Packs, read)
 	return dir, remove, true
+}
+
+// snapshotWorkspace builds a throwaway repository of repo from a snapshot read now. The cache then drops the
+// repository's packs the snapshot no longer lists.
+func (s *Server) snapshotWorkspace(ctx context.Context, repo repos.Repository) (string, func(), error) {
+	read := time.Now()
+	snapshot, err := s.snaps.Snapshot(ctx, repo.ID)
+	if err != nil {
+		return "", nil, fmt.Errorf("reading the repository's snapshot: %w", err)
+	}
+	dir, remove, err := s.workspace(ctx, repo, snapshot)
+	if err != nil {
+		return "", nil, err
+	}
+	s.cache.retain(repo.ID, snapshot.Packs, read)
+	return dir, remove, nil
 }
 
 // protocolEnv passes the client's Git-Protocol header on to git upload-pack, which reads it from GIT_PROTOCOL, when

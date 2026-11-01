@@ -21,6 +21,7 @@ models:
     fields:
       sessions: { resolver: true }
       personalTokens: { resolver: true }
+      sshKeys: { resolver: true }
       permissions: { resolver: true }
       organizations: { resolver: true }
       invitations: { resolver: true }

@@ -59,4 +59,14 @@ set postgresql.auth.existingSecret instead: such a render can't find the Secret 
 
 Git clients clone, fetch and push at {{ .Values.urls.git }}/<organization>/<repository>.git, with a personal token as
 the password, which each user makes in the Console's settings.
+{{- with .Values.urls.gitSsh }}
+
+Over SSH, they do at {{ . }}/<organization>/<repository>.git, with an SSH key each
+user adds in the Console's settings. Service {{ include "cobranch.fullname" $ }}-git-server-ssh serves it, and no route
+reaches it: expose it yourself.
+{{- if not $.Values.gitServer.ssh.hostKey.existingSecret }} Its host key is generated and kept in Secret
+{{ include "cobranch.gitSSHHostKey.secret" $ }}: under Argo CD, set gitServer.ssh.hostKey.existingSecret instead, or
+every render makes a new one.
+{{- end }}
+{{- end }}
 {{- end }}

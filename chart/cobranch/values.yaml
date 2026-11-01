@@ -43,6 +43,11 @@ urls:
   # clone URLs under it; without it, neither. Git clients carry no cookie, so it needn't share the others' parent
   # domain.
   git: ""
+  # The Git server's SSH address, where Git clients clone, fetch and push with an SSH key their user added: such as
+  # ssh://git@git.cobranch.example.com, or ssh://git@cobranch.example.com:2222. With it and git, the Git server also
+  # serves SSH, behind its Service of gitServer.ssh.service, and the Console shows clone URLs under it too. No route
+  # reaches it: give the Service a LoadBalancer, or route TCP to it yourself.
+  gitSsh: ""
 
 # Sign-in (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
 # says that sign-in isn't set up yet.
@@ -216,6 +221,20 @@ gitServer:
   # cache.size by a few maxPushSize.
   storage:
     sizeLimit: 16Gi
+  # SSH, with urls.gitSsh.
+  ssh:
+    # The Service SSH clients reach the Git server through, on port 22 or yours: ClusterIP for a route of yours, or
+    # LoadBalancer, with your cloud's annotations, to reach it directly.
+    service:
+      type: ClusterIP
+      port: 22
+      annotations: {}
+    # The private key, in PEM, that SSH clients know the server by. Without existingSecret, the chart generates an
+    # Ed25519 key on install and keeps it on upgrade, which needs the cluster at render time: under Argo CD, or
+    # anything else that renders without the cluster, give one, or every render changes the key clients trust.
+    hostKey:
+      existingSecret: ""
+      secretKey: key
   resources:
     requests:
       cpu: 100m

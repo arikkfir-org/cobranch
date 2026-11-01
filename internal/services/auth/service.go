@@ -70,6 +70,13 @@ type Store interface {
 	Tokens(ctx context.Context, userID uuid.UUID) ([]Credential, error)
 	// RevokeToken revokes personal token id of user userID at now, or ErrNotFound.
 	RevokeToken(ctx context.Context, userID, id uuid.UUID, now time.Time) error
+	// AddSSHKey records SSH key k, its fingerprint hash, and its event, as its user; ErrSSHKeyTaken when a user holds
+	// the key already.
+	AddSSHKey(ctx context.Context, k Credential, hash []byte) error
+	// SSHKeys lists a user's SSH keys, newest first.
+	SSHKeys(ctx context.Context, userID uuid.UUID) ([]Credential, error)
+	// DeleteSSHKey deletes SSH key id of user userID, and records its event, or ErrNotFound.
+	DeleteSSHKey(ctx context.Context, userID, id uuid.UUID) error
 	// Sessions lists a user's sessions that are not revoked, newest first.
 	Sessions(ctx context.Context, userID uuid.UUID) ([]Session, error)
 	// Revoke revokes session id of user userID at now, or ErrNotFound.
@@ -362,9 +369,9 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 	case ValidSecret(PrefixSession, token):
 		return s.authenticateSession(ctx, token)
 	case ValidSecret(PrefixPersonalToken, token):
-		return s.authenticateCredential(ctx, token, CredentialPersonalToken)
+		return s.authenticateCredential(ctx, Hash(token), CredentialPersonalToken)
 	case ValidSecret(PrefixAPIKey, token):
-		return s.authenticateCredential(ctx, token, CredentialAPIKey)
+		return s.authenticateCredential(ctx, Hash(token), CredentialAPIKey)
 	}
 	return Authenticated{}, ErrUnauthenticated
 }

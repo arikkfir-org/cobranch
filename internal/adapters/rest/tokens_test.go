@@ -44,8 +44,8 @@ func TestMyTokens(t *testing.T) {
 	})
 }
 
-// tokenCase is a request to the viewer's personal tokens, against Alice with a token of hers, "Old laptop", already
-// made.
+// tokenCase is a request to the viewer's personal tokens or SSH keys, against Alice with one of hers, "Old laptop",
+// already made.
 type tokenCase struct {
 	name       string
 	viewer     func(alice auth.Authenticated) *auth.Authenticated
@@ -59,19 +59,29 @@ type tokenCase struct {
 
 func runTokenCases(t *testing.T, tests []tokenCase) {
 	t.Helper()
+	runCredentialCases(t, func(t *testing.T, service *auth.Service, alice auth.Authenticated) uuid.UUID {
+		t.Helper()
+		token, _, err := service.CreateToken(context.Background(), alice, auth.TokenInput{Name: "Old laptop"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return token.ID
+	}, tests)
+}
+
+// runCredentialCases runs tests, each after seed made Alice's credential "Old laptop".
+func runCredentialCases(t *testing.T, seed func(t *testing.T, service *auth.Service, alice auth.Authenticated) uuid.UUID, tests []tokenCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service, alice, _ := signedIn(t)
-			token, _, err := service.CreateToken(context.Background(), alice, auth.TokenInput{Name: "Old laptop"})
-			if err != nil {
-				t.Fatal(err)
-			}
+			id := seed(t, service, alice)
 			var viewer *auth.Authenticated
 			if tt.viewer != nil {
 				viewer = tt.viewer(alice)
 			}
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest(tt.method, tt.path(token.ID), strings.NewReader(tt.body))
+			req := httptest.NewRequest(tt.method, tt.path(id), strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil)).ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {

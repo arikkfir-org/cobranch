@@ -130,6 +130,7 @@ type ComplexityRoot struct {
 
 	Mutation struct {
 		AcceptInvitation     func(childComplexity int, id string) int
+		AddSSHKey            func(childComplexity int, input SSHKeyInput) int
 		ApproveJoinRequest   func(childComplexity int, organizationID string, id string, roleID string) int
 		CancelInvitation     func(childComplexity int, organizationID string, id string) int
 		CreateAPIKey         func(childComplexity int, organizationID string, input APIKeyInput) int
@@ -141,6 +142,7 @@ type ComplexityRoot struct {
 		DeclineJoinRequest   func(childComplexity int, organizationID string, id string) int
 		DeleteAPIKey         func(childComplexity int, organizationID string, id string) int
 		DeleteRole           func(childComplexity int, organizationID string, id string) int
+		DeleteSSHKey         func(childComplexity int, id string) int
 		GrantRepositoryRole  func(childComplexity int, repositoryID string, principalID string, roleID string) int
 		GrantRole            func(childComplexity int, organizationID string, userID string, roleID string) int
 		InviteMember         func(childComplexity int, organizationID string, email string, roleID string) int
@@ -248,6 +250,15 @@ type ComplexityRoot struct {
 		Permissions    func(childComplexity int) int
 	}
 
+	SSHKey struct {
+		CreatedAt   func(childComplexity int) int
+		Fingerprint func(childComplexity int) int
+		ID          func(childComplexity int) int
+		LastUsedAt  func(childComplexity int) int
+		Name        func(childComplexity int) int
+		PublicKey   func(childComplexity int) int
+	}
+
 	Session struct {
 		CreatedAt  func(childComplexity int) int
 		Current    func(childComplexity int) int
@@ -267,6 +278,7 @@ type ComplexityRoot struct {
 		Organizations  func(childComplexity int) int
 		Permissions    func(childComplexity int) int
 		PersonalTokens func(childComplexity int) int
+		SSHKeys        func(childComplexity int) int
 		Sessions       func(childComplexity int) int
 	}
 }
@@ -279,6 +291,8 @@ type MutationResolver interface {
 	RevokeSession(ctx context.Context, id string) (bool, error)
 	CreatePersonalToken(ctx context.Context, input PersonalTokenInput) (*PersonalTokenCreated, error)
 	RevokePersonalToken(ctx context.Context, id string) (bool, error)
+	AddSSHKey(ctx context.Context, input SSHKeyInput) (*SSHKey, error)
+	DeleteSSHKey(ctx context.Context, id string) (bool, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -332,6 +346,7 @@ type RepositoryResolver interface {
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
 	PersonalTokens(ctx context.Context, obj *User) ([]*PersonalToken, error)
+	SSHKeys(ctx context.Context, obj *User) ([]*SSHKey, error)
 	Permissions(ctx context.Context, obj *User) ([]string, error)
 	Organizations(ctx context.Context, obj *User) ([]*Organization, error)
 	Invitations(ctx context.Context, obj *User) ([]*Invitation, error)
@@ -714,6 +729,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AcceptInvitation(childComplexity, args["id"].(string)), true
+	case "Mutation.addSSHKey":
+		if e.ComplexityRoot.Mutation.AddSSHKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_addSSHKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AddSSHKey(childComplexity, args["input"].(SSHKeyInput)), true
 	case "Mutation.approveJoinRequest":
 		if e.ComplexityRoot.Mutation.ApproveJoinRequest == nil {
 			break
@@ -835,6 +861,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteRole(childComplexity, args["organizationId"].(string), args["id"].(string)), true
+	case "Mutation.deleteSSHKey":
+		if e.ComplexityRoot.Mutation.DeleteSSHKey == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteSSHKey_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteSSHKey(childComplexity, args["id"].(string)), true
 	case "Mutation.grantRepositoryRole":
 		if e.ComplexityRoot.Mutation.GrantRepositoryRole == nil {
 			break
@@ -1418,6 +1455,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Role.Permissions(childComplexity), true
 
+	case "SSHKey.createdAt":
+		if e.ComplexityRoot.SSHKey.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.CreatedAt(childComplexity), true
+	case "SSHKey.fingerprint":
+		if e.ComplexityRoot.SSHKey.Fingerprint == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.Fingerprint(childComplexity), true
+	case "SSHKey.id":
+		if e.ComplexityRoot.SSHKey.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.ID(childComplexity), true
+	case "SSHKey.lastUsedAt":
+		if e.ComplexityRoot.SSHKey.LastUsedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.LastUsedAt(childComplexity), true
+	case "SSHKey.name":
+		if e.ComplexityRoot.SSHKey.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.Name(childComplexity), true
+	case "SSHKey.publicKey":
+		if e.ComplexityRoot.SSHKey.PublicKey == nil {
+			break
+		}
+
+		return e.ComplexityRoot.SSHKey.PublicKey(childComplexity), true
+
 	case "Session.createdAt":
 		if e.ComplexityRoot.Session.CreatedAt == nil {
 			break
@@ -1509,6 +1583,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.PersonalTokens(childComplexity), true
+	case "User.sshKeys":
+		if e.ComplexityRoot.User.SSHKeys == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.SSHKeys(childComplexity), true
 	case "User.sessions":
 		if e.ComplexityRoot.User.Sessions == nil {
 			break
@@ -1530,6 +1610,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
+			graphql.NewInputUnmarshaler("SSHKeyInput", ec.unmarshalInputSSHKeyInput),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 		)
 	}
@@ -1772,6 +1853,10 @@ type Mutation {
   createPersonalToken(input: PersonalTokenInput!): PersonalTokenCreated!
   "Revokes one of the viewer's personal tokens; the next request with it fails. False when the viewer has no such token."
   revokePersonalToken(id: ID!): Boolean!
+  "Adds an SSH key that acts as the viewer over SSH, as their session would; only from a session, never from a token or an API key."
+  addSSHKey(input: SSHKeyInput!): SSHKey!
+  "Deletes one of the viewer's SSH keys; the next connection with it fails; only from a session, never from a token or an API key. False when the viewer has no such key."
+  deleteSSHKey(id: ID!): Boolean!
 }
 
 "A person: a principal of kind user."
@@ -1784,6 +1869,8 @@ type User {
   sessions: [Session!]!
   "The user's personal tokens that are not revoked, expired ones included, newest first."
   personalTokens: [PersonalToken!]!
+  "The user's SSH keys, newest first."
+  sshKeys: [SSHKey!]!
 }
 
 type Email {
@@ -1833,6 +1920,26 @@ type PersonalTokenCreated {
   token: PersonalToken!
   "The token, to give a Git client as its password or a script as its bearer token."
   secret: String!
+}
+
+"An SSH key, as its user sees it."
+type SSHKey {
+  id: ID!
+  name: String!
+  "The key's type and base64, as an authorized_keys line has them, without its comment."
+  publicKey: String!
+  "The key's SHA256 fingerprint, as ssh-keygen -l shows it."
+  fingerprint: String!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
+"What adds an SSH key."
+input SSHKeyInput {
+  "What the key is for, 1 to 100 characters; the key's comment when null or empty."
+  name: String
+  "One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more."
+  publicKey: String!
 }
 
 "The scopes roles are granted at. Repositories come with their slice."
@@ -2390,6 +2497,24 @@ func (ec *executionContext) childFields_Role(ctx context.Context, field graphql.
 	return nil, fmt.Errorf("no field named %q was found under type Role", field.Name)
 }
 
+func (ec *executionContext) childFields_SSHKey(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_SSHKey_id(ctx, field)
+	case "name":
+		return ec.fieldContext_SSHKey_name(ctx, field)
+	case "publicKey":
+		return ec.fieldContext_SSHKey_publicKey(ctx, field)
+	case "fingerprint":
+		return ec.fieldContext_SSHKey_fingerprint(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_SSHKey_createdAt(ctx, field)
+	case "lastUsedAt":
+		return ec.fieldContext_SSHKey_lastUsedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type SSHKey", field.Name)
+}
+
 func (ec *executionContext) childFields_Session(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -2422,6 +2547,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_sessions(ctx, field)
 	case "personalTokens":
 		return ec.fieldContext_User_personalTokens(ctx, field)
+	case "sshKeys":
+		return ec.fieldContext_User_sshKeys(ctx, field)
 	case "permissions":
 		return ec.fieldContext_User_permissions(ctx, field)
 	case "organizations":
@@ -2561,6 +2688,20 @@ func (ec *executionContext) field_Mutation_acceptInvitation_args(ctx context.Con
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_addSSHKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (SSHKeyInput, error) {
+			return ec.unmarshalNSSHKeyInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKeyInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg0
 	return args, nil
 }
 
@@ -2795,6 +2936,20 @@ func (ec *executionContext) field_Mutation_deleteRole_args(ctx context.Context, 
 		return nil, err
 	}
 	args["id"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteSSHKey_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -4851,6 +5006,94 @@ func (ec *executionContext) fieldContext_Mutation_revokePersonalToken(ctx contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_revokePersonalToken_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_addSSHKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_addSSHKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AddSSHKey(ctx, fc.Args["input"].(SSHKeyInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *SSHKey) graphql.Marshaler {
+			return ec.marshalNSSHKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKey(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_addSSHKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SSHKey(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_addSSHKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteSSHKey(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteSSHKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteSSHKey(ctx, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteSSHKey(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteSSHKey_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -7690,6 +7933,144 @@ func (ec *executionContext) fieldContext_Role_organizationId(_ context.Context, 
 	return graphql.NewScalarFieldContext("Role", field, false, false, "ID")
 }
 
+func (ec *executionContext) _SSHKey_id(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "ID")
+}
+
+func (ec *executionContext) _SSHKey_name(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "String")
+}
+
+func (ec *executionContext) _SSHKey_publicKey(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_publicKey(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PublicKey, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_publicKey(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "String")
+}
+
+func (ec *executionContext) _SSHKey_fingerprint(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_fingerprint(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Fingerprint, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_fingerprint(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "String")
+}
+
+func (ec *executionContext) _SSHKey_createdAt(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "Time")
+}
+
+func (ec *executionContext) _SSHKey_lastUsedAt(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_SSHKey_lastUsedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LastUsedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_SSHKey_lastUsedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "Time")
+}
+
 func (ec *executionContext) _Session_id(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7988,6 +8369,38 @@ func (ec *executionContext) fieldContext_User_personalTokens(_ context.Context, 
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_PersonalToken(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _User_sshKeys(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_sshKeys(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().SSHKeys(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*SSHKey) graphql.Marshaler {
+			return ec.marshalNSSHKey2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKeyᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_sshKeys(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_SSHKey(ctx, field)
 		},
 	}
 	return fc, nil
@@ -9486,6 +9899,55 @@ func UnmarshalRoleInput(ctx context.Context, raw any) (RoleInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputSSHKeyInput(ctx context.Context, obj any) (SSHKeyInput, error) {
+	var it SSHKeyInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "publicKey"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "publicKey":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("publicKey"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.PublicKey = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalSSHKeyInput unmarshals raw into the SSHKeyInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalSSHKeyInput(ctx context.Context, raw any) (SSHKeyInput, error) {
+	var out SSHKeyInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "SSHKeyInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputSecretInput(ctx context.Context, obj any) (SecretInput, error) {
 	var it SecretInput
 	if obj == nil {
@@ -10167,6 +10629,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "revokePersonalToken":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_revokePersonalToken(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "addSSHKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_addSSHKey(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteSSHKey":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteSSHKey(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -10964,6 +11440,64 @@ func (ec *executionContext) _Role(ctx context.Context, sel ast.SelectionSet, obj
 	return out
 }
 
+var sSHKeyImplementors = []string{"SSHKey"}
+
+func (ec *executionContext) _SSHKey(ctx context.Context, sel ast.SelectionSet, obj *SSHKey) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, sSHKeyImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SSHKey")
+		case "id":
+			out.Values[i] = ec._SSHKey_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._SSHKey_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "publicKey":
+			out.Values[i] = ec._SSHKey_publicKey(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "fingerprint":
+			out.Values[i] = ec._SSHKey_fingerprint(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._SSHKey_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lastUsedAt":
+			out.Values[i] = ec._SSHKey_lastUsedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var sessionImplementors = []string{"Session"}
 
 func (ec *executionContext) _Session(ctx context.Context, sel ast.SelectionSet, obj *Session) graphql.Marshaler {
@@ -11064,6 +11598,12 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_personalTokens(ctx, field, obj)
+				})
+		case "sshKeys":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._User_sshKeys(ctx, field, obj)
 				})
 		case "permissions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -11926,6 +12466,35 @@ func (ec *executionContext) unmarshalNRoleScope2cobranchᚗdevᚋinternalᚋadap
 
 func (ec *executionContext) marshalNRoleScope2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleScope(ctx context.Context, sel ast.SelectionSet, v RoleScope) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNSSHKey2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKeyᚄ(ctx context.Context, sel ast.SelectionSet, v []*SSHKey) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSSHKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKey(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSSHKey2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKey(ctx context.Context, sel ast.SelectionSet, v *SSHKey) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "SSHKey!")
+		return graphql.Null
+	}
+	return ec._SSHKey(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNSSHKeyInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKeyInput(ctx context.Context, v any) (SSHKeyInput, error) {
+	res, err := ec.unmarshalInputSSHKeyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNSession2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSessionᚄ(ctx context.Context, sel ast.SelectionSet, v []*Session) graphql.Marshaler {

@@ -11,7 +11,7 @@ import (
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
-	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "HOOK_URL", "HOOK_TOKEN"}
+	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "GIT_SSH_ADDR", "GIT_SSH_HOST_KEY", "HOOK_URL", "HOOK_TOKEN"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -325,6 +325,10 @@ func TestLoadGitServer(t *testing.T) {
 			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
 				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, ShutdownTimeout: 20 * time.Second}},
 		{name: "a size that isn't one", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "10GB"}), wantErr: true},
+		{name: "SSH", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222", "COBRANCH_GIT_SSH_HOST_KEY": "-----BEGIN OPENSSH PRIVATE KEY-----"}),
+			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30,
+				SSHAddr: ":2222", SSHHostKey: "-----BEGIN OPENSSH PRIVATE KEY-----", ShutdownTimeout: 20 * time.Second}},
+		{name: "SSH without a host key", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222"}), wantErr: true},
 		{name: "no bucket", env: map[string]string{}, wantErr: true},
 	}
 	for _, tt := range tests {

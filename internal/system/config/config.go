@@ -4,6 +4,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/url"
@@ -259,7 +260,11 @@ type GitServer struct {
 	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.
 	CacheSize Size `envconfig:"GIT_CACHE_SIZE" default:"10Gi"`
 	// MaxPushSize is the largest pack a push may send, such as 2Gi.
-	MaxPushSize     Size          `envconfig:"GIT_MAX_PUSH_SIZE" default:"2Gi"`
+	MaxPushSize Size `envconfig:"GIT_MAX_PUSH_SIZE" default:"2Gi"`
+	// SSHAddr is where it also serves Git over SSH, such as :2222; empty, it serves HTTPS alone.
+	SSHAddr string `envconfig:"GIT_SSH_ADDR"`
+	// SSHHostKey is the private key, in PEM, that SSH clients know the server by; SSHAddr needs it.
+	SSHHostKey      string        `envconfig:"GIT_SSH_HOST_KEY"`
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
 }
 
@@ -268,6 +273,9 @@ func LoadGitServer() (GitServer, error) {
 	var c GitServer
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return GitServer{}, fmt.Errorf("reading git-server's configuration from the COBRANCH_ variables: %w", err)
+	}
+	if c.SSHAddr != "" && c.SSHHostKey == "" {
+		return GitServer{}, errors.New("COBRANCH_GIT_SSH_ADDR needs COBRANCH_GIT_SSH_HOST_KEY, the private key SSH clients know the server by")
 	}
 	return c, nil
 }

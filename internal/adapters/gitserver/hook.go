@@ -35,6 +35,8 @@ type pending struct {
 	pusher   uuid.UUID
 	dir      string
 	received time.Time
+	// transport is how the push came.
+	transport git.Transport
 }
 
 // hookRequest is what a push's hook sends: the ref updates Git gave it on its standard input, and where Git keeps the
@@ -118,7 +120,7 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 		slog.ErrorContext(ctx, "Storing a push's pack failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
-	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: git.TransportHTTPS,
+	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: p.transport,
 		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received})
 	if err != nil {
 		slog.ErrorContext(ctx, "Recording a push failed", "push", p.id, "repository", p.repo.ID, "error", err)

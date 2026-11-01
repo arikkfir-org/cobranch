@@ -2,9 +2,9 @@
 # pages where the REST API answers (COBRANCH_REST_URL, or, when empty, the root of their own host), where the Auth
 # server does (COBRANCH_AUTH_URL; empty, sign-in isn't set up), where the Console itself does (COBRANCH_CONSOLE_URL,
 # whose path is the pages' root when a route mounts it at a prefix; empty, the root of their own host) and where Git
-# clients reach the Git server (COBRANCH_GIT_URL, which clone URLs start with; empty, there are none). The pages
-# route in the browser, so a page at any depth asks for config.json beside itself, and every directory answers it.
-# The operator's routes bring the domain and TLS.
+# clients reach the Git server (COBRANCH_GIT_URL over HTTPS and COBRANCH_GIT_SSH_URL over SSH, which clone URLs start
+# with; empty, there are none). The pages route in the browser, so a page at any depth asks for config.json beside
+# itself, and every directory answers it. The operator's routes bring the domain and TLS.
 {
 	admin off
 	auto_https off
@@ -27,7 +27,7 @@
 	handle @config {
 		header Content-Type application/json
 		header Cache-Control no-store
-		respond `\{"restUrl":"{env.COBRANCH_REST_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}","gitUrl":"{env.COBRANCH_GIT_URL}"\}` 200
+		respond `\{"restUrl":"{env.COBRANCH_REST_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}","gitUrl":"{env.COBRANCH_GIT_URL}","gitSshUrl":"{env.COBRANCH_GIT_SSH_URL}"\}` 200
 	}
 	handle {
 		root * /srv

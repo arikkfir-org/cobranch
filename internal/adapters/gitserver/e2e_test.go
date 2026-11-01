@@ -32,8 +32,11 @@ import (
 const hookEnv = "COBRANCH_TEST_GIT_HOOK"
 
 // TestMain runs the test binary as a push's pre-receive hook when the Git server's hook script runs it, as the
-// cobranch binary runs as git-hook.
+// cobranch binary runs as git-hook, and as Git's SSH client when a test's core.sshCommand runs it.
 func TestMain(m *testing.M) {
+	if dir := os.Getenv(sshClientEnv); dir != "" {
+		os.Exit(runSSHClient(dir, os.Args[1:]))
+	}
 	if os.Getenv(hookEnv) == "1" {
 		os.Exit(gitserver.RunHook(context.Background(), gitserver.HookEnv{
 			URL: os.Getenv(gitserver.HookURLEnv), Token: os.Getenv(gitserver.HookTokenEnv), Quarantine: os.Getenv("GIT_QUARANTINE_PATH"),
@@ -112,6 +115,14 @@ func migrate(t *testing.T, pool *pgxpool.Pool) {
 // serve starts a Git server with its own cache in dataDir, and returns its URL.
 func (s *stack) serve(dataDir string) string {
 	s.t.Helper()
+	server := httptest.NewServer(s.server(dataDir).Handler())
+	s.t.Cleanup(server.Close)
+	return server.URL
+}
+
+// server prepares a Git server with its own cache in dataDir.
+func (s *stack) server(dataDir string) *gitserver.Server {
+	s.t.Helper()
 	self, err := os.Executable()
 	if err != nil {
 		s.t.Fatal(err)
@@ -125,9 +136,7 @@ func (s *stack) serve(dataDir string) string {
 		s.t.Fatal(err)
 	}
 	s.t.Cleanup(func() { _ = srv.Close() })
-	server := httptest.NewServer(srv.Handler())
-	s.t.Cleanup(server.Close)
-	return server.URL
+	return srv
 }
 
 // hookedStore is the stack's store, with its record hook in front of Record.
