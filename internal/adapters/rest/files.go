@@ -52,9 +52,11 @@ func codeFail(err error) error {
 	return fail(err, "repository")
 }
 
-// etag is the strong entity tag of an answer of kind that the commit and the path fix.
-func etag(kind, commit, path string) string {
-	sum := sha256.Sum256([]byte(kind + "\x00" + shape + "\x00" + commit + "\x00" + path))
+// etag is the strong entity tag of an answer of kind that the commit, the path, the ref asked and the organization's
+// and the repository's slugs fix: a rendered README's links name the ref and the slugs, so the same commit asked
+// another way, or after a rename, is another answer.
+func etag(kind, commit, path, ref, org, repo string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{kind, shape, commit, path, ref, org, repo}, "\x00")))
 	return `"` + hex.EncodeToString(sum[:16]) + `"`
 }
 
@@ -111,7 +113,7 @@ func (a api) GetTree(ctx context.Context, req GetTreeRequestObject) (GetTreeResp
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := etag("tree", tree.Commit, tree.Path)
+	tag := etag("tree", tree.Commit, tree.Path, refOf(req.Params.Ref), req.Org, req.Repo)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetTree304Response{Headers: GetTree304ResponseHeaders{ETag: tag}}, nil
 	}
@@ -142,7 +144,7 @@ func (a api) GetBlob(ctx context.Context, req GetBlobRequestObject) (GetBlobResp
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := etag("blob", f.Commit, f.Path)
+	tag := etag("blob", f.Commit, f.Path, refOf(req.Params.Ref), req.Org, req.Repo)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetBlob304Response{Headers: GetBlob304ResponseHeaders{ETag: tag}}, nil
 	}

@@ -119,9 +119,9 @@ answers 304 without a body.
 A file whose name ends in `.md`, `.markdown`, `.mdown`, `.mkd` or `.mkdn` opens rendered, with a switch to its source.
 The REST and GraphQL servers render it, so every client gets the same HTML, and the Console only shows it.
 
-**Markdown renders on the server and shows in a frame that runs nothing and loads only the installation’s images**
+**Markdown renders on the server and shows in a frame that runs nothing and loads nothing from outside but images**
 
-![Markdown renders on the server and shows in a frame that runs nothing and loads only the installation’s images](code-browsing/markdown.svg)
+![Markdown renders on the server and shows in a frame that runs nothing and loads nothing from outside but images](code-browsing/markdown.svg)
 
 The sanitizer is the guard; the Console’s frame is a second one, which holds even if the sanitizer lets something
 through.
@@ -196,9 +196,10 @@ on.
 
 ## Caching
 
-- **ETags from the commit.** A tree's and a file's answer is fixed by the commit its ref resolved to, its path and the
-  renderer's version, so its ETag is their hash. A history page's hashes the page itself, since the push worker maps a
-  commit's people to users after the push. A matching `If-None-Match` answers `304` without a body. Every answer sends
+- **ETags from the commit.** A tree's and a file's answer is fixed by the commit its ref resolved to, its path, the ref
+  asked, the organization's and the repository's slugs (a rendered README's links name them) and the renderer's version,
+  so its ETag is their hash. A history page's hashes the page itself, since the push worker maps a commit's people to
+  users after the push. A matching `If-None-Match` answers `304` without a body. Every answer sends
   `Cache-Control: private, no-cache`, as the house rules ask.
 - **Raw bytes at a commit are immutable.** **Agreed (owner, 2026-11-01):** `…/raw` asked at the full name of the commit
   it resolves to, as the Console's images always are, answers `Cache-Control: private, max-age=31536000, immutable`, its
@@ -233,7 +234,9 @@ Nothing for the operator: the chart wires the internal call whenever it runs the
 | `COBRANCH_GIT_INTERNAL_URL` on the REST and GraphQL servers, that Service's URL | `urls.git` is set |
 | Job `<release>-seed`, after each install and upgrade, where the migrate Job runs: a demo owner's push of a history to the demo organization's website, unless it has one | `seed.enabled`, with `urls.auth` and `urls.git` |
 
-An operator whose NetworkPolicies select the Git server admits the REST and GraphQL servers to port `8081`.
+An operator whose NetworkPolicies select the servers admits the REST and GraphQL servers to the Git server's port
+`8081`, and, with `seed.enabled`, the seed Job to the Auth, REST and Git servers' port `8080`; otherwise the Job waits
+for them until its deadline and fails the install.
 
 ## Tests
 

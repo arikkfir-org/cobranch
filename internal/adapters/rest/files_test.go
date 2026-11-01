@@ -205,9 +205,17 @@ func TestRawAttachment(t *testing.T) {
 	}
 }
 
-// TestFilesConditional checks that every read of a file answers 304 for the ETag the caller holds, and that a tree's
-// and a file's change with the commit their ref names.
+// TestFilesConditional checks that every read of a file answers 304 for the ETag the caller holds, that a tree's and a
+// file's change with the commit their ref names, and that the same commit asked at another ref is another answer,
+// since a rendered README's links name the ref.
 func TestFilesConditional(t *testing.T) {
+	f := newOrgFixture(t)
+	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n"}, "v2.0.0")
+	atMain := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/blob?path=README.md&ref=main", "").Header().Get("ETag")
+	atTag := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/blob?path=README.md&ref=v2.0.0", "").Header().Get("ETag")
+	if atMain == "" || atMain == atTag {
+		t.Errorf("the same commit's ETag at main and at a tag: %q, %q", atMain, atTag)
+	}
 	for _, path := range []string{"/v1/orgs/acme/repos/website/tree?path=docs", "/v1/orgs/acme/repos/website/blob?path=README.md",
 		"/v1/orgs/acme/repos/website/raw?path=README.md"} {
 		t.Run(path, func(t *testing.T) {

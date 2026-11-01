@@ -57,7 +57,9 @@ lists every value, and `values.schema.json` checks them at install.
 - **Demo data.** `seed.enabled` adds Cobranch's demo data after each migration, and lets the sign-in page sign in as
   any of its users with no provider, for a demo installation such as Cobranch's own pull request previews. With the
   Git server, a Job after each install and upgrade also pushes a history to the demo organization's website, unless it
-  has one. It is off by default; leave it off.
+  has one; NetworkPolicies that select the servers must admit the Job (pods labelled `app.kubernetes.io/component: seed`)
+  to the Auth, REST and Git servers' port `8080`, or it waits for them until its deadline. It is off by default; leave it
+  off.
 
 ## Upgrade
 
