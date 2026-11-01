@@ -17,7 +17,8 @@ type Processor interface {
 }
 
 // Run processes pushes until ctx ends: every waiting push, then again on each wake, or every poll. A push it fails
-// waits for another try, as the Processor keeps it; Run logs the failure and goes on with the rest.
+// waits for another try, as the Processor keeps it, which the first wake or poll once it is due takes; Run logs the
+// failure and goes on with the rest.
 func Run(ctx context.Context, p Processor, wake <-chan struct{}, poll time.Duration) {
 	timer := time.NewTimer(poll)
 	defer timer.Stop()

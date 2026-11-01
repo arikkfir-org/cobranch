@@ -181,10 +181,10 @@ after it committed, is asked again with the same push ID, which records nothing 
   four times, and a push already recorded is accepted as it was ([failure modes](architecture.md#failure-modes)).
 - **Then the push worker,** in a transaction of its own: it claims the push that has waited longest,
   `FOR UPDATE SKIP LOCKED`, so two replicas never take one push; maps its commits' authors and committers to principals;
-  and marks it processed. A push it fails keeps its error and waits for another try, a second after the first failure
-  and twice as long after each, at most an hour. `LISTEN` wakes it, and a poll every 30 seconds catches a lost
-  notification; its span links the push's trace, whose `traceparent` the push's row keeps. Until then a commit names its
-  author's email but no principal.
+  and marks it processed. A push it fails keeps its error and waits for another try, due a second after the first
+  failure and twice as long after each, at most an hour, and taken at the push worker's next wake once due. `LISTEN`
+  wakes it, and a poll every 30 seconds catches a lost notification and a retry that came due; its span links the push's
+  trace, whose `traceparent` the push's row keeps. Until then a commit names its author's email but no principal.
 
 ### Which pushes are accepted
 
@@ -268,7 +268,8 @@ active and every listed ref keeps its objects.
 - **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and uploads
   under `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes, and of pushes that
   brought a listed pack again.
-- **The cache** is an `emptyDir` of `gitServer.cache.size`, evicting the least recently used repositories' packs first.
+- **The cache** keeps up to `gitServer.cache.size` of packs, evicting the least recently used repositories' first, in
+  the pod's `emptyDir` of `gitServer.storage.sizeLimit`, beside the throwaway repositories of the requests in flight.
 
 ## SSH
 
@@ -292,7 +293,8 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 | --- | --- |
 | `urls.git` | Where Git clients reach the Git server, a host or a path prefix; the Console shows clone URLs under it |
 | `gitServer.replicas`, `pushWorker.replicas` | Two each; `pushWorker.replicas` null leaves the push worker's count to an autoscaler, which may scale it to zero while no push waits |
-| `gitServer.cache.size` | The pack cache's `emptyDir` size limit, 10 GiB by default |
+| `gitServer.cache.size` | How much of the bucket's packs a pod keeps before it evicts the least recently used repositories', 10 GiB by default |
+| `gitServer.storage.sizeLimit` | The pod's `emptyDir`, which holds the cache and the throwaway repositories of the requests in flight, 16 GiB by default: above `cache.size` by a few `maxPushSize` |
 | `gitServer.maxPushSize` | The largest pack a push may send, 2 GiB by default |
 | `gitServer.ssh.enabled`, `.port`, `.service`, `.hostKey.existingSecret` | SSH, from its pull request: off by default, then the Service the operator exposes and the host key |
 | `maintenance.compaction.packs` | The active packs that make a repository due for compaction, 8 by default |
