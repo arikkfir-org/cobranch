@@ -116,6 +116,11 @@
           "type": "string",
           "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
           "description": "The Back-office's public URL, where an installation's administrators run it: a host, and a path the route strips if any. Such as https://admin.cobranch.example.com."
+        },
+        "git": {
+          "type": "string",
+          "pattern": "^$|^https?://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~-]+)*/?$",
+          "description": "The Git server's public URL, where Git clients clone, fetch and push over HTTPS: a host, and a path the route strips if any. With it, the chart runs the Git server and the push worker. Such as https://git.cobranch.example.com or https://cobranch.example.com/git."
         }
       }
     },
@@ -316,6 +321,112 @@
       }
     },
     "adminServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "gitServer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "replicas",
+        "cache",
+        "maxPushSize",
+        "storage",
+        "resources"
+      ],
+      "properties": {
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "size"
+          ],
+          "properties": {
+            "size": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti)?$",
+              "description": "How much of the bucket's packs a pod keeps, such as 10Gi."
+            }
+          }
+        },
+        "maxPushSize": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*(Ki|Mi|Gi|Ti)?$",
+          "description": "The largest pack a push may send, such as 2Gi."
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sizeLimit"
+          ],
+          "properties": {
+            "sizeLimit": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The pod's emptyDir, which holds the cache and the requests in flight, as a Kubernetes quantity: above cache.size by a few maxPushSize."
+            }
+          }
+        },
+        "resources": {
+          "$ref": "#/definitions/resources"
+        },
+        "nodeSelector": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "tolerations": {
+          "type": "array"
+        },
+        "affinity": {
+          "type": "object"
+        },
+        "podAnnotations": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pushWorker": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -738,6 +849,19 @@
       }
     },
     "secretsKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "existingSecret": {
+          "type": "string"
+        },
+        "secretKey": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "internal": {
       "type": "object",
       "additionalProperties": false,
       "properties": {

@@ -7,7 +7,8 @@
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
        members, roles and settings under its slug, its repositories under theirs, and the viewer's own settings with
        their personal tokens. The design system's colours (docs/cobranch/designs/design-system), the REST
-       API at the URL config.json names, and the Auth server at the other URL it names. Caddy serves this page for
+       API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URL a
+       repository's clone URL starts with, when it names one. Caddy serves this page for
        every path, and it routes on the path: the organization's slug first, then its page or a repository's slug,
        then the repository's page. -->
   <style>
@@ -205,7 +206,7 @@
     };
     // The Console's own paths, which no organization's slug is.
     const reserved = ["sign-in", "new", "join", "invitations", "me", "settings"];
-    let config = { restUrl: "", authUrl: "" };
+    let config = { restUrl: "", authUrl: "", gitUrl: "" };
     let me = null;
     let orgs = [];
     let roles = []; // the roles the organization shown grants
@@ -259,7 +260,7 @@
     // The first load: where the APIs are, the version, and who the viewer is.
     // config.json sits beside the page's directory: for the Console's root without a trailing slash too.
     fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json()).then(async (c) => {
-      config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "" };
+      config = { restUrl: c.restUrl || "", authUrl: c.authUrl || "", gitUrl: (c.gitUrl || "").replace(/\/$/, "") };
       if (c.consoleUrl) base = new URL(c.consoleUrl).pathname.replace(/\/?$/, "/");
       try {
         me = await api("GET", "/me");
@@ -455,11 +456,26 @@
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
-      else sections = [h("section", { class: "panel" }, h("h3", {}, "Code"),
-          h("p", {}, "Nothing is pushed here yet: cloning and pushing arrive with the Git server. Until then a repository holds its settings and who may reach it."),
-          h("p", {}, "It opens on branch ", h("code", {}, "main"), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".")),
+      else sections = [repositoryCode(org, repo, can("repo.push")),
         h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p))))];
       main.replaceChildren(heading, error, ...sections);
+    }
+
+    // repositoryCode is a repository's Code page: how to clone it, and push to it for a viewer who may, over HTTPS with
+    // a personal token as the password. An installation that names no Git server has nothing to clone yet.
+    function repositoryCode(org, repo, push) {
+      const facts = h("p", {}, "It opens on branch ", h("code", {}, "main"), ", and its history names objects by ", h("code", {}, repo.objectFormat), ".");
+      if (!config.gitUrl) return h("section", { class: "panel" }, h("h3", {}, "Code"),
+        h("p", {}, "This installation's Git server has no address yet, so its repositories can't be cloned. Its operator gives it one."), facts);
+      const url = config.gitUrl + "/" + org.slug + "/" + repo.slug + ".git";
+      const code = h("code", {}, url);
+      const copy = h("button", { class: "button small", type: "button", onclick: () => {
+        navigator.clipboard.writeText(url).then(() => { copy.textContent = "Copied"; }).catch(() => { getSelection().selectAllChildren(code); });
+      } }, "Copy");
+      return h("section", { class: "panel" }, h("h3", {}, "Clone"), h("div", { class: "row" }, code, copy),
+        h("p", {}, "Git asks for a password: give it a ", h("a", { href: base + "settings", "data-nav": "" }, "personal token"), ", with any user name. ",
+          push ? "Pushing takes a token that may push, as tokens do unless you narrow them." : "You may read this repository, but not push to it."),
+        facts);
     }
 
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants

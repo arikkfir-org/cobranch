@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -49,7 +50,8 @@ type Recorder interface {
 // Config is how the Git server runs.
 type Config struct {
 	// DataDir holds the pack cache, the throwaway repositories and the hook, on one filesystem, so a repository
-	// hard-links packs from the cache. The server empties it when it starts.
+	// hard-links packs from the cache. The server empties it when it starts, and keeps the directory itself, which may
+	// be a volume's mount point.
 	DataDir string
 	// CacheSize is how many bytes of packs the cache keeps before it evicts the least recently used repositories'.
 	CacheSize int64
@@ -123,8 +125,14 @@ func New(ctx context.Context, cfg Config, a Authenticator, r Repositories, s Sna
 
 // prepare empties the data directory, left from a container that restarted, and writes the hook.
 func (s *Server) prepare() error {
-	if err := os.RemoveAll(s.cfg.DataDir); err != nil {
-		return fmt.Errorf("emptying %s: %w", s.cfg.DataDir, err)
+	left, err := os.ReadDir(s.cfg.DataDir)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("reading %s: %w", s.cfg.DataDir, err)
+	}
+	for _, entry := range left {
+		if err := os.RemoveAll(filepath.Join(s.cfg.DataDir, entry.Name())); err != nil {
+			return fmt.Errorf("emptying %s: %w", s.cfg.DataDir, err)
+		}
 	}
 	for _, dir := range []string{filepath.Join(cacheDir, incomingDir), workDir, hooksDir} {
 		if err := os.MkdirAll(filepath.Join(s.cfg.DataDir, dir), 0o700); err != nil {

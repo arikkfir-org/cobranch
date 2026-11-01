@@ -1,6 +1,8 @@
 {{/*
 A server of one API: its Deployment, Service and budget. Pass a dict of the root context, the component, which names
-the subcommand too, and the server's values.
+the subcommand too, and the server's values; and, for the Git workloads, bucket (false for one that never reads it),
+env (more of the container's variables, as YAML) and volumes (more emptyDirs: a name, a mountPath and the emptyDir
+each).
 */}}
 {{- define "cobranch.server" -}}
 {{- $root := .root }}
@@ -8,6 +10,10 @@ the subcommand too, and the server's values.
 {{- $name := printf "%s-%s" (include "cobranch.fullname" $root) .component }}
 {{- $values := .values }}
 {{- $api := ne .component "auth-server" }}
+{{- $bucket := $api }}
+{{- if hasKey . "bucket" }}
+{{- $bucket = .bucket }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,7 +43,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      {{- if $api }}
+      {{- if $bucket }}
       serviceAccountName: {{ include "cobranch.serviceAccount" $root }}
       {{- end }}
       automountServiceAccountToken: false
@@ -60,8 +66,10 @@ spec:
             - name: COBRANCH_HTTP_ADDR
               value: ":8080"
             {{- if $api }}
+            {{- if $bucket }}
             - name: COBRANCH_BLOB_URL
               value: {{ $root.Values.blob.url | quote }}
+            {{- end }}
             {{- if eq .component "admin-server" }}
             {{- with include "cobranch.signUpEnv" $root | trim }}
             {{- . | nindent 12 }}
@@ -75,8 +83,11 @@ spec:
             {{- include "cobranch.urlsEnv" $root | nindent 12 }}
             {{- include "cobranch.telemetryEnv" $root | nindent 12 }}
             {{- include "cobranch.databaseEnv" $root | nindent 12 }}
+            {{- with .env }}
+            {{- . | nindent 12 }}
+            {{- end }}
           {{- with $root.Values.blob.envFromSecret }}
-          {{- if $api }}
+          {{- if $bucket }}
           envFrom:
             - secretRef:
                 name: {{ . }}
@@ -88,7 +99,7 @@ spec:
               path: /healthz
               port: http
             periodSeconds: 10
-          # The schema is at least this version's, and the database (and, for an API, the bucket) answer.
+          # The schema is at least this version's, and the database (and the bucket, for a server that reads it) answer.
           readinessProbe:
             httpGet:
               path: /readyz
@@ -102,17 +113,26 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            {{- if and $api $root.Values.blob.volume }}
+            {{- if and $bucket $root.Values.blob.volume }}
             - name: blob
               mountPath: {{ $root.Values.blob.mountPath }}
+            {{- end }}
+            {{- range .volumes }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
             {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
-        {{- if $api }}
+        {{- if $bucket }}
         {{- with $root.Values.blob.volume }}
         - {{- toYaml (merge (dict "name" "blob") .) | nindent 10 }}
         {{- end }}
+        {{- end }}
+        {{- range .volumes }}
+        - name: {{ .name }}
+          emptyDir:
+            {{- toYaml .emptyDir | nindent 12 }}
         {{- end }}
 ---
 apiVersion: v1

@@ -270,3 +270,17 @@ they leave unset are the Back-office's. */}}
   value: {{ .Values.organizations.selfServe | quote }}
 {{- end }}
 {{- end -}}
+
+{{/* The Secret that holds the internal token, which the Git server bears to call the push worker. */}}
+{{- define "cobranch.internal.secret" -}}
+{{ .Values.internal.existingSecret | default (printf "%s-internal" (include "cobranch.fullname" .)) }}
+{{- end -}}
+
+{{/* The internal token, which the Git server bears and the push worker checks. */}}
+{{- define "cobranch.internalEnv" -}}
+- name: COBRANCH_INTERNAL_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "cobranch.internal.secret" . }}
+      key: {{ .Values.internal.secretKey }}
+{{- end -}}

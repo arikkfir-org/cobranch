@@ -1,0 +1,17 @@
+{{- if and .Values.urls.git (not .Values.internal.existingSecret) }}
+{{- $name := include "cobranch.internal.secret" . }}
+{{- $existing := lookup "v1" "Secret" .Release.Namespace $name }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "cobranch.labels" (dict "root" . "component" "internal") | nindent 4 }}
+type: Opaque
+data:
+  {{- if and $existing (hasKey $existing.data .Values.internal.secretKey) }}
+  {{ .Values.internal.secretKey }}: {{ index $existing.data .Values.internal.secretKey }}
+  {{- else }}
+  {{ .Values.internal.secretKey }}: {{ randAlphaNum 48 | b64enc }}
+  {{- end }}
+{{- end }}
