@@ -74,13 +74,17 @@ type AnnotationInput struct {
 	Summary string
 	Link    string
 	// Version is the version of the annotation the change was made from, which refuses one made meanwhile, or one that
-	// isn't there, with ErrAnnotationChanged: 0 names none, and AnyVersion whichever is there.
+	// isn't there, with ErrAnnotationChanged: 0 names none, AnyVersion whichever is there, and NoAnnotation none.
 	Version int64
 }
 
-// AnyVersion is a version a change names to change whichever version of an annotation is there, but not set one that
-// isn't (If-Match: *).
-const AnyVersion int64 = -1
+// The versions a change names that are no annotation's own.
+const (
+	// AnyVersion changes whichever version of an annotation is there, but sets none that isn't (If-Match: *).
+	AnyVersion int64 = -1
+	// NoAnnotation sets an annotation that isn't there, and refuses to change one that is (If-None-Match: *).
+	NoAnnotation int64 = -2
+)
 
 // Stale reports whether a change that names version want is refused by an annotation at version got.
 func Stale(want, got int64) bool {
@@ -97,7 +101,8 @@ const maxAnnotationLink = 2048
 // holding annotations.delete_any delete it. A *TakenError, which names them, matches it.
 var ErrAnnotationTaken = errors.New("another principal set this annotation")
 
-// ErrAnnotationChanged is a change that names a version of an annotation it no longer is, or of one that isn't there.
+// ErrAnnotationChanged is a change that names a version of an annotation it no longer is, or of one that isn't there,
+// or that names NoAnnotation where one is.
 var ErrAnnotationChanged = errors.New("the annotation changed since it was read")
 
 // TakenError refuses a change to an annotation that another principal set, naming them.
@@ -143,7 +148,7 @@ func ValidateAnnotation(in AnnotationInput) error {
 	if !utf8.ValidString(in.Summary) || utf8.RuneCountInString(in.Summary) > MaxAnnotationSummary {
 		return &orgs.ValidationError{Field: "summary", Code: "summary.invalid", Message: "at most 500 characters"}
 	}
-	if in.Version < AnyVersion {
+	if in.Version < NoAnnotation {
 		return &orgs.ValidationError{Field: "version", Code: "version.invalid", Message: "a version of the annotation, from 1"}
 	}
 	if in.Link == "" {
@@ -205,8 +210,8 @@ func (s *Service) SetAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID,
 }
 
 // DeleteAnnotation deletes an annotation from one of the repository's commits, which frees its name there: v's own
-// with annotations.write, any principal's with annotations.delete_any. A version other than 0 or AnyVersion refuses
-// it at any other with ErrAnnotationChanged; one that isn't there is repos.ErrNotFound.
+// with annotations.write, any principal's with annotations.delete_any. A version other than 0 refuses it at any other,
+// or one that isn't there, with ErrAnnotationChanged; without one, one that isn't there is repos.ErrNotFound.
 func (s *Service) DeleteAnnotation(ctx context.Context, v Viewer, repoID uuid.UUID, sha, name string, version int64) error {
 	ctx, span := tracer.Start(ctx, "code.Service.DeleteAnnotation")
 	defer span.End()
@@ -225,6 +230,9 @@ func (s *Service) DeleteAnnotation(ctx context.Context, v Viewer, repoID uuid.UU
 	}
 	if err := ValidateAnnotation(AnnotationInput{Name: name, Status: AnnotationPending, Version: version}); err != nil {
 		return err
+	}
+	if version == NoAnnotation {
+		return &orgs.ValidationError{Field: "version", Code: "version.invalid", Message: "a version of the annotation to delete"}
 	}
 	err = s.store.DeleteAnnotation(ctx, v.ID, repoID, sha, name, version, anyone)
 	if errors.Is(err, ErrAnnotationTaken) {

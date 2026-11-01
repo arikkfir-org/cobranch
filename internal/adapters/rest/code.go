@@ -171,7 +171,7 @@ func (a api) SetAnnotation(ctx context.Context, req SetAnnotationRequestObject) 
 	if err != nil {
 		return nil, err
 	}
-	match, err := ifMatch(req.Params.IfMatch)
+	match, err := setPrecondition(req.Params.IfMatch, req.Params.IfNoneMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +203,9 @@ func (a api) DeleteAnnotation(ctx context.Context, req DeleteAnnotationRequestOb
 	if err != nil {
 		return nil, err
 	}
+	if match == 0 {
+		return nil, refuse(http.StatusPreconditionRequired, "precondition.required", "Name the annotation's ETag in If-Match.")
+	}
 	if err := a.code.DeleteAnnotation(ctx, v, repo.ID, req.SHA, req.Name, match); err != nil {
 		return nil, fail(err, "annotation")
 	}
@@ -212,6 +215,27 @@ func (a api) DeleteAnnotation(ctx context.Context, req DeleteAnnotationRequestOb
 // annotationTag is a's ETag: its version, quoted.
 func annotationTag(a code.Annotation) string {
 	return `"` + strconv.FormatInt(a.Version, 10) + `"`
+}
+
+// setPrecondition is the version of an annotation that a PUT names: If-Match's, or code.NoAnnotation for If-None-Match
+// *. It refuses with 428 a PUT that names neither, and with 400 one that names both or another If-None-Match.
+func setPrecondition(ifMatchHeader, ifNoneMatch *string) (int64, error) {
+	match, err := ifMatch(ifMatchHeader)
+	none := ifNoneMatch != nil && strings.TrimSpace(*ifNoneMatch) != ""
+	switch {
+	case err != nil:
+		return 0, err
+	case none && match != 0:
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "Name If-Match to change the annotation or If-None-Match to set a new one, not both.")
+	case none && strings.TrimSpace(*ifNoneMatch) != "*":
+		return 0, refuse(http.StatusBadRequest, "precondition.invalid", "If-None-Match takes * alone: set the annotation only if it isn't there.")
+	case none:
+		return code.NoAnnotation, nil
+	case match == 0:
+		return 0, refuse(http.StatusPreconditionRequired, "precondition.required",
+			"Name the annotation's ETag in If-Match to change it, or If-None-Match: * to set a new one.")
+	}
+	return match, nil
 }
 
 // ifMatch is the version of an annotation that If-Match names: 0 without the header, code.AnyVersion for *, and a

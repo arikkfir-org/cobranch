@@ -158,7 +158,7 @@ func (s *Store) SetAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UU
 	list := s.Notes[repoID][sha]
 	i := slices.IndexFunc(list, func(a code.Annotation) bool { return a.Name == in.Name })
 	switch {
-	case i < 0 && in.Version != 0:
+	case i < 0 && in.Version != 0 && in.Version != code.NoAnnotation:
 		return code.Annotation{}, code.ErrAnnotationChanged
 	case i < 0:
 		return s.insertAnnotation(actor, repoID, sha, in), nil
@@ -167,7 +167,7 @@ func (s *Store) SetAnnotation(_ context.Context, actor uuid.UUID, repoID uuid.UU
 	switch {
 	case a.Principal == nil || a.Principal.ID != actor:
 		return code.Annotation{}, &code.TakenError{Name: in.Name, By: a.Principal}
-	case code.Stale(in.Version, a.Version):
+	case in.Version == code.NoAnnotation, code.Stale(in.Version, a.Version):
 		return code.Annotation{}, code.ErrAnnotationChanged
 	case a.Status == in.Status && a.Summary == in.Summary && a.Link == in.Link:
 		return *a, nil
@@ -208,7 +208,11 @@ func (s *Store) DeleteAnnotation(_ context.Context, actor uuid.UUID, repoID uuid
 	}
 	list := s.Notes[repoID][sha]
 	i := slices.IndexFunc(list, func(a code.Annotation) bool { return a.Name == name })
-	if i < 0 {
+	_, held := s.Commits[repoID][sha]
+	switch {
+	case i < 0 && version != 0 && held:
+		return code.ErrAnnotationChanged
+	case i < 0:
 		return repos.ErrNotFound
 	}
 	if a := list[i]; !anyone && (a.Principal == nil || a.Principal.ID != actor) {

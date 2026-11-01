@@ -94,14 +94,17 @@ func TestCodeStoreSetAnnotationVersions(t *testing.T) {
 		{name: "from any version", in: from(code.AnyVersion, annotation("ci/build", code.AnnotationSuccessful))},
 		{name: "from a version of none there", in: from(1, annotation("ci/test", code.AnnotationFailed)), wantErr: code.ErrAnnotationChanged},
 		{name: "from any version of none there", in: from(code.AnyVersion, annotation("ci/test", code.AnnotationFailed)), wantErr: code.ErrAnnotationChanged},
+		{name: "a new one where it is", in: from(code.NoAnnotation, annotation("ci/build", code.AnnotationFailed)), wantErr: code.ErrAnnotationChanged},
+		{name: "a new one where none is", in: from(code.NoAnnotation, annotation("ci/test", code.AnnotationFailed))},
 	}
 	for _, tt := range tests { // in order: each changes what the next meets
 		if _, err := f.c.SetAnnotation(ctx, f.max, f.website.ID, f.shaD, tt.in); !errors.Is(err, tt.wantErr) {
 			t.Errorf("SetAnnotation() %s = %v, want %v", tt.name, err, tt.wantErr)
 		}
 	}
-	if got, err := f.c.Annotations(ctx, f.website.ID, f.shaD); err != nil || len(got) != 1 || got[0].Version != 3 || got[0].Status != code.AnnotationSuccessful {
-		t.Errorf("Annotations() = %+v, %v; want ci/build alone, successful at version 3", got, err)
+	if got, err := f.c.Annotations(ctx, f.website.ID, f.shaD); err != nil || len(got) != 2 || got[0].Version != 3 || got[0].Status != code.AnnotationSuccessful ||
+		got[1].Version != 1 {
+		t.Errorf("Annotations() = %+v, %v; want ci/build successful at version 3, and ci/test new", got, err)
 	}
 }
 
@@ -184,6 +187,7 @@ func TestCodeStoreDeleteAnnotation(t *testing.T) {
 		anyone  bool
 		annName string
 		version int64
+		at      func(*codeFixture) string
 		wantErr error
 	}{
 		{name: "its principal", actor: func(f *codeFixture) uuid.UUID { return f.max }},
@@ -191,6 +195,9 @@ func TestCodeStoreDeleteAnnotation(t *testing.T) {
 		{name: "another principal", actor: func(f *codeFixture) uuid.UUID { return f.nia }, wantErr: code.ErrAnnotationTaken},
 		{name: "at the version it is", actor: func(f *codeFixture) uuid.UUID { return f.max }, version: 1},
 		{name: "at another version", actor: func(f *codeFixture) uuid.UUID { return f.max }, version: 2, wantErr: code.ErrAnnotationChanged},
+		{name: "a version of one that isn't there", actor: func(f *codeFixture) uuid.UUID { return f.max }, annName: "ci/test", version: 1, wantErr: code.ErrAnnotationChanged},
+		{name: "a version on a commit the repository doesn't hold", actor: func(f *codeFixture) uuid.UUID { return f.max }, version: 1,
+			at: func(f *codeFixture) string { return f.shaE }, wantErr: repos.ErrNotFound},
 		{name: "one that isn't there", actor: func(f *codeFixture) uuid.UUID { return f.max }, annName: "ci/test", wantErr: repos.ErrNotFound},
 	}
 	for _, tt := range tests {
@@ -204,8 +211,11 @@ func TestCodeStoreDeleteAnnotation(t *testing.T) {
 			if tt.annName != "" {
 				name = tt.annName
 			}
-			actor := tt.actor(f)
-			err := f.c.DeleteAnnotation(ctx, actor, f.website.ID, f.shaD, name, tt.version, tt.anyone)
+			actor, at := tt.actor(f), f.shaD
+			if tt.at != nil {
+				at = tt.at(f)
+			}
+			err := f.c.DeleteAnnotation(ctx, actor, f.website.ID, at, name, tt.version, tt.anyone)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("DeleteAnnotation() = %v, want %v", err, tt.wantErr)
 			}

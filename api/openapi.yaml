@@ -1344,13 +1344,14 @@ paths:
   /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}:
     put:
       operationId: setAnnotation
-      summary: Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted.
+      summary: Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
         - $ref: "#/components/parameters/annotation"
         - $ref: "#/components/parameters/ifMatchAnnotation"
+        - $ref: "#/components/parameters/ifNoneMatchAnnotation"
       requestBody:
         required: true
         content:
@@ -1379,11 +1380,13 @@ paths:
           $ref: "#/components/responses/Problem"
         "412":
           $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
     delete:
       operationId: deleteAnnotation
-      summary: Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's.
+      summary: Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -1402,6 +1405,8 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1426,7 +1431,13 @@ components:
     ifMatchAnnotation:
       name: If-Match
       in: header
-      description: The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there. Without it, the change applies to the annotation as it is.
+      description: The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchAnnotation:
+      name: If-None-Match
+      in: header
+      description: "*, to set an annotation that isn't there: one that is refuses with 412."
       schema:
         type: string
     org:

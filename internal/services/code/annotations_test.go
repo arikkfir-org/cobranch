@@ -119,7 +119,12 @@ func TestSetAnnotationVersions(t *testing.T) {
 		{name: "any version of one that isn't there is refused", in: from(code.AnyVersion, build(code.AnnotationPending)), wantErr: code.ErrAnnotationChanged},
 		{name: "another principal's is refused first, whatever the version", before: twice,
 			in: from(1, build(code.AnnotationSuccessful)), wantErr: code.ErrAnnotationTaken, taken: "CI"},
-		{name: "a version that can't be one", in: from(-2, build(code.AnnotationPending)), wantErr: invalid("version.invalid")},
+		{name: "a new one where there is none", in: from(code.NoAnnotation, build(code.AnnotationPending))},
+		{name: "a new one where its own is, is refused", before: twice, viewer: func(f *annotators) code.Viewer { return f.ci },
+			in: from(code.NoAnnotation, build(code.AnnotationSuccessful)), wantErr: code.ErrAnnotationChanged},
+		{name: "a new one where another's is, is refused naming them", before: twice,
+			in: from(code.NoAnnotation, build(code.AnnotationSuccessful)), wantErr: code.ErrAnnotationTaken, taken: "CI"},
+		{name: "a version that can't be one", in: from(-3, build(code.AnnotationPending)), wantErr: invalid("version.invalid")},
 	})
 }
 
@@ -221,7 +226,9 @@ func TestDeleteAnnotation(t *testing.T) {
 		{name: "at the version it read", viewer: func(f *annotators) code.Viewer { return f.ci }, version: 1},
 		{name: "at any version", viewer: func(f *annotators) code.Viewer { return f.mia }, version: code.AnyVersion},
 		{name: "a version since changed is refused", viewer: func(f *annotators) code.Viewer { return f.ci }, version: 2, wantErr: code.ErrAnnotationChanged},
-		{name: "a version that can't be one", viewer: func(f *annotators) code.Viewer { return f.ci }, version: -2, wantErr: &orgs.ValidationError{Code: "version.invalid"}},
+		{name: "a version that can't be one", viewer: func(f *annotators) code.Viewer { return f.ci }, version: -3, wantErr: &orgs.ValidationError{Code: "version.invalid"}},
+		{name: "none, which deletes nothing", viewer: func(f *annotators) code.Viewer { return f.ci }, version: code.NoAnnotation, wantErr: &orgs.ValidationError{Code: "version.invalid"}},
+		{name: "a version of one that isn't there", viewer: func(f *annotators) code.Viewer { return f.ci }, annName: "ci/test", version: 1, wantErr: code.ErrAnnotationChanged},
 		{name: "a Maintainer deletes another's", viewer: func(f *annotators) code.Viewer { return f.mia }},
 		{name: "a Developer may not delete another's", viewer: func(f *annotators) code.Viewer { return f.dev }, wantErr: auth.ErrForbidden},
 		{name: "a Reader may not", viewer: func(f *annotators) code.Viewer { return f.rae }, wantErr: auth.ErrForbidden},

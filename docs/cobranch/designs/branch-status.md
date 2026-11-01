@@ -61,10 +61,11 @@ it was set to when it last reached either.
   the [architecture](architecture.md#events-and-background-work)'s event `annotation.changed`, its details saying
   whether it was set or deleted, and the table carries trigger `audit()`, so a deletion of someone else's annotation is
   on record; setting it again as it is changes nothing.
-- **A version, its ETag.** Each change bumps an annotation's version. A change may name the version it was made from,
-  `If-Match` in REST and `expectedVersion` in GraphQL, to refuse one made meanwhile, or one deleted meanwhile (412, or
-  CONFLICT `precondition.failed`); `If-Match: *` changes whichever is there. Without one, its principal's change applies
-  to the annotation as it is: only they change it, and a CI run reports without reading it first.
+- **A version, its ETag.** Each change bumps an annotation's version. REST's `PUT` and `DELETE` name the version they
+  were made from in `If-Match`, which refuses one made meanwhile, or one deleted meanwhile, with 412; `If-Match: *`
+  names whichever is there, and a first set names `If-None-Match: *`, which refuses one already there. Without either,
+  the answer is 428, so a CI run that retries late can't overwrite a newer run's verdict unawares. GraphQL's
+  `expectedVersion` does the same, answering CONFLICT `precondition.failed`, and is optional there.
 
 **Every role reads annotations; Developers and Automation set them; Maintainers also delete others’**
 
@@ -292,7 +293,7 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | Annotations belong to the commit, one per name, changed only by their principal and deleted by them or `annotations.delete_any` | The catalog's two permissions; a verdict on a commit holds for every branch at it | Proposed |
-| An annotation's version is its ETag, and naming it is optional: `If-Match` in REST (412 when it changed), `expectedVersion` in GraphQL (CONFLICT) | Only its principal changes it, and a CI run reports without reading first; a principal who reads first can still refuse a change made meanwhile | Proposed |
+| An annotation's version is its ETag: REST's `PUT` and `DELETE` require `If-Match`, or `If-None-Match: *` for a first set (428 without, 412 when it changed); GraphQL's `expectedVersion` is optional (CONFLICT) | The house rules' HTTP APIs require `If-Match`; GraphQL has no create-only form without another argument, and none of its mutations takes a version yet | Proposed |
 | Setting or deleting an annotation appends the architecture's `annotation.changed`, its details naming which | The day-one event the architecture agreed; one kind for a job to follow | Agreed |
 | Merge requirements come from the default branch's `/cobranch.yaml`, `branches.<name>.requires`, read by the Git server when a push moves `main`; a file that doesn't parse refuses the push | Settings live in Git; the requirements in effect always match the file | Proposed |
 | `merge_requirements` is keyed by the branch's name, not its ID | A requirement may name a branch before it exists, and outlives one deleted and pushed again | Changed |

@@ -61,6 +61,7 @@ func TestAnnotationMutations(t *testing.T) {
 		{name: "a version that can't be one", viewer: annotatedByOlivia(olivia), document: setFrom("0"), wantCode: badUserInput, wantReason: "version.invalid"},
 		{name: "its principal deletes the version it read", viewer: annotatedByOlivia(olivia), document: delFrom("1"), want: []string{`"deleteAnnotation":true`}},
 		{name: "a deletion from a version since changed", viewer: annotatedByOlivia(olivia), document: delFrom("3"), wantCode: conflict, wantReason: "precondition.failed"},
+		{name: "a deletion from a version of one that is no more", viewer: olivia, document: delFrom("1"), wantCode: conflict, wantReason: "precondition.failed"},
 		{name: "another principal's is refused, naming them", viewer: annotatedByOlivia(maxHolding(auth.RoleDeveloper)),
 			document: set("ci/build", `{status: SUCCESSFUL}`), wantCode: conflict, wantReason: "annotation.taken",
 			want: []string{`Olivia set annotation ci/build on this commit`}},

@@ -42,9 +42,15 @@ func then(first, next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *
 
 const buildPath = "/v1/orgs/acme/repos/website/commits/cccccccccccccccccccccccccccccccccccccccc/annotations/ci%2Fbuild"
 
+// fresh sets an annotation only if it isn't there; atFirst changes or deletes one at version 1.
+var (
+	fresh   = http.Header{"If-None-Match": {"*"}}
+	atFirst = http.Header{"If-Match": {`"1"`}}
+)
+
 func TestSetAnnotationAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
-		{name: "a Developer sets one, its name escaped", viewer: maxDeveloping, method: http.MethodPut, path: fixed(buildPath),
+		{name: "a Developer sets one, its name escaped", viewer: maxDeveloping, method: http.MethodPut, path: fixed(buildPath), header: fresh,
 			body: `{"status":"in_progress","summary":"Building","link":"https://ci.example.com/8"}`, wantStatus: 200,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
 				a := decode[Annotation](t, body)
@@ -53,20 +59,18 @@ func TestSetAnnotationAPI(t *testing.T) {
 					t.Errorf("annotation = %s", body)
 				}
 			}},
-		{name: "with its status alone", viewer: maxDeveloping, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`, wantStatus: 200,
+		{name: "with its status alone", viewer: maxDeveloping, method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"successful"}`, wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if a := decode[Annotation](t, body); a.Summary != "" || a.Link != "" || a.CompletedAt == nil {
 					t.Errorf("annotation = %s", body)
 				}
 			}},
-		{name: "its principal changes it", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`, wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+		{name: "its principal changes the version it read", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: atFirst, wantStatus: 200, wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if a := decode[Annotation](t, body); a.Version != 2 {
 					t.Errorf("annotation = %s, want version 2", body)
 				}
 			}},
-		{name: "its principal changes the version it read", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
-			header: http.Header{"If-Match": {`"1"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"2"`}}},
 		{name: "any version of the one there", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
 			header: http.Header{"If-Match": {"*"}}, wantStatus: 200},
 		{name: "a version since changed", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
@@ -75,26 +79,34 @@ func TestSetAnnotationAPI(t *testing.T) {
 			header: http.Header{"If-Match": {`W/"1"`}}, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "any version of one that isn't there", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
 			header: http.Header{"If-Match": {"*"}}, wantStatus: 412, wantCode: "precondition.failed"},
-		{name: "another principal's is refused, naming them", viewer: then(oliviaAnnotated, maxDeveloping), method: http.MethodPut, path: fixed(buildPath),
+		{name: "a new one where one is", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+			header: fresh, wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "neither If-Match nor If-None-Match", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			wantStatus: 428, wantCode: "precondition.required"},
+		{name: "both If-Match and If-None-Match", viewer: oliviaAnnotated, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"successful"}`,
+			header: http.Header{"If-Match": {`"1"`}, "If-None-Match": {"*"}}, wantStatus: 400, wantCode: "precondition.invalid"},
+		{name: "If-None-Match of a tag", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+			header: http.Header{"If-None-Match": {`"1"`}}, wantStatus: 400, wantCode: "precondition.invalid"},
+		{name: "another principal's is refused, naming them", viewer: then(oliviaAnnotated, maxDeveloping), method: http.MethodPut, path: fixed(buildPath), header: fresh,
 			body: `{"status":"successful"}`, wantStatus: 409, wantCode: "annotation.taken",
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if p := decode[Problem](t, body); p.Detail == nil || *p.Detail != "Olivia set annotation ci/build on this commit; only they change it." {
 					t.Errorf("problem = %s", body)
 				}
 			}},
-		{name: "a Reader may not", viewer: maxReading, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+		{name: "a Reader may not", viewer: maxReading, method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"pending"}`,
 			wantStatus: 403, wantCode: "auth.forbidden"},
-		{name: "a Member who doesn't read it finds nothing", viewer: maxim, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+		{name: "a Member who doesn't read it finds nothing", viewer: maxim, method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"pending"}`,
 			wantStatus: 404, wantCode: "repository.not_found"},
-		{name: "a token with repo.read alone may not", viewer: oliviaToken("repo.read"), method: http.MethodPut, path: fixed(buildPath), body: `{"status":"pending"}`,
+		{name: "a token with repo.read alone may not", viewer: oliviaToken("repo.read"), method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"pending"}`,
 			wantStatus: 403, wantCode: "auth.forbidden"},
-		{name: "a commit the repository doesn't hold", viewer: olivia, method: http.MethodPut, body: `{"status":"pending"}`,
+		{name: "a commit the repository doesn't hold", viewer: olivia, method: http.MethodPut, header: fresh, body: `{"status":"pending"}`,
 			path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("e") + "/annotations/ci"), wantStatus: 404, wantCode: "commit.not_found"},
-		{name: "an unknown status", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"passed"}`,
+		{name: "an unknown status", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"passed"}`,
 			wantStatus: 400, wantCode: "status.invalid"},
-		{name: "a name in uppercase", viewer: olivia, method: http.MethodPut, body: `{"status":"pending"}`,
+		{name: "a name in uppercase", viewer: olivia, method: http.MethodPut, header: fresh, body: `{"status":"pending"}`,
 			path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("c") + "/annotations/CI"), wantStatus: 400, wantCode: "name.invalid"},
-		{name: "a link that isn't a URL of the web", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), body: `{"status":"failed","link":"file:///etc/passwd"}`,
+		{name: "a link that isn't a URL of the web", viewer: olivia, method: http.MethodPut, path: fixed(buildPath), header: fresh, body: `{"status":"failed","link":"file:///etc/passwd"}`,
 			wantStatus: 400, wantCode: "link.invalid"},
 	})
 }
@@ -123,23 +135,25 @@ func TestListAnnotationsAPI(t *testing.T) {
 
 func TestDeleteAnnotationAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
-		{name: "its principal deletes it", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath), wantStatus: 204,
+		{name: "its principal deletes the version it read", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath), header: atFirst, wantStatus: 204,
 			check: func(t *testing.T, f *orgFixture, _ []byte) {
 				if left := f.codeStore.Notes[f.website.ID][shaOf("c")]; len(left) != 0 {
 					t.Errorf("annotations left = %+v", left)
 				}
 			}},
-		{name: "at the version it read", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath),
-			header: http.Header{"If-Match": {`"1"`}}, wantStatus: 204},
+		{name: "without If-Match", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath), wantStatus: 428, wantCode: "precondition.required"},
 		{name: "a version since changed", viewer: oliviaAnnotated, method: http.MethodDelete, path: fixed(buildPath),
 			header: http.Header{"If-Match": {`"7"`}}, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "a Developer may not delete another's", viewer: then(oliviaAnnotated, maxDeveloping), method: http.MethodDelete, path: fixed(buildPath),
-			wantStatus: 403, wantCode: "auth.forbidden"},
+			header: atFirst, wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a Maintainer deletes another's", viewer: then(oliviaAnnotated, func(f *orgFixture) *auth.Authenticated {
 			f.store.Grant(f.max.User.ID, auth.RoleMaintainer, auth.ScopeRepository, f.website.ID)
 			return &f.max
-		}), method: http.MethodDelete, path: fixed(buildPath), wantStatus: 204},
-		{name: "one that isn't there", viewer: olivia, method: http.MethodDelete, path: fixed(buildPath), wantStatus: 404, wantCode: "annotation.not_found"},
+		}), method: http.MethodDelete, path: fixed(buildPath), header: atFirst, wantStatus: 204},
+		{name: "one that isn't there, or is no more", viewer: olivia, method: http.MethodDelete, path: fixed(buildPath), header: atFirst,
+			wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "on a commit the repository doesn't hold", viewer: olivia, method: http.MethodDelete, header: atFirst,
+			path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("e") + "/annotations/ci"), wantStatus: 404, wantCode: "annotation.not_found"},
 	})
 }
 

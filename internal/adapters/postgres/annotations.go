@@ -64,7 +64,7 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 			return err
 		case row.Principal == nil || row.Principal.ID != actor:
 			return &code.TakenError{Name: in.Name, By: row.Principal}
-		case code.Stale(in.Version, row.Version):
+		case in.Version == code.NoAnnotation, code.Stale(in.Version, row.Version):
 			return code.ErrAnnotationChanged
 		case row.Status == in.Status && row.Summary == in.Summary && row.Link == in.Link:
 			return nil
@@ -80,12 +80,12 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 }
 
 // lockAnnotation answers the annotation in.Name on the commit, locked until the transaction ends, and false; or, when
-// there is none and in names no version, sets it for actor, appends its event and answers it and true. Its insert
-// locks the annotation there instead of setting one, waiting for a transaction that sets or deletes it, so it answers
-// one whatever runs beside it. A version named of one that isn't there is code.ErrAnnotationChanged.
+// there is none and in names no version or code.NoAnnotation, sets it for actor, appends its event and answers it and
+// true. Its insert locks the annotation there instead of setting one, waiting for a transaction that sets or deletes
+// it, so it answers one whatever runs beside it. A version named of one that isn't there is code.ErrAnnotationChanged.
 func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, bool, error) {
 	created := false
-	if in.Version == 0 {
+	if in.Version == 0 || in.Version == code.NoAnnotation {
 		id, err := uuid.NewV7()
 		if err != nil {
 			return code.Annotation{}, false, fmt.Errorf("naming the annotation: %w", err)
@@ -98,7 +98,7 @@ func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoI
 		}
 	}
 	row, err := q.AnnotationForUpdate(ctx, repoID, sha, in.Name)
-	if errors.Is(err, pgx.ErrNoRows) && in.Version != 0 {
+	if errors.Is(err, pgx.ErrNoRows) && in.Version != 0 && in.Version != code.NoAnnotation {
 		return code.Annotation{}, false, code.ErrAnnotationChanged
 	}
 	if err != nil {
@@ -113,12 +113,13 @@ func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoI
 
 // DeleteAnnotation deletes the annotation of name from the repository's commit, when actor set it or anyone is true
 // and it is at the version that version names, in one transaction that acts for actor, and appends event
-// annotation.changed (code.Store).
+// annotation.changed (code.Store). One that isn't there, on a commit the repository holds, is
+// code.ErrAnnotationChanged when version names one.
 func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error {
 	return transact(ctx, s.pool, s.q, "deleting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.AnnotationForUpdate(ctx, repoID, sha, name)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return repos.ErrNotFound
+			return missingAnnotation(ctx, q, repoID, sha, version)
 		}
 		if err != nil {
 			return fmt.Errorf("finding annotation %s: %w", name, err)
@@ -135,6 +136,20 @@ func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoI
 		}
 		return annotationEvent(ctx, q, row.Annotation.OrgID, actor, "deleted", repoID, a)
 	})
+}
+
+// missingAnnotation is why an annotation the commit doesn't hold can't be deleted: code.ErrAnnotationChanged when the
+// deletion names a version of it, on a commit the repository holds; repos.ErrNotFound otherwise.
+func missingAnnotation(ctx context.Context, q *queries.Queries, repoID uuid.UUID, sha string, version int64) error {
+	if version == 0 {
+		return repos.ErrNotFound
+	}
+	if _, err := q.CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
+		return repos.ErrNotFound
+	} else if err != nil {
+		return fmt.Errorf("finding commit %s: %w", sha, err)
+	}
+	return code.ErrAnnotationChanged
 }
 
 // annotationEvent appends event annotation.changed about annotation a on the repository, as actor, saying whether a

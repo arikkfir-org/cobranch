@@ -38,11 +38,12 @@ type Store interface {
 	// SetAnnotation sets the annotation in names on one of the repository's commits for actor, or changes the one
 	// actor set there before, records the change unless it changes nothing, and answers the annotation as it now is:
 	// repos.ErrNotFound when the repository holds no such commit, a *TakenError when another principal set it, and
-	// ErrAnnotationChanged when it is at another version than in names, or isn't there while in names one.
+	// ErrAnnotationChanged when it is at another version than in names, isn't there while in names one, or is there
+	// while in names NoAnnotation.
 	SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in AnnotationInput) (Annotation, error)
 	// DeleteAnnotation deletes the annotation of name from one of the repository's commits and records it, when actor
-	// set it or anyone is true: repos.ErrNotFound when there is none, a *TakenError when another principal set it, and
-	// ErrAnnotationChanged when it is at another version than version names, unless that is 0 or AnyVersion.
+	// set it or anyone is true: repos.ErrNotFound when there is none and version is 0, a *TakenError when another
+	// principal set it, and ErrAnnotationChanged when version names another than it is, or one that isn't there.
 	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error
 }
 

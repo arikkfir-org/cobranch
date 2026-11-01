@@ -15,7 +15,7 @@ extend type Repository {
 extend type Mutation {
   "Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before, and answers it as it now is; takes annotations.write. An annotation of that name that another principal set is refused (CONFLICT, annotation.taken), naming them, until it is deleted. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
   setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!, expectedVersion: Int): Annotation!
-  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version is refused (CONFLICT, precondition.failed)."
+  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
 }
 

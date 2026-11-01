@@ -604,6 +604,9 @@ type Id = openapi_types.UUID
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
 
+// IfNoneMatchAnnotation defines model for ifNoneMatchAnnotation.
+type IfNoneMatchAnnotation = string
+
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
 
@@ -680,14 +683,17 @@ type ListCommitsParams struct {
 
 // DeleteAnnotationParams defines parameters for DeleteAnnotation.
 type DeleteAnnotationParams struct {
-	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there. Without it, the change applies to the annotation as it is.
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
 	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
 }
 
 // SetAnnotationParams defines parameters for SetAnnotation.
 type SetAnnotationParams struct {
-	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there. Without it, the change applies to the annotation as it is.
+	// IfMatch The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
 	IfMatch *IfMatchAnnotation `json:"If-Match,omitempty"`
+
+	// IfNoneMatch *, to set an annotation that isn't there: one that is refuses with 412.
+	IfNoneMatch *IfNoneMatchAnnotation `json:"If-None-Match,omitempty"`
 }
 
 // ListPermissionsParams defines parameters for ListPermissions.
@@ -891,10 +897,10 @@ type ServerInterface interface {
 	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
 	ListAnnotations(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
-	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's.
+	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	DeleteAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params DeleteAnnotationParams)
-	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted.
+	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
@@ -2391,6 +2397,25 @@ func (siw *ServerInterfaceWrapper) SetAnnotation(w http.ResponseWriter, r *http.
 		}
 
 		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatchAnnotation
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
 
 	}
 
@@ -6615,6 +6640,20 @@ func (response DeleteAnnotation412ApplicationProblemPlusJSONResponse) VisitDelet
 	return err
 }
 
+type DeleteAnnotation428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAnnotation428ApplicationProblemPlusJSONResponse) VisitDeleteAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type DeleteAnnotationdefaultApplicationProblemPlusJSONResponse struct {
 	Body       Problem
 	StatusCode int
@@ -6749,6 +6788,20 @@ func (response SetAnnotation412ApplicationProblemPlusJSONResponse) VisitSetAnnot
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAnnotation428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAnnotation428ApplicationProblemPlusJSONResponse) VisitSetAnnotationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -7533,10 +7586,10 @@ type StrictServerInterface interface {
 	// ListAnnotations The annotations principals set on one of the repository's commits, by name; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/annotations)
 	ListAnnotations(ctx context.Context, request ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error)
-	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's.
+	// DeleteAnnotation Deletes an annotation from one of the repository's commits, which frees its name there; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
 	// (DELETE /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	DeleteAnnotation(ctx context.Context, request DeleteAnnotationRequestObject) (DeleteAnnotationResponseObject, error)
-	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted.
+	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(ctx context.Context, request SetAnnotationRequestObject) (SetAnnotationResponseObject, error)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
