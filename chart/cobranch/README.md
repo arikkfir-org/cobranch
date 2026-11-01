@@ -55,8 +55,9 @@ lists every value, and `values.schema.json` checks them at install.
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.
 - **Telemetry.** Logs go to stdout as JSON; set `telemetry.traces.endpoint` to an OTLP endpoint for traces.
 - **Demo data.** `seed.enabled` adds Cobranch's demo data after each migration, and lets the sign-in page sign in as
-  any of its users with no provider, for a demo installation such as Cobranch's own pull request previews. It is off
-  by default; leave it off.
+  any of its users with no provider, for a demo installation such as Cobranch's own pull request previews. With the
+  Git server, a Job after each install and upgrade also pushes a history to the demo organization's website, unless it
+  has one. It is off by default; leave it off.
 
 ## Upgrade
 

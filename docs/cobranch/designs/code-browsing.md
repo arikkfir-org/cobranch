@@ -223,6 +223,7 @@ Nothing for the operator: the chart wires the internal call whenever it runs the
 | --- | --- |
 | The Git server's container port `internal` (`8081`) and Service `<release>-git-server-internal` | `urls.git` is set |
 | `COBRANCH_GIT_INTERNAL_URL` on the REST and GraphQL servers, that Service's URL | `urls.git` is set |
+| Job `<release>-seed`, after each install and upgrade, where the migrate Job runs: a demo owner's push of a history to the demo organization's website, unless it has one | `seed.enabled`, with `urls.auth` and `urls.git` |
 
 An operator whose NetworkPolicies select the Git server admits the REST and GraphQL servers to port `8081`.
 
@@ -274,6 +275,7 @@ Nothing of an installation is in the product: the chart wires the internal call 
 | The Console shows rendered HTML in a sandboxed frame with its own Content Security Policy | A second guard that holds whatever the sanitizer misses, and no document reaches the Console's own page | Proposed |
 | A directory's README is the first of `README.md` … `README`, rendered in the tree's answer | One request per directory | Proposed |
 | History follows every parent by default in the Console, with a graph; `parents=first` keeps today's walk | A merge's second line shows; first parent stays one switch away | Proposed |
+| A demo installation's Job pushes a history to the demo organization's website: directories, Markdown, an image, a symlink, merges, a tag and an open branch | A preview shows every page of this slice at once, through the push path anyone takes | Agreed (owner, 2026-11-01) |
 | Raw bytes at a full commit name are cached as immutable; everything else is `private, no-cache` | A README's images load once; the house rules' default stays for whatever can change | Proposed |
 | Syntax colouring, each entry's last commit, blame, a file's history, diffs, an image proxy and code search come later | Keeps this slice to its issue | Proposed |
 

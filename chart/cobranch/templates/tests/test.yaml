@@ -2,8 +2,8 @@
 # helm test: every server is ready and answers, the Console and the Back-office serve their pages and where they find
 # the APIs, and, with the demo data on, a seeded sign-in makes a session the REST API accepts, which the Admin API
 # refuses unless the user administers the installation, who reads its settings and identity providers; with the Git
-# server, the user makes a personal token, clones a repository, pushes to it and finds the push in a fresh clone and in
-# the REST API's files, and its SSH Service, given one, answers.
+# server, the user makes a personal token, clones a repository the demo data's Job pushed to, pushes to it and finds
+# the push in a fresh clone and in the REST API's files, and its SSH Service, given one, answers.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -78,14 +78,7 @@ spec:
           {{- if and .Values.seed.enabled .Values.urls.auth }}
           # The sign-in page lists the demo users, a seeded sign-in sets the session cookie, and the cookie signs in.
           wget -qO- "$auth/providers" | tee /dev/stderr | grep -q '"subject":"owner"'
-          # signIn prints the session cookie of a seeded sign-in as $1. BusyBox's wget follows the redirect and drops its
-          # headers, so nc reads the raw response; stdin stays open until the response is in, since the server cancels
-          # a request whose client went away.
-          signIn() {
-            host=${auth#http://}
-            (printf 'GET /sign-in?user=%s HTTP/1.0\r\nHost: %s\r\n\r\n' "$1" "$host"; sleep 2) | nc "$host" 80 | tr -d '\r' \
-              | sed -n 's/^Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p'
-          }
+          {{- include "cobranch.signIn" . | nindent 10 }}
           cookie=$(signIn owner)
           [ -n "$cookie" ]
           wget -qO- --header "Cookie: $cookie" "$rest/v1/me" | tee /dev/stderr | grep -q '"displayName":"Olivia Owner"'
@@ -105,8 +98,8 @@ spec:
           {{- end }}
           {{- if .Values.urls.git }}
           # Olivia, who maintains Acme's website, makes a personal token from her session and clones the website with
-          # it, empty the first time. Her commit's push returns once the Git server recorded it, and a fresh clone,
-          # from any Git server, brings it.
+          # it. Her commit's push returns once the Git server recorded it, and a fresh clone, from any Git server,
+          # brings it.
           cookie=$(signIn owner)
           token=$(wget -qO- --header "Cookie: $cookie" --header 'Content-Type: application/json' --post-data '{"name":"helm test"}' "$rest/v1/me/tokens" \
             | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')
@@ -115,6 +108,8 @@ spec:
           mkdir -p /tmp/git && cd /tmp/git
           url="http://git:$token@${gitserver#http://}/acme/website.git"
           git clone -q "$url" website
+          # The demo data's Job pushed the website's history before the test ran.
+          [ "$(git -C website tag -l v1.0.0)" = v1.0.0 ]
           echo "Pushed by helm test at $(date -u +%FT%TZ)" >website/README.md
           git -C website add README.md
           git -C website -c user.name='Helm test' -c user.email=helm-test@cobranch.example commit -qm 'Run helm test'
