@@ -10,6 +10,7 @@ import (
 	"hash"
 	"io"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -172,7 +173,7 @@ func (s *blobStore) Copy(ctx context.Context, dstKey, srcKey string, opts *drive
 			ContentLanguage: src.ContentLanguage, Metadata: src.Metadata}}
 	r := &blobReader{ctx: ctx, q: s.q, key: srcKey, content: src.Content, end: src.Size}
 	if _, err := io.Copy(w, r); err != nil {
-		w.abort(ctx)
+		w.abort()
 		return fmt.Errorf("copying object %q to %q: %w", srcKey, dstKey, err)
 	}
 	return w.finish(ctx)
@@ -235,8 +236,9 @@ func (r *blobReader) Close() error                         { return nil }
 func (r *blobReader) Attributes() *driver.ReaderAttributes { return &r.attrs }
 func (r *blobReader) As(any) bool                          { return false }
 
-// blobWriter writes a large object a chunk at a time in one transaction, begun with its first chunk, and names it by
-// its key as it closes. A canceled context, or a failure, rolls the transaction back, large object and all.
+// blobWriter writes a large object a chunk at a time in one transaction, run by transact in a goroutine of its own from
+// the first chunk on, which the writer feeds the chunks one by one, and names it by its key as the writer closes. A
+// canceled context, a failure or an abort rolls the transaction back, large object and all.
 type blobWriter struct {
 	ctx        context.Context
 	s          *blobStore
@@ -244,10 +246,18 @@ type blobWriter struct {
 	ifNotExist bool
 	hash       hash.Hash
 	buf        []byte
-	tx         pgx.Tx
-	q          *queries.Queries
-	err        error
+	// chunks feeds the transaction, from the first chunk on; closed, it ends the transaction, which commits only if
+	// complete is set by then.
+	chunks   chan []byte
+	done     chan error
+	complete bool
+	// ended is set once the transaction's result was read from done.
+	ended bool
+	err   error
 }
+
+// errAborted is the transaction of a writer that was abandoned before it closed.
+var errAborted = errors.New("the write was abandoned")
 
 func (w *blobWriter) Write(p []byte) (int, error) {
 	written := 0
@@ -256,32 +266,72 @@ func (w *blobWriter) Write(p []byte) (int, error) {
 		w.buf = append(w.buf, p[:take]...)
 		p, written = p[take:], written+take
 		if len(w.buf) == blobChunk {
-			w.err = w.flush(w.ctx)
+			w.err = w.flush()
 		}
 	}
 	return written, w.err
 }
 
-// flush writes the buffered chunk: the large object's first, which begins the transaction, or the next.
-func (w *blobWriter) flush(ctx context.Context) error {
-	if w.tx == nil {
-		tx, err := w.s.pool.Begin(ctx)
-		if err != nil {
-			return fmt.Errorf("writing object %q: beginning the transaction: %w", w.row.Key, err)
-		}
-		w.tx, w.q = tx, w.s.q.WithTx(tx)
-		if w.buf == nil {
-			w.buf = []byte{} // nil would be NULL, which makes no large object: an empty object's is empty bytes
-		}
-		if w.row.Content, err = w.q.CreateLargeObject(ctx, w.buf); err != nil {
-			return fmt.Errorf("writing object %q: creating its large object: %w", w.row.Key, err)
-		}
-	} else if err := w.q.AppendLargeObject(ctx, w.row.Content, w.row.Size, w.buf); err != nil {
-		return fmt.Errorf("writing object %q at %d: %w", w.row.Key, w.row.Size, err)
+// flush hands the buffered chunk to the transaction, which the first chunk starts; it fails only if the transaction
+// ended already, with the transaction's error.
+func (w *blobWriter) flush() error {
+	if w.chunks == nil {
+		w.chunks, w.done = make(chan []byte), make(chan error, 1)
+		go func() {
+			w.done <- transact(w.ctx, w.s.pool, w.s.q, fmt.Sprintf("writing object %q", w.row.Key), uuid.Nil, w.write)
+		}()
 	}
-	_, _ = w.hash.Write(w.buf) // a hash.Hash never fails
-	w.row.Size += int64(len(w.buf))
-	w.buf = w.buf[:0]
+	chunk := w.buf
+	if chunk == nil {
+		chunk = []byte{} // nil would be NULL, which makes no large object: an empty object's is empty bytes
+	}
+	w.buf = nil                // the chunk is the transaction's now
+	_, _ = w.hash.Write(chunk) // a hash.Hash never fails
+	w.row.Size += int64(len(chunk))
+	select {
+	case w.chunks <- chunk:
+		return nil
+	case err := <-w.done:
+		w.ended = true
+		return err
+	}
+}
+
+// write is the writer's transaction: it writes each chunk to the large object, the first creating it, and once the
+// chunks end, names it by the object's key, unless the write was abandoned or its context ended.
+func (w *blobWriter) write(ctx context.Context, q *queries.Queries) error {
+	var content pgtype.Uint32
+	var at int64
+	for chunk := range w.chunks {
+		var err error
+		if !content.Valid {
+			content, err = q.CreateLargeObject(ctx, chunk)
+		} else {
+			err = q.AppendLargeObject(ctx, content, at, chunk)
+		}
+		if err != nil {
+			return fmt.Errorf("writing at %d: %w", at, err)
+		}
+		at += int64(len(chunk))
+	}
+	if !w.complete {
+		return errAborted
+	}
+	if err := ctx.Err(); err != nil {
+		return err //nolint:wrapcheck // transact wraps it with the object's key
+	}
+	row := w.row
+	row.Content = content
+	if !w.ifNotExist {
+		return q.PutBlob(ctx, row) //nolint:wrapcheck // transact wraps it with the object's key
+	}
+	added, err := q.AddBlob(ctx, queries.AddBlobParams(row))
+	if err != nil {
+		return err //nolint:wrapcheck // transact wraps it with the object's key
+	}
+	if !added {
+		return errBlobExists
+	}
 	return nil
 }
 
@@ -291,52 +341,34 @@ func (w *blobWriter) Close() error { return w.finish(w.ctx) }
 
 // finish closes the writer on ctx, the writer's own or a copy's.
 func (w *blobWriter) finish(ctx context.Context) error {
-	defer w.abort(ctx)
 	if w.err != nil {
+		w.abort()
 		return w.err
 	}
 	if err := ctx.Err(); err != nil {
+		w.abort()
 		return fmt.Errorf("writing object %q: %w", w.row.Key, err)
 	}
-	if len(w.buf) > 0 || w.tx == nil {
-		if err := w.flush(ctx); err != nil {
+	if len(w.buf) > 0 || w.chunks == nil {
+		if err := w.flush(); err != nil {
 			return err
 		}
 	}
 	w.row.Md5 = w.hash.Sum(nil)
-	if err := w.name(ctx); err != nil {
-		return err
-	}
-	if err := w.tx.Commit(ctx); err != nil {
-		return fmt.Errorf("writing object %q: committing: %w", w.row.Key, err)
-	}
-	return nil
+	w.complete = true
+	close(w.chunks)
+	w.ended = true
+	return <-w.done
 }
 
-// name names the large object by the object's key: in place of what the key named, or only if it named nothing.
-func (w *blobWriter) name(ctx context.Context) error {
-	if !w.ifNotExist {
-		if err := w.q.PutBlob(ctx, w.row); err != nil {
-			return fmt.Errorf("writing object %q: %w", w.row.Key, err)
-		}
-		return nil
+// abort ends the writer's transaction, which rolls back, a no-op before it began or once it ended.
+func (w *blobWriter) abort() {
+	if w.chunks == nil || w.ended {
+		return
 	}
-	added, err := w.q.AddBlob(ctx, queries.AddBlobParams(w.row))
-	if err != nil {
-		return fmt.Errorf("writing object %q: %w", w.row.Key, err)
-	}
-	if !added {
-		return fmt.Errorf("writing object %q: %w", w.row.Key, errBlobExists)
-	}
-	return nil
-}
-
-// abort rolls the writer's transaction back, a no-op once committed or before it began.
-func (w *blobWriter) abort(ctx context.Context) {
-	if w.tx != nil {
-		// A rollback that fails leaves the transaction to its connection's end, which rolls it back as well.
-		_ = w.tx.Rollback(context.WithoutCancel(ctx))
-	}
+	close(w.chunks)
+	w.ended = true
+	<-w.done //nolint:errcheck // errAborted, or the failure that ended it first: the write is abandoned either way
 }
 
 // blobPage is how many objects a list returns at most when its caller sets no page size.
