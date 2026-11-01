@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/repos"
 )
 
 // mergeConflicts is how many of a conflicted merge's paths its refusal names.
@@ -32,7 +34,9 @@ const mergeConflicts = 5
 // mergeHandler serves the internal call's merges: each builds the merge it asks for in a throwaway repository of one
 // snapshot and records it as a push of its base for its requester, transport api, through the same transaction and
 // checks as a client's push (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
-// "By asking Cobranch"). It answers 200 once the push is committed, and 409 for a merge Cobranch won't make.
+// "By asking Cobranch"). Its requester is the viewer whose token the caller sends on, who must hold repo.merge, and
+// repo.bypass for a merge past main's requirements. It answers 200 once the push is committed, 403 for a merge the
+// viewer may not ask for, 404 for a repository they can't see, and 409 for a merge Cobranch won't make.
 func (s *Server) mergeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		viewer, ok := s.internalViewer(w, r)
@@ -49,24 +53,55 @@ func (s *Server) mergeHandler() http.HandlerFunc {
 			problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "a repository's ID, and a merge of a branch into main"})
 			return
 		}
-		ctx, span := tracer.Start(auth.WithViewer(r.Context(), viewer), "gitserver.internal merge", trace.WithAttributes(attribute.String("cobranch.repository.id", id.String()),
-			attribute.String("cobranch.branch", req.Branch), attribute.String("cobranch.merge.method", string(req.Method))))
+		ctx, span := tracer.Start(auth.WithViewer(r.Context(), viewer), "gitserver.internal merge", trace.WithAttributes(
+			attribute.String("cobranch.repository.id", id.String()), attribute.String("cobranch.branch", req.Branch),
+			attribute.String("cobranch.merge.method", string(req.Method))))
 		defer span.End()
-		merged, err := s.merge(ctx, id, req)
-		var refused *code.MergeError
-		switch {
-		case errors.Is(err, code.ErrBranchMoved):
-			problem(w, http.StatusConflict, gitinternal.Problem{Code: gitinternal.CodeMoved, Message: code.ErrBranchMoved.Error()})
-		case errors.As(err, &refused):
-			problem(w, http.StatusConflict, gitinternal.Problem{Code: refused.Code, Message: refused.Message})
-		case err != nil:
-			span.SetStatus(codes.Error, err.Error())
-			slog.ErrorContext(ctx, "Merging a branch failed", "repository", id, "branch", req.Branch, "error", err)
-			problem(w, http.StatusInternalServerError, gitinternal.Problem{Message: "the merge could not be made"})
-		default:
-			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(gitinternal.MergedOf(merged)) // a caller gone away gets nothing more
+		merged, err := s.mergeFor(ctx, viewer.User, id, req)
+		if err != nil {
+			answerMerge(ctx, w, span, id, req.Branch, err)
+			return
 		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(gitinternal.MergedOf(merged)) // a caller gone away gets nothing more
+	}
+}
+
+// mergeFor makes req's merge in repository repoID once viewer may ask for it: they see the repository, hold repo.merge,
+// and repo.bypass for a merge past main's requirements, and merge as themselves.
+func (s *Server) mergeFor(ctx context.Context, viewer auth.User, repoID uuid.UUID, req code.MergeRequest) (code.Merged, error) {
+	_, held, err := s.repos.ByID(ctx, viewer, repoID)
+	switch {
+	case err != nil:
+		return code.Merged{}, fmt.Errorf("finding repository %s for its merge: %w", repoID, err)
+	case req.By.ID != viewer.ID:
+		return code.Merged{}, fmt.Errorf("%w: a merge only for the viewer who asks for it", auth.ErrForbidden)
+	case !slices.Contains(held, repos.PermMerge):
+		return code.Merged{}, fmt.Errorf("%w: %s on the repository", auth.ErrForbidden, repos.PermMerge)
+	case req.Bypass && !slices.Contains(held, repos.PermBypass):
+		return code.Merged{}, fmt.Errorf("%w: %s on the repository", auth.ErrForbidden, repos.PermBypass)
+	}
+	return s.merge(ctx, repoID, req)
+}
+
+// answerMerge answers a merge that failed: 403 for one the viewer may not ask for, 404 with the code of what it didn't
+// find, 409 for one Cobranch won't make, or 500, logged, for anything else.
+func answerMerge(ctx context.Context, w http.ResponseWriter, span trace.Span, repoID uuid.UUID, branch string, err error) {
+	var refused *code.MergeError
+	c, missing := gitinternal.CodeOf(err)
+	switch {
+	case errors.Is(err, auth.ErrForbidden):
+		problem(w, http.StatusForbidden, gitinternal.Problem{Message: err.Error()})
+	case missing:
+		problem(w, http.StatusNotFound, gitinternal.Problem{Code: c, Message: err.Error()})
+	case errors.Is(err, code.ErrBranchMoved):
+		problem(w, http.StatusConflict, gitinternal.Problem{Code: gitinternal.CodeMoved, Message: code.ErrBranchMoved.Error()})
+	case errors.As(err, &refused):
+		problem(w, http.StatusConflict, gitinternal.Problem{Code: refused.Code, Message: refused.Message})
+	default:
+		span.SetStatus(codes.Error, err.Error())
+		slog.ErrorContext(ctx, "Merging a branch failed", "repository", repoID, "branch", branch, "error", err)
+		problem(w, http.StatusInternalServerError, gitinternal.Problem{Message: "the merge could not be made"})
 	}
 }
 

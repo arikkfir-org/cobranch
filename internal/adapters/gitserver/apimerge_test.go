@@ -14,6 +14,7 @@ import (
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/repos"
 )
 
 // apiMergeCase sets up main, perhaps with a /cobranch.yaml, and branch feature a commit ahead of it, changing
@@ -52,6 +53,11 @@ func apiMergeCases() []apiMergeCase {
 		{name: "a branch main requires to be Ready", settings: requireAnnotation, method: code.MethodMerge, wantErr: refused(code.MergeRefused)},
 		{name: "a Ready branch main has requirements of", settings: requireAnnotation, annotate: true, method: code.MethodFastForward},
 		{name: "repo.bypass past main's requirements", settings: requireAnnotation, method: code.MethodMerge, bypass: true, wantParents: 2},
+		{name: "a viewer without repo.merge", method: code.MethodMerge, perms: []string{"repo.read"}, wantErr: auth.ErrForbidden},
+		{name: "past main's requirements without repo.bypass", settings: requireAnnotation, method: code.MethodMerge, bypass: true,
+			perms: []string{"repo.read", "repo.merge"}, wantErr: auth.ErrForbidden},
+		{name: "a merge for someone besides the viewer", method: code.MethodMerge, someoneElse: true, wantErr: auth.ErrForbidden},
+		{name: "no viewer finds no repository", method: code.MethodMerge, anonymous: true, wantErr: repos.ErrNotFound},
 	}
 }
 

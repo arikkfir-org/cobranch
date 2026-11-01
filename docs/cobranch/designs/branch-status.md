@@ -228,15 +228,18 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
   fast-forward, which writes nothing. Where `main` requires linear history only a fast-forward is offered, and a Ready
   branch can always fast-forward, since `main`'s tip is in it. A branch merged past its requirements that is behind
   `main` takes a merge commit; with linear history required it can't be merged until it is brought up to date.
-- **The Git server builds it** on an [internal call](architecture.md#components) from the REST or GraphQL server: in a
-  throwaway repository of one snapshot, `git merge-tree --write-tree` and `git commit-tree`, then a pack of the new
-  commit, uploaded as a push's would be. It records a push of `main` for the requester, transport `api`, through the
-  same transaction and the same checks as a client's push, and answers once it is committed.
+- **The Git server builds it** on an [internal call](architecture.md#components) from the REST or GraphQL server, which
+  sends on the requester's own token: the Git server checks `repo.merge` itself, and `repo.bypass` for a merge past
+  `main`'s requirements, and merges only for that requester. It builds the merge in a throwaway repository of one
+  snapshot, `git merge-tree --write-tree` and `git commit-tree`, then a pack of the new commit, uploaded as a push's
+  would be. It records a push of `main` for the requester, transport `api`, through the same transaction and the same
+  checks as a client's push, and answers once it is committed.
 - **Then as any push:** the push worker records the merge, and the branch turns Merged. Code-browsing
   ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)) builds the internal call; this slice adds the merge to it.
 
 | The requester sees | When |
 | --- | --- |
+| 403 `auth.forbidden` | The requester lacks `repo.merge` |
 | 409 `branch.moved` | The branch moved from the head the request names, or it or `main` moved while the Git server built the merge |
 | 409 `branch.not_ready` | The branch isn't Ready, and the requester lacks `repo.bypass` |
 | 409 `branch.nothing_to_merge` | `main` holds every commit of the branch |

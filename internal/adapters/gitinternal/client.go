@@ -109,7 +109,7 @@ func (c *Client) get(ctx context.Context, repoID uuid.UUID, read string, query u
 }
 
 // do asks the Git server for op of the repository, and returns its answer when it is 200; the domain's error when it
-// is a 404 with one of answers' codes, or a 409 of a merge; or an error naming what it said.
+// is a 404 with one of answers' codes, a 403, or a 409 of a merge; or an error naming what it said.
 func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op string, query url.Values, body io.Reader) (*http.Response, error) {
 	u := c.base.JoinPath(ReposPath, repoID.String(), op)
 	u.RawQuery = query.Encode()
@@ -137,6 +137,8 @@ func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op str
 	switch {
 	case ok && resp.StatusCode == http.StatusNotFound:
 		return nil, fmt.Errorf("reading the %s of repository %s: %w", op, repoID, answer)
+	case resp.StatusCode == http.StatusForbidden:
+		return nil, fmt.Errorf("merging in repository %s: %w: %s", repoID, auth.ErrForbidden, problem.Message)
 	case resp.StatusCode == http.StatusConflict && problem.Code == CodeMoved:
 		return nil, fmt.Errorf("merging in repository %s: %w", repoID, code.ErrBranchMoved)
 	case resp.StatusCode == http.StatusConflict && problem.Code != "":
