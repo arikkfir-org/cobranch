@@ -28,6 +28,17 @@ app.kubernetes.io/component: {{ .component }}
 {{ .image.repository }}:{{ .image.tag | default .root.Chart.AppVersion }}
 {{- end -}}
 
+{{/* A shell function for the test and the demo data's Job, given the Auth server's URL in $auth: signIn prints the
+session cookie of a seeded sign-in as $1. BusyBox's wget follows the redirect and drops its headers, so nc reads the
+raw response; stdin stays open until the response is in, since the server cancels a request whose client went away. */}}
+{{- define "cobranch.signIn" -}}
+signIn() {
+  host=${auth#http://}
+  (printf 'GET /sign-in?user=%s HTTP/1.0\r\nHost: %s\r\n\r\n' "$1" "$host"; sleep 2) | nc "$host" 80 | tr -d '\r' \
+    | sed -n 's/^Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p'
+}
+{{- end -}}
+
 {{/* The bundled PostgreSQL's name, which its Service, StatefulSet and Secret share. */}}
 {{- define "cobranch.postgresql" -}}
 {{ include "cobranch.fullname" . }}-postgresql

@@ -66,6 +66,14 @@ func TestFileQueries(t *testing.T) {
 			want: []string{`"blob":{"name":"guide.md","kind":"BLOB","size":9,"binary":false,"truncated":false,"text":"Read me.\n"}`}},
 		{name: "a binary file has no text", viewer: olivia, document: repo(`blob(path: "logo.png") { binary text }`),
 			want: []string{`"blob":{"binary":true,"text":null}`}},
+		{name: "a Markdown file, rendered", viewer: olivia, document: repo(`blob(path: "docs/guide.md") { html }`),
+			want: []string{`"blob":{"html":"\u003cp\u003eRead me.\u003c/p\u003e\n"}`}},
+		{name: "a file that isn't Markdown has no HTML", viewer: olivia, document: repo(`blob(path: "logo.png") { html }`),
+			want: []string{`"blob":{"html":null}`}},
+		{name: "the root's README", viewer: olivia, document: repo(`tree { readme { path text html } }`),
+			want: []string{`"readme":{"path":"README.md","text":"# Website\n","html":"\u003ch1 id=\"user-content-website\"\u003eWebsite\u003c/h1\u003e\n"}`}},
+		{name: "a directory without one", viewer: olivia, document: repo(`tree(path: "docs") { readme { path } }`),
+			want: []string{`"tree":{"readme":null}`}},
 		{name: "a directory is no file", viewer: olivia, document: repo(`blob(path: "docs") { sha }`), wantCode: notFound, wantReason: "path.directory"},
 		{name: "a submodule is no file", viewer: olivia, document: repo(`blob(path: "vendor/lib.module") { sha }`), wantCode: notFound, wantReason: "path.submodule"},
 	})
@@ -74,7 +82,7 @@ func TestFileQueries(t *testing.T) {
 // TestFilesWithoutGitServer checks that an installation without a Git server answers UNAVAILABLE for a tree.
 func TestFilesWithoutGitServer(t *testing.T) {
 	f := newOrgFixture()
-	f.code = code.NewService(f.codeStore, nil, auth.NewAuthorizer(f.store))
+	f.code = code.NewService(f.codeStore, nil, nil, auth.NewAuthorizer(f.store))
 	body := f.query(&f.olivia, `{ organization(slug: "acme") { repository(slug: "website") { tree { sha } } } }`)
 	if !strings.Contains(body, `"code":"UNAVAILABLE"`) || !strings.Contains(body, `"reason":"git.unavailable"`) {
 		t.Errorf("body = %s, want UNAVAILABLE", body)

@@ -307,6 +307,8 @@ maintenance:
 # user.
 seed:
   # The migrate Job adds the demo data it lacks after migrating the schema, and the Auth server signs in as its users.
+  # With the Git server, a Job after each install and upgrade pushes a history to the demo organization's website,
+  # unless it has one.
   enabled: false
 
 # The bundled PostgreSQL: one replica of the official image, on a persistent volume. Turn it off to bring your own

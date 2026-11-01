@@ -431,8 +431,11 @@ type File struct {
 	Binary bool `json:"binary"`
 
 	// Commit The commit the ref resolved to.
-	Commit string   `json:"commit"`
-	Kind   FileKind `json:"kind"`
+	Commit string `json:"commit"`
+
+	// Html A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load this API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-.
+	Html *string  `json:"html,omitempty"`
+	Kind FileKind `json:"kind"`
 
 	// Mode Its mode as Git writes it, such as 100644 or 120000.
 	Mode string `json:"mode"`
@@ -780,6 +783,9 @@ type Tree struct {
 
 	// Path Its path from the repository's root; empty for the root.
 	Path string `json:"path"`
+
+	// Readme Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+	Readme *File `json:"readme,omitempty"`
 
 	// Sha Its tree's object.
 	Sha string `json:"sha"`
@@ -1201,7 +1207,7 @@ type ServerInterface interface {
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeParams)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
@@ -7676,6 +7682,7 @@ type GetRawResponseObject interface {
 }
 
 type GetRaw200ResponseHeaders struct {
+	CacheControl              string
 	ContentDisposition        *string
 	ContentSecurityPolicy     string
 	CrossOriginResourcePolicy string
@@ -7696,6 +7703,7 @@ func (response GetRaw200AsteriskResponse) VisitGetRawResponse(w http.ResponseWri
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
 	}
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	if response.Headers.ContentDisposition != nil {
 		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
 	}
@@ -7713,7 +7721,8 @@ func (response GetRaw200AsteriskResponse) VisitGetRawResponse(w http.ResponseWri
 }
 
 type GetRaw304ResponseHeaders struct {
-	ETag string
+	CacheControl string
+	ETag         string
 }
 
 type GetRaw304Response struct {
@@ -7721,6 +7730,7 @@ type GetRaw304Response struct {
 }
 
 func (response GetRaw304Response) VisitGetRawResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(304)
 	return nil
@@ -8778,7 +8788,7 @@ type StrictServerInterface interface {
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
-	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(ctx context.Context, request GetTreeRequestObject) (GetTreeResponseObject, error)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
