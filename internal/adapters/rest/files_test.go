@@ -43,6 +43,20 @@ func TestTreeAPI(t *testing.T) {
 			check: listing("docs:tree", "vendor:tree", "README.md:blob", "latest.link:symlink", "logo.png:blob")},
 		{name: "a directory", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?ref=main&path=docs"), wantStatus: 200,
 			check: listing("deep:tree", "guide.md:blob")},
+		{name: "the root's README, rendered", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				r := decode[Tree](t, body).Readme
+				if r == nil || r.Path != "README.md" || r.Text == nil || *r.Text != "# Website\n" || r.Html == nil ||
+					*r.Html != `<h1 id="user-content-website">Website</h1>`+"\n" {
+					t.Errorf("tree = %s, want README.md rendered", body)
+				}
+			}},
+		{name: "a directory without a README", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?path=docs"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if decode[Tree](t, body).Readme != nil {
+					t.Errorf("tree = %s, want no README", body)
+				}
+			}},
 		{name: "a submodule sorts with the directories", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?path=vendor"), wantStatus: 200,
 			check: listing("lib.module:submodule")},
 		{name: "at a commit's full name", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/tree?ref=" + shaOf("c") + "&path=docs/deep"),
@@ -79,13 +93,14 @@ func TestBlobAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "a text file", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/blob?path=docs/guide.md"), wantStatus: 200,
 			check: file(func(t *testing.T, f File) {
-				if f.Name != "guide.md" || f.Kind != FileKindBlob || f.Binary || f.Text == nil || *f.Text != "Read me.\n" || f.Size != 9 || f.Commit != shaOf("c") {
+				if f.Name != "guide.md" || f.Kind != FileKindBlob || f.Binary || f.Text == nil || *f.Text != "Read me.\n" || f.Size != 9 || f.Commit != shaOf("c") ||
+					f.Html == nil || *f.Html != "<p>Read me.</p>\n" {
 					t.Errorf("file = %+v", f)
 				}
 			})},
 		{name: "a binary file has no text", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/blob?path=logo.png"), wantStatus: 200,
 			check: file(func(t *testing.T, f File) {
-				if !f.Binary || f.Text != nil {
+				if !f.Binary || f.Text != nil || f.Html != nil {
 					t.Errorf("file = %+v, want binary without text", f)
 				}
 			})},
@@ -143,6 +158,35 @@ func TestRawAPI(t *testing.T) {
 	}
 }
 
+// TestRawCache checks that raw bytes asked at their commit's full name are kept for a year, revalidations included,
+// and that those asked at a branch, even one named like a commit, are revalidated each time.
+func TestRawCache(t *testing.T) {
+	const immutable, revalidated = "private, max-age=31536000, immutable", "private, no-cache"
+	tests := []struct {
+		name, ref, ifNoneMatch, want string
+		wantStatus                   int
+	}{
+		{name: "at a branch", ref: "main", want: revalidated, wantStatus: 200},
+		{name: "at the commit's full name", ref: shaOf("c"), want: immutable, wantStatus: 200},
+		{name: "revalidated at the commit's full name", ref: shaOf("c"), ifNoneMatch: "*", want: immutable, wantStatus: 304},
+		{name: "at a branch named like a commit", ref: shaOf("e"), want: revalidated, wantStatus: 200},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newOrgFixture(t)
+			f.objects.Commit(shaOf("f"), map[string]string{"README.md": "# Moved\n"}, shaOf("e"))
+			req := httptest.NewRequest("GET", "/v1/orgs/acme/repos/website/raw?path=README.md&ref="+tt.ref, nil)
+			if tt.ifNoneMatch != "" {
+				req.Header.Set("If-None-Match", tt.ifNoneMatch)
+			}
+			rec := f.serve(&f.olivia, req)
+			if rec.Code != tt.wantStatus || rec.Header().Get("Cache-Control") != tt.want {
+				t.Errorf("status %d, Cache-Control %q; want %d, %q", rec.Code, rec.Header().Get("Cache-Control"), tt.wantStatus, tt.want)
+			}
+		})
+	}
+}
+
 // serve serves req to viewer.
 func (f *orgFixture) serve(viewer *auth.Authenticated, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
@@ -161,9 +205,17 @@ func TestRawAttachment(t *testing.T) {
 	}
 }
 
-// TestFilesConditional checks that every read of a file answers 304 for the ETag the caller holds, and that a tree's
-// and a file's change with the commit their ref names.
+// TestFilesConditional checks that every read of a file answers 304 for the ETag the caller holds, that a tree's and a
+// file's change with the commit their ref names, and that the same commit asked at another ref is another answer,
+// since a rendered README's links name the ref.
 func TestFilesConditional(t *testing.T) {
+	f := newOrgFixture(t)
+	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n"}, "v2.0.0")
+	atMain := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/blob?path=README.md&ref=main", "").Header().Get("ETag")
+	atTag := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/blob?path=README.md&ref=v2.0.0", "").Header().Get("ETag")
+	if atMain == "" || atMain == atTag {
+		t.Errorf("the same commit's ETag at main and at a tag: %q, %q", atMain, atTag)
+	}
 	for _, path := range []string{"/v1/orgs/acme/repos/website/tree?path=docs", "/v1/orgs/acme/repos/website/blob?path=README.md",
 		"/v1/orgs/acme/repos/website/raw?path=README.md"} {
 		t.Run(path, func(t *testing.T) {
@@ -190,7 +242,7 @@ func TestFilesConditional(t *testing.T) {
 // branches.
 func TestFilesWithoutGitServer(t *testing.T) {
 	f := newOrgFixture(t)
-	f.code = code.NewService(f.codeStore, nil, auth.NewAuthorizer(f.store))
+	f.code = code.NewService(f.codeStore, nil, nil, auth.NewAuthorizer(f.store))
 	if rec := f.call(&f.olivia, "GET", "/v1/orgs/acme/repos/website/tree", ""); rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("tree: status %d, want 503: %s", rec.Code, rec.Body)
 	} else {

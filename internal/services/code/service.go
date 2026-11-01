@@ -47,23 +47,27 @@ type Store interface {
 	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error
 	// Tags lists the repository's tags by name.
 	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
+	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
+	Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error)
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
 // authorizer first, and answers repos.ErrNotFound without it, as for a repository that doesn't exist.
 type Service struct {
-	store   Store
-	objects Objects
-	authz   *auth.Authorizer
+	store    Store
+	objects  Objects
+	markdown Renderer
+	authz    *auth.Authorizer
 }
 
-// NewService returns a Service over store, and objects for what only the Git server reads, checking permissions with
-// authz. Without objects, as in an installation that runs no Git server, those reads answer ErrUnavailable.
-func NewService(store Store, objects Objects, authz *auth.Authorizer) *Service {
+// NewService returns a Service over store, objects for what only the Git server reads and markdown for rendering
+// Markdown files and READMEs, checking permissions with authz. Without objects, as in an installation that runs no Git
+// server, those reads answer ErrUnavailable; without markdown, Markdown answers as text alone.
+func NewService(store Store, objects Objects, markdown Renderer, authz *auth.Authorizer) *Service {
 	if objects == nil {
 		objects = unavailable{}
 	}
-	return &Service{store: store, objects: objects, authz: authz}
+	return &Service{store: store, objects: objects, markdown: markdown, authz: authz}
 }
 
 // Viewer is who an operation runs for: a signed-in user, or the user or API key a credential acts as.

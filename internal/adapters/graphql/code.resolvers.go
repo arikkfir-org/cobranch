@@ -129,7 +129,11 @@ func (r *repositoryResolver) Tree(ctx context.Context, obj *Repository, ref stri
 	if err != nil {
 		return nil, codeFail(ctx, err, "reading the tree")
 	}
-	return &Tree{Commit: t.Commit, Path: t.Path, Sha: t.SHA, Entries: mapAll(t.Entries, entry)}, nil
+	out := &Tree{Commit: t.Commit, Path: t.Path, Sha: t.SHA, Entries: mapAll(t.Entries, entry)}
+	if t.README != nil {
+		out.Readme = file(*t.README)
+	}
+	return out, nil
 }
 
 // Blob is the resolver for the blob field.

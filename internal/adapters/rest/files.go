@@ -19,7 +19,7 @@ import (
 
 // shape is the version of the shape of a tree's and a file's answers, which their ETags hold beside the commit and the
 // path: a change of what the API answers for them bumps it, so no client keeps an answer of the old shape.
-const shape = "1"
+const shape = "2"
 
 // rawPolicy is raw bytes' Content Security Policy: they load images of their own origin and data URLs alone, and run
 // nothing, so an HTML or SVG file opened on the API's origin, which holds the session cookie, can't act for its
@@ -52,9 +52,11 @@ func codeFail(err error) error {
 	return fail(err, "repository")
 }
 
-// etag is the strong entity tag of an answer of kind that the commit and the path fix.
-func etag(kind, commit, path string) string {
-	sum := sha256.Sum256([]byte(kind + "\x00" + shape + "\x00" + commit + "\x00" + path))
+// etag is the strong entity tag of an answer of kind that the commit, the path, the ref asked and the organization's
+// and the repository's slugs fix: a rendered README's links name the ref and the slugs, so the same commit asked
+// another way, or after a rename, is another answer.
+func etag(kind, commit, path, ref, org, repo string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{kind, shape, commit, path, ref, org, repo}, "\x00")))
 	return `"` + hex.EncodeToString(sum[:16]) + `"`
 }
 
@@ -111,11 +113,15 @@ func (a api) GetTree(ctx context.Context, req GetTreeRequestObject) (GetTreeResp
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := etag("tree", tree.Commit, tree.Path)
+	tag := etag("tree", tree.Commit, tree.Path, refOf(req.Params.Ref), req.Org, req.Repo)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetTree304Response{Headers: GetTree304ResponseHeaders{ETag: tag}}, nil
 	}
 	body := Tree{Commit: tree.Commit, Path: tree.Path, Sha: tree.SHA, Entries: mapAll(tree.Entries, entry)}
+	if tree.README != nil {
+		readme := fileOf(*tree.README)
+		body.Readme = &readme
+	}
 	return GetTree200JSONResponse{Body: body, Headers: GetTree200ResponseHeaders{ETag: tag}}, nil
 }
 
@@ -138,20 +144,30 @@ func (a api) GetBlob(ctx context.Context, req GetBlobRequestObject) (GetBlobResp
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := etag("blob", f.Commit, f.Path)
+	tag := etag("blob", f.Commit, f.Path, refOf(req.Params.Ref), req.Org, req.Repo)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetBlob304Response{Headers: GetBlob304ResponseHeaders{ETag: tag}}, nil
 	}
-	body := File{Commit: f.Commit, Path: f.Path, Name: f.Name, Kind: FileKind(f.Kind), Mode: f.Mode, Sha: f.SHA, Size: f.Size,
+	return GetBlob200JSONResponse{Body: fileOf(f), Headers: GetBlob200ResponseHeaders{ETag: tag}}, nil
+}
+
+// fileOf is f on the wire: its text unless it is binary, and its HTML when it rendered.
+func fileOf(f code.File) File {
+	out := File{Commit: f.Commit, Path: f.Path, Name: f.Name, Kind: FileKind(f.Kind), Mode: f.Mode, Sha: f.SHA, Size: f.Size,
 		Binary: f.Binary, Truncated: f.Truncated}
 	if !f.Binary {
-		body.Text = &f.Text
+		out.Text = &f.Text
 	}
-	return GetBlob200JSONResponse{Body: body, Headers: GetBlob200ResponseHeaders{ETag: tag}}, nil
+	if f.HTML != "" {
+		out.Html = &f.HTML
+	}
+	return out
 }
 
 // GetRaw streams the bytes of the file or symlink at a path of the commit a ref names, as nothing that runs, or
-// answers 304 while the caller holds them: their ETag is their blob's object, which their content fixes.
+// answers 304 while the caller holds them: their ETag is their blob's object, which their content fixes. Asked at the
+// full name of the commit it resolves to, as a Markdown document's images are, they never change, so the browser
+// keeps them (rawCache).
 func (a api) GetRaw(ctx context.Context, req GetRawRequestObject) (GetRawResponseObject, error) {
 	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
 	if err != nil {
@@ -161,19 +177,30 @@ func (a api) GetRaw(ctx context.Context, req GetRawRequestObject) (GetRawRespons
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := `"` + raw.SHA + `"`
+	tag, cache := `"`+raw.SHA+`"`, rawCache(refOf(req.Params.Ref), raw.Commit)
 	if matches(req.Params.IfNoneMatch, tag) {
 		_ = raw.Body.Close() // nothing was read, and nothing will be
-		return GetRaw304Response{Headers: GetRaw304ResponseHeaders{ETag: tag}}, nil
+		return GetRaw304Response{Headers: GetRaw304ResponseHeaders{ETag: tag, CacheControl: cache}}, nil
 	}
 	body := bufio.NewReaderSize(raw.Body, 8192)
 	contentType := rawType(raw, body)
-	headers := GetRaw200ResponseHeaders{ETag: tag, ContentSecurityPolicy: rawPolicy, XContentTypeOptions: "nosniff", CrossOriginResourcePolicy: "same-site"}
+	headers := GetRaw200ResponseHeaders{ETag: tag, CacheControl: cache, ContentSecurityPolicy: rawPolicy, XContentTypeOptions: "nosniff",
+		CrossOriginResourcePolicy: "same-site"}
 	if contentType == "application/octet-stream" || (req.Params.Download != nil && *req.Params.Download) {
 		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(raw.Path)})
 		headers.ContentDisposition = &disposition
 	}
 	return GetRaw200AsteriskResponse{Body: readCloser{Reader: body, Closer: raw.Body}, Headers: headers, ContentType: contentType, ContentLength: raw.Size}, nil
+}
+
+// rawCache is the Cache-Control of raw bytes asked at ref, which resolved to commit: kept for a year when ref is the
+// commit's full name, since a commit's bytes never change; revalidated each time, as every answer, when it is a
+// branch or a tag, even one named like a commit.
+func rawCache(ref, commit string) string {
+	if commit != "" && strings.EqualFold(ref, commit) {
+		return "private, max-age=31536000, immutable"
+	}
+	return "private, no-cache"
 }
 
 // readCloser reads from Reader and closes Closer.

@@ -634,7 +634,7 @@
       "properties": {
         "enabled": {
           "type": "boolean",
-          "description": "The migrate Job adds Cobranch's demo data (db/seeds) after migrating the schema."
+          "description": "The migrate Job adds Cobranch's demo data (db/seeds) after migrating the schema, and, with the Git server, a Job after each install and upgrade pushes a history to the demo organization's website unless it has one."
         }
       }
     },

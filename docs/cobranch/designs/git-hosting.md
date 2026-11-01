@@ -325,7 +325,8 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 ## Previews and tests
 
 - **Seeds** add a repository to the demo organization, its Maintainer a seeded user, so a demo installation shows one at
-  once; pushing into it is the demo's own act. Seeded users make personal tokens like anyone.
+  once; pushing into it is the demo's own act, and [code browsing](code-browsing.md#configuration)'s Job pushes a
+  history to it. Seeded users make personal tokens like anyone.
 - **End to end with the real `git`.** Go tests start the Git server and the push worker in process over PostgreSQL, with
   its packs in the database or a `file://` directory, and drive `git clone`, `fetch` and `push` against them: an empty
   clone, a first push, a stale push refused, two concurrent pushes into one repository, a lost answer asked again, a
