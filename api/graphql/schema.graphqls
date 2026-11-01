@@ -14,6 +14,14 @@ type Query {
 type Mutation {
   "Revokes one of the viewer's sessions; the next request with its cookie fails. False when the viewer has no such session."
   revokeSession(id: ID!): Boolean!
+  "Makes a personal token that acts as the viewer, narrowed to the permissions it lists, and shows it once; only from a session, never from another token or an API key."
+  createPersonalToken(input: PersonalTokenInput!): PersonalTokenCreated!
+  "Revokes one of the viewer's personal tokens; the next request with it fails. False when the viewer has no such token."
+  revokePersonalToken(id: ID!): Boolean!
+  "Adds an SSH key that acts as the viewer over SSH, as their session would; only from a session, never from a token or an API key."
+  addSSHKey(input: SSHKeyInput!): SSHKey!
+  "Deletes one of the viewer's SSH keys; the next connection with it fails; only from a session, never from a token or an API key. False when the viewer has no such key."
+  deleteSSHKey(id: ID!): Boolean!
 }
 
 "A person: a principal of kind user."
@@ -24,6 +32,10 @@ type User {
   emails: [Email!]!
   "The user's live sessions, newest first."
   sessions: [Session!]!
+  "The user's personal tokens that are not revoked, expired ones included, newest first."
+  personalTokens: [PersonalToken!]!
+  "The user's SSH keys, newest first."
+  sshKeys: [SSHKey!]!
 }
 
 type Email {
@@ -42,6 +54,57 @@ type Session {
   ip: String!
   "Whether this is the session the request itself came with."
   current: Boolean!
+}
+
+"A personal token, as its user sees it; the token itself was shown once."
+type PersonalToken {
+  id: ID!
+  name: String!
+  "The token's last four characters."
+  hint: String!
+  "The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give."
+  permissions: [String!]!
+  createdAt: Time!
+  "When the token stops working."
+  expiresAt: Time!
+  lastUsedAt: Time
+}
+
+"What makes a personal token."
+input PersonalTokenInput {
+  "What the token is for, 1 to 100 characters."
+  name: String!
+  "The permissions the token may use, from the catalog; repo.read and repo.push when null or empty."
+  permissions: [String!]
+  "When the token stops working, in the future and within a year; 30 days from now when null."
+  expiresAt: Time
+}
+
+"A personal token and its secret, which is shown here and never again."
+type PersonalTokenCreated {
+  token: PersonalToken!
+  "The token, to give a Git client as its password or a script as its bearer token."
+  secret: String!
+}
+
+"An SSH key, as its user sees it."
+type SSHKey {
+  id: ID!
+  name: String!
+  "The key's type and base64, as an authorized_keys line has them, without its comment."
+  publicKey: String!
+  "The key's SHA256 fingerprint, as ssh-keygen -l shows it."
+  fingerprint: String!
+  createdAt: Time!
+  lastUsedAt: Time
+}
+
+"What adds an SSH key."
+input SSHKeyInput {
+  "What the key is for, 1 to 100 characters; the key's comment when null or empty."
+  name: String
+  "One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more."
+  publicKey: String!
 }
 
 "The scopes roles are granted at. Repositories come with their slice."

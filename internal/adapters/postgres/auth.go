@@ -94,14 +94,22 @@ func (s *AuthStore) EmailHolder(ctx context.Context, email string) (uuid.UUID, s
 	return h.PrincipalID, h.Issuer, nil
 }
 
-// SignUp creates a user, their identity, their verified email if any, their installation grants and the event.
+// LoginlessHolder finds the login-less user who holds email unverified.
+func (s *AuthStore) LoginlessHolder(ctx context.Context, email string) (uuid.UUID, error) {
+	id, err := s.q.LoginlessHolder(ctx, email)
+	if err != nil {
+		return uuid.Nil, wrap("finding a login-less user with the email", err)
+	}
+	return id, nil
+}
+
+// SignUp creates a user, their identity, their verified email if any, their installation grants and the event; or,
+// adopting a login-less user, names them, gives them the identity and verifies their email.
 func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 	p, i := up.Principal, up.Identity
 	return s.transact(ctx, "signing up", p.ID, func(ctx context.Context, q *queries.Queries) error {
-		if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{
-			ID: p.ID, Kind: string(p.Kind), DisplayName: p.DisplayName, CreatedAt: i.LastSignInAt,
-		}); err != nil {
-			return fmt.Errorf("inserting the user: %w", err)
+		if err := signUpUser(ctx, q, up); err != nil {
+			return err
 		}
 		if err := q.InsertIdentity(ctx, queries.InsertIdentityParams{
 			Issuer: i.Issuer, Subject: i.Subject, PrincipalID: p.ID, Email: i.Email, EmailVerified: i.EmailVerified,
@@ -109,12 +117,7 @@ func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 		}); err != nil {
 			return fmt.Errorf("inserting the identity: %w", err)
 		}
-		if i.EmailVerified && i.Email != "" {
-			if err := q.InsertEmail(ctx, i.Email, p.ID, true); err != nil {
-				return fmt.Errorf("inserting the email: %w", err)
-			}
-		}
-		if err := event(ctx, q, p.ID, "user.signed_up", p.ID, map[string]any{"issuer": i.Issuer}); err != nil {
+		if err := event(ctx, q, p.ID, "user.signed_up", p.ID, map[string]any{"issuer": i.Issuer, "adopted": up.Adopt}); err != nil {
 			return err
 		}
 		for _, g := range up.Grants {
@@ -124,6 +127,32 @@ func (s *AuthStore) SignUp(ctx context.Context, up auth.SignUp) error {
 		}
 		return nil
 	})
+}
+
+// signUpUser creates the user and their verified email, or names the login-less user up adopts and verifies their
+// email.
+func signUpUser(ctx context.Context, q *queries.Queries, up auth.SignUp) error {
+	p, i := up.Principal, up.Identity
+	if up.Adopt {
+		if adopted, err := q.AdoptPrincipal(ctx, p.ID, p.DisplayName); err != nil || adopted == 0 {
+			return fmt.Errorf("naming the login-less user (%d named): %w", adopted, err)
+		}
+		if verified, err := q.VerifyEmail(ctx, i.Email, p.ID); err != nil || verified == 0 {
+			return fmt.Errorf("verifying the login-less user's email (%d verified): %w", verified, err)
+		}
+		return nil
+	}
+	if err := q.InsertPrincipal(ctx, queries.InsertPrincipalParams{
+		ID: p.ID, Kind: string(p.Kind), DisplayName: p.DisplayName, CreatedAt: i.LastSignInAt,
+	}); err != nil {
+		return fmt.Errorf("inserting the user: %w", err)
+	}
+	if i.EmailVerified && i.Email != "" {
+		if err := q.InsertEmail(ctx, i.Email, p.ID, true); err != nil {
+			return fmt.Errorf("inserting the email: %w", err)
+		}
+	}
+	return nil
 }
 
 // SignIn records the identity's latest claims and sign-in, sets Installation admin from the installation's list,
@@ -240,19 +269,27 @@ func (s *AuthStore) Session(ctx context.Context, tokenHash []byte) (auth.Session
 	if err != nil {
 		return auth.Session{}, auth.User{}, wrap("reading the session", err)
 	}
-	p := row.Principal
+	u, err := s.user(ctx, row.Principal)
+	if err != nil {
+		return auth.Session{}, auth.User{}, err
+	}
+	return sessionOf(row.Session), u, nil
+}
+
+// user is the domain's view of principal p, with the emails it holds: a user's, and none of an API key's.
+func (s *AuthStore) user(ctx context.Context, p queries.Principal) (auth.User, error) {
 	u := auth.User{
 		Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
 		CreatedAt: p.CreatedAt,
 	}
 	emails, err := s.q.Emails(ctx, u.ID)
 	if err != nil {
-		return auth.Session{}, auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
+		return auth.User{}, fmt.Errorf("listing the user's emails: %w", err)
 	}
 	for _, e := range emails {
 		u.Emails = append(u.Emails, auth.Email{Email: e.Email, Verified: e.Verified})
 	}
-	return sessionOf(row.Session), u, nil
+	return u, nil
 }
 
 // Touch records that session id was used at seen.

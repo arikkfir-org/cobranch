@@ -14,7 +14,8 @@ import (
 
 // credential is the domain's view of a credentials row.
 func credential(c queries.Credential) auth.Credential {
-	out := auth.Credential{ID: c.ID, PrincipalID: c.PrincipalID, Hint: c.Hint, CreatedAt: c.CreatedAt}
+	out := auth.Credential{ID: c.ID, Kind: auth.CredentialKind(c.Kind), PrincipalID: c.PrincipalID, Hint: c.Hint, CreatedAt: c.CreatedAt,
+		Name: c.Name, Permissions: c.Permissions, Issuer: c.Issuer, Subject: c.Subject, PublicKey: c.PublicKey}
 	out.CreatedBy = orNil(c.CreatedBy)
 	out.ExpiresAt, out.LastUsedAt, out.RevokedAt = orZero(c.ExpiresAt), orZero(c.LastUsedAt), orZero(c.RevokedAt)
 	return out
@@ -44,14 +45,18 @@ func nilIfZero(t time.Time) *time.Time {
 	return &t
 }
 
-// Credential finds a credential by its token's hash, with the principal it acts as.
-func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Credential, auth.Principal, error) {
+// Credential finds a credential by its token's hash, with the principal it acts as: an API key, or a user with their
+// emails.
+func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
 	row, err := s.q.CredentialByToken(ctx, tokenHash)
 	if err != nil {
-		return auth.Credential{}, auth.Principal{}, wrap("reading the credential", err)
+		return auth.Credential{}, auth.User{}, wrap("reading the credential", err)
 	}
-	p := row.Principal
-	return credential(row.Credential), auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended}, nil
+	u, err := s.user(ctx, row.Principal)
+	if err != nil {
+		return auth.Credential{}, auth.User{}, err
+	}
+	return credential(row.Credential), u, nil
 }
 
 // TouchCredential records that credential id was used at usedAt.

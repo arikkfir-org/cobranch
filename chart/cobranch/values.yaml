@@ -1,4 +1,4 @@
-# Cobranch's chart. Only blob.url is required; values.schema.json checks the rest at install.
+# Cobranch's chart. Every value has a default; values.schema.json checks them at install.
 
 # The images, as Cobranch publishes them. An empty tag means the chart's appVersion: one version names the chart and
 # every image it runs.
@@ -38,6 +38,16 @@ urls:
   admin: ""
   # The Back-office, where the installation's administrators run it: such as https://admin.cobranch.example.com.
   backOffice: ""
+  # The Git server, where Git clients clone, fetch and push over HTTPS: such as https://git.cobranch.example.com, or
+  # https://cobranch.example.com/git. With it, the chart runs the Git server and the push worker, and the Console shows
+  # clone URLs under it; without it, neither. Git clients carry no cookie, so it needn't share the others' parent
+  # domain.
+  git: ""
+  # The Git server's SSH address, where Git clients clone, fetch and push with an SSH key their user added: such as
+  # ssh://git@git.cobranch.example.com, or ssh://git@cobranch.example.com:2222. With it and git, the Git server also
+  # serves SSH, behind its Service of gitServer.ssh.service, and the Console shows clone URLs under it too. No route
+  # reaches it: give the Service a LoadBalancer, or route TCP to it yourself.
+  gitSsh: ""
 
 # Sign-in (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/sign-in-and-organizations.md). Without a provider, the Console
 # says that sign-in isn't set up yet.
@@ -77,20 +87,26 @@ organizations:
   # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).
   selfServe: null
 
-# The bucket, which only the servers reach: Go Cloud names it by URL (s3://, gs://, azblob:// or file://).
+# The object store, where the Git server and maintenance keep Git's packs
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-object-storage.md).
 blob:
-  # Required, such as s3://cobranch-objects?region=eu-west-1 or gs://cobranch-objects.
+  # Empty keeps every object in the database, as a large object: one store to run, and a backup of the database holds
+  # every repository whole (postgresql.storage.size then holds the packs too). Or a Go Cloud URL: a cloud's bucket,
+  # s3://cobranch-objects?region=eu-west-1, gs://cobranch-objects or azblob://cobranch-objects, for packs that outgrow
+  # the database; or file:///var/lib/cobranch/blobs, a directory on blob.volume, for trying Cobranch out.
   url: ""
-  # A Secret whose keys become the servers' environment, for credentials the URL's driver reads (such as
-  # AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
+  # A Secret whose keys become the Git server's and maintenance's environment, for credentials the URL's driver reads
+  # (such as AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
   envFromSecret: ""
-  # A volume, as a pod spec writes one without its name, mounted at mountPath: the directory of a file:// bucket.
+  # A volume, as a pod spec writes one without its name, mounted at mountPath: the directory of a file:// URL. Every Git
+  # server and maintenance mount it, so it must last and reach them all, such as a ReadWriteMany claim; an emptyDir is
+  # each pod's own, and loses its packs with the pod.
   volume: {}
   mountPath: /var/lib/cobranch/blobs
 
-# The servers' ServiceAccount, which both share.
+# The ServiceAccount of the Git server and maintenance, which reach the object store.
 serviceAccount:
-  # Binds the servers to the cloud's workload identity, for the bucket.
+  # Binds them to the cloud's workload identity, for a bucket.
   annotations: {}
 
 # Every Cobranch workload's logs and traces. Logs are JSON on stdout, for the cluster's log collector. Traces go over
@@ -198,6 +214,61 @@ backOffice:
   affinity: {}
   podAnnotations: {}
 
+# The Git server, with urls.git: Git's smart HTTP protocol over the bucket's packs, which each pod keeps a cache of on
+# its own disk, and the git CLI, which the cobranch image holds.
+gitServer:
+  replicas: 2
+  cache:
+    # How much of the bucket's packs a pod keeps, such as 10Gi; it evicts the least recently used repositories' first.
+    size: 10Gi
+  # The largest pack a push may send, such as 2Gi.
+  maxPushSize: 2Gi
+  # The pod's disk, an emptyDir that holds the cache and the repositories of the requests in flight: keep it above
+  # cache.size by a few maxPushSize.
+  storage:
+    sizeLimit: 16Gi
+  # SSH, with urls.gitSsh.
+  ssh:
+    # The Service SSH clients reach the Git server through, on port 22 or yours: ClusterIP for a route of yours, or
+    # LoadBalancer, with your cloud's annotations, to reach it directly.
+    service:
+      type: ClusterIP
+      port: 22
+      annotations: {}
+    # The private key, in PEM, that SSH clients know the server by. Without existingSecret, the chart generates an
+    # Ed25519 key on install and keeps it on upgrade, which needs the cluster at render time: under Argo CD, or
+    # anything else that renders without the cluster, give one, or every render changes the key clients trust.
+    hostKey:
+      existingSecret: ""
+      secretKey: key
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The push worker, with urls.git: it does what follows each push the Git server recorded, from the database, which
+# wakes it; nobody calls it. Set replicas to null to leave the count to an autoscaler, which may scale it to zero
+# while no push waits: the pushes waiting are SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <=
+# now(), as KEDA's PostgreSQL scaler asks.
+pushWorker:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
 # The Job that migrates the database before the servers of a new version roll out.
 migrate:
   # How long it may wait for the database and migrate, after which it fails.
@@ -216,12 +287,22 @@ migrate:
 # The CronJob that deletes what expired: sign-in flows and sessions, hourly.
 maintenance:
   schedule: "0 * * * *"
+  # How long a run may take, after which it fails: within the hour, so it never skips the next.
+  activeDeadlineSeconds: 3000
+  # With urls.git, each run also compacts the packs of every repository that has this many into one, and deletes what
+  # compaction replaced a day later. Null leaves packs alone, as a file:// URL on an emptyDir (blob.volume) does:
+  # maintenance can't reach a directory that only each Git server's pod holds.
+  compaction:
+    packs: 8
+  # The pod's disk while it compacts, an emptyDir: keep it above twice the packs of the largest repository.
+  storage:
+    sizeLimit: 16Gi
   resources:
     requests:
       cpu: 50m
       memory: 64Mi
     limits:
-      memory: 256Mi
+      memory: 1Gi
   nodeSelector: {}
   tolerations: []
   affinity: {}
@@ -232,6 +313,8 @@ maintenance:
 # user.
 seed:
   # The migrate Job adds the demo data it lacks after migrating the schema, and the Auth server signs in as its users.
+  # With the Git server, a Job after each install and upgrade pushes a history to the demo organization's website,
+  # unless it has one.
   enabled: false
 
 # The bundled PostgreSQL: one replica of the official image, on a persistent volume. Turn it off to bring your own

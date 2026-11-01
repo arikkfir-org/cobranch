@@ -1,8 +1,12 @@
 {{- include "cobranch.checkDatabase" . }}
 {{- $component := dict "root" . "component" "maintenance" }}
 {{- $values := .Values.maintenance }}
-# Deletes what expired, sign-in flows and sessions, every hour. One run at a time; a run that misses its hour is
-# skipped, since the next one does the same work.
+{{- $volume := .Values.blob.volume | default dict }}
+{{- $files := hasPrefix "file:" .Values.blob.url }}
+{{- $packs := and .Values.urls.git (not (kindIs "invalid" ($values.compaction | default dict).packs)) (not (and $files (hasKey $volume "emptyDir"))) }}
+# Deletes what expired, sign-in flows and sessions, every hour; with urls.git, also compacts repositories' packs and
+# deletes what compaction replaced. One run at a time; a run that misses its hour is skipped, since the next one does
+# the same work.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -20,7 +24,7 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
-      activeDeadlineSeconds: 600
+      activeDeadlineSeconds: {{ $values.activeDeadlineSeconds }}
       template:
         metadata:
           labels:
@@ -31,6 +35,9 @@ spec:
           {{- end }}
         spec:
           restartPolicy: Never
+          {{- if $packs }}
+          serviceAccountName: {{ include "cobranch.serviceAccount" . }}
+          {{- end }}
           automountServiceAccountToken: false
           {{- with .Values.imagePullSecrets }}
           imagePullSecrets:
@@ -46,7 +53,44 @@ spec:
               env:
                 {{- include "cobranch.telemetryEnv" . | nindent 16 }}
                 {{- include "cobranch.databaseEnv" . | nindent 16 }}
+                {{- if $packs }}
+                - name: COBRANCH_BLOB_URL
+                  value: {{ .Values.blob.url | quote }}
+                - name: COBRANCH_GIT_DATA_DIR
+                  value: /var/lib/cobranch/git
+                - name: COBRANCH_GIT_COMPACT_AT
+                  value: {{ $values.compaction.packs | quote }}
+                {{- end }}
+              {{- if $packs }}
+              {{- with .Values.blob.envFromSecret }}
+              envFrom:
+                - secretRef:
+                    name: {{ . }}
+              {{- end }}
+              {{- end }}
               resources:
                 {{- toYaml $values.resources | nindent 16 }}
               securityContext:
                 {{- include "cobranch.containerSecurityContext" . | nindent 16 }}
+              {{- if $packs }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+                - name: git
+                  mountPath: /var/lib/cobranch/git
+                {{- if $volume }}
+                - name: blob
+                  mountPath: {{ .Values.blob.mountPath }}
+                {{- end }}
+              {{- end }}
+          {{- if $packs }}
+          volumes:
+            - name: tmp
+              emptyDir: {}
+            - name: git
+              emptyDir:
+                sizeLimit: {{ $values.storage.sizeLimit }}
+            {{- if $volume }}
+            - {{- toYaml (merge (dict "name" "blob") $volume) | nindent 14 }}
+            {{- end }}
+          {{- end }}

@@ -10,6 +10,36 @@ import (
 	"time"
 )
 
+// A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
+type Annotation struct {
+	ID string `json:"id"`
+	// 1 to 100 lowercase letters, digits, '-', '_', '.' and '/', starting with a letter or digit, such as ci/build.
+	Name    string           `json:"name"`
+	Status  AnnotationStatus `json:"status"`
+	Summary string           `json:"summary"`
+	// Where its details are; empty without one.
+	Link string `json:"link"`
+	// Who set it; null once they are gone.
+	Principal *CommitPrincipal `json:"principal,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// When its run started: when it was set, or when it last went back from FAILED or SUCCESSFUL to PENDING or IN_PROGRESS.
+	StartedAt time.Time `json:"startedAt"`
+	// When it reached FAILED or SUCCESSFUL; null while it runs.
+	CompletedAt *time.Time `json:"completedAt,omitempty"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What a principal sets an annotation to.
+type AnnotationInput struct {
+	Status AnnotationStatus `json:"status"`
+	// At most 500 characters.
+	Summary string `json:"summary"`
+	// Where its details are, an absolute http or https URL of at most 2048 bytes; none when empty.
+	Link string `json:"link"`
+}
+
 // An API key: a principal of the organization that a script acts as, with the roles it holds there and its secrets.
 type APIKey struct {
 	ID             string `json:"id"`
@@ -51,9 +81,113 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
+// One of a repository's live branches and the commit it is at.
+type Branch struct {
+	// Its name, without refs/heads/.
+	Name string `json:"name"`
+	// The object it is at.
+	Head string `json:"head"`
+	// The commit it is at; null while its head is no commit a push recorded.
+	Commit    *Commit   `json:"commit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// When a push last moved it.
+	UpdatedAt time.Time `json:"updatedAt"`
+	// The branch it merges into, main; null for main.
+	Base *string `json:"base,omitempty"`
+	// Where it stands as a request to merge into its base; null for main.
+	Status *BranchStatus `json:"status,omitempty"`
+	// How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	Checks []*BranchCheck `json:"checks"`
+	// How many commits it has that its base lacks; null for main, and until a push works it out.
+	Ahead *int `json:"ahead,omitempty"`
+	// How many commits its base has that it lacks; null for main, and until a push works it out.
+	Behind *int `json:"behind,omitempty"`
+	// What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch.
+	Requirements *MergeRequirements `json:"requirements,omitempty"`
+	// The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's.
+	Merge *BranchMerge `json:"merge,omitempty"`
+}
+
+// One of a branch's merge requirements and how it stands.
+type BranchCheck struct {
+	Kind BranchCheckKind `json:"kind"`
+	// The required annotation's name; null unless kind is ANNOTATION.
+	Name *string `json:"name,omitempty"`
+	// The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION.
+	Status *AnnotationStatus `json:"status,omitempty"`
+	// For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION.
+	Count *int `json:"count,omitempty"`
+	Met   bool `json:"met"`
+}
+
+// A merge of a branch into its base that a push made.
+type BranchMerge struct {
+	// The head it brought into the base.
+	Head string `json:"head"`
+	// Who pushed it; null once they are gone.
+	By *CommitPrincipal `json:"by,omitempty"`
+	// When Cobranch recorded the push.
+	At time.Time `json:"at"`
+}
+
+// A commit a push brought, as the push recorded it.
+type Commit struct {
+	Sha  string `json:"sha"`
+	Tree string `json:"tree"`
+	// Its parents' names, the first of which its branch's history follows.
+	Parents   []string `json:"parents"`
+	Message   string   `json:"message"`
+	Author    *Person  `json:"author"`
+	Committer *Person  `json:"committer"`
+	// Its signature as written, not checked yet; empty for an unsigned commit.
+	Signature string `json:"signature"`
+	// The annotations principals set on it, by name.
+	Annotations []*Annotation `json:"annotations"`
+	// The push that first brought it; Repository.commit alone answers it, and null elsewhere.
+	Push *Push `json:"push,omitempty"`
+}
+
+// A page of a branch's history, nearest first.
+type CommitPage struct {
+	Commits []*Commit `json:"commits"`
+	// Where the next page starts, as history's after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key.
+type CommitPrincipal struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
+}
+
+// A file or a symlink at a commit, and its text when it isn't binary.
+type File struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// Its path from the repository's root.
+	Path string `json:"path"`
+	Name string `json:"name"`
+	// BLOB or SYMLINK.
+	Kind EntryKind `json:"kind"`
+	// Its mode as Git writes it, such as 100644 or 120000.
+	Mode string `json:"mode"`
+	// Its blob's object.
+	Sha string `json:"sha"`
+	// Its size in bytes.
+	Size int `json:"size"`
+	// Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8.
+	Binary bool `json:"binary"`
+	// Whether its text stops at 1 MiB, short of its size.
+	Truncated bool `json:"truncated"`
+	// Its text, up to 1 MiB; null when it is binary. A symlink's is its target.
+	Text *string `json:"text,omitempty"`
+	// A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file.
+	HTML *string `json:"html,omitempty"`
 }
 
 // An invitation to an email; only a user who holds it, verified, accepts it.
@@ -91,6 +225,14 @@ type Member struct {
 	Roles       []*Role   `json:"roles"`
 }
 
+// What a merge into a branch needs, as main's /cobranch.yaml names it under branches.
+type MergeRequirements struct {
+	// The annotations the incoming head must carry, Successful.
+	Annotations []string `json:"annotations"`
+	// Whether no merge commit may come in.
+	LinearHistory bool `json:"linearHistory"`
+}
+
 type Mutation struct {
 }
 
@@ -118,6 +260,10 @@ type Organization struct {
 	Roles []*Role `json:"roles"`
 	// The API keys, with their roles and secrets, by name; takes org.read.
 	APIKeys []*APIKey `json:"apiKeys"`
+	// The repositories the viewer reads, by slug; takes org.read.
+	Repositories []*Repository `json:"repositories"`
+	// A repository by its slug, current or former: null unless the viewer reads it.
+	Repository *Repository `json:"repository,omitempty"`
 }
 
 type OrganizationSettings struct {
@@ -129,7 +275,115 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 }
 
+// A commit's author or committer as the commit writes them.
+type Person struct {
+	Name  string    `json:"name"`
+	Email string    `json:"email"`
+	At    time.Time `json:"at"`
+	// The zone the commit wrote its time in, such as +0200.
+	Zone string `json:"zone"`
+	// Who is behind them; null until the push worker maps their email.
+	Principal *CommitPrincipal `json:"principal,omitempty"`
+}
+
+// A personal token, as its user sees it; the token itself was shown once.
+type PersonalToken struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// The token's last four characters.
+	Hint string `json:"hint"`
+	// The permissions the token may use, sorted; a check under it holds only what both these and the user's grants give.
+	Permissions []string  `json:"permissions"`
+	CreatedAt   time.Time `json:"createdAt"`
+	// When the token stops working.
+	ExpiresAt  time.Time  `json:"expiresAt"`
+	LastUsedAt *time.Time `json:"lastUsedAt,omitempty"`
+}
+
+// A personal token and its secret, which is shown here and never again.
+type PersonalTokenCreated struct {
+	Token *PersonalToken `json:"token"`
+	// The token, to give a Git client as its password or a script as its bearer token.
+	Secret string `json:"secret"`
+}
+
+// What makes a personal token.
+type PersonalTokenInput struct {
+	// What the token is for, 1 to 100 characters.
+	Name string `json:"name"`
+	// The permissions the token may use, from the catalog; repo.read and repo.push when null or empty.
+	Permissions []string `json:"permissions,omitempty"`
+	// When the token stops working, in the future and within a year; 30 days from now when null.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+}
+
+// The push that first brought a commit.
+type Push struct {
+	ID string `json:"id"`
+	// Who pushed; null once they are gone.
+	Pusher *CommitPrincipal `json:"pusher,omitempty"`
+	// https or ssh.
+	Transport string `json:"transport"`
+	// When Cobranch recorded it.
+	At time.Time `json:"at"`
+}
+
 type Query struct {
+}
+
+// One of an organization's Git repositories: a slug for its URLs, unique in the organization, a name and a description. Every repository opens on main, its default branch, which nobody changes.
+type Repository struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// The current slug; a lookup by an old one finds the repository with this one.
+	Slug        string `json:"slug"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// The hash its history's objects are named by: sha1, or sha256 later.
+	ObjectFormat string               `json:"objectFormat"`
+	Visibility   RepositoryVisibility `json:"visibility"`
+	// Who created it; null once they are gone.
+	CreatedBy *string   `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// The permissions the viewer holds on the repository.
+	ViewerPermissions []string `json:"viewerPermissions"`
+	// Who holds grants on the repository, with their roles there, by display name; takes repo.read. Roles at the organization reach it too.
+	Access []*RepositoryAccess `json:"access"`
+	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
+	Roles []*Role `json:"roles"`
+	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
+	Branches []*Branch `json:"branches"`
+	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
+	Branch *Branch `json:"branch,omitempty"`
+	// A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100.
+	History *CommitPage `json:"history"`
+	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
+	Commit *Commit `json:"commit,omitempty"`
+	// The repository's tags, by name, each with the object it names; takes repo.read.
+	Tags []*Tag `json:"tags"`
+	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
+	Tree *Tree `json:"tree,omitempty"`
+	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
+	Blob *File `json:"blob,omitempty"`
+}
+
+// A principal's grants on a repository.
+type RepositoryAccess struct {
+	PrincipalID string `json:"principalId"`
+	// user or api_key.
+	Kind        string `json:"kind"`
+	DisplayName string `json:"displayName"`
+	// The roles it holds on the repository, each with the permissions it gives there.
+	Roles []*Role `json:"roles"`
+}
+
+// What makes or changes a repository. updateRepository takes every field as the repository's new value.
+type RepositoryInput struct {
+	// 1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit, not ending in .git, unique in the organization.
+	Slug string `json:"slug"`
+	// The slug when null or empty.
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 // A role granted at an organization: built in, or the organization's own.
@@ -149,6 +403,26 @@ type RoleInput struct {
 	Description *string `json:"description,omitempty"`
 	// From the permissions listed at scope ORGANIZATION; at least one.
 	Permissions []string `json:"permissions"`
+}
+
+// An SSH key, as its user sees it.
+type SSHKey struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// The key's type and base64, as an authorized_keys line has them, without its comment.
+	PublicKey string `json:"publicKey"`
+	// The key's SHA256 fingerprint, as ssh-keygen -l shows it.
+	Fingerprint string     `json:"fingerprint"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	LastUsedAt  *time.Time `json:"lastUsedAt,omitempty"`
+}
+
+// What adds an SSH key.
+type SSHKeyInput struct {
+	// What the key is for, 1 to 100 characters; the key's comment when null or empty.
+	Name *string `json:"name,omitempty"`
+	// One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
+	PublicKey string `json:"publicKey"`
 }
 
 // When a new secret stops working; a year from now when neither is given.
@@ -172,6 +446,42 @@ type Session struct {
 	Current bool `json:"current"`
 }
 
+// One of a repository's tags and the object it names, a commit or an annotated tag.
+type Tag struct {
+	// Its name, without refs/tags/.
+	Name string `json:"name"`
+	// The object it names.
+	Target string `json:"target"`
+}
+
+// A directory at a commit.
+type Tree struct {
+	// The commit the ref resolved to, which every link to the directory's files may pin.
+	Commit string `json:"commit"`
+	// Its path from the repository's root; empty for the root.
+	Path string `json:"path"`
+	// Its tree's object.
+	Sha string `json:"sha"`
+	// Its directories and submodules first, then its files and symlinks, each by name.
+	Entries []*TreeEntry `json:"entries"`
+	// Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+	Readme *File `json:"readme,omitempty"`
+}
+
+// One of a directory's entries.
+type TreeEntry struct {
+	Name string `json:"name"`
+	// Its path from the repository's root.
+	Path string    `json:"path"`
+	Kind EntryKind `json:"kind"`
+	// Its mode as Git writes it, such as 100644, 100755 or 040000.
+	Mode string `json:"mode"`
+	// The object it names; a submodule's is the commit it pins.
+	Sha string `json:"sha"`
+	// A file's or a symlink's size in bytes; null for a directory or a submodule.
+	Size *int `json:"size,omitempty"`
+}
+
 // A person: a principal of kind user.
 type User struct {
 	ID          string `json:"id"`
@@ -180,6 +490,10 @@ type User struct {
 	Emails []*Email `json:"emails"`
 	// The user's live sessions, newest first.
 	Sessions []*Session `json:"sessions"`
+	// The user's personal tokens that are not revoked, expired ones included, newest first.
+	PersonalTokens []*PersonalToken `json:"personalTokens"`
+	// The user's SSH keys, newest first.
+	SSHKeys []*SSHKey `json:"sshKeys"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.
@@ -188,6 +502,312 @@ type User struct {
 	Invitations []*Invitation `json:"invitations"`
 	// The viewer's pending requests to join organizations.
 	JoinRequests []*JoinRequest `json:"joinRequests"`
+}
+
+// Where an annotation stands, in any order its principal sets them.
+type AnnotationStatus string
+
+const (
+	AnnotationStatusPending    AnnotationStatus = "PENDING"
+	AnnotationStatusInProgress AnnotationStatus = "IN_PROGRESS"
+	AnnotationStatusFailed     AnnotationStatus = "FAILED"
+	AnnotationStatusSuccessful AnnotationStatus = "SUCCESSFUL"
+)
+
+var AllAnnotationStatus = []AnnotationStatus{
+	AnnotationStatusPending,
+	AnnotationStatusInProgress,
+	AnnotationStatusFailed,
+	AnnotationStatusSuccessful,
+}
+
+func (e AnnotationStatus) IsValid() bool {
+	switch e {
+	case AnnotationStatusPending, AnnotationStatusInProgress, AnnotationStatusFailed, AnnotationStatusSuccessful:
+		return true
+	}
+	return false
+}
+
+func (e AnnotationStatus) String() string {
+	return string(e)
+}
+
+func (e *AnnotationStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AnnotationStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AnnotationStatus", str)
+	}
+	return nil
+}
+
+func (e AnnotationStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AnnotationStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AnnotationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What one of a branch's checks is of.
+type BranchCheckKind string
+
+const (
+	// An annotation its head must carry, Successful.
+	BranchCheckKindAnnotation BranchCheckKind = "ANNOTATION"
+	// No merge among its commits to merge.
+	BranchCheckKindLinearHistory BranchCheckKind = "LINEAR_HISTORY"
+	// Its base's tip in it.
+	BranchCheckKindUpToDate BranchCheckKind = "UP_TO_DATE"
+)
+
+var AllBranchCheckKind = []BranchCheckKind{
+	BranchCheckKindAnnotation,
+	BranchCheckKindLinearHistory,
+	BranchCheckKindUpToDate,
+}
+
+func (e BranchCheckKind) IsValid() bool {
+	switch e {
+	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindUpToDate:
+		return true
+	}
+	return false
+}
+
+func (e BranchCheckKind) String() string {
+	return string(e)
+}
+
+func (e *BranchCheckKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = BranchCheckKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid BranchCheckKind", str)
+	}
+	return nil
+}
+
+func (e BranchCheckKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *BranchCheckKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e BranchCheckKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a branch stands as a request to merge into its base, the first that holds.
+type BranchStatus string
+
+const (
+	// The push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress.
+	BranchStatusProcessing BranchStatus = "PROCESSING"
+	// It has commits to merge, and a requirement holds them back.
+	BranchStatusBlocked BranchStatus = "BLOCKED"
+	// It has nothing to merge, and no merge took its head into its base.
+	BranchStatusEmpty BranchStatus = "EMPTY"
+	// A merge took its head into its base.
+	BranchStatusMerged BranchStatus = "MERGED"
+	// It has commits to merge, and nothing holds them back.
+	BranchStatusReady BranchStatus = "READY"
+)
+
+var AllBranchStatus = []BranchStatus{
+	BranchStatusProcessing,
+	BranchStatusBlocked,
+	BranchStatusEmpty,
+	BranchStatusMerged,
+	BranchStatusReady,
+}
+
+func (e BranchStatus) IsValid() bool {
+	switch e {
+	case BranchStatusProcessing, BranchStatusBlocked, BranchStatusEmpty, BranchStatusMerged, BranchStatusReady:
+		return true
+	}
+	return false
+}
+
+func (e BranchStatus) String() string {
+	return string(e)
+}
+
+func (e *BranchStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = BranchStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid BranchStatus", str)
+	}
+	return nil
+}
+
+func (e BranchStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *BranchStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e BranchStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+type EntryKind string
+
+const (
+	EntryKindTree      EntryKind = "TREE"
+	EntryKindBlob      EntryKind = "BLOB"
+	EntryKindSymlink   EntryKind = "SYMLINK"
+	EntryKindSubmodule EntryKind = "SUBMODULE"
+)
+
+var AllEntryKind = []EntryKind{
+	EntryKindTree,
+	EntryKindBlob,
+	EntryKindSymlink,
+	EntryKindSubmodule,
+}
+
+func (e EntryKind) IsValid() bool {
+	switch e {
+	case EntryKindTree, EntryKindBlob, EntryKindSymlink, EntryKindSubmodule:
+		return true
+	}
+	return false
+}
+
+func (e EntryKind) String() string {
+	return string(e)
+}
+
+func (e *EntryKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EntryKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EntryKind", str)
+	}
+	return nil
+}
+
+func (e EntryKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EntryKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EntryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Who reaches a repository, as its grants say: nobody sets it.
+type RepositoryVisibility string
+
+const (
+	// Its creator and the organization's Owners alone.
+	RepositoryVisibilityPrivate RepositoryVisibility = "PRIVATE"
+	// Someone else too, through a grant on it or a role at the organization.
+	RepositoryVisibilityInternal RepositoryVisibility = "INTERNAL"
+)
+
+var AllRepositoryVisibility = []RepositoryVisibility{
+	RepositoryVisibilityPrivate,
+	RepositoryVisibilityInternal,
+}
+
+func (e RepositoryVisibility) IsValid() bool {
+	switch e {
+	case RepositoryVisibilityPrivate, RepositoryVisibilityInternal:
+		return true
+	}
+	return false
+}
+
+func (e RepositoryVisibility) String() string {
+	return string(e)
+}
+
+func (e *RepositoryVisibility) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RepositoryVisibility(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RepositoryVisibility", str)
+	}
+	return nil
+}
+
+func (e RepositoryVisibility) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RepositoryVisibility) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RepositoryVisibility) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // The scopes roles are granted at. Repositories come with their slice.

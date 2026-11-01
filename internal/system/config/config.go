@@ -4,10 +4,13 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -78,8 +81,6 @@ type Server struct {
 	// DatabaseURL is PostgreSQL's connection URL. When empty, pgx reads libpq's variables (PGHOST, PGPASSWORD and so
 	// on), as the chart sets them for its own PostgreSQL.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
-	// BlobURL is the bucket's Go Cloud URL: s3://, gs://, azblob:// or file://.
-	BlobURL string `envconfig:"BLOB_URL" required:"true"`
 	// ShutdownTimeout bounds how long the server waits for requests in flight once asked to stop. It must end before
 	// the pod's grace period does.
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
@@ -90,6 +91,9 @@ type Server struct {
 	Providers Providers `envconfig:"AUTH_PROVIDERS"`
 	// SecretsKey seals the secrets the Admin server keeps: the Back-office's providers' client secrets.
 	SecretsKey string `envconfig:"SECRETS_KEY"`
+	// GitInternalURL is the Git server's internal port, where the REST and GraphQL servers read repositories' trees
+	// and files; empty, as in an installation without a Git server, those reads answer 503.
+	GitInternalURL URL `envconfig:"GIT_INTERNAL_URL"`
 }
 
 // SignUpSettings are the sign-up settings the chart's values give. Each they leave unset is the Back-office's, kept in
@@ -220,10 +224,18 @@ func LoadMigrate() (Migrate, error) {
 	return c, nil
 }
 
-// Maintenance configures the maintenance CronJob, which deletes what expired.
+// Maintenance configures the maintenance CronJob, which deletes what expired and, given CompactAt, compacts the
+// repositories' packs and deletes those nobody lists any more.
 type Maintenance struct {
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// BlobURL names the object store, as the Git server's.
+	BlobURL string `envconfig:"BLOB_URL"`
+	// GitDataDir holds the throwaway repositories it compacts in.
+	GitDataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
+	// CompactAt is how many active packs make a repository due for compaction, 2 or more; 0, unset, leaves every pack
+	// alone, as in an installation whose Git servers each keep their packs on a disk of their own.
+	CompactAt int `envconfig:"GIT_COMPACT_AT"`
 }
 
 // LoadMaintenance reads the maintenance CronJob's configuration from the environment.
@@ -232,5 +244,104 @@ func LoadMaintenance() (Maintenance, error) {
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return Maintenance{}, fmt.Errorf("reading the maintenance job's configuration from the COBRANCH_ variables: %w", err)
 	}
+	if c.CompactAt != 0 && c.CompactAt < 2 {
+		return Maintenance{}, fmt.Errorf("COBRANCH_GIT_COMPACT_AT is %d: compacting takes 2 packs or more", c.CompactAt)
+	}
 	return c, nil
+}
+
+// GitServer configures git-server, which serves Git's smart HTTP protocol.
+type GitServer struct {
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
+	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
+	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// BlobURL names the object store, which holds the packs: empty or postgres:// for the database's large objects,
+	// s3://, gs:// or azblob:// for a cloud's bucket, file:// for a directory.
+	BlobURL string `envconfig:"BLOB_URL"`
+	// DataDir holds the pack cache and the throwaway repositories, on one filesystem.
+	DataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
+	// CacheSize is how much of the bucket's packs the pod keeps, such as 10Gi.
+	CacheSize Size `envconfig:"GIT_CACHE_SIZE" default:"10Gi"`
+	// MaxPushSize is the largest pack a push may send, such as 2Gi.
+	MaxPushSize Size `envconfig:"GIT_MAX_PUSH_SIZE" default:"2Gi"`
+	// SSHAddr is where it also serves Git over SSH, such as :2222; empty, it serves HTTPS alone.
+	SSHAddr string `envconfig:"GIT_SSH_ADDR"`
+	// SSHHostKey is the private key, in PEM, that SSH clients know the server by; SSHAddr needs it.
+	SSHHostKey string `envconfig:"GIT_SSH_HOST_KEY"`
+	// InternalAddr is where it serves the internal call, the REST and GraphQL servers' reads of trees and files, on a
+	// port no route names.
+	InternalAddr    string        `envconfig:"GIT_INTERNAL_ADDR" default:":8081"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
+}
+
+// LoadGitServer reads git-server's configuration from the environment.
+func LoadGitServer() (GitServer, error) {
+	var c GitServer
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return GitServer{}, fmt.Errorf("reading git-server's configuration from the COBRANCH_ variables: %w", err)
+	}
+	if c.SSHAddr != "" && c.SSHHostKey == "" {
+		return GitServer{}, errors.New("COBRANCH_GIT_SSH_ADDR needs COBRANCH_GIT_SSH_HOST_KEY, the private key SSH clients know the server by")
+	}
+	return c, nil
+}
+
+// PushWorker configures push-worker, which processes the pushes the Git server recorded.
+type PushWorker struct {
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:":8080"`
+	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
+	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// PollInterval is how often it looks for waiting pushes without being woken, in case it missed a notification.
+	PollInterval    time.Duration `envconfig:"PUSH_POLL_INTERVAL" default:"30s"`
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
+}
+
+// LoadPushWorker reads push-worker's configuration from the environment.
+func LoadPushWorker() (PushWorker, error) {
+	var c PushWorker
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return PushWorker{}, fmt.Errorf("reading push-worker's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// Hook configures git-hook, a push's pre-receive hook, from what its Git server gives receive-pack.
+type Hook struct {
+	URL   string `envconfig:"HOOK_URL" required:"true"`
+	Token string `envconfig:"HOOK_TOKEN" required:"true"`
+}
+
+// LoadHook reads git-hook's configuration from the environment.
+func LoadHook() (Hook, error) {
+	var c Hook
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return Hook{}, fmt.Errorf("reading git-hook's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// Size is a number of bytes, written as Kubernetes writes quantities: a number, with Ki, Mi, Gi or Ti after it.
+type Size int64
+
+// sizeUnits are the suffixes a Size may carry, and what each multiplies by.
+var sizeUnits = []struct {
+	suffix string
+	factor int64
+}{{"Ti", 1 << 40}, {"Gi", 1 << 30}, {"Mi", 1 << 20}, {"Ki", 1 << 10}}
+
+// Decode reads value, such as 10Gi or 1048576.
+func (s *Size) Decode(value string) error {
+	number, factor := strings.TrimSpace(value), int64(1)
+	for _, u := range sizeUnits {
+		if trimmed, ok := strings.CutSuffix(number, u.suffix); ok {
+			number, factor = trimmed, u.factor
+			break
+		}
+	}
+	n, err := strconv.ParseInt(number, 10, 64)
+	if err != nil || n <= 0 || n > math.MaxInt64/factor {
+		return fmt.Errorf("%q is not a size, such as 10Gi", value)
+	}
+	*s = Size(n * factor)
+	return nil
 }

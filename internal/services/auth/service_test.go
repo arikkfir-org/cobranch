@@ -194,6 +194,44 @@ func TestComplete(t *testing.T) {
 	}
 }
 
+// TestCompleteAdopts signs Alice up as the login-less user a push made for her commits' email, once her provider
+// verifies it, so those commits are hers at once; an unverified email gets a new user and leaves the login-less one.
+func TestCompleteAdopts(t *testing.T) {
+	unverified := alice
+	unverified.EmailVerified = false
+	tests := []struct {
+		name      string
+		claims    auth.Claims
+		wantAdopt bool
+	}{
+		{name: "a verified email", claims: alice, wantAdopt: true},
+		{name: "an unverified email", claims: unverified},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, store, _ := newService(auth.Settings{SignUp: auth.PolicyAnyone}, tt.claims)
+			loginless := uuid.New()
+			created := now.Add(-24 * time.Hour)
+			store.Users[loginless] = auth.User{Principal: auth.Principal{ID: loginless, Kind: auth.KindUser, DisplayName: "alice"}, CreatedAt: created,
+				Emails: []auth.Email{{Email: "alice@example.com"}}}
+			token := signedIn(t, s)
+			_, user, err := store.Session(context.Background(), auth.Hash(token))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if adopted := user.ID == loginless; adopted != tt.wantAdopt {
+				t.Fatalf("Alice signed up as %s (the login-less user: %t), want adopted %t", user.ID, adopted, tt.wantAdopt)
+			}
+			if tt.wantAdopt && (user.DisplayName != "Alice" || !user.CreatedAt.Equal(created) || len(user.Emails) != 1 || !user.Emails[0].Verified) {
+				t.Errorf("the adopted user = %+v, want Alice, created when the push made her, her email verified", user)
+			}
+			if !tt.wantAdopt && len(store.Users) != 2 {
+				t.Errorf("%d users, want the login-less one and Alice", len(store.Users))
+			}
+		})
+	}
+}
+
 // TestCompleteSettings finishes sign-ups under the settings the Back-office keeps, and the values' over them.
 func TestCompleteSettings(t *testing.T) {
 	on, off := true, false

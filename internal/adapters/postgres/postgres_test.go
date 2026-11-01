@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 9},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 18},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 9},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 9},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 18},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 18},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -427,6 +427,12 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 		}
 		if n := countRows(t, pool, "SELECT count(*) FROM credentials c JOIN principals p ON p.id = c.principal_id WHERE p.kind = 'api_key' AND c.revoked_at IS NOT NULL"); n != 1 {
 			t.Errorf("seeded API key secrets = %d, want the Deploy script's", n)
+		}
+		if n := countRows(t, pool, "SELECT count(*) FROM repositories r JOIN repository_slugs s ON s.repo_id = r.id AND s.slug = r.slug"); n != 3 {
+			t.Errorf("seeded repositories with their slugs = %d, want website, handbook and ledger", n)
+		}
+		if n := countRows(t, pool, "SELECT count(*) FROM grants WHERE scope = 'repository'"); n != 5 {
+			t.Errorf("seeded repository grants = %d, want each creator's Maintainer, and Max's and Gwen's on website", n)
 		}
 		return
 	}

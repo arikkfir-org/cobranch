@@ -1,0 +1,270 @@
+# A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"); its tags,
+# trees and files, which the Git server reads
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
+# the annotations principals set on its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
+
+extend type Repository {
+  "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
+  branches: [Branch!]!
+  "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
+  branch(name: String!): Branch
+  "A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100."
+  history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
+  "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
+  commit(sha: String!): Commit
+  "The repository's tags, by name, each with the object it names; takes repo.read."
+  tags: [Tag!]!
+  "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
+  tree(ref: String! = "main", path: String! = ""): Tree
+  "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
+  blob(ref: String! = "main", path: String!): File
+}
+
+"One of a repository's tags and the object it names, a commit or an annotated tag."
+type Tag {
+  "Its name, without refs/tags/."
+  name: String!
+  "The object it names."
+  target: String!
+}
+
+"A directory at a commit."
+type Tree {
+  "The commit the ref resolved to, which every link to the directory's files may pin."
+  commit: String!
+  "Its path from the repository's root; empty for the root."
+  path: String!
+  "Its tree's object."
+  sha: String!
+  "Its directories and submodules first, then its files and symlinks, each by name."
+  entries: [TreeEntry!]!
+  "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
+  readme: File
+}
+
+"What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository."
+enum EntryKind {
+  TREE
+  BLOB
+  SYMLINK
+  SUBMODULE
+}
+
+"One of a directory's entries."
+type TreeEntry {
+  name: String!
+  "Its path from the repository's root."
+  path: String!
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644, 100755 or 040000."
+  mode: String!
+  "The object it names; a submodule's is the commit it pins."
+  sha: String!
+  "A file's or a symlink's size in bytes; null for a directory or a submodule."
+  size: Int
+}
+
+"A file or a symlink at a commit, and its text when it isn't binary."
+type File {
+  "The commit the ref resolved to."
+  commit: String!
+  "Its path from the repository's root."
+  path: String!
+  name: String!
+  "BLOB or SYMLINK."
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644 or 120000."
+  mode: String!
+  "Its blob's object."
+  sha: String!
+  "Its size in bytes."
+  size: Int!
+  "Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8."
+  binary: Boolean!
+  "Whether its text stops at 1 MiB, short of its size."
+  truncated: Boolean!
+  "Its text, up to 1 MiB; null when it is binary. A symlink's is its target."
+  text: String
+  "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
+  html: String
+}
+
+extend type Mutation {
+  "Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before, and answers it as it now is; takes annotations.write. An annotation of that name that another principal set is refused (CONFLICT, annotation.taken), naming them, until it is deleted. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
+  setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!, expectedVersion: Int): Annotation!
+  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's. With expectedVersion, an annotation at another version, or none, is refused (CONFLICT, precondition.failed)."
+  deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
+}
+
+"One of a repository's live branches and the commit it is at."
+type Branch {
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it is at."
+  head: String!
+  "The commit it is at; null while its head is no commit a push recorded."
+  commit: Commit
+  createdAt: Time!
+  "When a push last moved it."
+  updatedAt: Time!
+  "The branch it merges into, main; null for main."
+  base: String
+  "Where it stands as a request to merge into its base; null for main."
+  status: BranchStatus
+  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main."
+  checks: [BranchCheck!]!
+  "How many commits it has that its base lacks; null for main, and until a push works it out."
+  ahead: Int
+  "How many commits its base has that it lacks; null for main, and until a push works it out."
+  behind: Int
+  "What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch."
+  requirements: MergeRequirements
+  "The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's."
+  merge: BranchMerge
+}
+
+"A merge of a branch into its base that a push made."
+type BranchMerge {
+  "The head it brought into the base."
+  head: String!
+  "Who pushed it; null once they are gone."
+  by: CommitPrincipal
+  "When Cobranch recorded the push."
+  at: Time!
+}
+
+"Where a branch stands as a request to merge into its base, the first that holds."
+enum BranchStatus {
+  "The push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress."
+  PROCESSING
+  "It has commits to merge, and a requirement holds them back."
+  BLOCKED
+  "It has nothing to merge, and no merge took its head into its base."
+  EMPTY
+  "A merge took its head into its base."
+  MERGED
+  "It has commits to merge, and nothing holds them back."
+  READY
+}
+
+"What one of a branch's checks is of."
+enum BranchCheckKind {
+  "An annotation its head must carry, Successful."
+  ANNOTATION
+  "No merge among its commits to merge."
+  LINEAR_HISTORY
+  "Its base's tip in it."
+  UP_TO_DATE
+}
+
+"One of a branch's merge requirements and how it stands."
+type BranchCheck {
+  kind: BranchCheckKind!
+  "The required annotation's name; null unless kind is ANNOTATION."
+  name: String
+  "The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION."
+  status: AnnotationStatus
+  "For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION."
+  count: Int
+  met: Boolean!
+}
+
+"What a merge into a branch needs, as main's /cobranch.yaml names it under branches."
+type MergeRequirements {
+  "The annotations the incoming head must carry, Successful."
+  annotations: [String!]!
+  "Whether no merge commit may come in."
+  linearHistory: Boolean!
+}
+
+"A page of a branch's history, nearest first."
+type CommitPage {
+  commits: [Commit!]!
+  "Where the next page starts, as history's after; null after the last page."
+  nextCursor: String
+}
+
+"A commit a push brought, as the push recorded it."
+type Commit {
+  sha: String!
+  tree: String!
+  "Its parents' names, the first of which its branch's history follows."
+  parents: [String!]!
+  message: String!
+  author: Person!
+  committer: Person!
+  "Its signature as written, not checked yet; empty for an unsigned commit."
+  signature: String!
+  "The annotations principals set on it, by name."
+  annotations: [Annotation!]!
+  "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
+  push: Push
+}
+
+"A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes."
+type Annotation {
+  id: ID!
+  "1 to 100 lowercase letters, digits, '-', '_', '.' and '/', starting with a letter or digit, such as ci/build."
+  name: String!
+  status: AnnotationStatus!
+  summary: String!
+  "Where its details are; empty without one."
+  link: String!
+  "Who set it; null once they are gone."
+  principal: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "When its run started: when it was set, or when it last went back from FAILED or SUCCESSFUL to PENDING or IN_PROGRESS."
+  startedAt: Time!
+  "When it reached FAILED or SUCCESSFUL; null while it runs."
+  completedAt: Time
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"Where an annotation stands, in any order its principal sets them."
+enum AnnotationStatus {
+  PENDING
+  IN_PROGRESS
+  FAILED
+  SUCCESSFUL
+}
+
+"What a principal sets an annotation to."
+input AnnotationInput {
+  status: AnnotationStatus!
+  "At most 500 characters."
+  summary: String! = ""
+  "Where its details are, an absolute http or https URL of at most 2048 bytes; none when empty."
+  link: String! = ""
+}
+
+"A commit's author or committer as the commit writes them."
+type Person {
+  name: String!
+  email: String!
+  at: Time!
+  "The zone the commit wrote its time in, such as +0200."
+  zone: String!
+  "Who is behind them; null until the push worker maps their email."
+  principal: CommitPrincipal
+}
+
+"Who is behind a commit's author or committer, a push, an annotation or a merge: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
+type CommitPrincipal {
+  id: ID!
+  displayName: String!
+}
+
+"The push that first brought a commit."
+type Push {
+  id: ID!
+  "Who pushed; null once they are gone."
+  pusher: CommitPrincipal
+  "https or ssh."
+  transport: String!
+  "When Cobranch recorded it."
+  at: Time!
+}

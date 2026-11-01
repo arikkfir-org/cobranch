@@ -26,13 +26,18 @@ const (
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
 var AnonymousID = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 
-// The built-in roles a sign-in grants, by the IDs the first migration gives them.
+// The built-in roles, by the IDs migration 2 gives them: those a sign-in grants, the organizations' and the
+// repositories'.
 var (
 	RoleInstallationAdmin = uuid.MustParse("00000000-0000-7000-8000-000000000101")
 	RoleInstallationUser  = uuid.MustParse("00000000-0000-7000-8000-000000000102")
 	RoleOwner             = uuid.MustParse("00000000-0000-7000-8000-000000000201")
 	RoleMember            = uuid.MustParse("00000000-0000-7000-8000-000000000202")
 	RoleGuest             = uuid.MustParse("00000000-0000-7000-8000-000000000203")
+	RoleReader            = uuid.MustParse("00000000-0000-7000-8000-000000000301")
+	RoleDeveloper         = uuid.MustParse("00000000-0000-7000-8000-000000000302")
+	RoleMaintainer        = uuid.MustParse("00000000-0000-7000-8000-000000000303")
+	RoleAutomation        = uuid.MustParse("00000000-0000-7000-8000-000000000304")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.
@@ -142,19 +147,44 @@ func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
 }
 
-// Credential is a secret that acts as a principal: an API key's, shown once when made and kept hashed. The
-// Authorization header carries it as a bearer token.
+// CredentialKind is what a credential is: an API key's secret, or a user's personal token or SSH key.
+type CredentialKind string
+
+// The credential kinds.
+const (
+	// CredentialAPIKey is an API key's secret, which acts as the key and holds what the key's grants give.
+	CredentialAPIKey CredentialKind = "api_key"
+	// CredentialPersonalToken is a personal token, which acts as the user who made it, narrowed to its permissions.
+	CredentialPersonalToken CredentialKind = "personal_token"
+	// CredentialSSHKey is an SSH public key, which acts as the user who added it, unnarrowed, as their session would.
+	CredentialSSHKey CredentialKind = "ssh_key"
+)
+
+// Credential is a secret that acts as a principal: an API key's or a user's personal token, shown once when made and
+// kept hashed. The Authorization header carries it as a bearer token, and a Git client as a password. A user's SSH key
+// is one too, whose secret is the private key its user keeps: a Git client proves it over SSH.
 type Credential struct {
 	ID          uuid.UUID
+	Kind        CredentialKind
 	PrincipalID uuid.UUID
-	// Hint is the secret's last four characters, which the Console shows.
+	// Hint is the secret's last four characters, which the Console shows; an SSH key's SHA256 fingerprint.
 	Hint      string
 	CreatedAt time.Time
 	CreatedBy uuid.UUID
-	// ExpiresAt is when the credential stops working; zero for one that never expires.
+	// ExpiresAt is when the credential stops working; zero for one that never expires, which no personal token is and
+	// every SSH key is.
 	ExpiresAt  time.Time
 	LastUsedAt time.Time
 	RevokedAt  time.Time
+	// Name is what a personal token's or an SSH key's user called it; an API key's secret has none.
+	Name string
+	// Permissions are the permissions a personal token may use, sorted; nil for an API key's secret.
+	Permissions []string
+	// Issuer and Subject name the identity of the session that made a personal token; empty for an API key's secret.
+	Issuer, Subject string
+	// PublicKey is an SSH key's public half, its type and base64, as an authorized_keys line has it without a comment;
+	// empty for the others.
+	PublicKey string
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.
@@ -179,6 +209,9 @@ type SignUp struct {
 	Principal Principal
 	Identity  Identity
 	Grants    []Grant
+	// Adopt signs the identity up as Principal, a login-less user who holds its verified email unverified, rather than
+	// as a new user: the email turns verified, and the commits a push gave them are the identity's at once.
+	Adopt bool
 }
 
 // Policy is an installation's sign-up policy.
@@ -220,7 +253,18 @@ var (
 	ErrUnauthenticated = errors.New("the credential signs nobody in")
 	// ErrSeedOff is a seeded sign-in on an installation whose seeding is off.
 	ErrSeedOff = errors.New("seeded sign-in is off")
+	// ErrSSHKeyTaken is an SSH key a user holds already, its adder or another: a key names one user.
+	ErrSSHKeyTaken = errors.New("the SSH key is taken")
 )
+
+// ValidationError is input the domain refuses: Field names what, Code why, in the API's terms.
+type ValidationError struct {
+	Field, Code, Message string
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Field, e.Message)
+}
 
 // EmailTakenError is a new identity whose verified email another user already holds; Issuer names the provider that
 // user signs in with, for the page to say.

@@ -1,7 +1,7 @@
 # The Cobranch repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-10-31, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
@@ -55,10 +55,12 @@ throwaway kind cluster. A privileged Docker daemon runs beside its steps and lis
 lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
 `cobranch`, `cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, and `cluster` creates
 the cluster there and loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the
-migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, and the
-Console and the Back-office serve their pages and the APIs' URLs. `upgrade` rolls every pod, and fails if the generated
-database password changed or its migrate Job applied anything; `retest` tests again. Both tasks clone the commit with
-one StepAction.
+migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, the Console
+and the Back-office serve their pages and the APIs' URLs, a seeded user clones a repository over HTTPS, pushes to it and
+finds the push, and the Git server's SSH Service answers. `upgrade` rolls every pod, and fails if the generated database
+password or the SSH host key changed or its migrate Job applied anything; `retest` tests again. `maintenance` runs the
+maintenance CronJob once, which must compact the two packs the tests pushed, and `test-compacted` tests on the compacted
+pack. Both tasks clone the commit with one StepAction.
 
 **Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
 
@@ -105,11 +107,12 @@ which runs pipeline `tag`; a draft has no tag and does nothing. `tag` refuses a 
 isn't on `main` and one whose chart doesn't default to the images published here, waits up to 15 minutes for `main`'s
 images of the commit, adds `1.2.3` to each, and only then packages the commit's chart at `1.2.3`, its app version the
 same, and pushes it beside them as `charts/cobranch`. So one version names the chart and every image it runs, and an
-operator installs it with nothing but a bucket:
+operator installs it with nothing else: Git's packs live in the chart's database by default, and `blob.url` names a
+bucket only for an installation that wants one ([Git object storage](git-object-storage.md#choosing-an-adapter)):
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 ```
 
 **A version retags main’s images of a commit and publishes the chart at that version**

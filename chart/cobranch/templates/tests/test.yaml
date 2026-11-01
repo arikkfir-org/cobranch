@@ -1,7 +1,9 @@
 {{- $fullname := include "cobranch.fullname" . }}
 # helm test: every server is ready and answers, the Console and the Back-office serve their pages and where they find
 # the APIs, and, with the demo data on, a seeded sign-in makes a session the REST API accepts, which the Admin API
-# refuses unless the user administers the installation, who reads its settings and identity providers.
+# refuses unless the user administers the installation, who reads its settings and identity providers; with the Git
+# server, the user makes a personal token, clones a repository the demo data's Job pushed to, pushes to it and finds
+# the push in a fresh clone and in the REST API's files, and its SSH Service, given one, answers.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -27,7 +29,7 @@ spec:
       type: RuntimeDefault
   containers:
     - name: test
-      # The cobranch image has what the test needs: a shell and wget.
+      # The cobranch image has what the test needs: a shell, wget and git.
       image: {{ include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
       imagePullPolicy: {{ .Values.images.cobranch.pullPolicy }}
       command: [/bin/sh, -ec]
@@ -50,9 +52,19 @@ spec:
           # The page routes in the browser, so any path gets it, and any directory answers config.json.
           wget -qO- "$console/acme/members" | grep -q '<title>Cobranch</title>'
           wget -qO- "$console/acme/config.json" | grep -q '"consoleUrl"'
-          wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}","authUrl":"{{ .Values.urls.auth | trimSuffix "/" }}","consoleUrl":"{{ .Values.urls.console | trimSuffix "/" }}"'
+          wget -qO- "$console/config.json" | tee /dev/stderr | grep -q '"restUrl":"{{ .Values.urls.rest | trimSuffix "/" }}","authUrl":"{{ .Values.urls.auth | trimSuffix "/" }}","consoleUrl":"{{ .Values.urls.console | trimSuffix "/" }}","gitUrl":"{{ .Values.urls.git | trimSuffix "/" }}","gitSshUrl":"{{ and .Values.urls.git .Values.urls.gitSsh }}"'
           # Anonymous gets 401 from /v1/me, as a problem.
           wget -qO- --server-response "$rest/v1/me" 2>&1 | grep -q 'HTTP/1.1 401'
+          {{- if .Values.urls.git }}
+          gitserver=http://{{ $fullname }}-git-server
+          wget -qO- "$gitserver/readyz"; echo
+          # Without a credential, the Git server asks for one.
+          wget -qO- --server-response "$gitserver/acme/website.git/info/refs?service=git-upload-pack" 2>&1 | grep -q 'HTTP/1.1 401'
+          {{- if .Values.urls.gitSsh }}
+          # Its SSH Service answers with the Git server's banner.
+          sleep 2 | nc {{ $fullname }}-git-server-ssh {{ .Values.gitServer.ssh.service.port }} | tee /dev/stderr | grep -q '^SSH-2.0-Cobranch'
+          {{- end }}
+          {{- end }}
           {{- if .Values.urls.admin }}
           admin=http://{{ $fullname }}-admin-server
           backoffice=http://{{ $fullname }}-back-office
@@ -66,14 +78,7 @@ spec:
           {{- if and .Values.seed.enabled .Values.urls.auth }}
           # The sign-in page lists the demo users, a seeded sign-in sets the session cookie, and the cookie signs in.
           wget -qO- "$auth/providers" | tee /dev/stderr | grep -q '"subject":"owner"'
-          # signIn prints the session cookie of a seeded sign-in as $1. BusyBox's wget follows the redirect and drops its
-          # headers, so nc reads the raw response; stdin stays open until the response is in, since the server cancels
-          # a request whose client went away.
-          signIn() {
-            host=${auth#http://}
-            (printf 'GET /sign-in?user=%s HTTP/1.0\r\nHost: %s\r\n\r\n' "$1" "$host"; sleep 2) | nc "$host" 80 | tr -d '\r' \
-              | sed -n 's/^Set-Cookie: \(__[A-Za-z-]*cobranch-session=[^;]*\);.*/\1/p'
-          }
+          {{- include "cobranch.signIn" . | nindent 10 }}
           cookie=$(signIn owner)
           [ -n "$cookie" ]
           wget -qO- --header "Cookie: $cookie" "$rest/v1/me" | tee /dev/stderr | grep -q '"displayName":"Olivia Owner"'
@@ -91,6 +96,34 @@ spec:
           wget -qO- --header "Cookie: $cookie" "$admin/v1/providers" | tee /dev/stderr | grep -q '"items":\['
           {{- end }}
           {{- end }}
+          {{- if .Values.urls.git }}
+          # Olivia, who maintains Acme's website, makes a personal token from her session and clones the website with
+          # it. Her commit's push returns once the Git server recorded it, and a fresh clone, from any Git server,
+          # brings it.
+          cookie=$(signIn owner)
+          token=$(wget -qO- --header "Cookie: $cookie" --header 'Content-Type: application/json' --post-data '{"name":"helm test"}' "$rest/v1/me/tokens" \
+            | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')
+          [ -n "$token" ]
+          export HOME=/tmp/git GIT_TERMINAL_PROMPT=0
+          mkdir -p /tmp/git && cd /tmp/git
+          url="http://git:$token@${gitserver#http://}/acme/website.git"
+          git clone -q "$url" website
+          # The demo data's Job pushed the website's history before the test ran.
+          [ "$(git -C website tag -l v1.0.0)" = v1.0.0 ]
+          echo "Pushed by helm test at $(date -u +%FT%TZ)" >website/README.md
+          git -C website add README.md
+          git -C website -c user.name='Helm test' -c user.email=helm-test@cobranch.example commit -qm 'Run helm test'
+          git -C website push origin HEAD:refs/heads/main
+          git clone -q "$url" fresh
+          [ "$(git -C fresh rev-parse HEAD)" = "$(git -C website rev-parse HEAD)" ]
+          # The REST API reads the pushed files from the Git server's internal port: main's root lists the README and
+          # renders it, and its bytes are the commit's.
+          tree="$(wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/tree")"
+          echo "$tree" >&2
+          echo "$tree" | grep -q "\"commit\":\"$(git -C website rev-parse HEAD)\""
+          echo "$tree" | grep -qF '"html":"\u003cp\u003ePushed by helm test'
+          wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/raw?path=README.md" | grep -q 'Pushed by helm test'
+          {{- end }}
           {{- end }}
           echo "Cobranch {{ .Values.images.cobranch.tag | default .Chart.AppVersion }} answers, built as $version"
       resources:
@@ -101,3 +134,10 @@ spec:
           memory: 64Mi
       securityContext:
         {{- include "cobranch.containerSecurityContext" . | nindent 8 }}
+      volumeMounts:
+        # The clones, and git's HOME.
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir: {}

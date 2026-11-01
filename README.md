@@ -14,7 +14,7 @@ Cobranch is a Kfirs project, created by Arik Kfir, and is released under the [MI
 
 ## Status
 
-Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions, organizations with their members, invitations and join requests, their roles, built in and custom, with the grants of them, and their API keys, which scripts send as bearer tokens, are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)). The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them.
+Foundations. The Helm chart installs Cobranch's skeleton, whose servers answer only their version ([ENG-195](https://linear.app/arikkfir/issue/ENG-195)), pipeline `main` publishes the images of `main`'s newest commit, and each GitHub release publishes the chart at its version ([ENG-207](https://linear.app/arikkfir/issue/ENG-207)). Sign-in through any OpenID Connect provider, sessions, organizations with their members, invitations and join requests, their roles, built in and custom, with the grants of them, and their API keys, which scripts send as bearer tokens, are in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197), [the design](docs/cobranch/designs/sign-in-and-organizations.md)). Git hosting has begun: an organization's repositories, with the grants of their roles, and personal tokens, which act as their user narrowed to the permissions they list, through the APIs and the Console; and the Git server, which clones, fetches and takes pushes over HTTPS with a personal token, recording each push before it answers, with the push worker, which then maps each push's commits to their authors; and a repository's code through the APIs and the Console: its branches, a branch's first-parent history and its commits, with the users behind them and the pushes that brought them. Pack compaction and Git over SSH, with the SSH keys users add through the APIs and the Console, are in too ([ENG-198](https://linear.app/arikkfir/issue/ENG-198), [the design](docs/cobranch/designs/git-hosting.md)). Browsing code has begun: a repository's directories and files at any branch, tag or commit, with Markdown rendered as GitHub renders it and each directory's README beneath its listing, through the APIs and the Console, which the REST and GraphQL servers read from the Git server over an internal call that carries the viewer's own token, so the Git server itself checks who reads ([ENG-228](https://linear.app/arikkfir/issue/ENG-228), [the design](docs/cobranch/designs/code-browsing.md)). Branch status has begun: principals set annotations on commits through the APIs, such as a CI system's verdict, and the Console shows them on a commit's page and in a branch's history; `main`'s `/cobranch.yaml` names the annotations a merge needs and whether history stays linear, and every other branch shows its status as a request to merge into `main`, Processing, Blocked, Empty, Merged or Ready, with the checks behind it, through the APIs and the Console; a push into a branch with merge requirements brings only Ready branches' commits, unless its pusher holds `repo.bypass`, and a branch a push brings into `main` turns Merged, naming who merged it ([ENG-199](https://linear.app/arikkfir/issue/ENG-199), [the design](docs/cobranch/designs/branch-status.md)). The work is tracked in Linear's [Cobranch project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), and the designs are cross-linked pages that start from the [product design](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy); [`docs/cobranch/designs/`](docs/cobranch/designs/) holds snapshots of them.
 
 ## Layout
 
@@ -22,9 +22,9 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 
 | Path | What it holds |
 | --- | --- |
-| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `admin-server`, `migrate`, `maintenance` and `version` |
-| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys; `admin`, the installation's administration), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `adminapi`, `server`, `blob`) and `system/` (configuration, telemetry, build information) |
-| `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`): sign-in, the welcome page (create, join, invitations) and an organization's home, members, roles, API keys and settings under its slug, routed in the browser |
+| `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `admin-server`, `migrate`, `git-server`, `push-worker` (with `git-hook`, the Git server's pre-receive hook), `maintenance` and `version` |
+| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions, personal tokens, SSH keys and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys; `repos`, repositories and the grants on them; `git`, what a fetch serves and the record of pushes; `code`, a repository's branches, history, commits, directories and files as people browse them, the annotations principals set on its commits, and each branch's status with the merge requirements behind it; `admin`, the installation's administration), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `adminapi`, `server`, `blob`, `gitserver`, `gitinternal`, `markdown`, `pushworker`) and `system/` (configuration, telemetry, build information) |
+| `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`): sign-in, the welcome page (create, join, invitations), an organization's home, members, roles, API keys and settings under its slug, its repositories' pages under theirs, with their files at any branch, tag or commit, Markdown and READMEs rendered, branches with their status, history and commits with their annotations, and the viewer's settings with their personal tokens and SSH keys, routed in the browser |
 | `web/back-office/` | The Back-office, which Caddy serves as static files (image `cobranch-back-office`): an installation's organizations (search, create one for a user, enter one) and its users, routed in the browser |
 | `web/ui/` | _Planned_: the components the web apps share |
 | `api/` | The API contracts, from which `go generate ./...` writes the servers' stubs: REST (`openapi.yaml`), GraphQL (`graphql/`) and the Admin API (`admin.yaml`), which the Back-office calls |
@@ -54,10 +54,10 @@ bin/cobranch version
 ```
 
 The workloads read `COBRANCH_` variables. `migrate` brings a database's schema to the build's version and exits; each
-server needs a bucket and the database, and turns ready once the schema is at that version:
+server needs the database, and turns ready once the schema is at that version. The Git server and maintenance keep
+Git's packs in it too, unless `COBRANCH_BLOB_URL` names a bucket or a directory:
 
 ```bash
-export COBRANCH_BLOB_URL='file:///tmp/cobranch-blobs?create_dir=true'
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
 export COBRANCH_SECRETS_KEY="$(openssl rand -hex 24)"    # keep it: it seals the providers' secrets the Admin server adds
 bin/cobranch migrate
@@ -69,14 +69,14 @@ COBRANCH_HTTP_ADDR=:8083 COBRANCH_BACK_OFFICE_URL=http://localhost:3001 \
 
 `auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
 (`COBRANCH_SEED=true` with `migrate`, then with `auth-server`, lets the sign-in page sign in as a demo user);
-`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits:
+`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given `COBRANCH_GIT_COMPACT_AT`, it also deletes the packs nobody lists any more and compacts the repositories that have that many packs or more, working in `COBRANCH_GIT_DATA_DIR`:
 
 ```bash
 export COBRANCH_CONSOLE_URL=http://localhost:3000 COBRANCH_AUTH_URL=http://localhost:8082
 export COBRANCH_AUTH_PROVIDERS='[{"id":"google","name":"Google","preset":"google","clientId":"…"}]'
 export COBRANCH_AUTH_CLIENT_SECRET_GOOGLE='…'          # the redirect URI is $COBRANCH_AUTH_URL/callback
 COBRANCH_HTTP_ADDR=:8082 bin/cobranch auth-server        # :8082: /providers, /sign-in, /callback, /sign-out
-bin/cobranch maintenance
+COBRANCH_GIT_COMPACT_AT=8 COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
 ```
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces
@@ -92,7 +92,7 @@ Install a version of the chart, which is published beside its images; its guide,
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 helm test cobranch --namespace cobranch
 ```
 
@@ -107,7 +107,7 @@ built. To follow `main`, install the chart from a checkout with its commit's ima
 helm install cobranch chart/cobranch --namespace cobranch --create-namespace \
   --set-string images.cobranch.tag=$(git rev-parse HEAD | cut -c1-7) \
   --set-string images.console.tag=$(git rev-parse HEAD | cut -c1-7) \
-  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7) --set blob.url='gs://my-cobranch-bucket'
+  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7)
 ```
 
 For a commit of your own, build the images, push them where your cluster pulls from, and install with those
@@ -123,8 +123,8 @@ docker push registry.example.com/cobranch-back-office:dev
 
 Every workload serves as if it were alone, so you choose where each one lives: a host each, or paths on one host
 (`https://cobranch.example.com/api`), the prefix stripped. Route them from your Gateway, or set `urls.console`,
-`urls.rest`, `urls.graphql`, `urls.auth`, `urls.admin` and `urls.backOffice` with `httpRoute.enabled` for an HTTPRoute
-each. Logs go to stdout as JSON; to see
+`urls.rest`, `urls.graphql`, `urls.auth`, `urls.admin`, `urls.backOffice` and `urls.git` with `httpRoute.enabled` for an
+HTTPRoute each. Git over SSH, with `urls.gitSsh`, takes no route: expose the Git server's SSH Service yourself. Logs go to stdout as JSON; to see
 traces, set `telemetry.traces.endpoint` to your OpenTelemetry Collector's or a vendor's OTLP endpoint.
 
 ## Contributing

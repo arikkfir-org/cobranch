@@ -1,0 +1,4 @@
+{{- if .Values.urls.git }}
+{{- include "cobranch.checkDatabase" . }}
+{{- include "cobranch.server" (dict "root" . "component" "push-worker" "values" .Values.pushWorker "bucket" false "service" false) }}
+{{- end }}

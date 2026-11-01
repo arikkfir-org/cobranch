@@ -1,0 +1,220 @@
+{{- if and .Values.seed.enabled .Values.urls.auth .Values.urls.git }}
+{{- $fullname := include "cobranch.fullname" . }}
+{{- $component := dict "root" . "component" "seed" }}
+# Demo data's code: once the servers answer, after each install and upgrade, Olivia, the demo owner, pushes a history to
+# Acme's website, unless it has one: directories, Markdown with a README in each directory, an image, a symlink and an
+# executable script, a branch and a hotfix merged into main, tag v1.0.0, and branch feature/search, still open. It
+# pushes through the Git server, as anyone does, so the push is recorded and the push worker maps its authors, the demo
+# users. It runs where the migrate Job runs.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-seed
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "cobranch.labels" $component | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- include "cobranch.podSecurityContext" . | nindent 6 }}
+      {{- include "cobranch.placement" .Values.migrate | nindent 6 }}
+      containers:
+        - name: seed
+          # The cobranch image has what the Job needs: a shell, wget, nc and git.
+          image: {{ include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
+          imagePullPolicy: {{ .Values.images.cobranch.pullPolicy }}
+          command: [/bin/sh, -ec]
+          args:
+            - |
+              rest=http://{{ $fullname }}-rest-server
+              auth=http://{{ $fullname }}-auth-server
+              gitserver=http://{{ $fullname }}-git-server
+              # Helm runs the Job once the objects exist, maybe before the servers answer: the deadline bounds the wait.
+              for server in "$auth" "$rest" "$gitserver"; do
+                until wget -qO /dev/null "$server/readyz"; do sleep 2; done
+              done
+              {{- include "cobranch.signIn" . | nindent 14 }}
+              cookie=$(signIn owner)
+              [ -n "$cookie" ]
+              # A website with a branch or a tag has a history already, and gets no token that would only pile up.
+              website="$rest/v1/orgs/acme/repos/website"
+              branches=$(wget -qO- --header "Cookie: $cookie" "$website/branches")
+              tags=$(wget -qO- --header "Cookie: $cookie" "$website/tags")
+              case "$branches $tags" in
+                *'"branches":[]'*'"tags":[]'*) ;;
+                *'"branches":['*'"tags":['*) echo "acme/website has a history already, so the demo data adds none"; exit 0 ;;
+                *) echo "Could not read acme/website's branches and tags: $branches $tags" >&2; exit 1 ;;
+              esac
+              token=$(wget -qO- --header "Cookie: $cookie" --header 'Content-Type: application/json' --post-data '{"name":"demo data"}' "$rest/v1/me/tokens" \
+                | sed -n 's/.*"secret":"\([^"]*\)".*/\1/p')
+              [ -n "$token" ]
+              export HOME=/tmp/seed GIT_TERMINAL_PROMPT=0
+              url="http://git:$token@${gitserver#http://}/acme/website.git"
+              mkdir -p "$HOME/website" && cd "$HOME/website"
+              git init -q -b main
+              # by runs git with the rest of its arguments as $1 (olivia, max or gwen), a demo user, at $2.
+              by() {
+                who=$1 at=$2
+                shift 2
+                case $who in
+                  olivia) name='Olivia Owner' ;;
+                  max) name='Max Member' ;;
+                  gwen) name='Gwen Guest' ;;
+                  *) echo "No demo user $who" >&2; return 1 ;;
+                esac
+                GIT_AUTHOR_NAME=$name GIT_AUTHOR_EMAIL=$who@cobranch.example GIT_AUTHOR_DATE=$at \
+                  GIT_COMMITTER_NAME=$name GIT_COMMITTER_EMAIL=$who@cobranch.example GIT_COMMITTER_DATE=$at git "$@"
+              }
+              mkdir -p css docs images scripts
+              cat >index.html <<'EOF'
+              <!doctype html>
+              <html lang="en">
+              <head><meta charset="utf-8"><title>Acme</title><link rel="stylesheet" href="css/site.css"></head>
+              <body>
+              <h1>Acme</h1>
+              <p>Things that work, since 1949.</p>
+              <footer>© 2025 Acme</footer>
+              </body>
+              </html>
+              EOF
+              printf '# Acme website\n\nThe public site of Acme.\n' >README.md
+              git add -A && by olivia 2026-10-12T09:14:00+02:00 commit -qm 'Start the website'
+              printf 'body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 40rem; }\nfooter { color: #666; }\n' >css/site.css
+              git add -A && by olivia 2026-10-12T11:02:00+02:00 commit -qm 'Add the style sheet'
+              git checkout -qb docs
+              cat >docs/README.md <<'EOF'
+              # Working on the site
+
+              - [Contributing](contributing.md): branches, commits and pull requests.
+              - [Releasing](releasing.md): the checklist for a release, also at [latest](latest.md).
+
+              Back to the [README](../README.md).
+              EOF
+              cat >docs/contributing.md <<'EOF'
+              # Contributing
+
+              ## Branches
+
+              Branch from `main`, and name the branch after what it does: `fix/footer`, `feature/search`.
+
+              ## Commits
+
+              Write the subject in the imperative, as *Add the logo*, and say why in the body.
+
+              ## Pull requests
+
+              Open one early. It merges once a maintainer approves it and its checks pass.
+              EOF
+              git add -A && by max 2026-10-13T10:20:00+02:00 commit -qm 'Write the contributing guide' \
+                -m 'How we branch, commit and open pull requests, so newcomers know before they ask.'
+              cat >docs/releasing.md <<'EOF'
+              # Releasing
+
+              | Step | Who | When |
+              | :--- | :--- | ---: |
+              | Tag the release | A maintainer | Tuesday |
+              | Publish the site | The build script | Right after |
+
+              - [x] Check the links
+              - [x] Build the site
+              - [ ] Tag `vX.Y.Z`
+              EOF
+              ln -s releasing.md docs/latest.md
+              git add -A && by max 2026-10-13T15:45:00+02:00 commit -qm 'Add the release checklist'
+              git checkout -q main
+              base64 -d >images/logo.png <<'EOF'
+              iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAA00lEQVR42u2aUQ7AIAhDvcxOtuPvENu/yRK1tAjSZH+G9UG2oNha
+              KZGu+3lHnpCmt4NBjbuBWBuXgrDN0yBUxikgXuZNILzNwxChAXYxvwRh8cJeUojQAAzzUojQAEzzEojjAUZFAVBkn1oFlXlaFY4G
+              WNUWAKi2BphZ4wIwml1GFegAyFoJgLUKYAaCJVkvFBrAwgAaY3lPYJVBJA60I7P8CGkAfxDWf5GVeNCpBKMdoAH0EKyGbCZunY3W
+              CfWJM4IaMaUb8qUYs6YZdKe5alAC9QGlDJIxU/qFpwAAAABJRU5ErkJggg==
+              EOF
+              printf '# Acme website\n\n![The Acme logo](images/logo.png)\n\nThe public site of Acme.\n' >README.md
+              git add -A && by olivia 2026-10-14T09:30:00+02:00 commit -qm 'Add the logo'
+              by olivia 2026-10-14T16:00:00+02:00 merge -q --no-ff -m "Merge branch 'docs'" docs
+              by olivia 2026-10-14T16:05:00+02:00 tag -a v1.0.0 -m 'Version 1.0.0: the home page, its style and the guides'
+              git checkout -qb hotfix/footer
+              sed -i 's/© 2025/© 2026/' index.html
+              git add -A && by gwen 2026-10-15T08:50:00+02:00 commit -qm "Fix the footer's year"
+              git checkout -q main
+              cat >scripts/build.sh <<'EOF'
+              #!/bin/sh
+              # Builds the site into out/.
+              set -eu
+              rm -rf out && mkdir -p out
+              cp -R index.html css images out/
+              echo "Built the site in out/"
+              EOF
+              chmod +x scripts/build.sh
+              git add -A && by max 2026-10-15T12:10:00+02:00 commit -qm 'Add the build script'
+              by olivia 2026-10-15T17:30:00+02:00 merge -q --no-ff -m "Merge branch 'hotfix/footer'" hotfix/footer
+              cat >README.md <<'EOF'
+              # Acme website
+
+              ![The Acme logo](images/logo.png)
+
+              The public site of Acme: plain HTML and CSS, built by [one script](scripts/build.sh).
+
+              ## Contents
+
+              | Path | What it holds |
+              | :--- | :--- |
+              | [`index.html`](index.html) | The home page |
+              | [`css/`](css/) | The style sheet |
+              | [`docs/`](docs/) | How we work on the site |
+
+              ## Getting started
+
+              ```sh
+              ./scripts/build.sh
+              open out/index.html
+              ```
+
+              Read [how to contribute](docs/contributing.md#pull-requests) before you push.
+
+              ## Roadmap
+
+              - [x] The home page
+              - [x] The logo
+              - [ ] Search, on branch `feature/search`
+              - [ ] A dark theme
+
+              > The site runs no JavaScript, on purpose.[^why]
+
+              [^why]: Its pages load faster, and nothing in them can break.
+              EOF
+              git add -A && by olivia 2026-10-16T10:00:00+02:00 commit -qm 'Describe the site in the README'
+              git checkout -qb feature/search
+              printf '<!doctype html>\n<title>Search Acme</title>\n<form><input type="search" name="q"></form>\n' >search.html
+              git add -A && by max 2026-10-17T14:05:00+02:00 commit -qm 'Sketch the search page'
+              git remote add origin "$url"
+              git push -q origin main feature/search v1.0.0
+              echo "Pushed acme/website's history: $(git rev-list --count --all) commits"
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            {{- include "cobranch.containerSecurityContext" . | nindent 12 }}
+          volumeMounts:
+            # The repository, and git's HOME.
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}
