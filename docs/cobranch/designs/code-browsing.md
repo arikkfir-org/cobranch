@@ -124,9 +124,6 @@ The REST and GraphQL servers render it, so every client gets the same HTML, and 
 The sanitizer is the guard; the Console’s frame is a second one, which holds even if the sanitizer lets something
 through.
 
-The sanitizer is the guard; the Console’s frame is a second one, which holds even if the sanitizer lets something
-through.
-
 - **GitHub-flavoured.** goldmark with GFM's tables, task lists, strikethrough and autolinks, and footnotes. Code blocks
   keep their language as a `language-…` class; colouring them waits for a later slice.
 - **Raw HTML is kept, then sanitized.** An allow-list in the spirit of GitHub's: headings, paragraphs, lists, tables
