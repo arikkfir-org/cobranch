@@ -69,6 +69,19 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 	return b, nil
 }
 
+// Tags lists the repository's tags by name, each with the object its ref names (code.Store).
+func (s *CodeStore) Tags(ctx context.Context, repoID uuid.UUID) ([]code.Tag, error) {
+	rows, err := s.q.Tags(ctx, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("listing the tags: %w", err)
+	}
+	out := make([]code.Tag, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, code.Tag{Name: r.Name, Target: r.Sha})
+	}
+	return out, nil
+}
+
 // commitsAt finds those of the repository's commits that shas name, by name.
 func (s *CodeStore) commitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
 	if len(shas) == 0 {

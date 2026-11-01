@@ -1,2 +1,2 @@
 {{- include "cobranch.checkDatabase" . }}
-{{- include "cobranch.server" (dict "root" . "component" "rest-server" "values" .Values.restServer) }}
+{{- include "cobranch.server" (dict "root" . "component" "rest-server" "values" .Values.restServer "env" (include "cobranch.gitInternalEnv" . | trim)) }}

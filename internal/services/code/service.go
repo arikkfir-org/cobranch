@@ -32,18 +32,25 @@ type Store interface {
 	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
 	// Commit finds one of the repository's commits with the push that first brought it, or repos.ErrNotFound.
 	Commit(ctx context.Context, repoID uuid.UUID, sha string) (Commit, Push, error)
+	// Tags lists the repository's tags by name.
+	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
 // authorizer first, and answers repos.ErrNotFound without it, as for a repository that doesn't exist.
 type Service struct {
-	store Store
-	authz *auth.Authorizer
+	store   Store
+	objects Objects
+	authz   *auth.Authorizer
 }
 
-// NewService returns a Service over store, checking permissions with authz.
-func NewService(store Store, authz *auth.Authorizer) *Service {
-	return &Service{store: store, authz: authz}
+// NewService returns a Service over store, and objects for what only the Git server reads, checking permissions with
+// authz. Without objects, as in an installation that runs no Git server, those reads answer ErrUnavailable.
+func NewService(store Store, objects Objects, authz *auth.Authorizer) *Service {
+	if objects == nil {
+		objects = unavailable{}
+	}
+	return &Service{store: store, objects: objects, authz: authz}
 }
 
 // Viewer is who an operation runs for: a signed-in user, or the user or API key a credential acts as.
@@ -163,10 +170,33 @@ func failed(span trace.Span, what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr):
+	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), answer(err):
 		return err
 	}
 	span.RecordError(err)
 	span.SetStatus(codes.Error, what)
 	return fmt.Errorf("%s: %w", what, err)
+}
+
+// answer reports whether err is one of the Git server's answers about a ref or a path, which a viewer's request
+// earns, rather than a failure.
+func answer(err error) bool {
+	for _, a := range []error{ErrRefNotFound, ErrPathNotFound, ErrNotTree, ErrNotBlob, ErrSubmodule} {
+		if errors.Is(err, a) {
+			return true
+		}
+	}
+	return false
+}
+
+// sortEntries puts a tree's directories and submodules first and then its files and symlinks, each by name, as people
+// browse them.
+func sortEntries(entries []Entry) {
+	folder := func(e Entry) int {
+		if e.Kind == KindTree || e.Kind == KindSubmodule {
+			return 0
+		}
+		return 1
+	}
+	slices.SortFunc(entries, func(a, b Entry) int { return cmp.Or(cmp.Compare(folder(a), folder(b)), cmp.Compare(a.Name, b.Name)) })
 }

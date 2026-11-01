@@ -10,14 +10,15 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/git"
-	"cobranch.dev/internal/services/repos"
 )
 
-// workspace builds a throwaway bare repository of repo from snapshot: its refs in packed-refs, its packs hard-linked
+// workspace builds a throwaway bare repository from snapshot: its refs in packed-refs, its packs hard-linked
 // from the cache, and HEAD at main. It returns the repository's directory and what removes it, which
 // the request calls when it ends.
-func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot git.Snapshot) (string, func(), error) {
+func (s *Server) workspace(ctx context.Context, repoID uuid.UUID, snapshot git.Snapshot) (string, func(), error) {
 	dir, err := os.MkdirTemp(filepath.Join(s.cfg.DataDir, workDir), "repo-")
 	if err != nil {
 		return "", nil, fmt.Errorf("making a throwaway repository: %w", err)
@@ -28,7 +29,7 @@ func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot 
 		return "", nil, err
 	}
 	for _, pack := range snapshot.Packs {
-		if err := s.cache.link(ctx, repo.ID, pack, filepath.Join(dir, "objects", "pack")); err != nil {
+		if err := s.cache.link(ctx, repoID, pack, filepath.Join(dir, "objects", "pack")); err != nil {
 			remove()
 			return "", nil, err
 		}

@@ -93,6 +93,9 @@ type Server struct {
 	Providers Providers `envconfig:"AUTH_PROVIDERS"`
 	// SecretsKey seals the secrets the Admin server keeps: the Back-office's providers' client secrets.
 	SecretsKey string `envconfig:"SECRETS_KEY"`
+	// GitInternalURL is the Git server's internal port, where the REST and GraphQL servers read repositories' trees
+	// and files; empty, as in an installation without a Git server, those reads answer 503.
+	GitInternalURL URL `envconfig:"GIT_INTERNAL_URL"`
 }
 
 // SignUpSettings are the sign-up settings the chart's values give. Each they leave unset is the Back-office's, kept in
@@ -264,7 +267,10 @@ type GitServer struct {
 	// SSHAddr is where it also serves Git over SSH, such as :2222; empty, it serves HTTPS alone.
 	SSHAddr string `envconfig:"GIT_SSH_ADDR"`
 	// SSHHostKey is the private key, in PEM, that SSH clients know the server by; SSHAddr needs it.
-	SSHHostKey      string        `envconfig:"GIT_SSH_HOST_KEY"`
+	SSHHostKey string `envconfig:"GIT_SSH_HOST_KEY"`
+	// InternalAddr is where it serves the internal call, the REST and GraphQL servers' reads of trees and files, on a
+	// port no route names.
+	InternalAddr    string        `envconfig:"GIT_INTERNAL_ADDR" default:":8081"`
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
 }
 

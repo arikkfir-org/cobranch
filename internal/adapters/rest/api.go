@@ -35,8 +35,9 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 }
 
 // NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's,
-// organizations and repositories for theirs, and code for the repositories' branches and commits. Every other path
-// answers 404, and a request the API can't read 400, both as problem details.
+// organizations and repositories for theirs, and code for the repositories' branches, commits and files. Every other
+// path answers 404, and a request the API can't read 400, both as problem details. A GET's answer is the viewer's, and
+// revalidated each time (Cache-Control: private, no-cache).
 func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code) http.Handler {
 	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
@@ -47,7 +48,12 @@ func NewHandler(version string, sessions Sessions, organizations Organizations, 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, r, http.StatusNotFound, "route.not_found", "No operation has this method and path.")
 	})
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			w.Header().Set("Cache-Control", "private, no-cache")
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 func badRequest(w http.ResponseWriter, r *http.Request, err error) {

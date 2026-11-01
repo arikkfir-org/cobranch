@@ -39,6 +39,7 @@ type orgFixture struct {
 	invitation       orgs.Invitation
 	website          repos.Repository
 	codeStore        *codetest.Store
+	objects          *codetest.Objects
 	code             *code.Service
 	push             code.Push
 }
@@ -71,13 +72,17 @@ func newOrgFixture() *orgFixture {
 	if err := f.repoStore.Create(context.Background(), f.olivia.User.ID, f.website); err != nil {
 		panic(err)
 	}
-	f.codeStore = codetest.NewStore()
-	f.code = code.NewService(f.codeStore, auth.NewAuthorizer(store))
+	f.codeStore, f.objects = codetest.NewStore(), codetest.NewObjects()
+	f.code = code.NewService(f.codeStore, f.objects, auth.NewAuthorizer(store))
 	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
 	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))
 	f.codeStore.SetBranch(f.website.ID, "feature", shaOf("d"))
+	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
+	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
+		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
+	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
 	return f
 }
 

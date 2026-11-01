@@ -62,6 +62,7 @@ func TestLoadServer(t *testing.T) {
 				"COBRANCH_ORGANIZATIONS_SELF_SERVE": "false",
 				"COBRANCH_AUTH_PROVIDERS":           `[{"id":"google","name":"Google","preset":"google","clientId":"c1"}]`,
 				"COBRANCH_SECRETS_KEY":              "a secrets key of at least 32 characters",
+				"COBRANCH_GIT_INTERNAL_URL":         "http://cobranch-git-server-internal",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
@@ -71,6 +72,7 @@ func TestLoadServer(t *testing.T) {
 						Admin: mustURL(t, "https://admin.example.com/v"), BackOffice: mustURL(t, "https://back-office.example.com")},
 					SignUpSettings: SignUpSettings{SignUp: "domains", SignUpDomains: []string{"example.com"}, SelfServe: &no},
 					Providers:      Providers{{ID: "google", Name: "Google", Preset: "google", ClientID: "c1"}}, SecretsKey: "a secrets key of at least 32 characters",
+					GitInternalURL: mustURL(t, "http://cobranch-git-server-internal"),
 				}
 			},
 		},
@@ -320,14 +322,17 @@ func TestLoadGitServer(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "defaults", env: required, want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
-			DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, ShutdownTimeout: 20 * time.Second}},
+			DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
 		{name: "sizes", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "512Mi", "COBRANCH_GIT_MAX_PUSH_SIZE": "1048576", "COBRANCH_GIT_DATA_DIR": "/data"}),
 			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
-				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, ShutdownTimeout: 20 * time.Second}},
+				DataDir: "/data", CacheSize: 512 << 20, MaxPushSize: 1 << 20, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "the internal call's address", env: with(map[string]string{"COBRANCH_GIT_INTERNAL_ADDR": ":9000"}),
+			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob",
+				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":9000", ShutdownTimeout: 20 * time.Second}},
 		{name: "a size that isn't one", env: with(map[string]string{"COBRANCH_GIT_CACHE_SIZE": "10GB"}), wantErr: true},
 		{name: "SSH", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222", "COBRANCH_GIT_SSH_HOST_KEY": "-----BEGIN OPENSSH PRIVATE KEY-----"}),
 			want: GitServer{HTTPAddr: ":8080", BlobURL: "file:///blob", DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30,
-				SSHAddr: ":2222", SSHHostKey: "-----BEGIN OPENSSH PRIVATE KEY-----", ShutdownTimeout: 20 * time.Second}},
+				SSHAddr: ":2222", SSHHostKey: "-----BEGIN OPENSSH PRIVATE KEY-----", InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
 		{name: "SSH without a host key", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222"}), wantErr: true},
 		{name: "no bucket", env: map[string]string{}, wantErr: true},
 	}
