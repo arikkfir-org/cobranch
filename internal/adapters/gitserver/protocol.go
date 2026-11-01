@@ -113,8 +113,10 @@ func mayPush(w http.ResponseWriter, req request) bool {
 	return false
 }
 
-// serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500.
+// serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500. The cache then
+// drops the repository's packs the snapshot no longer lists.
 func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req request) (string, func(), bool) {
+	read := time.Now()
 	snapshot, err := s.snaps.Snapshot(r.Context(), req.repo.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Reading a repository's snapshot failed", "repository", req.repo.ID, "error", err)
@@ -127,6 +129,7 @@ func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req requ
 		http.Error(w, "the repository could not be read", http.StatusInternalServerError)
 		return "", nil, false
 	}
+	s.cache.retain(req.repo.ID, snapshot.Packs, read)
 	return dir, remove, true
 }
 

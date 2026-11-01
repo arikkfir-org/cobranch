@@ -93,7 +93,7 @@ blob:
   volume: {}
   mountPath: /var/lib/cobranch/blobs
 
-# The servers' ServiceAccount, which both share.
+# The ServiceAccount of the servers that read the bucket, and of maintenance while it compacts packs.
 serviceAccount:
   # Binds the servers to the cloud's workload identity, for the bucket.
   annotations: {}
@@ -262,12 +262,22 @@ migrate:
 # The CronJob that deletes what expired: sign-in flows and sessions, hourly.
 maintenance:
   schedule: "0 * * * *"
+  # How long a run may take, after which it fails: within the hour, so it never skips the next.
+  activeDeadlineSeconds: 3000
+  # With urls.git, each run also compacts the packs of every repository that has this many into one, and deletes what
+  # compaction replaced a day later. Null leaves packs alone, as an emptyDir bucket (blob.volume) does: maintenance
+  # can't reach a bucket that only each server's pod holds.
+  compaction:
+    packs: 8
+  # The pod's disk while it compacts, an emptyDir: keep it above twice the packs of the largest repository.
+  storage:
+    sizeLimit: 16Gi
   resources:
     requests:
       cpu: 50m
       memory: 64Mi
     limits:
-      memory: 256Mi
+      memory: 1Gi
   nodeSelector: {}
   tolerations: []
   affinity: {}

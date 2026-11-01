@@ -23,7 +23,7 @@ func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot 
 		return "", nil, fmt.Errorf("making a throwaway repository: %w", err)
 	}
 	remove := func() { _ = os.RemoveAll(dir) } // the pod's end empties the directory anyway
-	if err := s.layout(dir, snapshot); err != nil {
+	if err := layout(dir, snapshot, s.repoConfig()); err != nil {
 		remove()
 		return "", nil, err
 	}
@@ -36,8 +36,8 @@ func (s *Server) workspace(ctx context.Context, repo repos.Repository, snapshot 
 	return dir, remove, nil
 }
 
-// layout writes a bare repository's files into dir: its configuration, HEAD and packed-refs.
-func (s *Server) layout(dir string, snapshot git.Snapshot) error {
+// layout writes a bare repository's files into dir: its configuration, HEAD and the snapshot's refs in packed-refs.
+func layout(dir string, snapshot git.Snapshot, config string) error {
 	for _, sub := range []string{"objects/pack", "objects/info", "refs/heads", "refs/tags"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o700); err != nil {
 			return fmt.Errorf("laying the repository out: %w", err)
@@ -53,7 +53,7 @@ func (s *Server) layout(dir string, snapshot git.Snapshot) error {
 	}
 	files := map[string]string{
 		"HEAD":        "ref: refs/heads/" + git.DefaultBranch + "\n",
-		"config":      s.repoConfig(),
+		"config":      config,
 		"packed-refs": packed.String(),
 	}
 	for name, content := range files {
@@ -88,10 +88,16 @@ func (s *Server) repoConfig() string {
 
 // git returns the git CLI's command for args, isolated from the pod's own configuration, with extra variables.
 func (s *Server) git(ctx context.Context, extra []string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, s.cfg.Git, args...)
+	return gitCommand(ctx, s.cfg.Git, filepath.Join(s.cfg.DataDir, workDir), extra, args...)
+}
+
+// gitCommand returns the command that runs the git CLI at bin for args, isolated from the pod's own configuration
+// with home as its HOME, with extra variables.
+func gitCommand(ctx context.Context, bin, home string, extra []string, args ...string) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = append([]string{
 		"PATH=" + os.Getenv("PATH"),
-		"HOME=" + filepath.Join(s.cfg.DataDir, workDir),
+		"HOME=" + home,
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_TERMINAL_PROMPT=0",

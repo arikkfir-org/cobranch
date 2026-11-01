@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,9 +22,23 @@ import (
 // packFiles are the files of a pack, each named <pack><suffix>.
 var packFiles = []string{".idx", ".pack"}
 
+// packsPrefix is where the bucket keeps every repository's packs.
+const packsPrefix = "git/"
+
 // packKey is where the bucket keeps a file of one upload of a repository's pack.
 func packKey(repoID, upload uuid.UUID, file string) string {
-	return "git/" + repoID.String() + "/" + upload.String() + "/" + file
+	return packsPrefix + repoID.String() + "/" + upload.String() + "/" + file
+}
+
+// parsePackKey reads the repository and the upload from a key packKey made, and reports whether it is one.
+func parsePackKey(key string) (repoID, upload uuid.UUID, ok bool) {
+	parts := strings.Split(strings.TrimPrefix(key, packsPrefix), "/")
+	if !strings.HasPrefix(key, packsPrefix) || len(parts) != 3 || parts[2] == "" {
+		return uuid.Nil, uuid.Nil, false
+	}
+	repoID, repoErr := uuid.Parse(parts[0])
+	upload, uploadErr := uuid.Parse(parts[1])
+	return repoID, upload, repoErr == nil && uploadErr == nil
 }
 
 // cache keeps packs from the bucket on the pod's disk, a directory per repository, and evicts the least recently used
@@ -45,7 +60,22 @@ type cache struct {
 type cachedRepo struct {
 	size  int64
 	used  time.Time
-	packs map[string]bool
+	packs map[string]cachedPack
+}
+
+// holds reports whether r, which may be nil, holds pack.
+func (r *cachedRepo) holds(pack string) bool {
+	if r == nil {
+		return false
+	}
+	_, ok := r.packs[pack]
+	return ok
+}
+
+// cachedPack is one pack the cache holds: how many bytes its files hold, and when the cache took it.
+type cachedPack struct {
+	size  int64
+	added time.Time
 }
 
 func newCache(dir string, limit int64, bucket *blob.Bucket) *cache {
@@ -85,7 +115,7 @@ func linkFiles(from func(file string) string, pack, dir string) error {
 func (c *cache) ensure(ctx context.Context, repoID uuid.UUID, pack git.Pack) error {
 	c.mu.Lock()
 	r := c.repos[repoID]
-	if r != nil && r.packs[pack.Name] {
+	if r.holds(pack.Name) {
 		r.used = time.Now()
 		c.mu.Unlock()
 		return nil
@@ -109,7 +139,7 @@ func (c *cache) download(ctx context.Context, repoID uuid.UUID, pack git.Pack) e
 	defer func() { _ = os.RemoveAll(incoming) }() // emptied by the move, or left from a failure
 	var size int64
 	for _, suffix := range packFiles {
-		n, err := c.fetch(ctx, packKey(repoID, pack.Upload, pack.Name+suffix), filepath.Join(incoming, pack.Name+suffix))
+		n, err := fetch(ctx, c.bucket, packKey(repoID, pack.Upload, pack.Name+suffix), filepath.Join(incoming, pack.Name+suffix))
 		if err != nil {
 			return err
 		}
@@ -119,8 +149,8 @@ func (c *cache) download(ctx context.Context, repoID uuid.UUID, pack git.Pack) e
 }
 
 // fetch copies the bucket's object key into file, and returns its size.
-func (c *cache) fetch(ctx context.Context, key, file string) (int64, error) {
-	r, err := c.bucket.NewReader(ctx, key, nil)
+func fetch(ctx context.Context, bucket *blob.Bucket, key, file string) (int64, error) {
+	r, err := bucket.NewReader(ctx, key, nil)
 	if err != nil {
 		return 0, fmt.Errorf("reading %s from the bucket: %w", key, err)
 	}
@@ -145,7 +175,7 @@ func (c *cache) add(repoID uuid.UUID, pack string, size int64, from func(file st
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	r := c.repos[repoID]
-	if r != nil && r.packs[pack] {
+	if r.holds(pack) {
 		r.used = time.Now()
 		return nil
 	}
@@ -158,13 +188,41 @@ func (c *cache) add(repoID uuid.UUID, pack string, size int64, from func(file st
 		}
 	}
 	if r == nil {
-		r = &cachedRepo{packs: map[string]bool{}}
+		r = &cachedRepo{packs: map[string]cachedPack{}}
 		c.repos[repoID] = r
 	}
-	r.packs[pack], r.size, r.used = true, r.size+size, time.Now()
+	r.packs[pack], r.size, r.used = cachedPack{size: size, added: time.Now()}, r.size+size, time.Now()
 	c.size += size
 	c.evict(repoID)
 	return nil
+}
+
+// retain deletes the repository's packs that the cache took before read and that packs, a snapshot read then, doesn't
+// list: compaction superseded them, and no later snapshot lists them again. One a push was still recording at the read
+// is downloaded again by the first request whose snapshot lists it, as is one a request with an older snapshot links.
+func (c *cache) retain(repoID uuid.UUID, packs []git.Pack, read time.Time) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	r := c.repos[repoID]
+	if r == nil {
+		return
+	}
+	listed := make(map[string]bool, len(packs))
+	for _, p := range packs {
+		listed[p.Name] = true
+	}
+	for name, p := range r.packs {
+		if listed[name] || !p.added.Before(read) {
+			continue
+		}
+		for _, suffix := range packFiles {
+			// A file left behind is a file the next eviction of the directory, or the pod's end, deletes.
+			_ = os.Remove(c.path(repoID, name+suffix))
+		}
+		delete(r.packs, name)
+		r.size -= p.size
+		c.size -= p.size
+	}
 }
 
 // evict deletes the least recently used repositories' packs, all but keep's, until the cache fits its limit.

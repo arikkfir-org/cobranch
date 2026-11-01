@@ -258,18 +258,26 @@ An organization’s own pages (members, roles, API keys, settings) keep their pa
 Compaction builds its pack from one snapshot and supersedes only that snapshot’s packs, so packs pushed meanwhile stay
 active and every listed ref keeps its objects.
 
-- **Compaction.** The hourly maintenance job repacks a repository whose active packs pass a threshold (8 by default): it
-  fetches them into a throwaway repository with the snapshot's refs, runs `git repack -a -d`, uploads the new pack, and
-  in one transaction lists it and marks the snapshot's packs superseded. Packs pushed meanwhile stay active, untouched.
+- **Compaction.** The hourly maintenance job repacks a repository whose active packs reach a threshold (8 by default):
+  it fetches them into a throwaway repository with the snapshot's refs, runs `git repack -a -d --keep-unreachable`,
+  uploads the new pack, and in one transaction that locks the repository lists it and marks the snapshot's packs
+  superseded. Packs pushed meanwhile stay active, untouched. The new pack keeps every object, reachable or not: a push
+  that began before the snapshot may build on a branch deleted since. A compaction that finds one of its packs
+  superseded already, by another, changes nothing, and its upload goes unlisted.
 - **An upload of its own.** Each upload of a pack's files has an ID, in its keys: `git/<repo-id>/<upload>/<pack>.pack`
   and its `.idx`. A pack's name is its content's hash, so a push that brings back objects the repository holds, a
   deleted branch pushed again, brings a pack it lists already: the listed pack keeps its upload while active, and one
   compaction superseded turns active again with the new upload, so no file a row lists is ever one maintenance deletes.
-- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, and uploads
-  under `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes, and of pushes that
-  brought a listed pack again.
+- **Deletion a day later.** Maintenance deletes a superseded pack's files a day after it was superseded, then its row,
+  and uploads under `git/<repo-id>/` that no row lists a day after they were written: the packs of failed pushes, and of
+  pushes that brought a listed pack again.
 - **The cache** keeps up to `gitServer.cache.size` of packs, evicting the least recently used repositories' first, in
-  the pod's `emptyDir` of `gitServer.storage.sizeLimit`, beside the throwaway repositories of the requests in flight.
+  the pod's `emptyDir` of `gitServer.storage.sizeLimit`, beside the throwaway repositories of the requests in flight. It
+  drops a repository's packs that a snapshot read after it took them no longer lists, which compaction superseded; a
+  request with an older snapshot downloads one again.
+- **A bucket maintenance reaches.** Compaction reads and writes the bucket the Git server does, with its ServiceAccount;
+  a `file://` bucket on an `emptyDir` is each pod's own, so maintenance leaves its packs alone, as
+  `maintenance.compaction.packs` null does.
 
 ## SSH
 
@@ -297,7 +305,9 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 | `gitServer.storage.sizeLimit` | The pod's `emptyDir`, which holds the cache and the throwaway repositories of the requests in flight, 16 GiB by default: above `cache.size` by a few `maxPushSize` |
 | `gitServer.maxPushSize` | The largest pack a push may send, 2 GiB by default |
 | `gitServer.ssh.enabled`, `.port`, `.service`, `.hostKey.existingSecret` | SSH, from its pull request: off by default, then the Service the operator exposes and the host key |
-| `maintenance.compaction.packs` | The active packs that make a repository due for compaction, 8 by default |
+| `maintenance.compaction.packs` | The active packs that make a repository due for compaction, 8 by default; null leaves packs alone |
+| `maintenance.storage.sizeLimit` | The maintenance pod's `emptyDir`, which holds the packs of the repository it compacts, 16 GiB by default: above twice the largest repository's packs |
+| `maintenance.activeDeadlineSeconds` | How long a maintenance run may take, 50 minutes by default, so it ends before the next hour's |
 
 ## Previews and tests
 
@@ -305,10 +315,11 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
   once; pushing into it is the demo's own act. Seeded users make personal tokens like anyone.
 - **End to end with the real `git`.** Go tests start the Git server and the push worker in process over PostgreSQL and a
   `file://` bucket, and drive `git clone`, `fetch` and `push` against them: an empty clone, a first push, a stale push
-  refused, two concurrent pushes into one repository, a lost answer asked again, a refused ref, and a fetch across a
-  compaction.
+  refused, two concurrent pushes into one repository, a lost answer asked again, a refused ref, and fetches across a
+  compaction and the sweep a day later, a deleted branch's commit kept.
 - **The chart in CI** installs both workloads in kind, as it does the others, and its test pod clones an empty
-  repository, pushes to it, and finds the push in a fresh clone.
+  repository, pushes to it, and finds the push in a fresh clone; it runs again once maintenance compacted the packs its
+  runs pushed.
 
 ## Data model
 
@@ -361,7 +372,8 @@ Nothing of an installation is in the product: an operator routes the Git server 
 | The Git server commits each push in one transaction that locks the repository's row and moves refs by compare-and-swap, recording it once by its ID; the push worker claims it later from PostgreSQL, woken by NOTIFY | The push worker leaves the push's path and may scale to zero; a lost answer is asked again; no message broker | Changed |
 | Unknown authors become login-less users holding their email unverified; a new identity with that email verified adopts the login-less user | Commits have principals at once, and become their author's without rewriting | Agreed |
 | The Console shows first-parent history from PostgreSQL; live updates come with the web app | The push is recorded before Git returns; the graph view can wait | Agreed |
-| Maintenance compacts past 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Agreed |
+| Maintenance compacts at 8 active packs and deletes unlisted and superseded files a day later | Every push adds a pack; failed pushes leave files | Agreed |
+| Compaction keeps unreachable objects, and nothing prunes them yet | A push that began before the snapshot may build on a branch deleted since; pruning them safely needs a grace of its own, which a later slice can add | Changed |
 | Each upload of a pack's files has an ID of its own in its keys, and a pack's row names the upload it lists | A pack's name is its content's hash and comes back with a branch pushed again; maintenance never deletes the files a row lists | Changed |
 | SSH keys act as their user unnarrowed; the operator exposes the SSH Service | A key is a session's equal; exposure differs per cluster | Agreed |
 | Deleting repositories, public repositories, signature checks, merge requirements, path rules and `/cobranch.yaml` come later | Keeps this slice to its issue; [ENG-199](https://linear.app/arikkfir/issue/ENG-199) and settings follow | Agreed |

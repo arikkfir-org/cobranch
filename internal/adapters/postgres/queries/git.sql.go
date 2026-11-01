@@ -43,6 +43,31 @@ func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
 	return i, err
 }
 
+const crowdedRepositories = `-- name: CrowdedRepositories :many
+SELECT repo_id FROM packs WHERE state = 'active' GROUP BY repo_id HAVING count(*) >= $1::bigint ORDER BY repo_id
+`
+
+// CrowdedRepositories lists the repositories that have at least threshold active packs, for compaction.
+func (q *Queries) CrowdedRepositories(ctx context.Context, threshold int64) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, crowdedRepositories, threshold)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var repo_id uuid.UUID
+		if err := rows.Scan(&repo_id); err != nil {
+			return nil, err
+		}
+		items = append(items, repo_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteBranch = `-- name: DeleteBranch :execrows
 UPDATE branches SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz WHERE repo_id = $2 AND name = $3 AND deleted_at IS NULL
 `
@@ -93,6 +118,16 @@ WHERE id = $3 AND processed_at IS NULL
 // processed it once the failed transaction let go of it.
 func (q *Queries) FailPush(ctx context.Context, message string, delay float64, iD uuid.UUID) error {
 	_, err := q.db.Exec(ctx, failPush, message, delay, iD)
+	return err
+}
+
+const forgetPack = `-- name: ForgetPack :exec
+DELETE FROM packs WHERE repo_id = $1 AND name = $2 AND upload = $3 AND state = 'superseded'
+`
+
+// ForgetPack deletes a superseded pack's row, once its files are gone, unless a push made it active again.
+func (q *Queries) ForgetPack(ctx context.Context, repoID uuid.UUID, name string, upload uuid.UUID) error {
+	_, err := q.db.Exec(ctx, forgetPack, repoID, name, upload)
 	return err
 }
 
@@ -249,6 +284,31 @@ func (q *Queries) NotifyPush(ctx context.Context, pushID string) error {
 	return err
 }
 
+const packUploads = `-- name: PackUploads :many
+SELECT upload FROM packs
+`
+
+// PackUploads lists every upload a pack's row names, whatever its state.
+func (q *Queries) PackUploads(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, packUploads)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var upload uuid.UUID
+		if err := rows.Scan(&upload); err != nil {
+			return nil, err
+		}
+		items = append(items, upload)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pushCommits = `-- name: PushCommits :many
 SELECT sha, author_name, author_email, committer_name, committer_email FROM commits WHERE first_push = $1
 `
@@ -376,4 +436,50 @@ func (q *Queries) Snapshot(ctx context.Context, repoID uuid.UUID) (SnapshotRow, 
 		&i.PackUploads,
 	)
 	return i, err
+}
+
+const supersedePacks = `-- name: SupersedePacks :execrows
+UPDATE packs SET state = 'superseded', superseded_at = now()
+WHERE repo_id = $1 AND state = 'active' AND name = ANY($2::text[])
+`
+
+// SupersedePacks marks the repository's active packs named superseded, once compaction listed the pack that holds
+// their objects.
+func (q *Queries) SupersedePacks(ctx context.Context, repoID uuid.UUID, names []string) (int64, error) {
+	result, err := q.db.Exec(ctx, supersedePacks, repoID, names)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const supersededPacks = `-- name: SupersededPacks :many
+SELECT repo_id, name, upload FROM packs WHERE state = 'superseded' AND superseded_at < $1::timestamptz ORDER BY superseded_at
+`
+
+type SupersededPacksRow struct {
+	RepoID uuid.UUID
+	Name   string
+	Upload uuid.UUID
+}
+
+// SupersededPacks lists the packs superseded before the time, whose files maintenance deletes.
+func (q *Queries) SupersededPacks(ctx context.Context, before time.Time) ([]SupersededPacksRow, error) {
+	rows, err := q.db.Query(ctx, supersededPacks, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SupersededPacksRow
+	for rows.Next() {
+		var i SupersededPacksRow
+		if err := rows.Scan(&i.RepoID, &i.Name, &i.Upload); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

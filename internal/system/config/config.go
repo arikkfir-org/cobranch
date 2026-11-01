@@ -222,10 +222,17 @@ func LoadMigrate() (Migrate, error) {
 	return c, nil
 }
 
-// Maintenance configures the maintenance CronJob, which deletes what expired.
+// Maintenance configures the maintenance CronJob, which deletes what expired and, given the bucket, compacts the
+// repositories' packs and deletes those nobody lists any more.
 type Maintenance struct {
 	// DatabaseURL is PostgreSQL's connection URL, as the servers'.
 	DatabaseURL string `envconfig:"DATABASE_URL"`
+	// BlobURL is the bucket's Go Cloud URL, as the Git server's; empty leaves every pack alone.
+	BlobURL string `envconfig:"BLOB_URL"`
+	// GitDataDir holds the throwaway repositories it compacts in.
+	GitDataDir string `envconfig:"GIT_DATA_DIR" default:"/var/lib/cobranch/git"`
+	// CompactAt is how many active packs make a repository due for compaction, 2 or more.
+	CompactAt int `envconfig:"GIT_COMPACT_AT" default:"8"`
 }
 
 // LoadMaintenance reads the maintenance CronJob's configuration from the environment.
@@ -233,6 +240,9 @@ func LoadMaintenance() (Maintenance, error) {
 	var c Maintenance
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return Maintenance{}, fmt.Errorf("reading the maintenance job's configuration from the COBRANCH_ variables: %w", err)
+	}
+	if c.BlobURL != "" && c.CompactAt < 2 {
+		return Maintenance{}, fmt.Errorf("COBRANCH_GIT_COMPACT_AT is %d: compacting takes 2 packs or more", c.CompactAt)
 	}
 	return c, nil
 }
