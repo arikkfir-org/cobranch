@@ -1041,19 +1041,22 @@
     // the base requires linear history a fast-forward alone, and none for a branch behind its base.
     function mergeControl(path, b, can, fail) {
       const ready = b.status === "ready";
-      if (!b.ahead || !can("repo.merge") || (!ready && !can("repo.bypass"))) return null;
+      if (b.ahead === 0 || !can("repo.merge") || (!ready && !can("repo.bypass"))) return null;
+      // Until the push worker counts a branch's commits, Cobranch picks the method main allows.
+      const known = b.ahead != null;
       const linear = b.checks.some((c) => c.kind === "linear_history");
-      const methods = [["merge", "Merge commit"], ["fast_forward", "Fast-forward"]].filter(([m]) => (m === "merge" ? !linear : !b.behind));
-      if (!methods.length) return null;
+      const methods = !known ? [] : [["merge", "Merge commit"], ["fast_forward", "Fast-forward"]].filter(([m]) => (m === "merge" ? !linear : !b.behind));
+      if (known && !methods.length) return null;
       const method = methods.length > 1 ? h("select", { "aria-label": "How to merge" }, methods.map(([m, label]) => h("option", { value: m }, label))) : null;
-      const how = methods.length > 1 ? null : h("span", { class: "muted" }, linear ? "By fast-forward: " + b.base + " requires linear history."
+      const how = methods.length > 1 ? null : h("span", { class: "muted" }, !known ? "Cobranch picks how, as " + b.base + " allows."
+        : linear ? "By fast-forward: " + b.base + " requires linear history."
         : "By a merge commit: it is " + plural(b.behind, "commit") + " behind " + b.base + ".");
       const button = h("button", { class: "button " + (ready ? "primary" : "danger"), type: "submit" }, ready ? "Merge" : "Merge anyway");
       const merge = (e) => {
         e.preventDefault();
         if (!ready && !confirm("Merge " + b.name + " into " + b.base + " though it is " + branchStatuses[b.status].word + "?")) return;
         button.disabled = true;
-        api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/merge", { head: b.head, method: method ? method.value : methods[0][0] })
+        api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/merge", { head: b.head, method: method ? method.value : methods.length ? methods[0][0] : undefined })
           .then(render).catch((err) => { button.disabled = false; fail(err); });
       };
       return h("form", { class: "row merge", onsubmit: merge }, method, button, how);
