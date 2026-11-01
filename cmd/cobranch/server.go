@@ -7,11 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/adminapi"
-	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
 	"cobranch.dev/internal/adapters/markdown"
@@ -88,11 +85,6 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
-	bucket, err := blob.Open(ctx, cfg.BlobURL)
-	if err != nil {
-		return fmt.Errorf("opening the bucket %s: %w", cfg.BlobURL, err)
-	}
-	defer func() { _ = bucket.Close() }() // nothing is left to write
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to the database: %w", err)
@@ -113,7 +105,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return err
 	}
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg, pool), markdown.New(cfg.Console.URL, cfg.REST.URL), authorizer),
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), markdown.New(cfg.Console.URL, cfg.REST.URL), authorizer),
 		administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
@@ -123,7 +115,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	pages := a.pages(cfg.URLs).Origin()
 	handler := server.AllowOrigin([]string{pages}, server.Handler(a.pattern,
 		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, domain)),
-		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)}))
+		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 	slog.InfoContext(ctx, "Starting the server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("serving: %w", err)
@@ -133,11 +125,11 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 
 // objects reads repositories' trees and files from the Git server's internal port, or nil, which answers that no Git
 // server runs, when the configuration names none.
-func objects(cfg config.Server, pool *pgxpool.Pool) code.Objects {
+func objects(cfg config.Server) code.Objects {
 	if cfg.GitInternalURL.URL == nil {
 		return nil
 	}
-	return gitinternal.NewClient(cfg.GitInternalURL.URL, gitinternal.NewToken(postgres.NewInternalTokens(pool).Read))
+	return gitinternal.NewClient(cfg.GitInternalURL.URL)
 }
 
 // sessionCookie names the session cookie from the workloads' public URLs: host-only when they share one host (or

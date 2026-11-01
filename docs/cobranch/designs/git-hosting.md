@@ -9,10 +9,10 @@ storage and pushes](architecture.md#git-storage-and-pushes) and [principals and
 permissions](principals-and-permissions.md) · Adds the Git server and the push worker to the chart · Built by
 [ENG-198](https://linear.app/arikkfir/issue/ENG-198), in six pull requests
 
-Organizations keep their code in Cobranch: a repository is packs in the bucket and refs in PostgreSQL, the Git server
-serves clone, fetch and push over HTTPS and then SSH, and a push returns only once the Git server has recorded its refs,
-commits and branches, so the Console shows it the moment Git returns; the push worker adds the principals behind them
-after.
+Organizations keep their code in Cobranch: a repository is packs in the object store and refs in PostgreSQL, the Git
+server serves clone, fetch and push over HTTPS and then SSH, and a push returns only once the Git server has recorded
+its refs, commits and branches, so the Console shows it the moment Git returns; the push worker adds the principals
+behind them after.
 
 ## Scope
 
@@ -42,9 +42,9 @@ Kubernetes token, and the push worker has no Service: the two share only Postgre
 
 - **The Git server** (`cobranch git-server`) serves Git's smart HTTP protocol at `/<org>/<repo>.git`, and SSH in the
   last pull request. It reads PostgreSQL, keeps a pack cache on an ephemeral volume, reads and writes packs in the
-  bucket, and runs the `git` CLI, which the `cobranch` image already holds. Two replicas, no Kubernetes token.
+  object store, and runs the `git` CLI, which the `cobranch` image already holds. Two replicas, no Kubernetes token.
 - **The push worker** (`cobranch push-worker`) claims each push the Git server recorded, from PostgreSQL, and does what
-  can wait: in this slice, the principals behind its commits. Nobody calls it: no Service, no route, no bucket, no
+  can wait: in this slice, the principals behind its commits. Nobody calls it: no Service, no route, no object store, no
   Kubernetes token. Two replicas, or none while no push waits under an operator's autoscaler.
 - **No internal call.** The two share only PostgreSQL: a push's row is the push worker's task, and the push's
   transaction notifies the push workers, so the Git server never waits on one, and neither holds a secret of the
@@ -209,7 +209,7 @@ status](branch-status.md#by-a-push)); path rules join with settings.
 | `Cobranch keeps branches and tags only: refs/notes/commits refused` | Any other ref |
 | `refs/heads/main moved while Cobranch took your push; nothing changed, so push again` | Another push moved a branch while this one was recorded |
 | `main requires feature/login to be Ready: ci/test failed on 9f3c2e1` | A push into a branch with merge requirements brings a branch that isn't Ready, or commits no branch brings ([branch status](branch-status.md#by-a-push)) |
-| `Cobranch could not record the push; nothing changed, so try again` | The bucket or the database failed |
+| `Cobranch could not record the push; nothing changed, so try again` | The object store or the database failed |
 
 ## Principals behind a push
 
@@ -278,9 +278,12 @@ active and every listed ref keeps its objects.
   the pod's `emptyDir` of `gitServer.storage.sizeLimit`, beside the throwaway repositories of the requests in flight. It
   drops a repository's packs that a snapshot read after it took them no longer lists, which compaction superseded; a
   request with an older snapshot downloads one again.
-- **A bucket maintenance reaches.** Compaction reads and writes the bucket the Git server does, with its ServiceAccount;
-  a `file://` bucket on an `emptyDir` is each pod's own, so maintenance leaves its packs alone, as
-  `maintenance.compaction.packs` null does.
+- **One store for the Git server and maintenance.** **Changed** (2026-11-01, [Git object
+  storage](git-object-storage.md)): packs live in the object store, by default PostgreSQL's large objects, so nothing
+  more is configured and a backup of the database holds every repository; `blob.url` names a cloud's bucket or a
+  directory instead, and `blob.moveFrom` moves an installation from one to another. Compaction reads and writes the
+  store the Git server does, with its ServiceAccount; a `file://` directory on an `emptyDir` is each pod's own, so
+  maintenance leaves its packs alone, as `maintenance.compaction.packs` null does.
 
 ## SSH
 
@@ -308,7 +311,8 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 | --- | --- |
 | `urls.git` | Where Git clients reach the Git server, a host or a path prefix; the Console shows clone URLs under it |
 | `gitServer.replicas`, `pushWorker.replicas` | Two each; `pushWorker.replicas` null leaves the push worker's count to an autoscaler, which may scale it to zero while no push waits |
-| `gitServer.cache.size` | How much of the bucket's packs a pod keeps before it evicts the least recently used repositories', 10 GiB by default |
+| `blob.url`, `blob.moveFrom` | Where packs live: empty for the database, the default, or a cloud's bucket or a directory; and the store they are moving from ([Git object storage](git-object-storage.md#configuration)) |
+| `gitServer.cache.size` | How much of the object store's packs a pod keeps before it evicts the least recently used repositories', 10 GiB by default |
 | `gitServer.storage.sizeLimit` | The pod's `emptyDir`, which holds the cache and the throwaway repositories of the requests in flight, 16 GiB by default: above `cache.size` by a few `maxPushSize` |
 | `gitServer.maxPushSize` | The largest pack a push may send, 2 GiB by default |
 | `urls.gitSsh` | Where Git clients reach the Git server over SSH, such as `ssh://git@git.example.com:2222`; with it, the Git server serves SSH, and the Console shows clone URLs under it too |
@@ -323,12 +327,12 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 - **Seeds** add a repository to the demo organization, its Maintainer a seeded user, so a demo installation shows one at
   once; pushing into it is the demo's own act, and [code browsing](code-browsing.md#configuration)'s Job pushes a
   history to it. Seeded users make personal tokens like anyone.
-- **End to end with the real `git`.** Go tests start the Git server and the push worker in process over PostgreSQL and a
-  `file://` bucket, and drive `git clone`, `fetch` and `push` against them: an empty clone, a first push, a stale push
-  refused, two concurrent pushes into one repository, a lost answer asked again, a refused ref, and fetches across a
-  compaction and the sweep a day later, a deleted branch's commit kept. Over SSH, with this test binary as Git's SSH
-  client: a clone and a push by a key's user, a reader's push refused, a repository its user can't read, a key nobody
-  added, and a shell.
+- **End to end with the real `git`.** Go tests start the Git server and the push worker in process over PostgreSQL, with
+  its packs in the database or a `file://` directory, and drive `git clone`, `fetch` and `push` against them: an empty
+  clone, a first push, a stale push refused, two concurrent pushes into one repository, a lost answer asked again, a
+  refused ref, and fetches across a compaction and the sweep a day later, a deleted branch's commit kept. Over SSH, with
+  this test binary as Git's SSH client: a clone and a push by a key's user, a reader's push refused, a repository its
+  user can't read, a key nobody added, and a shell.
 - **The chart in CI** installs both workloads in kind, as it does the others, and its test pod clones an empty
   repository, pushes to it, and finds the push in a fresh clone, and reads the SSH Service's banner; it runs again once
   maintenance compacted the packs its runs pushed, and the upgrade keeps the host key.

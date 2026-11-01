@@ -18,7 +18,8 @@ type Authenticator interface {
 }
 
 // Authenticate resolves the request's credential and puts who it acts as on the request's context for the API to
-// read (auth.Viewer): a bearer token in the Authorization header (a personal token or an API key's secret), or else
+// read (auth.Viewer), with its token for the calls the API makes for the viewer (auth.Token): a bearer token in the
+// Authorization header (a personal token or an API key's secret), or else
 // the session cookie, named cookie. A request with neither runs as Anonymous; one whose credential acts as nobody is
 // refused with 401.
 // A request with the cookie that would change something must be JSON from the origin of the pages that call the API,
@@ -51,7 +52,7 @@ func Authenticate(cookie string, a Authenticator, pagesOrigin string, next http.
 			http.Error(w, "the credential could not be checked", http.StatusInternalServerError)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(auth.WithViewer(r.Context(), viewer)))
+		next.ServeHTTP(w, r.WithContext(auth.WithViewer(auth.WithToken(r.Context(), token), viewer)))
 	})
 }
 

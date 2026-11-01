@@ -48,6 +48,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Agreed |
 | [Branch status](branch-status.md) | Commit annotations, merge requirements, how a branch’s status is computed, and merges. | Proposed |
 | [Code browsing](code-browsing.md) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
+| [Git object storage](git-object-storage.md) | Where Git objects live: PostgreSQL by default, a bucket or local files by choice, and moving between them. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -168,8 +169,9 @@ are the first integration, Slack comes in phase 2 with several use cases still t
 
 ![One Helm chart installs Cobranch; the operator brings the cluster around it](product/deploy.svg)
 
-The [architecture](architecture.md#components) details each workload, and the [Helm
-chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) how the chart installs and upgrades them.
+The [architecture](architecture.md#components) details each workload, the [Helm
+chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) how the chart installs and upgrades them, and [Git object
+storage](git-object-storage.md) where Git objects live.
 
 A push returns once the Git server has recorded it in one PostgreSQL transaction (its refs, pack, commits and branches),
 so a fetch and the Console already show it. The push worker, which nobody calls and which may scale to zero, picks the
@@ -209,7 +211,7 @@ definitions, its default-branch trust boundary and its organization pipelines ar
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
 | Infrastructure as code | A Terraform provider for Cobranch's resources, a client of the REST API like any other, in [phase 2](#phase-2), once the roadmap's slices have landed |
-| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, an MCP server with a Claude Code integration, continuous documentation and an AI side panel |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, an MCP server with a Claude Code integration, continuous documentation, an AI side panel, and quotas |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -265,5 +267,7 @@ Planned after the foundations, each with a design of its own when its turn comes
 - **An AI side panel:** whoever views a repository in the Console asks it questions about the repository and has it act
   on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review)
   ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
+- **Quotas:** administrators cap what each user and organization may store and push, so an installation open to anyone's
+  sign-up keeps its storage in check ([ENG-238](https://linear.app/arikkfir/issue/ENG-238)).
 
 Cobranch is a Kfirs project, created by Arik Kfir.

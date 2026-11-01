@@ -9,16 +9,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/adapters/gitinternal"
-	"cobranch.dev/internal/adapters/postgres"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 )
 
 // apiMergeCase sets up main, perhaps with a /cobranch.yaml, and branch feature a commit ahead of it, changing
 // featureFile, perhaps annotated ci/build Successful; then perhaps a commit on main that changes mainFile; and asks the
-// Git server for a merge of feature at the head head names by method, past the requirements when bypass. It expects
-// the merge refused with wantErr, or main at a merge commit of wantParents parents, or at feature's head for none, and
-// feature Merged by Olivia once the push worker processed it.
+// Git server, on a token of Olivia's that holds perms (repo.read, repo.merge, and repo.bypass when bypass, if none) or
+// on none when anonymous, for a merge of feature at the head head names by method, for Olivia or for someone else,
+// past the requirements when bypass. It expects the merge refused with wantErr, or main at a merge commit of
+// wantParents parents, or at feature's head for none, and feature Merged by Olivia once the push worker processed it.
 type apiMergeCase struct {
 	name        string
 	settings    string
@@ -28,6 +31,9 @@ type apiMergeCase struct {
 	method      code.MergeMethod
 	head        func(feature string) string
 	bypass      bool
+	perms       []string
+	anonymous   bool
+	someoneElse bool
 	wantErr     error
 	wantParents int
 }
@@ -57,8 +63,11 @@ func TestMergeByAPI(t *testing.T) {
 			if tt.head != nil {
 				head = tt.head(feature)
 			}
-			got, err := client.Merge(context.Background(), website, code.MergeRequest{Branch: "feature", Head: head, Base: "main", Method: tt.method,
-				By: code.Merger{ID: olivia, Name: "Olivia", Email: "olivia@example.com"}, Bypass: tt.bypass})
+			by := code.Merger{ID: olivia, Name: "Olivia", Email: "olivia@example.com"}
+			if tt.someoneElse {
+				by.ID = uuid.New()
+			}
+			got, err := client.Merge(tt.asker(t, s), website, code.MergeRequest{Branch: "feature", Head: head, Base: "main", Method: tt.method, By: by, Bypass: tt.bypass})
 			if !sameRefusal(err, tt.wantErr) {
 				t.Fatalf("Merge = %v, want %v", err, tt.wantErr)
 			}
@@ -72,6 +81,22 @@ func TestMergeByAPI(t *testing.T) {
 			checkMerge(t, s, tt, got, main, before, feature)
 		})
 	}
+}
+
+// asker is the context of tt's merge: one that carries a token of Olivia's holding tt's permissions, or none.
+func (tt apiMergeCase) asker(t *testing.T, s *stack) context.Context {
+	t.Helper()
+	if tt.anonymous {
+		return t.Context()
+	}
+	perms := tt.perms
+	if perms == nil {
+		perms = []string{"repo.read", "repo.merge"}
+		if tt.bypass {
+			perms = append(perms, "repo.bypass")
+		}
+	}
+	return auth.WithToken(t.Context(), s.token(olivia, perms...))
 }
 
 // checkMerge checks that main is at the commit the merge answered, the merge or feature, that a fresh clone gets it,
@@ -126,14 +151,14 @@ func apiMergeRepo(t *testing.T, tt apiMergeCase) (*stack, *gitinternal.Client, s
 		mustGit(t, dir, "push", "-q", s.url(s.base, s.token(olivia, "repo.read", "repo.push", "repo.bypass"), "acme/website.git"), "main")
 	}
 	s.process()
-	internal := httptest.NewServer(s.server(t.TempDir()).InternalHandler(gitinternal.NewToken(postgres.NewInternalTokens(s.pool).Read)))
+	internal := httptest.NewServer(s.server(t.TempDir()).InternalHandler())
 	t.Cleanup(internal.Close)
 	base, err := url.Parse(internal.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	before := query[string](t, s.pool, "SELECT sha FROM refs WHERE repo_id = $1 AND name = 'refs/heads/main'", website)
-	return s, gitinternal.NewClient(base, gitinternal.NewToken(postgres.NewInternalTokens(s.pool).Read)), feature, before
+	return s, gitinternal.NewClient(base), feature, before
 }
 
 // sameRefusal reports whether err is want: a *code.MergeError of the same code, or the same error.

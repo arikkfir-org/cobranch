@@ -14,26 +14,28 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 )
 
 // Client reads a repository's trees and files from the Git server, and has it build merges, over the internal call:
-// code.Objects. The REST and GraphQL servers each hold one.
+// code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it sends the token
+// the viewer's credential carried (auth.Token), or none for Anonymous, and the Git server decides what that viewer may
+// read or merge.
 type Client struct {
-	base  *url.URL
-	token *Token
-	http  *http.Client
+	base *url.URL
+	http *http.Client
 }
 
 var _ code.Objects = (*Client)(nil)
 
-// NewClient returns a client of the Git server's internal call at base, such as http://git-server-internal, which
-// sends token. Its requests continue the caller's trace; a request has no deadline but its context's, so a large
-// file's bytes may stream for as long as their reader reads.
-func NewClient(base *url.URL, token *Token) *Client {
+// NewClient returns a client of the Git server's internal call at base, such as http://git-server-internal. Its
+// requests continue the caller's trace; a request has no deadline but its context's, so a large file's bytes may
+// stream for as long as their reader reads.
+func NewClient(base *url.URL) *Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 30 * time.Second
-	return &Client{base: base, token: token, http: &http.Client{Transport: otelhttp.NewTransport(transport)}}
+	return &Client{base: base, http: &http.Client{Transport: otelhttp.NewTransport(transport)}}
 }
 
 // Tree reads the directory at path in the commit ref names (code.Objects).
@@ -109,17 +111,15 @@ func (c *Client) get(ctx context.Context, repoID uuid.UUID, read string, query u
 // do asks the Git server for op of the repository, and returns its answer when it is 200; the domain's error when it
 // is a 404 with one of answers' codes, or a 409 of a merge; or an error naming what it said.
 func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op string, query url.Values, body io.Reader) (*http.Response, error) {
-	token, err := c.token.Get(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("asking the Git server for the %s of repository %s: %w", op, repoID, err)
-	}
 	u := c.base.JoinPath(ReposPath, repoID.String(), op)
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
 	if err != nil {
 		return nil, fmt.Errorf("asking the Git server for the %s of repository %s: %w", op, repoID, err)
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	if token, ok := auth.Token(ctx); ok {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

@@ -21,6 +21,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/adapters/gitinternal"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 )
@@ -32,9 +33,10 @@ const mergeConflicts = 5
 // snapshot and records it as a push of its base for its requester, transport api, through the same transaction and
 // checks as a client's push (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
 // "By asking Cobranch"). It answers 200 once the push is committed, and 409 for a merge Cobranch won't make.
-func (s *Server) mergeHandler(token *gitinternal.Token) http.HandlerFunc {
+func (s *Server) mergeHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if !authorized(w, r, token) {
+		viewer, ok := s.internalViewer(w, r)
+		if !ok {
 			return
 		}
 		id, err := uuid.Parse(r.PathValue("id"))
@@ -47,7 +49,7 @@ func (s *Server) mergeHandler(token *gitinternal.Token) http.HandlerFunc {
 			problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "a repository's ID, and a merge of a branch into main"})
 			return
 		}
-		ctx, span := tracer.Start(r.Context(), "gitserver.internal merge", trace.WithAttributes(attribute.String("cobranch.repository.id", id.String()),
+		ctx, span := tracer.Start(auth.WithViewer(r.Context(), viewer), "gitserver.internal merge", trace.WithAttributes(attribute.String("cobranch.repository.id", id.String()),
 			attribute.String("cobranch.branch", req.Branch), attribute.String("cobranch.merge.method", string(req.Method))))
 		defer span.End()
 		merged, err := s.merge(ctx, id, req)

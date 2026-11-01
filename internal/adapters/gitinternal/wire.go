@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/repos"
 )
 
 // ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
@@ -142,6 +143,7 @@ func (b Blob) Domain() code.Blob {
 
 // answers are the domain's errors for what a read doesn't find, by the code of the 404 that carries each.
 var answers = map[string]error{
+	"repo.not_found": repos.ErrNotFound,
 	"ref.not_found":  code.ErrRefNotFound,
 	"path.not_found": code.ErrPathNotFound,
 	"path.file":      code.ErrNotTree,
@@ -149,8 +151,8 @@ var answers = map[string]error{
 	"path.submodule": code.ErrSubmodule,
 }
 
-// CodeOf is the code of the 404 that carries err, one of the domain's answers about a ref or a path, or false for any
-// other error.
+// CodeOf is the code of the 404 that carries err, one of the domain's answers about a repository, a ref or a path, or
+// false for any other error.
 func CodeOf(err error) (string, bool) {
 	for c, answer := range answers {
 		if errors.Is(err, answer) {
