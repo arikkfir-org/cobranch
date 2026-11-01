@@ -205,17 +205,18 @@ func (s *Server) runSSHCommand(ctx context.Context, viewer auth.Authenticated, c
 		}
 		return s.runSSH(ctx, ch, ch, env, "upload-pack", dir)
 	}
-	return s.receiveSSH(ctx, ch, viewer, repo, dir)
+	return s.receiveSSH(ctx, ch, viewer, repo, slices.Contains(held, repos.PermBypass), dir)
 }
 
 // receiveSSH serves a push over SSH as receivePack does over HTTPS: the hook records it before Git answers.
-func (s *Server) receiveSSH(ctx context.Context, ch ssh.Channel, viewer auth.Authenticated, repo repos.Repository, dir string) uint32 {
+func (s *Server) receiveSSH(ctx context.Context, ch ssh.Channel, viewer auth.Authenticated, repo repos.Repository, bypass bool, dir string) uint32 {
 	id, err := uuid.NewV7()
 	if err != nil {
 		slog.ErrorContext(ctx, "Making a push's ID failed", "error", err)
 		return tell(ch, "The push could not start")
 	}
-	token := s.expect(&pending{ctx: ctx, id: id, repo: repo, pusher: viewer.User.ID, dir: dir, received: time.Now(), transport: git.TransportSSH})
+	token := s.expect(&pending{ctx: ctx, id: id, repo: repo, pusher: viewer.User.ID, bypass: bypass, dir: dir, received: time.Now(),
+		transport: git.TransportSSH})
 	defer s.forget(token)
 	return s.runSSH(ctx, io.LimitReader(ch, s.cfg.MaxPushSize+pushOverhead), ch, []string{HookURLEnv + "=" + s.hookURL, HookTokenEnv + "=" + token},
 		"receive-pack", dir)

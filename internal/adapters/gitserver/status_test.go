@@ -184,7 +184,8 @@ func TestRequirementsFollowMain(t *testing.T) {
 	if got := requirements(); len(got) != 2 {
 		t.Errorf("after a push to feature, requirements = %v, want main's as they were", got)
 	}
-	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/main")
+	// main requires ci/build, which feature's head lacks: the push takes repo.bypass.
+	mustGit(t, dir, "push", "-q", s.url(s.base, s.token(olivia, "repo.read", "repo.push", "repo.bypass"), "acme/website.git"), "HEAD:refs/heads/main")
 	if got := requirements(); len(got) != 0 {
 		t.Errorf("after main dropped its branches, requirements = %v, want none", got)
 	}

@@ -246,7 +246,7 @@ type Annotation struct {
 	Link string `json:"link"`
 	Name string `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// StartedAt When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
@@ -345,6 +345,9 @@ type Branch struct {
 	// Head The object it is at.
 	Head string `json:"head"`
 
+	// Merge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
+	Merge *BranchMerge `json:"merge,omitempty"`
+
 	// Name Its name, without refs/heads/.
 	Name string `json:"name"`
 
@@ -376,6 +379,18 @@ type BranchCheck struct {
 
 // BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; up_to_date, its base's tip in it.
 type BranchCheckKind string
+
+// BranchMerge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
+type BranchMerge struct {
+	// At When Cobranch recorded the push.
+	At time.Time `json:"at"`
+
+	// By Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	By *Principal `json:"by,omitempty"`
+
+	// Head The head it brought into the base.
+	Head string `json:"head"`
+}
 
 // BranchStatus Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
 type BranchStatus string
@@ -527,7 +542,7 @@ type Person struct {
 	Email string    `json:"email"`
 	Name  string    `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Zone The zone the commit wrote its time in, such as +0200.
@@ -572,7 +587,7 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
-// Principal Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
@@ -605,7 +620,7 @@ type Push struct {
 	At time.Time          `json:"at"`
 	Id openapi_types.UUID `json:"id"`
 
-	// Pusher Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+	// Pusher Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
 	Pusher    *Principal    `json:"pusher,omitempty"`
 	Transport PushTransport `json:"transport"`
 }

@@ -2009,6 +2009,24 @@ components:
           description: How many commits its base has that it lacks; left out until a push works it out.
         requirements:
           $ref: "#/components/schemas/MergeRequirements"
+        merge:
+          $ref: "#/components/schemas/BranchMerge"
+    BranchMerge:
+      type: object
+      description: >-
+        The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is
+        merged while its head is the merge's.
+      required: [head, at]
+      properties:
+        head:
+          type: string
+          description: The head it brought into the base.
+        by:
+          $ref: "#/components/schemas/Principal"
+        at:
+          type: string
+          format: date-time
+          description: When Cobranch recorded the push.
     BranchStatus:
       type: string
       description: >-
@@ -2100,7 +2118,7 @@ components:
           $ref: "#/components/schemas/Principal"
     Principal:
       type: object
-      description: Who is behind a commit's author or committer, a push or an annotation; absent from a person until the push worker maps their email, and from a push or an annotation once its principal is gone.
+      description: Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
       required: [id, displayName]
       properties:
         id:

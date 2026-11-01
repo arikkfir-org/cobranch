@@ -192,20 +192,23 @@ after it committed, is asked again with the same push ID, which records nothing 
 
 ![A push is accepted whole, or refused whole with the reason](git-hosting/accept.svg)
 
-Merge requirements and path rules join this flow with branch status
-([ENG-199](https://linear.app/arikkfir/issue/ENG-199)) and settings.
+A push into a branch with merge requirements meets their checks too, in the same transaction ([branch
+status](branch-status.md#by-a-push)); path rules join with settings.
 
 - **Branches and tags only.** A push may update `refs/heads/*` and `refs/tags/*` and nothing else, and none under
   `cobranch/`, which [only Cobranch writes](architecture.md#which-pushes-are-accepted).
 - **Atomic.** One hook decides for the whole push, so every ref moves or none does, as `git push --atomic` would.
-- **Merge requirements and path rules** come with branch status ([ENG-199](https://linear.app/arikkfir/issue/ENG-199))
-  and settings; until then any principal with `repo.push` moves any branch, `repo.bypass` included or not.
+- **Merge requirements** of a branch that `main`'s `/cobranch.yaml` names let a push into it bring only Ready branches'
+  commits, unless the pusher holds `repo.bypass` ([branch status](branch-status.md#by-a-push)). Path rules come with
+  settings.
 
 | The client sees | When |
 | --- | --- |
 | `refs/heads/main moved since you fetched: fetch, merge or rebase, then push again` | Another push moved a ref first |
 | `Cobranch writes refs under cobranch/ itself` | A ref under `refs/heads/cobranch/` or `refs/tags/cobranch/` |
 | `Cobranch keeps branches and tags only: refs/notes/commits refused` | Any other ref |
+| `refs/heads/main moved while Cobranch took your push; nothing changed, so push again` | Another push moved a branch while this one was recorded |
+| `main requires feature/login to be Ready: ci/test failed on 9f3c2e1` | A push into a branch with merge requirements brings a branch that isn't Ready, or commits no branch brings ([branch status](branch-status.md#by-a-push)) |
 | `Cobranch could not record the push; nothing changed, so try again` | The bucket or the database failed |
 
 ## Principals behind a push

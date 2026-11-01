@@ -15,13 +15,15 @@ import (
 	"cobranch.dev/internal/services/git"
 )
 
-// statusBranch is a branch whose status a transaction works out, locked until it ends.
+// statusBranch is a branch whose status a transaction works out, locked until it ends, with the head of the last merge
+// recorded of it, if any.
 type statusBranch struct {
-	ID       uuid.UUID
-	Head     string
-	Base     string
-	Facts    git.Facts
-	WaitsFor *uuid.UUID
+	ID         uuid.UUID
+	Head       string
+	Base       string
+	Facts      git.Facts
+	WaitsFor   *uuid.UUID
+	MergedHead *string
 }
 
 // checkJSON is how a branch's row keeps a check behind its status.
@@ -98,7 +100,7 @@ func restatusWaiting(ctx context.Context, q *queries.Queries, repoID, pushID uui
 	}
 	branches := make([]statusBranch, 0, len(rows))
 	for _, r := range rows {
-		branches = append(branches, branchOf(r.ID, r.Head, r.Base, r.Ahead, r.Behind, r.Merges, r.WaitsFor))
+		branches = append(branches, branchOf(r))
 	}
 	return restatus(ctx, q, repoID, branches)
 }
@@ -113,26 +115,26 @@ func restatusAt(ctx context.Context, q *queries.Queries, repoID uuid.UUID, sha s
 	branches := make([]statusBranch, 0, len(rows))
 	for _, r := range rows {
 		if r.WaitsFor == nil {
-			branches = append(branches, branchOf(r.ID, r.Head, r.Base, r.Ahead, r.Behind, r.Merges, r.WaitsFor))
+			branches = append(branches, branchOf(queries.BranchesWaitingForRow(r)))
 		}
 	}
 	return restatus(ctx, q, repoID, branches)
 }
 
 // branchOf is a branch's row as restatus takes it.
-func branchOf(id uuid.UUID, head string, base *string, ahead, behind, merges *int32, waitsFor *uuid.UUID) statusBranch {
-	b := statusBranch{ID: id, Head: head, WaitsFor: waitsFor}
-	if base != nil {
-		b.Base = *base
+func branchOf(r queries.BranchesWaitingForRow) statusBranch {
+	b := statusBranch{ID: r.ID, Head: r.Head, WaitsFor: r.WaitsFor, MergedHead: r.MergedHead}
+	if r.Base != nil {
+		b.Base = *r.Base
 	}
-	if ahead != nil {
-		b.Facts.Ahead = int(*ahead)
+	if r.Ahead != nil {
+		b.Facts.Ahead = int(*r.Ahead)
 	}
-	if behind != nil {
-		b.Facts.Behind = int(*behind)
+	if r.Behind != nil {
+		b.Facts.Behind = int(*r.Behind)
 	}
-	if merges != nil {
-		n := int(*merges)
+	if r.Merges != nil {
+		n := int(*r.Merges)
 		b.Facts.Merges = &n
 	}
 	return b
@@ -163,7 +165,8 @@ func restatus(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branche
 			}
 			requirements[b.Base] = req
 		}
-		status, checks := code.Evaluate(code.Standing{Requirements: req, Facts: b.Facts, Annotations: annotations[b.Head]})
+		merged := b.MergedHead != nil && *b.MergedHead == b.Head
+		status, checks := code.Evaluate(code.Standing{Requirements: req, Facts: b.Facts, Annotations: annotations[b.Head], Merged: merged})
 		encoded, err := json.Marshal(checksJSON(checks))
 		if err != nil {
 			return fmt.Errorf("encoding the checks: %w", err)

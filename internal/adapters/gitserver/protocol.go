@@ -98,8 +98,8 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request, req request
 		return
 	}
 	defer remove()
-	token := s.expect(&pending{ctx: r.Context(), id: id, repo: req.repo, pusher: req.viewer.User.ID, dir: dir, received: time.Now(),
-		transport: git.TransportHTTPS})
+	token := s.expect(&pending{ctx: r.Context(), id: id, repo: req.repo, pusher: req.viewer.User.ID, bypass: slices.Contains(req.held, repos.PermBypass),
+		dir: dir, received: time.Now(), transport: git.TransportHTTPS})
 	defer s.forget(token)
 	w.Header().Set("Content-Type", "application/x-git-receive-pack-result")
 	noCache(w)

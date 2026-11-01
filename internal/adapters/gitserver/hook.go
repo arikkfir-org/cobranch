@@ -29,10 +29,12 @@ const hookPath = "/pre-receive"
 // pending is a push whose receive-pack runs: what its hook's call needs to record it.
 type pending struct {
 	// ctx is the push's request's, which carries its trace and ends when its client goes away.
-	ctx      context.Context
-	id       uuid.UUID
-	repo     repos.Repository
-	pusher   uuid.UUID
+	ctx    context.Context
+	id     uuid.UUID
+	repo   repos.Repository
+	pusher uuid.UUID
+	// bypass is whether the pusher's credential holds repo.bypass.
+	bypass   bool
 	dir      string
 	received time.Time
 	// transport is how the push came.
@@ -129,8 +131,8 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
 	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: p.transport,
-		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received,
-		Requirements: branches.requirements, Facts: branches.facts, Tips: branches.tips})
+		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received, Requirements: branches.requirements, Facts: branches.facts,
+		Tips: branches.tips, Brought: branches.brought, Bypass: p.bypass})
 	if err != nil {
 		slog.ErrorContext(ctx, "Recording a push failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}

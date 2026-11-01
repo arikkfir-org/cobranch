@@ -52,6 +52,8 @@ const (
 	PermManage = "repo.manage"
 	// PermPush pushes to a repository: its Git server checks it before it reads a push.
 	PermPush = "repo.push"
+	// PermBypass pushes past a branch's merge requirements.
+	PermBypass = "repo.bypass"
 )
 
 // Service runs repositories: every operation checks its viewer's permissions through the authorizer first.

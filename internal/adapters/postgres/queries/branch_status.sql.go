@@ -12,21 +12,22 @@ import (
 )
 
 const branchesAt = `-- name: BranchesAt :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for FROM branches
+SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE repo_id = $1 AND head = $2 AND deleted_at IS NULL AND base IS NOT NULL
 ORDER BY id
 FOR UPDATE
 `
 
 type BranchesAtRow struct {
-	ID       uuid.UUID
-	RepoID   uuid.UUID
-	Head     string
-	Base     *string
-	Ahead    *int32
-	Behind   *int32
-	Merges   *int32
-	WaitsFor *uuid.UUID
+	ID         uuid.UUID
+	RepoID     uuid.UUID
+	Head       string
+	Base       *string
+	Ahead      *int32
+	Behind     *int32
+	Merges     *int32
+	WaitsFor   *uuid.UUID
+	MergedHead *string
 }
 
 // BranchesAt lists a repository's live branches whose head is a commit and that have a base, by ID, locked until the
@@ -49,6 +50,7 @@ func (q *Queries) BranchesAt(ctx context.Context, repoID uuid.UUID, head string)
 			&i.Behind,
 			&i.Merges,
 			&i.WaitsFor,
+			&i.MergedHead,
 		); err != nil {
 			return nil, err
 		}
@@ -61,21 +63,22 @@ func (q *Queries) BranchesAt(ctx context.Context, repoID uuid.UUID, head string)
 }
 
 const branchesWaitingFor = `-- name: BranchesWaitingFor :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for FROM branches
+SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE waits_for = $1 AND deleted_at IS NULL
 ORDER BY id
 FOR UPDATE
 `
 
 type BranchesWaitingForRow struct {
-	ID       uuid.UUID
-	RepoID   uuid.UUID
-	Head     string
-	Base     *string
-	Ahead    *int32
-	Behind   *int32
-	Merges   *int32
-	WaitsFor *uuid.UUID
+	ID         uuid.UUID
+	RepoID     uuid.UUID
+	Head       string
+	Base       *string
+	Ahead      *int32
+	Behind     *int32
+	Merges     *int32
+	WaitsFor   *uuid.UUID
+	MergedHead *string
 }
 
 // BranchesWaitingFor lists the live branches that wait for a push, by ID, locked until the transaction ends.
@@ -97,6 +100,7 @@ func (q *Queries) BranchesWaitingFor(ctx context.Context, waitsFor *uuid.UUID) (
 			&i.Behind,
 			&i.Merges,
 			&i.WaitsFor,
+			&i.MergedHead,
 		); err != nil {
 			return nil, err
 		}
@@ -115,6 +119,46 @@ DELETE FROM merge_requirements WHERE repo_id = $1
 func (q *Queries) DeleteMergeRequirements(ctx context.Context, repoID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteMergeRequirements, repoID)
 	return err
+}
+
+const incomingBranches = `-- name: IncomingBranches :many
+SELECT name, head, base, status, checks FROM branches WHERE repo_id = $1 AND name = ANY ($2::text[]) AND deleted_at IS NULL
+`
+
+type IncomingBranchesRow struct {
+	Name   string
+	Head   string
+	Base   *string
+	Status *string
+	Checks []byte
+}
+
+// IncomingBranches finds those of a repository's live branches that names name, as a push into a branch with merge
+// requirements finds them before it applies: their heads, bases, status and checks.
+func (q *Queries) IncomingBranches(ctx context.Context, repoID uuid.UUID, names []string) ([]IncomingBranchesRow, error) {
+	rows, err := q.db.Query(ctx, incomingBranches, repoID, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IncomingBranchesRow
+	for rows.Next() {
+		var i IncomingBranchesRow
+		if err := rows.Scan(
+			&i.Name,
+			&i.Head,
+			&i.Base,
+			&i.Status,
+			&i.Checks,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const lockLiveBranches = `-- name: LockLiveBranches :exec
