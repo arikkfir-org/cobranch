@@ -202,7 +202,7 @@ definitions, its default-branch trust boundary and its organization pipelines ar
 | Organizations | Repositories belong to organizations; one installation serves many, and a user may belong to several |
 | Operator surface | The Back-office starts small and evolves |
 | Infrastructure as code | A Terraform provider for Cobranch's resources, a client of the REST API like any other, in [phase 2](#phase-2), once the roadmap's slices have landed |
-| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence and repository hooks |
+| Phase 2 | [The phase 2 list](#phase-2): pinned job security, search with semantic search, Git LFS, Slack, members provisioned from an identity provider, the Terraform provider, Continuous Intelligence, repository hooks, and an MCP server with a Claude Code integration |
 | Credit | The Kfirs entity and Arik Kfir, anywhere it fits |
 
 No questions remain open at this level; the permission list, the agent harness and the delivery controller's
@@ -244,5 +244,10 @@ Planned after the foundations, each with a design of its own when its turn comes
   commit hooks and ideally sharing their code, so a team shares and enforces its house rules and tests in the
   repository. They run inside the push, before it is recorded, with the isolation jobs have. Their scope needs
   discussion first ([ENG-230](https://linear.app/arikkfir/issue/ENG-230)).
+- **An MCP server and a Claude Code integration:** Cobranch serves its tools over MCP, so AI clients such as Claude Code
+  work with an installation directly, and a Claude Code integration adds that connection with skills for Cobranch's
+  workflows and mods that bring Cobranch into its interface. Like the Terraform provider, the MCP server is a client of
+  the APIs with no privileges of its own, and waits for their shape to settle
+  ([ENG-231](https://linear.app/arikkfir/issue/ENG-231)).
 
 Cobranch is a Kfirs project, created by Arik Kfir.
