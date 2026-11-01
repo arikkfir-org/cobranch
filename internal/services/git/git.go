@@ -81,8 +81,8 @@ const (
 )
 
 // Push is a push's manifest, which the Git server records once Git has checked its objects: who pushed,
-// the refs it moves, its pack (nil when it only deletes) and every commit it brings that the repository's refs didn't
-// reach.
+// the refs it moves, its pack (nil when it only deletes), every commit it brings that the repository's refs didn't
+// reach, and what its refs say of the branches once it applies.
 type Push struct {
 	// ID names the push: the Git server asks again with it when it lost the answer.
 	ID         uuid.UUID
@@ -93,6 +93,47 @@ type Push struct {
 	Pack       *Pack
 	Commits    []Commit
 	ReceivedAt time.Time
+	// Requirements replace the repository's merge requirements when the push moves the default branch: those of
+	// SettingsFile at its new tip, none without one or when the push deletes the branch.
+	Requirements []Requirements
+	// Facts are every live branch's but the default's once the push applies, when it moves a branch; nil when it moves
+	// none.
+	Facts []Facts
+}
+
+// MovesDefault reports whether the push moves the default branch: creates, moves or deletes it.
+func (p Push) MovesDefault() bool {
+	for _, u := range p.Updates {
+		if u.Name == "refs/heads/"+DefaultBranch {
+			return true
+		}
+	}
+	return false
+}
+
+// SettingsFile is the path of a repository's settings in its default branch, whose branches key names its branches'
+// merge requirements (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
+// "Merge requirements").
+const SettingsFile = "cobranch.yaml"
+
+// Requirements are what a merge into a branch needs, as SettingsFile names them under branches: the annotations the
+// incoming head must carry, Successful, and whether history stays linear. A branch named there has requirements even
+// when they list nothing.
+type Requirements struct {
+	Branch        string
+	Annotations   []string
+	LinearHistory bool
+}
+
+// Facts are what Git's objects say of a live branch against the default branch: how many commits it has that the
+// default branch lacks (Ahead), how many the default branch has that it lacks (Behind), and how many of those it has
+// are merges (Merges), counted only while the default branch requires linear history; nil otherwise. Without a
+// default branch, Ahead counts all of its commits.
+type Facts struct {
+	Branch string
+	Ahead  int
+	Behind int
+	Merges *int
 }
 
 // Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines.

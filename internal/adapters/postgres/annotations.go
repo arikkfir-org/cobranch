@@ -34,19 +34,12 @@ func (s *CodeStore) annotationsOf(ctx context.Context, repoID uuid.UUID, shas []
 	if len(shas) == 0 {
 		return nil, nil
 	}
-	rows, err := s.q.AnnotationsOf(ctx, repoID, shas)
-	if err != nil {
-		return nil, fmt.Errorf("reading the annotations: %w", err)
-	}
-	out := map[string][]code.Annotation{}
-	for _, r := range rows {
-		out[r.Annotation.Sha] = append(out[r.Annotation.Sha], annotationOf(r.Annotation, r.PrincipalDisplayName))
-	}
-	return out, nil
+	return annotationsAt(ctx, s.q, repoID, shas)
 }
 
 // SetAnnotation sets the annotation on the repository's commit for actor, or changes the one actor set there before,
-// in one transaction that acts for actor: it appends event annotation.changed unless it changes nothing (code.Store).
+// in one transaction that acts for actor: unless it changes nothing, it appends event annotation.changed and works out
+// again the status of the branches at the commit (code.Store).
 func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error) {
 	var out code.Annotation
 	err := transact(ctx, s.pool, s.q, "setting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -60,8 +53,10 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		row, created, err := lockAnnotation(ctx, q, actor, orgID, repoID, sha, in)
 		out = row
 		switch {
-		case err != nil || created:
+		case err != nil:
 			return err
+		case created:
+			return restatusAt(ctx, q, repoID, sha)
 		case row.Principal == nil || row.Principal.ID != actor:
 			return &code.TakenError{Name: in.Name, By: row.Principal}
 		case in.Version == code.NoAnnotation, code.Stale(in.Version, row.Version):
@@ -74,7 +69,10 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 			return fmt.Errorf("changing annotation %s: %w", in.Name, err)
 		}
 		out = annotationOf(updated, &row.Principal.DisplayName)
-		return annotationEvent(ctx, q, orgID, actor, "set", repoID, out)
+		if err := annotationEvent(ctx, q, orgID, actor, "set", repoID, out); err != nil {
+			return err
+		}
+		return restatusAt(ctx, q, repoID, sha)
 	})
 	return out, err
 }
@@ -112,9 +110,9 @@ func lockAnnotation(ctx context.Context, q *queries.Queries, actor, orgID, repoI
 }
 
 // DeleteAnnotation deletes the annotation of name from the repository's commit, when actor set it or anyone is true
-// and it is at the version that version names, in one transaction that acts for actor, and appends event
-// annotation.changed (code.Store). One that isn't there, on a commit the repository holds, is
-// code.ErrAnnotationChanged when version names one.
+// and it is at the version that version names, in one transaction that acts for actor, appends event
+// annotation.changed and works out again the status of the branches at the commit (code.Store). One that isn't
+// there, on a commit the repository holds, is code.ErrAnnotationChanged when version names one.
 func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error {
 	return transact(ctx, s.pool, s.q, "deleting the annotation", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := q.AnnotationForUpdate(ctx, repoID, sha, name)
@@ -134,7 +132,10 @@ func (s *CodeStore) DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoI
 		if err := q.DeleteAnnotation(ctx, a.ID); err != nil {
 			return fmt.Errorf("deleting annotation %s: %w", name, err)
 		}
-		return annotationEvent(ctx, q, row.Annotation.OrgID, actor, "deleted", repoID, a)
+		if err := annotationEvent(ctx, q, row.Annotation.OrgID, actor, "deleted", repoID, a); err != nil {
+			return err
+		}
+		return restatusAt(ctx, q, repoID, sha)
 	})
 }
 

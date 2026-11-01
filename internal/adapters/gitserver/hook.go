@@ -94,8 +94,8 @@ func (s *Server) hookHandler() http.Handler {
 	return mux
 }
 
-// receive checks a push's refs, builds its manifest, uploads its pack and records the push, or refuses it with the
-// reason. A failure of the bucket or the database refuses it, unchanged.
+// receive checks a push's refs, builds its manifest, with what its refs say of the branches, uploads its pack and
+// records the push, or refuses it with the reason. A failure of the bucket or the database refuses it, unchanged.
 func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 	ctx := p.ctx
 	updates, err := parseUpdates(hr.Updates)
@@ -115,13 +115,21 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 		slog.ErrorContext(ctx, "Reading a push's commits failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
+	reqs, facts, refusal, err := s.branchFacts(ctx, p.dir, objects.env, updates)
+	if err != nil {
+		slog.ErrorContext(ctx, "Working out a push's branches failed", "push", p.id, "repository", p.repo.ID, "error", err)
+		return git.Answer{Message: git.MessageNotRecorded}
+	}
+	if refusal != "" {
+		return git.Answer{Message: refusal}
+	}
 	pack, err := s.storePack(ctx, p, objects.quarantine)
 	if err != nil {
 		slog.ErrorContext(ctx, "Storing a push's pack failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
 	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: p.transport,
-		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received})
+		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received, Requirements: reqs, Facts: facts})
 	if err != nil {
 		slog.ErrorContext(ctx, "Recording a push failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}

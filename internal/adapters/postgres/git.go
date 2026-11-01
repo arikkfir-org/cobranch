@@ -73,25 +73,37 @@ func (s *GitStore) Record(ctx context.Context, push git.Push) error {
 		if recorded {
 			return nil
 		}
-		if err := checkRefs(ctx, q, push); err != nil {
-			return err
-		}
-		if err := s.insertPush(ctx, q, orgID, push); err != nil {
-			return err
-		}
-		if err := moveRefs(ctx, q, orgID, push); err != nil {
-			return err
-		}
-		if err := orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
-			"push": push.ID, "refs": updatesJSON(push.Updates), "commits": len(push.Commits),
-		}); err != nil {
-			return err
-		}
-		if err := q.NotifyPush(ctx, push.ID.String()); err != nil {
-			return fmt.Errorf("notifying the push workers: %w", err)
-		}
-		return nil
+		return s.apply(ctx, q, orgID, push)
 	})
+}
+
+// apply records a push no transaction recorded before: once its refs prove to be where it found them, it locks the
+// repository's branches, stores the push, moves its refs and stores the branches' facts, then tells the push workers.
+func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+	if err := checkRefs(ctx, q, push); err != nil {
+		return err
+	}
+	if err := q.LockLiveBranches(ctx, push.RepoID); err != nil {
+		return fmt.Errorf("locking the branches: %w", err)
+	}
+	if err := s.insertPush(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := moveRefs(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := recordFacts(ctx, q, orgID, push); err != nil {
+		return err
+	}
+	if err := orgEvent(ctx, q, &orgID, push.PusherID, "repo.pushed", push.RepoID, map[string]any{
+		"push": push.ID, "refs": updatesJSON(push.Updates), "commits": len(push.Commits),
+	}); err != nil {
+		return err
+	}
+	if err := q.NotifyPush(ctx, push.ID.String()); err != nil {
+		return fmt.Errorf("notifying the push workers: %w", err)
+	}
+	return nil
 }
 
 // checkRefs returns a *git.StaleError for the first ref the push would move from a value it no longer has.
@@ -177,6 +189,9 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		}
 		linkPush(ctx, claimed.Traceparent)
 		if err := s.attribute(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
