@@ -13,7 +13,7 @@ import (
 )
 
 const claimPush = `-- name: ClaimPush :one
-SELECT id, repo_id, received_at, attempts FROM pushes
+SELECT id, repo_id, received_at, attempts, traceparent FROM pushes
 WHERE processed_at IS NULL AND retry_at <= now()
 ORDER BY retry_at, committed_at
 LIMIT 1
@@ -21,10 +21,11 @@ FOR UPDATE SKIP LOCKED
 `
 
 type ClaimPushRow struct {
-	ID         uuid.UUID
-	RepoID     uuid.UUID
-	ReceivedAt time.Time
-	Attempts   int32
+	ID          uuid.UUID
+	RepoID      uuid.UUID
+	ReceivedAt  time.Time
+	Attempts    int32
+	Traceparent string
 }
 
 // ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
@@ -37,6 +38,7 @@ func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
 		&i.RepoID,
 		&i.ReceivedAt,
 		&i.Attempts,
+		&i.Traceparent,
 	)
 	return i, err
 }
@@ -143,19 +145,20 @@ func (q *Queries) InsertPack(ctx context.Context, arg InsertPackParams) error {
 }
 
 const insertPush = `-- name: InsertPush :exec
-INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertPushParams struct {
-	ID         uuid.UUID
-	OrgID      uuid.UUID
-	RepoID     uuid.UUID
-	PusherID   *uuid.UUID
-	Transport  string
-	RefUpdates []byte
-	Pack       string
-	ReceivedAt time.Time
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	RepoID      uuid.UUID
+	PusherID    *uuid.UUID
+	Transport   string
+	RefUpdates  []byte
+	Pack        string
+	ReceivedAt  time.Time
+	Traceparent string
 }
 
 func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
@@ -168,6 +171,7 @@ func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
 		arg.RefUpdates,
 		arg.Pack,
 		arg.ReceivedAt,
+		arg.Traceparent,
 	)
 	return err
 }

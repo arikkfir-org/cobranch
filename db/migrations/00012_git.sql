@@ -32,7 +32,8 @@ CREATE TABLE packs (
 -- A push that moved a repository's refs: its ID, with which a Git server that lost the answer asks again; who pushed,
 -- over which transport; the refs it moved, as {name, old, new}; its pack, empty for a push that only deletes; and
 -- whether the push worker processed it: a push waits until processed_at is set, and after a failure until retry_at,
--- with the attempts and the last error kept.
+-- with the attempts and the last error kept. traceparent names the Git server's trace of the push, which the push
+-- worker's links.
 CREATE TABLE pushes (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
@@ -46,7 +47,8 @@ CREATE TABLE pushes (
     processed_at timestamptz,
     attempts integer NOT NULL DEFAULT 0,
     retry_at timestamptz NOT NULL DEFAULT now(),
-    error text NOT NULL DEFAULT ''
+    error text NOT NULL DEFAULT '',
+    traceparent text NOT NULL DEFAULT ''
 );
 CREATE INDEX pushes_repo ON pushes (repo_id, committed_at);
 CREATE INDEX pushes_waiting ON pushes (retry_at, committed_at) WHERE processed_at IS NULL;

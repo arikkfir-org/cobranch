@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/git"
@@ -123,7 +125,7 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	}
 	if err := q.InsertPush(ctx, queries.InsertPushParams{
 		ID: push.ID, OrgID: orgID, RepoID: push.RepoID, PusherID: &push.PusherID, Transport: string(push.Transport),
-		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt,
+		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt, Traceparent: traceparent(ctx),
 	}); err != nil {
 		return fmt.Errorf("recording the push: %w", err)
 	}
@@ -166,6 +168,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		if err != nil {
 			return fmt.Errorf("claiming a push: %w", err)
 		}
+		linkPush(ctx, claimed.Traceparent)
 		if err := s.attribute(ctx, q, claimed); err != nil {
 			return err
 		}
@@ -182,6 +185,23 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
+}
+
+// traceparent is the W3C traceparent of the span in ctx, or "" without one.
+func traceparent(ctx context.Context) string {
+	carrier := propagation.MapCarrier{}
+	propagation.TraceContext{}.Inject(ctx, carrier)
+	return carrier.Get("traceparent")
+}
+
+// linkPush links the span in ctx to the trace that recorded a push, which its traceparent names, so the push worker's
+// trace leads back to the push's.
+func linkPush(ctx context.Context, traceparent string) {
+	if traceparent == "" {
+		return
+	}
+	pushed := propagation.TraceContext{}.Extract(ctx, propagation.MapCarrier{"traceparent": traceparent})
+	trace.SpanFromContext(ctx).AddLink(trace.LinkFromContext(pushed))
 }
 
 // attribute resolves the authors and committers of the commits the claimed push first brought to their principals.

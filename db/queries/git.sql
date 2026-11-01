@@ -20,8 +20,8 @@ SELECT name, sha FROM refs WHERE repo_id = $1;
 INSERT INTO packs (repo_id, name, org_id, size, objects) VALUES (@repo_id, @name, @org_id, @size, @objects);
 
 -- name: InsertPush :exec
-INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at)
-VALUES (@id, @org_id, @repo_id, @pusher_id, @transport, @ref_updates, @pack, @received_at);
+INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent)
+VALUES (@id, @org_id, @repo_id, @pusher_id, @transport, @ref_updates, @pack, @received_at, @traceparent);
 
 -- InsertCommit records a commit a push brought, unless another push brought it first; the push worker fills in its
 -- author's and committer's principals.
@@ -66,7 +66,7 @@ LISTEN cobranch_pushes;
 -- ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
 -- push worker holds.
 -- name: ClaimPush :one
-SELECT id, repo_id, received_at, attempts FROM pushes
+SELECT id, repo_id, received_at, attempts, traceparent FROM pushes
 WHERE processed_at IS NULL AND retry_at <= now()
 ORDER BY retry_at, committed_at
 LIMIT 1

@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/git"
@@ -365,6 +368,44 @@ func TestGitStoreProcessRetries(t *testing.T) {
 	}
 	if got := count(t, f.pool, "SELECT count(*) FROM commits WHERE repo_id = $1 AND author_id IS NOT NULL", f.website.ID); got != 1 {
 		t.Error("the retried push's commit has no author")
+	}
+}
+
+func TestGitStoreProcessLinksTrace(t *testing.T) {
+	tests := []struct {
+		name      string
+		traced    bool
+		wantLinks int
+	}{
+		{name: "a push recorded in a trace", traced: true, wantLinks: 1},
+		{name: "a push recorded outside one", traced: false, wantLinks: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newGitFixture(t)
+			recorder := tracetest.NewSpanRecorder()
+			tracer := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)).Tracer("test")
+			ctx, pushed := context.Background(), trace.SpanFromContext(context.Background())
+			if tt.traced {
+				ctx, pushed = tracer.Start(ctx, "push")
+			}
+			if err := f.g.Record(ctx, pushOf(f.website.ID, f.olivia, "", []git.RefUpdate{{Name: "refs/tags/v1", Old: git.ZeroSHA, New: shaA}})); err != nil {
+				t.Fatal(err)
+			}
+			pushed.End()
+			ctx, processing := tracer.Start(context.Background(), "process")
+			if _, err := f.g.Process(ctx, git.RetryAfter); err != nil {
+				t.Fatal(err)
+			}
+			processing.End()
+			links := processing.(sdktrace.ReadOnlySpan).Links()
+			if len(links) != tt.wantLinks {
+				t.Fatalf("the push worker's span has %d links, want %d", len(links), tt.wantLinks)
+			}
+			if tt.wantLinks > 0 && links[0].SpanContext.SpanID() != pushed.SpanContext().SpanID() {
+				t.Errorf("the push worker's span links %s, want the push's span %s", links[0].SpanContext.SpanID(), pushed.SpanContext().SpanID())
+			}
+		})
 	}
 }
 
