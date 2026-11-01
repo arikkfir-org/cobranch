@@ -1,6 +1,6 @@
 {{/*
 A server of one API: its Deployment, Service and budget. Pass a dict of the root context, the component, which names
-the subcommand too, and the server's values; and, for the Git workloads, bucket (false for one that never reads it),
+the subcommand too, and the server's values; and, for the Git workloads, bucket (true for the one that reads packs),
 service (false for one nobody calls), env (more of the container's variables, as YAML), volumes (more emptyDirs: a
 name, a mountPath and the emptyDir each) and ports (more of the container's: a name and a containerPort each). Values
 without replicas leave the count to an autoscaler.
@@ -11,10 +11,7 @@ without replicas leave the count to an autoscaler.
 {{- $name := printf "%s-%s" (include "cobranch.fullname" $root) .component }}
 {{- $values := .values }}
 {{- $api := ne .component "auth-server" }}
-{{- $bucket := $api }}
-{{- if hasKey . "bucket" }}
-{{- $bucket = .bucket }}
-{{- end }}
+{{- $bucket := .bucket | default false }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -106,7 +103,7 @@ spec:
               path: /healthz
               port: http
             periodSeconds: 10
-          # The schema is at least this version's, and the database (and the bucket, for a server that reads it) answer.
+          # The schema is at least this version's, and the database (and the object store, for the Git server) answer.
           readinessProbe:
             httpGet:
               path: /readyz

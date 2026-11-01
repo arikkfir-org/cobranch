@@ -2,7 +2,8 @@
 {{- $component := dict "root" . "component" "maintenance" }}
 {{- $values := .Values.maintenance }}
 {{- $volume := .Values.blob.volume | default dict }}
-{{- $packs := and .Values.urls.git (not (kindIs "invalid" ($values.compaction | default dict).packs)) (not (hasKey $volume "emptyDir")) }}
+{{- $files := hasPrefix "file:" .Values.blob.url }}
+{{- $packs := and .Values.urls.git (not (kindIs "invalid" ($values.compaction | default dict).packs)) (not (and $files (hasKey $volume "emptyDir"))) }}
 # Deletes what expired, sign-in flows and sessions, every hour; with urls.git, also compacts repositories' packs and
 # deletes what compaction replaced. One run at a time; a run that misses its hour is skipped, since the next one does
 # the same work.

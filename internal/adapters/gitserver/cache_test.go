@@ -26,7 +26,7 @@ func testPack(name string) git.Pack {
 // named there, 10 bytes in all.
 func newTestCache(t *testing.T, limit int64, packs map[uuid.UUID][]string) (*cache, *gocloudblob.Bucket) {
 	t.Helper()
-	bucket, err := blob.Open(t.Context(), "file://"+t.TempDir())
+	bucket, err := blob.Open(t.Context(), "file://"+t.TempDir(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

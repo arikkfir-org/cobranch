@@ -135,8 +135,8 @@
       "properties": {
         "url": {
           "type": "string",
-          "pattern": "^(s3|gs|azblob|file)://.+",
-          "description": "The bucket's Go Cloud URL: s3://, gs://, azblob:// or file://."
+          "pattern": "^$|^postgres://$|^(s3|gs|azblob|file)://.+",
+          "description": "Where the object store keeps Git's packs: empty (or postgres://) for the database's large objects, the default; s3://, gs:// or azblob:// for a cloud's bucket; file:// for a directory on blob.volume."
         },
         "envFromSecret": {
           "type": "string"
@@ -148,10 +148,7 @@
           "type": "string",
           "pattern": "^/"
         }
-      },
-      "required": [
-        "url"
-      ]
+      }
     },
     "serviceAccount": {
       "type": "object",
@@ -974,7 +971,6 @@
     }
   },
   "required": [
-    "blob",
     "authServer",
     "restServer",
     "graphqlServer",

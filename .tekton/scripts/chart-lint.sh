@@ -1,13 +1,14 @@
 #!/bin/sh
-# Lints chart/cobranch and validates what it renders: with the bundled database, a host per workload, SSH behind a
-# load balancer, Google and traces, and with an external database, one host with a path per workload, SSH with the
+# Lints chart/cobranch with its defaults, packs in the database included, and validates what it renders: with the
+# bundled database, packs in a Google Cloud Storage bucket, a host per workload, SSH behind a load balancer, Google and
+# traces, and with an external database, packs in an S3 bucket, one host with a path per workload, SSH with the
 # operator's host key, another provider, an autoscaled push worker and no traces. Writes the bundled PostgreSQL's
 # image to .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
 out=.ci/manifests
 mkdir -p "$out"
-helm lint --strict "$chart" --set blob.url=file:///var/lib/cobranch/blobs
+helm lint --strict "$chart"
 helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranch-objects \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://api.cobranch.example.com \
   --set urls.graphql=https://graphql.cobranch.example.com --set urls.auth=https://auth.cobranch.example.com \

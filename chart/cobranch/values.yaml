@@ -1,4 +1,4 @@
-# Cobranch's chart. Only blob.url is required; values.schema.json checks the rest at install.
+# Cobranch's chart. Every value has a default; values.schema.json checks them at install.
 
 # The images, as Cobranch publishes them. An empty tag means the chart's appVersion: one version names the chart and
 # every image it runs.
@@ -87,20 +87,26 @@ organizations:
   # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).
   selfServe: null
 
-# The bucket, which only the servers reach: Go Cloud names it by URL (s3://, gs://, azblob:// or file://).
+# The object store, where the Git server and maintenance keep Git's packs
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-object-storage.md).
 blob:
-  # Required, such as s3://cobranch-objects?region=eu-west-1 or gs://cobranch-objects.
+  # Empty keeps every object in the database, as a large object: one store to run, and a backup of the database holds
+  # every repository whole (postgresql.storage.size then holds the packs too). Or a Go Cloud URL: a cloud's bucket,
+  # s3://cobranch-objects?region=eu-west-1, gs://cobranch-objects or azblob://cobranch-objects, for packs that outgrow
+  # the database; or file:///var/lib/cobranch/blobs, a directory on blob.volume, for trying Cobranch out.
   url: ""
-  # A Secret whose keys become the servers' environment, for credentials the URL's driver reads (such as
-  # AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
+  # A Secret whose keys become the Git server's and maintenance's environment, for credentials the URL's driver reads
+  # (such as AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
   envFromSecret: ""
-  # A volume, as a pod spec writes one without its name, mounted at mountPath: the directory of a file:// bucket.
+  # A volume, as a pod spec writes one without its name, mounted at mountPath: the directory of a file:// URL. Every Git
+  # server and maintenance mount it, so it must last and reach them all, such as a ReadWriteMany claim; an emptyDir is
+  # each pod's own, and loses its packs with the pod.
   volume: {}
   mountPath: /var/lib/cobranch/blobs
 
-# The ServiceAccount of the servers that read the bucket, and of maintenance while it compacts packs.
+# The ServiceAccount of the Git server and maintenance, which reach the object store.
 serviceAccount:
-  # Binds the servers to the cloud's workload identity, for the bucket.
+  # Binds them to the cloud's workload identity, for a bucket.
   annotations: {}
 
 # Every Cobranch workload's logs and traces. Logs are JSON on stdout, for the cluster's log collector. Traces go over
@@ -284,8 +290,8 @@ maintenance:
   # How long a run may take, after which it fails: within the hour, so it never skips the next.
   activeDeadlineSeconds: 3000
   # With urls.git, each run also compacts the packs of every repository that has this many into one, and deletes what
-  # compaction replaced a day later. Null leaves packs alone, as an emptyDir bucket (blob.volume) does: maintenance
-  # can't reach a bucket that only each server's pod holds.
+  # compaction replaced a day later. Null leaves packs alone, as a file:// URL on an emptyDir (blob.volume) does:
+  # maintenance can't reach a directory that only each Git server's pod holds.
   compaction:
     packs: 8
   # The pod's disk while it compacts, an emptyDir: keep it above twice the packs of the largest repository.

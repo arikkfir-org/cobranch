@@ -45,16 +45,16 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("finding this binary, which the hook runs: %w", err)
 	}
-	bucket, err := blob.Open(ctx, cfg.BlobURL)
-	if err != nil {
-		return fmt.Errorf("opening the bucket %s: %w", cfg.BlobURL, err)
-	}
-	defer func() { _ = bucket.Close() }() // every upload closed already
 	pool, err := postgres.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return fmt.Errorf("connecting to the database: %w", err)
 	}
 	defer pool.Close()
+	bucket, err := blob.Open(ctx, cfg.BlobURL, pool)
+	if err != nil {
+		return fmt.Errorf("opening the object store, %s: %w", blob.Name(cfg.BlobURL), err)
+	}
+	defer func() { _ = bucket.Close() }() // every upload closed already
 	schema, err := postgres.NewSchema(pool, migrations.FS, migrations.Go...)
 	if err != nil {
 		return fmt.Errorf("reading the schema's version: %w", err)
@@ -69,7 +69,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("preparing the Git server: %w", err)
 	}
 	defer func() { _ = gitServer.Close() }() // no push runs once the server stopped
-	handler := server.Handler("/", gitServer.Handler(), map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)})
+	handler := server.Handler("/", gitServer.Handler(), map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "objects": blob.Check(bucket)})
 	internal := server.Handler(gitinternal.ReposPath, gitServer.InternalHandler(gitinternal.NewToken(postgres.NewInternalTokens(pool).Read)), nil)
 	servers := []func(context.Context) error{
 		func(ctx context.Context) error { return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler) },

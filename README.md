@@ -54,10 +54,10 @@ bin/cobranch version
 ```
 
 The workloads read `COBRANCH_` variables. `migrate` brings a database's schema to the build's version and exits; each
-server needs a bucket and the database, and turns ready once the schema is at that version:
+server needs the database, and turns ready once the schema is at that version. The Git server and maintenance keep
+Git's packs in it too, unless `COBRANCH_BLOB_URL` names a bucket or a directory:
 
 ```bash
-export COBRANCH_BLOB_URL='file:///tmp/cobranch-blobs?create_dir=true'
 export COBRANCH_DATABASE_URL="$COBRANCH_TEST_DATABASE_URL"
 export COBRANCH_SECRETS_KEY="$(openssl rand -hex 24)"    # keep it: it seals the providers' secrets the Admin server adds
 bin/cobranch migrate
@@ -92,7 +92,7 @@ Install a version of the chart, which is published beside its images; its guide,
 
 ```bash
 helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cobranch --version 1.2.3 \
-  --namespace cobranch --create-namespace --set blob.url='gs://my-cobranch-bucket'
+  --namespace cobranch --create-namespace
 helm test cobranch --namespace cobranch
 ```
 
@@ -107,7 +107,7 @@ built. To follow `main`, install the chart from a checkout with its commit's ima
 helm install cobranch chart/cobranch --namespace cobranch --create-namespace \
   --set-string images.cobranch.tag=$(git rev-parse HEAD | cut -c1-7) \
   --set-string images.console.tag=$(git rev-parse HEAD | cut -c1-7) \
-  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7) --set blob.url='gs://my-cobranch-bucket'
+  --set-string images.backOffice.tag=$(git rev-parse HEAD | cut -c1-7)
 ```
 
 For a commit of your own, build the images, push them where your cluster pulls from, and install with those

@@ -20,8 +20,9 @@ import (
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, and, given the bucket,
-// deletes the packs nobody lists any more and compacts the repositories that have too many, once, and exits. The chart
+// runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, and, given a number of
+// packs to compact at, deletes the packs nobody lists any more and compacts the repositories that have too many, once,
+// and exits. The chart
 // runs it as an hourly CronJob. A failure of either part leaves the other to run, and fails the run.
 func runMaintenance(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "maintenance", buildinfo.Version())
@@ -39,7 +40,7 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 	}
 	defer pool.Close()
 	expired := deleteExpired(ctx, pool)
-	if cfg.BlobURL == "" {
+	if cfg.CompactAt == 0 {
 		return expired
 	}
 	return errors.Join(expired, maintainPacks(ctx, cfg, pool))
@@ -63,9 +64,9 @@ func deleteExpired(ctx context.Context, pool *pgxpool.Pool) error {
 // maintainPacks deletes the packs nobody lists any more, then compacts the repositories with cfg.CompactAt active packs
 // or more, each past the others' failures.
 func maintainPacks(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Pool) error {
-	bucket, err := blob.Open(ctx, cfg.BlobURL)
+	bucket, err := blob.Open(ctx, cfg.BlobURL, pool)
 	if err != nil {
-		return fmt.Errorf("opening the bucket %s: %w", cfg.BlobURL, err)
+		return fmt.Errorf("opening the object store, %s: %w", blob.Name(cfg.BlobURL), err)
 	}
 	defer func() { _ = bucket.Close() }() // every upload closed already
 	packs, err := gitserver.NewPacks(cfg.GitDataDir, "", bucket)
