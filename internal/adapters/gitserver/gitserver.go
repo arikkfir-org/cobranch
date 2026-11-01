@@ -35,9 +35,11 @@ type Authenticator interface {
 	AuthenticateSSHKey(ctx context.Context, wire []byte) (auth.Authenticated, error)
 }
 
-// Repositories finds the repository a Git URL names, for a viewer who reads it: repos.Service.
+// Repositories finds the repository a Git URL names, or the internal call's ID, for a viewer who reads it:
+// repos.Service.
 type Repositories interface {
 	Locate(ctx context.Context, v auth.User, orgSlug, slug string) (repos.Repository, []string, error)
+	ByID(ctx context.Context, v auth.User, repoID uuid.UUID) (repos.Repository, []string, error)
 }
 
 // Snapshots reads what a fetch serves: git.Service.

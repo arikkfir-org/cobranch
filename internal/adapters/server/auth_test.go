@@ -43,42 +43,32 @@ func TestAuthenticate(t *testing.T) {
 		body        string
 		wantStatus  int
 		wantViewer  string
+		// wantToken is the credential the request's context carries on for an internal call; none for Anonymous.
+		wantToken string
 	}{
 		{name: "no cookie", method: "GET", wantStatus: 200, wantViewer: "anonymous"},
-		{name: "a live session", method: "GET", token: "cbs_alice", wantStatus: 200, wantViewer: "Alice"},
+		{name: "a live session", method: "GET", token: "cbs_alice", wantStatus: 200, wantViewer: "Alice", wantToken: "cbs_alice"},
 		{name: "a dead session", method: "GET", token: "cbs_old", wantStatus: 401},
 		{name: "a check that fails", method: "GET", token: "cbs_down", wantStatus: 500},
-		{name: "a JSON mutation from the Console", method: "POST", token: "cbs_alice", origin: console, contentType: "application/json", body: "{}", wantStatus: 200, wantViewer: "Alice"},
-		{name: "a JSON mutation with no Origin", method: "POST", token: "cbs_alice", contentType: "application/json; charset=utf-8", body: "{}", wantStatus: 200, wantViewer: "Alice"},
-		{name: "a merge patch from the Console", method: "PATCH", token: "cbs_alice", origin: console, contentType: "application/merge-patch+json", body: "{}", wantStatus: 200, wantViewer: "Alice"},
+		{name: "a JSON mutation from the Console", method: "POST", token: "cbs_alice", origin: console, contentType: "application/json", body: "{}", wantStatus: 200, wantViewer: "Alice", wantToken: "cbs_alice"},
+		{name: "a JSON mutation with no Origin", method: "POST", token: "cbs_alice", contentType: "application/json; charset=utf-8", body: "{}", wantStatus: 200, wantViewer: "Alice", wantToken: "cbs_alice"},
+		{name: "a merge patch from the Console", method: "PATCH", token: "cbs_alice", origin: console, contentType: "application/merge-patch+json", body: "{}", wantStatus: 200, wantViewer: "Alice", wantToken: "cbs_alice"},
 		{name: "a merge patch from another origin", method: "PATCH", token: "cbs_alice", origin: "https://evil.example.com", contentType: "application/merge-patch+json", body: "{}", wantStatus: 403},
 		{name: "a JSON look-alike", method: "POST", token: "cbs_alice", origin: console, contentType: "application/jsonp", body: "{}", wantStatus: 403},
 		{name: "a mutation from another origin", method: "POST", token: "cbs_alice", origin: "https://evil.example.com", contentType: "application/json", body: "{}", wantStatus: 403},
 		{name: "a form from the Console", method: "POST", token: "cbs_alice", origin: console, contentType: "application/x-www-form-urlencoded", body: "a=b", wantStatus: 403},
 		{name: "a form with no Origin", method: "POST", token: "cbs_alice", contentType: "text/plain", body: "{}", wantStatus: 403},
-		{name: "a DELETE with no body from the Console", method: "DELETE", token: "cbs_alice", origin: console, wantStatus: 200, wantViewer: "Alice"},
+		{name: "a DELETE with no body from the Console", method: "DELETE", token: "cbs_alice", origin: console, wantStatus: 200, wantViewer: "Alice", wantToken: "cbs_alice"},
 		{name: "a mutation without the cookie", method: "POST", origin: "https://evil.example.com", contentType: "text/plain", body: "x", wantStatus: 200, wantViewer: "anonymous"},
-		{name: "an API key", method: "GET", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy"},
-		{name: "an API key's mutation from anywhere", method: "POST", bearer: "bearer cbk_deploy", origin: "https://evil.example.com", contentType: "text/plain", body: "x", wantStatus: 200, wantViewer: "Deploy"},
-		{name: "an API key beside the cookie", method: "GET", token: "cbs_alice", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy"},
+		{name: "an API key", method: "GET", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy", wantToken: "cbk_deploy"},
+		{name: "an API key's mutation from anywhere", method: "POST", bearer: "bearer cbk_deploy", origin: "https://evil.example.com", contentType: "text/plain", body: "x", wantStatus: 200, wantViewer: "Deploy", wantToken: "cbk_deploy"},
+		{name: "an API key beside the cookie", method: "GET", token: "cbs_alice", bearer: "Bearer cbk_deploy", wantStatus: 200, wantViewer: "Deploy", wantToken: "cbk_deploy"},
 		{name: "a dead API key", method: "GET", bearer: "Bearer cbk_old", wantStatus: 401},
 		{name: "another scheme", method: "GET", bearer: "Basic cbk_deploy", wantStatus: 200, wantViewer: "anonymous"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := Authenticate(auth.HostCookie, fakeAuthenticator{}, console, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if v, ok := auth.Viewer(r.Context()); ok {
-					_, _ = io.WriteString(w, v.User.DisplayName)
-					return
-				}
-				_, _ = io.WriteString(w, "anonymous")
-			}))
-			req := cookieRequest(tt.method, tt.body, tt.token, tt.origin, tt.contentType)
-			if tt.bearer != "" {
-				req.Header.Set("Authorization", tt.bearer)
-			}
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, req)
+			rec, token := authenticate(tt.method, tt.body, tt.token, tt.origin, tt.contentType, tt.bearer)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}
@@ -88,8 +78,33 @@ func TestAuthenticate(t *testing.T) {
 			if tt.wantViewer != "" && rec.Body.String() != tt.wantViewer {
 				t.Errorf("viewer = %q, want %q", rec.Body, tt.wantViewer)
 			}
+			if token != tt.wantToken {
+				t.Errorf("token carried on = %q, want %q", token, tt.wantToken)
+			}
 		})
 	}
+}
+
+// authenticate serves a request through Authenticate for the Console's origin, with the session cookie token and the
+// Authorization header bearer when given, and returns the answer, whose body names the viewer, and the token the
+// request's context carried on.
+func authenticate(method, body, token, origin, contentType, bearer string) (*httptest.ResponseRecorder, string) {
+	var carried string
+	h := Authenticate(auth.HostCookie, fakeAuthenticator{}, "https://cobranch.example.com", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		carried, _ = auth.Token(r.Context())
+		if v, ok := auth.Viewer(r.Context()); ok {
+			_, _ = io.WriteString(w, v.User.DisplayName)
+			return
+		}
+		_, _ = io.WriteString(w, "anonymous")
+	}))
+	req := cookieRequest(method, body, token, origin, contentType)
+	if bearer != "" {
+		req.Header.Set("Authorization", bearer)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec, carried
 }
 
 // cookieRequest is a request for /v1/me with body, the session cookie token, and the Origin and Content-Type headers
