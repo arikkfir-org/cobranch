@@ -51,6 +51,8 @@ var renderCases = []struct {
 	{name: "an anchor of the document", src: "[top](#hello)\n", want: []string{`href="#user-content-hello"`}},
 	{name: "a URL elsewhere stays", src: "[site](https://example.org/a?b=c) <mailto:x@example.org>\n",
 		want: []string{`href="https://example.org/a?b=c"`, `href="mailto:x@example.org"`}},
+	{name: "a URL of a host alone goes to https", src: "[site](//example.org/a) <a href=\"//example.org/b\">b</a>\n",
+		want: []string{`<a href="https://example.org/a" rel="nofollow">site</a>`, `<a href="https://example.org/b" rel="nofollow">b</a>`}},
 	{name: "a script URL goes", src: "[x](javascript:alert(1))\n", wantNot: []string{"javascript"}},
 	{name: "a relative image loads the raw bytes at the commit", src: "![logo](../img/logo.png)\n",
 		want: []string{`<img alt="logo" src="` + raw + `img%2Flogo.png&amp;ref=` + commit + `"/>`}},

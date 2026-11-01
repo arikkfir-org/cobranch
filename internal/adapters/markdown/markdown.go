@@ -209,8 +209,8 @@ func (r *Renderer) outside(img *html.Node, u *url.URL) {
 	img.Parent.RemoveChild(img)
 }
 
-// link is where href, a link of doc, points: a URL of http, https or mailto as it is; an anchor of the document with
-// idPrefix; a path in the repository, relative to doc or from the root, at the Console's page of it at doc's ref, its
+// link is where href, a link of doc, points: a URL of http, https or mailto as it is, at https when it names a host
+// alone; an anchor of the document with idPrefix; a path in the repository, relative to doc or from the root, at the Console's page of it at doc's ref, its
 // tree's when it ends in a slash; "" for anything else.
 func (r *Renderer) link(href string, doc code.Document) string {
 	u, err := url.Parse(strings.TrimSpace(href))
@@ -218,6 +218,9 @@ func (r *Renderer) link(href string, doc code.Document) string {
 	case err != nil:
 		return ""
 	case u.Scheme != "" || u.Host != "":
+		if u.Scheme == "" {
+			u.Scheme = "https"
+		}
 		if scheme := strings.ToLower(u.Scheme); scheme == "http" || scheme == "https" || scheme == "mailto" {
 			return u.String()
 		}

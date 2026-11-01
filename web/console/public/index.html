@@ -689,6 +689,7 @@
         fit();
         doc.querySelectorAll("img").forEach((img) => img.addEventListener("load", fit));
         doc.addEventListener("click", (e) => follow(e, frame));
+        if (location.hash) reveal(frame, location.hash.slice(1), "auto");
       });
       new ResizeObserver(([entry]) => {
         if (entry.contentRect.width !== width) { width = entry.contentRect.width; fit(); }
@@ -696,21 +697,26 @@
       return frame;
     }
 
-    // follow follows a click on a link in a rendered document's frame: the Console's own pages within the Console, an
-    // anchor of the document by scrolling to it, anything else in a new tab.
+    // follow follows a click on a link in a rendered document's frame: the Console's own pages within the Console, with
+    // the anchor they name, which their frame scrolls to once it loads; an anchor of the document by scrolling to it;
+    // anything else in a new tab.
     function follow(e, frame) {
       const a = e.target.closest ? e.target.closest("a[href]") : null;
       if (!a) return;
       e.preventDefault();
       const href = a.getAttribute("href");
-      if (href.startsWith("#")) {
-        const target = frame.contentDocument.getElementById(decodeURIComponent(href.slice(1)));
-        if (target) scrollTo({ top: scrollY + frame.getBoundingClientRect().top + target.getBoundingClientRect().top - 16, behavior: "smooth" });
-        return;
-      }
+      if (href.startsWith("#")) return reveal(frame, href.slice(1), "smooth");
       const url = new URL(href, location.href);
-      if (url.origin === location.origin && url.pathname.startsWith(base) && !e.metaKey && !e.ctrlKey) return go(url.pathname.slice(base.length - 1));
+      if (url.origin === location.origin && url.pathname.startsWith(base) && !e.metaKey && !e.ctrlKey) return go(url.pathname.slice(base.length - 1) + url.hash);
       open(url.href, "_blank", "noopener");
+    }
+
+    // reveal scrolls the page to the element of a rendered document's frame whose id is the anchor, if it has one.
+    function reveal(frame, anchor, behavior) {
+      let id = anchor;
+      try { id = decodeURIComponent(anchor); } catch { /* not percent-encoded: the id as written */ }
+      const target = frame.contentDocument && frame.contentDocument.getElementById(id);
+      if (target) scrollTo({ top: scrollY + frame.getBoundingClientRect().top + target.getBoundingClientRect().top - 16, behavior });
     }
 
     // imageFile reports whether a file's name is an image's, which its page shows from its bytes.
