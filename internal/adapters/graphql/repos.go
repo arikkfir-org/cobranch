@@ -51,18 +51,27 @@ func repositoryInput(input RepositoryInput) repos.Input {
 	return in
 }
 
-// resolveRepo answers a repository's field through read, for the viewer.
-func resolveRepo[T any](ctx context.Context, obj *Repository, read func(context.Context, repos.Viewer, uuid.UUID) (T, error), what string) (T, error) {
-	var zero T
+// repoOf is the viewer of a repository's field, and the repository's ID.
+func repoOf(ctx context.Context, obj *Repository) (repos.Viewer, uuid.UUID, error) {
 	v, err := viewer(ctx)
 	if err != nil {
-		return zero, err
+		return repos.Viewer{}, uuid.Nil, err
 	}
 	repoID, err := parseID(ctx, obj.ID, "repository")
 	if err != nil {
+		return repos.Viewer{}, uuid.Nil, err
+	}
+	return v.User, repoID, nil
+}
+
+// resolveRepo answers a repository's field through read, for the viewer.
+func resolveRepo[T any](ctx context.Context, obj *Repository, read func(context.Context, repos.Viewer, uuid.UUID) (T, error), what string) (T, error) {
+	var zero T
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
 		return zero, err
 	}
-	out, err := read(ctx, v.User, repoID)
+	out, err := read(ctx, v, repoID)
 	if err != nil {
 		return zero, fail(ctx, err, "repository", what)
 	}

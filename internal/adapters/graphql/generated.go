@@ -63,6 +63,35 @@ type ComplexityRoot struct {
 		RevokedAt  func(childComplexity int) int
 	}
 
+	Branch struct {
+		Commit    func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		Head      func(childComplexity int) int
+		Name      func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+	}
+
+	Commit struct {
+		Author    func(childComplexity int) int
+		Committer func(childComplexity int) int
+		Message   func(childComplexity int) int
+		Parents   func(childComplexity int) int
+		Push      func(childComplexity int) int
+		Sha       func(childComplexity int) int
+		Signature func(childComplexity int) int
+		Tree      func(childComplexity int) int
+	}
+
+	CommitPage struct {
+		Commits    func(childComplexity int) int
+		NextCursor func(childComplexity int) int
+	}
+
+	CommitPrincipal struct {
+		DisplayName func(childComplexity int) int
+		ID          func(childComplexity int) int
+	}
+
 	Email struct {
 		Email    func(childComplexity int) int
 		Verified func(childComplexity int) int
@@ -147,6 +176,14 @@ type ComplexityRoot struct {
 		ViewerPermissions   func(childComplexity int) int
 	}
 
+	Person struct {
+		At        func(childComplexity int) int
+		Email     func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Principal func(childComplexity int) int
+		Zone      func(childComplexity int) int
+	}
+
 	PersonalToken struct {
 		CreatedAt   func(childComplexity int) int
 		ExpiresAt   func(childComplexity int) int
@@ -162,6 +199,13 @@ type ComplexityRoot struct {
 		Token  func(childComplexity int) int
 	}
 
+	Push struct {
+		At        func(childComplexity int) int
+		ID        func(childComplexity int) int
+		Pusher    func(childComplexity int) int
+		Transport func(childComplexity int) int
+	}
+
 	Query struct {
 		Organization func(childComplexity int, slug string) int
 		Permissions  func(childComplexity int, scope RoleScope) int
@@ -172,9 +216,12 @@ type ComplexityRoot struct {
 
 	Repository struct {
 		Access            func(childComplexity int) int
+		Branches          func(childComplexity int) int
+		Commit            func(childComplexity int, sha string) int
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
 		Description       func(childComplexity int) int
+		History           func(childComplexity int, branch string, first int, after *string) int
 		ID                func(childComplexity int) int
 		Name              func(childComplexity int) int
 		ObjectFormat      func(childComplexity int) int
@@ -278,6 +325,9 @@ type RepositoryResolver interface {
 	ViewerPermissions(ctx context.Context, obj *Repository) ([]string, error)
 	Access(ctx context.Context, obj *Repository) ([]*RepositoryAccess, error)
 	Roles(ctx context.Context, obj *Repository) ([]*Role, error)
+	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
+	History(ctx context.Context, obj *Repository, branch string, first int, after *string) (*CommitPage, error)
+	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -398,6 +448,112 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ApiKeySecret.RevokedAt(childComplexity), true
+
+	case "Branch.commit":
+		if e.ComplexityRoot.Branch.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.Commit(childComplexity), true
+	case "Branch.createdAt":
+		if e.ComplexityRoot.Branch.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.CreatedAt(childComplexity), true
+	case "Branch.head":
+		if e.ComplexityRoot.Branch.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.Head(childComplexity), true
+	case "Branch.name":
+		if e.ComplexityRoot.Branch.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.Name(childComplexity), true
+	case "Branch.updatedAt":
+		if e.ComplexityRoot.Branch.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.UpdatedAt(childComplexity), true
+
+	case "Commit.author":
+		if e.ComplexityRoot.Commit.Author == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Author(childComplexity), true
+	case "Commit.committer":
+		if e.ComplexityRoot.Commit.Committer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Committer(childComplexity), true
+	case "Commit.message":
+		if e.ComplexityRoot.Commit.Message == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Message(childComplexity), true
+	case "Commit.parents":
+		if e.ComplexityRoot.Commit.Parents == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Parents(childComplexity), true
+	case "Commit.push":
+		if e.ComplexityRoot.Commit.Push == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Push(childComplexity), true
+	case "Commit.sha":
+		if e.ComplexityRoot.Commit.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Sha(childComplexity), true
+	case "Commit.signature":
+		if e.ComplexityRoot.Commit.Signature == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Signature(childComplexity), true
+	case "Commit.tree":
+		if e.ComplexityRoot.Commit.Tree == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Tree(childComplexity), true
+
+	case "CommitPage.commits":
+		if e.ComplexityRoot.CommitPage.Commits == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommitPage.Commits(childComplexity), true
+	case "CommitPage.nextCursor":
+		if e.ComplexityRoot.CommitPage.NextCursor == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommitPage.NextCursor(childComplexity), true
+
+	case "CommitPrincipal.displayName":
+		if e.ComplexityRoot.CommitPrincipal.DisplayName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommitPrincipal.DisplayName(childComplexity), true
+	case "CommitPrincipal.id":
+		if e.ComplexityRoot.CommitPrincipal.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.CommitPrincipal.ID(childComplexity), true
 
 	case "Email.email":
 		if e.ComplexityRoot.Email.Email == nil {
@@ -941,6 +1097,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Organization.ViewerPermissions(childComplexity), true
 
+	case "Person.at":
+		if e.ComplexityRoot.Person.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Person.At(childComplexity), true
+	case "Person.email":
+		if e.ComplexityRoot.Person.Email == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Person.Email(childComplexity), true
+	case "Person.name":
+		if e.ComplexityRoot.Person.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Person.Name(childComplexity), true
+	case "Person.principal":
+		if e.ComplexityRoot.Person.Principal == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Person.Principal(childComplexity), true
+	case "Person.zone":
+		if e.ComplexityRoot.Person.Zone == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Person.Zone(childComplexity), true
+
 	case "PersonalToken.createdAt":
 		if e.ComplexityRoot.PersonalToken.CreatedAt == nil {
 			break
@@ -997,6 +1184,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.PersonalTokenCreated.Token(childComplexity), true
 
+	case "Push.at":
+		if e.ComplexityRoot.Push.At == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Push.At(childComplexity), true
+	case "Push.id":
+		if e.ComplexityRoot.Push.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Push.ID(childComplexity), true
+	case "Push.pusher":
+		if e.ComplexityRoot.Push.Pusher == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Push.Pusher(childComplexity), true
+	case "Push.transport":
+		if e.ComplexityRoot.Push.Transport == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Push.Transport(childComplexity), true
+
 	case "Query.organization":
 		if e.ComplexityRoot.Query.Organization == nil {
 			break
@@ -1049,6 +1261,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Access(childComplexity), true
+	case "Repository.branches":
+		if e.ComplexityRoot.Repository.Branches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Branches(childComplexity), true
+	case "Repository.commit":
+		if e.ComplexityRoot.Repository.Commit == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_commit_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Commit(childComplexity, args["sha"].(string)), true
 	case "Repository.createdAt":
 		if e.ComplexityRoot.Repository.CreatedAt == nil {
 			break
@@ -1067,6 +1296,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Description(childComplexity), true
+	case "Repository.history":
+		if e.ComplexityRoot.Repository.History == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_history_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["first"].(int), args["after"].(*string)), true
 	case "Repository.id":
 		if e.ComplexityRoot.Repository.ID == nil {
 			break
@@ -1367,6 +1607,81 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
+	{Name: "../../../api/graphql/code.graphqls", Input: `# A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console").
+
+extend type Repository {
+  "The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read."
+  branches: [Branch!]!
+  "A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100."
+  history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
+  "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
+  commit(sha: String!): Commit
+}
+
+"One of a repository's live branches and the commit it is at."
+type Branch {
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it is at."
+  head: String!
+  "The commit it is at; null while its head is no commit a push recorded."
+  commit: Commit
+  createdAt: Time!
+  "When a push last moved it."
+  updatedAt: Time!
+}
+
+"A page of a branch's history, nearest first."
+type CommitPage {
+  commits: [Commit!]!
+  "Where the next page starts, as history's after; null after the last page."
+  nextCursor: String
+}
+
+"A commit a push brought, as the push recorded it."
+type Commit {
+  sha: String!
+  tree: String!
+  "Its parents' names, the first of which its branch's history follows."
+  parents: [String!]!
+  message: String!
+  author: Person!
+  committer: Person!
+  "Its signature as written, not checked yet; empty for an unsigned commit."
+  signature: String!
+  "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
+  push: Push
+}
+
+"A commit's author or committer as the commit writes them."
+type Person {
+  name: String!
+  email: String!
+  at: Time!
+  "The zone the commit wrote its time in, such as +0200."
+  zone: String!
+  "Who is behind them; null until the push worker maps their email."
+  principal: CommitPrincipal
+}
+
+"Who is behind a commit's author or committer, or a push: a user, perhaps one with no login whom a push made for an unknown email."
+type CommitPrincipal {
+  id: ID!
+  displayName: String!
+}
+
+"The push that first brought a commit."
+type Push {
+  id: ID!
+  "Who pushed; null once they are gone."
+  pusher: CommitPrincipal
+  "https or ssh."
+  transport: String!
+  "When Cobranch recorded it."
+  at: Time!
+}
+`, BuiltIn: false},
 	{Name: "../../../api/graphql/repositories.graphqls", Input: `# Repositories: an organization's Git repositories, their settings and the grants that reach them
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "Repositories").
 
@@ -1781,6 +2096,64 @@ func (ec *executionContext) childFields_ApiKeySecret(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type ApiKeySecret", field.Name)
 }
 
+func (ec *executionContext) childFields_Branch(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_Branch_name(ctx, field)
+	case "head":
+		return ec.fieldContext_Branch_head(ctx, field)
+	case "commit":
+		return ec.fieldContext_Branch_commit(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Branch_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Branch_updatedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Branch", field.Name)
+}
+
+func (ec *executionContext) childFields_Commit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "sha":
+		return ec.fieldContext_Commit_sha(ctx, field)
+	case "tree":
+		return ec.fieldContext_Commit_tree(ctx, field)
+	case "parents":
+		return ec.fieldContext_Commit_parents(ctx, field)
+	case "message":
+		return ec.fieldContext_Commit_message(ctx, field)
+	case "author":
+		return ec.fieldContext_Commit_author(ctx, field)
+	case "committer":
+		return ec.fieldContext_Commit_committer(ctx, field)
+	case "signature":
+		return ec.fieldContext_Commit_signature(ctx, field)
+	case "push":
+		return ec.fieldContext_Commit_push(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Commit", field.Name)
+}
+
+func (ec *executionContext) childFields_CommitPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commits":
+		return ec.fieldContext_CommitPage_commits(ctx, field)
+	case "nextCursor":
+		return ec.fieldContext_CommitPage_nextCursor(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommitPage", field.Name)
+}
+
+func (ec *executionContext) childFields_CommitPrincipal(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_CommitPrincipal_id(ctx, field)
+	case "displayName":
+		return ec.fieldContext_CommitPrincipal_displayName(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type CommitPrincipal", field.Name)
+}
+
 func (ec *executionContext) childFields_Email(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "email":
@@ -1889,6 +2262,22 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
 }
 
+func (ec *executionContext) childFields_Person(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_Person_name(ctx, field)
+	case "email":
+		return ec.fieldContext_Person_email(ctx, field)
+	case "at":
+		return ec.fieldContext_Person_at(ctx, field)
+	case "zone":
+		return ec.fieldContext_Person_zone(ctx, field)
+	case "principal":
+		return ec.fieldContext_Person_principal(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Person", field.Name)
+}
+
 func (ec *executionContext) childFields_PersonalToken(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -1919,6 +2308,20 @@ func (ec *executionContext) childFields_PersonalTokenCreated(ctx context.Context
 	return nil, fmt.Errorf("no field named %q was found under type PersonalTokenCreated", field.Name)
 }
 
+func (ec *executionContext) childFields_Push(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Push_id(ctx, field)
+	case "pusher":
+		return ec.fieldContext_Push_pusher(ctx, field)
+	case "transport":
+		return ec.fieldContext_Push_transport(ctx, field)
+	case "at":
+		return ec.fieldContext_Push_at(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Push", field.Name)
+}
+
 func (ec *executionContext) childFields_Repository(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -1945,6 +2348,12 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_access(ctx, field)
 	case "roles":
 		return ec.fieldContext_Repository_roles(ctx, field)
+	case "branches":
+		return ec.fieldContext_Repository_branches(ctx, field)
+	case "history":
+		return ec.fieldContext_Repository_history(ctx, field)
+	case "commit":
+		return ec.fieldContext_Repository_commit(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Repository", field.Name)
 }
@@ -2829,6 +3238,50 @@ func (ec *executionContext) field_Query_roles_args(ctx context.Context, rawArgs 
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_commit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sha",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sha"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_history_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field___Directive_args_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3273,6 +3726,442 @@ func (ec *executionContext) _ApiKeySecret_revokedAt(ctx context.Context, field g
 }
 func (ec *executionContext) fieldContext_ApiKeySecret_revokedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ApiKeySecret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Branch_name(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "String")
+}
+
+func (ec *executionContext) _Branch_head(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "String")
+}
+
+func (ec *executionContext) _Branch_commit(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Branch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Branch_createdAt(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Branch_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Commit_sha(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Commit", field, false, false, "String")
+}
+
+func (ec *executionContext) _Commit_tree(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_tree(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tree, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_tree(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Commit", field, false, false, "String")
+}
+
+func (ec *executionContext) _Commit_parents(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_parents(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Parents, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_parents(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Commit", field, false, false, "String")
+}
+
+func (ec *executionContext) _Commit_message(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_message(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Message, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_message(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Commit", field, false, false, "String")
+}
+
+func (ec *executionContext) _Commit_author(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_author(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Author, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Person) graphql.Marshaler {
+			return ec.marshalNPerson2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPerson(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_author(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Commit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Person(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Commit_committer(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_committer(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Committer, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Person) graphql.Marshaler {
+			return ec.marshalNPerson2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPerson(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_committer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Commit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Person(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Commit_signature(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_signature(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Signature, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_signature(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Commit", field, false, false, "String")
+}
+
+func (ec *executionContext) _Commit_push(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_push(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Push, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Push) graphql.Marshaler {
+			return ec.marshalOPush2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPush(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_push(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Commit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Push(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommitPage_commits(ctx context.Context, field graphql.CollectedField, obj *CommitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommitPage_commits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commits, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Commit) graphql.Marshaler {
+			return ec.marshalNCommit2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommitPage_commits(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "CommitPage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _CommitPage_nextCursor(ctx context.Context, field graphql.CollectedField, obj *CommitPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommitPage_nextCursor(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NextCursor, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_CommitPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommitPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _CommitPrincipal_id(ctx context.Context, field graphql.CollectedField, obj *CommitPrincipal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommitPrincipal_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommitPrincipal_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommitPrincipal", field, false, false, "ID")
+}
+
+func (ec *executionContext) _CommitPrincipal_displayName(ctx context.Context, field graphql.CollectedField, obj *CommitPrincipal) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_CommitPrincipal_displayName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DisplayName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_CommitPrincipal_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("CommitPrincipal", field, false, false, "String")
 }
 
 func (ec *executionContext) _Email_email(ctx context.Context, field graphql.CollectedField, obj *Email) (ret graphql.Marshaler) {
@@ -5444,6 +6333,130 @@ func (ec *executionContext) fieldContext_Organization_repository(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Person_name(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Person_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Person_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Person", field, false, false, "String")
+}
+
+func (ec *executionContext) _Person_email(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Person_email(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Email, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Person_email(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Person", field, false, false, "String")
+}
+
+func (ec *executionContext) _Person_at(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Person_at(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Person_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Person", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Person_zone(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Person_zone(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Zone, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Person_zone(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Person", field, false, false, "String")
+}
+
+func (ec *executionContext) _Person_principal(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Person_principal(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Principal, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Person_principal(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Person",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _PersonalToken_id(ctx context.Context, field graphql.CollectedField, obj *PersonalToken) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5658,6 +6671,107 @@ func (ec *executionContext) _PersonalTokenCreated_secret(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_PersonalTokenCreated_secret(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("PersonalTokenCreated", field, false, false, "String")
+}
+
+func (ec *executionContext) _Push_id(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Push_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Push_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Push", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Push_pusher(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Push_pusher(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Pusher, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Push_pusher(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Push",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Push_transport(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Push_transport(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Transport, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Push_transport(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Push", field, false, false, "String")
+}
+
+func (ec *executionContext) _Push_at(ctx context.Context, field graphql.CollectedField, obj *Push) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Push_at(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.At, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Push_at(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Push", field, false, false, "Time")
 }
 
 func (ec *executionContext) _Query_version(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -6213,6 +7327,126 @@ func (ec *executionContext) fieldContext_Repository_roles(_ context.Context, fie
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_Role(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_branches(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_branches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().Branches(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Branch) graphql.Marshaler {
+			return ec.marshalNBranch2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_branches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Branch(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_history(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_history(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["first"].(int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPage) graphql.Marshaler {
+			return ec.marshalNCommitPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_history(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_history_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_commit(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Commit(ctx, obj, fc.Args["sha"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_commit(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_commit_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -8468,6 +9702,203 @@ func (ec *executionContext) _ApiKeySecret(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var branchImplementors = []string{"Branch"}
+
+func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, obj *Branch) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, branchImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Branch")
+		case "name":
+			out.Values[i] = ec._Branch_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._Branch_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commit":
+			out.Values[i] = ec._Branch_commit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Branch_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Branch_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var commitImplementors = []string{"Commit"}
+
+func (ec *executionContext) _Commit(ctx context.Context, sel ast.SelectionSet, obj *Commit) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, commitImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Commit")
+		case "sha":
+			out.Values[i] = ec._Commit_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "tree":
+			out.Values[i] = ec._Commit_tree(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "parents":
+			out.Values[i] = ec._Commit_parents(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "message":
+			out.Values[i] = ec._Commit_message(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "author":
+			out.Values[i] = ec._Commit_author(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "committer":
+			out.Values[i] = ec._Commit_committer(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "signature":
+			out.Values[i] = ec._Commit_signature(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "push":
+			out.Values[i] = ec._Commit_push(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var commitPageImplementors = []string{"CommitPage"}
+
+func (ec *executionContext) _CommitPage(ctx context.Context, sel ast.SelectionSet, obj *CommitPage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, commitPageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommitPage")
+		case "commits":
+			out.Values[i] = ec._CommitPage_commits(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "nextCursor":
+			out.Values[i] = ec._CommitPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var commitPrincipalImplementors = []string{"CommitPrincipal"}
+
+func (ec *executionContext) _CommitPrincipal(ctx context.Context, sel ast.SelectionSet, obj *CommitPrincipal) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, commitPrincipalImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CommitPrincipal")
+		case "id":
+			out.Values[i] = ec._CommitPrincipal_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._CommitPrincipal_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var emailImplementors = []string{"Email"}
 
 func (ec *executionContext) _Email(ctx context.Context, sel ast.SelectionSet, obj *Email) graphql.Marshaler {
@@ -9036,6 +10467,59 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 	return out
 }
 
+var personImplementors = []string{"Person"}
+
+func (ec *executionContext) _Person(ctx context.Context, sel ast.SelectionSet, obj *Person) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, personImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Person")
+		case "name":
+			out.Values[i] = ec._Person_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "email":
+			out.Values[i] = ec._Person_email(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "at":
+			out.Values[i] = ec._Person_at(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "zone":
+			out.Values[i] = ec._Person_zone(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "principal":
+			out.Values[i] = ec._Person_principal(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var personalTokenImplementors = []string{"PersonalToken"}
 
 func (ec *executionContext) _PersonalToken(ctx context.Context, sel ast.SelectionSet, obj *PersonalToken) graphql.Marshaler {
@@ -9117,6 +10601,54 @@ func (ec *executionContext) _PersonalTokenCreated(ctx context.Context, sel ast.S
 			}
 		case "secret":
 			out.Values[i] = ec._PersonalTokenCreated_secret(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var pushImplementors = []string{"Push"}
+
+func (ec *executionContext) _Push(ctx context.Context, sel ast.SelectionSet, obj *Push) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, pushImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Push")
+		case "id":
+			out.Values[i] = ec._Push_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "pusher":
+			out.Values[i] = ec._Push_pusher(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "transport":
+			out.Values[i] = ec._Push_transport(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "at":
+			out.Values[i] = ec._Push_at(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -9290,6 +10822,24 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, true,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_roles(ctx, field, obj)
+				})
+		case "branches":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_branches(ctx, field, obj)
+				})
+		case "history":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_history(ctx, field, obj)
+				})
+		case "commit":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_commit(ctx, field, obj)
 				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -9993,6 +11543,62 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
+func (ec *executionContext) marshalNBranch2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchᚄ(ctx context.Context, sel ast.SelectionSet, v []*Branch) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranch(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranch(ctx context.Context, sel ast.SelectionSet, v *Branch) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Branch!")
+		return graphql.Null
+	}
+	return ec._Branch(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommit2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitᚄ(ctx context.Context, sel ast.SelectionSet, v []*Commit) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx context.Context, sel ast.SelectionSet, v *Commit) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Commit!")
+		return graphql.Null
+	}
+	return ec._Commit(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNCommitPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPage(ctx context.Context, sel ast.SelectionSet, v *CommitPage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "CommitPage!")
+		return graphql.Null
+	}
+	return ec._CommitPage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNEmail2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEmailᚄ(ctx context.Context, sel ast.SelectionSet, v []*Email) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -10058,6 +11664,20 @@ func (ec *executionContext) marshalNID2ᚕstringᚄ(ctx context.Context, sel ast
 	}
 
 	return ret
+}
+
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v any) (int, error) {
+	res, err := graphql.UnmarshalInt(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt(v)
+	if res == graphql.Null {
+		graphql.AddInvalidNullFromMarshaler(ctx, "Int!")
+	}
+	return res
 }
 
 func (ec *executionContext) marshalNInvitation2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐInvitationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Invitation) graphql.Marshaler {
@@ -10159,6 +11779,14 @@ func (ec *executionContext) marshalNOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationSettings(ctx context.Context, v any) (OrganizationSettings, error) {
 	res, err := ec.unmarshalInputOrganizationSettings(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNPerson2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPerson(ctx context.Context, sel ast.SelectionSet, v *Person) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Person!")
+		return graphql.Null
+	}
+	return ec._Person(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNPersonalToken2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPersonalTokenᚄ(ctx context.Context, sel ast.SelectionSet, v []*PersonalToken) graphql.Marshaler {
@@ -10553,6 +12181,20 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return res
 }
 
+func (ec *executionContext) marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx context.Context, sel ast.SelectionSet, v *Commit) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Commit(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx context.Context, sel ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CommitPrincipal(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -10576,6 +12218,13 @@ func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 		return graphql.Null
 	}
 	return ec._Organization(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOPush2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPush(ctx context.Context, sel ast.SelectionSet, v *Push) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Push(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalORepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx context.Context, sel ast.SelectionSet, v *Repository) graphql.Marshaler {

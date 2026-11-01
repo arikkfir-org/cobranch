@@ -1,0 +1,74 @@
+# A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console").
+
+extend type Repository {
+  "The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read."
+  branches: [Branch!]!
+  "A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100."
+  history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
+  "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
+  commit(sha: String!): Commit
+}
+
+"One of a repository's live branches and the commit it is at."
+type Branch {
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it is at."
+  head: String!
+  "The commit it is at; null while its head is no commit a push recorded."
+  commit: Commit
+  createdAt: Time!
+  "When a push last moved it."
+  updatedAt: Time!
+}
+
+"A page of a branch's history, nearest first."
+type CommitPage {
+  commits: [Commit!]!
+  "Where the next page starts, as history's after; null after the last page."
+  nextCursor: String
+}
+
+"A commit a push brought, as the push recorded it."
+type Commit {
+  sha: String!
+  tree: String!
+  "Its parents' names, the first of which its branch's history follows."
+  parents: [String!]!
+  message: String!
+  author: Person!
+  committer: Person!
+  "Its signature as written, not checked yet; empty for an unsigned commit."
+  signature: String!
+  "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
+  push: Push
+}
+
+"A commit's author or committer as the commit writes them."
+type Person {
+  name: String!
+  email: String!
+  at: Time!
+  "The zone the commit wrote its time in, such as +0200."
+  zone: String!
+  "Who is behind them; null until the push worker maps their email."
+  principal: CommitPrincipal
+}
+
+"Who is behind a commit's author or committer, or a push: a user, perhaps one with no login whom a push made for an unknown email."
+type CommitPrincipal {
+  id: ID!
+  displayName: String!
+}
+
+"The push that first brought a commit."
+type Push {
+  id: ID!
+  "Who pushed; null once they are gone."
+  pusher: CommitPrincipal
+  "https or ssh."
+  transport: String!
+  "When Cobranch recorded it."
+  at: Time!
+}

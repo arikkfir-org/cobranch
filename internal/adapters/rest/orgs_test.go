@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
@@ -27,7 +30,8 @@ func emptyOrgs(t *testing.T) *orgs.Service {
 
 // orgFixture is Acme, with Olivia its Owner and Max a Member, Nia outside it with a pending invitation and
 // permission to create organizations, over the organizations' service; website is Acme's repository, which Olivia
-// created, over the repositories'.
+// created, over the repositories', with main at c after a ← b ← c and feature at d on a, all pushed by Olivia, over the
+// code's.
 type orgFixture struct {
 	store            *orgstest.Store
 	service          *orgs.Service
@@ -37,6 +41,9 @@ type orgFixture struct {
 	olivia, max, nia auth.Authenticated
 	invitation       orgs.Invitation
 	website          repos.Repository
+	codeStore        *codetest.Store
+	code             *code.Service
+	push             code.Push
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -68,8 +75,18 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	if err := f.repoStore.Create(t.Context(), f.olivia.User.ID, f.website); err != nil {
 		t.Fatal(err)
 	}
+	f.codeStore = codetest.NewStore()
+	f.code = code.NewService(f.codeStore, auth.NewAuthorizer(store))
+	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
+	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
+	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
+	f.codeStore.SetBranch(f.website.ID, "main", shaOf("c"))
+	f.codeStore.SetBranch(f.website.ID, "feature", shaOf("d"))
 	return f
 }
+
+// shaOf is the object name of 40 letter's.
+func shaOf(letter string) string { return strings.Repeat(letter, 40) }
 
 // call serves one request to the API as viewer and returns the recorder.
 func (f *orgFixture) call(viewer *auth.Authenticated, method, path, body string) *httptest.ResponseRecorder {
@@ -78,7 +95,7 @@ func (f *orgFixture) call(viewer *auth.Authenticated, method, path, body string)
 		req.Header.Set("Content-Type", "application/json")
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
 	return rec
 }
 

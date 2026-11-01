@@ -25,6 +25,8 @@ type api struct {
 	orgs Organizations
 	// repos is the repositories' service.
 	repos Repositories
+	// code is the service of the repositories' code.
+	code Code
 }
 
 // GetVersion answers the version the server was built as.
@@ -32,11 +34,11 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 	return GetVersion200JSONResponse{Version: a.version}, nil
 }
 
-// NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's and
-// organizations and repositories for theirs. Every other path answers 404, and a request the API can't read 400,
-// both as problem details.
-func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories) http.Handler {
-	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions, orgs: organizations, repos: repositories}, nil, StrictHTTPServerOptions{
+// NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's,
+// organizations and repositories for theirs, and code for the repositories' branches and commits. Every other path
+// answers 404, and a request the API can't read 400, both as problem details.
+func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code) http.Handler {
+	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,
 	})
