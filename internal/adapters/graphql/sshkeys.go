@@ -48,7 +48,7 @@ func (r *Resolver) addSSHKey(ctx context.Context, input SSHKeyInput) (*SSHKey, e
 	return sshKey(key), nil
 }
 
-// deleteSSHKey deletes one of the viewer's SSH keys: false when the viewer has no such key.
+// deleteSSHKey deletes one of the viewer's SSH keys, from their session: false when the viewer has no such key.
 func (r *Resolver) deleteSSHKey(ctx context.Context, id string) (bool, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -58,8 +58,10 @@ func (r *Resolver) deleteSSHKey(ctx context.Context, id string) (bool, error) {
 	if err != nil {
 		return false, nil
 	}
-	err = r.Sessions.DeleteSSHKey(ctx, v.User.ID, keyID)
+	err = r.Sessions.DeleteSSHKey(ctx, v, keyID)
 	switch {
+	case errors.Is(err, auth.ErrForbidden):
+		return false, refuse(ctx, forbidden, "ssh_key.session_required", "only a signed-in session deletes an SSH key, never a token or an API key")
 	case errors.Is(err, auth.ErrNotFound):
 		return false, nil
 	case err != nil:

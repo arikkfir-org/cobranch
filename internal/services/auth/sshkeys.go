@@ -122,9 +122,14 @@ func (s *Service) SSHKeys(ctx context.Context, userID uuid.UUID) ([]Credential, 
 	return keys, nil
 }
 
-// DeleteSSHKey deletes SSH key id of user userID, or ErrNotFound; the next connection with it fails.
-func (s *Service) DeleteSSHKey(ctx context.Context, userID, id uuid.UUID) error {
-	if err := s.store.DeleteSSHKey(ctx, userID, id); err != nil {
+// DeleteSSHKey deletes SSH key id of the user a signs in, or ErrNotFound; the next connection with it fails. Like
+// adding one, only a session deletes one, never a token or an API key's secret, so a token narrowed to reading
+// repositories can't take its user's SSH access away.
+func (s *Service) DeleteSSHKey(ctx context.Context, a Authenticated, id uuid.UUID) error {
+	if a.Session.ID == uuid.Nil || a.User.Kind != KindUser {
+		return fmt.Errorf("%w: only a signed-in user deletes an SSH key, never a token or a key", ErrForbidden)
+	}
+	if err := s.store.DeleteSSHKey(ctx, a.User.ID, id); err != nil {
 		return fmt.Errorf("deleting the SSH key: %w", err)
 	}
 	return nil

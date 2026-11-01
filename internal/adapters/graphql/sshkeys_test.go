@@ -41,6 +41,8 @@ func TestSSHKeys(t *testing.T) {
 		{name: "add one as anonymous", query: add("Desktop", authtest.AuthorizedKey(key, "")), wantBody: []string{`"code":"UNAUTHENTICATED"`}},
 		{name: "delete one", viewer: self, query: func(key uuid.UUID) string { return `mutation { deleteSSHKey(id: "` + key.String() + `") }` },
 			wantBody: []string{`{"data":{"deleteSSHKey":true}}`}},
+		{name: "delete one under a token", viewer: underToken, query: func(key uuid.UUID) string { return `mutation { deleteSSHKey(id: "` + key.String() + `") }` },
+			wantBody: []string{`"code":"FORBIDDEN"`, `"reason":"ssh_key.session_required"`}},
 		{name: "delete one nobody has", viewer: self, query: fixedQuery(`mutation { deleteSSHKey(id: "` + uuid.NewString() + `") }`),
 			wantBody: []string{`{"data":{"deleteSSHKey":false}}`}},
 		{name: "delete nonsense", viewer: self, query: fixedQuery(`mutation { deleteSSHKey(id: "nope") }`), wantBody: []string{`{"data":{"deleteSSHKey":false}}`}},

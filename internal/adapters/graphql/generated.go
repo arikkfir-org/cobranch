@@ -1855,7 +1855,7 @@ type Mutation {
   revokePersonalToken(id: ID!): Boolean!
   "Adds an SSH key that acts as the viewer over SSH, as their session would; only from a session, never from a token or an API key."
   addSSHKey(input: SSHKeyInput!): SSHKey!
-  "Deletes one of the viewer's SSH keys; the next connection with it fails. False when the viewer has no such key."
+  "Deletes one of the viewer's SSH keys; the next connection with it fails; only from a session, never from a token or an API key. False when the viewer has no such key."
   deleteSSHKey(id: ID!): Boolean!
 }
 

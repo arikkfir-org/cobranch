@@ -18,7 +18,7 @@ type Sessions interface {
 	RevokeToken(ctx context.Context, userID, id uuid.UUID) error
 	AddSSHKey(ctx context.Context, a auth.Authenticated, in auth.SSHKeyInput) (auth.Credential, error)
 	SSHKeys(ctx context.Context, userID uuid.UUID) ([]auth.Credential, error)
-	DeleteSSHKey(ctx context.Context, userID, id uuid.UUID) error
+	DeleteSSHKey(ctx context.Context, a auth.Authenticated, id uuid.UUID) error
 }
 
 // Resolver resolves api/graphql/'s schema. gqlgen generates its methods' stubs into <schema>.resolvers.go and keeps

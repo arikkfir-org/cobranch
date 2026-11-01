@@ -694,7 +694,7 @@ type ServerInterface interface {
 	// AddMySSHKey Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
 	// (POST /me/ssh-keys)
 	AddMySSHKey(w http.ResponseWriter, r *http.Request)
-	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails.
+	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
 	// (DELETE /me/ssh-keys/{id})
 	DeleteMySSHKey(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
@@ -3175,6 +3175,20 @@ func (response DeleteMySSHKey401ApplicationProblemPlusJSONResponse) VisitDeleteM
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteMySSHKey403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteMySSHKey403ApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -6778,7 +6792,7 @@ type StrictServerInterface interface {
 	// AddMySSHKey Adds an SSH key that acts as the user over SSH, as their session would; only from a session, never from a token or an API key.
 	// (POST /me/ssh-keys)
 	AddMySSHKey(ctx context.Context, request AddMySSHKeyRequestObject) (AddMySSHKeyResponseObject, error)
-	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails.
+	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
 	// (DELETE /me/ssh-keys/{id})
 	DeleteMySSHKey(ctx context.Context, request DeleteMySSHKeyRequestObject) (DeleteMySSHKeyResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.

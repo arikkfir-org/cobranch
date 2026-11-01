@@ -253,10 +253,7 @@ func TestSSHKeysAndDeleteSSHKey(t *testing.T) {
 	if got, err := s.SSHKeys(ctx, a.User.ID); err != nil || len(got) != 2 || got[0].ID != newer.ID || got[1].ID != older.ID {
 		t.Fatalf("SSHKeys() = %+v, %v, want the newer first", got, err)
 	}
-	if err := s.DeleteSSHKey(ctx, uuid.New(), newer.ID); !errors.Is(err, auth.ErrNotFound) {
-		t.Errorf("DeleteSSHKey() of another's key = %v, want auth.ErrNotFound", err)
-	}
-	if err := s.DeleteSSHKey(ctx, a.User.ID, newer.ID); err != nil {
+	if err := s.DeleteSSHKey(ctx, a, newer.ID); err != nil {
 		t.Fatalf("DeleteSSHKey() = %v", err)
 	}
 	if _, err := s.AuthenticateSSHKey(ctx, again.Marshal()); !errors.Is(err, auth.ErrUnauthenticated) {
@@ -270,7 +267,49 @@ func TestSSHKeysAndDeleteSSHKey(t *testing.T) {
 	if _, err := s.SSHKeys(ctx, a.User.ID); err == nil {
 		t.Error("SSHKeys() on a store that fails = nil, want its error")
 	}
-	if err := s.DeleteSSHKey(ctx, a.User.ID, older.ID); err == nil {
-		t.Error("DeleteSSHKey() on a store that fails = nil, want its error")
+}
+
+func TestDeleteSSHKey(t *testing.T) {
+	apiKey := auth.User{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindAPIKey, DisplayName: "Deploy"}}
+	tests := []struct {
+		name    string
+		as      func(a auth.Authenticated) auth.Authenticated
+		fail    bool
+		wantErr error
+	}{
+		{name: "from a session", as: func(a auth.Authenticated) auth.Authenticated { return a }},
+		{name: "from a personal token", as: func(a auth.Authenticated) auth.Authenticated {
+			return auth.Authenticated{User: a.User, Credential: auth.Credential{ID: uuid.New(), Kind: auth.CredentialPersonalToken, Permissions: []string{"repo.read"}}}
+		}, wantErr: auth.ErrForbidden},
+		{name: "from an API key", as: func(auth.Authenticated) auth.Authenticated {
+			return auth.Authenticated{User: apiKey, Credential: auth.Credential{ID: uuid.New(), Kind: auth.CredentialAPIKey}}
+		}, wantErr: auth.ErrForbidden},
+		{name: "another user's key", as: func(a auth.Authenticated) auth.Authenticated {
+			a.User.ID = uuid.New()
+			return a
+		}, wantErr: auth.ErrNotFound},
+		{name: "a store that fails", as: func(a auth.Authenticated) auth.Authenticated { return a }, fail: true, wantErr: errDown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, store, a := signedInAs(t)
+			ctx := context.Background()
+			key := newSSHKey(t)
+			added, err := s.AddSSHKey(ctx, a, auth.SSHKeyInput{Name: "Laptop", PublicKey: authtest.AuthorizedKey(key, "")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.fail {
+				store.Fail = errDown
+			}
+			if err := s.DeleteSSHKey(ctx, tt.as(a), added.ID); !errors.Is(err, tt.wantErr) {
+				t.Fatalf("DeleteSSHKey() = %v, want %v", err, tt.wantErr)
+			}
+			store.Fail = nil
+			_, err = s.AuthenticateSSHKey(ctx, key.Marshal())
+			if deleted := errors.Is(err, auth.ErrUnauthenticated); deleted != (tt.wantErr == nil) {
+				t.Errorf("AuthenticateSSHKey() after DeleteSSHKey() = %v, want the key deleted: %t", err, tt.wantErr == nil)
+			}
+		})
 	}
 }

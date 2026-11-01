@@ -193,7 +193,7 @@ paths:
   /me/ssh-keys/{id}:
     delete:
       operationId: deleteMySSHKey
-      summary: Deletes one of the user's SSH keys; the next connection with it fails.
+      summary: Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
       parameters:
         - name: id
           in: path
@@ -205,6 +205,8 @@ paths:
         "204":
           description: Deleted.
         "401":
+          $ref: "#/components/responses/Problem"
+        "403":
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"

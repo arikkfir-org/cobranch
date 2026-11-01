@@ -41,6 +41,12 @@ func TestMySSHKeys(t *testing.T) {
 				}
 			}},
 		{name: "delete one nobody has", viewer: self, method: "DELETE", path: fixedPath("/v1/me/ssh-keys/" + uuid.NewString()), wantStatus: 404, wantCode: "ssh_key.not_found"},
+		{name: "delete one under a token", viewer: underToken, method: "DELETE", path: sshKeyPath, wantStatus: 403, wantCode: "ssh_key.session_required",
+			check: func(t *testing.T, service *auth.Service, alice auth.Authenticated, _ []byte) {
+				if keys, err := service.SSHKeys(context.Background(), alice.User.ID); err != nil || len(keys) != 1 {
+					t.Errorf("SSHKeys() after the refusal = %+v, %v, want the key kept", keys, err)
+				}
+			}},
 	})
 }
 

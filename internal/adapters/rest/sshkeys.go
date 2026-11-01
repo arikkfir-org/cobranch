@@ -47,13 +47,16 @@ func (a api) AddMySSHKey(ctx context.Context, req AddMySSHKeyRequestObject) (Add
 	return AddMySSHKey201JSONResponse(sshKey(key)), nil
 }
 
-// DeleteMySSHKey deletes one of the viewer's SSH keys.
+// DeleteMySSHKey deletes one of the viewer's SSH keys, from their session.
 func (a api) DeleteMySSHKey(ctx context.Context, req DeleteMySSHKeyRequestObject) (DeleteMySSHKeyResponseObject, error) {
 	v, ok := auth.Viewer(ctx)
 	if !ok {
 		return nil, errUnauthenticated
 	}
-	err := a.sessions.DeleteSSHKey(ctx, v.User.ID, req.Id)
+	err := a.sessions.DeleteSSHKey(ctx, v, req.Id)
+	if errors.Is(err, auth.ErrForbidden) {
+		return nil, refuse(http.StatusForbidden, "ssh_key.session_required", "Only a signed-in session deletes an SSH key, never a token or an API key.")
+	}
 	if errors.Is(err, auth.ErrNotFound) {
 		return nil, refuse(http.StatusNotFound, "ssh_key.not_found", "You have no such SSH key.")
 	}

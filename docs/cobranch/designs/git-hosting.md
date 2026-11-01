@@ -290,10 +290,11 @@ A user adds SSH keys in the Console; a key acts as its user, as a session would.
 - **The same pipeline.** The Git server also listens for SSH, with any user name as over HTTPS (its URLs say `git`), and
   runs `git-upload-pack` and `git-receive-pack` for `<org>/<repo>.git` through the same snapshot, throwaway repository,
   hook and transaction; `GIT_PROTOCOL` passes through, so fetches speak protocol v2. A shell gets a greeting and ends.
-- **Keys are a user's.** Users add SSH public keys in the Console, from a session only: Ed25519, ECDSA, or RSA of 2048
-  bits or more, named by their comment unless given a name. A key is a credential of kind `ssh_key`, found by the
-  SHA-256 of its wire form, so a key belongs to one user; it acts as its user, unnarrowed, as a session would, and never
-  expires. Deleting one deletes its row, so its user may add it again.
+- **Keys are a user's.** Users add and delete SSH public keys in the Console, from a session only, so no token narrowed
+  to reading takes its user's SSH access away: Ed25519, ECDSA, or RSA of 2048 bits or more, named by their comment
+  unless given a name. A key is a credential of kind `ssh_key`, found by the SHA-256 of its wire form, so a key belongs
+  to one user; it acts as its user, unnarrowed, as a session would, and never expires. Deleting one deletes its row, so
+  its user may add it again.
 - **Exposure is the operator's.** With `urls.gitSsh`, the chart gives the Git server a Service of its own for SSH and
   keeps the host key in a Secret it generates, or the operator's; a load balancer, a node port or a TCP route, and the
   host name, are the operator's choice.
