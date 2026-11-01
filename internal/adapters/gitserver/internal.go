@@ -94,7 +94,7 @@ func (s *Server) internal(read string, next func(w http.ResponseWriter, r *http.
 func (s *Server) internalViewer(w http.ResponseWriter, r *http.Request) (auth.Authenticated, bool) {
 	header := r.Header.Get("Authorization")
 	if header == "" {
-		return auth.Authenticated{}, true
+		return auth.Authenticated{User: auth.User{Principal: auth.Anonymous}}, true
 	}
 	scheme, token, _ := strings.Cut(header, " ")
 	token = strings.TrimSpace(token)

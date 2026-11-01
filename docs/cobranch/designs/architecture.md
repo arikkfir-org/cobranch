@@ -62,8 +62,9 @@ and check the same grants. The [Helm chart](https://claude.ai/artifact/LyMHXgSoN
 sign-in ([ENG-197](https://linear.app/arikkfir/issue/ENG-197)), and the Admin server with the Back-office.
 
 **Internal calls** (the GraphQL and REST servers to the Git server) are plain HTTP with JSON on a port the chart never
-exposes, authenticated with a secret the chart generates. Every workload is the same Go binary, so both ends of a call
-share one Go type for its body.
+exposes. **Changed** (owner, 2026-11-01): a call carries the viewer's own token, which the caller sends on and the Git
+server checks itself, instead of a secret the chart generates ([code browsing](code-browsing.md)). Every workload is the
+same Go binary, so both ends of a call share one Go type for its body.
 
 ## Deployment
 
