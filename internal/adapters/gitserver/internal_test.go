@@ -2,6 +2,7 @@ package gitserver_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -16,7 +17,9 @@ import (
 
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/postgres"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"github.com/google/uuid"
 )
 
 // browsed is a repository pushed to a Git server, with the commits and objects the internal call's tests read: main's
@@ -24,8 +27,11 @@ import (
 // API's text, a symlink, a submodule and names that Git's pathspecs would read as patterns; main's head merges branch
 // feature into it.
 type browsed struct {
-	client           *gitinternal.Client
-	internal         string
+	stack    *stack
+	client   *gitinternal.Client
+	internal string
+	// reader is a personal token of Gwen's, who reads the website.
+	reader           string
 	dir              string
 	first, merge     string
 	feature, logoSHA string
@@ -37,13 +43,13 @@ func newBrowsed(t *testing.T) *browsed {
 	srv := s.server(t.TempDir())
 	smart := httptest.NewServer(srv.Handler())
 	t.Cleanup(smart.Close)
-	internal := httptest.NewServer(srv.InternalHandler(gitinternal.NewToken(postgres.NewInternalTokens(s.pool).Read)))
+	internal := httptest.NewServer(srv.InternalHandler())
 	t.Cleanup(internal.Close)
 	base, err := url.Parse(internal.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := &browsed{client: gitinternal.NewClient(base, gitinternal.NewToken(postgres.NewInternalTokens(s.pool).Read)), internal: internal.URL,
+	b := &browsed{stack: s, client: gitinternal.NewClient(base), internal: internal.URL, reader: s.token(gwen),
 		dir: clone(t, s.websiteURL(smart.URL, olivia))}
 	files := map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/with space ü.md": "Spaces\n",
 		"docs/*.md": "A star\n", "logo.png": "\x89PNG\r\n\x1a\n\x00\x01", "big.txt": strings.Repeat("x", code.MaxText+10), "bin/tool": "#!/bin/sh\n"}
@@ -109,7 +115,7 @@ func TestInternalTree(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tree, err := b.client.Tree(t.Context(), website, b.named(tt.ref), tt.path)
+			tree, err := b.client.Tree(b.ctx(t), website, b.named(tt.ref), tt.path)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Tree() error = %v, want %v", err, tt.wantErr)
 			}
@@ -125,6 +131,11 @@ func TestInternalTree(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ctx is a test's context, carrying the reader's token for the client to send on.
+func (b *browsed) ctx(t *testing.T) context.Context {
+	return auth.WithToken(t.Context(), b.reader)
 }
 
 // named is the commit a test's name stands for, or the name itself.
@@ -164,7 +175,7 @@ func TestInternalBlob(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			blob, err := b.client.Blob(t.Context(), website, "main", tt.path, tt.limit)
+			blob, err := b.client.Blob(b.ctx(t), website, "main", tt.path, tt.limit)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Blob() error = %v, want %v", err, tt.wantErr)
 			}
@@ -180,7 +191,7 @@ func TestInternalBlob(t *testing.T) {
 
 func TestInternalRaw(t *testing.T) {
 	b := newBrowsed(t)
-	raw, err := b.client.Raw(t.Context(), website, "v1", "logo.png")
+	raw, err := b.client.Raw(b.ctx(t), website, "v1", "logo.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +200,7 @@ func TestInternalRaw(t *testing.T) {
 	if err != nil || !bytes.Equal(body, []byte("\x89PNG\r\n\x1a\n\x00\x01")) || raw.Size != 10 || raw.SHA != b.logoSHA || raw.Commit != b.first {
 		t.Errorf("Raw() = %+v with %q, %v", raw, body, err)
 	}
-	large, err := b.client.Raw(t.Context(), website, "main", "big.txt")
+	large, err := b.client.Raw(b.ctx(t), website, "main", "big.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,20 +208,28 @@ func TestInternalRaw(t *testing.T) {
 	if n, err := io.Copy(io.Discard, large.Body); err != nil || n != code.MaxText+10 {
 		t.Errorf("Raw() of a large file streamed %d bytes, %v", n, err)
 	}
-	if _, err := b.client.Raw(t.Context(), website, "main", "docs"); !errors.Is(err, code.ErrNotBlob) {
+	if _, err := b.client.Raw(b.ctx(t), website, "main", "docs"); !errors.Is(err, code.ErrNotBlob) {
 		t.Errorf("Raw() of a directory: %v", err)
 	}
 }
 
-func TestInternalToken(t *testing.T) {
+func TestInternalViewer(t *testing.T) {
 	b := newBrowsed(t)
+	session, err := auth.NewService(postgres.NewAuthStore(b.stack.pool), nil, auth.Settings{Seed: true}).SignInSeeded(t.Context(), "guest", "/", auth.Client{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	nia := uuid.MustParse("00000000-0000-7000-8000-00000000d004")
 	tests := []struct {
 		name, header string
 		want         int
 	}{
-		{name: "no token", want: http.StatusUnauthorized},
-		{name: "another token", header: "Bearer " + strings.Repeat("0", 64), want: http.StatusUnauthorized},
+		{name: "no credential reads as Anonymous, who sees no private repository", want: http.StatusNotFound},
+		{name: "a credential that acts as nobody", header: "Bearer " + auth.NewSecret(auth.PrefixPersonalToken), want: http.StatusUnauthorized},
 		{name: "a Basic password", header: "Basic Z2l0OnRva2Vu", want: http.StatusUnauthorized},
+		{name: "a token of someone outside the organization", header: "Bearer " + b.stack.token(nia), want: http.StatusNotFound},
+		{name: "a reader's token", header: "Bearer " + b.reader, want: http.StatusOK},
+		{name: "a reader's session", header: "Bearer " + session.SessionToken, want: http.StatusOK},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
