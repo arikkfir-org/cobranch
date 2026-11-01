@@ -10,6 +10,22 @@ import (
 	"github.com/google/uuid"
 )
 
+type Annotation struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	RepoID      uuid.UUID
+	Sha         string
+	Name        string
+	Status      string
+	Summary     string
+	Link        string
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	StartedAt   time.Time
+	CompletedAt *time.Time
+}
+
 type Commit struct {
 	RepoID         uuid.UUID
 	Sha            string

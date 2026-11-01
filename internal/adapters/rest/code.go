@@ -17,6 +17,9 @@ type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
+	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
+	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
+	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string) error
 }
 
 func principal(p *code.Principal) *Principal {
@@ -30,10 +33,20 @@ func person(p code.Person) Person {
 	return Person{Name: p.Name, Email: p.Email, At: p.At.UTC(), Zone: p.Zone, Principal: principal(p.Principal)}
 }
 
-// commit is c as the API shows it; a list's commits come without their pushes.
+// commit is c as the API shows it, with its annotations; a list's commits come without their pushes.
 func commit(c code.Commit) Commit {
 	return Commit{Sha: c.SHA, Tree: c.Tree, Parents: nonNil(c.Parents), Message: c.Message, Author: person(c.Author),
-		Committer: person(c.Committer), Signature: c.Signature}
+		Committer: person(c.Committer), Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation)}
+}
+
+func annotation(a code.Annotation) Annotation {
+	out := Annotation{Id: a.ID, Name: a.Name, Status: AnnotationStatus(a.Status), Summary: a.Summary, Link: a.Link, Principal: principal(a.Principal),
+		CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), StartedAt: a.StartedAt.UTC()}
+	if a.CompletedAt != nil {
+		at := a.CompletedAt.UTC()
+		out.CompletedAt = &at
+	}
+	return out
 }
 
 func branch(b code.Branch) Branch {
@@ -127,4 +140,61 @@ func (a api) GetCommit(ctx context.Context, req GetCommitRequestObject) (GetComm
 	out := commit(c)
 	out.Push = &Push{Id: p.ID, Pusher: principal(p.Pusher), Transport: PushTransport(p.Transport), At: p.At.UTC()}
 	return GetCommit200JSONResponse(out), nil
+}
+
+// ListAnnotations lists the annotations on one of the repository's commits.
+func (a api) ListAnnotations(ctx context.Context, req ListAnnotationsRequestObject) (ListAnnotationsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.code.Annotations(ctx, v, repo.ID, req.SHA)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	return ListAnnotations200JSONResponse{Annotations: mapAll(list, annotation)}, nil
+}
+
+// SetAnnotation sets an annotation on one of the repository's commits for the viewer, or changes the viewer's own.
+func (a api) SetAnnotation(ctx context.Context, req SetAnnotationRequestObject) (SetAnnotationResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	in := code.AnnotationInput{Name: req.Name, Status: code.AnnotationStatus(req.Body.Status)}
+	if req.Body.Summary != nil {
+		in.Summary = *req.Body.Summary
+	}
+	if req.Body.Link != nil {
+		in.Link = *req.Body.Link
+	}
+	set, err := a.code.SetAnnotation(ctx, v, repo.ID, req.SHA, in)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	return SetAnnotation200JSONResponse(annotation(set)), nil
+}
+
+// DeleteAnnotation deletes an annotation from one of the repository's commits.
+func (a api) DeleteAnnotation(ctx context.Context, req DeleteAnnotationRequestObject) (DeleteAnnotationResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.code.DeleteAnnotation(ctx, v, repo.ID, req.SHA, req.Name); err != nil {
+		return nil, fail(err, "annotation")
+	}
+	return DeleteAnnotation204Response{}, nil
 }

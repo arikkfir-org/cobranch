@@ -12,6 +12,31 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
+// SetAnnotation is the resolver for the setAnnotation field.
+func (r *mutationResolver) SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput) (*Annotation, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	set, err := r.Code.SetAnnotation(ctx, v, repoID, sha, annotationInput(name, input))
+	if err != nil {
+		return nil, fail(ctx, err, "commit", "setting the annotation")
+	}
+	return annotation(set), nil
+}
+
+// DeleteAnnotation is the resolver for the deleteAnnotation field.
+func (r *mutationResolver) DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string) (bool, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Code.DeleteAnnotation(ctx, v, repoID, sha, name); err != nil {
+		return false, fail(ctx, err, "annotation", "deleting the annotation")
+	}
+	return true, nil
+}
+
 // Branches is the resolver for the branches field.
 func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*Branch, error) {
 	list, err := resolveRepo(ctx, obj, r.Code.Branches, "listing the branches")

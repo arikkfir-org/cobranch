@@ -15,15 +15,17 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// CodeStore reads what pushes recorded of repositories' code (db/migrations/00012_git.sql): code.Store on PostgreSQL,
-// through the queries sqlc generates from db/queries.
+// CodeStore reads what pushes recorded of repositories' code (db/migrations/00012_git.sql) and keeps the annotations
+// principals set on its commits (db/migrations/00014_annotations.sql): code.Store on PostgreSQL, through the queries
+// sqlc generates from db/queries.
 type CodeStore struct {
-	q *queries.Queries
+	pool *pgxpool.Pool
+	q    *queries.Queries
 }
 
 // NewCodeStore returns the code's store on pool's database.
 func NewCodeStore(pool *pgxpool.Pool) *CodeStore {
-	return &CodeStore{q: queries.New(pool)}
+	return &CodeStore{pool: pool, q: queries.New(pool)}
 }
 
 var _ code.Store = (*CodeStore)(nil)
@@ -69,7 +71,7 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 	return b, nil
 }
 
-// commitsAt finds those of the repository's commits that shas name, by name.
+// commitsAt finds those of the repository's commits that shas name, with their annotations, by name.
 func (s *CodeStore) commitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
 	if len(shas) == 0 {
 		return nil, nil
@@ -78,23 +80,39 @@ func (s *CodeStore) commitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 	if err != nil {
 		return nil, fmt.Errorf("reading the commits: %w", err)
 	}
+	annotations, err := s.annotationsOf(ctx, repoID, shas)
+	if err != nil {
+		return nil, err
+	}
 	out := make(map[string]code.Commit, len(rows))
 	for _, r := range rows {
-		out[r.Commit.Sha] = commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName)
+		c := commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName)
+		c.Annotations = annotations[c.SHA]
+		out[r.Commit.Sha] = c
 	}
 	return out, nil
 }
 
-// FirstParents lists at most limit of the repository's commits from sha along first parents, nearest first
-// (code.Store).
+// FirstParents lists at most limit of the repository's commits from sha along first parents, nearest first, with
+// their annotations (code.Store).
 func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]code.Commit, error) {
 	rows, err := s.q.FirstParents(ctx, repoID, sha, int32(min(limit, code.MaxPageSize+1)))
 	if err != nil {
 		return nil, fmt.Errorf("walking the first parents of %s: %w", sha, err)
 	}
+	shas := make([]string, 0, len(rows))
+	for _, r := range rows {
+		shas = append(shas, r.Commit.Sha)
+	}
+	annotations, err := s.annotationsOf(ctx, repoID, shas)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]code.Commit, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName))
+		c := commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName)
+		c.Annotations = annotations[c.SHA]
+		out = append(out, c)
 	}
 	return out, nil
 }

@@ -32,6 +32,16 @@ type Store interface {
 	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
 	// Commit finds one of the repository's commits with the push that first brought it, or repos.ErrNotFound.
 	Commit(ctx context.Context, repoID uuid.UUID, sha string) (Commit, Push, error)
+	// Annotations lists the annotations on one of the repository's commits by name, or repos.ErrNotFound when the
+	// repository holds no such commit.
+	Annotations(ctx context.Context, repoID uuid.UUID, sha string) ([]Annotation, error)
+	// SetAnnotation sets the annotation in names on one of the repository's commits for actor, or changes the one
+	// actor set there before, records the change unless it changes nothing, and answers the annotation as it now is:
+	// repos.ErrNotFound when the repository holds no such commit, a *TakenError when another principal set it.
+	SetAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in AnnotationInput) (Annotation, error)
+	// DeleteAnnotation deletes the annotation of name from one of the repository's commits and records it, when actor
+	// set it or anyone is true: repos.ErrNotFound when there is none, a *TakenError when another principal set it.
+	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, anyone bool) error
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
@@ -51,14 +61,20 @@ type Viewer = auth.User
 
 // read checks that v reads the repository, or answers repos.ErrNotFound.
 func (s *Service) read(ctx context.Context, v Viewer, repoID uuid.UUID) error {
+	_, err := s.holds(ctx, v, repoID)
+	return err
+}
+
+// holds returns what v holds on the repository, or repos.ErrNotFound without repo.read.
+func (s *Service) holds(ctx context.Context, v Viewer, repoID uuid.UUID) ([]string, error) {
 	held, err := s.authz.Holds(ctx, v.ID, auth.ScopeRepository, repoID)
 	if err != nil {
-		return fmt.Errorf("reading the viewer's permissions: %w", err)
+		return nil, fmt.Errorf("reading the viewer's permissions: %w", err)
 	}
 	if !slices.Contains(held, repos.PermRead) {
-		return repos.ErrNotFound
+		return nil, repos.ErrNotFound
 	}
-	return nil
+	return held, nil
 }
 
 // Branches lists the repository's live branches, main first and then by name, each with the commit it is at; it
@@ -163,7 +179,7 @@ func failed(span trace.Span, what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr):
+	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrAnnotationTaken):
 		return err
 	}
 	span.RecordError(err)

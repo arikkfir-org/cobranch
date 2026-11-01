@@ -1,5 +1,7 @@
 # A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"), and the
+# annotations principals set on its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read."
@@ -8,6 +10,13 @@ extend type Repository {
   history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
+}
+
+extend type Mutation {
+  "Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before, and answers it as it now is; takes annotations.write. An annotation of that name that another principal set is refused (CONFLICT, annotation.taken), naming them, until it is deleted."
+  setAnnotation(repositoryId: ID!, sha: String!, name: String!, input: AnnotationInput!): Annotation!
+  "Deletes an annotation from one of the repository's commits, which frees its name there, and answers true; takes annotations.write for the viewer's own, and annotations.delete_any for another principal's."
+  deleteAnnotation(repositoryId: ID!, sha: String!, name: String!): Boolean!
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -41,8 +50,46 @@ type Commit {
   committer: Person!
   "Its signature as written, not checked yet; empty for an unsigned commit."
   signature: String!
+  "The annotations principals set on it, by name."
+  annotations: [Annotation!]!
   "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
   push: Push
+}
+
+"A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes."
+type Annotation {
+  id: ID!
+  "1 to 100 lowercase letters, digits, '-', '_', '.' and '/', starting with a letter or digit, such as ci/build."
+  name: String!
+  status: AnnotationStatus!
+  summary: String!
+  "Where its details are; empty without one."
+  link: String!
+  "Who set it; null once they are gone."
+  principal: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "When its run started: when it was set, or when it last went back from FAILED or SUCCESSFUL to PENDING or IN_PROGRESS."
+  startedAt: Time!
+  "When it reached FAILED or SUCCESSFUL; null while it runs."
+  completedAt: Time
+}
+
+"Where an annotation stands, in any order its principal sets them."
+enum AnnotationStatus {
+  PENDING
+  IN_PROGRESS
+  FAILED
+  SUCCESSFUL
+}
+
+"What a principal sets an annotation to."
+input AnnotationInput {
+  status: AnnotationStatus!
+  "At most 500 characters."
+  summary: String! = ""
+  "Where its details are, an absolute http or https URL of at most 2048 bytes; none when empty."
+  link: String! = ""
 }
 
 "A commit's author or committer as the commit writes them."
@@ -56,7 +103,7 @@ type Person {
   principal: CommitPrincipal
 }
 
-"Who is behind a commit's author or committer, or a push: a user, perhaps one with no login whom a push made for an unknown email."
+"Who is behind a commit's author or committer, a push or an annotation: a user, perhaps one with no login whom a push made for an unknown email, or an API key."
 type CommitPrincipal {
   id: ID!
   displayName: String!

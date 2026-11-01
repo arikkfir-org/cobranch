@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -99,9 +100,12 @@ var conflicts = map[error]string{
 // response error handler logs and answers as internal.
 func fail(err error, kind string) error {
 	var verr *orgs.ValidationError
+	var taken *code.TakenError
 	switch {
 	case errors.As(err, &verr):
 		return refuse(http.StatusBadRequest, verr.Code, verr.Message)
+	case errors.As(err, &taken):
+		return refuse(http.StatusConflict, "annotation.taken", taken.Error())
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(http.StatusForbidden, "auth.forbidden", "You lack the permission this takes.")
 	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):
