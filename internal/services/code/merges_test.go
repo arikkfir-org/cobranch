@@ -16,6 +16,7 @@ func TestViolations(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
+		linear  bool
 		brought *git.Brought
 		live    map[string]code.Incoming
 		want    []string
@@ -48,13 +49,20 @@ func TestViolations(t *testing.T) {
 			want: []string{"main requires feature/login to be Ready: it moves in this push"}},
 		{name: "created by the same push", brought: &git.Brought{Heads: []git.Head{feature}},
 			want: []string{"main requires feature/login to be Ready: it moves in this push"}},
+		{name: "a merge commit with changes of its own", brought: &git.Brought{Merges: 1, Unclean: []string{head}},
+			want: []string{"main requires merge commits to merge cleanly: 9f3c2e1 holds changes of its own; make them in a Ready branch"}},
+		{name: "several", brought: &git.Brought{Merges: 3, Unclean: []string{head, "b", "c"}},
+			want: []string{"main requires merge commits to merge cleanly: 9f3c2e1 and 2 more hold changes of their own; make them in a Ready branch"}},
+		{name: "a merge commit where linear history is required", linear: true, brought: &git.Brought{Merges: 1},
+			want: []string{"main requires linear history: the push adds 1 merge commit"}},
+		{name: "merge commits where it isn't", brought: &git.Brought{Merges: 2}},
 		{name: "each break, commits first", brought: &git.Brought{Orphans: 2, Heads: []git.Head{feature}}, live: at(code.StatusProcessing),
 			want: []string{"main requires its commits to come from Ready branches: 2 commits come from none",
 				"main requires feature/login to be Ready: it is Processing"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := code.Violations("main", tt.brought, tt.live); !reflect.DeepEqual(got, tt.want) {
+			if got := code.Violations("main", tt.linear, tt.brought, tt.live); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Violations() = %q, want %q", got, tt.want)
 			}
 		})

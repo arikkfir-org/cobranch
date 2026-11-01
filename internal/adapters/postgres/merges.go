@@ -66,7 +66,7 @@ func checkMerges(ctx context.Context, q *queries.Queries, push git.Push) (map[st
 
 // violations lists what the push's move of branch name breaks of its merge requirements: none when it has none.
 func violations(ctx context.Context, q *queries.Queries, push git.Push, name string, deletes bool) ([]string, error) {
-	_, err := q.MergeRequirementsOf(ctx, push.RepoID, name)
+	reqs, err := q.MergeRequirementsOf(ctx, push.RepoID, name)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -74,7 +74,7 @@ func violations(ctx context.Context, q *queries.Queries, push git.Push, name str
 		return nil, fmt.Errorf("reading the merge requirements of branch %s: %w", name, err)
 	}
 	if deletes {
-		return code.Violations(name, nil, nil), nil
+		return code.Violations(name, reqs.LinearHistory, nil, nil), nil
 	}
 	brought := git.Brought{Branch: name}
 	if i := slices.IndexFunc(push.Brought, func(b git.Brought) bool { return b.Branch == name }); i >= 0 {
@@ -84,7 +84,7 @@ func violations(ctx context.Context, q *queries.Queries, push git.Push, name str
 	if err != nil {
 		return nil, err
 	}
-	return code.Violations(name, &brought, live), nil
+	return code.Violations(name, reqs.LinearHistory, &brought, live), nil
 }
 
 // incoming finds the branches whose heads brought brings, as they stand before the push applies, by name.

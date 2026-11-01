@@ -174,6 +174,11 @@ type Brought struct {
 	Branch  string
 	Heads   []Head
 	Orphans int
+	// Merges counts the merge commits it adds that none of those branches nor the default branch holds, and Unclean
+	// lists those whose tree isn't what Git merges their parents into: a conflict resolved by hand, changes of their
+	// own, or more than two parents. Only a move of a branch with merge requirements counts them.
+	Merges  int
+	Unclean []string
 }
 
 // RefusedError is a push that a branch's merge requirements refuse, with what the client sees.

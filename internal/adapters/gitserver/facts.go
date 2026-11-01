@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -61,10 +62,42 @@ func (s *Server) branchFacts(ctx context.Context, dir string, env []string, upda
 	if err != nil {
 		return pushFacts{}, "", err
 	}
-	if out.brought, err = s.brought(ctx, refs, dir, env, tips, updates); err != nil {
+	protected, err := s.protected(ctx, dir, env, tips, updates)
+	if err != nil {
+		return pushFacts{}, "", err
+	}
+	if out.brought, err = s.brought(ctx, refs, dir, env, tips, protected, updates); err != nil {
 		return pushFacts{}, "", err
 	}
 	return out, "", nil
+}
+
+// protected names the branches whose merge requirements the push meets: those /cobranch.yaml names at the default
+// branch's tip before the push, which the push's transaction holds parsed. tips are the branches once it applies.
+func (s *Server) protected(ctx context.Context, dir string, env []string, tips map[string]string, updates []git.RefUpdate) (map[string]bool, error) {
+	before, ok := tips[git.DefaultBranch]
+	for _, u := range updates {
+		if name, isBranch := git.Branch(u.Name); isBranch && name == git.DefaultBranch {
+			before, ok = u.Old, u.Old != git.ZeroSHA
+		}
+	}
+	if !ok {
+		return nil, nil
+	}
+	reqs, err := s.requirementsAt(ctx, dir, env, before)
+	var bad *code.SettingsError
+	switch {
+	case errors.As(err, &bad):
+		// A file that doesn't parse never reached the default branch's tip through a push, so nothing applies it.
+		return nil, nil
+	case err != nil:
+		return nil, err
+	}
+	out := make(map[string]bool, len(reqs))
+	for _, r := range reqs {
+		out[r.Branch] = true
+	}
+	return out, nil
 }
 
 // settings reads the merge requirements of /cobranch.yaml at the default branch's tip, head. One that doesn't parse
@@ -85,15 +118,19 @@ func (s *Server) settings(ctx context.Context, dir string, env []string, head st
 }
 
 // brought works out what each of updates that moves a branch to a commit brings into it, over refs, the branches as
-// they are once the push applies.
-func (s *Server) brought(ctx context.Context, refs, dir string, env []string, tips map[string]string, updates []git.RefUpdate) ([]git.Brought, error) {
+// they are once the push applies, and the merge commits it adds into the branches protected names.
+func (s *Server) brought(ctx context.Context, refs, dir string, env []string, tips map[string]string, protected map[string]bool,
+	updates []git.RefUpdate) ([]git.Brought, error) {
 	var out []git.Brought
 	for _, u := range updates {
 		name, ok := git.Branch(u.Name)
 		if !ok || u.New == git.ZeroSHA {
 			continue
 		}
-		b, err := s.bringing(ctx, refs, dir, env, tips, name, u)
+		b, revs, err := s.bringing(ctx, refs, dir, env, tips, name, u)
+		if err == nil && protected[name] {
+			b.Merges, b.Unclean, err = s.mergesAdded(ctx, dir, env, revs)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -105,8 +142,9 @@ func (s *Server) brought(ctx context.Context, refs, dir string, env []string, ti
 // bringing works out what u's move of branch name brings into it: the live branches, besides it and the default, whose
 // tips its new tip holds and its start lacked, and, for a branch besides the default, the default lacks too; and how
 // many of the commits it adds, merges aside, none of those nor the default branch holds. Its start is its old tip, or,
-// for a branch it creates, the default branch's tip.
-func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, tips map[string]string, name string, u git.RefUpdate) (git.Brought, error) {
+// for a branch it creates, the default branch's tip. It also returns git rev-list's arguments for those commits,
+// merges included.
+func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, tips map[string]string, name string, u git.RefUpdate) (git.Brought, []string, error) {
 	main, hasDefault := tips[git.DefaultBranch]
 	start := u.Old
 	if start == git.ZeroSHA {
@@ -116,7 +154,7 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 		}
 	}
 	list := []string{"--git-dir=" + refs, "for-each-ref", "--format=%(refname:lstrip=2) %(objectname)", "--merged=" + u.New}
-	revs := []string{"--no-merges", u.New}
+	revs := []string{u.New}
 	if start != "" {
 		list = append(list, "--no-merged="+start)
 		revs = append(revs, "^"+start)
@@ -128,7 +166,7 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 	}
 	listed, err := s.output(ctx, env, "", append(list, "refs/heads/")...)
 	if err != nil {
-		return git.Brought{}, err
+		return git.Brought{}, nil, err
 	}
 	b := git.Brought{Branch: name}
 	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
@@ -139,10 +177,66 @@ func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, t
 		b.Heads = append(b.Heads, git.Head{Branch: branch, SHA: sha})
 		revs = append(revs, "^"+sha)
 	}
-	if b.Orphans, err = s.count(ctx, dir, env, revs...); err != nil {
-		return git.Brought{}, err
+	if b.Orphans, err = s.count(ctx, dir, env, append([]string{"--no-merges"}, revs...)...); err != nil {
+		return git.Brought{}, nil, err
 	}
-	return b, nil
+	return b, revs, nil
+}
+
+// mergesAdded counts the merge commits git rev-list lists for revs, and lists those whose tree isn't what Git merges
+// their parents into (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "By a
+// push").
+func (s *Server) mergesAdded(ctx context.Context, dir string, env []string, revs []string) (int, []string, error) {
+	listed, err := s.output(ctx, env, "", append([]string{"--git-dir=" + dir, "rev-list", "--merges", "--no-commit-header", "--format=%H %T %P"}, revs...)...)
+	if err != nil {
+		return 0, nil, err
+	}
+	merges, unclean := 0, []string(nil)
+	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		merges++
+		clean, err := s.mergesCleanly(ctx, dir, env, fields[1], fields[2:])
+		if err != nil {
+			return 0, nil, err
+		}
+		if !clean {
+			unclean = append(unclean, fields[0])
+		}
+	}
+	return merges, unclean, nil
+}
+
+// mergesCleanly reports whether tree is what Git merges parents into, with no conflict to resolve by hand: never for
+// more than two parents.
+func (s *Server) mergesCleanly(ctx context.Context, dir string, env []string, tree string, parents []string) (bool, error) {
+	if len(parents) != 2 {
+		return false, nil
+	}
+	merged, conflicts, err := s.mergeTreeOf(ctx, dir, env, parents[0], parents[1])
+	if err != nil {
+		return false, err
+	}
+	return len(conflicts) == 0 && merged == tree, nil
+}
+
+// mergeTreeOf merges commits a and b as Git does, with no working tree, and returns the tree it writes, with the
+// paths they conflict on, none when they merge cleanly.
+func (s *Server) mergeTreeOf(ctx context.Context, dir string, env []string, a, b string) (string, []string, error) {
+	out, err := s.git(ctx, env, "--git-dir="+dir, "merge-tree", "--write-tree", "--name-only", "--no-messages", a, b).Output()
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return lines[0], nil, nil
+	case errors.As(err, &exit) && exit.ExitCode() == 1:
+		return lines[0], lines[1:], nil
+	case errors.As(err, &exit):
+		return "", nil, fmt.Errorf("merging %s and %s: %w: %s", a, b, err, strings.TrimSpace(string(exit.Stderr)))
+	}
+	return "", nil, fmt.Errorf("merging %s and %s: %w", a, b, err)
 }
 
 // linearHistory reports whether reqs require linear history of merges into the default branch.

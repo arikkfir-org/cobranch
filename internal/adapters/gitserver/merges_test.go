@@ -3,6 +3,8 @@ package gitserver_test
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,6 +15,9 @@ import (
 
 // requireAnnotation is a /cobranch.yaml whose main requires ci/build alone.
 const requireAnnotation = "branches:\n  main:\n    requires:\n      annotations: [ci/build]\n"
+
+// requireLinear is a /cobranch.yaml whose main requires ci/build and linear history.
+const requireLinear = requireAnnotation + "      linearHistory: true\n"
 
 // mergeRow is what a branch's row says of the last merge recorded of it.
 type mergeRow struct {
@@ -76,6 +81,24 @@ func mergeCases() []mergeCase {
 			}, want: merged},
 		{name: "a Blocked branch is refused", settings: requireAnnotation, push: pushMain("feature"),
 			refusal: "main requires feature to be Ready: ci/build isn't on "},
+		{name: "a merge commit with changes of its own is refused", settings: requireAnnotation, annotate: true,
+			push: func(t *testing.T, _ *stack, dir string) (string, error) {
+				mustGit(t, dir, "checkout", "-q", "main")
+				mustGit(t, dir, "merge", "-q", "--no-ff", "--no-commit", "feature")
+				if err := os.WriteFile(filepath.Join(dir, "evil.txt"), []byte("in no branch\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				mustGit(t, dir, "add", "evil.txt")
+				mustGit(t, dir, "commit", "-q", "-m", "Merge feature")
+				return gitCmd(t, dir, "push", "origin", "main")
+			}, refusal: "main requires merge commits to merge cleanly: "},
+		{name: "linear history refuses a merge commit", settings: requireLinear, annotate: true,
+			push: func(t *testing.T, _ *stack, dir string) (string, error) {
+				mustGit(t, dir, "checkout", "-q", "main")
+				mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
+				return gitCmd(t, dir, "push", "origin", "main")
+			}, refusal: "main requires linear history: the push adds 1 merge commit"},
+		{name: "linear history takes a fast-forward", settings: requireLinear, annotate: true, push: pushMain("feature"), want: merged},
 		{name: "a commit no branch holds is refused", settings: requireAnnotation, annotate: true,
 			push: func(t *testing.T, _ *stack, dir string) (string, error) {
 				mustGit(t, dir, "checkout", "-q", "main")
