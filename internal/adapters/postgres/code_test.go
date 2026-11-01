@@ -138,3 +138,41 @@ func TestCodeStoreCommit(t *testing.T) {
 		}
 	}
 }
+
+func TestCodeStoreTags(t *testing.T) {
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	for _, tag := range []struct{ name, sha string }{{"v2", shaB}, {"V3", f.shaD}, {"v1.0", shaA}} {
+		if _, err := f.pool.Exec(ctx, "INSERT INTO refs (repo_id, name, org_id, sha) VALUES ($1, $2, $3, $4)",
+			f.website.ID, "refs/tags/"+tag.name, f.website.OrgID, tag.sha); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := f.c.Tags(ctx, f.website.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []code.Tag{{Name: "V3", Target: f.shaD}, {Name: "v1.0", Target: shaA}, {Name: "v2", Target: shaB}}
+	if !slices.Equal(got, want) {
+		t.Errorf("Tags() = %v, want %v, by name byte by byte, without the branches", got, want)
+	}
+	if other, err := f.c.Tags(ctx, f.secret.ID); err != nil || len(other) != 0 {
+		t.Errorf("another repository's Tags() = %v, %v", other, err)
+	}
+}
+
+func TestInternalTokens(t *testing.T) {
+	f := newCodeFixture(t)
+	tokens := NewInternalTokens(f.pool)
+	first, err := tokens.Read(context.Background(), "git-server")
+	if err != nil || len(first) != 64 || strings.Trim(first, "0123456789abcdef") != "" {
+		t.Errorf("Read(git-server) = %q, %v, want 64 hexadecimal digits", first, err)
+	}
+	other := newCodeFixture(t)
+	if second, err := NewInternalTokens(other.pool).Read(context.Background(), "git-server"); err != nil || second == first {
+		t.Errorf("another database's token = %q, %v, want one of its own", second, err)
+	}
+	if _, err := tokens.Read(context.Background(), "nothing"); err == nil {
+		t.Error("Read(nothing) found a token")
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -91,4 +92,39 @@ func (r *repositoryResolver) Commit(ctx context.Context, obj *Repository, sha st
 	out := commit(c)
 	out.Push = &Push{ID: p.ID.String(), Pusher: commitPrincipal(p.Pusher), Transport: string(p.Transport), At: p.At.UTC()}
 	return out, nil
+}
+
+// Tags is the resolver for the tags field.
+func (r *repositoryResolver) Tags(ctx context.Context, obj *Repository) ([]*Tag, error) {
+	list, err := resolveRepo(ctx, obj, r.Code.Tags, "listing the tags")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(list, func(t code.Tag) *Tag { return &Tag{Name: t.Name, Target: t.Target} }), nil
+}
+
+// Tree is the resolver for the tree field.
+func (r *repositoryResolver) Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	t, err := r.Code.Tree(ctx, v, repoID, ref, path)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the tree")
+	}
+	return &Tree{Commit: t.Commit, Path: t.Path, Sha: t.SHA, Entries: mapAll(t.Entries, entry)}, nil
+}
+
+// Blob is the resolver for the blob field.
+func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	f, err := r.Code.File(ctx, v, repoID, ref, path)
+	if err != nil {
+		return nil, codeFail(ctx, err, "reading the file")
+	}
+	return file(f), nil
 }

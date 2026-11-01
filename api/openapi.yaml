@@ -1410,6 +1410,180 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/tags:
+    get:
+      operationId: listTags
+      summary: The repository's tags, by name, each with the object it names; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The tags.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tags]
+                properties:
+                  tags:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/tree:
+    get:
+      operationId: getTree
+      summary: >-
+        The directory at a path of the commit a ref names, its directories first and then its files, each by name;
+        takes repo.read. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - $ref: "#/components/parameters/path"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The directory.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tree"
+        "304":
+          description: The directory is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/blob:
+    get:
+      operationId: getBlob
+      summary: >-
+        The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to
+        1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The file.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/File"
+        "304":
+          description: The file is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/raw:
+    get:
+      operationId: getRaw
+      summary: >-
+        The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as
+        its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an
+        installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - name: download
+          in: query
+          description: Whether to answer the bytes as an attachment, whatever they are.
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The bytes.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Content-Disposition:
+              description: attachment, with the file's name, for anything but an image or text, or when download is true.
+              schema:
+                type: string
+            Content-Security-Policy:
+              description: Lets the bytes load images of their own origin and data URLs alone, and sandboxes them, so an HTML or SVG file runs nothing.
+              required: true
+              schema:
+                type: string
+            X-Content-Type-Options:
+              description: nosniff, so no browser takes the bytes for another type.
+              required: true
+              schema:
+                type: string
+            Cross-Origin-Resource-Policy:
+              description: same-site, so only the installation's own pages embed the bytes.
+              required: true
+              schema:
+                type: string
+          content:
+            "*/*":
+              schema:
+                type: string
+                format: binary
+        "304":
+          description: The bytes are still those If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
 components:
   parameters:
     sha:
@@ -1437,7 +1611,7 @@ components:
     ifNoneMatchAnnotation:
       name: If-None-Match
       in: header
-      description: "*, to set an annotation that isn't there: one that is refuses with 412."
+      description: "*, to set an annotation that isn't there: one the viewer set refuses with 412, and another principal's with 409, as every change of it does."
       schema:
         type: string
     org:
@@ -1505,9 +1679,31 @@ components:
       schema:
         type: string
         format: uuid
+    ref:
+      name: ref
+      in: query
+      description: >-
+        The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A
+        full name is tried first, then a branch, then a tag.
+      schema:
+        type: string
+        default: main
+    path:
+      name: path
+      in: query
+      description: The directory's path from the repository's root, as names separated by /; empty for the root.
+      schema:
+        type: string
+        default: ""
+    ifNoneMatch:
+      name: If-None-Match
+      in: header
+      description: The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+      schema:
+        type: string
   headers:
     ETag:
-      description: A strong entity tag of the resource as it is now.
+      description: A strong entity tag of the answer.
       required: true
       schema:
         type: string
@@ -2159,6 +2355,95 @@ components:
         expiresAt:
           type: string
           format: date-time
+    Tag:
+      type: object
+      description: One of a repository's tags and the object it names, a commit or an annotated tag.
+      required: [name, target]
+      properties:
+        name:
+          type: string
+          description: Its name, without refs/tags/.
+        target:
+          type: string
+          description: The object it names.
+    Tree:
+      type: object
+      description: A directory at a commit.
+      required: [commit, path, sha, entries]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to, which every link to the directory's files may pin.
+        path:
+          type: string
+          description: Its path from the repository's root; empty for the root.
+        sha:
+          type: string
+          description: Its tree's object.
+        entries:
+          type: array
+          description: Its directories and submodules first, then its files and symlinks, each by name.
+          items:
+            $ref: "#/components/schemas/TreeEntry"
+    TreeEntry:
+      type: object
+      description: One of a directory's entries.
+      required: [name, path, kind, mode, sha]
+      properties:
+        name:
+          type: string
+        path:
+          type: string
+          description: Its path from the repository's root.
+        kind:
+          type: string
+          description: A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+          enum: [tree, blob, symlink, submodule]
+        mode:
+          type: string
+          description: Its mode as Git writes it, such as 100644, 100755 or 040000.
+        sha:
+          type: string
+          description: The object it names; a submodule's is the commit it pins.
+        size:
+          type: integer
+          format: int64
+          description: A file's or a symlink's size in bytes.
+    File:
+      type: object
+      description: A file or a symlink at a commit, and its text when it isn't binary.
+      required: [commit, path, name, kind, mode, sha, size, binary, truncated]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        path:
+          type: string
+          description: Its path from the repository's root.
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [blob, symlink]
+        mode:
+          type: string
+          description: Its mode as Git writes it, such as 100644 or 120000.
+        sha:
+          type: string
+          description: Its blob's object.
+        size:
+          type: integer
+          format: int64
+          description: Its size in bytes.
+        binary:
+          type: boolean
+          description: Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8.
+        truncated:
+          type: boolean
+          description: Whether its text stops at 1 MiB, short of its size.
+        text:
+          type: string
+          description: Its text, up to 1 MiB, when it isn't binary; a symlink's is its target.
     Problem:
       type: object
       description: Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.

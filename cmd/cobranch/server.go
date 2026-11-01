@@ -7,9 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/adminapi"
 	"cobranch.dev/internal/adapters/blob"
+	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/rest"
@@ -109,7 +112,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return err
 	}
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), authorizer),
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg, pool), authorizer),
 		administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
@@ -125,6 +128,15 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return fmt.Errorf("serving: %w", err)
 	}
 	return nil
+}
+
+// objects reads repositories' trees and files from the Git server's internal port, or nil, which answers that no Git
+// server runs, when the configuration names none.
+func objects(cfg config.Server, pool *pgxpool.Pool) code.Objects {
+	if cfg.GitInternalURL.URL == nil {
+		return nil
+	}
+	return gitinternal.NewClient(cfg.GitInternalURL.URL, gitinternal.NewToken(postgres.NewInternalTokens(pool).Read))
 }
 
 // sessionCookie names the session cookie from the workloads' public URLs: host-only when they share one host (or

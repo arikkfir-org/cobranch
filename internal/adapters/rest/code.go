@@ -22,6 +22,10 @@ type Code interface {
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
+	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
+	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
+	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
+	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 }
 
 func principal(p *code.Principal) *Principal {

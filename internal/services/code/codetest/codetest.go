@@ -14,12 +14,13 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a code.Store in memory: each repository's commits by name, branches and pushes, and the annotations on its
-// commits. Fail, when set, fails every listing and every change. Names names the principals who set annotations, by
-// ID; Now is the time it records changes at.
+// Store is a code.Store in memory: each repository's commits by name, branches, tags and pushes, and the annotations
+// on its commits. Fail, when set, fails every listing and every change. Names names the principals who set
+// annotations, by ID; Now is the time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
+	TagList    map[uuid.UUID][]code.Tag
 	Pushes     map[uuid.UUID]code.Push
 	Notes      map[uuid.UUID]map[string][]code.Annotation
 	Names      map[uuid.UUID]string
@@ -29,8 +30,8 @@ type Store struct {
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, Pushes: map[uuid.UUID]code.Push{},
-		Notes: map[uuid.UUID]map[string][]code.Annotation{}, Names: map[uuid.UUID]string{}}
+	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
+		Pushes: map[uuid.UUID]code.Push{}, Notes: map[uuid.UUID]map[string][]code.Annotation{}, Names: map[uuid.UUID]string{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -90,6 +91,14 @@ func (s *Store) annotatedBranch(repoID uuid.UUID, b code.Branch) code.Branch {
 func (s *Store) annotated(repoID uuid.UUID, c code.Commit) code.Commit {
 	c.Annotations = slices.Clone(s.Notes[repoID][c.SHA])
 	return c
+}
+
+// Tags lists the repository's tags in the order they were added.
+func (s *Store) Tags(_ context.Context, repoID uuid.UUID) ([]code.Tag, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return slices.Clone(s.TagList[repoID]), nil
 }
 
 // FirstParents walks the repository's commits from sha along first parents.

@@ -37,3 +37,9 @@ ORDER BY line.depth;
 SELECT p.id, p.pusher_id, u.display_name AS pusher_display_name, p.transport, p.committed_at
 FROM pushes p LEFT JOIN principals u ON u.id = p.pusher_id
 WHERE p.repo_id = $1 AND p.id = $2;
+
+-- Tags lists a repository's tags, by name, each with the object its ref names: a commit, or an annotated tag.
+-- name: Tags :many
+SELECT substr(name, length('refs/tags/') + 1)::text AS name, sha FROM refs
+WHERE repo_id = $1 AND starts_with(name, 'refs/tags/')
+ORDER BY name COLLATE "C";

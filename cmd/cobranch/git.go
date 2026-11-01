@@ -15,6 +15,7 @@ import (
 
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/blob"
+	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/gitserver"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/pushworker"
@@ -27,9 +28,9 @@ import (
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runGitServer serves Git's smart HTTP protocol, SSH given an address, and the health endpoints until ctx ends. Its
-// pushes' hook runs this binary as git-hook. It turns ready once its stores answer and the schema is at this build's
-// version.
+// runGitServer serves Git's smart HTTP protocol, SSH given an address, the internal call and the health endpoints
+// until ctx ends. Its pushes' hook runs this binary as git-hook. It turns ready once its stores answer and the schema
+// is at this build's version.
 func runGitServer(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "git-server", buildinfo.Version())
 	if err != nil {
@@ -69,33 +70,57 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	}
 	defer func() { _ = gitServer.Close() }() // no push runs once the server stopped
 	handler := server.Handler("/", gitServer.Handler(), map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool), "bucket": blob.Check(bucket)})
-	if cfg.SSHAddr == "" {
-		return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler)
+	internal := server.Handler(gitinternal.ReposPath, gitServer.InternalHandler(gitinternal.NewToken(postgres.NewInternalTokens(pool).Read)), nil)
+	servers := []func(context.Context) error{
+		func(ctx context.Context) error { return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler) },
+		func(ctx context.Context) error {
+			return serve(ctx, cfg.InternalAddr, cfg.ShutdownTimeout, schema, internal)
+		},
 	}
-	return serveWithSSH(ctx, cfg, gitServer, schema, handler)
+	if cfg.SSHAddr != "" {
+		ssh, err := sshServer(ctx, cfg, gitServer)
+		if err != nil {
+			return err
+		}
+		servers = append(servers, ssh)
+	}
+	return serveTogether(ctx, servers...)
 }
 
-// serveWithSSH serves Git over SSH at cfg.SSHAddr beside serve's HTTP, until ctx ends or either fails, which stops the
-// other.
-func serveWithSSH(ctx context.Context, cfg config.GitServer, gitServer *gitserver.Server, schema *postgres.Schema, handler http.Handler) error {
+// sshServer listens for Git over SSH at cfg.SSHAddr, and returns what serves it until its context ends.
+func sshServer(ctx context.Context, cfg config.GitServer, gitServer *gitserver.Server) (func(context.Context) error, error) {
 	hostKey, err := ssh.ParsePrivateKey([]byte(cfg.SSHHostKey))
 	if err != nil {
-		return fmt.Errorf("reading COBRANCH_GIT_SSH_HOST_KEY: %w", err)
+		return nil, fmt.Errorf("reading COBRANCH_GIT_SSH_HOST_KEY: %w", err)
 	}
 	ln, err := server.Listen(ctx, cfg.SSHAddr)
 	if err != nil {
-		return fmt.Errorf("listening for SSH: %w", err)
+		return nil, fmt.Errorf("listening for SSH: %w", err)
 	}
+	return func(ctx context.Context) error {
+		if err := gitServer.ServeSSH(ctx, ln, hostKey, cfg.ShutdownTimeout); err != nil {
+			return fmt.Errorf("serving SSH: %w", err)
+		}
+		return nil
+	}, nil
+}
+
+// serveTogether runs servers until ctx ends or one of them fails, which stops the others, and returns their errors.
+func serveTogether(ctx context.Context, servers ...func(context.Context) error) error {
 	work, stop := context.WithCancel(ctx)
 	defer stop()
-	served := make(chan error, 1)
-	go func() {
-		defer stop()
-		served <- gitServer.ServeSSH(work, ln, hostKey, cfg.ShutdownTimeout)
-	}()
-	err = serve(work, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, handler)
-	stop()
-	return errors.Join(err, <-served)
+	served := make(chan error, len(servers))
+	for _, run := range servers {
+		go func() {
+			defer stop()
+			served <- run(work)
+		}()
+	}
+	errs := make([]error, 0, len(servers))
+	for range servers {
+		errs = append(errs, <-served)
+	}
+	return errors.Join(errs...)
 }
 
 // runPushWorker processes the pushes the Git server recorded, and serves the health endpoints, until ctx ends.

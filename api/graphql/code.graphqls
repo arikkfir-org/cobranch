@@ -1,6 +1,8 @@
 # A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"), and the
-# annotations principals set on its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"); its tags,
+# trees and files, which the Git server reads
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
+# the annotations principals set on its commits
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
 
 extend type Repository {
@@ -10,6 +12,77 @@ extend type Repository {
   history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
+  "The repository's tags, by name, each with the object it names; takes repo.read."
+  tags: [Tag!]!
+  "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
+  tree(ref: String! = "main", path: String! = ""): Tree
+  "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
+  blob(ref: String! = "main", path: String!): File
+}
+
+"One of a repository's tags and the object it names, a commit or an annotated tag."
+type Tag {
+  "Its name, without refs/tags/."
+  name: String!
+  "The object it names."
+  target: String!
+}
+
+"A directory at a commit."
+type Tree {
+  "The commit the ref resolved to, which every link to the directory's files may pin."
+  commit: String!
+  "Its path from the repository's root; empty for the root."
+  path: String!
+  "Its tree's object."
+  sha: String!
+  "Its directories and submodules first, then its files and symlinks, each by name."
+  entries: [TreeEntry!]!
+}
+
+"What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository."
+enum EntryKind {
+  TREE
+  BLOB
+  SYMLINK
+  SUBMODULE
+}
+
+"One of a directory's entries."
+type TreeEntry {
+  name: String!
+  "Its path from the repository's root."
+  path: String!
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644, 100755 or 040000."
+  mode: String!
+  "The object it names; a submodule's is the commit it pins."
+  sha: String!
+  "A file's or a symlink's size in bytes; null for a directory or a submodule."
+  size: Int
+}
+
+"A file or a symlink at a commit, and its text when it isn't binary."
+type File {
+  "The commit the ref resolved to."
+  commit: String!
+  "Its path from the repository's root."
+  path: String!
+  name: String!
+  "BLOB or SYMLINK."
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644 or 120000."
+  mode: String!
+  "Its blob's object."
+  sha: String!
+  "Its size in bytes."
+  size: Int!
+  "Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8."
+  binary: Boolean!
+  "Whether its text stops at 1 MiB, short of its size."
+  truncated: Boolean!
+  "Its text, up to 1 MiB; null when it is binary. A symlink's is its target."
+  text: String
 }
 
 extend type Mutation {

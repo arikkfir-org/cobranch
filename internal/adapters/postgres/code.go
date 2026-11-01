@@ -16,7 +16,7 @@ import (
 )
 
 // CodeStore reads what pushes recorded of repositories' code (db/migrations/00012_git.sql) and keeps the annotations
-// principals set on its commits (db/migrations/00014_annotations.sql): code.Store on PostgreSQL, through the queries
+// principals set on its commits (db/migrations/00015_annotations.sql): code.Store on PostgreSQL, through the queries
 // sqlc generates from db/queries.
 type CodeStore struct {
 	pool *pgxpool.Pool
@@ -69,6 +69,19 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 		b.Commit = &c
 	}
 	return b, nil
+}
+
+// Tags lists the repository's tags by name, each with the object its ref names (code.Store).
+func (s *CodeStore) Tags(ctx context.Context, repoID uuid.UUID) ([]code.Tag, error) {
+	rows, err := s.q.Tags(ctx, repoID)
+	if err != nil {
+		return nil, fmt.Errorf("listing the tags: %w", err)
+	}
+	out := make([]code.Tag, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, code.Tag{Name: r.Name, Target: r.Sha})
+	}
+	return out, nil
 }
 
 // commitsAt finds those of the repository's commits that shas name, with their annotations, by name.

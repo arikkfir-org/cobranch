@@ -129,6 +129,29 @@ type Email struct {
 	Verified bool   `json:"verified"`
 }
 
+// A file or a symlink at a commit, and its text when it isn't binary.
+type File struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// Its path from the repository's root.
+	Path string `json:"path"`
+	Name string `json:"name"`
+	// BLOB or SYMLINK.
+	Kind EntryKind `json:"kind"`
+	// Its mode as Git writes it, such as 100644 or 120000.
+	Mode string `json:"mode"`
+	// Its blob's object.
+	Sha string `json:"sha"`
+	// Its size in bytes.
+	Size int `json:"size"`
+	// Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8.
+	Binary bool `json:"binary"`
+	// Whether its text stops at 1 MiB, short of its size.
+	Truncated bool `json:"truncated"`
+	// Its text, up to 1 MiB; null when it is binary. A symlink's is its target.
+	Text *string `json:"text,omitempty"`
+}
+
 // An invitation to an email; only a user who holds it, verified, accepts it.
 type Invitation struct {
 	ID               string `json:"id"`
@@ -288,6 +311,12 @@ type Repository struct {
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`
+	// The repository's tags, by name, each with the object it names; takes repo.read.
+	Tags []*Tag `json:"tags"`
+	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
+	Tree *Tree `json:"tree,omitempty"`
+	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
+	Blob *File `json:"blob,omitempty"`
 }
 
 // A principal's grants on a repository.
@@ -369,6 +398,40 @@ type Session struct {
 	Current bool `json:"current"`
 }
 
+// One of a repository's tags and the object it names, a commit or an annotated tag.
+type Tag struct {
+	// Its name, without refs/tags/.
+	Name string `json:"name"`
+	// The object it names.
+	Target string `json:"target"`
+}
+
+// A directory at a commit.
+type Tree struct {
+	// The commit the ref resolved to, which every link to the directory's files may pin.
+	Commit string `json:"commit"`
+	// Its path from the repository's root; empty for the root.
+	Path string `json:"path"`
+	// Its tree's object.
+	Sha string `json:"sha"`
+	// Its directories and submodules first, then its files and symlinks, each by name.
+	Entries []*TreeEntry `json:"entries"`
+}
+
+// One of a directory's entries.
+type TreeEntry struct {
+	Name string `json:"name"`
+	// Its path from the repository's root.
+	Path string    `json:"path"`
+	Kind EntryKind `json:"kind"`
+	// Its mode as Git writes it, such as 100644, 100755 or 040000.
+	Mode string `json:"mode"`
+	// The object it names; a submodule's is the commit it pins.
+	Sha string `json:"sha"`
+	// A file's or a symlink's size in bytes; null for a directory or a submodule.
+	Size *int `json:"size,omitempty"`
+}
+
 // A person: a principal of kind user.
 type User struct {
 	ID          string `json:"id"`
@@ -446,6 +509,66 @@ func (e *AnnotationStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e AnnotationStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+type EntryKind string
+
+const (
+	EntryKindTree      EntryKind = "TREE"
+	EntryKindBlob      EntryKind = "BLOB"
+	EntryKindSymlink   EntryKind = "SYMLINK"
+	EntryKindSubmodule EntryKind = "SUBMODULE"
+)
+
+var AllEntryKind = []EntryKind{
+	EntryKindTree,
+	EntryKindBlob,
+	EntryKindSymlink,
+	EntryKindSubmodule,
+}
+
+func (e EntryKind) IsValid() bool {
+	switch e {
+	case EntryKindTree, EntryKindBlob, EntryKindSymlink, EntryKindSubmodule:
+		return true
+	}
+	return false
+}
+
+func (e EntryKind) String() string {
+	return string(e)
+}
+
+func (e *EntryKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EntryKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EntryKind", str)
+	}
+	return nil
+}
+
+func (e EntryKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EntryKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EntryKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

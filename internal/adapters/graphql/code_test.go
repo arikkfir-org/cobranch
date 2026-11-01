@@ -1,6 +1,12 @@
 package graphql
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
+)
 
 func TestCodeQueries(t *testing.T) {
 	repo := func(fields string) func(*orgFixture) string {
@@ -27,4 +33,38 @@ func TestCodeQueries(t *testing.T) {
 		{name: "an abbreviated name", viewer: olivia, document: repo(`commit(sha: "ccc") { sha }`),
 			wantCode: badUserInput, wantReason: "sha.invalid"},
 	})
+}
+
+func TestFileQueries(t *testing.T) {
+	repo := func(fields string) func(*orgFixture) string {
+		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
+	}
+	runOrgCases(t, []orgCase{
+		{name: "the tags", viewer: olivia, document: repo(`tags { name target }`),
+			want: []string{`"tags":[{"name":"v1.0.0","target":"` + shaOf("b") + `"}]`}},
+		{name: "main's root, directories first", viewer: olivia, document: repo(`tree { commit path entries { name kind size } }`),
+			want: []string{`"commit":"` + shaOf("c") + `","path":"","entries":[{"name":"docs","kind":"TREE","size":null},{"name":"vendor","kind":"TREE","size":null},` +
+				`{"name":"README.md","kind":"BLOB","size":10},{"name":"latest.link","kind":"SYMLINK","size":13},{"name":"logo.png","kind":"BLOB","size":6}]`}},
+		{name: "a directory at a tag", viewer: olivia, document: repo(`tree(ref: "v1.0.0", path: "") { commit entries { path } }`),
+			want: []string{`"commit":"` + shaOf("b") + `","entries":[{"path":"README.md"}]`}},
+		{name: "a ref that names nothing", viewer: olivia, document: repo(`tree(ref: "gone") { sha }`), wantCode: notFound, wantReason: "ref.not_found"},
+		{name: "a file's path", viewer: olivia, document: repo(`tree(path: "README.md") { sha }`), wantCode: notFound, wantReason: "path.file"},
+		{name: "a path that climbs out", viewer: olivia, document: repo(`tree(path: "..") { sha }`), wantCode: badUserInput, wantReason: "path.invalid"},
+		{name: "a text file", viewer: olivia, document: repo(`blob(path: "docs/guide.md") { name kind size binary truncated text }`),
+			want: []string{`"blob":{"name":"guide.md","kind":"BLOB","size":9,"binary":false,"truncated":false,"text":"Read me.\n"}`}},
+		{name: "a binary file has no text", viewer: olivia, document: repo(`blob(path: "logo.png") { binary text }`),
+			want: []string{`"blob":{"binary":true,"text":null}`}},
+		{name: "a directory is no file", viewer: olivia, document: repo(`blob(path: "docs") { sha }`), wantCode: notFound, wantReason: "path.directory"},
+		{name: "a submodule is no file", viewer: olivia, document: repo(`blob(path: "vendor/lib.module") { sha }`), wantCode: notFound, wantReason: "path.submodule"},
+	})
+}
+
+// TestFilesWithoutGitServer checks that an installation without a Git server answers UNAVAILABLE for a tree.
+func TestFilesWithoutGitServer(t *testing.T) {
+	f := newOrgFixture()
+	f.code = code.NewService(f.codeStore, nil, auth.NewAuthorizer(f.store))
+	body := f.query(&f.olivia, `{ organization(slug: "acme") { repository(slug: "website") { tree { sha } } } }`)
+	if !strings.Contains(body, `"code":"UNAVAILABLE"`) || !strings.Contains(body, `"reason":"git.unavailable"`) {
+		t.Errorf("body = %s, want UNAVAILABLE", body)
+	}
 }

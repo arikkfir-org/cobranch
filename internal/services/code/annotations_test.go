@@ -35,7 +35,7 @@ func newAnnotators() *annotators {
 	f := &annotators{store: codetest.NewStore(), repo: uuid.New(), rae: viewer("Rae"), dev: viewer("Dev"), mia: viewer("Mia"), ci: viewer("CI"), nia: viewer("Nia")}
 	f.ci.Kind = auth.KindAPIKey
 	o.Repos[f.repo] = uuid.New()
-	f.service = code.NewService(f.store, auth.NewAuthorizer(o))
+	f.service = code.NewService(f.store, nil, auth.NewAuthorizer(o))
 	o.Grant(f.rae.ID, auth.RoleReader, auth.ScopeRepository, f.repo)
 	o.Grant(f.dev.ID, auth.RoleDeveloper, auth.ScopeRepository, f.repo)
 	o.Grant(f.mia.ID, auth.RoleMaintainer, auth.ScopeRepository, f.repo)
