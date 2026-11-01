@@ -13,12 +13,14 @@ import (
 	"cobranch.dev/internal/services/code"
 )
 
-// Objects is a code.Objects in memory, the Git server's objects for tests: the files of each commit, by path, and the
-// branches and tags that name commits. A path ending in Symlink holds a symlink, and one in Submodule a submodule.
-// Every repository holds the same objects. Fail, when set, fails every read.
+// Objects is a code.Objects in memory, the Git server's objects for tests: the files of each commit, by path, the
+// branches and tags that name commits, and the walk of history from each commit, newest first. A path ending in
+// Symlink holds a symlink, and one in Submodule a submodule. Every repository holds the same objects. Fail, when set,
+// fails every read.
 type Objects struct {
 	Files map[string]map[string]string
 	Refs  map[string]string
+	Logs  map[string][]code.LogEntry
 	Fail  error
 }
 
@@ -30,12 +32,20 @@ const (
 
 // NewObjects returns an Objects without commits.
 func NewObjects() *Objects {
-	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}}
+	return &Objects{Files: map[string]map[string]string{}, Refs: map[string]string{}, Logs: map[string][]code.LogEntry{}}
 }
 
 // Commit records the files of the commit named sha, by path, and makes refs name it.
 func (o *Objects) Commit(sha string, files map[string]string, refs ...string) {
 	o.Files[sha] = files
+	for _, ref := range refs {
+		o.Refs[ref] = sha
+	}
+}
+
+// History records the walk of history from the commit named sha, newest first, and makes refs name it.
+func (o *Objects) History(sha string, log []code.LogEntry, refs ...string) {
+	o.Logs[sha] = log
 	for _, ref := range refs {
 		o.Refs[ref] = sha
 	}
@@ -48,6 +58,9 @@ func (o *Objects) resolve(ref string) (string, map[string]string, error) {
 	}
 	if files, ok := o.Files[ref]; ok {
 		return ref, files, nil
+	}
+	if _, ok := o.Logs[ref]; ok {
+		return ref, nil, nil
 	}
 	if sha, ok := o.Refs[ref]; ok {
 		return sha, o.Files[sha], nil
@@ -109,6 +122,17 @@ func (o *Objects) Raw(_ context.Context, _ uuid.UUID, ref, path string) (code.Ra
 		return code.Raw{}, err
 	}
 	return code.Raw{Commit: commit, Path: path, SHA: name(content), Size: int64(len(content)), Body: io.NopCloser(strings.NewReader(content))}, nil
+}
+
+// Log lists at most limit of the walk of history from the commit ref names, after the first skip.
+func (o *Objects) Log(_ context.Context, _ uuid.UUID, ref string, skip, limit int) (code.Log, error) {
+	commit, _, err := o.resolve(ref)
+	if err != nil {
+		return code.Log{}, err
+	}
+	log := o.Logs[commit]
+	log = log[min(skip, len(log)):]
+	return code.Log{Commit: commit, Entries: slices.Clone(log[:min(limit, len(log))])}, nil
 }
 
 // file finds the file at path of the commit ref names.

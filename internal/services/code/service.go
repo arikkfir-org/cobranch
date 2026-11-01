@@ -30,6 +30,9 @@ type Store interface {
 	// FirstParents lists at most limit of the repository's commits, from sha along each one's first parent, nearest
 	// first: none when the repository recorded no commit sha.
 	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
+	// CommitsAt finds those of the repository's commits that shas name, by name: none for a name no push recorded as
+	// a commit.
+	CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]Commit, error)
 	// Commit finds one of the repository's commits with the push that first brought it, or repos.ErrNotFound.
 	Commit(ctx context.Context, repoID uuid.UUID, sha string) (Commit, Push, error)
 	// Annotations lists the annotations on one of the repository's commits by name, or repos.ErrNotFound when the
@@ -132,55 +135,6 @@ func rank(b Branch) int {
 		return 0
 	}
 	return 1
-}
-
-// History lists a page of a branch's first-parent history, as git log --first-parent does, nearest first: from the
-// branch's head, or from cursor, where the previous page said the next one starts; it takes repo.read. A merge's
-// second line stays out until the full graph view arrives. limit 0 asks for DefaultPageSize. A branch whose head is
-// no commit a push recorded has no history.
-func (s *Service) History(ctx context.Context, v Viewer, repoID uuid.UUID, branch, cursor string, limit int) (Page, error) {
-	ctx, span := tracer.Start(ctx, "code.Service.History")
-	defer span.End()
-	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", branch))
-	if err := s.read(ctx, v, repoID); err != nil {
-		return Page{}, failed(span, "reading the history", err)
-	}
-	size, err := pageSize(limit)
-	if err != nil {
-		return Page{}, err
-	}
-	from, err := s.start(ctx, repoID, branch, cursor)
-	if err != nil || from == "" {
-		return Page{}, failed(span, "reading the history", err)
-	}
-	commits, err := s.store.FirstParents(ctx, repoID, from, size+1)
-	if err != nil {
-		return Page{}, failed(span, "reading the history", err)
-	}
-	if len(commits) == 0 {
-		return Page{}, &orgs.ValidationError{Field: "cursor", Code: "cursor.invalid", Message: "no page of this repository's history starts here"}
-	}
-	page := Page{Commits: commits}
-	if len(commits) > size {
-		page.Commits, page.Next = commits[:size], commits[size].SHA
-	}
-	return page, nil
-}
-
-// start is where a page of branch's history starts: cursor when the caller gave one, or else the branch's head, or
-// nothing when its head is no commit a push recorded.
-func (s *Service) start(ctx context.Context, repoID uuid.UUID, branch, cursor string) (string, error) {
-	if cursor != "" {
-		return cursor, ValidateSHA("cursor", cursor)
-	}
-	b, err := s.store.Branch(ctx, repoID, branch)
-	if err != nil {
-		return "", fmt.Errorf("finding branch %q: %w", branch, err)
-	}
-	if b.Commit == nil {
-		return "", nil
-	}
-	return b.Head, nil
 }
 
 // Commit finds one of the repository's commits by its full name, with the push that first brought it; it takes

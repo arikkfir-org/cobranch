@@ -141,6 +141,20 @@ func firstParent(c code.Commit) string {
 	return c.Parents[0]
 }
 
+// CommitsAt finds those of the repository's commits that shas name.
+func (s *Store) CommitsAt(_ context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	out := map[string]code.Commit{}
+	for _, sha := range shas {
+		if c, ok := s.Commits[repoID][sha]; ok {
+			out[sha] = c
+		}
+	}
+	return out, nil
+}
+
 // Commit finds one of the repository's commits with its push, or repos.ErrNotFound.
 func (s *Store) Commit(_ context.Context, repoID uuid.UUID, sha string) (code.Commit, code.Push, error) {
 	c, ok := s.Commits[repoID][sha]

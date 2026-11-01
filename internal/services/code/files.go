@@ -19,6 +19,9 @@ type Objects interface {
 	Blob(ctx context.Context, repoID uuid.UUID, ref, path string, limit int64) (Blob, error)
 	// Raw streams the bytes of the file or symlink at path in the commit ref names.
 	Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (Raw, error)
+	// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, newest first
+	// as git log --date-order lists them, after skipping the first skip.
+	Log(ctx context.Context, repoID uuid.UUID, ref string, skip, limit int) (Log, error)
 }
 
 // unavailable answers every read with ErrUnavailable, for an installation that runs no Git server.
@@ -34,6 +37,10 @@ func (unavailable) Blob(context.Context, uuid.UUID, string, string, int64) (Blob
 
 func (unavailable) Raw(context.Context, uuid.UUID, string, string) (Raw, error) {
 	return Raw{}, ErrUnavailable
+}
+
+func (unavailable) Log(context.Context, uuid.UUID, string, int, int) (Log, error) {
+	return Log{}, ErrUnavailable
 }
 
 // Tags lists the repository's tags by name, each with the object its ref names; it takes repo.read.

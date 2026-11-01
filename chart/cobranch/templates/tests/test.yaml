@@ -123,6 +123,9 @@ spec:
           echo "$tree" | grep -q "\"commit\":\"$(git -C website rev-parse HEAD)\""
           echo "$tree" | grep -qF '"html":"\u003cp\u003ePushed by helm test'
           wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/raw?path=README.md" | grep -q 'Pushed by helm test'
+          # Its history through every parent, which the Git server walks, holds the commit.
+          wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/commits?parents=all" | tee /dev/stderr \
+            | grep -q "\"sha\":\"$(git -C website rev-parse HEAD)\""
           {{- end }}
           {{- end }}
           echo "Cobranch {{ .Values.images.cobranch.tag | default .Chart.AppVersion }} answers, built as $version"

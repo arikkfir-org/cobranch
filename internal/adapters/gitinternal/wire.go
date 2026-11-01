@@ -1,7 +1,7 @@
 // Package gitinternal is the internal call to the Git server, on a port no route names: the REST and GraphQL servers
-// read a repository's trees and files with it, since only the Git server holds Git's objects. It holds the call's
-// paths, its answers as JSON and the codes of the answers that find nothing, which the Git server writes, and the
-// client that reads them, code.Objects
+// read a repository's trees, files and history with it, since only the Git server holds Git's objects. It holds the
+// call's paths, its answers as JSON and the codes of the answers that find nothing, which the Git server writes, and
+// the client that reads them, code.Objects
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "The internal call").
 package gitinternal
 
@@ -13,7 +13,7 @@ import (
 )
 
 // ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
-// /raw, each with the query parameters ref and path, and blob with limit.
+// /raw, each with the query parameters ref and path, and blob with limit; and /log, with ref, skip and limit.
 const ReposPath = "/internal/v1/repos/"
 
 // The headers of a raw answer, beside its Content-Length, which name what its bytes are.
@@ -51,6 +51,36 @@ type Blob struct {
 	Size      int64  `json:"size"`
 	Content   []byte `json:"content"`
 	Truncated bool   `json:"truncated"`
+}
+
+// LogEntry is a commit as a walk of history names it, as the internal call carries it: code.LogEntry.
+type LogEntry struct {
+	SHA     string   `json:"sha"`
+	Parents []string `json:"parents"`
+}
+
+// Log is a page of a walk of history as the internal call carries it: code.Log.
+type Log struct {
+	Commit  string     `json:"commit"`
+	Entries []LogEntry `json:"entries"`
+}
+
+// LogOf is log as the internal call carries it.
+func LogOf(log code.Log) Log {
+	entries := make([]LogEntry, 0, len(log.Entries))
+	for _, e := range log.Entries {
+		entries = append(entries, LogEntry{SHA: e.SHA, Parents: e.Parents})
+	}
+	return Log{Commit: log.Commit, Entries: entries}
+}
+
+// Domain is the domain's log.
+func (l Log) Domain() code.Log {
+	entries := make([]code.LogEntry, 0, len(l.Entries))
+	for _, e := range l.Entries {
+		entries = append(entries, code.LogEntry{SHA: e.SHA, Parents: e.Parents})
+	}
+	return code.Log{Commit: l.Commit, Entries: entries}
 }
 
 // Problem is the body of an answer other than 200: a code, for one that finds nothing, and what went wrong.

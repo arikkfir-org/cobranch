@@ -14,7 +14,7 @@ import (
 type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
 	Branch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.Branch, error)
-	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
+	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.HistoryQuery) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
@@ -48,6 +48,9 @@ func codeFail(ctx context.Context, err error, what string) error {
 	}
 	return fail(ctx, err, "repository", what)
 }
+
+// historyParents are the parents a history follows as the domain names them.
+var historyParents = map[HistoryParents]code.Parents{HistoryParentsFirst: code.ParentsFirst, HistoryParentsAll: code.ParentsAll}
 
 // entryKinds are the kinds of a tree's entries as the API shows them.
 var entryKinds = map[code.EntryKind]EntryKind{

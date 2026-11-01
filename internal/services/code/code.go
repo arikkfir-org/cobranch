@@ -89,8 +89,7 @@ type Merge struct {
 	At   time.Time
 }
 
-// Page is a page of a branch's first-parent history, nearest first; Next is where the next page starts, empty after
-// the last.
+// Page is a page of history, nearest first; Next is where the next page starts, empty after the last.
 type Page struct {
 	Commits []Commit
 	Next    string

@@ -1261,19 +1261,41 @@ paths:
   /orgs/{org}/repos/{repo}/commits:
     get:
       operationId: listCommits
-      summary: A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+      summary: >-
+        A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it
+        walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as
+        git log --date-order lists it (no commit before its children, the newest first among those the graph leaves
+        free), it reads the Git server (an installation without one answers 503) and leaves out any commit
+        no push recorded.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - name: branch
           in: query
-          description: The branch whose history the page lists, without refs/heads/.
+          description: The branch whose history the page lists, without refs/heads/, unless ref names another start.
           schema:
             type: string
             default: main
+        - name: ref
+          in: query
+          description: >-
+            Where the history starts instead of branch: a branch's or a tag's name, without refs/heads/ or refs/tags/,
+            or a commit's full name. A full name is tried first, then a branch, then a tag.
+          schema:
+            type: string
+        - name: parents
+          in: query
+          description: Which parents of each commit the history follows, the first alone or every one.
+          schema:
+            type: string
+            enum: [first, all]
+            default: first
         - name: cursor
           in: query
-          description: Where the page starts, as the previous page's Link names it; the branch's head when left out. Opaque.
+          description: >-
+            Where the page starts, as the previous page's Link names it, in place of branch and ref; the start's commit
+            when left out. Opaque: every parent's cursor holds the commit the first page started from, so later pages
+            hold still while the branch moves on.
           schema:
             type: string
         - name: limit
@@ -1284,10 +1306,16 @@ paths:
             minimum: 1
             maximum: 100
             default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The page's commits, nearest first, without their pushes.
           headers:
+            ETag:
+              description: A strong entity tag of the page, which its commits and its next page's link fix.
+              required: true
+              schema:
+                type: string
             Link:
               description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
               schema:
@@ -1302,11 +1330,21 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Commit"
+        "304":
+          description: The page is still the one If-None-Match names.
+          headers:
+            ETag:
+              description: A strong entity tag of the page, which its commits and its next page's link fix.
+              required: true
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/Problem"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        "503":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
