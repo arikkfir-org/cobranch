@@ -102,6 +102,26 @@ type Push struct {
 	// Tips are the branches Facts were counted from: every live branch once the push applies, by name, each with the
 	// commit it names; nil when the push moves no branch. Another push recorded since may have moved one.
 	Tips map[string]string
+	// Brought is what each move of a branch to a commit brings into it; nil when the push moves no branch to one.
+	Brought []Brought
+	// Bypass is whether the pusher holds repo.bypass, which pushes past merge requirements.
+	Bypass bool
+}
+
+// Merges are the branches whose heads the push brings into the default branch when it moves it on from a commit: the
+// merges the push worker records. Creating the default branch merges nothing.
+func (p Push) Merges() []Head {
+	for _, u := range p.Updates {
+		if u.Name != "refs/heads/"+DefaultBranch || u.Old == ZeroSHA {
+			continue
+		}
+		for _, b := range p.Brought {
+			if b.Branch == DefaultBranch {
+				return b.Heads
+			}
+		}
+	}
+	return nil
 }
 
 // MovesDefault reports whether the push moves the default branch: creates, moves or deletes it.
@@ -138,6 +158,30 @@ type Facts struct {
 	Behind int
 	Merges *int
 }
+
+// Head is a branch at a commit.
+type Head struct {
+	Branch string
+	SHA    string
+}
+
+// Brought is what a push's move of a branch to a commit brings into it: the other live branches, besides the default,
+// whose heads it brings in (Heads), and how many of the commits it adds, merges aside, none of them nor the default
+// branch holds (Orphans). A move adds the commits its new tip has and its old one lacked; creating a branch adds those
+// the default branch lacks, or, for the default branch itself, all its commits
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "By a push").
+type Brought struct {
+	Branch  string
+	Heads   []Head
+	Orphans int
+}
+
+// RefusedError is a push that a branch's merge requirements refuse, with what the client sees.
+type RefusedError struct {
+	Message string
+}
+
+func (e *RefusedError) Error() string { return e.Message }
 
 // Answer is what the client learns of its push: accepted, or refused with the reason, which it shows as remote: lines.
 type Answer struct {

@@ -23,9 +23,11 @@ type Store interface {
 	// repository apply one at a time; does nothing for a push whose ID it recorded already; checks every ref's old
 	// value, returning a *StaleError for the first that moved; checks the branches the facts were counted from, keeping
 	// only facts that still hold and returning a *StaleError (During) when the default branch moved, or any branch did
-	// under a push that moves the default branch; lists the pack (one the repository lists already keeps
+	// under a push that moves the default branch; checks each branch it moves against the branch's merge
+	// requirements, as they were before it, returning a *RefusedError for the first it breaks unless the pusher may
+	// bypass them, and then records event branch.bypassed; lists the pack (one the repository lists already keeps
 	// its upload while active); records the push, waiting for the push
-	// worker, and its commits; moves the refs; creates, moves and deletes the branches; replaces the merge
+	// worker, and its commits and merges; moves the refs; creates, moves and deletes the branches; replaces the merge
 	// requirements when it moves the default branch; stores the branches' facts, and has every branch whose facts or
 	// requirements it changed wait for it; records event repo.pushed; and notifies the push workers. ErrNotFound when
 	// the repository is gone.
@@ -33,8 +35,8 @@ type Store interface {
 	// Process claims the push that has waited longest for the push worker and may be tried now, skipping any another
 	// push worker holds, and processes it in one transaction: it resolves its commits' authors and committers to
 	// principals by lowercased email (a user who holds it verified, or else the login-less user who holds it, or else
-	// a new login-less user holding it unverified, named after the commit), works out the status of the branches that
-	// wait for it, then marks the push processed. It returns
+	// a new login-less user holding it unverified, named after the commit), records the merges it made for its pusher,
+	// works out the status of the branches that wait for it, then marks the push processed. It returns
 	// the push's ID, or uuid.Nil when none waits. A push it fails keeps waiting, with the error, for another try after
 	// retry(attempts), attempts counting this one.
 	Process(ctx context.Context, retry func(attempts int) time.Duration) (uuid.UUID, error)
@@ -85,9 +87,12 @@ func (s *Service) Record(ctx context.Context, push Push) (Answer, error) {
 	}
 	err := s.record(ctx, push)
 	var stale *StaleError
+	var refused *RefusedError
 	switch {
 	case errors.As(err, &stale):
 		return Answer{Message: stale.Error()}, nil
+	case errors.As(err, &refused):
+		return Answer{Message: refused.Message}, nil
 	case err != nil:
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "recording the push")

@@ -26,7 +26,7 @@ WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL
 
 -- BranchesWaitingFor lists the live branches that wait for a push, by ID, locked until the transaction ends.
 -- name: BranchesWaitingFor :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for FROM branches
+SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE waits_for = $1 AND deleted_at IS NULL
 ORDER BY id
 FOR UPDATE;
@@ -34,10 +34,21 @@ FOR UPDATE;
 -- BranchesAt lists a repository's live branches whose head is a commit and that have a base, by ID, locked until the
 -- transaction ends.
 -- name: BranchesAt :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for FROM branches
+SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE repo_id = $1 AND head = $2 AND deleted_at IS NULL AND base IS NOT NULL
 ORDER BY id
 FOR UPDATE;
 
 -- name: SetBranchStatus :exec
 UPDATE branches SET status = @status::text, checks = @checks, waits_for = NULL WHERE id = @id;
+
+-- RecordMerge records a merge of a live branch into its base, at the head merged, for the pusher, at when Cobranch
+-- recorded the push.
+-- name: RecordMerge :batchexec
+UPDATE branches SET merged_head = @head::text, merged_by = @merged_by, merged_at = @merged_at::timestamptz
+WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL;
+
+-- IncomingBranches finds those of a repository's live branches that names name, as a push into a branch with merge
+-- requirements finds them before it applies: their heads, bases, status and checks.
+-- name: IncomingBranches :many
+SELECT name, head, base, status, checks FROM branches WHERE repo_id = @repo_id AND name = ANY (@names::text[]) AND deleted_at IS NULL;

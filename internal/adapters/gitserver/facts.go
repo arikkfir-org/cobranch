@@ -17,50 +17,129 @@ import (
 // maxSettings is the largest /cobranch.yaml a push may bring into the default branch.
 const maxSettings = 1 << 20
 
-// pushFacts is what a push's transaction stores of the repository's branches once the push applies, and the branches
-// it was counted from.
+// pushFacts is what a push's transaction stores and checks of the repository's branches once the push applies, and the
+// branches it was counted from.
 type pushFacts struct {
 	requirements []git.Requirements
 	facts        []git.Facts
 	tips         map[string]string
+	brought      []git.Brought
 }
 
 // branchFacts works out what the push's transaction stores of the repository's branches once the push applies: the
 // merge requirements of /cobranch.yaml at the default branch's new tip when the push moves that branch, and, when it
 // moves any branch, every other live branch's facts against the default branch, with the tips they were counted from
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Graph facts"). A
-// /cobranch.yaml that doesn't parse refuses the push: refusal says why.
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Graph facts"), and what
+// each move brings into its branch. A /cobranch.yaml that doesn't parse refuses the push: refusal says why.
 func (s *Server) branchFacts(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (out pushFacts, refusal string, err error) {
 	moves := slices.ContainsFunc(updates, func(u git.RefUpdate) bool { _, ok := git.Branch(u.Name); return ok })
 	if !moves {
 		return pushFacts{}, "", nil
 	}
-	if out.tips, err = s.branchTips(ctx, dir, updates); err != nil {
+	tips, err := s.branchTips(ctx, dir, updates)
+	if err != nil {
 		return pushFacts{}, "", err
 	}
-	head, hasDefault := out.tips[git.DefaultBranch]
+	out.tips = tips
+	head, hasDefault := tips[git.DefaultBranch]
 	if hasDefault {
-		out.requirements, err = s.requirementsAt(ctx, dir, env, head)
-		var bad *code.SettingsError
-		switch {
-		case errors.As(err, &bad) && (git.Push{Updates: updates}).MovesDefault():
-			return pushFacts{}, bad.Error(), nil
-		case errors.As(err, &bad):
-			// A file pushed before Cobranch read it: the requirements stay as they were, which named none.
-			out.requirements = nil
-		case err != nil:
-			return pushFacts{}, "", err
+		out.requirements, refusal, err = s.settings(ctx, dir, env, head, git.Push{Updates: updates}.MovesDefault())
+		if refusal != "" || err != nil {
+			return pushFacts{}, refusal, err
 		}
 	}
+	refs, remove, err := s.tipsDir(dir, tips)
+	if err != nil {
+		return pushFacts{}, "", err
+	}
+	defer remove()
 	if !hasDefault {
-		out.facts, err = s.countAll(ctx, dir, env, out.tips)
+		out.facts, err = s.countAll(ctx, dir, env, tips)
 	} else {
-		out.facts, err = s.aheadBehind(ctx, dir, env, out.tips, head, linearHistory(out.requirements))
+		out.facts, err = s.aheadBehind(ctx, refs, dir, env, tips, head, linearHistory(out.requirements))
 	}
 	if err != nil {
 		return pushFacts{}, "", err
 	}
+	if out.brought, err = s.brought(ctx, refs, dir, env, tips, updates); err != nil {
+		return pushFacts{}, "", err
+	}
 	return out, "", nil
+}
+
+// settings reads the merge requirements of /cobranch.yaml at the default branch's tip, head. One that doesn't parse
+// refuses a push that moves the default branch, saying why; any other push keeps the requirements as they were, which
+// named none, since Cobranch never read that file.
+func (s *Server) settings(ctx context.Context, dir string, env []string, head string, movesDefault bool) ([]git.Requirements, string, error) {
+	reqs, err := s.requirementsAt(ctx, dir, env, head)
+	var bad *code.SettingsError
+	switch {
+	case errors.As(err, &bad) && movesDefault:
+		return nil, bad.Error(), nil
+	case errors.As(err, &bad):
+		return nil, "", nil
+	case err != nil:
+		return nil, "", err
+	}
+	return reqs, "", nil
+}
+
+// brought works out what each of updates that moves a branch to a commit brings into it, over refs, the branches as
+// they are once the push applies.
+func (s *Server) brought(ctx context.Context, refs, dir string, env []string, tips map[string]string, updates []git.RefUpdate) ([]git.Brought, error) {
+	var out []git.Brought
+	for _, u := range updates {
+		name, ok := git.Branch(u.Name)
+		if !ok || u.New == git.ZeroSHA {
+			continue
+		}
+		b, err := s.bringing(ctx, refs, dir, env, tips, name, u)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+	}
+	return out, nil
+}
+
+// bringing works out what u's move of branch name brings into it: the live branches, besides it and the default, whose
+// tips its new tip holds and its start lacked, and how many of the commits it adds, merges aside, none of those nor
+// the default branch holds. Its start is its old tip, or, for a branch it creates, the default branch's tip.
+func (s *Server) bringing(ctx context.Context, refs, dir string, env []string, tips map[string]string, name string, u git.RefUpdate) (git.Brought, error) {
+	main, hasDefault := tips[git.DefaultBranch]
+	start := u.Old
+	if start == git.ZeroSHA {
+		start = ""
+		if name != git.DefaultBranch && hasDefault {
+			start = main
+		}
+	}
+	list := []string{"--git-dir=" + refs, "for-each-ref", "--format=%(refname:lstrip=2) %(objectname)", "--merged=" + u.New}
+	revs := []string{"--no-merges", u.New}
+	if start != "" {
+		list = append(list, "--no-merged="+start)
+		revs = append(revs, "^"+start)
+	}
+	if hasDefault && name != git.DefaultBranch {
+		revs = append(revs, "^"+main)
+	}
+	listed, err := s.output(ctx, env, "", append(list, "refs/heads/")...)
+	if err != nil {
+		return git.Brought{}, err
+	}
+	b := git.Brought{Branch: name}
+	for line := range strings.SplitSeq(strings.TrimSpace(listed), "\n") {
+		branch, sha, ok := strings.Cut(line, " ")
+		if !ok || branch == name || branch == git.DefaultBranch {
+			continue
+		}
+		b.Heads = append(b.Heads, git.Head{Branch: branch, SHA: sha})
+		revs = append(revs, "^"+sha)
+	}
+	if b.Orphans, err = s.count(ctx, dir, env, revs...); err != nil {
+		return git.Brought{}, err
+	}
+	return b, nil
 }
 
 // linearHistory reports whether reqs require linear history of merges into the default branch.
@@ -131,14 +210,9 @@ func (s *Server) requirementsAt(ctx context.Context, dir string, env []string, c
 }
 
 // aheadBehind counts every live branch but the default against its tip, head, in one walk, as git for-each-ref's
-// ahead-behind does, over the branches as they are once the push applies; and, when linear is true, the merges among
-// each one's commits that head lacks.
-func (s *Server) aheadBehind(ctx context.Context, dir string, env []string, tips map[string]string, head string, linear bool) ([]git.Facts, error) {
-	refs, remove, err := s.tipsDir(dir, tips)
-	if err != nil {
-		return nil, err
-	}
-	defer remove()
+// ahead-behind does, over refs, the branches as they are once the push applies; and, when linear is true, the merges
+// among each one's commits that head lacks.
+func (s *Server) aheadBehind(ctx context.Context, refs, dir string, env []string, tips map[string]string, head string, linear bool) ([]git.Facts, error) {
 	listed, err := s.output(ctx, env, "", "--git-dir="+refs, "for-each-ref", "--format=%(refname:lstrip=2) %(ahead-behind:"+head+")",
 		"refs/heads/")
 	if err != nil {
