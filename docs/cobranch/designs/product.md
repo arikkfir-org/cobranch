@@ -46,8 +46,6 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Sign-in and organizations](sign-in-and-organizations.md) | Sign-in, sign-up, organizations, their members and API keys. | Agreed |
 | [Back-office](back-office.md) | The Admin server and the Back-office: organizations, users, settings and providers. | Agreed |
 | [Git hosting](git-hosting.md) | Repositories, the Git server and the push worker, personal tokens and login-less authors. | Agreed |
-| [Branch status](https://claude.ai/artifact/2NuiCJYpPVGGqX78b47dMH) | Commit annotations, merge requirements, how a branch’s status is computed, and merges. | Proposed |
-| [Code browsing](code-browsing.md) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -114,8 +112,6 @@ what may be overridden, as Octomaton trusts only the default branch’s definiti
 
 A branch is the request to merge into its base: there is no separate pull request. Each branch carries a real-time,
 threaded chat whose messages can point at a file and line range, which is how review comments point at code.
-Annotations, merge requirements, how a branch's status is computed and how a merge is recorded are in [Branch status and
-merges](https://claude.ai/artifact/2NuiCJYpPVGGqX78b47dMH).
 
 **A branch’s status is computed; the first rule that matches wins**
 
@@ -176,9 +172,6 @@ so a fetch and the Console already show it. The push worker, which nobody calls 
 push up a moment later and derives the rest: its authors' principals, and later branch status, merges and jobs ([Git
 hosting](git-hosting.md#a-push)).
 
-Only the Git server reads Git objects: the Console's files, trees, history and rendered Markdown come from it through
-the API servers ([Code browsing](code-browsing.md)).
-
 ## Relation to the Kfirs hub
 
 **Each hand-assembled part of the Kfirs hub becomes a built-in part of Cobranch**
@@ -221,8 +214,7 @@ Each domain gets its own design, drafted as a page like this one and linked unde
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
 slice after the ones it waits for. The design, the installable foundations, and identity and organizations (sign-in,
-organizations and the Back-office) are done, and so is Git hosting; branch status and browsing code in the Console are
-in progress.
+organizations and the Back-office) are done; Git hosting is in progress.
 
 **The roadmap by milestone, as of 2026-11-01**
 
