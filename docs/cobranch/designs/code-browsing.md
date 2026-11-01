@@ -283,10 +283,6 @@ Nothing of an installation is in the product: the chart wires the internal call 
 
 ## Open questions
 
-1. **Images from outside: links, or a proxy?** Proposed: links, which the issue's "no outside content" asks; a proxy
-   that fetches and serves them from the installation can come later, as GitHub's does.
-2. **Immutable raw bytes at a commit,** beside the house rules' `no-cache`? Proposed: yes, for full commit names only.
-3. **The internal token in PostgreSQL** rather than a Secret the chart generates? Proposed: yes, since a render without
-   the cluster can't keep the Secret and the operator then configures nothing.
+None. Images from elsewhere, the raw bytes' caching and the viewer's token were decided on 2026-11-01 (see Decisions).
 
 Cobranch is a Kfirs project, created by Arik Kfir.
