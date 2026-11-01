@@ -28,7 +28,8 @@ Every value has a default: `values.yaml` lists them, and `values.schema.json` ch
   the database up with `pg_dump`, which takes the large objects with it unless you name schemas or tables, or with your
   operator's snapshots, and restore it as the role Cobranch connects as, which owns the large objects.
 - **Moving packs** from one store to another, such as from a bucket into the database: set `blob.url` to the new store
-  and `blob.moveFrom` to the old one, as `blob.url` named it. The Git server writes to the new store and reads from the
+  and `blob.moveFrom` to the old one, as `blob.url` named it; a `file://` one on a lasting volume, never an emptyDir,
+  which maintenance can't see. The Git server writes to the new store and reads from the
   old one what the new one lacks, and the maintenance CronJob copies the old store over every hour, each object checked
   by its size and MD5, logging how many are left. Once a run logs that none are, remove `blob.moveFrom`; nothing
   deletes the old store, so delete it when you like. Until then, moving back is the same move the other way round.

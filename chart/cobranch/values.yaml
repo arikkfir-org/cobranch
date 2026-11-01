@@ -98,7 +98,8 @@ blob:
   # The store objects move from, named as url names one, while an installation moves its packs into url's: the Git
   # server reads from it what url's store lacks, and maintenance copies it over every hour and logs how many objects
   # are left. Once a run logs that none are, remove moveFrom, and delete the old store when you like: nothing deletes
-  # it for you. A file:// store must be on blob.volume, under mountPath.
+  # it for you. A file:// store must be on blob.volume, under mountPath, and lasting: on an emptyDir, each pod's own,
+  # maintenance never sees the Git server's packs, so the chart refuses it.
   moveFrom: ""
   # A Secret whose keys become the Git server's and maintenance's environment, for credentials the URL's driver reads
   # (such as AWS_ACCESS_KEY_ID). Prefer the cloud's workload identity: serviceAccount.annotations.
