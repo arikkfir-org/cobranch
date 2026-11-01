@@ -45,30 +45,34 @@ func TestParseUpdates(t *testing.T) {
 	}
 }
 
-func TestHookRequestEnv(t *testing.T) {
+func TestHookRequestWithin(t *testing.T) {
 	dir := "/data/work/repo-1"
 	tests := []struct {
-		name    string
-		hr      hookRequest
-		want    []string
-		wantErr bool
+		name           string
+		hr             hookRequest
+		wantQuarantine string
+		wantEnv        []string
+		wantErr        bool
 	}{
 		{name: "the quarantine and the repository's objects", hr: hookRequest{Quarantine: dir + "/objects/tmp_objdir-incoming-x", ObjectDirectory: dir + "/objects/tmp_objdir-incoming-x",
-			Alternates: dir + "/objects"}, want: []string{"GIT_ALTERNATE_OBJECT_DIRECTORIES=" + dir + "/objects", "GIT_OBJECT_DIRECTORY=" + dir + "/objects/tmp_objdir-incoming-x",
-			"GIT_QUARANTINE_PATH=" + dir + "/objects/tmp_objdir-incoming-x"}},
+			Alternates: dir + "/objects"}, wantQuarantine: dir + "/objects/tmp_objdir-incoming-x", wantEnv: []string{"GIT_QUARANTINE_PATH=" + dir + "/objects/tmp_objdir-incoming-x",
+			"GIT_OBJECT_DIRECTORY=" + dir + "/objects/tmp_objdir-incoming-x", "GIT_ALTERNATE_OBJECT_DIRECTORIES=" + dir + "/objects"}},
+		{name: "paths that wander inside", hr: hookRequest{Quarantine: dir + "/objects/../objects/q/", Alternates: dir + "/objects:" + dir + "/./alt"},
+			wantQuarantine: dir + "/objects/q", wantEnv: []string{"GIT_QUARANTINE_PATH=" + dir + "/objects/q", "GIT_ALTERNATE_OBJECT_DIRECTORIES=" + dir + "/objects:" + dir + "/alt"}},
 		{name: "nothing", hr: hookRequest{}},
 		{name: "a quarantine outside the repository", hr: hookRequest{Quarantine: "/data/work/repo-2/objects"}, wantErr: true},
+		{name: "a relative quarantine", hr: hookRequest{Quarantine: "objects/q"}, wantErr: true},
 		{name: "a way out", hr: hookRequest{ObjectDirectory: dir + "/../repo-2/objects"}, wantErr: true},
 		{name: "one alternate of two outside", hr: hookRequest{Alternates: dir + "/objects:/etc"}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.hr.env(dir)
+			got, err := tt.hr.within(dir)
 			if (err != nil) != tt.wantErr {
-				t.Fatalf("env() = %v, %v", got, err)
+				t.Fatalf("within() = %+v, %v", got, err)
 			}
-			if strings.Join(slices.Sorted(slices.Values(got)), " ") != strings.Join(tt.want, " ") {
-				t.Errorf("env() = %v, want %v", got, tt.want)
+			if got.quarantine != tt.wantQuarantine || !slices.Equal(got.env, tt.wantEnv) {
+				t.Errorf("within() = %+v, want quarantine %q and environment %v", got, tt.wantQuarantine, tt.wantEnv)
 			}
 		})
 	}

@@ -102,17 +102,17 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 	if why := git.Refusal(updates); why != "" {
 		return git.Answer{Message: why}
 	}
-	env, err := hr.env(p.dir)
+	objects, err := hr.within(p.dir)
 	if err != nil {
 		slog.ErrorContext(ctx, "A hook named objects outside its repository", "push", p.id, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
-	commits, err := s.newCommits(ctx, p.dir, env, updates)
+	commits, err := s.newCommits(ctx, p.dir, objects.env, updates)
 	if err != nil {
 		slog.ErrorContext(ctx, "Reading a push's commits failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
-	pack, err := s.storePack(ctx, p, hr.Quarantine)
+	pack, err := s.storePack(ctx, p, objects.quarantine)
 	if err != nil {
 		slog.ErrorContext(ctx, "Storing a push's pack failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
@@ -142,22 +142,54 @@ func parseUpdates(lines string) ([]git.RefUpdate, error) {
 	return updates, nil
 }
 
-// env is what Git told the hook of where the push's objects are, for the git CLI to read them: each path within dir.
-func (hr hookRequest) env(dir string) ([]string, error) {
-	paths := map[string]string{"GIT_QUARANTINE_PATH": hr.Quarantine, "GIT_OBJECT_DIRECTORY": hr.ObjectDirectory, "GIT_ALTERNATE_OBJECT_DIRECTORIES": hr.Alternates}
-	var env []string
-	for name, value := range paths {
-		if value == "" {
-			continue
-		}
-		for path := range strings.SplitSeq(value, string(os.PathListSeparator)) {
-			if rel, err := filepath.Rel(dir, path); err != nil || rel == ".." || strings.HasPrefix(rel, "../") || filepath.IsAbs(rel) {
-				return nil, fmt.Errorf("%s is %s, outside %s", name, path, dir)
-			}
-		}
-		env = append(env, name+"="+value)
+// objectDirs is where Git keeps a push's objects while its hook runs: the quarantine that holds its pack, and the
+// environment through which the git CLI reads them.
+type objectDirs struct {
+	quarantine string
+	env        []string
+}
+
+// within resolves what Git told the hook of where the push's objects are, each path within dir, so that a call can't
+// have the server read or upload files outside the push's repository.
+func (hr hookRequest) within(dir string) (objectDirs, error) {
+	quarantine, err := inside(dir, hr.Quarantine)
+	if err != nil {
+		return objectDirs{}, fmt.Errorf("GIT_QUARANTINE_PATH: %w", err)
 	}
-	return env, nil
+	objects, err := inside(dir, hr.ObjectDirectory)
+	if err != nil {
+		return objectDirs{}, fmt.Errorf("GIT_OBJECT_DIRECTORY: %w", err)
+	}
+	var alternates []string
+	if hr.Alternates != "" {
+		for path := range strings.SplitSeq(hr.Alternates, string(os.PathListSeparator)) {
+			alternate, err := inside(dir, path)
+			if err != nil {
+				return objectDirs{}, fmt.Errorf("GIT_ALTERNATE_OBJECT_DIRECTORIES: %w", err)
+			}
+			alternates = append(alternates, alternate)
+		}
+	}
+	od := objectDirs{quarantine: quarantine}
+	for _, v := range [][2]string{{"GIT_QUARANTINE_PATH", quarantine}, {"GIT_OBJECT_DIRECTORY", objects},
+		{"GIT_ALTERNATE_OBJECT_DIRECTORIES", strings.Join(alternates, string(os.PathListSeparator))}} {
+		if v[1] != "" {
+			od.env = append(od.env, v[0]+"="+v[1])
+		}
+	}
+	return od, nil
+}
+
+// inside returns path, which must lie within dir, rebuilt from dir and path's place relative to it; "" stays "".
+func inside(dir, path string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || !filepath.IsLocal(rel) {
+		return "", fmt.Errorf("%s is outside %s", path, dir)
+	}
+	return filepath.Join(dir, rel), nil
 }
 
 // newCommits reads every commit the push brings that the repository's refs don't reach, whole.
