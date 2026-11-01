@@ -176,8 +176,7 @@ type Credential struct {
 	Name string
 	// Permissions are the permissions a personal token may use, sorted; nil for an API key's secret.
 	Permissions []string
-	// Issuer and Subject name the identity of the session that made a personal token; empty for a seeded sign-in's
-	// and for an API key's secret.
+	// Issuer and Subject name the identity of the session that made a personal token; empty for an API key's secret.
 	Issuer, Subject string
 }
 
