@@ -69,14 +69,14 @@ COBRANCH_HTTP_ADDR=:8083 COBRANCH_BACK_OFFICE_URL=http://localhost:3001 \
 
 `auth-server` signs people in. It needs the Console's URL and its own, and an identity provider or the demo data
 (`COBRANCH_SEED=true` with `migrate`, then with `auth-server`, lets the sign-in page sign in as a demo user);
-`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given the bucket, it also deletes the packs nobody lists any more and compacts the repositories that have too many, working in `COBRANCH_GIT_DATA_DIR`:
+`maintenance` deletes expired sign-in flows, sessions, invitations and join requests once and exits; given `COBRANCH_GIT_COMPACT_AT`, it also deletes the packs nobody lists any more and compacts the repositories that have that many packs or more, working in `COBRANCH_GIT_DATA_DIR`:
 
 ```bash
 export COBRANCH_CONSOLE_URL=http://localhost:3000 COBRANCH_AUTH_URL=http://localhost:8082
 export COBRANCH_AUTH_PROVIDERS='[{"id":"google","name":"Google","preset":"google","clientId":"…"}]'
 export COBRANCH_AUTH_CLIENT_SECRET_GOOGLE='…'          # the redirect URI is $COBRANCH_AUTH_URL/callback
 COBRANCH_HTTP_ADDR=:8082 bin/cobranch auth-server        # :8082: /providers, /sign-in, /callback, /sign-out
-COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
+COBRANCH_GIT_COMPACT_AT=8 COBRANCH_GIT_DATA_DIR=/tmp/cobranch-git bin/cobranch maintenance
 ```
 
 They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH_LOG_LEVEL` the level), and send traces
