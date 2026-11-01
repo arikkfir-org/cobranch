@@ -12,18 +12,20 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a code.Store in memory: each repository's commits by name, branches and pushes. Fail, when set, fails
-// every listing.
+// Store is a code.Store in memory: each repository's commits by name, branches, tags and pushes. Fail, when set,
+// fails every listing.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
+	TagList    map[uuid.UUID][]code.Tag
 	Pushes     map[uuid.UUID]code.Push
 	Fail       error
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, Pushes: map[uuid.UUID]code.Push{}}
+	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
+		Pushes: map[uuid.UUID]code.Push{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -64,6 +66,14 @@ func (s *Store) Branch(_ context.Context, repoID uuid.UUID, name string) (code.B
 		}
 	}
 	return code.Branch{}, repos.ErrNotFound
+}
+
+// Tags lists the repository's tags in the order they were added.
+func (s *Store) Tags(_ context.Context, repoID uuid.UUID) ([]code.Tag, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return slices.Clone(s.TagList[repoID]), nil
 }
 
 // FirstParents walks the repository's commits from sha along first parents.

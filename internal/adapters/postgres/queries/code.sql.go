@@ -222,3 +222,35 @@ func (q *Queries) PushOf(ctx context.Context, repoID uuid.UUID, iD uuid.UUID) (P
 	)
 	return i, err
 }
+
+const tags = `-- name: Tags :many
+SELECT substr(name, length('refs/tags/') + 1)::text AS name, sha FROM refs
+WHERE repo_id = $1 AND starts_with(name, 'refs/tags/')
+ORDER BY name COLLATE "C"
+`
+
+type TagsRow struct {
+	Name string
+	Sha  string
+}
+
+// Tags lists a repository's tags, by name, each with the object its ref names: a commit, or an annotated tag.
+func (q *Queries) Tags(ctx context.Context, repoID uuid.UUID) ([]TagsRow, error) {
+	rows, err := q.db.Query(ctx, tags, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []TagsRow
+	for rows.Next() {
+		var i TagsRow
+		if err := rows.Scan(&i.Name, &i.Sha); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

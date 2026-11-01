@@ -205,6 +205,15 @@ hosts the session cookie is set for. */}}
 {{- end }}
 {{- end -}}
 
+{{/* Where the REST and GraphQL servers read repositories' trees and files: the Git server's internal port, through
+its own Service, which no route names. Nothing without a Git server. */}}
+{{- define "cobranch.gitInternalEnv" -}}
+{{- if .Values.urls.git }}
+- name: COBRANCH_GIT_INTERNAL_URL
+  value: {{ printf "http://%s-git-server-internal" (include "cobranch.fullname" .) | quote }}
+{{- end }}
+{{- end -}}
+
 {{/* The Secret that holds the secrets key. */}}
 {{- define "cobranch.secretsKey.secret" -}}
 {{ .Values.secretsKey.existingSecret | default (printf "%s-secrets-key" (include "cobranch.fullname" .)) }}

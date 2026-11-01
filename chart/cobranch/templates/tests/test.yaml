@@ -2,8 +2,8 @@
 # helm test: every server is ready and answers, the Console and the Back-office serve their pages and where they find
 # the APIs, and, with the demo data on, a seeded sign-in makes a session the REST API accepts, which the Admin API
 # refuses unless the user administers the installation, who reads its settings and identity providers; with the Git
-# server, the user makes a personal token, clones a repository, pushes to it and finds the push in a fresh clone, and
-# its SSH Service, given one, answers.
+# server, the user makes a personal token, clones a repository, pushes to it and finds the push in a fresh clone and in
+# the REST API's files, and its SSH Service, given one, answers.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -121,6 +121,11 @@ spec:
           git -C website push origin HEAD:refs/heads/main
           git clone -q "$url" fresh
           [ "$(git -C fresh rev-parse HEAD)" = "$(git -C website rev-parse HEAD)" ]
+          # The REST API reads the pushed files from the Git server's internal port: main's root lists the README, whose
+          # bytes are the commit's.
+          wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/tree" | tee /dev/stderr \
+            | grep -q "\"commit\":\"$(git -C website rev-parse HEAD)\""
+          wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/raw?path=README.md" | grep -q 'Pushed by helm test'
           {{- end }}
           {{- end }}
           echo "Cobranch {{ .Values.images.cobranch.tag | default .Chart.AppVersion }} answers, built as $version"

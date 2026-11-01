@@ -17,6 +17,10 @@ type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
 	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
+	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
+	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
+	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
+	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 }
 
 func principal(p *code.Principal) *Principal {

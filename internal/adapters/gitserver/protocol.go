@@ -117,7 +117,7 @@ func mayPush(w http.ResponseWriter, req request) bool {
 
 // serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500.
 func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req request) (string, func(), bool) {
-	dir, remove, err := s.snapshotWorkspace(r.Context(), req.repo)
+	dir, remove, err := s.snapshotWorkspace(r.Context(), req.repo.ID)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Building a repository failed", "repository", req.repo.ID, "error", err)
 		http.Error(w, "the repository could not be read", http.StatusInternalServerError)
@@ -126,19 +126,19 @@ func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req requ
 	return dir, remove, true
 }
 
-// snapshotWorkspace builds a throwaway repository of repo from a snapshot read now. The cache then drops the
-// repository's packs the snapshot no longer lists.
-func (s *Server) snapshotWorkspace(ctx context.Context, repo repos.Repository) (string, func(), error) {
+// snapshotWorkspace builds a throwaway repository of the repository from a snapshot read now. The cache then drops
+// the repository's packs the snapshot no longer lists.
+func (s *Server) snapshotWorkspace(ctx context.Context, repoID uuid.UUID) (string, func(), error) {
 	read := time.Now()
-	snapshot, err := s.snaps.Snapshot(ctx, repo.ID)
+	snapshot, err := s.snaps.Snapshot(ctx, repoID)
 	if err != nil {
 		return "", nil, fmt.Errorf("reading the repository's snapshot: %w", err)
 	}
-	dir, remove, err := s.workspace(ctx, repo, snapshot)
+	dir, remove, err := s.workspace(ctx, repoID, snapshot)
 	if err != nil {
 		return "", nil, err
 	}
-	s.cache.retain(repo.ID, snapshot.Packs, read)
+	s.cache.retain(repoID, snapshot.Packs, read)
 	return dir, remove, nil
 }
 

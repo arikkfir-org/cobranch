@@ -28,6 +28,8 @@ func sha(n int) string { return fmt.Sprintf("%040x", n) }
 // at 6 on 2, and stray at an object no push recorded as a commit. Max reads the repository; Nia doesn't.
 type fixture struct {
 	store   *codetest.Store
+	objects *codetest.Objects
+	authz   *auth.Authorizer
 	repo    uuid.UUID
 	service *code.Service
 	max     code.Viewer
@@ -37,11 +39,12 @@ type fixture struct {
 
 func newFixture() *fixture {
 	o := orgstest.NewStore()
-	f := &fixture{store: codetest.NewStore(), repo: uuid.New(),
+	f := &fixture{store: codetest.NewStore(), objects: codetest.NewObjects(), repo: uuid.New(),
 		max: code.Viewer{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindUser, DisplayName: "Max"}},
 		nia: code.Viewer{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindUser, DisplayName: "Nia"}}}
 	o.Repos[f.repo] = uuid.New()
-	f.service = code.NewService(f.store, auth.NewAuthorizer(o))
+	f.authz = auth.NewAuthorizer(o)
+	f.service = code.NewService(f.store, f.objects, f.authz)
 	o.Grant(f.max.ID, auth.RoleReader, auth.ScopeRepository, f.repo)
 	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.max.ID, DisplayName: "Max"}, Transport: git.TransportHTTPS, At: now}
 	parents := map[int][]string{1: nil, 2: {sha(1)}, 3: {sha(2)}, 4: {sha(3)}, 5: {sha(4), sha(6)}, 6: {sha(2)}}

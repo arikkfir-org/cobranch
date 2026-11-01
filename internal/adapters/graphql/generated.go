@@ -97,6 +97,19 @@ type ComplexityRoot struct {
 		Verified func(childComplexity int) int
 	}
 
+	File struct {
+		Binary    func(childComplexity int) int
+		Commit    func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		Mode      func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Path      func(childComplexity int) int
+		Sha       func(childComplexity int) int
+		Size      func(childComplexity int) int
+		Text      func(childComplexity int) int
+		Truncated func(childComplexity int) int
+	}
+
 	Invitation struct {
 		CreatedAt        func(childComplexity int) int
 		Email            func(childComplexity int) int
@@ -218,6 +231,7 @@ type ComplexityRoot struct {
 
 	Repository struct {
 		Access            func(childComplexity int) int
+		Blob              func(childComplexity int, ref string, path string) int
 		Branches          func(childComplexity int) int
 		Commit            func(childComplexity int, sha string) int
 		CreatedAt         func(childComplexity int) int
@@ -230,6 +244,8 @@ type ComplexityRoot struct {
 		OrganizationID    func(childComplexity int) int
 		Roles             func(childComplexity int) int
 		Slug              func(childComplexity int) int
+		Tags              func(childComplexity int) int
+		Tree              func(childComplexity int, ref string, path string) int
 		ViewerPermissions func(childComplexity int) int
 		Visibility        func(childComplexity int) int
 	}
@@ -267,6 +283,27 @@ type ComplexityRoot struct {
 		IP         func(childComplexity int) int
 		LastSeenAt func(childComplexity int) int
 		UserAgent  func(childComplexity int) int
+	}
+
+	Tag struct {
+		Name   func(childComplexity int) int
+		Target func(childComplexity int) int
+	}
+
+	Tree struct {
+		Commit  func(childComplexity int) int
+		Entries func(childComplexity int) int
+		Path    func(childComplexity int) int
+		Sha     func(childComplexity int) int
+	}
+
+	TreeEntry struct {
+		Kind func(childComplexity int) int
+		Mode func(childComplexity int) int
+		Name func(childComplexity int) int
+		Path func(childComplexity int) int
+		Sha  func(childComplexity int) int
+		Size func(childComplexity int) int
 	}
 
 	User struct {
@@ -342,6 +379,9 @@ type RepositoryResolver interface {
 	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
 	History(ctx context.Context, obj *Repository, branch string, first int, after *string) (*CommitPage, error)
 	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
+	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
+	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
+	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -582,6 +622,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Email.Verified(childComplexity), true
+
+	case "File.binary":
+		if e.ComplexityRoot.File.Binary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Binary(childComplexity), true
+	case "File.commit":
+		if e.ComplexityRoot.File.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Commit(childComplexity), true
+	case "File.kind":
+		if e.ComplexityRoot.File.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Kind(childComplexity), true
+	case "File.mode":
+		if e.ComplexityRoot.File.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Mode(childComplexity), true
+	case "File.name":
+		if e.ComplexityRoot.File.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Name(childComplexity), true
+	case "File.path":
+		if e.ComplexityRoot.File.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Path(childComplexity), true
+	case "File.sha":
+		if e.ComplexityRoot.File.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Sha(childComplexity), true
+	case "File.size":
+		if e.ComplexityRoot.File.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Size(childComplexity), true
+	case "File.text":
+		if e.ComplexityRoot.File.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Text(childComplexity), true
+	case "File.truncated":
+		if e.ComplexityRoot.File.Truncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.File.Truncated(childComplexity), true
 
 	case "Invitation.createdAt":
 		if e.ComplexityRoot.Invitation.CreatedAt == nil {
@@ -1298,6 +1399,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Access(childComplexity), true
+	case "Repository.blob":
+		if e.ComplexityRoot.Repository.Blob == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_blob_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Blob(childComplexity, args["ref"].(string), args["path"].(string)), true
 	case "Repository.branches":
 		if e.ComplexityRoot.Repository.Branches == nil {
 			break
@@ -1380,6 +1492,23 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Slug(childComplexity), true
+	case "Repository.tags":
+		if e.ComplexityRoot.Repository.Tags == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Tags(childComplexity), true
+	case "Repository.tree":
+		if e.ComplexityRoot.Repository.Tree == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_tree_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Tree(childComplexity, args["ref"].(string), args["path"].(string)), true
 	case "Repository.viewerPermissions":
 		if e.ComplexityRoot.Repository.ViewerPermissions == nil {
 			break
@@ -1535,6 +1664,81 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Session.UserAgent(childComplexity), true
 
+	case "Tag.name":
+		if e.ComplexityRoot.Tag.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tag.Name(childComplexity), true
+	case "Tag.target":
+		if e.ComplexityRoot.Tag.Target == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tag.Target(childComplexity), true
+
+	case "Tree.commit":
+		if e.ComplexityRoot.Tree.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tree.Commit(childComplexity), true
+	case "Tree.entries":
+		if e.ComplexityRoot.Tree.Entries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tree.Entries(childComplexity), true
+	case "Tree.path":
+		if e.ComplexityRoot.Tree.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tree.Path(childComplexity), true
+	case "Tree.sha":
+		if e.ComplexityRoot.Tree.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Tree.Sha(childComplexity), true
+
+	case "TreeEntry.kind":
+		if e.ComplexityRoot.TreeEntry.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Kind(childComplexity), true
+	case "TreeEntry.mode":
+		if e.ComplexityRoot.TreeEntry.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Mode(childComplexity), true
+	case "TreeEntry.name":
+		if e.ComplexityRoot.TreeEntry.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Name(childComplexity), true
+	case "TreeEntry.path":
+		if e.ComplexityRoot.TreeEntry.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Path(childComplexity), true
+	case "TreeEntry.sha":
+		if e.ComplexityRoot.TreeEntry.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Sha(childComplexity), true
+	case "TreeEntry.size":
+		if e.ComplexityRoot.TreeEntry.Size == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeEntry.Size(childComplexity), true
+
 	case "User.displayName":
 		if e.ComplexityRoot.User.DisplayName == nil {
 			break
@@ -1689,7 +1893,9 @@ func newExecutionContext(
 
 var sources = []*ast.Source{
 	{Name: "../../../api/graphql/code.graphqls", Input: `# A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"); and its tags,
+# trees and files, which the Git server reads
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at; takes repo.read."
@@ -1698,6 +1904,77 @@ extend type Repository {
   history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
+  "The repository's tags, by name, each with the object it names; takes repo.read."
+  tags: [Tag!]!
+  "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
+  tree(ref: String! = "main", path: String! = ""): Tree
+  "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
+  blob(ref: String! = "main", path: String!): File
+}
+
+"One of a repository's tags and the object it names, a commit or an annotated tag."
+type Tag {
+  "Its name, without refs/tags/."
+  name: String!
+  "The object it names."
+  target: String!
+}
+
+"A directory at a commit."
+type Tree {
+  "The commit the ref resolved to, which every link to the directory's files may pin."
+  commit: String!
+  "Its path from the repository's root; empty for the root."
+  path: String!
+  "Its tree's object."
+  sha: String!
+  "Its directories and submodules first, then its files and symlinks, each by name."
+  entries: [TreeEntry!]!
+}
+
+"What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository."
+enum EntryKind {
+  TREE
+  BLOB
+  SYMLINK
+  SUBMODULE
+}
+
+"One of a directory's entries."
+type TreeEntry {
+  name: String!
+  "Its path from the repository's root."
+  path: String!
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644, 100755 or 040000."
+  mode: String!
+  "The object it names; a submodule's is the commit it pins."
+  sha: String!
+  "A file's or a symlink's size in bytes; null for a directory or a submodule."
+  size: Int
+}
+
+"A file or a symlink at a commit, and its text when it isn't binary."
+type File {
+  "The commit the ref resolved to."
+  commit: String!
+  "Its path from the repository's root."
+  path: String!
+  name: String!
+  "BLOB or SYMLINK."
+  kind: EntryKind!
+  "Its mode as Git writes it, such as 100644 or 120000."
+  mode: String!
+  "Its blob's object."
+  sha: String!
+  "Its size in bytes."
+  size: Int!
+  "Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8."
+  binary: Boolean!
+  "Whether its text stops at 1 MiB, short of its size."
+  truncated: Boolean!
+  "Its text, up to 1 MiB; null when it is binary. A symlink's is its target."
+  text: String
 }
 
 "One of a repository's live branches and the commit it is at."
@@ -2271,6 +2548,32 @@ func (ec *executionContext) childFields_Email(ctx context.Context, field graphql
 	return nil, fmt.Errorf("no field named %q was found under type Email", field.Name)
 }
 
+func (ec *executionContext) childFields_File(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commit":
+		return ec.fieldContext_File_commit(ctx, field)
+	case "path":
+		return ec.fieldContext_File_path(ctx, field)
+	case "name":
+		return ec.fieldContext_File_name(ctx, field)
+	case "kind":
+		return ec.fieldContext_File_kind(ctx, field)
+	case "mode":
+		return ec.fieldContext_File_mode(ctx, field)
+	case "sha":
+		return ec.fieldContext_File_sha(ctx, field)
+	case "size":
+		return ec.fieldContext_File_size(ctx, field)
+	case "binary":
+		return ec.fieldContext_File_binary(ctx, field)
+	case "truncated":
+		return ec.fieldContext_File_truncated(ctx, field)
+	case "text":
+		return ec.fieldContext_File_text(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
+}
+
 func (ec *executionContext) childFields_Invitation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -2461,6 +2764,12 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_history(ctx, field)
 	case "commit":
 		return ec.fieldContext_Repository_commit(ctx, field)
+	case "tags":
+		return ec.fieldContext_Repository_tags(ctx, field)
+	case "tree":
+		return ec.fieldContext_Repository_tree(ctx, field)
+	case "blob":
+		return ec.fieldContext_Repository_blob(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Repository", field.Name)
 }
@@ -2533,6 +2842,48 @@ func (ec *executionContext) childFields_Session(ctx context.Context, field graph
 		return ec.fieldContext_Session_current(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Session", field.Name)
+}
+
+func (ec *executionContext) childFields_Tag(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_Tag_name(ctx, field)
+	case "target":
+		return ec.fieldContext_Tag_target(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Tag", field.Name)
+}
+
+func (ec *executionContext) childFields_Tree(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commit":
+		return ec.fieldContext_Tree_commit(ctx, field)
+	case "path":
+		return ec.fieldContext_Tree_path(ctx, field)
+	case "sha":
+		return ec.fieldContext_Tree_sha(ctx, field)
+	case "entries":
+		return ec.fieldContext_Tree_entries(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Tree", field.Name)
+}
+
+func (ec *executionContext) childFields_TreeEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_TreeEntry_name(ctx, field)
+	case "path":
+		return ec.fieldContext_TreeEntry_path(ctx, field)
+	case "kind":
+		return ec.fieldContext_TreeEntry_kind(ctx, field)
+	case "mode":
+		return ec.fieldContext_TreeEntry_mode(ctx, field)
+	case "sha":
+		return ec.fieldContext_TreeEntry_sha(ctx, field)
+	case "size":
+		return ec.fieldContext_TreeEntry_size(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TreeEntry", field.Name)
 }
 
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3393,6 +3744,28 @@ func (ec *executionContext) field_Query_roles_args(ctx context.Context, rawArgs 
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_blob_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ref"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "path",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Repository_commit_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -3434,6 +3807,28 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_tree_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ref"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "path",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg1
 	return args, nil
 }
 
@@ -4363,6 +4758,236 @@ func (ec *executionContext) _Email_verified(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_Email_verified(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Email", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _File_commit(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_path(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_name(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_kind(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v EntryKind) graphql.Marshaler {
+			return ec.marshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "EntryKind")
+}
+
+func (ec *executionContext) _File_mode(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_mode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_sha(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _File_size(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_size(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "Int")
+}
+
+func (ec *executionContext) _File_binary(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_binary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Binary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_binary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _File_truncated(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_truncated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Truncated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_File_truncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _File_text(ctx context.Context, field graphql.CollectedField, obj *File) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_File_text(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_File_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("File", field, false, false, "String")
 }
 
 func (ec *executionContext) _Invitation_id(ctx context.Context, field graphql.CollectedField, obj *Invitation) (ret graphql.Marshaler) {
@@ -7694,6 +8319,126 @@ func (ec *executionContext) fieldContext_Repository_commit(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_tags(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_tags(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().Tags(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Tag) graphql.Marshaler {
+			return ec.marshalNTag2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTagᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_tags(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Tag(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_tree(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_tree(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Tree(ctx, obj, fc.Args["ref"].(string), fc.Args["path"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Tree) graphql.Marshaler {
+			return ec.marshalOTree2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTree(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_tree(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Tree(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_tree_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_blob(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_blob(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Blob(ctx, obj, fc.Args["ref"].(string), fc.Args["path"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *File) graphql.Marshaler {
+			return ec.marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFile(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_blob(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_File(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_blob_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RepositoryAccess_principalId(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -8230,6 +8975,291 @@ func (ec *executionContext) _Session_current(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_Session_current(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Session", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _Tag_name(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tag_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tag_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Tag", field, false, false, "String")
+}
+
+func (ec *executionContext) _Tag_target(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tag_target(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Target, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tag_target(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Tag", field, false, false, "String")
+}
+
+func (ec *executionContext) _Tree_commit(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tree_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tree_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Tree", field, false, false, "String")
+}
+
+func (ec *executionContext) _Tree_path(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tree_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tree_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Tree", field, false, false, "String")
+}
+
+func (ec *executionContext) _Tree_sha(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tree_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tree_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Tree", field, false, false, "String")
+}
+
+func (ec *executionContext) _Tree_entries(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Tree_entries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Entries, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TreeEntry) graphql.Marshaler {
+			return ec.marshalNTreeEntry2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Tree_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Tree",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TreeEntry(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TreeEntry_name(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeEntry_path(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeEntry_kind(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v EntryKind) graphql.Marshaler {
+			return ec.marshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "EntryKind")
+}
+
+func (ec *executionContext) _TreeEntry_mode(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_mode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeEntry_sha(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeEntry_size(ctx context.Context, field graphql.CollectedField, obj *TreeEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeEntry_size(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Size, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TreeEntry_size(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "Int")
 }
 
 func (ec *executionContext) _User_id(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
@@ -10399,6 +11429,84 @@ func (ec *executionContext) _Email(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var fileImplementors = []string{"File"}
+
+func (ec *executionContext) _File(ctx context.Context, sel ast.SelectionSet, obj *File) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("File")
+		case "commit":
+			out.Values[i] = ec._File_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._File_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._File_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._File_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._File_mode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._File_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._File_size(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "binary":
+			out.Values[i] = ec._File_binary(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "truncated":
+			out.Values[i] = ec._File_truncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._File_text(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var invitationImplementors = []string{"Invitation"}
 
 func (ec *executionContext) _Invitation(ctx context.Context, sel ast.SelectionSet, obj *Invitation) graphql.Marshaler {
@@ -11317,6 +12425,24 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_commit(ctx, field, obj)
 				})
+		case "tags":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_tags(ctx, field, obj)
+				})
+		case "tree":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_tree(ctx, field, obj)
+				})
+		case "blob":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_blob(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -11542,6 +12668,150 @@ func (ec *executionContext) _Session(ctx context.Context, sel ast.SelectionSet, 
 		case "current":
 			out.Values[i] = ec._Session_current(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var tagImplementors = []string{"Tag"}
+
+func (ec *executionContext) _Tag(ctx context.Context, sel ast.SelectionSet, obj *Tag) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, tagImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Tag")
+		case "name":
+			out.Values[i] = ec._Tag_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "target":
+			out.Values[i] = ec._Tag_target(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var treeImplementors = []string{"Tree"}
+
+func (ec *executionContext) _Tree(ctx context.Context, sel ast.SelectionSet, obj *Tree) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, treeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Tree")
+		case "commit":
+			out.Values[i] = ec._Tree_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._Tree_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._Tree_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "entries":
+			out.Values[i] = ec._Tree_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var treeEntryImplementors = []string{"TreeEntry"}
+
+func (ec *executionContext) _TreeEntry(ctx context.Context, sel ast.SelectionSet, obj *TreeEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, treeEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TreeEntry")
+		case "name":
+			out.Values[i] = ec._TreeEntry_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._TreeEntry_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._TreeEntry_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._TreeEntry_mode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._TreeEntry_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "size":
+			out.Values[i] = ec._TreeEntry_size(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -12163,6 +13433,16 @@ func (ec *executionContext) marshalNEmail2ᚖcobranchᚗdevᚋinternalᚋadapter
 	return ec._Email(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx context.Context, v any) (EntryKind, error) {
+	var res EntryKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx context.Context, sel ast.SelectionSet, v EntryKind) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
 	res, err := graphql.UnmarshalID(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -12564,6 +13844,30 @@ func (ec *executionContext) marshalNString2ᚕstringᚄ(ctx context.Context, sel
 	return ret
 }
 
+func (ec *executionContext) marshalNTag2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTagᚄ(ctx context.Context, sel ast.SelectionSet, v []*Tag) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTag2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTag(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTag2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTag(ctx context.Context, sel ast.SelectionSet, v *Tag) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Tag!")
+		return graphql.Null
+	}
+	return ec._Tag(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v any) (time.Time, error) {
 	res, err := graphql.UnmarshalTime(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -12576,6 +13880,30 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 		graphql.AddInvalidNullFromMarshaler(ctx, "Time!")
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNTreeEntry2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*TreeEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTreeEntry2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTreeEntry2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeEntry(ctx context.Context, sel ast.SelectionSet, v *TreeEntry) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "TreeEntry!")
+		return graphql.Null
+	}
+	return ec._TreeEntry(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {
@@ -12764,6 +14092,13 @@ func (ec *executionContext) marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternal
 	return ec._CommitPrincipal(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFile(ctx context.Context, sel ast.SelectionSet, v *File) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._File(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -12779,6 +14114,24 @@ func (ec *executionContext) marshalOID2ᚖstring(ctx context.Context, sel ast.Se
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalID(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOInt2ᚖint(ctx context.Context, v any) (*int, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalInt(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.SelectionSet, v *int) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalInt(*v)
 	return res
 }
 
@@ -12880,6 +14233,13 @@ func (ec *executionContext) marshalOTime2ᚖtimeᚐTime(ctx context.Context, sel
 	_ = ctx
 	res := graphql.MarshalTime(*v)
 	return res
+}
+
+func (ec *executionContext) marshalOTree2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTree(ctx context.Context, sel ast.SelectionSet, v *Tree) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Tree(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOUser2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUser(ctx context.Context, sel ast.SelectionSet, v *User) graphql.Marshaler {
