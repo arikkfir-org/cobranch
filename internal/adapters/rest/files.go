@@ -163,7 +163,9 @@ func fileOf(f code.File) File {
 }
 
 // GetRaw streams the bytes of the file or symlink at a path of the commit a ref names, as nothing that runs, or
-// answers 304 while the caller holds them: their ETag is their blob's object, which their content fixes.
+// answers 304 while the caller holds them: their ETag is their blob's object, which their content fixes. Asked at the
+// full name of the commit it resolves to, as a Markdown document's images are, they never change, so the browser
+// keeps them (rawCache).
 func (a api) GetRaw(ctx context.Context, req GetRawRequestObject) (GetRawResponseObject, error) {
 	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
 	if err != nil {
@@ -173,19 +175,30 @@ func (a api) GetRaw(ctx context.Context, req GetRawRequestObject) (GetRawRespons
 	if err != nil {
 		return nil, codeFail(err)
 	}
-	tag := `"` + raw.SHA + `"`
+	tag, cache := `"`+raw.SHA+`"`, rawCache(refOf(req.Params.Ref), raw.Commit)
 	if matches(req.Params.IfNoneMatch, tag) {
 		_ = raw.Body.Close() // nothing was read, and nothing will be
-		return GetRaw304Response{Headers: GetRaw304ResponseHeaders{ETag: tag}}, nil
+		return GetRaw304Response{Headers: GetRaw304ResponseHeaders{ETag: tag, CacheControl: cache}}, nil
 	}
 	body := bufio.NewReaderSize(raw.Body, 8192)
 	contentType := rawType(raw, body)
-	headers := GetRaw200ResponseHeaders{ETag: tag, ContentSecurityPolicy: rawPolicy, XContentTypeOptions: "nosniff", CrossOriginResourcePolicy: "same-site"}
+	headers := GetRaw200ResponseHeaders{ETag: tag, CacheControl: cache, ContentSecurityPolicy: rawPolicy, XContentTypeOptions: "nosniff",
+		CrossOriginResourcePolicy: "same-site"}
 	if contentType == "application/octet-stream" || (req.Params.Download != nil && *req.Params.Download) {
 		disposition := mime.FormatMediaType("attachment", map[string]string{"filename": path.Base(raw.Path)})
 		headers.ContentDisposition = &disposition
 	}
 	return GetRaw200AsteriskResponse{Body: readCloser{Reader: body, Closer: raw.Body}, Headers: headers, ContentType: contentType, ContentLength: raw.Size}, nil
+}
+
+// rawCache is the Cache-Control of raw bytes asked at ref, which resolved to commit: kept for a year when ref is the
+// commit's full name, since a commit's bytes never change; revalidated each time, as every answer, when it is a
+// branch or a tag, even one named like a commit.
+func rawCache(ref, commit string) string {
+	if commit != "" && strings.EqualFold(ref, commit) {
+		return "private, max-age=31536000, immutable"
+	}
+	return "private, no-cache"
 }
 
 // readCloser reads from Reader and closes Closer.

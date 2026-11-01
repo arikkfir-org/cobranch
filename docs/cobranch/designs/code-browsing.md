@@ -10,8 +10,8 @@ server’s internal port to the chart · Built by [ENG-228](https://linear.app/a
 requests
 
 People read a repository in the Console the way its authors wrote it: its directories and files at any branch, tag or
-commit, Markdown rendered as on GitHub but unable to run anything or load anything from outside, a README beneath every
-directory, and history through every parent. The REST and GraphQL servers ask the Git server, the only workload that
+commit, Markdown rendered as on GitHub but unable to run anything or load anything from outside but images, a README
+beneath every directory, and history through every parent. The REST and GraphQL servers ask the Git server, the only workload that
 reads Git objects, over an internal call this slice builds.
 
 ## Scope
@@ -134,11 +134,12 @@ through.
   Console's page of that path at the same ref; a link to a directory lands on its tree, which the Console tells from a
   file by asking. A relative image loads from the REST API's `…/raw` at the commit. A heading gets GitHub's anchor, its
   `id` prefixed with `user-content-` so no document clobbers the Console's own ids, and `#anchor` links scroll to it.
-- **Nothing loads from outside.** An image from another host, Markdown or HTML, becomes a link to it, labelled with its
-  alt text; `data:` images of PNG, JPEG, GIF and WebP stay. Badges from outside services show as links; an image proxy
-  may come later.
+- **Images from elsewhere load in the browser.** An image from another host, Markdown or HTML, stays at its URL, at https
+  when it names a host alone, and the viewer's browser loads it as any page's, cached as that host says; Cobranch
+  neither fetches nor proxies it. `data:` images of PNG, JPEG, GIF and WebP stay too. Nothing else loads from outside;
+  a setting with which a user turns images from elsewhere off may come later.
 - **A sandboxed frame in the Console.** The Console draws the HTML in an `iframe` with `sandbox` but no `allow-scripts`,
-  so nothing in it runs, and a Content Security Policy that lets it load images from the REST API and `data:` alone. The
+  so nothing in it runs, and a Content Security Policy that lets it load images alone, from any host and `data:`. The
   Console sizes the frame to its content and follows its links itself.
 
 ## READMEs
@@ -193,9 +194,10 @@ on.
 - **ETags from the commit.** A tree's, a file's and a history page's answer is fixed by the commit its ref resolved to,
   its path and the renderer's version, so its ETag is their hash; a matching `If-None-Match` answers `304` without a
   body. Every answer sends `Cache-Control: private, no-cache`, as the house rules ask.
-- **Raw bytes at a commit are immutable.** **Proposed:** `…/raw` asked at a full commit name, as the Console's images
-  always are, answers `Cache-Control: private, max-age=31536000, immutable`, so a README's images aren't asked again on
-  every view; asked at a branch or a tag, it stays `no-cache`.
+- **Raw bytes at a commit are immutable.** **Agreed (owner, 2026-11-01):** `…/raw` asked at the full name of the commit
+  it resolves to, as the Console's images always are, answers `Cache-Control: private, max-age=31536000, immutable`, its
+  `304` too, so a README's images aren't asked again on every view; asked at a branch or a tag, even one named like a
+  commit, it stays `no-cache`.
 - **The Git server's pack cache** serves every internal call as it does fetches; nothing else is cached in this slice.
 
 ## The Console
@@ -230,8 +232,8 @@ An operator whose NetworkPolicies select the Git server admits the REST and Grap
 ## Tests
 
 - **The renderer** in table-driven tests: every GFM feature, relative links and images at the root and in directories,
-  anchors, and the sanitizer against script, event handlers, `javascript:` URLs, `style`, SVG, `iframe`, forms, outside
-  images and DOM-clobbering ids.
+  anchors, images from elsewhere, and the sanitizer against script, event handlers, `javascript:` URLs, `style`, SVG,
+  `iframe`, forms and DOM-clobbering ids.
 - **The internal call end to end with the real `git`,** as Git hosting's tests do: push a repository with directories, a
   symlink, a submodule, binary and large files, an annotated tag and a merge, then read trees, blobs, raw bytes and
   every-parent history through the REST API, by branch, tag and commit, and the codes for missing refs and paths.
@@ -271,13 +273,13 @@ Nothing of an installation is in the product: the chart wires the internal call 
 | The internal call's token lives in PostgreSQL, written by a migration, instead of a Secret the chart generates | A render without the cluster can't keep a generated Secret; the database is already the shared trust | Proposed |
 | A ref is a full commit name, a branch or a tag, in that order, peeled to a commit; nothing else reaches `git` | One meaning per ref; no revision syntax from a URL | Proposed |
 | The API servers render Markdown, with goldmark (GFM) and an allow-list sanitizer, and resolve links and images inside the repository | One renderer for every client, tested in Go; later issues and reviews reuse it | Proposed |
-| Images from outside become links; nothing loads from another host | The issue asks that a document load no outside content | Proposed |
+| Images from other hosts load in the viewer's browser, cached as their hosts say; nothing else loads from outside, and nothing fetches or proxies them | A README's badges and screenshots show as their authors meant; a setting that turns them off may come later | Changed (owner, 2026-11-01) |
 | The Console shows rendered HTML in a sandboxed frame with its own Content Security Policy | A second guard that holds whatever the sanitizer misses, and no document reaches the Console's own page | Proposed |
 | A directory's README is the first of `README.md` … `README`, rendered in the tree's answer | One request per directory | Proposed |
 | History follows every parent by default in the Console, with a graph; `parents=first` keeps today's walk | A merge's second line shows; first parent stays one switch away | Proposed |
 | A demo installation's Job pushes a history to the demo organization's website: directories, Markdown, an image, a symlink, merges, a tag and an open branch | A preview shows every page of this slice at once, through the push path anyone takes | Agreed (owner, 2026-11-01) |
-| Raw bytes at a full commit name are cached as immutable; everything else is `private, no-cache` | A README's images load once; the house rules' default stays for whatever can change | Proposed |
-| Syntax colouring, each entry's last commit, blame, a file's history, diffs, an image proxy and code search come later | Keeps this slice to its issue | Proposed |
+| Raw bytes at the full name of their commit are cached as immutable; everything else is `private, no-cache` | A README's images load once; the house rules' default stays for whatever can change | Agreed (owner, 2026-11-01) |
+| Syntax colouring, each entry's last commit, blame, a file's history, diffs, a setting that turns images from elsewhere off and code search come later | Keeps this slice to its issue | Proposed |
 
 ## Open questions
 

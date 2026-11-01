@@ -6759,6 +6759,7 @@ type GetRawResponseObject interface {
 }
 
 type GetRaw200ResponseHeaders struct {
+	CacheControl              string
 	ContentDisposition        *string
 	ContentSecurityPolicy     string
 	CrossOriginResourcePolicy string
@@ -6779,6 +6780,7 @@ func (response GetRaw200AsteriskResponse) VisitGetRawResponse(w http.ResponseWri
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
 	}
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	if response.Headers.ContentDisposition != nil {
 		w.Header().Set("Content-Disposition", fmt.Sprint(*response.Headers.ContentDisposition))
 	}
@@ -6796,7 +6798,8 @@ func (response GetRaw200AsteriskResponse) VisitGetRawResponse(w http.ResponseWri
 }
 
 type GetRaw304ResponseHeaders struct {
-	ETag string
+	CacheControl string
+	ETag         string
 }
 
 type GetRaw304Response struct {
@@ -6804,6 +6807,7 @@ type GetRaw304Response struct {
 }
 
 func (response GetRaw304Response) VisitGetRawResponse(w http.ResponseWriter) error {
+	w.Header().Set("Cache-Control", fmt.Sprint(response.Headers.CacheControl))
 	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(304)
 	return nil

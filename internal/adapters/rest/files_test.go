@@ -158,6 +158,35 @@ func TestRawAPI(t *testing.T) {
 	}
 }
 
+// TestRawCache checks that raw bytes asked at their commit's full name are kept for a year, revalidations included,
+// and that those asked at a branch, even one named like a commit, are revalidated each time.
+func TestRawCache(t *testing.T) {
+	const immutable, revalidated = "private, max-age=31536000, immutable", "private, no-cache"
+	tests := []struct {
+		name, ref, ifNoneMatch, want string
+		wantStatus                   int
+	}{
+		{name: "at a branch", ref: "main", want: revalidated, wantStatus: 200},
+		{name: "at the commit's full name", ref: shaOf("c"), want: immutable, wantStatus: 200},
+		{name: "revalidated at the commit's full name", ref: shaOf("c"), ifNoneMatch: "*", want: immutable, wantStatus: 304},
+		{name: "at a branch named like a commit", ref: shaOf("e"), want: revalidated, wantStatus: 200},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newOrgFixture(t)
+			f.objects.Commit(shaOf("f"), map[string]string{"README.md": "# Moved\n"}, shaOf("e"))
+			req := httptest.NewRequest("GET", "/v1/orgs/acme/repos/website/raw?path=README.md&ref="+tt.ref, nil)
+			if tt.ifNoneMatch != "" {
+				req.Header.Set("If-None-Match", tt.ifNoneMatch)
+			}
+			rec := f.serve(&f.olivia, req)
+			if rec.Code != tt.wantStatus || rec.Header().Get("Cache-Control") != tt.want {
+				t.Errorf("status %d, Cache-Control %q; want %d, %q", rec.Code, rec.Header().Get("Cache-Control"), tt.wantStatus, tt.want)
+			}
+		})
+	}
+}
+
 // serve serves req to viewer.
 func (f *orgFixture) serve(viewer *auth.Authenticated, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
