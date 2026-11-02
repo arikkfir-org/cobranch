@@ -38,4 +38,6 @@ type Resolver struct {
 	IssueService Issues
 	// Chats is the service of the branches' chats.
 	Chats Chats
+	// Agents is the service of the organizations' agents and their tasks.
+	Agents Agents
 }

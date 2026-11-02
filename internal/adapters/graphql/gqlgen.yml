@@ -38,6 +38,10 @@ models:
       repository: { resolver: true }
       issues: { resolver: true }
       issue: { resolver: true }
+      agents: { resolver: true }
+      agent: { resolver: true }
+      tasks: { resolver: true }
+      task: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }

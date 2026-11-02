@@ -1,0 +1,148 @@
+# An organization's agents, principals it owns that its members create and assign tasks to, and their tasks, each of
+# which does no more than both its agent and its assigner may
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Agents" and "Tasks").
+
+extend type Organization {
+  "The organization's agents by name, each with its grants; takes org.read."
+  agents: [Agent!]!
+  "One of the organization's agents by ID: null unless it is there; takes org.read."
+  agent(id: ID!): Agent
+  "A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
+  tasks(agent: ID, states: [TaskState!], repositoryId: ID, first: Int! = 30, after: String): TaskPage!
+  "One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read."
+  task(number: Int!): Task
+}
+
+"One of an organization's agents, a principal it owns that takes tasks, with the roles it holds."
+type Agent {
+  "Its principal's ID."
+  id: ID!
+  name: String!
+  description: String!
+  "The standing instructions, in Markdown, that every task of it starts from."
+  instructions: String!
+  "Whether Cobranch made it for the organization; it is never deleted."
+  builtIn: Boolean!
+  "Who created it; null for a built-in agent, and once its creator is gone."
+  createdBy: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+  "The roles it holds, those at the organization first."
+  grants: [AgentGrant!]!
+}
+
+"A role an agent holds, at its organization or, with a repository, on that repository."
+type AgentGrant {
+  roleId: ID!
+  roleName: String!
+  "The repository it holds the role on; null at the organization."
+  repositoryId: ID
+  repositorySlug: String
+}
+
+"Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread."
+enum TaskState {
+  QUEUED
+  RUNNING
+  WAITING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+"A page of an organization's tasks, newest first."
+type TaskPage {
+  tasks: [Task!]!
+  "Where the next page starts, as tasks' after; null after the last page."
+  nextCursor: String
+}
+
+"A task of one of the organization's agents, which the organization numbers."
+type Task {
+  id: ID!
+  "Counts the organization's tasks from 1."
+  number: Int!
+  agent: CommitPrincipal!
+  "What it is for: assigned for a task a principal assigned."
+  kind: String!
+  "Its assigner, whose permissions cap it; null once they are gone, when it may do nothing."
+  assignedBy: CommitPrincipal
+  title: String!
+  "Its instructions, in Markdown."
+  instructions: String!
+  "The repository it works in; null for none."
+  repositoryId: ID
+  repositorySlug: String
+  "The branch of that repository it works on; null for none."
+  branchId: ID
+  branch: String
+  "The thread of that branch's chat it talks in; null for none."
+  threadId: ID
+  state: TaskState!
+  "Why it failed or was cancelled; empty otherwise."
+  reason: String!
+  "What the agent said it did, once it ended."
+  summary: String!
+  cancelledBy: CommitPrincipal
+  createdAt: Time!
+  "When it started; null until it does."
+  startedAt: Time
+  "When it ended; null until it does."
+  endedAt: Time
+  "Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"A role a new agent starts with, at the organization or, with a repository, on that repository."
+input AgentGrantInput {
+  roleId: ID!
+  repositoryId: ID
+}
+
+"A new agent."
+input AgentInput {
+  "1 to 100 characters, unique in the organization in any case."
+  name: String!
+  "At most 1000 characters."
+  description: String
+  "At most 20000 characters of Markdown."
+  instructions: String
+  "At most 20, each one the creator holds every permission of where it applies."
+  grants: [AgentGrantInput!]
+}
+
+"What changes about an agent; a field left out keeps its value."
+input AgentPatch {
+  name: String
+  description: String
+  instructions: String
+}
+
+"A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat."
+input TaskInput {
+  agentId: ID!
+  "1 to 200 characters."
+  title: String!
+  "At most 20000 characters of Markdown."
+  instructions: String
+  repositoryId: ID
+  branchId: ID
+  "The branch's name, without refs/heads/, when branchId doesn't name it."
+  branch: String
+  threadId: ID
+}
+
+extend type Mutation {
+  "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
+  createAgent(organizationId: ID!, input: AgentInput!): Agent!
+  "Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
+  "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
+  "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
+  assignTask(organizationId: ID!, input: TaskInput!): Task!
+  "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  cancelTask(organizationId: ID!, number: Int!, expectedVersion: Int): Task!
+}

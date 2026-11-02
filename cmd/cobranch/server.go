@@ -70,7 +70,7 @@ var (
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
 	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, handler: func(version, pages string, s services) http.Handler {
-		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats)
+		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
 	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version, _ string, s services) http.Handler {
