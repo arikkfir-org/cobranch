@@ -54,6 +54,7 @@ func newOrgFixture(t *testing.T) *orgFixture {
 }
 
 func TestOrgStoreCreate(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	org, err := f.s.BySlug(ctx, "acme")
@@ -88,6 +89,7 @@ func TestOrgStoreCreate(t *testing.T) {
 }
 
 func TestOrgStoreUpdate(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	org := f.acme
@@ -123,6 +125,7 @@ func TestOrgStoreUpdate(t *testing.T) {
 }
 
 func TestOrgStoreMembers(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	members, err := f.s.Members(ctx, f.acme.ID)
@@ -171,6 +174,7 @@ func TestOrgStoreMembers(t *testing.T) {
 }
 
 func TestOrgStoreInvitations(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	inv := orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, Email: "nia@example.com", RoleID: auth.RoleGuest, InvitedBy: f.olivia, State: orgs.StatePending, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
@@ -227,6 +231,7 @@ func TestOrgStoreInvitations(t *testing.T) {
 }
 
 func TestOrgStoreInviteAfterExpiry(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	inv := orgs.Invitation{ID: uuid.New(), OrgID: f.acme.ID, Email: "nia@example.com", RoleID: auth.RoleGuest, InvitedBy: f.olivia, CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
@@ -258,6 +263,7 @@ func TestOrgStoreInviteAfterExpiry(t *testing.T) {
 }
 
 func TestOrgStoreJoinRequests(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	req := orgs.JoinRequest{ID: uuid.New(), OrgID: f.acme.ID, UserID: f.nia, Note: "Let me in", CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
@@ -291,6 +297,7 @@ func TestOrgStoreJoinRequests(t *testing.T) {
 }
 
 func TestOrgStoreLeave(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	if err := f.s.Leave(ctx, f.olivia, f.acme.ID, f.olivia, now); !errors.Is(err, orgs.ErrLastOwner) {
@@ -339,6 +346,7 @@ func TestOrgStoreLeave(t *testing.T) {
 }
 
 func TestOrgStoreRolesAndExpiry(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	roles, err := f.s.Roles(ctx, f.acme.ID)

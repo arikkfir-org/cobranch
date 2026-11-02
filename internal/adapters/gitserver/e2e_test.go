@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel/metric"
 	gocloudblob "gocloud.dev/blob"
 
 	"cobranch.dev/db/migrations"
@@ -70,6 +71,8 @@ type stack struct {
 	record func(ctx context.Context, push git.Push, next git.Store) error
 	// quotas, when set, hold the pushes of the servers served after to their organizations' Git data limits.
 	quotas git.Quotas
+	// meter, when set, makes the metrics of the Git servers the stack starts from then on.
+	meter metric.MeterProvider
 }
 
 // The object stores a stack's packs may live in: the database's large objects, the default, or a directory.
@@ -167,7 +170,7 @@ func (s *stack) server(dataDir string) *gitserver.Server {
 	if s.quotas != nil {
 		domain.WithQuotas(s.quotas)
 	}
-	srv, err := gitserver.New(context.Background(), gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}},
+	srv, err := gitserver.New(context.Background(), gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}, Meter: s.meter},
 		auth.NewService(postgres.NewAuthStore(s.pool), nil, auth.Settings{}), repos.NewService(postgres.NewRepoStore(s.pool), auth.NewAuthorizer(orgStore)),
 		domain, domain, s.bucket)
 	if err != nil {
@@ -313,6 +316,7 @@ func query[T any](t *testing.T, pool *pgxpool.Pool, sql string, args ...any) T {
 }
 
 func TestStatusCodes(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	reader, narrow := s.token(gwen), s.token(olivia, "repo.read")
 	tests := []struct {

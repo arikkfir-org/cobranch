@@ -14,6 +14,7 @@ import (
 )
 
 func TestOrgStoreAllOrganizations(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	globex := orgs.Organization{ID: uuid.Must(uuid.NewV7()), Slug: "globex", Name: "Globex 100%", MembershipRoleID: auth.RoleMember, CreatedAt: now}
@@ -77,6 +78,7 @@ func cmpUUID(a, b uuid.UUID) int {
 }
 
 func TestOrgStoreAllUsers(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	if _, err := f.pool.Exec(ctx, "INSERT INTO grants (principal_id, role_id, scope, source) VALUES ($1, $2, 'installation', 'admins')",
@@ -126,6 +128,7 @@ func TestOrgStoreAllUsers(t *testing.T) {
 }
 
 func TestOrgStoreCreateFor(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	ada := f.nia // an administrator, as far as the store knows
@@ -181,6 +184,7 @@ func checkEntered(t *testing.T, f *orgFixture, who uuid.UUID, granted bool) {
 }
 
 func TestOrgStoreEnter(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name       string
 		who        func(*orgFixture) uuid.UUID
@@ -195,6 +199,7 @@ func TestOrgStoreEnter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newOrgFixture(t)
 			ctx := context.Background()
 			who := tt.who(f)

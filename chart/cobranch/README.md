@@ -72,7 +72,12 @@ Every value has a default: `values.yaml` lists them, and `values.schema.json` ch
 - **Database.** The bundled PostgreSQL generates its password on install and keeps it. Under Argo CD, or anything else
   that renders without the cluster, set `postgresql.auth.existingSecret`. For your own database, set
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.
-- **Telemetry.** Logs go to stdout as JSON; set `telemetry.traces.endpoint` to an OTLP endpoint for traces.
+- **Telemetry.** Logs go to stdout as JSON; set `telemetry.traces.endpoint` to an OTLP endpoint for traces. Metrics
+  go there too once it is set, or to `telemetry.metrics.endpoint`; with `telemetry.metrics.exporter: prometheus` every
+  server serves them at `/metrics` on port `metrics` (`telemetry.metrics.port`, 9464) for your Prometheus to scrape, and
+  NetworkPolicies that select the servers must admit your scraper to it. They time each Console page, REST route and
+  GraphQL field, and measure the Git server's throwaway repositories and pack cache
+  ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/monitoring.md)).
 - **Demo data.** `seed.enabled` adds Cobranch's demo data after each migration, and lets the sign-in page sign in as
   any of its users with no provider, for a demo installation such as Cobranch's own pull request previews. With the
   Git server, a Job after each install and upgrade also pushes a history to the demo organization's website, unless it

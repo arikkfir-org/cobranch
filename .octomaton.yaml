@@ -13,6 +13,10 @@ pipelines:
       repo-url: "{{ .Repository.CloneURL }}"
       revision: "{{ .Revision }}"
     timeout: 30m
+    # A run whose pod the cluster took away (a Spot node reclaimed, an upgrade, an eviction) runs again, while its check
+    # stays pending: a merge queue entry keeps its place.
+    disruptions:
+      reruns: 2
 
   # Publish both images of every pull request's head commit, tagged with its short SHA, for its preview: delivery's
   # ApplicationSet cobranch-pull-requests installs the chart at that commit with them. Not a required check: a preview
@@ -25,6 +29,10 @@ pipelines:
       repo-url: "{{ .Repository.CloneURL }}"
       revision: "{{ .Revision }}"
     timeout: 30m
+    # A build whose pod the cluster took away runs again, as a new run: the preview waits for its images, and pushing
+    # the same tags twice is harmless. Its task doesn't retry: Tekton leaves a failed attempt's Docker daemon running.
+    disruptions:
+      reruns: 2
 
   # Publish both images of main's newest commit, tagged with its short SHA (also the version the binary reports), for
   # an installation that follows main. Never give it a paths filter: main's newest commit must always have its images.
@@ -42,6 +50,11 @@ pipelines:
     concurrency:
       group: main
       policy: latest
+    # A build whose pod the cluster took away runs again, as a new run: an installation runs the images of the commit
+    # main is at, and pushing the same tags twice is harmless. Its task doesn't retry: Tekton leaves a failed attempt's
+    # Docker daemon running.
+    disruptions:
+      reruns: 2
 
   # A version: a v* tag (v1.2.3, which publishing a GitHub release creates) adds 1.2.3 to the images main published for
   # the tagged commit, rebuilding nothing, and publishes the chart at 1.2.3, once the tag is confirmed to be a version

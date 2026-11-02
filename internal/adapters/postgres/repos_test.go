@@ -36,6 +36,7 @@ func newRepoFixture(t *testing.T) *repoFixture {
 }
 
 func TestRepoStoreCreate(t *testing.T) {
+	t.Parallel()
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	got, err := f.r.BySlug(ctx, f.acme.ID, "website")
@@ -65,6 +66,7 @@ func TestRepoStoreCreate(t *testing.T) {
 }
 
 func TestRepoStoreUpdate(t *testing.T) {
+	t.Parallel()
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	renamed := f.website
@@ -98,6 +100,7 @@ func TestRepoStoreUpdate(t *testing.T) {
 }
 
 func TestRepoStorePermissions(t *testing.T) {
+	t.Parallel()
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	held := func(principal, repo uuid.UUID) []string {
@@ -151,6 +154,7 @@ func TestRepoStorePermissions(t *testing.T) {
 }
 
 func TestRepoStoreLeave(t *testing.T) {
+	t.Parallel()
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	if err := f.r.Grant(ctx, f.olivia, f.website, f.max, auth.RoleDeveloper); err != nil {
@@ -172,6 +176,7 @@ func TestRepoStoreLeave(t *testing.T) {
 }
 
 func TestRepoStorePrincipalsAndRoles(t *testing.T) {
+	t.Parallel()
 	f := newRepoFixture(t)
 	ctx := context.Background()
 	key, _ := deployKey(t, f.orgFixture)

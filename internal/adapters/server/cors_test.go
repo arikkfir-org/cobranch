@@ -58,7 +58,7 @@ func TestAllowOrigin(t *testing.T) {
 				"Access-Control-Allow-Methods":     tt.wantMethods,
 				"Access-Control-Allow-Headers":     tt.wantHeaders,
 				"Access-Control-Allow-Credentials": tt.wantCreds,
-				"Access-Control-Expose-Headers":    map[bool]string{true: "X-Request-Id, Link, ETag"}[tt.wantAllowed != ""],
+				"Access-Control-Expose-Headers":    map[bool]string{true: "X-Request-Id, Link, ETag, Server-Timing"}[tt.wantAllowed != ""],
 			} {
 				if got := rec.Header().Get(header); got != want {
 					t.Errorf("%s = %q, want %q", header, got, want)

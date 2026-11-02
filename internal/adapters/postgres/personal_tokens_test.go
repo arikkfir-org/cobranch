@@ -19,6 +19,7 @@ func personalToken(userID uuid.UUID, name string, at time.Time) auth.Credential 
 }
 
 func TestAuthStorePersonalTokens(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)
@@ -74,6 +75,7 @@ func checkTokenRecords(t *testing.T, s *AuthStore, userID uuid.UUID) {
 }
 
 func TestAuthStorePersonalTokenConstraints(t *testing.T) {
+	t.Parallel()
 	s, pool := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)

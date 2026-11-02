@@ -202,6 +202,37 @@
             }
           }
         },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exporter": {
+              "type": "string",
+              "enum": [
+                "",
+                "otlp",
+                "prometheus",
+                "none"
+              ]
+            },
+            "endpoint": {
+              "type": "string",
+              "pattern": "^(https?://.+)?$"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1024,
+              "maximum": 65535,
+              "not": {
+                "enum": [
+                  2222,
+                  8080,
+                  8081
+                ]
+              }
+            }
+          }
+        },
         "env": {
           "type": "object",
           "propertyNames": {
@@ -210,6 +241,10 @@
               "enum": [
                 "OTEL_EXPORTER_OTLP_ENDPOINT",
                 "OTEL_EXPORTER_OTLP_HEADERS",
+                "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+                "OTEL_EXPORTER_PROMETHEUS_HOST",
+                "OTEL_EXPORTER_PROMETHEUS_PORT",
+                "OTEL_METRICS_EXPORTER",
                 "OTEL_SERVICE_NAME",
                 "OTEL_TRACES_SAMPLER",
                 "OTEL_TRACES_SAMPLER_ARG"
