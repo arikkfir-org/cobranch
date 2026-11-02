@@ -284,7 +284,9 @@ ID, so re-running it never posts twice.
 - **Every step is an entry,** appended through the REST API before the next step starts: the instructions it began with
   (`input`), each model turn with the tool calls it asked for (`turn`), each tool's result (`result`), and each change
   of state (`state`), a JSON object of at most 256 KiB. An entry's number is the next in its task: an append that
-  repeats one answers the one already there, even once the task has ended, and one that skips a number is refused.
+  repeats one answers the one already there, and one that skips a number is refused. The entry that ends the task ends
+  its token too, so repeating that one is refused like any later call, and a harness that lost its answer exits on the
+  refusal, its task already ended.
 - **A state entry moves the task:** Running to Waiting while the agent waits for an answer, Waiting back to Running, and
   Running or Waiting to Succeeded, with its summary, or Failed, with its reason. Only the controller starts a Queued
   task, and nothing moves one that has ended.
@@ -368,7 +370,8 @@ threads on the file.
 
 `chat_threads`, `chat_messages`, `agents`, `model_providers` and `agent_tasks` carry trigger `audit()`; transcripts are
 the task’s own record and don’t, and task tokens, which Cobranch alone makes and sweeps, don’t either. Every new row
-carries `org_id`. A message’s `task_id` names the task an agent posted it from.
+carries `org_id`, except a task's own, its transcript's entries, its tokens and its pods' record, which reach their
+organization through `task_id`. A message’s `task_id` names the task an agent posted it from.
 
 ## Rollout
 
