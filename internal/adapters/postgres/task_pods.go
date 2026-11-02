@@ -100,7 +100,8 @@ func (s *TaskPodStore) Defer(ctx context.Context, taskID uuid.UUID, until time.T
 	return nil
 }
 
-// MarkRunning marks a queued task running in its first pod, which started now (taskrunner.Store).
+// MarkRunning marks a queued task running in its first pod, which started now, and works out again the status of the
+// branches at a review task's head (taskrunner.Store).
 func (s *TaskPodStore) MarkRunning(ctx context.Context, taskID uuid.UUID) (bool, error) {
 	marked := false
 	err := transact(ctx, s.pool, s.q, "marking the task running", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
@@ -115,7 +116,10 @@ func (s *TaskPodStore) MarkRunning(ctx context.Context, taskID uuid.UUID) (bool,
 			return fmt.Errorf("recording the task's pod: %w", err)
 		}
 		marked = true
-		return orgEvent(ctx, q, &r.OrgID, r.AgentID, "task.running", taskID, map[string]any{"number": r.Number})
+		if err := orgEvent(ctx, q, &r.OrgID, r.AgentID, "task.running", taskID, map[string]any{"number": r.Number}); err != nil {
+			return err
+		}
+		return restatusReviewed(ctx, q, r.Kind, r.RepoID, r.Sha)
 	})
 	return marked, err
 }

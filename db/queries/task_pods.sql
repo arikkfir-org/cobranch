@@ -31,11 +31,11 @@ WHERE t.id = $1 AND t.state IN ('running', 'waiting');
 -- name: DeferTask :exec
 UPDATE agent_task_pods SET lease_until = @until::timestamptz WHERE task_id = @task_id;
 
--- MarkTaskRunning marks a queued task running, as its first pod starts, and answers its organization, number and
--- agent; no row when it is no longer queued.
+-- MarkTaskRunning marks a queued task running, as its first pod starts, and answers its organization, number, agent,
+-- and kind, repository and head, for a review task's branches; no row when it is no longer queued.
 -- name: MarkTaskRunning :one
 UPDATE agent_tasks SET state = 'running', started_at = now() WHERE id = $1 AND state = 'queued'
-RETURNING org_id, number, agent_id;
+RETURNING org_id, number, agent_id, kind, repo_id, sha;
 
 -- LeaseTaskRestart claims a running or waiting task whose newest pod is attempt, for one controller to start its next
 -- pod, until a time; no row when another controller holds it, or started its next pod already. The row's lock makes

@@ -86,9 +86,16 @@ func (s aiSteps) review(sha string, state code.ReviewState) func() {
 	}
 }
 
-// run starts the queued review task, as the controller does.
+// run starts the queued review task, as the controller does when its first pod starts.
 func (s aiSteps) run() {
-	exec(context.Background(), s.t, s.f.pool, "UPDATE agent_tasks SET state = 'running', started_at = now() WHERE state = 'queued'")
+	ctx := context.Background()
+	var id uuid.UUID
+	if err := s.f.pool.QueryRow(ctx, "SELECT id FROM agent_tasks WHERE state = 'queued'").Scan(&id); err != nil {
+		s.t.Fatal(err)
+	}
+	if marked, err := NewTaskPodStore(s.f.pool).MarkRunning(ctx, id); !marked || err != nil {
+		s.t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
 }
 
 // end has the harness move the running review task as change says.
@@ -152,7 +159,8 @@ func TestAIRequirementStatus(t *testing.T) {
 		{name: "a reviewer without a model blocks", do: []func(){s.push(git.ZeroSHA, shaC, 1)}, want: "blocked no_model"},
 		{name: "a model for the reviewer works the branches out again", do: []func(){s.model("acme-models", "review-1")}, want: "blocked unreviewed"},
 		{name: "a review asked for keeps it Processing", do: []func(){s.request}, want: "processing queued"},
-		{name: "the reviewer approves as its task runs", do: []func(){s.run, s.review(shaC, code.ReviewApproved)}, want: "processing running"},
+		{name: "its task starts running", do: []func(){s.run}, want: "processing running"},
+		{name: "the reviewer approves as its task runs", do: []func(){s.review(shaC, code.ReviewApproved)}, want: "processing running"},
 		{name: "its task succeeds", do: []func(){s.end(agents.StateChange{State: agents.TaskSucceeded, Summary: "Approved"})}, want: "ready approved"},
 		{name: "another review, cancelled, leaves the approval standing", do: []func(){s.request, s.cancel(2)}, want: "ready approved"},
 		{name: "the reviewer requests changes", do: []func(){s.review(shaC, code.ReviewChangesRequested)}, want: "blocked changes_requested"},
