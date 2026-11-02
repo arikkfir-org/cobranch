@@ -1212,6 +1212,36 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/branches:
+    get:
+      operationId: listIssueBranches
+      summary: >-
+        The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by
+        repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+      responses:
+        "200":
+          description: The issue's branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branches]
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IssueBranch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/issues/{number}/activity:
     get:
       operationId: listIssueActivity
@@ -1553,6 +1583,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeletedBranch"
         "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/issue:
+    put:
+      operationId: linkBranch
+      summary: >-
+        Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the
+        viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no
+        issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkBranchInput"
+      responses:
+        "200":
+          description: The branch's issue.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchIssue"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: unlinkBranch
+      summary: >-
+        Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write,
+        and repo.read. A branch with no issue answers 204 too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "204":
+          description: The branch works on no issue.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
@@ -2936,6 +3020,64 @@ components:
           $ref: "#/components/schemas/MergeRequirements"
         merge:
           $ref: "#/components/schemas/BranchMerge"
+        issue:
+          $ref: "#/components/schemas/BranchIssue"
+    BranchIssue:
+      type: object
+      description: >-
+        The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and
+        leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
+      required: [number, identifier, title, state, priority, linkedBy]
+      properties:
+        number:
+          type: integer
+        identifier:
+          type: string
+          description: Its organization's issue key and its number, such as ACME-42.
+        title:
+          type: string
+        state:
+          $ref: "#/components/schemas/IssueState"
+        priority:
+          $ref: "#/components/schemas/IssuePriority"
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
+    LinkedBy:
+      type: string
+      description: How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+      enum: [name, hand]
+    LinkBranchInput:
+      type: object
+      description: The issue to link a branch to.
+      required: [number]
+      properties:
+        number:
+          type: integer
+          description: One of the organization's issues, by its number.
+    IssueBranch:
+      type: object
+      description: >-
+        A branch linked to an issue, of a repository the viewer reads: the commit it is at, its status as a request to
+        merge while a push has worked it out, and how it was linked. A deleted branch stays linked.
+      required: [repository, name, head, deleted, linkedBy, linkedAt]
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueRepository"
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        head:
+          type: string
+          description: The object it is at, or was at when it was deleted.
+        status:
+          $ref: "#/components/schemas/BranchStatus"
+        deleted:
+          type: boolean
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
+        linkedAt:
+          type: string
+          format: date-time
     BranchMerge:
       type: object
       description: >-
@@ -3235,7 +3377,7 @@ components:
           format: uuid
         kind:
           type: string
-          description: issue.created or issue.changed; more kinds come with branches.
+          description: issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
         actor:
           $ref: "#/components/schemas/Principal"
         at:
@@ -3246,6 +3388,23 @@ components:
           description: The fields an issue.changed changed.
           items:
             $ref: "#/components/schemas/IssueChange"
+        branch:
+          $ref: "#/components/schemas/IssueEventBranch"
+    IssueEventBranch:
+      type: object
+      description: >-
+        The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out
+        for a viewer who doesn't read the repository.
+      required: [linkedBy]
+      properties:
+        repository:
+          type: string
+          description: Its repository's slug.
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
     IssueChange:
       type: object
       description: A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.

@@ -83,33 +83,6 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
-// One of a repository's live branches and the commit it is at.
-type Branch struct {
-	// Its name, without refs/heads/.
-	Name string `json:"name"`
-	// The object it is at.
-	Head string `json:"head"`
-	// The commit it is at; null while its head is no commit a push recorded.
-	Commit    *Commit   `json:"commit,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	// When a push last moved it.
-	UpdatedAt time.Time `json:"updatedAt"`
-	// The branch it merges into, main; null for main.
-	Base *string `json:"base,omitempty"`
-	// Where it stands as a request to merge into its base; null for main.
-	Status *BranchStatus `json:"status,omitempty"`
-	// How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main.
-	Checks []*BranchCheck `json:"checks"`
-	// How many commits it has that its base lacks; null for main, and until a push works it out.
-	Ahead *int `json:"ahead,omitempty"`
-	// How many commits its base has that it lacks; null for main, and until a push works it out.
-	Behind *int `json:"behind,omitempty"`
-	// What a merge into it needs, as main's /cobranch.yaml names it under branches; null when it names no such branch.
-	Requirements *MergeRequirements `json:"requirements,omitempty"`
-	// The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's.
-	Merge *BranchMerge `json:"merge,omitempty"`
-}
-
 // One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
 	Kind BranchCheckKind `json:"kind"`
@@ -122,6 +95,12 @@ type BranchCheck struct {
 	// For APPROVALS, how many the base requires; null otherwise.
 	Required *int `json:"required,omitempty"`
 	Met      bool `json:"met"`
+}
+
+// The issue a branch works on, and how the branch was linked to it.
+type BranchIssue struct {
+	Issue    *Issue   `json:"issue"`
+	LinkedBy LinkedBy `json:"linkedBy"`
 }
 
 // A merge of a branch into its base that a push made.
@@ -356,8 +335,24 @@ type Issue struct {
 	ClosedAt *time.Time `json:"closedAt,omitempty"`
 	// Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
-	// What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	// What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads, as a link names only their branches.
 	Activity []*IssueEvent `json:"activity"`
+	// The branches linked to it, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+	Branches []*IssueBranch `json:"branches"`
+}
+
+// A branch linked to an issue: the commit it is at, its status as a request to merge, and how it was linked. A deleted branch stays linked.
+type IssueBranch struct {
+	Repository *IssueRepository `json:"repository"`
+	// Its name, without refs/heads/.
+	Name string `json:"name"`
+	// The object it is at, or was at when it was deleted.
+	Head string `json:"head"`
+	// Where it stands as a request to merge into its base; null until a push works it out.
+	Status   *BranchStatus `json:"status,omitempty"`
+	Deleted  bool          `json:"deleted"`
+	LinkedBy LinkedBy      `json:"linkedBy"`
+	LinkedAt time.Time     `json:"linkedAt"`
 }
 
 // A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads.
@@ -371,13 +366,24 @@ type IssueChange struct {
 // Something that happened to an issue.
 type IssueEvent struct {
 	ID string `json:"id"`
-	// issue.created or issue.changed; more kinds come with branches.
+	// issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
 	Kind string `json:"kind"`
 	// Who did it; null once they are gone.
 	Actor *IssuePrincipal `json:"actor,omitempty"`
 	At    time.Time       `json:"at"`
 	// The fields an issue.changed changed.
 	Changes []*IssueChange `json:"changes"`
+	// The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds.
+	Branch *IssueEventBranch `json:"branch,omitempty"`
+}
+
+// The branch an issue.branch_linked or issue.branch_unlinked names.
+type IssueEventBranch struct {
+	// Its repository's slug; null for a viewer who doesn't read the repository.
+	Repository *string `json:"repository,omitempty"`
+	// Its name, without refs/heads/; null for a viewer who doesn't read the repository.
+	Name     *string  `json:"name,omitempty"`
+	LinkedBy LinkedBy `json:"linkedBy"`
 }
 
 // Which of an organization's issues a list shows.
@@ -1308,6 +1314,64 @@ func (e *IssueState) UnmarshalJSON(b []byte) error {
 }
 
 func (e IssueState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How a branch was linked to its issue, or unlinked from it.
+type LinkedBy string
+
+const (
+	// By its name, which holds the issue's identifier as a word of its own, such as acme-42-login.
+	LinkedByName LinkedBy = "NAME"
+	// By hand, which its name never undoes.
+	LinkedByHand LinkedBy = "HAND"
+)
+
+var AllLinkedBy = []LinkedBy{
+	LinkedByName,
+	LinkedByHand,
+}
+
+func (e LinkedBy) IsValid() bool {
+	switch e {
+	case LinkedByName, LinkedByHand:
+		return true
+	}
+	return false
+}
+
+func (e LinkedBy) String() string {
+	return string(e)
+}
+
+func (e *LinkedBy) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LinkedBy(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LinkedBy", str)
+	}
+	return nil
+}
+
+func (e LinkedBy) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LinkedBy) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LinkedBy) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

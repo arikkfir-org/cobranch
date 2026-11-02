@@ -83,8 +83,52 @@ type Issue {
   closedAt: Time
   "Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile."
   version: Int!
-  "What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads."
+  "What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads, as a link names only their branches."
   activity: [IssueEvent!]!
+  "The branches linked to it, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads."
+  branches: [IssueBranch!]!
+}
+
+"A branch linked to an issue: the commit it is at, its status as a request to merge, and how it was linked. A deleted branch stays linked."
+type IssueBranch {
+  repository: IssueRepository!
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it is at, or was at when it was deleted."
+  head: String!
+  "Where it stands as a request to merge into its base; null until a push works it out."
+  status: BranchStatus
+  deleted: Boolean!
+  linkedBy: LinkedBy!
+  linkedAt: Time!
+}
+
+"How a branch was linked to its issue, or unlinked from it."
+enum LinkedBy {
+  "By its name, which holds the issue's identifier as a word of its own, such as acme-42-login."
+  NAME
+  "By hand, which its name never undoes."
+  HAND
+}
+
+extend type Branch {
+  "The issue it works on, and how it was linked; null for none, and for a viewer who holds no issues.read. main works on none."
+  issue: BranchIssue
+}
+
+"The issue a branch works on, and how the branch was linked to it."
+type BranchIssue {
+  issue: Issue!
+  linkedBy: LinkedBy!
+}
+
+"The branch an issue.branch_linked or issue.branch_unlinked names."
+type IssueEventBranch {
+  "Its repository's slug; null for a viewer who doesn't read the repository."
+  repository: String
+  "Its name, without refs/heads/; null for a viewer who doesn't read the repository."
+  name: String
+  linkedBy: LinkedBy!
 }
 
 "Who an issue is assigned to, who created it, or who changed it."
@@ -103,13 +147,15 @@ type IssueRepository {
 "Something that happened to an issue."
 type IssueEvent {
   id: ID!
-  "issue.created or issue.changed; more kinds come with branches."
+  "issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked."
   kind: String!
   "Who did it; null once they are gone."
   actor: IssuePrincipal
   at: Time!
   "The fields an issue.changed changed."
   changes: [IssueChange!]!
+  "The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds."
+  branch: IssueEventBranch
 }
 
 "A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads."
@@ -160,4 +206,8 @@ extend type Mutation {
   updateIssue(organizationId: ID!, number: Int!, input: IssuePatch!, expectedVersion: Int): Issue!
   "Deletes one of the organization's issues, with its activity, for a mistake, and answers true; work that won't be done is CANCELED instead. Takes issues.manage. With expectedVersion, an issue at another version is refused (CONFLICT, precondition.failed)."
   deleteIssue(organizationId: ID!, number: Int!, expectedVersion: Int): Boolean!
+  "Links one of the organization's repository's live branches to one of its issues by hand, in place of any issue it works on, for the viewer, and answers the link; takes issues.write, and repo.read. An issue in BACKLOG or TODO moves to IN_PROGRESS. main works on no issue (BAD_USER_INPUT, branch.default), as for an issue the organization doesn't have (issue.invalid)."
+  linkBranch(organizationId: ID!, repositoryId: ID!, branch: String!, number: Int!): BranchIssue!
+  "Unlinks one of the organization's repository's live branches from its issue by hand, for the viewer, so its name never links it again, and answers true; takes issues.write, and repo.read."
+  unlinkBranch(organizationId: ID!, repositoryId: ID!, branch: String!): Boolean!
 }
