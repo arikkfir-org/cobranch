@@ -60,7 +60,7 @@ func agent(a agents.Agent) *Agent {
 func task(t agents.Task) *Task {
 	out := &Task{ID: t.ID.String(), Number: int(t.Number), Agent: agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
 		Title: t.Title, Instructions: t.Instructions, RepositoryID: idOf(t.RepoID), RepositorySlug: text(t.RepoSlug), BranchID: idOf(t.BranchID),
-		Branch: text(t.Branch), ThreadID: idOf(t.ThreadID), State: TaskState(strings.ToUpper(string(t.State))), Reason: t.Reason, Summary: t.Summary,
+		Branch: text(t.Branch), ThreadID: idOf(t.ThreadID), Sha: text(t.SHA), State: TaskState(strings.ToUpper(string(t.State))), Reason: t.Reason, Summary: t.Summary,
 		CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: int(t.Version)}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()

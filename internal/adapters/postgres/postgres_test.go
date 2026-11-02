@@ -463,7 +463,7 @@ func TestNewSeeds(t *testing.T) {
 		wantVersion int64
 		wantErr     bool
 	}{
-		{name: "Cobranch's seeds", seeds: seeds.Go, wantVersion: int64(len(seeds.Go))},
+		{name: "Cobranch's seeds", seeds: seeds.Go, wantVersion: seeds.Go[len(seeds.Go)-1].Version},
 		{name: "two seeds", seeds: []*goose.Migration{seedA(1, 1), seedA(2, 2)}, wantVersion: 2},
 		{name: "no seeds", wantErr: true},
 	}
@@ -527,7 +527,7 @@ func TestSeedsMigrate(t *testing.T) {
 		wantRows      int
 		wantSeedTable int64
 	}{
-		{name: "Cobranch's seeds", runs: [][]*goose.Migration{seeds.Go}, schema: migrations.FS, wantSeedTable: int64(len(seeds.Go))},
+		{name: "Cobranch's seeds", runs: [][]*goose.Migration{seeds.Go}, schema: migrations.FS, wantSeedTable: seeds.Go[len(seeds.Go)-1].Version},
 		{name: "one build", runs: [][]*goose.Migration{{seedA(1, 1), seedA(2, 2)}}, wantRows: 2, wantSeedTable: 2},
 		{name: "the same build again", runs: [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1)}}, wantRows: 1, wantSeedTable: 1},
 		{

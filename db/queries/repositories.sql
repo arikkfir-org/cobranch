@@ -49,11 +49,12 @@ SELECT rp.id FROM repositories rp WHERE rp.org_id = @org_id AND (
                  AND @permission::text = ANY (r.permissions)))
 ORDER BY rp.slug;
 
--- SharedRepositories lists the IDs of the organization's repositories that someone besides their creator and the
+-- SharedRepositories lists the IDs of the organization's repositories that a user besides their creator and the
 -- organization's Owners reads, through a grant on the repository or a role at the organization: the Internal ones.
+-- Agents and API keys don't count, so the AI reviewer, which reads every repository, leaves them Private.
 -- name: SharedRepositories :many
 SELECT rp.id FROM repositories rp WHERE rp.org_id = @org_id AND EXISTS (
-    SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
+    SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id JOIN principals p ON p.id = g.principal_id AND p.kind = 'user'
     WHERE 'repo.read' = ANY (r.permissions) AND g.principal_id IS DISTINCT FROM rp.created_by
       AND ((g.scope = 'repository' AND g.scope_id = rp.id) OR (g.scope = 'organization' AND g.scope_id = rp.org_id))
       AND NOT EXISTS (SELECT 1 FROM grants o WHERE o.principal_id = g.principal_id AND o.role_id = @owner_role_id

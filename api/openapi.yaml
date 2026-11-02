@@ -5931,6 +5931,9 @@ components:
           type: string
           format: uuid
           description: The thread of that branch's chat it talks in; absent for none.
+        sha:
+          type: string
+          description: The commit it works at, such as the head a review task reviews; absent for none.
         state:
           $ref: "#/components/schemas/TaskState"
         reason:

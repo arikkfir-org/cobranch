@@ -43,7 +43,7 @@ func TestRunMigrateSeeds(t *testing.T) {
 			defer func() { _ = conn.Close(context.Background()) }()
 			var version *int64
 			err = conn.QueryRow(context.Background(), "SELECT max(version_id) FROM "+postgres.SeedTable).Scan(&version)
-			if gotSeed := err == nil && version != nil && *version == int64(len(seeds.Go)); gotSeed != tt.wantSeed {
+			if gotSeed := err == nil && version != nil && *version == seeds.Go[len(seeds.Go)-1].Version; gotSeed != tt.wantSeed {
 				t.Errorf("seeded = %t (version %v, error %v), want %t", gotSeed, version, err, tt.wantSeed)
 			}
 		})

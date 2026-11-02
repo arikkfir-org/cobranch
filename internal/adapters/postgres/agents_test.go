@@ -78,8 +78,8 @@ func TestAgentStoreCreate(t *testing.T) {
 	if n := count(t, f.pool, "SELECT count(*) FROM principals WHERE id = $1 AND kind = 'agent' AND org_id = $2 AND display_name = 'Scout'", s.ID, f.acme.ID); n != 1 {
 		t.Errorf("Scout's principals = %d, want 1 of kind agent in Acme", n)
 	}
-	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'agents' AND principal_id = $1", f.olivia); n != 1 {
-		t.Errorf("Olivia's agents audit rows = %d, want 1", n)
+	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'agents' AND principal_id = $1 AND after->>'principal_id' = $2", f.olivia, s.ID.String()); n != 1 {
+		t.Errorf("Olivia's audit rows of Scout = %d, want 1", n)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = 'agent.created' AND subject_id = $1", s.ID); n != 1 {
 		t.Errorf("agent.created events = %d, want 1", n)
@@ -90,8 +90,9 @@ func TestAgentStoreCreate(t *testing.T) {
 	}
 	f.created(t, "Archivist")
 	list, err := f.a.Agents(ctx, f.acme.ID)
-	if err != nil || len(list) != 2 || list[0].Name != "Archivist" || list[1].Name != "Scout" || len(list[1].Grants) != 2 || len(list[0].Grants) != 0 {
-		t.Errorf("Agents() = %+v, %v; want Archivist, then Scout with its grants", list, err)
+	if err != nil || len(list) != 3 || list[0].Name != agents.ReviewerName || list[1].Name != "Archivist" || list[2].Name != "Scout" ||
+		len(list[2].Grants) != 2 || len(list[1].Grants) != 0 {
+		t.Errorf("Agents() = %+v, %v; want the AI reviewer, Archivist, then Scout with its grants", list, err)
 	}
 	if _, err := f.a.Agent(ctx, uuid.New(), s.ID); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("Agent(of another organization) = %v, want %v", err, orgs.ErrNotFound)
@@ -152,7 +153,7 @@ func TestAgentStoreWhere(t *testing.T) {
 	if roles, err := f.a.Roles(ctx, f.acme.ID, auth.ScopeRepository); err != nil || len(roles) == 0 || roles[0].ID != auth.RoleReader {
 		t.Errorf("Roles(repository) = %+v, %v; want the repositories' built-in roles first", roles, err)
 	}
-	if roles, err := f.a.Roles(ctx, f.acme.ID, auth.ScopeOrganization); err != nil || len(roles) != 3 || roles[0].ID != auth.RoleGuest {
+	if roles, err := f.a.Roles(ctx, f.acme.ID, auth.ScopeOrganization); err != nil || len(roles) != 4 || roles[0].ID != auth.RoleOrgAutomation {
 		t.Errorf("Roles(organization) = %+v, %v; want the organizations' built-in roles first", roles, err)
 	}
 }

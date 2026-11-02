@@ -22,6 +22,7 @@ type Agent struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Version      int64
+	Purpose      *string
 }
 
 type AgentTask struct {
@@ -45,6 +46,7 @@ type AgentTask struct {
 	EndedAt      *time.Time
 	Version      int64
 	IssueID      *uuid.UUID
+	Sha          *string
 }
 
 type Annotation struct {

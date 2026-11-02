@@ -699,6 +699,7 @@ type ComplexityRoot struct {
 		Reason         func(childComplexity int) int
 		RepositoryID   func(childComplexity int) int
 		RepositorySlug func(childComplexity int) int
+		Sha            func(childComplexity int) int
 		StartedAt      func(childComplexity int) int
 		State          func(childComplexity int) int
 		Summary        func(childComplexity int) int
@@ -4184,6 +4185,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.RepositorySlug(childComplexity), true
+	case "Task.sha":
+		if e.ComplexityRoot.Task.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.Sha(childComplexity), true
 	case "Task.startedAt":
 		if e.ComplexityRoot.Task.StartedAt == nil {
 			break
@@ -4596,6 +4603,8 @@ type Task {
   branch: String
   "The thread of that branch's chat it talks in; null for none."
   threadId: ID
+  "The commit it works at, such as the head a review task reviews; null for none."
+  sha: String
   state: TaskState!
   "Why it failed or was cancelled; empty otherwise."
   reason: String!
@@ -7306,6 +7315,8 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_branch(ctx, field)
 	case "threadId":
 		return ec.fieldContext_Task_threadId(ctx, field)
+	case "sha":
+		return ec.fieldContext_Task_sha(ctx, field)
 	case "state":
 		return ec.fieldContext_Task_state(ctx, field)
 	case "reason":
@@ -23022,6 +23033,29 @@ func (ec *executionContext) fieldContext_Task_threadId(_ context.Context, field 
 	return graphql.NewScalarFieldContext("Task", field, false, false, "ID")
 }
 
+func (ec *executionContext) _Task_sha(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Task_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "String")
+}
+
 func (ec *executionContext) _Task_state(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -30703,6 +30737,11 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 			}
 		case "threadId":
 			out.Values[i] = ec._Task_threadId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._Task_sha(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}

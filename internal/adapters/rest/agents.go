@@ -65,7 +65,7 @@ func agent(a agents.Agent) Agent {
 func task(t agents.Task) Task {
 	out := Task{Id: t.ID, Number: t.Number, Agent: *agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
 		Title: t.Title, Instructions: t.Instructions, RepositoryId: optionalID(t.RepoID), RepositorySlug: optional(t.RepoSlug),
-		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), State: TaskState(t.State),
+		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), Sha: optional(t.SHA), State: TaskState(t.State),
 		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: t.Version}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()

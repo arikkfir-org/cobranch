@@ -68,12 +68,13 @@ func TestOrgStoreCreate(t *testing.T) {
 	if held, _ := f.s.Permissions(ctx, f.olivia, auth.ScopeInstallation, uuid.Nil); len(held) != 0 {
 		t.Errorf("Olivia holds %v at the installation, want nothing", held)
 	}
-	want := []string{"user.signed_up", "user.signed_up", "user.signed_up", "org.created", "member.joined", "join_request.made", "join_request.approved", "member.joined"}
+	want := []string{"user.signed_up", "user.signed_up", "user.signed_up", "org.created", "member.joined", "agent.created", "join_request.made", "join_request.approved",
+		"member.joined"}
 	if got := eventKinds(t, f.pool); !slices.Equal(got, want) {
 		t.Errorf("events = %v, want %v", got, want)
 	}
-	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE org_id = $1", f.acme.ID); n != 5 {
-		t.Errorf("%d events carry Acme's id, want 5", n)
+	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE org_id = $1", f.acme.ID); n != 6 {
+		t.Errorf("%d events carry Acme's id, want 6", n)
 	}
 	// The organization, its slug, Olivia's own membership and Max's, which Olivia approved.
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name IN ('organizations', 'organization_slugs', 'memberships') AND principal_id = $1", f.olivia); n != 4 {
@@ -156,8 +157,8 @@ func TestOrgStoreMembers(t *testing.T) {
 	if err != nil || len(list) != 1 || list[0].Slug != "acme" {
 		t.Errorf("OrganizationsOf(max) = %+v, %v", list, err)
 	}
-	if roles, err := f.s.Roles(ctx, f.acme.ID); err != nil || len(roles) != 3 || roles[0].Name != "Guest" || roles[0].OrgID != uuid.Nil {
-		t.Errorf("Roles() = %+v, %v, want the three built-in organization roles", roles, err)
+	if roles, err := f.s.Roles(ctx, f.acme.ID); err != nil || len(roles) != 4 || roles[0].Name != "Automation" || roles[0].OrgID != uuid.Nil {
+		t.Errorf("Roles() = %+v, %v, want the four built-in organization roles", roles, err)
 	}
 	if err := f.s.Leave(ctx, f.olivia, f.acme.ID, f.max, now); err != nil {
 		t.Fatal(err)
@@ -350,8 +351,8 @@ func TestOrgStoreRolesAndExpiry(t *testing.T) {
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	roles, err := f.s.Roles(ctx, f.acme.ID)
-	if err != nil || len(roles) != 3 || roles[0].Name != "Guest" || !roles[0].BuiltIn {
-		t.Errorf("Roles() = %+v, %v, want Guest, Member and Owner", roles, err)
+	if err != nil || len(roles) != 4 || roles[0].Name != "Automation" || !roles[0].BuiltIn {
+		t.Errorf("Roles() = %+v, %v, want Automation, Guest, Member and Owner", roles, err)
 	}
 	if r, err := f.s.Role(ctx, auth.RoleOwner); err != nil || r.Name != "Owner" || !slices.Contains(r.Permissions, "org.manage") {
 		t.Errorf("Role(Owner) = %+v, %v", r, err)

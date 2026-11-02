@@ -80,6 +80,8 @@ type Task {
   branch: String
   "The thread of that branch's chat it talks in; null for none."
   threadId: ID
+  "The commit it works at, such as the head a review task reviews; null for none."
+  sha: String
   state: TaskState!
   "Why it failed or was cancelled; empty otherwise."
   reason: String!
