@@ -1363,6 +1363,18 @@ type GetCommitDiffParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListReviewsParams defines parameters for ListReviews.
+type ListReviewsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many reviews the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetRawParams defines parameters for GetRaw.
 type GetRawParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -1374,6 +1386,12 @@ type GetRawParams struct {
 	// Download Whether to answer the bytes as an attachment, whatever they are.
 	Download *bool `form:"download,omitempty" json:"download,omitempty"`
 
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetReviewParams defines parameters for GetReview.
+type GetReviewParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -1621,9 +1639,9 @@ type ServerInterface interface {
 	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
 	GetCommitDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params GetCommitDiffParams)
-	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
-	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
@@ -1632,7 +1650,7 @@ type ServerInterface interface {
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
 	// GetReview One of the repository's reviews; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/reviews/{review})
-	GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID)
+	GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID, params GetReviewParams)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -3558,8 +3576,58 @@ func (siw *ServerInterfaceWrapper) ListReviews(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReviewsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListReviews(w, r, org, repo, sha)
+		siw.Handler.ListReviews(w, r, org, repo, sha, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3744,8 +3812,32 @@ func (siw *ServerInterfaceWrapper) GetReview(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetReviewParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetReview(w, r, org, repo, review)
+		siw.Handler.GetReview(w, r, org, repo, review, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8889,29 +8981,56 @@ func (response GetCommitDiffdefaultApplicationProblemPlusJSONResponse) VisitGetC
 }
 
 type ListReviewsRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
-	SHA  SHA  `json:"sha"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Params ListReviewsParams
 }
 
 type ListReviewsResponseObject interface {
 	VisitListReviewsResponse(w http.ResponseWriter) error
 }
 
+type ListReviews200ResponseHeaders struct {
+	ETag string
+	Link *string
+}
+
 type ListReviews200JSONResponse struct {
-	Reviews []Review `json:"reviews"`
+	Body struct {
+		Reviews []Review `json:"reviews"`
+	}
+	Headers ListReviews200ResponseHeaders
 }
 
 func (response ListReviews200JSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListReviews304ResponseHeaders struct {
+	ETag string
+}
+
+type ListReviews304Response struct {
+	Headers ListReviews304ResponseHeaders
+}
+
+func (response ListReviews304Response) VisitListReviewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListReviews400ApplicationProblemPlusJSONResponse struct {
@@ -9229,24 +9348,47 @@ type GetReviewRequestObject struct {
 	Org    Org                `json:"org"`
 	Repo   Repo               `json:"repo"`
 	Review openapi_types.UUID `json:"review"`
+	Params GetReviewParams
 }
 
 type GetReviewResponseObject interface {
 	VisitGetReviewResponse(w http.ResponseWriter) error
 }
 
-type GetReview200JSONResponse Review
+type GetReview200ResponseHeaders struct {
+	ETag string
+}
+
+type GetReview200JSONResponse struct {
+	Body    Review
+	Headers GetReview200ResponseHeaders
+}
 
 func (response GetReview200JSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetReview304ResponseHeaders struct {
+	ETag string
+}
+
+type GetReview304Response struct {
+	Headers GetReview304ResponseHeaders
+}
+
+func (response GetReview304Response) VisitGetReviewResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetReview400ApplicationProblemPlusJSONResponse struct {
@@ -10336,7 +10478,7 @@ type StrictServerInterface interface {
 	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
 	GetCommitDiff(ctx context.Context, request GetCommitDiffRequestObject) (GetCommitDiffResponseObject, error)
-	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(ctx context.Context, request ListReviewsRequestObject) (ListReviewsResponseObject, error)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
@@ -11917,12 +12059,13 @@ func (sh *strictHandler) GetCommitDiff(w http.ResponseWriter, r *http.Request, o
 }
 
 // ListReviews operation middleware
-func (sh *strictHandler) ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+func (sh *strictHandler) ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams) {
 	var request ListReviewsRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.SHA = sha
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListReviews(ctx, request.(ListReviewsRequestObject))
@@ -12008,12 +12151,13 @@ func (sh *strictHandler) GetRaw(w http.ResponseWriter, r *http.Request, org Org,
 }
 
 // GetReview operation middleware
-func (sh *strictHandler) GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID) {
+func (sh *strictHandler) GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID, params GetReviewParams) {
 	var request GetReviewRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.Review = review
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetReview(ctx, request.(GetReviewRequestObject))

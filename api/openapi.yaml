@@ -1607,14 +1607,35 @@ paths:
   /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
     get:
       operationId: listReviews
-      summary: The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many reviews the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: The reviews.
+          description: The page's reviews, in the order they were submitted.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1625,6 +1646,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Review"
+        "304":
+          description: The page is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -1682,13 +1708,22 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The review.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Review"
+        "304":
+          description: The review is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":

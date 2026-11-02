@@ -48,9 +48,10 @@ type Store interface {
 	// set it or anyone is true: repos.ErrNotFound when there is none and version is 0, a *TakenError when another
 	// principal set it, and ErrAnnotationChanged when version names another than it is, or one that isn't there.
 	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error
-	// Reviews lists the reviews on one of the repository's commits in the order they were submitted, or
-	// repos.ErrNotFound when the repository holds no such commit.
-	Reviews(ctx context.Context, repoID uuid.UUID, sha string) ([]Review, error)
+	// Reviews lists at most limit of the reviews on one of the repository's commits in the order they were submitted,
+	// after the review named after, or from the first when after is uuid.Nil; none when after names no review of the
+	// commit, and repos.ErrNotFound when the repository holds no such commit.
+	Reviews(ctx context.Context, repoID uuid.UUID, sha string, after uuid.UUID, limit int) ([]Review, error)
 	// Review finds one of the repository's reviews, or repos.ErrNotFound.
 	Review(ctx context.Context, repoID, id uuid.UUID) (Review, error)
 	// SubmitReview records actor's review in of one of the repository's commits, works out again the status of the

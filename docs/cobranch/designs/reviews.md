@@ -278,8 +278,10 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 | `GET /commits/{sha}/diff` | `Repository.commitDiff` | `repo.read` |
 | `POST /branches/{branch}/review` | `requestReview` | `repo.push` |
 
-`POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`. A
-branch carries its reviews checks with its others, and its AI review's task.
+`POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`.
+Every `GET` answers a strong `ETag`, and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages
+with an opaque cursor and `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and
+its AI review's task.
 
 ## Data model
 
