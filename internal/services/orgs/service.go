@@ -29,6 +29,8 @@ type Store interface {
 	Update(ctx context.Context, actor uuid.UUID, org Organization) error
 	// OrganizationsOf lists the organizations user belongs to, by name.
 	OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Organization, error)
+	// Created counts the organizations the user created for themselves, those that still exist.
+	Created(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Members lists the organization's members with the roles they hold there, by display name.
 	Members(ctx context.Context, orgID uuid.UUID) ([]Member, error)
 	// Member finds one member with their roles, or ErrNotFound.
@@ -184,6 +186,24 @@ func (s *Service) Create(ctx context.Context, v Viewer, slug, name string) (Orga
 		return Organization{}, fmt.Errorf("creating the organization: %w", err)
 	}
 	return org, nil
+}
+
+// Created returns how many organizations v created for themselves, against the most a user may create: what Create
+// weighs. It is v's own, so it takes no permission.
+func (s *Service) Created(ctx context.Context, v Viewer) (limits.Quota, error) {
+	created, err := s.store.Created(ctx, v.ID)
+	if err != nil {
+		return limits.Quota{}, fmt.Errorf("counting the organizations the viewer created: %w", err)
+	}
+	var limit int64
+	if s.limits != nil {
+		l, err := s.limits.Installation(ctx)
+		if err != nil {
+			return limits.Quota{}, fmt.Errorf("reading the limits: %w", err)
+		}
+		limit = l.OrganizationsPerUser
+	}
+	return limits.Quota{Used: created, Limit: limit}, nil
 }
 
 // Organizations lists the organizations v belongs to.

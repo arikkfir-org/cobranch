@@ -166,12 +166,7 @@ func (s *Store) Repositories(ctx context.Context, principal, orgID uuid.UUID, pe
 
 // Create records the organization with its creator as Owner, counted against them, unless they created limit already.
 func (s *Store) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization, limit int64) error {
-	created := int64(0)
-	for _, by := range s.CreatedBy {
-		if by == actor {
-			created++
-		}
-	}
+	created, _ := s.Created(ctx, actor) // the fake's Created never fails
 	if limits.Exceeds(limit, created, 1) {
 		return &limits.ExceededError{Kind: limits.KindOrganizations, Limit: limit, Used: created, Adding: 1}
 	}
@@ -180,6 +175,17 @@ func (s *Store) Create(ctx context.Context, actor uuid.UUID, org orgs.Organizati
 	}
 	s.CreatedBy[org.ID] = actor
 	return nil
+}
+
+// Created counts the organizations the user created for themselves.
+func (s *Store) Created(_ context.Context, userID uuid.UUID) (int64, error) {
+	created := int64(0)
+	for _, by := range s.CreatedBy {
+		if by == userID {
+			created++
+		}
+	}
+	return created, nil
 }
 
 // create records the organization with owner its first Owner.

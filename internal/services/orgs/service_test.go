@@ -651,3 +651,38 @@ func TestCreateHeldToLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestCreated(t *testing.T) {
+	broken := errors.New("broken")
+	tests := []struct {
+		name      string
+		limits    *installationLimits
+		created   int // organizations Nia created
+		byAnAdmin int // organizations an administrator created for Nia
+		want      limits.Quota
+		wantErr   error
+	}{
+		{name: "against the limit", limits: &installationLimits{Limits: limits.Limits{OrganizationsPerUser: 5}}, created: 2,
+			want: limits.Quota{Used: 2, Limit: 5}},
+		{name: "those an administrator created count against nobody", limits: &installationLimits{Limits: limits.Limits{OrganizationsPerUser: 5}},
+			created: 1, byAnAdmin: 3, want: limits.Quota{Used: 1, Limit: 5}},
+		{name: "at the limit", limits: &installationLimits{Limits: limits.Limits{OrganizationsPerUser: 2}}, created: 2,
+			want: limits.Quota{Used: 2, Limit: 2}},
+		{name: "a limit of 0 caps nothing", limits: &installationLimits{}, created: 7, want: limits.Quota{Used: 7}},
+		{name: "a service without limits caps nothing", created: 1, want: limits.Quota{Used: 1}},
+		{name: "the limits can't be read", limits: &installationLimits{err: broken}, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			if tt.limits != nil {
+				f.service.WithLimits(*tt.limits)
+			}
+			f.createForNia(t, tt.created, tt.byAnAdmin)
+			got, err := f.service.Created(t.Context(), f.nia)
+			if !errors.Is(err, tt.wantErr) || got != tt.want {
+				t.Errorf("Created() = %+v, %v, want %+v, %v", got, err, tt.want, tt.wantErr)
+			}
+		})
+	}
+}

@@ -22,6 +22,7 @@ type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
 	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)

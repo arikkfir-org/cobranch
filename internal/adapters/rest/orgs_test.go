@@ -108,6 +108,14 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.addChats()
+	f.commitObjects()
+	f.addIssues()
+	return f
+}
+
+// commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
+// history.
+func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -120,8 +128,8 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
-	f.addIssues()
-	return f
+	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
+	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 }
 
 // addIssues gives the fixture the issues' service, over a store that knows website.
