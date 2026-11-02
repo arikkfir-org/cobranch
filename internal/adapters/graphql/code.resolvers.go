@@ -95,7 +95,13 @@ func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*
 	if err != nil {
 		return nil, err
 	}
-	return mapAll(list, branch), nil
+	out := mapAll(list, branch)
+	for _, b := range out {
+		if err := b.of(ctx, obj); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // Branch is the resolver for the branch field.
@@ -111,7 +117,8 @@ func (r *repositoryResolver) Branch(ctx context.Context, obj *Repository, name s
 	case err != nil:
 		return nil, fail(ctx, err, "branch", "reading the branch")
 	}
-	return branch(b), nil
+	out := branch(b)
+	return out, out.of(ctx, obj)
 }
 
 // DeletedBranch is the resolver for the deletedBranch field.
@@ -233,3 +240,8 @@ func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref stri
 	}
 	return file(f), nil
 }
+
+// Branch returns BranchResolver implementation.
+func (r *Resolver) Branch() BranchResolver { return &branchResolver{r} }
+
+type branchResolver struct{ *Resolver }

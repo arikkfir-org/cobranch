@@ -300,7 +300,13 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		if err := s.attribute(ctx, q, claimed); err != nil {
 			return err
 		}
+		if err := linkPushed(ctx, q, claimed); err != nil {
+			return err
+		}
 		if err := recordMerges(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := finishMerged(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
