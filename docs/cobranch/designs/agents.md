@@ -5,8 +5,8 @@
 > from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-02 · [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Builds the [product’s
-agents](product.md#agents-and-ai-review) on [jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y)’ runtime · Adds
-the agent image · Built by [ENG-215](https://linear.app/arikkfir/issue/ENG-215), in five pull requests
+agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Adds the agent image · Built by
+[ENG-215](https://linear.app/arikkfir/issue/ENG-215), in five pull requests
 
 Every branch carries a real-time, threaded chat whose threads can point at lines of a file. Users create agents, which
 their organization owns and an admin puts on a model from the providers the organization holds keys for; a user assigns
@@ -24,18 +24,19 @@ harness works a task through Cobranch's APIs, saving its transcript as it goes. 
 design](product.md#agents-and-ai-review) fixed agents as principals with a model each; the
 [architecture](architecture.md#settings-secrets-and-models) fixed the providers, the controller and the agent image;
 [principals and permissions](principals-and-permissions.md#agents) fixed `agents.create`, `agents.assign`,
-`messages.post` and `messages.moderate`, the assigner cap and the task token. Pods run on
-[jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y)' runtime: its controller, its job namespaces and its secrets.
+`messages.post` and `messages.moderate`, the assigner cap and the task token. Pods run on [jobs](jobs.md)' runtime: its
+controller, its job namespaces and its secrets.
 
 **This slice builds chats, agents, tasks and the harness; it runs pods on jobs’ runtime**
 
 ![This slice builds chats, agents, tasks and the harness; it runs pods on jobs’ runtime](agents/scope.svg)
 
-Chats come first and need nothing else; agents and tasks need jobs’ secrets; pods need its controller.
+Chats, agents and tasks come first and need nothing else; providers, models and agents’ secrets need jobs’ secrets; pods
+need its controller.
 
 Choices beyond the agreed designs are under [Decisions](#decisions), and the owner's answers to three questions under
-[Open questions](#open-questions). Branch chats, live, are built (cobranch's first pull request for
-[ENG-215](https://linear.app/arikkfir/issue/ENG-215)); the rest follows in four more.
+[Open questions](#open-questions). Branch chats, live, and agents with their tasks are built (cobranch's first two pull
+requests for [ENG-215](https://linear.app/arikkfir/issue/ENG-215)); the rest follows in three more.
 
 ## Branch chats
 
@@ -119,7 +120,8 @@ admin changes its model, its secrets, or deletes it.
   permissions the creator holds there, as every grant must; creating it needs no `org.grants.manage`. Later grants are
   ordinary grants.
 - **Its creator and `org.principals.manage`** change its name, description and instructions. **Only
-  `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it.
+  `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it, holding every permission
+  of the roles the agent holds where they apply, as revoking them would take; its creator alone can't delete it.
 - **It has an email of its own,** `<agent ID>@agents.<Console host>`, verified, written when it is created: the harness
   commits with it, so the push worker maps the agent's commits to the agent.
 - **Built-in agents,** such as the [AI reviewer](product.md#agents-and-ai-review) of
@@ -159,7 +161,8 @@ and the task does no more than its assigner can; it receives the agent's secrets
 ![A task does what both its agent and its assigner may, checked at every call](agents/cap.svg)
 
 Secrets are the one exception, as agreed: the task receives the agent’s secrets whoever assigned it. A task Cobranch
-starts itself has no assigner, so the agent’s grants alone cap it.
+starts itself names its agent as its assigner, so the agent’s grants alone cap it; one whose assigner is gone may do
+nothing.
 
 - **A task** names its agent, a title and instructions in Markdown, and optionally where it works: a repository, a
   branch, a chat thread. A task assigned from a thread talks in that thread; one that names a branch without a thread
@@ -169,8 +172,12 @@ starts itself has no assigner, so the agent’s grants alone cap it.
   leaves the organization stops every task they assigned, which the controller then cancels.
 - **Assigning** takes `agents.assign` in the organization, and `repo.read` on the repository a task names. Cancelling
   takes being its assigner, or `org.principals.manage`.
-- **Cobranch's own tasks,** such as [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s reviews, have no assigner:
-  the agent's own grants are their cap.
+- **Cobranch's own tasks,** such as [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s reviews, name their agent as
+  their assigner: the agent's own grants are their cap. A task whose assigner is gone names none, and may do nothing, so
+  no task ever runs uncapped.
+- **A task's kind** is a row of `task_kinds`: `assigned` for a task someone assigned; a later slice adds its own, such
+  as [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s `review`, in a migration of its own, which a lookup table
+  takes and gives back where an enum would keep it.
 - **Each task has a number** in its organization, `#17`, for the Console.
 
 **A task queues, runs, waits for answers, and ends**
@@ -200,10 +207,10 @@ organization's job namespace, reaching Cobranch through its public URLs like any
 
 Every arrow into REST / GraphQL or Git carries the task token, so each is checked as the agent capped by Alice.
 
-- **The controller runs agent tasks** as a queue of its own, beside [jobs'
-  runs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#life): a replica claims a queued task `FOR UPDATE SKIP LOCKED`
-  under a lease, makes sure the organization's namespace exists, opens the provider's key and the agent's secrets
-  through the same call runs use, and creates the task's Secret and pod, labelled as an agent task.
+- **The controller runs agent tasks** as a queue of its own, beside [jobs' runs](jobs.md#a-runs-life): a replica claims
+  a queued task `FOR UPDATE SKIP LOCKED` under a lease, makes sure the organization's namespace exists, opens the
+  provider's key and the agent's secrets through the same call runs use, and creates the task's Secret and pod, labelled
+  as an agent task.
 - **One pod per task, for as long as the task lives.** A task can take hours and many turns of conversation; its pod
   keeps its workspace meanwhile. Two tasks never share a pod, so one assigner's work never leaks into another's.
 - **The token is a file.** The task token, `cba_…`, is valid for an hour; the controller renews it every half hour into
@@ -284,8 +291,7 @@ as its work.
 
 ## The chart
 
-Agents add no workload and no RBAC: the controller and its role over job namespaces come with
-[jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#chart).
+Agents add no workload and no RBAC: the controller and its role over job namespaces come with [jobs](jobs.md#the-chart).
 
 | Value | Default | What it sets |
 | --- | --- | --- |
@@ -316,7 +322,7 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 
 | REST, under `/v1/orgs/{org}` | GraphQL | Takes |
 | --- | --- | --- |
-| `GET`, `POST /agents`; `GET`, `PATCH`, `DELETE /agents/{agent}` | `agents`, `createAgent`, `updateAgent`, `deleteAgent` | `org.read`; `agents.create`; its creator or `org.principals.manage` |
+| `GET`, `POST /agents`; `GET`, `PATCH`, `DELETE /agents/{agent}` | `agents`, `createAgent`, `updateAgent`, `deleteAgent` | `org.read`; `agents.create`; its creator or `org.principals.manage` changes it; `org.principals.manage`, with every permission of its roles, deletes it |
 | `PUT /agents/{agent}/model`, `PUT /agents/{agent}/secrets` | `setAgentModel`, `setAgentSecrets` | `org.principals.manage` |
 | `GET`, `PUT`, `DELETE /model-providers/{provider}` | `modelProviders`, `setModelProvider`, `removeModelProvider` | `org.read`; `org.manage` |
 | `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`; `agents.assign`; its assigner or `org.principals.manage` |
@@ -343,12 +349,14 @@ from.
 
 ![Five pull requests, each keeping main working](agents/rollout.svg)
 
-Chats ship first: they need nothing from jobs, and [ENG-216](https://linear.app/arikkfir/issue/ENG-216)’s review
-comments build on them.
+Chats ship first, and agents and tasks right after: they need nothing from jobs, and
+[ENG-216](https://linear.app/arikkfir/issue/ENG-216)’s reviewer and
+[ENG-217](https://linear.app/arikkfir/issue/ENG-217)’s issue assignments build on them while jobs’ secrets are still to
+land.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-215](https://linear.app/arikkfir/issue/ENG-215); the
-  fifth closes it. Chats need nothing else; agents and their models need
-  [jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#secrets)' secrets; pods need its controller and namespaces.
+  fifth closes it. Chats, agents and tasks need nothing else; providers, models and agents' secrets need
+  [jobs](jobs.md#secrets)' secrets; pods, and the task token they hold, need its controller and namespaces.
 - **An operator upgrades** with nothing to do for chats, agents and tasks; agent pods need jobs' RBAC, which the
   operator already granted for job pods, and the image `cobranch-agent`, which the chart names.
 - **An organization adopts agents** by adding a provider's key as a secret, adding the provider, creating an agent and

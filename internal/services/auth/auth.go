@@ -21,6 +21,8 @@ const (
 	KindAnonymous Kind = "anonymous"
 	// KindAPIKey is an API key: a principal of an organization that a script acts as, with its own grants.
 	KindAPIKey Kind = "api_key"
+	// KindAgent is an agent: a principal of an organization that does the tasks its members assign it.
+	KindAgent Kind = "agent"
 )
 
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.

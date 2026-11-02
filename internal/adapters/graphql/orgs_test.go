@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/adapters/markdown"
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/agents/agentstest"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/chats/chatstest"
@@ -52,6 +54,9 @@ type orgFixture struct {
 	chatStore        *chatstest.Store
 	notifier         *chatstest.Notifier
 	chats            *chats.Service
+	agentStore       *agentstest.Store
+	agents           *agents.Service
+	scout            agents.Agent
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -106,6 +111,7 @@ func newOrgFixture() *orgFixture {
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.addChats()
+	f.addAgents()
 	f.commitObjects()
 	f.issueStore = issuestest.NewStore(store)
 	f.issueStore.Repos[f.website.ID] = f.website
@@ -157,7 +163,7 @@ func (f *orgFixture) query(viewer *auth.Authenticated, document string) string {
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"query":`+jsonString(document)+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", "", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", "", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents)).ServeHTTP(rec, req)
 	return rec.Body.String()
 }
 

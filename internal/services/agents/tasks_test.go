@@ -1,0 +1,194 @@
+package agents_test
+
+import (
+	"cmp"
+	"context"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/orgs"
+)
+
+func TestAssign(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	scout := f.agent(t, f.olive, "Scout")
+	tests := []struct {
+		name   string
+		viewer agents.Viewer
+		agent  uuid.UUID
+		in     agents.TaskInput
+		want   error
+		where  agents.Task
+	}{
+		{name: "anywhere", viewer: f.mel, in: agents.TaskInput{Title: " Tidy up ", Instructions: "Everything"}},
+		{name: "a repository", viewer: f.max, in: agents.TaskInput{Title: "Read", RepoID: f.website},
+			where: agents.Task{RepoID: f.website, RepoSlug: "website"}},
+		{name: "a branch by name, in a thread", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, Branch: "refs/heads/feature", ThreadID: f.thread},
+			where: agents.Task{RepoID: f.website, RepoSlug: "website", BranchID: f.feature, Branch: "feature", ThreadID: f.thread}},
+		{name: "a branch by ID", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, BranchID: f.other},
+			where: agents.Task{RepoID: f.website, RepoSlug: "website", BranchID: f.other, Branch: "other"}},
+		{name: "a repository the assigner doesn't read", viewer: f.mel, in: agents.TaskInput{Title: "Peek", RepoID: f.vault}, want: invalid("repository.invalid")},
+		{name: "another organization's repository", viewer: f.olive, in: agents.TaskInput{Title: "Peek", RepoID: uuid.New()}, want: invalid("repository.invalid")},
+		{name: "a deleted branch", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, Branch: "gone"}, want: invalid("branch.invalid")},
+		{name: "a branch not there", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, BranchID: uuid.New()}, want: invalid("branch.invalid")},
+		{name: "another branch's thread", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, BranchID: f.other, ThreadID: f.thread}, want: invalid("thread.invalid")},
+		{name: "a thread not there", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, Branch: "feature", ThreadID: uuid.New()}, want: invalid("thread.invalid")},
+		{name: "a branch without its repository", viewer: f.mel, in: agents.TaskInput{Title: "Fix", Branch: "feature"}, want: invalid("task.branch_invalid")},
+		{name: "a thread without its branch", viewer: f.mel, in: agents.TaskInput{Title: "Fix", RepoID: f.website, ThreadID: f.thread}, want: invalid("task.thread_invalid")},
+		{name: "no title", viewer: f.mel, in: agents.TaskInput{Title: " "}, want: invalid("task.title_invalid")},
+		{name: "an agent not there", viewer: f.mel, agent: uuid.New(), in: agents.TaskInput{Title: "Fix"}, want: invalid("agent.invalid")},
+		{name: "a guest", viewer: f.gus, in: agents.TaskInput{Title: "Fix"}, want: auth.ErrForbidden},
+		{name: "an agent", viewer: f.bot, in: agents.TaskInput{Title: "Fix"}, want: auth.ErrForbidden},
+		{name: "no member", viewer: f.nia, in: agents.TaskInput{Title: "Fix"}, want: orgs.ErrNotFound},
+	}
+	number := int64(0)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			agent := cmp.Or(tt.agent, scout.ID)
+			task, err := f.service.Assign(context.Background(), tt.viewer, f.org, agent, tt.in)
+			if !is(err, tt.want) {
+				t.Fatalf("Assign() = %v, want %v", err, tt.want)
+			}
+			if err != nil {
+				return
+			}
+			number++
+			got := agents.Task{RepoID: task.RepoID, RepoSlug: task.RepoSlug, BranchID: task.BranchID, Branch: task.Branch, ThreadID: task.ThreadID}
+			if got != tt.where {
+				t.Errorf("Assign() works at %+v, want %+v", got, tt.where)
+			}
+			if task.Number != number || task.State != agents.TaskQueued || task.Kind != agents.KindAssigned || task.Agent.ID != scout.ID ||
+				task.AssignedBy == nil || task.AssignedBy.ID != tt.viewer.ID || task.Title != strings.TrimSpace(tt.in.Title) || task.ByCobranch() {
+				t.Errorf("Assign() = %+v, want number %d, queued, assigned by %s", task, number, tt.viewer.DisplayName)
+			}
+		})
+	}
+}
+
+// taskFixture has Scout and Archer hold tasks: 1 by Mel anywhere, 2 by Mel on website, 3 by Olive on vault, which Mel
+// doesn't read, 4 by Max to Archer on website, and 5 by Olive anywhere, which ended.
+func taskFixture(t *testing.T) (*fixture, agents.Agent, agents.Agent) {
+	t.Helper()
+	f := newFixture(t)
+	scout, archer := f.agent(t, f.olive, "Scout"), f.agent(t, f.olive, "Archer")
+	f.assign(t, f.mel, scout, "One", uuid.Nil)
+	f.assign(t, f.mel, scout, "Two", f.website)
+	f.assign(t, f.olive, scout, "Three", f.vault)
+	f.assign(t, f.max, archer, "Four", f.website)
+	f.assign(t, f.olive, scout, "Five", uuid.Nil)
+	f.store.SetState(f.org, 5, agents.TaskSucceeded)
+	return f, scout, archer
+}
+
+func numbers(tasks []agents.Task) []int64 {
+	var out []int64
+	for _, t := range tasks {
+		out = append(out, t.Number)
+	}
+	return out
+}
+
+func TestTasks(t *testing.T) {
+	t.Parallel()
+	f, scout, archer := taskFixture(t)
+	tests := []struct {
+		name   string
+		viewer agents.Viewer
+		filter agents.TaskFilter
+		limit  int
+		want   []int64
+		next   int64
+		err    error
+	}{
+		{name: "an owner reads all", viewer: f.olive, limit: 10, want: []int64{5, 4, 3, 2, 1}},
+		{name: "a member reads those on repositories they read", viewer: f.mel, limit: 10, want: []int64{5, 4, 2, 1}},
+		{name: "a guest reads those on no repository", viewer: f.gus, limit: 10, want: []int64{5, 1}},
+		{name: "a page", viewer: f.olive, limit: 2, want: []int64{5, 4}, next: 4},
+		{name: "the next page", viewer: f.olive, filter: agents.TaskFilter{Before: 4}, limit: 2, want: []int64{3, 2}, next: 2},
+		{name: "the last page", viewer: f.olive, filter: agents.TaskFilter{Before: 2}, limit: 2, want: []int64{1}},
+		{name: "an agent's", viewer: f.olive, filter: agents.TaskFilter{AgentID: archer.ID}, limit: 10, want: []int64{4}},
+		{name: "a repository's", viewer: f.mel, filter: agents.TaskFilter{RepoID: f.website, AgentID: scout.ID}, limit: 10, want: []int64{2}},
+		{name: "active", viewer: f.olive, filter: agents.TaskFilter{States: []agents.TaskState{agents.TaskQueued, agents.TaskRunning}}, limit: 10, want: []int64{4, 3, 2, 1}},
+		{name: "a state not there", viewer: f.olive, filter: agents.TaskFilter{States: []agents.TaskState{"lost"}}, limit: 10, err: invalid("task.state_invalid")},
+		{name: "no limit", viewer: f.olive, limit: 0, err: invalid("limit.invalid")},
+		{name: "a limit past a page", viewer: f.olive, limit: agents.MaxPage + 1, err: invalid("limit.invalid")},
+		{name: "no member", viewer: f.nia, limit: 10, err: orgs.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := f.service.Tasks(context.Background(), tt.viewer, f.org, tt.filter, tt.limit)
+			if !is(err, tt.err) {
+				t.Fatalf("Tasks() = %v, want %v", err, tt.err)
+			}
+			if got := numbers(page.Tasks); !slices.Equal(got, tt.want) || page.Next != tt.next {
+				t.Errorf("Tasks() = %v, next %d; want %v, next %d", got, page.Next, tt.want, tt.next)
+			}
+		})
+	}
+}
+
+func TestTask(t *testing.T) {
+	t.Parallel()
+	f, _, _ := taskFixture(t)
+	tests := []struct {
+		name   string
+		viewer agents.Viewer
+		number int64
+		want   error
+	}{
+		{name: "on no repository", viewer: f.gus, number: 1},
+		{name: "on a repository the viewer reads", viewer: f.max, number: 2},
+		{name: "on a repository the viewer doesn't read", viewer: f.mel, number: 3, want: orgs.ErrNotFound},
+		{name: "not there", viewer: f.olive, number: 9, want: orgs.ErrNotFound},
+		{name: "no member", viewer: f.nia, number: 1, want: orgs.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			task, err := f.service.Task(context.Background(), tt.viewer, f.org, tt.number)
+			if !errors.Is(err, tt.want) || (err == nil && task.Number != tt.number) {
+				t.Errorf("Task(%d) = %d, %v; want %v", tt.number, task.Number, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestCancelTask(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		viewer  func(*fixture) agents.Viewer
+		number  int64
+		version int64
+		want    error
+	}{
+		{name: "its assigner", viewer: func(f *fixture) agents.Viewer { return f.mel }, number: 2, version: 1},
+		{name: "a principals manager", viewer: func(f *fixture) agents.Viewer { return f.stu }, number: 1, version: agents.AnyVersion},
+		{name: "another member", viewer: func(f *fixture) agents.Viewer { return f.max }, number: 2, version: 1, want: auth.ErrForbidden},
+		{name: "on a repository the viewer doesn't read", viewer: func(f *fixture) agents.Viewer { return f.mel }, number: 3, version: 1, want: orgs.ErrNotFound},
+		{name: "a stale version", viewer: func(f *fixture) agents.Viewer { return f.mel }, number: 1, version: 2, want: agents.ErrChanged},
+		{name: "ended", viewer: func(f *fixture) agents.Viewer { return f.olive }, number: 5, version: agents.AnyVersion, want: agents.ErrEnded},
+		{name: "not there", viewer: func(f *fixture) agents.Viewer { return f.olive }, number: 9, version: 1, want: orgs.ErrNotFound},
+		{name: "no member", viewer: func(f *fixture) agents.Viewer { return f.nia }, number: 1, version: 1, want: orgs.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			f, _, _ := taskFixture(t)
+			v := tt.viewer(f)
+			task, err := f.service.CancelTask(context.Background(), v, f.org, tt.number, tt.version)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("CancelTask(%d) = %v, want %v", tt.number, err, tt.want)
+			}
+			if err == nil && (task.State != agents.TaskCancelled || task.CancelledBy == nil || task.CancelledBy.ID != v.ID || task.EndedAt.IsZero()) {
+				t.Errorf("CancelTask(%d) = %+v, want cancelled by %s", tt.number, task, v.DisplayName)
+			}
+		})
+	}
+}
