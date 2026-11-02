@@ -794,6 +794,30 @@ func (e TaskState) Valid() bool {
 	}
 }
 
+// Defines values for TranscriptEntryKind.
+const (
+	TranscriptEntryKindInput  TranscriptEntryKind = "input"
+	TranscriptEntryKindResult TranscriptEntryKind = "result"
+	TranscriptEntryKindState  TranscriptEntryKind = "state"
+	TranscriptEntryKindTurn   TranscriptEntryKind = "turn"
+)
+
+// Valid indicates whether the value is a known member of the TranscriptEntryKind enum.
+func (e TranscriptEntryKind) Valid() bool {
+	switch e {
+	case TranscriptEntryKindInput:
+		return true
+	case TranscriptEntryKindResult:
+		return true
+	case TranscriptEntryKindState:
+		return true
+	case TranscriptEntryKindTurn:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TreeEntryKind.
 const (
 	TreeEntryKindBlob      TreeEntryKind = "blob"
@@ -1935,6 +1959,14 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
+// MyTask The task a task token works, and the slug of its organization, which the harness's calls name.
+type MyTask struct {
+	Organization string `json:"organization"`
+
+	// Task A task of one of the organization's agents, which the organization numbers.
+	Task Task `json:"task"`
+}
+
 // NewSecret What makes a secret.
 type NewSecret struct {
 	// Name At most 100 characters, unique where the secret lives.
@@ -2486,6 +2518,29 @@ type TaskInput struct {
 
 // TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 type TaskState string
+
+// TranscriptEntry A step of a task's transcript, numbered from 1 in its task; entries never change.
+type TranscriptEntry struct {
+	// Body What the harness recorded, as it wrote it. A state entry's holds state, and summary or reason.
+	Body      json.RawMessage `json:"body"`
+	CreatedAt time.Time       `json:"createdAt"`
+
+	// Kind What an entry records: input, what the task began with or a message a person sent it since; turn, a turn of the agent's model with the tool calls it asked for; result, a tool's result; state, a change of the task's state.
+	Kind TranscriptEntryKind `json:"kind"`
+	Seq  int                 `json:"seq"`
+}
+
+// TranscriptEntryInput The next entry of a task's transcript: its number, its kind and its body, a JSON object of at most 256 KiB. A state entry's body holds state (running, waiting, succeeded or failed), with a summary of 1 to 20000 characters for succeeded and a reason of 1 to 1000 for failed.
+type TranscriptEntryInput struct {
+	Body json.RawMessage `json:"body"`
+
+	// Kind What an entry records: input, what the task began with or a message a person sent it since; turn, a turn of the agent's model with the tool calls it asked for; result, a tool's result; state, a change of the task's state.
+	Kind TranscriptEntryKind `json:"kind"`
+	Seq  int                 `json:"seq"`
+}
+
+// TranscriptEntryKind What an entry records: input, what the task began with or a message a person sent it since; turn, a turn of the agent's model with the tool calls it asked for; result, a tool's result; state, a change of the task's state.
+type TranscriptEntryKind string
 
 // Tree A directory at a commit.
 type Tree struct {
@@ -3130,6 +3185,21 @@ type CancelTaskParams struct {
 	IfMatch *IfMatchTask `json:"If-Match,omitempty"`
 }
 
+// ListTranscriptParams defines parameters for ListTranscript.
+type ListTranscriptParams struct {
+	// After The number of the last entry already read; 0, the default, for the first.
+	After *int `form:"after,omitempty" json:"after,omitempty"`
+
+	// Limit How many entries the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetTranscriptEntryParams defines parameters for GetTranscriptEntry.
+type GetTranscriptEntryParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetOrganizationUsageParams defines parameters for GetOrganizationUsage.
 type GetOrganizationUsageParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
@@ -3275,6 +3345,9 @@ type GrantSecretJSONRequestBody GrantSecretJSONBody
 // AssignTaskJSONRequestBody defines body for AssignTask for application/json ContentType.
 type AssignTaskJSONRequestBody = TaskInput
 
+// AppendTranscriptJSONRequestBody defines body for AppendTranscript for application/json ContentType.
+type AppendTranscriptJSONRequestBody = TranscriptEntryInput
+
 // ReportPageViewsJSONRequestBody defines body for ReportPageViews for application/json ContentType.
 type ReportPageViewsJSONRequestBody = PageViews
 
@@ -3313,6 +3386,9 @@ type ServerInterface interface {
 	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
 	// (DELETE /me/ssh-keys/{id})
 	DeleteMySSHKey(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
+	// (GET /me/task)
+	GetMyTask(w http.ResponseWriter, r *http.Request)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(w http.ResponseWriter, r *http.Request)
@@ -3688,6 +3764,15 @@ type ServerInterface interface {
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
 	// (POST /orgs/{org}/tasks/{number}/cancel)
 	CancelTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params CancelTaskParams)
+	// ListTranscript The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
+	// (GET /orgs/{org}/tasks/{number}/transcript)
+	ListTranscript(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params ListTranscriptParams)
+	// AppendTranscript Appends the next entry to the transcript of one of the organization's tasks; only the task's own token appends, while the task hasn't ended (409 task.ended). An entry already numbered seq answers 200 unchanged, so a harness that repeats an append records it once; a number past the next answers 400 transcript.seq_invalid. A state entry moves the task too: a running task to waiting and back, one that runs or waits to succeeded with a summary or failed with a reason; another move answers 409 task.transition_invalid.
+	// (POST /orgs/{org}/tasks/{number}/transcript)
+	AppendTranscript(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber)
+	// GetTranscriptEntry One entry of a task's transcript, by its number; who reads the transcript reads it.
+	// (GET /orgs/{org}/tasks/{number}/transcript/{seq})
+	GetTranscriptEntry(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, seq int, params GetTranscriptEntryParams)
 	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
 	// (GET /orgs/{org}/usage)
 	GetOrganizationUsage(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationUsageParams)
@@ -3909,6 +3994,20 @@ func (siw *ServerInterfaceWrapper) DeleteMySSHKey(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteMySSHKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMyTask operation middleware
+func (siw *ServerInterfaceWrapper) GetMyTask(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyTask(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10159,6 +10258,173 @@ func (siw *ServerInterfaceWrapper) CancelTask(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListTranscript operation middleware
+func (siw *ServerInterfaceWrapper) ListTranscript(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number TaskNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTranscriptParams
+
+	// ------------- Optional query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTranscript(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AppendTranscript operation middleware
+func (siw *ServerInterfaceWrapper) AppendTranscript(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number TaskNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AppendTranscript(w, r, org, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTranscriptEntry operation middleware
+func (siw *ServerInterfaceWrapper) GetTranscriptEntry(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number TaskNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "seq" -------------
+	var seq int
+
+	err = runtime.BindStyledParameterWithOptions("simple", "seq", r.PathValue("seq"), &seq, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "seq", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTranscriptEntryParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTranscriptEntry(w, r, org, number, seq, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetOrganizationUsage operation middleware
 func (siw *ServerInterfaceWrapper) GetOrganizationUsage(w http.ResponseWriter, r *http.Request) {
 
@@ -10426,6 +10692,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/version", wrapper.GetVersion)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/page-views", wrapper.ReportPageViews)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/task", wrapper.GetMyTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{id}", wrapper.RevokeMySession)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/tokens", wrapper.ListMyTokens)
@@ -10490,6 +10757,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.AssignTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}", wrapper.GetTask)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks/{number}/cancel", wrapper.CancelTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}/transcript", wrapper.ListTranscript)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks/{number}/transcript", wrapper.AppendTranscript)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}/transcript/{seq}", wrapper.GetTranscriptEntry)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.ListIssues)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.CreateIssue)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.DeleteIssue)
@@ -11262,6 +11532,74 @@ type DeleteMySSHKeydefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DeleteMySSHKeydefaultApplicationProblemPlusJSONResponse) VisitDeleteMySSHKeyResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyTaskRequestObject struct {
+}
+
+type GetMyTaskResponseObject interface {
+	VisitGetMyTaskResponse(w http.ResponseWriter) error
+}
+
+type GetMyTask200JSONResponse MyTask
+
+func (response GetMyTask200JSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyTask401ApplicationProblemPlusJSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetMyTask403ApplicationProblemPlusJSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyTaskdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMyTaskdefaultApplicationProblemPlusJSONResponse) VisitGetMyTaskResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -24183,6 +24521,370 @@ func (response CancelTaskdefaultApplicationProblemPlusJSONResponse) VisitCancelT
 	return err
 }
 
+type ListTranscriptRequestObject struct {
+	Org    Org        `json:"org"`
+	Number TaskNumber `json:"number"`
+	Params ListTranscriptParams
+}
+
+type ListTranscriptResponseObject interface {
+	VisitListTranscriptResponse(w http.ResponseWriter) error
+}
+
+type ListTranscript200ResponseHeaders struct {
+	Link *string
+}
+
+type ListTranscript200JSONResponse struct {
+	Body struct {
+		Entries []TranscriptEntry `json:"entries"`
+	}
+	Headers ListTranscript200ResponseHeaders
+}
+
+func (response ListTranscript200JSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTranscript400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListTranscript400ApplicationProblemPlusJSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTranscript401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTranscript401ApplicationProblemPlusJSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTranscript403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTranscript403ApplicationProblemPlusJSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTranscript404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTranscript404ApplicationProblemPlusJSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTranscriptdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListTranscriptdefaultApplicationProblemPlusJSONResponse) VisitListTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscriptRequestObject struct {
+	Org    Org        `json:"org"`
+	Number TaskNumber `json:"number"`
+	Body   *AppendTranscriptJSONRequestBody
+}
+
+type AppendTranscriptResponseObject interface {
+	VisitAppendTranscriptResponse(w http.ResponseWriter) error
+}
+
+type AppendTranscript200ResponseHeaders struct {
+	ETag string
+}
+
+type AppendTranscript200JSONResponse struct {
+	Body    TranscriptEntry
+	Headers AppendTranscript200ResponseHeaders
+}
+
+func (response AppendTranscript200JSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AppendTranscript201JSONResponse struct {
+	Body    TranscriptEntry
+	Headers AppendTranscript201ResponseHeaders
+}
+
+func (response AppendTranscript201JSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AppendTranscript400ApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript401ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendTranscript401ApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript403ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendTranscript403ApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript404ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendTranscript404ApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscript409ApplicationProblemPlusJSONResponse Problem
+
+func (response AppendTranscript409ApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AppendTranscriptdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AppendTranscriptdefaultApplicationProblemPlusJSONResponse) VisitAppendTranscriptResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscriptEntryRequestObject struct {
+	Org    Org        `json:"org"`
+	Number TaskNumber `json:"number"`
+	Seq    int        `json:"seq"`
+	Params GetTranscriptEntryParams
+}
+
+type GetTranscriptEntryResponseObject interface {
+	VisitGetTranscriptEntryResponse(w http.ResponseWriter) error
+}
+
+type GetTranscriptEntry200ResponseHeaders struct {
+	ETag string
+}
+
+type GetTranscriptEntry200JSONResponse struct {
+	Body    TranscriptEntry
+	Headers GetTranscriptEntry200ResponseHeaders
+}
+
+func (response GetTranscriptEntry200JSONResponse) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscriptEntry304ResponseHeaders struct {
+	ETag string
+}
+
+type GetTranscriptEntry304Response struct {
+	Headers GetTranscriptEntry304ResponseHeaders
+}
+
+func (response GetTranscriptEntry304Response) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetTranscriptEntry401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetTranscriptEntry401ApplicationProblemPlusJSONResponse) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscriptEntry403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTranscriptEntry403ApplicationProblemPlusJSONResponse) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscriptEntry404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTranscriptEntry404ApplicationProblemPlusJSONResponse) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTranscriptEntrydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTranscriptEntrydefaultApplicationProblemPlusJSONResponse) VisitGetTranscriptEntryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetOrganizationUsageRequestObject struct {
 	Org    Org `json:"org"`
 	Params GetOrganizationUsageParams
@@ -24525,6 +25227,9 @@ type StrictServerInterface interface {
 	// DeleteMySSHKey Deletes one of the user's SSH keys; the next connection with it fails. Only from a session, never from a token or an API key.
 	// (DELETE /me/ssh-keys/{id})
 	DeleteMySSHKey(ctx context.Context, request DeleteMySSHKeyRequestObject) (DeleteMySSHKeyResponseObject, error)
+	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
+	// (GET /me/task)
+	GetMyTask(ctx context.Context, request GetMyTaskRequestObject) (GetMyTaskResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
 	// (GET /me/tokens)
 	ListMyTokens(ctx context.Context, request ListMyTokensRequestObject) (ListMyTokensResponseObject, error)
@@ -24900,6 +25605,15 @@ type StrictServerInterface interface {
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
 	// (POST /orgs/{org}/tasks/{number}/cancel)
 	CancelTask(ctx context.Context, request CancelTaskRequestObject) (CancelTaskResponseObject, error)
+	// ListTranscript The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
+	// (GET /orgs/{org}/tasks/{number}/transcript)
+	ListTranscript(ctx context.Context, request ListTranscriptRequestObject) (ListTranscriptResponseObject, error)
+	// AppendTranscript Appends the next entry to the transcript of one of the organization's tasks; only the task's own token appends, while the task hasn't ended (409 task.ended). An entry already numbered seq answers 200 unchanged, so a harness that repeats an append records it once; a number past the next answers 400 transcript.seq_invalid. A state entry moves the task too: a running task to waiting and back, one that runs or waits to succeeded with a summary or failed with a reason; another move answers 409 task.transition_invalid.
+	// (POST /orgs/{org}/tasks/{number}/transcript)
+	AppendTranscript(ctx context.Context, request AppendTranscriptRequestObject) (AppendTranscriptResponseObject, error)
+	// GetTranscriptEntry One entry of a task's transcript, by its number; who reads the transcript reads it.
+	// (GET /orgs/{org}/tasks/{number}/transcript/{seq})
+	GetTranscriptEntry(ctx context.Context, request GetTranscriptEntryRequestObject) (GetTranscriptEntryResponseObject, error)
 	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
 	// (GET /orgs/{org}/usage)
 	GetOrganizationUsage(ctx context.Context, request GetOrganizationUsageRequestObject) (GetOrganizationUsageResponseObject, error)
@@ -25230,6 +25944,30 @@ func (sh *strictHandler) DeleteMySSHKey(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteMySSHKeyResponseObject); ok {
 		if err := validResponse.VisitDeleteMySSHKeyResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMyTask operation middleware
+func (sh *strictHandler) GetMyTask(w http.ResponseWriter, r *http.Request) {
+	var request GetMyTaskRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyTask(ctx, request.(GetMyTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyTaskResponseObject); ok {
+		if err := validResponse.VisitGetMyTaskResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -28970,6 +29708,97 @@ func (sh *strictHandler) CancelTask(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelTaskResponseObject); ok {
 		if err := validResponse.VisitCancelTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTranscript operation middleware
+func (sh *strictHandler) ListTranscript(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params ListTranscriptParams) {
+	var request ListTranscriptRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTranscript(ctx, request.(ListTranscriptRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTranscript")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTranscriptResponseObject); ok {
+		if err := validResponse.VisitListTranscriptResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AppendTranscript operation middleware
+func (sh *strictHandler) AppendTranscript(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber) {
+	var request AppendTranscriptRequestObject
+
+	request.Org = org
+	request.Number = number
+
+	var body AppendTranscriptJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AppendTranscript(ctx, request.(AppendTranscriptRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AppendTranscript")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AppendTranscriptResponseObject); ok {
+		if err := validResponse.VisitAppendTranscriptResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTranscriptEntry operation middleware
+func (sh *strictHandler) GetTranscriptEntry(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, seq int, params GetTranscriptEntryParams) {
+	var request GetTranscriptEntryRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Seq = seq
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTranscriptEntry(ctx, request.(GetTranscriptEntryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTranscriptEntry")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTranscriptEntryResponseObject); ok {
+		if err := validResponse.VisitGetTranscriptEntryResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

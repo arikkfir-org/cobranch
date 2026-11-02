@@ -37,6 +37,7 @@ type ResolverRoot interface {
 	Repository() RepositoryResolver
 	Secret() SecretResolver
 	Subscription() SubscriptionResolver
+	Task() TaskResolver
 	User() UserResolver
 }
 
@@ -497,6 +498,7 @@ type ComplexityRoot struct {
 	Mutation struct {
 		AcceptInvitation       func(childComplexity int, id string) int
 		AddSSHKey              func(childComplexity int, input SSHKeyInput) int
+		AppendTranscriptEntry  func(childComplexity int, organizationID string, number int, input TranscriptEntryInput) int
 		ApproveJoinRequest     func(childComplexity int, organizationID string, id string, roleID string) int
 		AssignTask             func(childComplexity int, organizationID string, input TaskInput) int
 		CancelInvitation       func(childComplexity int, organizationID string, id string) int
@@ -569,6 +571,11 @@ type ComplexityRoot struct {
 		UpdateSecret           func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
 	}
 
+	MyTask struct {
+		Organization func(childComplexity int) int
+		Task         func(childComplexity int) int
+	}
+
 	Organization struct {
 		APIKeys                 func(childComplexity int) int
 		AcceptsJoinRequests     func(childComplexity int) int
@@ -636,6 +643,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		MyTask       func(childComplexity int) int
 		Organization func(childComplexity int, slug string) int
 		Permissions  func(childComplexity int, scope RoleScope) int
 		Roles        func(childComplexity int, scope RoleScope) int
@@ -799,6 +807,7 @@ type ComplexityRoot struct {
 		Instructions   func(childComplexity int) int
 		Kind           func(childComplexity int) int
 		Number         func(childComplexity int) int
+		OrganizationID func(childComplexity int) int
 		Reason         func(childComplexity int) int
 		RepositoryID   func(childComplexity int) int
 		RepositorySlug func(childComplexity int) int
@@ -807,12 +816,20 @@ type ComplexityRoot struct {
 		Summary        func(childComplexity int) int
 		ThreadID       func(childComplexity int) int
 		Title          func(childComplexity int) int
+		Transcript     func(childComplexity int, after *int, first *int) int
 		Version        func(childComplexity int) int
 	}
 
 	TaskPage struct {
 		NextCursor func(childComplexity int) int
 		Tasks      func(childComplexity int) int
+	}
+
+	TranscriptEntry struct {
+		Body      func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		Kind      func(childComplexity int) int
+		Seq       func(childComplexity int) int
 	}
 
 	Tree struct {
@@ -887,6 +904,7 @@ type MutationResolver interface {
 	RemoveModelProvider(ctx context.Context, organizationID string, provider string, expectedVersion *int) (bool, error)
 	AssignTask(ctx context.Context, organizationID string, input TaskInput) (*Task, error)
 	CancelTask(ctx context.Context, organizationID string, number int, expectedVersion *int) (*Task, error)
+	AppendTranscriptEntry(ctx context.Context, organizationID string, number int, input TranscriptEntryInput) (*TranscriptEntry, error)
 	StartChatThread(ctx context.Context, repositoryID string, branch string, input ChatThreadInput) (*ChatThread, error)
 	PostChatMessage(ctx context.Context, repositoryID string, branch string, thread string, input ChatMessageInput) (*ChatMessage, error)
 	EditChatMessage(ctx context.Context, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) (*ChatMessage, error)
@@ -971,6 +989,7 @@ type OrganizationResolver interface {
 type QueryResolver interface {
 	Version(ctx context.Context) (string, error)
 	Viewer(ctx context.Context) (*User, error)
+	MyTask(ctx context.Context) (*MyTask, error)
 	Organization(ctx context.Context, slug string) (*Organization, error)
 	Permissions(ctx context.Context, scope RoleScope) ([]string, error)
 	Roles(ctx context.Context, scope RoleScope) ([]*Role, error)
@@ -1005,6 +1024,9 @@ type SecretResolver interface {
 type SubscriptionResolver interface {
 	ChatUpdates(ctx context.Context, repositoryID string, branch string, after string) (<-chan *ChatUpdate, error)
 	IssueChatUpdates(ctx context.Context, organizationID string, number int, after string) (<-chan *ChatUpdate, error)
+}
+type TaskResolver interface {
+	Transcript(ctx context.Context, obj *Task, after *int, first *int) ([]*TranscriptEntry, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -2951,6 +2973,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.AddSSHKey(childComplexity, args["input"].(SSHKeyInput)), true
+	case "Mutation.appendTranscriptEntry":
+		if e.ComplexityRoot.Mutation.AppendTranscriptEntry == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_appendTranscriptEntry_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.AppendTranscriptEntry(childComplexity, args["organizationId"].(string), args["number"].(int), args["input"].(TranscriptEntryInput)), true
 	case "Mutation.approveJoinRequest":
 		if e.ComplexityRoot.Mutation.ApproveJoinRequest == nil {
 			break
@@ -3722,6 +3755,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.UpdateSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(SecretChange), args["expectedVersion"].(*int)), true
 
+	case "MyTask.organization":
+		if e.ComplexityRoot.MyTask.Organization == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTask.Organization(childComplexity), true
+	case "MyTask.task":
+		if e.ComplexityRoot.MyTask.Task == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTask.Task(childComplexity), true
+
 	case "Organization.apiKeys":
 		if e.ComplexityRoot.Organization.APIKeys == nil {
 			break
@@ -4046,6 +4092,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Push.Transport(childComplexity), true
 
+	case "Query.myTask":
+		if e.ComplexityRoot.Query.MyTask == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Query.MyTask(childComplexity), true
 	case "Query.organization":
 		if e.ComplexityRoot.Query.Organization == nil {
 			break
@@ -4864,6 +4916,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.Number(childComplexity), true
+	case "Task.organizationId":
+		if e.ComplexityRoot.Task.OrganizationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Task.OrganizationID(childComplexity), true
 	case "Task.reason":
 		if e.ComplexityRoot.Task.Reason == nil {
 			break
@@ -4912,6 +4970,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Task.Title(childComplexity), true
+	case "Task.transcript":
+		if e.ComplexityRoot.Task.Transcript == nil {
+			break
+		}
+
+		args, err := ec.field_Task_transcript_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Task.Transcript(childComplexity, args["after"].(*int), args["first"].(*int)), true
 	case "Task.version":
 		if e.ComplexityRoot.Task.Version == nil {
 			break
@@ -4931,6 +5000,31 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.TaskPage.Tasks(childComplexity), true
+
+	case "TranscriptEntry.body":
+		if e.ComplexityRoot.TranscriptEntry.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TranscriptEntry.Body(childComplexity), true
+	case "TranscriptEntry.createdAt":
+		if e.ComplexityRoot.TranscriptEntry.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TranscriptEntry.CreatedAt(childComplexity), true
+	case "TranscriptEntry.kind":
+		if e.ComplexityRoot.TranscriptEntry.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TranscriptEntry.Kind(childComplexity), true
+	case "TranscriptEntry.seq":
+		if e.ComplexityRoot.TranscriptEntry.Seq == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TranscriptEntry.Seq(childComplexity), true
 
 	case "Tree.commit":
 		if e.ComplexityRoot.Tree.Commit == nil {
@@ -5122,6 +5216,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("SecretChange", ec.unmarshalInputSecretChange),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 			graphql.NewInputUnmarshaler("TaskInput", ec.unmarshalInputTaskInput),
+			graphql.NewInputUnmarshaler("TranscriptEntryInput", ec.unmarshalInputTranscriptEntryInput),
 		)
 	}
 	first := true
@@ -5313,6 +5408,8 @@ type TaskPage {
 "A task of one of the organization's agents, which the organization numbers."
 type Task {
   id: ID!
+  "The organization whose agent it is."
+  organizationId: ID!
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
@@ -5344,6 +5441,43 @@ type Task {
   endedAt: Time
   "Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+  "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
+  transcript(after: Int, first: Int): [TranscriptEntry!]!
+}
+
+"The task a task token works, and the slug of its organization."
+type MyTask {
+  organization: String!
+  task: Task!
+}
+
+"What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
+enum TranscriptEntryKind {
+  INPUT
+  TURN
+  RESULT
+  STATE
+}
+
+"A step of a task's transcript, numbered from 1 in its task; entries never change."
+type TranscriptEntry {
+  seq: Int!
+  kind: TranscriptEntryKind!
+  "What the harness recorded, as it wrote it. A state entry's holds state, and summary or reason."
+  body: Map!
+  createdAt: Time!
+}
+
+"The next entry of a task's transcript. Its body is a JSON object of at most 256 KiB; a state entry's holds state (running, waiting, succeeded or failed), with a summary of 1 to 20000 characters for succeeded and a reason of 1 to 1000 for failed."
+input TranscriptEntryInput {
+  seq: Int!
+  kind: TranscriptEntryKind!
+  body: Map!
+}
+
+extend type Query {
+  "The task the request's task token works, with its organization's slug, for the agent's harness to start from; any other credential is refused (FORBIDDEN)."
+  myTask: MyTask!
 }
 
 "A role a new agent starts with, at the organization or, with a repository, on that repository."
@@ -5410,6 +5544,8 @@ extend type Mutation {
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   cancelTask(organizationId: ID!, number: Int!, expectedVersion: Int): Task!
+  "Appends the next entry to the transcript of one of the organization's tasks; only the task's own token appends (FORBIDDEN otherwise), while the task hasn't ended (CONFLICT, task.ended). An entry already numbered seq answers unchanged, so a harness that repeats an append records it once; a number past the next is refused (BAD_USER_INPUT, transcript.seq_invalid). A state entry moves the task too: a running task to waiting and back, one that runs or waits to succeeded or failed; another move is refused (CONFLICT, task.transition_invalid)."
+  appendTranscriptEntry(organizationId: ID!, number: Int!, input: TranscriptEntryInput!): TranscriptEntry!
 }
 `, BuiltIn: false},
 	{Name: "../../../api/graphql/chats.graphqls", Input: `# The chats on branches: every branch carries a chat of threads of Markdown messages, a thread perhaps anchored to
@@ -8007,6 +8143,16 @@ func (ec *executionContext) childFields_ModelProvider(ctx context.Context, field
 	return nil, fmt.Errorf("no field named %q was found under type ModelProvider", field.Name)
 }
 
+func (ec *executionContext) childFields_MyTask(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "organization":
+		return ec.fieldContext_MyTask_organization(ctx, field)
+	case "task":
+		return ec.fieldContext_MyTask_task(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type MyTask", field.Name)
+}
+
 func (ec *executionContext) childFields_Organization(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -8421,6 +8567,8 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 	switch field.Name {
 	case "id":
 		return ec.fieldContext_Task_id(ctx, field)
+	case "organizationId":
+		return ec.fieldContext_Task_organizationId(ctx, field)
 	case "number":
 		return ec.fieldContext_Task_number(ctx, field)
 	case "agent":
@@ -8459,6 +8607,8 @@ func (ec *executionContext) childFields_Task(ctx context.Context, field graphql.
 		return ec.fieldContext_Task_endedAt(ctx, field)
 	case "version":
 		return ec.fieldContext_Task_version(ctx, field)
+	case "transcript":
+		return ec.fieldContext_Task_transcript(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Task", field.Name)
 }
@@ -8471,6 +8621,20 @@ func (ec *executionContext) childFields_TaskPage(ctx context.Context, field grap
 		return ec.fieldContext_TaskPage_nextCursor(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type TaskPage", field.Name)
+}
+
+func (ec *executionContext) childFields_TranscriptEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "seq":
+		return ec.fieldContext_TranscriptEntry_seq(ctx, field)
+	case "kind":
+		return ec.fieldContext_TranscriptEntry_kind(ctx, field)
+	case "body":
+		return ec.fieldContext_TranscriptEntry_body(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_TranscriptEntry_createdAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TranscriptEntry", field.Name)
 }
 
 func (ec *executionContext) childFields_Tree(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -8738,6 +8902,36 @@ func (ec *executionContext) field_Mutation_addSSHKey_args(ctx context.Context, r
 		return nil, err
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_appendTranscriptEntry_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "number",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["number"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (TranscriptEntryInput, error) {
+			return ec.unmarshalNTranscriptEntryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
 	return args, nil
 }
 
@@ -11314,6 +11508,28 @@ func (ec *executionContext) field_Subscription_issueChatUpdates_args(ctx context
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Task_transcript_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg1
 	return args, nil
 }
 
@@ -19582,6 +19798,50 @@ func (ec *executionContext) fieldContext_Mutation_cancelTask(ctx context.Context
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_appendTranscriptEntry(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_appendTranscriptEntry(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().AppendTranscriptEntry(ctx, fc.Args["organizationId"].(string), fc.Args["number"].(int), fc.Args["input"].(TranscriptEntryInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TranscriptEntry) graphql.Marshaler {
+			return ec.marshalNTranscriptEntry2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntry(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_appendTranscriptEntry(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TranscriptEntry(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_appendTranscriptEntry_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_startChatThread(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22134,6 +22394,61 @@ func (ec *executionContext) fieldContext_Mutation_revokeSecret(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _MyTask_organization(ctx context.Context, field graphql.CollectedField, obj *MyTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTask_organization(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Organization, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MyTask_organization(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MyTask", field, false, false, "String")
+}
+
+func (ec *executionContext) _MyTask_task(ctx context.Context, field graphql.CollectedField, obj *MyTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTask_task(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Task, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Task) graphql.Marshaler {
+			return ec.marshalNTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTask(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MyTask_task(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MyTask",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Task(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_id(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -23567,6 +23882,38 @@ func (ec *executionContext) fieldContext_Query_viewer(_ context.Context, field g
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_User(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Query_myTask(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Query_myTask(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Query().MyTask(ctx)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *MyTask) graphql.Marshaler {
+			return ec.marshalNMyTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMyTask(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Query_myTask(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Query",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_MyTask(ctx, field)
 		},
 	}
 	return fc, nil
@@ -26629,6 +26976,29 @@ func (ec *executionContext) fieldContext_Task_id(_ context.Context, field graphq
 	return graphql.NewScalarFieldContext("Task", field, false, false, "ID")
 }
 
+func (ec *executionContext) _Task_organizationId(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_organizationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OrganizationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_organizationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Task", field, false, false, "ID")
+}
+
 func (ec *executionContext) _Task_number(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27093,6 +27463,50 @@ func (ec *executionContext) fieldContext_Task_version(_ context.Context, field g
 	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
 }
 
+func (ec *executionContext) _Task_transcript(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Task_transcript(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Task().Transcript(ctx, obj, fc.Args["after"].(*int), fc.Args["first"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*TranscriptEntry) graphql.Marshaler {
+			return ec.marshalNTranscriptEntry2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Task_transcript(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Task",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TranscriptEntry(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Task_transcript_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _TaskPage_tasks(ctx context.Context, field graphql.CollectedField, obj *TaskPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -27146,6 +27560,98 @@ func (ec *executionContext) _TaskPage_nextCursor(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_TaskPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("TaskPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _TranscriptEntry_seq(ctx context.Context, field graphql.CollectedField, obj *TranscriptEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TranscriptEntry_seq(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Seq, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TranscriptEntry_seq(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TranscriptEntry", field, false, false, "Int")
+}
+
+func (ec *executionContext) _TranscriptEntry_kind(ctx context.Context, field graphql.CollectedField, obj *TranscriptEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TranscriptEntry_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v TranscriptEntryKind) graphql.Marshaler {
+			return ec.marshalNTranscriptEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TranscriptEntry_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TranscriptEntry", field, false, false, "TranscriptEntryKind")
+}
+
+func (ec *executionContext) _TranscriptEntry_body(ctx context.Context, field graphql.CollectedField, obj *TranscriptEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TranscriptEntry_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v map[string]any) graphql.Marshaler {
+			return ec.marshalNMap2map(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TranscriptEntry_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TranscriptEntry", field, false, false, "Map")
+}
+
+func (ec *executionContext) _TranscriptEntry_createdAt(ctx context.Context, field graphql.CollectedField, obj *TranscriptEntry) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TranscriptEntry_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TranscriptEntry_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TranscriptEntry", field, false, false, "Time")
 }
 
 func (ec *executionContext) _Tree_commit(ctx context.Context, field graphql.CollectedField, obj *Tree) (ret graphql.Marshaler) {
@@ -30449,6 +30955,62 @@ func UnmarshalTaskInput(ctx context.Context, raw any) (TaskInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputTranscriptEntryInput(ctx context.Context, obj any) (TranscriptEntryInput, error) {
+	var it TranscriptEntryInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"seq", "kind", "body"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "seq":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("seq"))
+			data, err := ec.unmarshalNInt2int(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Seq = data
+		case "kind":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("kind"))
+			data, err := ec.unmarshalNTranscriptEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryKind(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Kind = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalNMap2map(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalTranscriptEntryInput unmarshals raw into the TranscriptEntryInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalTranscriptEntryInput(ctx context.Context, raw any) (TranscriptEntryInput, error) {
+	var out TranscriptEntryInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "TranscriptEntryInput", raw, &out)
+	return out, err
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -33454,6 +34016,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "appendTranscriptEntry":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_appendTranscriptEntry(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "startChatThread":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_startChatThread(ctx, field)
@@ -33857,6 +34426,44 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_revokeSecret(ctx, field)
 			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var myTaskImplementors = []string{"MyTask"}
+
+func (ec *executionContext) _MyTask(ctx context.Context, sel ast.SelectionSet, obj *MyTask) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, myTaskImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MyTask")
+		case "organization":
+			out.Values[i] = ec._MyTask_organization(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "task":
+			out.Values[i] = ec._MyTask_task(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -34334,6 +34941,12 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Query_viewer(ctx, field)
+				})
+		case "myTask":
+			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Query_myTask(ctx, field)
 				})
 		case "organization":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
@@ -35307,103 +35920,114 @@ func (ec *executionContext) _Task(ctx context.Context, sel ast.SelectionSet, obj
 		case "id":
 			out.Values[i] = ec._Task_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "organizationId":
+			out.Values[i] = ec._Task_organizationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "number":
 			out.Values[i] = ec._Task_number(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "agent":
 			out.Values[i] = ec._Task_agent(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "kind":
 			out.Values[i] = ec._Task_kind(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "assignedBy":
 			out.Values[i] = ec._Task_assignedBy(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "title":
 			out.Values[i] = ec._Task_title(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "instructions":
 			out.Values[i] = ec._Task_instructions(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "repositoryId":
 			out.Values[i] = ec._Task_repositoryId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "repositorySlug":
 			out.Values[i] = ec._Task_repositorySlug(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "branchId":
 			out.Values[i] = ec._Task_branchId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "branch":
 			out.Values[i] = ec._Task_branch(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "threadId":
 			out.Values[i] = ec._Task_threadId(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "state":
 			out.Values[i] = ec._Task_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "reason":
 			out.Values[i] = ec._Task_reason(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "summary":
 			out.Values[i] = ec._Task_summary(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "cancelledBy":
 			out.Values[i] = ec._Task_cancelledBy(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdAt":
 			out.Values[i] = ec._Task_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "startedAt":
 			out.Values[i] = ec._Task_startedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "endedAt":
 			out.Values[i] = ec._Task_endedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._Task_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "transcript":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Task_transcript(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -35440,6 +36064,54 @@ func (ec *executionContext) _TaskPage(ctx context.Context, sel ast.SelectionSet,
 		case "nextCursor":
 			out.Values[i] = ec._TaskPage_nextCursor(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var transcriptEntryImplementors = []string{"TranscriptEntry"}
+
+func (ec *executionContext) _TranscriptEntry(ctx context.Context, sel ast.SelectionSet, obj *TranscriptEntry) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, transcriptEntryImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TranscriptEntry")
+		case "seq":
+			out.Values[i] = ec._TranscriptEntry_seq(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._TranscriptEntry_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._TranscriptEntry_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._TranscriptEntry_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -37180,6 +37852,14 @@ func (ec *executionContext) marshalNModelProvider2ᚖcobranchᚗdevᚋinternal�
 	return ec._ModelProvider(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNMyTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMyTask(ctx context.Context, sel ast.SelectionSet, v *MyTask) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "MyTask!")
+		return graphql.Null
+	}
+	return ec._MyTask(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNNewSecret2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐNewSecret(ctx context.Context, v any) (NewSecret, error) {
 	res, err := ec.unmarshalInputNewSecret(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -37709,6 +38389,45 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 		graphql.AddInvalidNullFromMarshaler(ctx, "Time!")
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNTranscriptEntry2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*TranscriptEntry) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNTranscriptEntry2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntry(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNTranscriptEntry2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntry(ctx context.Context, sel ast.SelectionSet, v *TranscriptEntry) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "TranscriptEntry!")
+		return graphql.Null
+	}
+	return ec._TranscriptEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNTranscriptEntryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryInput(ctx context.Context, v any) (TranscriptEntryInput, error) {
+	res, err := ec.unmarshalInputTranscriptEntryInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNTranscriptEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryKind(ctx context.Context, v any) (TranscriptEntryKind, error) {
+	var res TranscriptEntryKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTranscriptEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTranscriptEntryKind(ctx context.Context, sel ast.SelectionSet, v TranscriptEntryKind) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNTreeEntry2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeEntryᚄ(ctx context.Context, sel ast.SelectionSet, v []*TreeEntry) graphql.Marshaler {

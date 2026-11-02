@@ -47,6 +47,8 @@ type Store interface {
 	Tasks(ctx context.Context, orgID uuid.UUID, f TaskFilter, readable []uuid.UUID, hidden []string, limit int) ([]Task, error)
 	// Task finds one of the organization's tasks by its number.
 	Task(ctx context.Context, orgID uuid.UUID, number int64) (Task, error)
+	// TaskByID finds a task by its ID, with its organization's slug.
+	TaskByID(ctx context.Context, id uuid.UUID) (Task, string, error)
 	// Assign numbers the task in its organization and records it for actor, Queued, and answers it.
 	Assign(ctx context.Context, actor uuid.UUID, t Task) (Task, error)
 	// Cancel cancels one of the organization's active tasks for actor, at version or at any version for AnyVersion,
@@ -72,6 +74,13 @@ type Store interface {
 	// SetSecrets names the secrets one of the organization's agents' tasks receive, for actor, at version or at any
 	// version for AnyVersion, and answers it; ErrChanged.
 	SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID, version int64, named map[string]uuid.UUID) (Agent, error)
+	// Entries lists at most limit of a task's transcript entries numbered above after, in order.
+	Entries(ctx context.Context, taskID uuid.UUID, after, limit int) ([]Entry, error)
+	// Append records entry e of a task for actor, the next of its transcript, and, given change, moves the task to
+	// change.State from one of change.From(), in one transaction; it answers the entry and whether it recorded it, or
+	// the entry already numbered e.Seq unchanged. ErrEnded once the task has ended, ErrTransition, and a validation
+	// error for a number past the next.
+	Append(ctx context.Context, actor, taskID uuid.UUID, e Entry, change *StateChange) (Entry, bool, error)
 }
 
 // Service keeps an organization's agents and tasks for the viewers who read the organization: every operation checks

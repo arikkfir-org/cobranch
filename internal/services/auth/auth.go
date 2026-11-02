@@ -164,6 +164,8 @@ const (
 	CredentialPersonalToken CredentialKind = "personal_token"
 	// CredentialSSHKey is an SSH public key, which acts as the user who added it, unnarrowed, as their session would.
 	CredentialSSHKey CredentialKind = "ssh_key"
+	// CredentialTaskToken is a task token, which acts as an agent for one of its tasks, capped by the task's assigner.
+	CredentialTaskToken CredentialKind = "task_token"
 )
 
 // Credential is a secret that acts as a principal: an API key's or a user's personal token, shown once when made and
@@ -191,6 +193,15 @@ type Credential struct {
 	// PublicKey is an SSH key's public half, its type and base64, as an authorized_keys line has it without a comment;
 	// empty for the others.
 	PublicKey string
+	// Task is the task a task token works; zero for the others.
+	Task TaskGrant
+}
+
+// TaskGrant is what a task token acts for: its task, the task's organization, and its assigner, whose permissions cap
+// the agent's. AssignerID is the agent's own for a task Cobranch started, and uuid.Nil once the assigner is gone, when
+// the token may do nothing.
+type TaskGrant struct {
+	ID, OrgID, AssignerID uuid.UUID
 }
 
 // Live reports whether the credential acts at now: not revoked and not expired.

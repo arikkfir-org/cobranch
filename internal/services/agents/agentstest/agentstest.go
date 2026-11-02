@@ -47,8 +47,11 @@ type Store struct {
 	Names     map[uuid.UUID]string
 	providers map[uuid.UUID]map[string]agents.ModelProvider
 	secrets   map[uuid.UUID]Secret
-	Events    []string
-	Now       time.Time
+	entries   map[uuid.UUID][]agents.Entry
+	// OrgSlugs are the organizations' slugs, by ID.
+	OrgSlugs map[uuid.UUID]string
+	Events   []string
+	Now      time.Time
 }
 
 var _ agents.Store = (*Store)(nil)
@@ -59,7 +62,8 @@ func NewStore() *Store {
 		OrgRoles:  []orgs.Role{orgstest.Owner, orgstest.Member, orgstest.Guest, orgstest.Manager},
 		RepoRoles: []orgs.Role{orgstest.Reader, orgstest.Developer, orgstest.Maintainer, orgstest.Automation},
 		Repos:     map[uuid.UUID]Repository{}, Branches: map[uuid.UUID]Branch{}, Threads: map[uuid.UUID]uuid.UUID{},
-		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{}}
+		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{},
+		entries: map[uuid.UUID][]agents.Entry{}, OrgSlugs: map[uuid.UUID]string{}}
 }
 
 // AddAgent records a, as CreateAgent would without checking its name, and answers it as the store keeps it.
@@ -263,6 +267,64 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 		return agents.Task{}, orgs.ErrNotFound
 	}
 	return s.tasks[i], nil
+}
+
+// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs.
+func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Task, string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.tasks, func(t agents.Task) bool { return t.ID == id })
+	if i < 0 {
+		return agents.Task{}, "", orgs.ErrNotFound
+	}
+	return s.tasks[i], s.OrgSlugs[s.tasks[i].OrgID], nil
+}
+
+// Entries lists at most limit of a task's entries numbered above after.
+func (s *Store) Entries(_ context.Context, taskID uuid.UUID, after, limit int) ([]agents.Entry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	all := s.entries[taskID]
+	out := []agents.Entry{}
+	for _, e := range all[min(after, len(all)):] {
+		if len(out) == limit {
+			break
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+
+// Append records e as the task's next entry, or answers the one numbered e.Seq, and moves the task as change says.
+func (s *Store) Append(_ context.Context, actor, taskID uuid.UUID, e agents.Entry, change *agents.StateChange) (agents.Entry, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	i := slices.IndexFunc(s.tasks, func(t agents.Task) bool { return t.ID == taskID })
+	all := s.entries[taskID]
+	switch {
+	case i < 0:
+		return agents.Entry{}, false, orgs.ErrNotFound
+	case e.Seq <= len(all):
+		return all[e.Seq-1], false, nil
+	case !s.tasks[i].State.Active():
+		return agents.Entry{}, false, agents.ErrEnded
+	case e.Seq > len(all)+1:
+		return agents.Entry{}, false, &orgs.ValidationError{Field: "seq", Code: "transcript.seq_invalid", Message: "not the next entry"}
+	case change != nil && !slices.Contains(change.From(), s.tasks[i].State):
+		return agents.Entry{}, false, agents.ErrTransition
+	}
+	e.CreatedAt = s.Now
+	s.entries[taskID] = append(all, e)
+	if change != nil {
+		t := &s.tasks[i]
+		t.State, t.Summary, t.Reason = change.State, change.Summary, change.Reason
+		if !change.State.Active() {
+			t.EndedAt = s.Now
+		}
+		t.Version++
+		s.Events = append(s.Events, "task."+string(change.State)+" "+t.Title+" by "+s.Names[actor])
+	}
+	return e, true, nil
 }
 
 // Assign numbers t in its organization and records it.

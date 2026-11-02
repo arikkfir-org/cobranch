@@ -16,6 +16,8 @@ const (
 	PrefixAPIKey = "cbk_"
 	// PrefixPersonalToken starts a personal token.
 	PrefixPersonalToken = "cbp_"
+	// PrefixTaskToken starts an agent task's token.
+	PrefixTaskToken = "cba_"
 )
 
 const (
