@@ -2376,6 +2376,54 @@ type UpdateIssueParams struct {
 	IfMatch *IfMatchIssue `json:"If-Match,omitempty"`
 }
 
+// ListIssueChatThreadsParams defines parameters for ListIssueChatThreads.
+type ListIssueChatThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetIssueChatThreadParams defines parameters for GetIssueChatThread.
+type GetIssueChatThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateIssueChatThreadParams defines parameters for UpdateIssueChatThread.
+type UpdateIssueChatThreadParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// DeleteIssueChatMessageParams defines parameters for DeleteIssueChatMessage.
+type DeleteIssueChatMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// GetIssueChatMessageParams defines parameters for GetIssueChatMessage.
+type GetIssueChatMessageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// EditIssueChatMessageParams defines parameters for EditIssueChatMessage.
+type EditIssueChatMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// ListIssueChatUpdatesParams defines parameters for ListIssueChatUpdates.
+type ListIssueChatUpdatesParams struct {
+	// After Where the updates start, as listIssueChatThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
+}
+
 // RequestToJoinJSONBody defines parameters for RequestToJoin.
 type RequestToJoinJSONBody struct {
 	// Note A word for the managers, at most 500 characters.
@@ -2672,6 +2720,18 @@ type CreateIssueJSONRequestBody = IssueInput
 // UpdateIssueApplicationMergePatchPlusJSONRequestBody defines body for UpdateIssue for application/merge-patch+json ContentType.
 type UpdateIssueApplicationMergePatchPlusJSONRequestBody = IssuePatch
 
+// StartIssueChatThreadJSONRequestBody defines body for StartIssueChatThread for application/json ContentType.
+type StartIssueChatThreadJSONRequestBody = ChatThreadInput
+
+// UpdateIssueChatThreadApplicationMergePatchPlusJSONRequestBody defines body for UpdateIssueChatThread for application/merge-patch+json ContentType.
+type UpdateIssueChatThreadApplicationMergePatchPlusJSONRequestBody = ChatThreadPatch
+
+// PostIssueChatMessageJSONRequestBody defines body for PostIssueChatMessage for application/json ContentType.
+type PostIssueChatMessageJSONRequestBody = ChatMessageInput
+
+// EditIssueChatMessageApplicationMergePatchPlusJSONRequestBody defines body for EditIssueChatMessage for application/merge-patch+json ContentType.
+type EditIssueChatMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
+
 // RequestToJoinJSONRequestBody defines body for RequestToJoin for application/json ContentType.
 type RequestToJoinJSONRequestBody RequestToJoinJSONBody
 
@@ -2830,6 +2890,33 @@ type ServerInterface interface {
 	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
 	// (GET /orgs/{org}/issues/{number}/branches)
 	ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number)
+	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/issues/{number}/chat)
+	ListIssueChatThreads(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueChatThreadsParams)
+	// StartIssueChatThread Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/issues/{number}/chat/threads)
+	StartIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number)
+	// GetIssueChatThread One of the issue's chat threads, with its messages in the order they were posted; takes issues.read.
+	// (GET /orgs/{org}/issues/{number}/chat/threads/{thread})
+	GetIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, params GetIssueChatThreadParams)
+	// UpdateIssueChatThread Resolves one of the issue's chat threads, or opens it again; takes issues.write for a thread the viewer started and issues.manage for another's. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/issues/{number}/chat/threads/{thread})
+	UpdateIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, params UpdateIssueChatThreadParams)
+	// PostIssueChatMessage Posts a message to one of the issue's chat threads for the viewer; takes issues.write. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages)
+	PostIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID)
+	// DeleteIssueChatMessage Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes issues.write for the viewer's own and issues.manage for another's. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	DeleteIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params DeleteIssueChatMessageParams)
+	// GetIssueChatMessage One of the messages of one of the issue's chat threads; takes issues.read.
+	// (GET /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	GetIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params GetIssueChatMessageParams)
+	// EditIssueChatMessage Changes the body of one of the viewer's messages; takes issues.write, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	EditIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params EditIssueChatMessageParams)
+	// ListIssueChatUpdates The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	// (GET /orgs/{org}/issues/{number}/chat/updates)
+	ListIssueChatUpdates(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueChatUpdatesParams)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(w http.ResponseWriter, r *http.Request, org Org)
@@ -4062,6 +4149,580 @@ func (siw *ServerInterfaceWrapper) ListIssueBranches(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIssueBranches(w, r, org, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIssueChatThreads operation middleware
+func (siw *ServerInterfaceWrapper) ListIssueChatThreads(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIssueChatThreadsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIssueChatThreads(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartIssueChatThread operation middleware
+func (siw *ServerInterfaceWrapper) StartIssueChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartIssueChatThread(w, r, org, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIssueChatThread operation middleware
+func (siw *ServerInterfaceWrapper) GetIssueChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetIssueChatThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssueChatThread(w, r, org, number, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateIssueChatThread operation middleware
+func (siw *ServerInterfaceWrapper) UpdateIssueChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateIssueChatThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateIssueChatThread(w, r, org, number, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostIssueChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostIssueChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostIssueChatMessage(w, r, org, number, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIssueChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIssueChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteIssueChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIssueChatMessage(w, r, org, number, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIssueChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetIssueChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetIssueChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssueChatMessage(w, r, org, number, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditIssueChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditIssueChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditIssueChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditIssueChatMessage(w, r, org, number, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIssueChatUpdates operation middleware
+func (siw *ServerInterfaceWrapper) ListIssueChatUpdates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIssueChatUpdatesParams
+
+	// ------------- Required query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIssueChatUpdates(w, r, org, number, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7991,6 +8652,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.UpdateIssue)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/branches", wrapper.ListIssueBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/activity", wrapper.ListIssueActivity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat", wrapper.ListIssueChatThreads)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads", wrapper.StartIssueChatThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}", wrapper.GetIssueChatThread)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}", wrapper.UpdateIssueChatThread)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}/messages", wrapper.PostIssueChatMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message}", wrapper.DeleteIssueChatMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message}", wrapper.GetIssueChatMessage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message}", wrapper.EditIssueChatMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/chat/updates", wrapper.ListIssueChatUpdates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/labels", wrapper.ListLabels)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/labels", wrapper.CreateLabel)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/labels/{label}", wrapper.DeleteLabel)
@@ -10769,6 +11439,1084 @@ type ListIssueBranchesdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response ListIssueBranchesdefaultApplicationProblemPlusJSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreadsRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Params ListIssueChatThreadsParams
+}
+
+type ListIssueChatThreadsResponseObject interface {
+	VisitListIssueChatThreadsResponse(w http.ResponseWriter) error
+}
+
+type ListIssueChatThreads200ResponseHeaders struct {
+	Link *string
+}
+
+type ListIssueChatThreads200JSONResponse struct {
+	Body struct {
+		// After Where the chat's updates stood when the page was read, as listIssueChatUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	Headers ListIssueChatThreads200ResponseHeaders
+}
+
+func (response ListIssueChatThreads200JSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreads400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListIssueChatThreads400ApplicationProblemPlusJSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreads401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatThreads401ApplicationProblemPlusJSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreads403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatThreads403ApplicationProblemPlusJSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreads404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatThreads404ApplicationProblemPlusJSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatThreadsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListIssueChatThreadsdefaultApplicationProblemPlusJSONResponse) VisitListIssueChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThreadRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Body   *StartIssueChatThreadJSONRequestBody
+}
+
+type StartIssueChatThreadResponseObject interface {
+	VisitStartIssueChatThreadResponse(w http.ResponseWriter) error
+}
+
+type StartIssueChatThread201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartIssueChatThread201JSONResponse struct {
+	Body    ChatThread
+	Headers StartIssueChatThread201ResponseHeaders
+}
+
+func (response StartIssueChatThread201JSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartIssueChatThread400ApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartIssueChatThread401ApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartIssueChatThread403ApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartIssueChatThread404ApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThread409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartIssueChatThread409ApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartIssueChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartIssueChatThreaddefaultApplicationProblemPlusJSONResponse) VisitStartIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	Number   Number   `json:"number"`
+	ThreadID ThreadID `json:"thread"`
+	Params   GetIssueChatThreadParams
+}
+
+type GetIssueChatThreadResponseObject interface {
+	VisitGetIssueChatThreadResponse(w http.ResponseWriter) error
+}
+
+type GetIssueChatThread200ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssueChatThread200JSONResponse struct {
+	Body    ChatThread
+	Headers GetIssueChatThread200ResponseHeaders
+}
+
+func (response GetIssueChatThread200JSONResponse) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatThread304ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssueChatThread304Response struct {
+	Headers GetIssueChatThread304ResponseHeaders
+}
+
+func (response GetIssueChatThread304Response) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetIssueChatThread401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetIssueChatThread401ApplicationProblemPlusJSONResponse) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssueChatThread403ApplicationProblemPlusJSONResponse) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssueChatThread404ApplicationProblemPlusJSONResponse) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetIssueChatThreaddefaultApplicationProblemPlusJSONResponse) VisitGetIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThreadRequestObject struct {
+	Org      Org      `json:"org"`
+	Number   Number   `json:"number"`
+	ThreadID ThreadID `json:"thread"`
+	Params   UpdateIssueChatThreadParams
+	Body     *UpdateIssueChatThreadApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateIssueChatThreadResponseObject interface {
+	VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error
+}
+
+type UpdateIssueChatThread200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateIssueChatThread200JSONResponse struct {
+	Body    ChatThread
+	Headers UpdateIssueChatThread200ResponseHeaders
+}
+
+func (response UpdateIssueChatThread200JSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateIssueChatThread400ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssueChatThread401ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssueChatThread403ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssueChatThread404ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssueChatThread412ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThread428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssueChatThread428ApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateIssueChatThreaddefaultApplicationProblemPlusJSONResponse) VisitUpdateIssueChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessageRequestObject struct {
+	Org      Org      `json:"org"`
+	Number   Number   `json:"number"`
+	ThreadID ThreadID `json:"thread"`
+	Body     *PostIssueChatMessageJSONRequestBody
+}
+
+type PostIssueChatMessageResponseObject interface {
+	VisitPostIssueChatMessageResponse(w http.ResponseWriter) error
+}
+
+type PostIssueChatMessage201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type PostIssueChatMessage201JSONResponse struct {
+	Body    ChatMessage
+	Headers PostIssueChatMessage201ResponseHeaders
+}
+
+func (response PostIssueChatMessage201JSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostIssueChatMessage400ApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostIssueChatMessage401ApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostIssueChatMessage403ApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostIssueChatMessage404ApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response PostIssueChatMessage409ApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostIssueChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostIssueChatMessagedefaultApplicationProblemPlusJSONResponse) VisitPostIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Number    Number    `json:"number"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    DeleteIssueChatMessageParams
+}
+
+type DeleteIssueChatMessageResponseObject interface {
+	VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteIssueChatMessage204Response struct {
+}
+
+func (response DeleteIssueChatMessage204Response) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteIssueChatMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteIssueChatMessage401ApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssueChatMessage403ApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssueChatMessage404ApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssueChatMessage412ApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssueChatMessage428ApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteIssueChatMessagedefaultApplicationProblemPlusJSONResponse) VisitDeleteIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Number    Number    `json:"number"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    GetIssueChatMessageParams
+}
+
+type GetIssueChatMessageResponseObject interface {
+	VisitGetIssueChatMessageResponse(w http.ResponseWriter) error
+}
+
+type GetIssueChatMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssueChatMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers GetIssueChatMessage200ResponseHeaders
+}
+
+func (response GetIssueChatMessage200JSONResponse) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatMessage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssueChatMessage304Response struct {
+	Headers GetIssueChatMessage304ResponseHeaders
+}
+
+func (response GetIssueChatMessage304Response) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetIssueChatMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetIssueChatMessage401ApplicationProblemPlusJSONResponse) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssueChatMessage403ApplicationProblemPlusJSONResponse) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssueChatMessage404ApplicationProblemPlusJSONResponse) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetIssueChatMessagedefaultApplicationProblemPlusJSONResponse) VisitGetIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessageRequestObject struct {
+	Org       Org       `json:"org"`
+	Number    Number    `json:"number"`
+	ThreadID  ThreadID  `json:"thread"`
+	MessageID MessageID `json:"message"`
+	Params    EditIssueChatMessageParams
+	Body      *EditIssueChatMessageApplicationMergePatchPlusJSONRequestBody
+}
+
+type EditIssueChatMessageResponseObject interface {
+	VisitEditIssueChatMessageResponse(w http.ResponseWriter) error
+}
+
+type EditIssueChatMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type EditIssueChatMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers EditIssueChatMessage200ResponseHeaders
+}
+
+func (response EditIssueChatMessage200JSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EditIssueChatMessage400ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage401ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage403ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage404ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage409ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage412ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response EditIssueChatMessage428ApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditIssueChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EditIssueChatMessagedefaultApplicationProblemPlusJSONResponse) VisitEditIssueChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdatesRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Params ListIssueChatUpdatesParams
+}
+
+type ListIssueChatUpdatesResponseObject interface {
+	VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error
+}
+
+type ListIssueChatUpdates200JSONResponse struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+}
+
+func (response ListIssueChatUpdates200JSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListIssueChatUpdates400ApplicationProblemPlusJSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdates401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatUpdates401ApplicationProblemPlusJSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdates403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatUpdates403ApplicationProblemPlusJSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueChatUpdates404ApplicationProblemPlusJSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueChatUpdatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListIssueChatUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListIssueChatUpdatesResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -18171,6 +19919,33 @@ type StrictServerInterface interface {
 	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
 	// (GET /orgs/{org}/issues/{number}/branches)
 	ListIssueBranches(ctx context.Context, request ListIssueBranchesRequestObject) (ListIssueBranchesResponseObject, error)
+	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/issues/{number}/chat)
+	ListIssueChatThreads(ctx context.Context, request ListIssueChatThreadsRequestObject) (ListIssueChatThreadsResponseObject, error)
+	// StartIssueChatThread Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/issues/{number}/chat/threads)
+	StartIssueChatThread(ctx context.Context, request StartIssueChatThreadRequestObject) (StartIssueChatThreadResponseObject, error)
+	// GetIssueChatThread One of the issue's chat threads, with its messages in the order they were posted; takes issues.read.
+	// (GET /orgs/{org}/issues/{number}/chat/threads/{thread})
+	GetIssueChatThread(ctx context.Context, request GetIssueChatThreadRequestObject) (GetIssueChatThreadResponseObject, error)
+	// UpdateIssueChatThread Resolves one of the issue's chat threads, or opens it again; takes issues.write for a thread the viewer started and issues.manage for another's. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/issues/{number}/chat/threads/{thread})
+	UpdateIssueChatThread(ctx context.Context, request UpdateIssueChatThreadRequestObject) (UpdateIssueChatThreadResponseObject, error)
+	// PostIssueChatMessage Posts a message to one of the issue's chat threads for the viewer; takes issues.write. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages)
+	PostIssueChatMessage(ctx context.Context, request PostIssueChatMessageRequestObject) (PostIssueChatMessageResponseObject, error)
+	// DeleteIssueChatMessage Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes issues.write for the viewer's own and issues.manage for another's. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	DeleteIssueChatMessage(ctx context.Context, request DeleteIssueChatMessageRequestObject) (DeleteIssueChatMessageResponseObject, error)
+	// GetIssueChatMessage One of the messages of one of the issue's chat threads; takes issues.read.
+	// (GET /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	GetIssueChatMessage(ctx context.Context, request GetIssueChatMessageRequestObject) (GetIssueChatMessageResponseObject, error)
+	// EditIssueChatMessage Changes the body of one of the viewer's messages; takes issues.write, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message})
+	EditIssueChatMessage(ctx context.Context, request EditIssueChatMessageRequestObject) (EditIssueChatMessageResponseObject, error)
+	// ListIssueChatUpdates The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	// (GET /orgs/{org}/issues/{number}/chat/updates)
+	ListIssueChatUpdates(ctx context.Context, request ListIssueChatUpdatesRequestObject) (ListIssueChatUpdatesResponseObject, error)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(ctx context.Context, request ListJoinRequestsRequestObject) (ListJoinRequestsResponseObject, error)
@@ -19344,6 +21119,293 @@ func (sh *strictHandler) ListIssueBranches(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListIssueBranchesResponseObject); ok {
 		if err := validResponse.VisitListIssueBranchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListIssueChatThreads operation middleware
+func (sh *strictHandler) ListIssueChatThreads(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueChatThreadsParams) {
+	var request ListIssueChatThreadsRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIssueChatThreads(ctx, request.(ListIssueChatThreadsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIssueChatThreads")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIssueChatThreadsResponseObject); ok {
+		if err := validResponse.VisitListIssueChatThreadsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartIssueChatThread operation middleware
+func (sh *strictHandler) StartIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number) {
+	var request StartIssueChatThreadRequestObject
+
+	request.Org = org
+	request.Number = number
+
+	var body StartIssueChatThreadJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartIssueChatThread(ctx, request.(StartIssueChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartIssueChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartIssueChatThreadResponseObject); ok {
+		if err := validResponse.VisitStartIssueChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIssueChatThread operation middleware
+func (sh *strictHandler) GetIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, params GetIssueChatThreadParams) {
+	var request GetIssueChatThreadRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIssueChatThread(ctx, request.(GetIssueChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIssueChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIssueChatThreadResponseObject); ok {
+		if err := validResponse.VisitGetIssueChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateIssueChatThread operation middleware
+func (sh *strictHandler) UpdateIssueChatThread(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, params UpdateIssueChatThreadParams) {
+	var request UpdateIssueChatThreadRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+	request.Params = params
+
+	var body UpdateIssueChatThreadApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateIssueChatThread(ctx, request.(UpdateIssueChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateIssueChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateIssueChatThreadResponseObject); ok {
+		if err := validResponse.VisitUpdateIssueChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostIssueChatMessage operation middleware
+func (sh *strictHandler) PostIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID) {
+	var request PostIssueChatMessageRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+
+	var body PostIssueChatMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostIssueChatMessage(ctx, request.(PostIssueChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostIssueChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostIssueChatMessageResponseObject); ok {
+		if err := validResponse.VisitPostIssueChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteIssueChatMessage operation middleware
+func (sh *strictHandler) DeleteIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params DeleteIssueChatMessageParams) {
+	var request DeleteIssueChatMessageRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteIssueChatMessage(ctx, request.(DeleteIssueChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteIssueChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteIssueChatMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteIssueChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIssueChatMessage operation middleware
+func (sh *strictHandler) GetIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params GetIssueChatMessageParams) {
+	var request GetIssueChatMessageRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIssueChatMessage(ctx, request.(GetIssueChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIssueChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIssueChatMessageResponseObject); ok {
+		if err := validResponse.VisitGetIssueChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditIssueChatMessage operation middleware
+func (sh *strictHandler) EditIssueChatMessage(w http.ResponseWriter, r *http.Request, org Org, number Number, threadID ThreadID, messageID MessageID, params EditIssueChatMessageParams) {
+	var request EditIssueChatMessageRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	var body EditIssueChatMessageApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditIssueChatMessage(ctx, request.(EditIssueChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditIssueChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditIssueChatMessageResponseObject); ok {
+		if err := validResponse.VisitEditIssueChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListIssueChatUpdates operation middleware
+func (sh *strictHandler) ListIssueChatUpdates(w http.ResponseWriter, r *http.Request, org Org, number Number, params ListIssueChatUpdatesParams) {
+	var request ListIssueChatUpdatesRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIssueChatUpdates(ctx, request.(ListIssueChatUpdatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIssueChatUpdates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIssueChatUpdatesResponseObject); ok {
+		if err := validResponse.VisitListIssueChatUpdatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

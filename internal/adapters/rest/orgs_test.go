@@ -143,7 +143,7 @@ func (f *orgFixture) addIssues() {
 }
 
 // addChats gives the fixture the chats' service, over a store that knows the people, website's commits and the chat of
-// its feature/login branch, at c.
+// its feature/login branch, at c, and that of Acme's issue ACME-7.
 func (f *orgFixture) addChats() {
 	f.chatStore, f.notifier = chatstest.NewStore(), &chatstest.Notifier{}
 	f.chatStore.Now = now
@@ -154,6 +154,7 @@ func (f *orgFixture) addChats() {
 		f.chatStore.AddCommit(f.website.ID, shaOf(letter))
 	}
 	f.chatStore.SetBranch(chats.Subject{OrgID: f.acme.ID, RepoID: f.website.ID, Branch: "feature/login", Head: shaOf("c"), Org: "acme", Repo: "website"})
+	f.chatStore.SetIssue(chats.Subject{OrgID: f.acme.ID, Number: 7, Issue: "ACME-7", Org: "acme"})
 	f.chats = chats.NewService(f.chatStore, f.notifier, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
 }
 
