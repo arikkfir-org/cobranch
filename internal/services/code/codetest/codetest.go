@@ -16,9 +16,9 @@ import (
 
 // Store is a code.Store in memory: each repository's commits by name, branches, deleted branches, oldest deletion
 // first, tags, pushes and slugs, the organization's then its own, and the annotations on its commits and the reviews
-// of them, in the order they were submitted, and its runs, oldest first. Fail, when set, fails every listing and every
-// change. Names names the principals who set annotations and submit reviews, by ID, and NotPeople holds those who
-// aren't people; Now is the time it records changes at.
+// of them, in the order they were submitted, with what each was submitted with, by its ID, and its runs, oldest first.
+// Fail, when set, fails every listing and every change. Names names the principals who set annotations and submit
+// reviews, by ID, and NotPeople holds those who aren't people; Now is the time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
@@ -28,6 +28,7 @@ type Store struct {
 	SlugList   map[uuid.UUID][2]string
 	Notes      map[uuid.UUID]map[string][]code.Annotation
 	ReviewList map[uuid.UUID][]code.Review
+	Submitted  map[uuid.UUID]code.ReviewInput
 	Names      map[uuid.UUID]string
 	NotPeople  map[uuid.UUID]bool
 	RunList    map[uuid.UUID][]code.Run
@@ -43,8 +44,9 @@ func NewStore() *Store {
 	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{},
 		Deleted: map[uuid.UUID][]code.DeletedBranch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
-		ReviewList: map[uuid.UUID][]code.Review{}, Names: map[uuid.UUID]string{}, NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{},
-		EnvironmentList: map[uuid.UUID][]code.Environment{}, DeliveryList: map[uuid.UUID][]code.Delivery{}}
+		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
+		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
+		DeliveryList: map[uuid.UUID][]code.Delivery{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -191,6 +193,7 @@ func (s *Store) SubmitReview(_ context.Context, actor uuid.UUID, repoID uuid.UUI
 	r := code.Review{ID: uuid.New(), SHA: sha, State: in.State, Body: in.Body, Reviewer: &code.Principal{ID: actor, DisplayName: s.Names[actor]},
 		Person: !s.NotPeople[actor], SubmittedAt: s.Now}
 	s.ReviewList[repoID] = append(s.ReviewList[repoID], r)
+	s.Submitted[r.ID] = in
 	return r, nil
 }
 

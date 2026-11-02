@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -34,6 +35,10 @@ var updateKinds = map[chats.UpdateKind]ChatUpdateKind{
 func chatThread(t chats.Thread) *ChatThread {
 	out := &ChatThread{ID: t.ID.String(), Outdated: t.Outdated, StartedBy: commitPrincipal(t.StartedBy), CreatedAt: t.CreatedAt.UTC(),
 		ResolvedAt: utc(t.ResolvedAt), ResolvedBy: commitPrincipal(t.ResolvedBy), Version: int(t.Version)}
+	if t.ReviewID != nil {
+		id := t.ReviewID.String()
+		out.ReviewID = &id
+	}
 	if a := t.Anchor; a != nil {
 		out.Anchor = &ChatAnchor{Sha: a.SHA, Path: a.Path, StartLine: a.StartLine, EndLine: a.EndLine}
 	}
@@ -219,9 +224,14 @@ func chatInput(ctx context.Context, in ChatThreadInput) (chats.ThreadInput, erro
 		out.ID = id
 	}
 	if a := in.Anchor; a != nil {
-		out.Anchor = &chats.Anchor{SHA: a.Sha, Path: a.Path, StartLine: a.StartLine, EndLine: a.EndLine}
+		out.Anchor = anchorOf(a)
 	}
 	return out, nil
+}
+
+// anchorOf is a as the services take it.
+func anchorOf(a *ChatAnchorInput) *code.Anchor {
+	return &code.Anchor{SHA: a.Sha, Path: a.Path, StartLine: a.StartLine, EndLine: a.EndLine}
 }
 
 // pickedID is an ID a poster picked, or a BAD_USER_INPUT error for one that is no UUID.

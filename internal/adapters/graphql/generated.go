@@ -153,6 +153,7 @@ type ComplexityRoot struct {
 		Outdated   func(childComplexity int) int
 		ResolvedAt func(childComplexity int) int
 		ResolvedBy func(childComplexity int) int
+		ReviewID   func(childComplexity int) int
 		StartedBy  func(childComplexity int) int
 		Version    func(childComplexity int) int
 	}
@@ -1359,6 +1360,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChatThread.ResolvedBy(childComplexity), true
+	case "ChatThread.reviewId":
+		if e.ComplexityRoot.ChatThread.ReviewID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatThread.ReviewID(childComplexity), true
 	case "ChatThread.startedBy":
 		if e.ComplexityRoot.ChatThread.StartedBy == nil {
 			break
@@ -4339,6 +4346,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
+			graphql.NewInputUnmarshaler("ReviewCommentInput", ec.unmarshalInputReviewCommentInput),
 			graphql.NewInputUnmarshaler("ReviewInput", ec.unmarshalInputReviewInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
 			graphql.NewInputUnmarshaler("SSHKeyInput", ec.unmarshalInputSSHKeyInput),
@@ -4460,8 +4468,10 @@ type ChatThread {
   id: ID!
   "Where it points: lines of a file at a commit; null for none."
   anchor: ChatAnchor
-  "Whether the branch has moved on from the commit its anchor names; false without an anchor."
+  "Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit the review reviewed, whose diff it may anchor at its base; false without an anchor."
   outdated: Boolean!
+  "The review the thread is a comment of, which opened it; null for a thread started in the chat, and once its review is gone."
+  reviewId: ID
   "Who started it; null once they are gone."
   startedBy: CommitPrincipal
   createdAt: Time!
@@ -4802,15 +4812,26 @@ extend type Mutation {
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
   "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved); without it, the branch is deleted wherever it is, at its new head when it moves meanwhile, and refused so only once it kept moving. main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
   deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
-  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and answers it; takes reviews.submit. A review is never changed: its reviewer submits another, and their latest is the one that counts."
+  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, opens its comments as threads of the chat of the branch it names, and answers it; takes reviews.submit, and messages.post with comments. A review is never changed: its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is refused (CONFLICT, branch.deleted)."
   submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
 }
 
 "The review a principal submits."
 input ReviewInput {
   state: ReviewState!
-  "What the reviewer writes, at most 65,536 characters, which only an approval may leave blank."
+  "What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may leave blank."
   body: String! = ""
+  "The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments needs none."
+  branch: String
+  "The review's comments on lines of files, at most 100, each a thread of the branch's chat that the review's transaction opens, anchored there, its first message the comment."
+  comments: [ReviewCommentInput!]! = []
+}
+
+"A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff, or its base's."
+input ReviewCommentInput {
+  anchor: ChatAnchorInput!
+  "The comment's Markdown, at most 20,000 characters, not blank."
+  body: String!
 }
 
 "A review's verdict on a commit."
@@ -6251,6 +6272,8 @@ func (ec *executionContext) childFields_ChatThread(ctx context.Context, field gr
 		return ec.fieldContext_ChatThread_anchor(ctx, field)
 	case "outdated":
 		return ec.fieldContext_ChatThread_outdated(ctx, field)
+	case "reviewId":
+		return ec.fieldContext_ChatThread_reviewId(ctx, field)
 	case "startedBy":
 		return ec.fieldContext_ChatThread_startedBy(ctx, field)
 	case "createdAt":
@@ -11391,6 +11414,29 @@ func (ec *executionContext) _ChatThread_outdated(ctx context.Context, field grap
 }
 func (ec *executionContext) fieldContext_ChatThread_outdated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ChatThread", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _ChatThread_reviewId(ctx context.Context, field graphql.CollectedField, obj *ChatThread) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatThread_reviewId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ReviewID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatThread_reviewId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatThread", field, false, false, "ID")
 }
 
 func (ec *executionContext) _ChatThread_startedBy(ctx context.Context, field graphql.CollectedField, obj *ChatThread) (ret graphql.Marshaler) {
@@ -25440,6 +25486,55 @@ func UnmarshalRepositoryInput(ctx context.Context, raw any) (RepositoryInput, er
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputReviewCommentInput(ctx context.Context, obj any) (ReviewCommentInput, error) {
+	var it ReviewCommentInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"anchor", "body"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "anchor":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("anchor"))
+			data, err := ec.unmarshalNChatAnchorInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatAnchorInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Anchor = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalReviewCommentInput unmarshals raw into the ReviewCommentInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalReviewCommentInput(ctx context.Context, raw any) (ReviewCommentInput, error) {
+	var out ReviewCommentInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ReviewCommentInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputReviewInput(ctx context.Context, obj any) (ReviewInput, error) {
 	var it ReviewInput
 	if obj == nil {
@@ -25454,8 +25549,11 @@ func (ec *executionContext) unmarshalInputReviewInput(ctx context.Context, obj a
 	if _, present := asMap["body"]; !present {
 		asMap["body"] = ""
 	}
+	if _, present := asMap["comments"]; !present {
+		asMap["comments"] = []any{}
+	}
 
-	fieldsInOrder := [...]string{"state", "body"}
+	fieldsInOrder := [...]string{"state", "body", "branch", "comments"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -25476,6 +25574,20 @@ func (ec *executionContext) unmarshalInputReviewInput(ctx context.Context, obj a
 				return it, err
 			}
 			it.Body = data
+		case "branch":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("branch"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Branch = data
+		case "comments":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("comments"))
+			data, err := ec.unmarshalNReviewCommentInput2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewCommentInputᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Comments = data
 		}
 	}
 	return it, nil
@@ -26334,6 +26446,11 @@ func (ec *executionContext) _ChatThread(ctx context.Context, sel ast.SelectionSe
 		case "outdated":
 			out.Values[i] = ec._ChatThread_outdated(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewId":
+			out.Values[i] = ec._ChatThread_reviewId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "startedBy":
@@ -30737,6 +30854,11 @@ func (ec *executionContext) marshalNBranchIssue2ᚖcobranchᚗdevᚋinternalᚋa
 	return ec._BranchIssue(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNChatAnchorInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatAnchorInput(ctx context.Context, v any) (*ChatAnchorInput, error) {
+	res, err := ec.unmarshalInputChatAnchorInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNChatMessage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatMessage(ctx context.Context, sel ast.SelectionSet, v *ChatMessage) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "ChatMessage!")
@@ -31675,6 +31797,25 @@ func (ec *executionContext) marshalNReview2ᚖcobranchᚗdevᚋinternalᚋadapte
 		return graphql.Null
 	}
 	return ec._Review(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNReviewCommentInput2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewCommentInputᚄ(ctx context.Context, v any) ([]*ReviewCommentInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*ReviewCommentInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNReviewCommentInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewCommentInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNReviewCommentInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewCommentInput(ctx context.Context, v any) (*ReviewCommentInput, error) {
+	res, err := ec.unmarshalInputReviewCommentInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNReviewInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewInput(ctx context.Context, v any) (ReviewInput, error) {

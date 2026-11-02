@@ -37,6 +37,10 @@ var ReviewStates = []ReviewState{ReviewApproved, ReviewChangesRequested, ReviewN
 // PermReview submits reviews.
 const PermReview = "reviews.submit"
 
+// PermPostMessages posts messages to the branches' chats, which a review's comments are: it is the chats' own
+// permission, which a review with comments takes too.
+const PermPostMessages = "messages.post"
+
 // MaxReviewBody is the longest body a review takes, in characters.
 const MaxReviewBody = 65536
 
@@ -60,10 +64,15 @@ type Review struct {
 type ReviewInput struct {
 	State ReviewState
 	Body  string
+	// Branch names the branch in whose chat Comments open their threads; a review without comments needs none.
+	Branch string
+	// Comments are the review's comments on lines of files, each a thread of the branch's chat.
+	Comments []ReviewComment
 }
 
-// ValidateReview reports whether in is a review: one of the three states, and a body of at most MaxReviewBody
-// characters, which only an approval may leave blank: a review that requests changes or comments says what.
+// ValidateReview reports whether in is a review: one of the three states, a body of at most MaxReviewBody
+// characters, which only an approval may leave blank unless comments say what, and at most MaxReviewComments
+// comments, each anchored and saying something, with the branch they open their threads in.
 func ValidateReview(in ReviewInput) error {
 	if !slices.Contains(ReviewStates, in.State) {
 		return &orgs.ValidationError{Field: "state", Code: "state.invalid", Message: "approved, changes_requested or neutral"}
@@ -71,10 +80,10 @@ func ValidateReview(in ReviewInput) error {
 	if !utf8.ValidString(in.Body) || utf8.RuneCountInString(in.Body) > MaxReviewBody {
 		return &orgs.ValidationError{Field: "body", Code: "body.invalid", Message: "at most 65,536 characters"}
 	}
-	if in.State != ReviewApproved && strings.TrimSpace(in.Body) == "" {
-		return &orgs.ValidationError{Field: "body", Code: "body.required", Message: "a review that requests changes or comments says what"}
+	if in.State != ReviewApproved && strings.TrimSpace(in.Body) == "" && len(in.Comments) == 0 {
+		return &orgs.ValidationError{Field: "body", Code: "body.required", Message: "a review that requests changes or comments says what, in its body or its comments"}
 	}
-	return nil
+	return validateComments(in.Branch, in.Comments)
 }
 
 // Latest is each reviewer's latest review among reviews, which are in the order they were submitted: the ones that
@@ -186,7 +195,10 @@ func (s *Service) Review(ctx context.Context, v Viewer, repoID, id uuid.UUID) (R
 }
 
 // SubmitReview submits v's review of one of the repository's commits, which works out again the status of the branches
-// at it; it takes reviews.submit. A commit the repository doesn't hold is repos.ErrNotFound.
+// at it, and opens its comments as threads of the chat of the branch it names; it takes reviews.submit, and
+// messages.post with comments. A commit the repository doesn't hold is repos.ErrNotFound; a branch it doesn't have,
+// or that was deleted, is branch.unknown, and a comment's commit it doesn't hold comments[i].anchor.sha's
+// anchor.commit_not_found.
 func (s *Service) SubmitReview(ctx context.Context, v Viewer, repoID uuid.UUID, sha string, in ReviewInput) (Review, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.SubmitReview")
 	defer span.End()
@@ -196,8 +208,10 @@ func (s *Service) SubmitReview(ctx context.Context, v Viewer, repoID uuid.UUID, 
 	if err != nil {
 		return Review{}, failed(span, "submitting the review", err)
 	}
-	if !slices.Contains(held, PermReview) {
-		return Review{}, fmt.Errorf("%w: %s on the repository", auth.ErrForbidden, PermReview)
+	for _, perm := range permsToReview(in) {
+		if !slices.Contains(held, perm) {
+			return Review{}, fmt.Errorf("%w: %s on the repository", auth.ErrForbidden, perm)
+		}
 	}
 	if err := ValidateSHA("sha", sha); err != nil {
 		return Review{}, err
@@ -205,9 +219,20 @@ func (s *Service) SubmitReview(ctx context.Context, v Viewer, repoID uuid.UUID, 
 	if err := ValidateReview(in); err != nil {
 		return Review{}, err
 	}
+	if err := s.checkComments(ctx, repoID, in); err != nil {
+		return Review{}, failed(span, "submitting the review", err)
+	}
 	r, err := s.store.SubmitReview(ctx, v.ID, repoID, sha, in)
 	if err != nil {
 		return Review{}, failed(span, "submitting the review", err)
 	}
 	return r, nil
+}
+
+// permsToReview lists the permissions submitting in takes: reviews.submit, and messages.post when it has comments.
+func permsToReview(in ReviewInput) []string {
+	if len(in.Comments) > 0 {
+		return []string{PermReview, PermPostMessages}
+	}
+	return []string{PermReview}
 }

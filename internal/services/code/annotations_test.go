@@ -19,9 +19,10 @@ import (
 )
 
 // annotators is a repository with commits 1 to 3 and a viewer per built-in repository role: Rae reads it, Dev
-// develops, Mia maintains it, and the CI's API key automates; Nia holds nothing there.
+// develops, Mia maintains it, and the CI's API key automates; Nia holds nothing there. Orgs holds the grants.
 type annotators struct {
 	store                  *codetest.Store
+	orgs                   *orgstest.Store
 	repo                   uuid.UUID
 	service                *code.Service
 	rae, dev, mia, ci, nia code.Viewer
@@ -34,6 +35,7 @@ func newAnnotators() *annotators {
 	}
 	f := &annotators{store: codetest.NewStore(), repo: uuid.New(), rae: viewer("Rae"), dev: viewer("Dev"), mia: viewer("Mia"), ci: viewer("CI"), nia: viewer("Nia")}
 	f.ci.Kind = auth.KindAPIKey
+	f.orgs = o
 	o.Repos[f.repo] = uuid.New()
 	f.service = code.NewService(f.store, nil, nil, auth.NewAuthorizer(o))
 	o.Grant(f.rae.ID, auth.RoleReader, auth.ScopeRepository, f.repo)

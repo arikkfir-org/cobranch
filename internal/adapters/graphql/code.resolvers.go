@@ -82,7 +82,7 @@ func (r *mutationResolver) SubmitReview(ctx context.Context, repositoryID string
 	if err != nil {
 		return nil, err
 	}
-	submitted, err := r.Code.SubmitReview(ctx, v, repoID, sha, code.ReviewInput{State: reviewStateOf(input.State), Body: input.Body})
+	submitted, err := r.Code.SubmitReview(ctx, v, repoID, sha, reviewInput(input))
 	if err != nil {
 		return nil, fail(ctx, err, "commit", "submitting the review")
 	}

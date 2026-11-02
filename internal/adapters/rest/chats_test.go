@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 )
 
 // chatStep is one request of a conversation on feature/login's chat, against one fixture: path is relative to the
@@ -214,4 +216,27 @@ func (s chatStep) checkTag(t *testing.T, tag string, ids *chatIDs) {
 		t.Errorf("%s: ETag = %s, the one before, want another", s.name, tag)
 	}
 	ids.tag = tag
+}
+
+func TestChatThreadNamesItsReview(t *testing.T) {
+	review := uuid.New()
+	tests := []struct {
+		name   string
+		review *uuid.UUID
+		want   string
+	}{
+		{name: "a review's comment", review: &review, want: `"reviewId":"` + review.String() + `"`},
+		{name: "a thread started in the chat"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			body, err := json.Marshal(chatThread(chats.Thread{ID: uuid.New(), ReviewID: tt.review}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := string(body); tt.want != "" && !strings.Contains(got, tt.want) || tt.want == "" && strings.Contains(got, "reviewId") {
+				t.Errorf("chatThread() = %s, want %q", got, tt.want)
+			}
+		})
+	}
 }

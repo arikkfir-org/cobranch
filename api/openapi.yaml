@@ -2967,7 +2967,7 @@ paths:
           $ref: "#/components/responses/Problem"
     post:
       operationId: submitReview
-      summary: Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+      summary: Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -2997,6 +2997,8 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        "409":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -4748,7 +4750,15 @@ components:
           $ref: "#/components/schemas/ChatAnchor"
         outdated:
           type: boolean
-          description: Whether the branch has moved on from the commit its anchor names; false without an anchor.
+          description: >-
+            Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit
+            the review reviewed, whose diff it may anchor at its base; false without an anchor.
+        reviewId:
+          type: string
+          format: uuid
+          description: >-
+            The review the thread is a comment of, which opened it; absent for a thread started in the chat, and once
+            its review is gone.
         startedBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -5247,7 +5257,34 @@ components:
           $ref: "#/components/schemas/ReviewState"
         body:
           type: string
-          description: What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
+          description: >-
+            What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may
+            leave blank.
+        branch:
+          type: string
+          description: >-
+            The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments
+            needs none.
+        comments:
+          type: array
+          maxItems: 100
+          description: >-
+            The review's comments on lines of files, each a thread of the branch's chat that the review's transaction
+            opens, anchored there, its first message the comment.
+          items:
+            $ref: "#/components/schemas/ReviewComment"
+    ReviewComment:
+      type: object
+      description: >-
+        A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff,
+        or its base's.
+      required: [anchor, body]
+      properties:
+        anchor:
+          $ref: "#/components/schemas/ChatAnchor"
+        body:
+          type: string
+          description: The comment's Markdown, at most 20,000 characters, not blank.
     AnnotationInput:
       type: object
       description: What a principal sets an annotation to.

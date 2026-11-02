@@ -47,8 +47,13 @@ func (s *ChatStore) Subject(ctx context.Context, repoID uuid.UUID, branch string
 	if err != nil {
 		return chats.Subject{}, fmt.Errorf("finding branch %s: %w", branch, err)
 	}
+	return chatSubjectOf(row), nil
+}
+
+// chatSubjectOf is the domain's view of a branch as a chat's subject.
+func chatSubjectOf(row queries.ChatSubjectRow) chats.Subject {
 	return chats.Subject{OrgID: row.OrgID, RepoID: row.RepoID, BranchID: row.ID, Branch: row.Name, Head: row.Head, Org: row.OrgSlug,
-		Repo: row.RepoSlug}, nil
+		Repo: row.RepoSlug}
 }
 
 // Issue finds one of the organization's issues by number as a chat's subject, or repos.ErrNotFound (chats.Store).
@@ -106,7 +111,7 @@ func (s *ChatStore) Threads(ctx context.Context, subj chats.Subject, before uuid
 	}
 	list := make([]chats.Thread, len(rows))
 	for i, r := range rows {
-		list[i] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName)
+		list[i] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName, r.ReviewedSha)
 	}
 	if err := withMessages(ctx, s.q, list); err != nil {
 		return nil, 0, err
@@ -144,7 +149,7 @@ func chatThreads(ctx context.Context, q *queries.Queries, subj chats.Subject, id
 	}
 	out := make(map[uuid.UUID]chats.Thread, len(rows))
 	for _, r := range rows {
-		out[r.ChatThread.ID] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName)
+		out[r.ChatThread.ID] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName, r.ReviewedSha)
 	}
 	return out, nil
 }
@@ -218,31 +223,24 @@ func chatMessages(ctx context.Context, q *queries.Queries, subj chats.Subject, i
 // if any, and notifies the servers that listen.
 func (s *ChatStore) changeChat(ctx context.Context, actor uuid.UUID, subj chats.Subject, what string, fn func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error)) error {
 	return transact(ctx, s.pool, s.q, what, actor, func(ctx context.Context, q *queries.Queries) error {
-		if err := q.LockChat(ctx, subj.ID().String()); err != nil {
-			return fmt.Errorf("locking the chat: %w", err)
-		}
-		if err := live(ctx, q, subj); err != nil {
+		if err := holdChat(ctx, q, subj); err != nil {
 			return err
 		}
 		kind, e, err := fn(ctx, q)
 		if err != nil || kind == "" {
 			return err
 		}
-		details := map[string]any{"repo": subj.RepoID, "thread": e.Thread}
-		if subj.OfIssue() {
-			details = map[string]any{"issue": subj.IssueID, "thread": e.Thread}
-		}
-		if e.Message != nil {
-			details["message"] = *e.Message
-		}
-		if err := orgEvent(ctx, q, &subj.OrgID, actor, "chat."+string(kind), subj.ID(), details); err != nil {
-			return err
-		}
-		if err := q.NotifyChat(ctx, subj.ID().String()); err != nil {
-			return fmt.Errorf("notifying the chat's followers: %w", err)
-		}
-		return nil
+		return chatChanged(ctx, q, actor, subj, kind, e)
 	})
+}
+
+// holdChat holds the subject's chat for the rest of q's transaction, whose events then commit in the order of their
+// seq, and checks that it takes changes (live).
+func holdChat(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
+	if err := q.LockChat(ctx, subj.ID().String()); err != nil {
+		return fmt.Errorf("locking the chat: %w", err)
+	}
+	return live(ctx, q, subj)
 }
 
 // live checks that the subject's chat takes changes: that its issue is there, which it then holds from deletion until
@@ -268,6 +266,25 @@ func live(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
 	return nil
 }
 
+// chatChanged appends the event of a change of kind to the subject's chat, which holdChat holds, about the thread and
+// the message, if any, and notifies the servers that listen once the transaction commits.
+func chatChanged(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, kind chats.UpdateKind, e chatEvent) error {
+	details := map[string]any{"repo": subj.RepoID, "thread": e.Thread}
+	if subj.OfIssue() {
+		details = map[string]any{"issue": subj.IssueID, "thread": e.Thread}
+	}
+	if e.Message != nil {
+		details["message"] = *e.Message
+	}
+	if err := orgEvent(ctx, q, &subj.OrgID, actor, "chat."+string(kind), subj.ID(), details); err != nil {
+		return err
+	}
+	if err := q.NotifyChat(ctx, subj.ID().String()); err != nil {
+		return fmt.Errorf("notifying the chat's followers: %w", err)
+	}
+	return nil
+}
+
 // touchThread bumps the version of a thread whose messages changed, so its ETag covers them.
 func touchThread(ctx context.Context, q *queries.Queries, id uuid.UUID) error {
 	if err := q.TouchChatThread(ctx, id); err != nil {
@@ -282,34 +299,45 @@ func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats
 	var out chats.Thread
 	created := false
 	err := s.changeChat(ctx, actor, subj, "starting the thread", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
-		p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &actor}
-		if subj.OfIssue() {
-			p.RepoID, p.BranchID, p.IssueID = nil, nil, &subj.IssueID
+		inserted, err := insertThread(ctx, q, actor, subj, id, messageID, anchor, nil, body)
+		if err != nil {
+			return "", chatEvent{}, err
 		}
-		if anchor != nil {
-			start, end := int32(anchor.StartLine), int32(anchor.EndLine) //nolint:gosec // lines a file holds fit
-			p.Sha, p.Path, p.StartLine, p.EndLine = &anchor.SHA, &anchor.Path, &start, &end
-		}
-		_, err := q.InsertChatThread(ctx, p)
-		if errors.Is(err, pgx.ErrNoRows) { // one of its ID is there
+		if !inserted { // one of its ID is there
 			out, err = chatThread(ctx, q, subj, id)
 			if errors.Is(err, repos.ErrNotFound) {
 				err = chats.ErrIDTaken
 			}
 			return "", chatEvent{}, err
 		}
-		if err != nil {
-			return "", chatEvent{}, fmt.Errorf("inserting thread %s: %w", id, err)
-		}
-		if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &actor,
-			Body: body}); err != nil {
-			return "", chatEvent{}, fmt.Errorf("inserting message %s: %w", messageID, err)
-		}
 		created = true
 		out, err = chatThread(ctx, q, subj, id)
 		return chats.ThreadStarted, chatEvent{Thread: id, Message: &messageID}, err
 	})
 	return out, created, err
+}
+
+// insertThread inserts the subject's thread id for actor, anchored when anchor is set and a comment of the review
+// reviewID names when it is set, with its first message, and reports whether it did: not when a thread of id is there.
+func insertThread(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
+	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &actor, ReviewID: reviewID}
+	if subj.OfIssue() {
+		p.RepoID, p.BranchID, p.IssueID = nil, nil, &subj.IssueID
+	}
+	if anchor != nil {
+		start, end := int32(anchor.StartLine), int32(anchor.EndLine) //nolint:gosec // lines a file holds fit
+		p.Sha, p.Path, p.StartLine, p.EndLine = &anchor.SHA, &anchor.Path, &start, &end
+	}
+	if _, err := q.InsertChatThread(ctx, p); errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("inserting thread %s: %w", id, err)
+	}
+	if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &actor,
+		Body: body}); err != nil {
+		return false, fmt.Errorf("inserting message %s: %w", messageID, err)
+	}
+	return true, nil
 }
 
 // Post posts message id to one of the subject's threads for actor, and answers it and true; or answers the message of
@@ -456,10 +484,14 @@ func (s *ChatStore) Updates(ctx context.Context, subj chats.Subject, after int64
 	return out, nil
 }
 
-// chatThreadOf is the domain's view of a chat_threads row, with the display names of its starter and resolver.
-func chatThreadOf(t queries.ChatThread, starter, resolver *string) chats.Thread {
+// chatThreadOf is the domain's view of a chat_threads row, with the display names of its starter and resolver, and the
+// commit its review reviewed, if any.
+func chatThreadOf(t queries.ChatThread, starter, resolver, reviewed *string) chats.Thread {
 	out := chats.Thread{ID: t.ID, StartedBy: principalOf(t.CreatedBy, starter), CreatedAt: t.CreatedAt, ResolvedAt: t.ResolvedAt,
-		ResolvedBy: principalOf(t.ResolvedBy, resolver), Version: t.Version}
+		ResolvedBy: principalOf(t.ResolvedBy, resolver), Version: t.Version, ReviewID: t.ReviewID}
+	if reviewed != nil {
+		out.ReviewedSHA = *reviewed
+	}
 	if t.Sha != nil && t.Path != nil && t.StartLine != nil && t.EndLine != nil {
 		out.Anchor = &chats.Anchor{SHA: *t.Sha, Path: *t.Path, StartLine: int(*t.StartLine), EndLine: int(*t.EndLine)}
 	}

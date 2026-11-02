@@ -43,19 +43,21 @@ ORDER BY seq LIMIT @lim;
 
 -- ChatThreads lists at most lim of the chat threads of an organization's subject, a branch or an issue, newest first,
 -- from the one before before names, or from the newest when it is null, with the display names of their starters and
--- resolvers.
+-- resolvers, and the commit each one's review reviewed.
 -- name: ChatThreads :many
-SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid)
   AND (sqlc.narg(before)::uuid IS NULL OR t.id < sqlc.narg(before)::uuid)
 ORDER BY t.id DESC LIMIT @lim;
 
 -- ChatThreadsByID finds those of the chat threads of an organization's subject, a branch or an issue, that ids name,
--- with the display names of their starters and resolvers.
+-- with the display names of their starters and resolvers, and the commit each one's review reviewed.
 -- name: ChatThreadsByID :many
-SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid) AND t.id = ANY (@ids::uuid[]);
 
 -- ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were
@@ -72,12 +74,12 @@ SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_n
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
 WHERE m.id = ANY (@ids::uuid[]);
 
--- InsertChatThread starts a thread of a branch's chat, in its repository, or of an issue's: none when one of its ID is
--- there already.
+-- InsertChatThread starts a thread of a branch's chat, in its repository, or of an issue's, perhaps a comment of a
+-- review: none when one of its ID is there already.
 -- name: InsertChatThread :one
-INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, sha, path, start_line, end_line, created_by)
+INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, sha, path, start_line, end_line, created_by, review_id)
 VALUES (@id, @org_id, sqlc.narg(repo_id), sqlc.narg(branch_id), sqlc.narg(issue_id), sqlc.narg(sha), sqlc.narg(path), sqlc.narg(start_line),
-        sqlc.narg(end_line), @created_by)
+        sqlc.narg(end_line), @created_by, sqlc.narg(review_id))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
