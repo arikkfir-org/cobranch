@@ -54,7 +54,7 @@ Choices beyond the issue are collected under [Decisions](#decisions).
 | `cobranch.git.workspace.size` | Histogram, By | `cobranch.git.operation` | Git server | How much disk a throwaway repository takes beyond the pack cache |
 | `cobranch.git.pack_cache.lookups` | Counter, `{lookup}` | `cobranch.git.pack_cache.result` | Git server | How often the pack cache holds the pack a repository links: its hit rate |
 | `cobranch.git.pack_cache.usage` | Gauge, By | | Git server | How full each pod's pack cache is |
-| `cobranch.git.pack_cache.limit` | Gauge, By | | Git server | What the cache keeps before it evicts (`gitServer.cacheSize`) |
+| `cobranch.git.pack_cache.limit` | Gauge, By | | Git server | What the cache keeps before it evicts (`gitServer.cache.size`) |
 
 Every metric carries the workload's resource, as traces do: `service.name` the workload, `service.namespace`,
 `service.version` and whatever `OTEL_RESOURCE_ATTRIBUTES` adds, such as `deployment.environment.name`.
@@ -174,10 +174,12 @@ Every other OTLP setting is OpenTelemetry’s own: endpoint, headers, certificat
 
 ![One pull request in Cobranch; the rest is each operator’s](monitoring/rollout.svg)
 
-Nothing of an installation is in the product: an operator who sets nothing sees no change.
+Nothing of an installation is in the product: an operator who sets nothing exports nothing.
 
-An installation that sets nothing new sees no change: without `OTEL_METRICS_EXPORTER` or an OTLP endpoint, metrics stay
-in the process, as unexported spans do. Each operator then chooses where they go, and builds their dashboards and alerts
-on the questions above.
+An installation that sets nothing new exports nothing: without `OTEL_METRICS_EXPORTER` or an OTLP endpoint, metrics stay
+in the process, as unexported spans do. Two things change for every installation all the same: each Console tab that
+showed pages reports them, in one small POST every 30 seconds at most and when it hides, and each API answer whose
+request read Git names those reads in `Server-Timing`. Each operator then chooses where they go, and builds their
+dashboards and alerts on the questions above.
 
 Cobranch is a Kfirs project, created by Arik Kfir.
