@@ -28,6 +28,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Branch() BranchResolver
 	Issue() IssueResolver
 	Mutation() MutationResolver
 	Organization() OrganizationResolver
@@ -86,6 +87,7 @@ type ComplexityRoot struct {
 		Commit       func(childComplexity int) int
 		CreatedAt    func(childComplexity int) int
 		Head         func(childComplexity int) int
+		Issue        func(childComplexity int) int
 		Merge        func(childComplexity int) int
 		Name         func(childComplexity int) int
 		Requirements func(childComplexity int) int
@@ -100,6 +102,11 @@ type ComplexityRoot struct {
 		Name     func(childComplexity int) int
 		Required func(childComplexity int) int
 		Status   func(childComplexity int) int
+	}
+
+	BranchIssue struct {
+		Issue    func(childComplexity int) int
+		LinkedBy func(childComplexity int) int
 	}
 
 	BranchMerge struct {
@@ -215,6 +222,7 @@ type ComplexityRoot struct {
 	Issue struct {
 		Activity        func(childComplexity int) int
 		Assignee        func(childComplexity int) int
+		Branches        func(childComplexity int) int
 		ClosedAt        func(childComplexity int) int
 		CreatedAt       func(childComplexity int) int
 		CreatedBy       func(childComplexity int) int
@@ -232,6 +240,16 @@ type ComplexityRoot struct {
 		Version         func(childComplexity int) int
 	}
 
+	IssueBranch struct {
+		Deleted    func(childComplexity int) int
+		Head       func(childComplexity int) int
+		LinkedAt   func(childComplexity int) int
+		LinkedBy   func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Repository func(childComplexity int) int
+		Status     func(childComplexity int) int
+	}
+
 	IssueChange struct {
 		Field func(childComplexity int) int
 		From  func(childComplexity int) int
@@ -241,9 +259,16 @@ type ComplexityRoot struct {
 	IssueEvent struct {
 		Actor   func(childComplexity int) int
 		At      func(childComplexity int) int
+		Branch  func(childComplexity int) int
 		Changes func(childComplexity int) int
 		ID      func(childComplexity int) int
 		Kind    func(childComplexity int) int
+	}
+
+	IssueEventBranch struct {
+		LinkedBy   func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Repository func(childComplexity int) int
 	}
 
 	IssuePage struct {
@@ -316,6 +341,7 @@ type ComplexityRoot struct {
 		GrantRole            func(childComplexity int, organizationID string, userID string, roleID string) int
 		InviteMember         func(childComplexity int, organizationID string, email string, roleID string) int
 		LeaveOrganization    func(childComplexity int, id string) int
+		LinkBranch           func(childComplexity int, organizationID string, repositoryID string, branch string, number int) int
 		MergeBranch          func(childComplexity int, repositoryID string, branch string, input *MergeInput) int
 		RemoveMember         func(childComplexity int, organizationID string, userID string) int
 		RequestToJoin        func(childComplexity int, slug string, note *string) int
@@ -327,6 +353,7 @@ type ComplexityRoot struct {
 		RotateAPIKey         func(childComplexity int, organizationID string, id string, input *SecretInput) int
 		SetAnnotation        func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
 		SubmitReview         func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
+		UnlinkBranch         func(childComplexity int, organizationID string, repositoryID string, branch string) int
 		UpdateIssue          func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
 		UpdateOrganization   func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRepository     func(childComplexity int, id string, input RepositoryInput) int
@@ -507,8 +534,12 @@ type ComplexityRoot struct {
 
 // region    ************************** generated!.gotpl **************************
 
+type BranchResolver interface {
+	Issue(ctx context.Context, obj *Branch) (*BranchIssue, error)
+}
 type IssueResolver interface {
 	Activity(ctx context.Context, obj *Issue) ([]*IssueEvent, error)
+	Branches(ctx context.Context, obj *Issue) ([]*IssueBranch, error)
 }
 type MutationResolver interface {
 	RevokeSession(ctx context.Context, id string) (bool, error)
@@ -524,6 +555,8 @@ type MutationResolver interface {
 	CreateIssue(ctx context.Context, organizationID string, input IssueInput) (*Issue, error)
 	UpdateIssue(ctx context.Context, organizationID string, number int, input IssuePatch, expectedVersion *int) (*Issue, error)
 	DeleteIssue(ctx context.Context, organizationID string, number int, expectedVersion *int) (bool, error)
+	LinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string, number int) (*BranchIssue, error)
+	UnlinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string) (bool, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -815,6 +848,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Branch.Head(childComplexity), true
+	case "Branch.issue":
+		if e.ComplexityRoot.Branch.Issue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.Issue(childComplexity), true
 	case "Branch.merge":
 		if e.ComplexityRoot.Branch.Merge == nil {
 			break
@@ -882,6 +921,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BranchCheck.Status(childComplexity), true
+
+	case "BranchIssue.issue":
+		if e.ComplexityRoot.BranchIssue.Issue == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchIssue.Issue(childComplexity), true
+	case "BranchIssue.linkedBy":
+		if e.ComplexityRoot.BranchIssue.LinkedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchIssue.LinkedBy(childComplexity), true
 
 	case "BranchMerge.at":
 		if e.ComplexityRoot.BranchMerge.At == nil {
@@ -1351,6 +1403,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Issue.Assignee(childComplexity), true
+	case "Issue.branches":
+		if e.ComplexityRoot.Issue.Branches == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Issue.Branches(childComplexity), true
 	case "Issue.closedAt":
 		if e.ComplexityRoot.Issue.ClosedAt == nil {
 			break
@@ -1442,6 +1500,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Issue.Version(childComplexity), true
 
+	case "IssueBranch.deleted":
+		if e.ComplexityRoot.IssueBranch.Deleted == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.Deleted(childComplexity), true
+	case "IssueBranch.head":
+		if e.ComplexityRoot.IssueBranch.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.Head(childComplexity), true
+	case "IssueBranch.linkedAt":
+		if e.ComplexityRoot.IssueBranch.LinkedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.LinkedAt(childComplexity), true
+	case "IssueBranch.linkedBy":
+		if e.ComplexityRoot.IssueBranch.LinkedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.LinkedBy(childComplexity), true
+	case "IssueBranch.name":
+		if e.ComplexityRoot.IssueBranch.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.Name(childComplexity), true
+	case "IssueBranch.repository":
+		if e.ComplexityRoot.IssueBranch.Repository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.Repository(childComplexity), true
+	case "IssueBranch.status":
+		if e.ComplexityRoot.IssueBranch.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueBranch.Status(childComplexity), true
+
 	case "IssueChange.field":
 		if e.ComplexityRoot.IssueChange.Field == nil {
 			break
@@ -1473,6 +1574,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IssueEvent.At(childComplexity), true
+	case "IssueEvent.branch":
+		if e.ComplexityRoot.IssueEvent.Branch == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEvent.Branch(childComplexity), true
 	case "IssueEvent.changes":
 		if e.ComplexityRoot.IssueEvent.Changes == nil {
 			break
@@ -1491,6 +1598,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IssueEvent.Kind(childComplexity), true
+
+	case "IssueEventBranch.linkedBy":
+		if e.ComplexityRoot.IssueEventBranch.LinkedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEventBranch.LinkedBy(childComplexity), true
+	case "IssueEventBranch.name":
+		if e.ComplexityRoot.IssueEventBranch.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEventBranch.Name(childComplexity), true
+	case "IssueEventBranch.repository":
+		if e.ComplexityRoot.IssueEventBranch.Repository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEventBranch.Repository(childComplexity), true
 
 	case "IssuePage.issues":
 		if e.ComplexityRoot.IssuePage.Issues == nil {
@@ -1897,6 +2023,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.LeaveOrganization(childComplexity, args["id"].(string)), true
+	case "Mutation.linkBranch":
+		if e.ComplexityRoot.Mutation.LinkBranch == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_linkBranch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.LinkBranch(childComplexity, args["organizationId"].(string), args["repositoryId"].(string), args["branch"].(string), args["number"].(int)), true
 	case "Mutation.mergeBranch":
 		if e.ComplexityRoot.Mutation.MergeBranch == nil {
 			break
@@ -2018,6 +2155,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SubmitReview(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["input"].(ReviewInput)), true
+	case "Mutation.unlinkBranch":
+		if e.ComplexityRoot.Mutation.UnlinkBranch == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_unlinkBranch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UnlinkBranch(childComplexity, args["organizationId"].(string), args["repositoryId"].(string), args["branch"].(string)), true
 	case "Mutation.updateIssue":
 		if e.ComplexityRoot.Mutation.UpdateIssue == nil {
 			break
@@ -3511,8 +3659,52 @@ type Issue {
   closedAt: Time
   "Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile."
   version: Int!
-  "What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads."
+  "What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads, as a link names only their branches."
   activity: [IssueEvent!]!
+  "The branches linked to it, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads."
+  branches: [IssueBranch!]!
+}
+
+"A branch linked to an issue: the commit it is at, its status as a request to merge, and how it was linked. A deleted branch stays linked."
+type IssueBranch {
+  repository: IssueRepository!
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it is at, or was at when it was deleted."
+  head: String!
+  "Where it stands as a request to merge into its base; null until a push works it out."
+  status: BranchStatus
+  deleted: Boolean!
+  linkedBy: LinkedBy!
+  linkedAt: Time!
+}
+
+"How a branch was linked to its issue, or unlinked from it."
+enum LinkedBy {
+  "By its name, which holds the issue's identifier as a word of its own, such as acme-42-login."
+  NAME
+  "By hand, which its name never undoes."
+  HAND
+}
+
+extend type Branch {
+  "The issue it works on, and how it was linked; null for none, and for a viewer who holds no issues.read. main works on none."
+  issue: BranchIssue
+}
+
+"The issue a branch works on, and how the branch was linked to it."
+type BranchIssue {
+  issue: Issue!
+  linkedBy: LinkedBy!
+}
+
+"The branch an issue.branch_linked or issue.branch_unlinked names."
+type IssueEventBranch {
+  "Its repository's slug; null for a viewer who doesn't read the repository."
+  repository: String
+  "Its name, without refs/heads/; null for a viewer who doesn't read the repository."
+  name: String
+  linkedBy: LinkedBy!
 }
 
 "Who an issue is assigned to, who created it, or who changed it."
@@ -3531,13 +3723,15 @@ type IssueRepository {
 "Something that happened to an issue."
 type IssueEvent {
   id: ID!
-  "issue.created or issue.changed; more kinds come with branches."
+  "issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked."
   kind: String!
   "Who did it; null once they are gone."
   actor: IssuePrincipal
   at: Time!
   "The fields an issue.changed changed."
   changes: [IssueChange!]!
+  "The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds."
+  branch: IssueEventBranch
 }
 
 "A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads."
@@ -3588,6 +3782,10 @@ extend type Mutation {
   updateIssue(organizationId: ID!, number: Int!, input: IssuePatch!, expectedVersion: Int): Issue!
   "Deletes one of the organization's issues, with its activity, for a mistake, and answers true; work that won't be done is CANCELED instead. Takes issues.manage. With expectedVersion, an issue at another version is refused (CONFLICT, precondition.failed)."
   deleteIssue(organizationId: ID!, number: Int!, expectedVersion: Int): Boolean!
+  "Links one of the organization's repository's live branches to one of its issues by hand, in place of any issue it works on, for the viewer, and answers the link; takes issues.write, and repo.read. An issue in BACKLOG or TODO moves to IN_PROGRESS. main works on no issue (BAD_USER_INPUT, branch.default), as for an issue the organization doesn't have (issue.invalid)."
+  linkBranch(organizationId: ID!, repositoryId: ID!, branch: String!, number: Int!): BranchIssue!
+  "Unlinks one of the organization's repository's live branches from its issue by hand, for the viewer, so its name never links it again, and answers true; takes issues.write, and repo.read."
+  unlinkBranch(organizationId: ID!, repositoryId: ID!, branch: String!): Boolean!
 }
 `, BuiltIn: false},
 	{Name: "../../../api/graphql/repositories.graphqls", Input: `# Repositories: an organization's Git repositories, their settings and the grants that reach them
@@ -3609,7 +3807,7 @@ extend type Organization {
 }
 
 extend type Mutation {
-  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create."
+  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused (CONFLICT, limit.repositories)."
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
   "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
@@ -3795,7 +3993,7 @@ extend type User {
 }
 
 extend type Mutation {
-  "Creates an organization and makes the viewer its Owner; takes orgs.create."
+  "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!
   "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
   updateOrganization(id: ID!, input: OrganizationSettings!): Organization!
@@ -4084,6 +4282,8 @@ func (ec *executionContext) childFields_Branch(ctx context.Context, field graphq
 		return ec.fieldContext_Branch_requirements(ctx, field)
 	case "merge":
 		return ec.fieldContext_Branch_merge(ctx, field)
+	case "issue":
+		return ec.fieldContext_Branch_issue(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Branch", field.Name)
 }
@@ -4104,6 +4304,16 @@ func (ec *executionContext) childFields_BranchCheck(ctx context.Context, field g
 		return ec.fieldContext_BranchCheck_met(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type BranchCheck", field.Name)
+}
+
+func (ec *executionContext) childFields_BranchIssue(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "issue":
+		return ec.fieldContext_BranchIssue_issue(ctx, field)
+	case "linkedBy":
+		return ec.fieldContext_BranchIssue_linkedBy(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BranchIssue", field.Name)
 }
 
 func (ec *executionContext) childFields_BranchMerge(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4362,8 +4572,30 @@ func (ec *executionContext) childFields_Issue(ctx context.Context, field graphql
 		return ec.fieldContext_Issue_version(ctx, field)
 	case "activity":
 		return ec.fieldContext_Issue_activity(ctx, field)
+	case "branches":
+		return ec.fieldContext_Issue_branches(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Issue", field.Name)
+}
+
+func (ec *executionContext) childFields_IssueBranch(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repository":
+		return ec.fieldContext_IssueBranch_repository(ctx, field)
+	case "name":
+		return ec.fieldContext_IssueBranch_name(ctx, field)
+	case "head":
+		return ec.fieldContext_IssueBranch_head(ctx, field)
+	case "status":
+		return ec.fieldContext_IssueBranch_status(ctx, field)
+	case "deleted":
+		return ec.fieldContext_IssueBranch_deleted(ctx, field)
+	case "linkedBy":
+		return ec.fieldContext_IssueBranch_linkedBy(ctx, field)
+	case "linkedAt":
+		return ec.fieldContext_IssueBranch_linkedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type IssueBranch", field.Name)
 }
 
 func (ec *executionContext) childFields_IssueChange(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4390,8 +4622,22 @@ func (ec *executionContext) childFields_IssueEvent(ctx context.Context, field gr
 		return ec.fieldContext_IssueEvent_at(ctx, field)
 	case "changes":
 		return ec.fieldContext_IssueEvent_changes(ctx, field)
+	case "branch":
+		return ec.fieldContext_IssueEvent_branch(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type IssueEvent", field.Name)
+}
+
+func (ec *executionContext) childFields_IssueEventBranch(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repository":
+		return ec.fieldContext_IssueEventBranch_repository(ctx, field)
+	case "name":
+		return ec.fieldContext_IssueEventBranch_name(ctx, field)
+	case "linkedBy":
+		return ec.fieldContext_IssueEventBranch_linkedBy(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type IssueEventBranch", field.Name)
 }
 
 func (ec *executionContext) childFields_IssuePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -5426,6 +5672,44 @@ func (ec *executionContext) field_Mutation_leaveOrganization_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_linkBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "number",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["number"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_mergeBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5721,6 +6005,36 @@ func (ec *executionContext) field_Mutation_submitReview_args(ctx context.Context
 		return nil, err
 	}
 	args["input"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_unlinkBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg2
 	return args, nil
 }
 
@@ -7144,6 +7458,38 @@ func (ec *executionContext) fieldContext_Branch_merge(_ context.Context, field g
 	return fc, nil
 }
 
+func (ec *executionContext) _Branch_issue(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_issue(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Branch().Issue(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BranchIssue) graphql.Marshaler {
+			return ec.marshalOBranchIssue2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchIssue(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_issue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Branch",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BranchIssue(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _BranchCheck_kind(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7280,6 +7626,61 @@ func (ec *executionContext) _BranchCheck_met(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_BranchCheck_met(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _BranchIssue_issue(ctx context.Context, field graphql.CollectedField, obj *BranchIssue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchIssue_issue(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Issue, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Issue) graphql.Marshaler {
+			return ec.marshalNIssue2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssue(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BranchIssue_issue(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BranchIssue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Issue(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BranchIssue_linkedBy(ctx context.Context, field graphql.CollectedField, obj *BranchIssue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchIssue_linkedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LinkedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LinkedBy) graphql.Marshaler {
+			return ec.marshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BranchIssue_linkedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchIssue", field, false, false, "LinkedBy")
 }
 
 func (ec *executionContext) _BranchMerge_head(ctx context.Context, field graphql.CollectedField, obj *BranchMerge) (ret graphql.Marshaler) {
@@ -9528,6 +9929,208 @@ func (ec *executionContext) fieldContext_Issue_activity(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Issue_branches(ctx context.Context, field graphql.CollectedField, obj *Issue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Issue_branches(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Issue().Branches(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*IssueBranch) graphql.Marshaler {
+			return ec.marshalNIssueBranch2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueBranchᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Issue_branches(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Issue",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueBranch(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IssueBranch_repository(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_repository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *IssueRepository) graphql.Marshaler {
+			return ec.marshalNIssueRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueRepository(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_repository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IssueBranch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueRepository(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IssueBranch_name(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueBranch_head(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueBranch_status(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BranchStatus) graphql.Marshaler {
+			return ec.marshalOBranchStatus2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchStatus(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "BranchStatus")
+}
+
+func (ec *executionContext) _IssueBranch_deleted(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_deleted(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deleted, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_deleted(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _IssueBranch_linkedBy(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_linkedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LinkedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LinkedBy) graphql.Marshaler {
+			return ec.marshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_linkedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "LinkedBy")
+}
+
+func (ec *executionContext) _IssueBranch_linkedAt(ctx context.Context, field graphql.CollectedField, obj *IssueBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueBranch_linkedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LinkedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueBranch_linkedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueBranch", field, false, false, "Time")
+}
+
 func (ec *executionContext) _IssueChange_field(ctx context.Context, field graphql.CollectedField, obj *IssueChange) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9728,6 +10331,107 @@ func (ec *executionContext) fieldContext_IssueEvent_changes(_ context.Context, f
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _IssueEvent_branch(ctx context.Context, field graphql.CollectedField, obj *IssueEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEvent_branch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Branch, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *IssueEventBranch) graphql.Marshaler {
+			return ec.marshalOIssueEventBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueEventBranch(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEvent_branch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IssueEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueEventBranch(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _IssueEventBranch_repository(ctx context.Context, field graphql.CollectedField, obj *IssueEventBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEventBranch_repository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEventBranch_repository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueEventBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueEventBranch_name(ctx context.Context, field graphql.CollectedField, obj *IssueEventBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEventBranch_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEventBranch_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueEventBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueEventBranch_linkedBy(ctx context.Context, field graphql.CollectedField, obj *IssueEventBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEventBranch_linkedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.LinkedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LinkedBy) graphql.Marshaler {
+			return ec.marshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEventBranch_linkedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueEventBranch", field, false, false, "LinkedBy")
 }
 
 func (ec *executionContext) _IssuePage_issues(ctx context.Context, field graphql.CollectedField, obj *IssuePage) (ret graphql.Marshaler) {
@@ -10921,6 +11625,94 @@ func (ec *executionContext) fieldContext_Mutation_deleteIssue(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_deleteIssue_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_linkBranch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_linkBranch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().LinkBranch(ctx, fc.Args["organizationId"].(string), fc.Args["repositoryId"].(string), fc.Args["branch"].(string), fc.Args["number"].(int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BranchIssue) graphql.Marshaler {
+			return ec.marshalNBranchIssue2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchIssue(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_linkBranch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BranchIssue(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_linkBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_unlinkBranch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_unlinkBranch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UnlinkBranch(ctx, fc.Args["organizationId"].(string), fc.Args["repositoryId"].(string), fc.Args["branch"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_unlinkBranch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_unlinkBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -17438,63 +18230,69 @@ func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, o
 		case "name":
 			out.Values[i] = ec._Branch_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "head":
 			out.Values[i] = ec._Branch_head(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "commit":
 			out.Values[i] = ec._Branch_commit(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdAt":
 			out.Values[i] = ec._Branch_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Branch_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "base":
 			out.Values[i] = ec._Branch_base(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "status":
 			out.Values[i] = ec._Branch_status(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "checks":
 			out.Values[i] = ec._Branch_checks(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "ahead":
 			out.Values[i] = ec._Branch_ahead(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "behind":
 			out.Values[i] = ec._Branch_behind(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "requirements":
 			out.Values[i] = ec._Branch_requirements(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "merge":
 			out.Values[i] = ec._Branch_merge(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "issue":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Branch_issue(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -17550,6 +18348,44 @@ func (ec *executionContext) _BranchCheck(ctx context.Context, sel ast.SelectionS
 			}
 		case "met":
 			out.Values[i] = ec._BranchCheck_met(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var branchIssueImplementors = []string{"BranchIssue"}
+
+func (ec *executionContext) _BranchIssue(ctx context.Context, sel ast.SelectionSet, obj *BranchIssue) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, branchIssueImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BranchIssue")
+		case "issue":
+			out.Values[i] = ec._BranchIssue_issue(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "linkedBy":
+			out.Values[i] = ec._BranchIssue_linkedBy(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -18373,6 +19209,75 @@ func (ec *executionContext) _Issue(ctx context.Context, sel ast.SelectionSet, ob
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Issue_activity(ctx, field, obj)
 				})
+		case "branches":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Issue_branches(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var issueBranchImplementors = []string{"IssueBranch"}
+
+func (ec *executionContext) _IssueBranch(ctx context.Context, sel ast.SelectionSet, obj *IssueBranch) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, issueBranchImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IssueBranch")
+		case "repository":
+			out.Values[i] = ec._IssueBranch_repository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._IssueBranch_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._IssueBranch_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "status":
+			out.Values[i] = ec._IssueBranch_status(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "deleted":
+			out.Values[i] = ec._IssueBranch_deleted(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "linkedBy":
+			out.Values[i] = ec._IssueBranch_linkedBy(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "linkedAt":
+			out.Values[i] = ec._IssueBranch_linkedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -18466,6 +19371,54 @@ func (ec *executionContext) _IssueEvent(ctx context.Context, sel ast.SelectionSe
 			}
 		case "changes":
 			out.Values[i] = ec._IssueEvent_changes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "branch":
+			out.Values[i] = ec._IssueEvent_branch(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var issueEventBranchImplementors = []string{"IssueEventBranch"}
+
+func (ec *executionContext) _IssueEventBranch(ctx context.Context, sel ast.SelectionSet, obj *IssueEventBranch) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, issueEventBranchImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IssueEventBranch")
+		case "repository":
+			out.Values[i] = ec._IssueEventBranch_repository(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._IssueEventBranch_name(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "linkedBy":
+			out.Values[i] = ec._IssueEventBranch_linkedBy(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -18918,6 +19871,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "deleteIssue":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_deleteIssue(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "linkBranch":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_linkBranch(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unlinkBranch":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_unlinkBranch(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -20765,6 +21732,14 @@ func (ec *executionContext) marshalNBranchCheckKind2cobranchᚗdevᚋinternalᚋ
 	return v
 }
 
+func (ec *executionContext) marshalNBranchIssue2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchIssue(ctx context.Context, sel ast.SelectionSet, v *BranchIssue) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "BranchIssue!")
+		return graphql.Null
+	}
+	return ec._BranchIssue(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNCommit2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitᚄ(ctx context.Context, sel ast.SelectionSet, v []*Commit) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -21028,6 +22003,30 @@ func (ec *executionContext) marshalNIssue2ᚖcobranchᚗdevᚋinternalᚋadapter
 	return ec._Issue(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNIssueBranch2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueBranchᚄ(ctx context.Context, sel ast.SelectionSet, v []*IssueBranch) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNIssueBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueBranch(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNIssueBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueBranch(ctx context.Context, sel ast.SelectionSet, v *IssueBranch) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "IssueBranch!")
+		return graphql.Null
+	}
+	return ec._IssueBranch(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNIssueChange2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueChangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*IssueChange) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -21104,6 +22103,14 @@ func (ec *executionContext) marshalNIssuePriority2cobranchᚗdevᚋinternalᚋad
 	return v
 }
 
+func (ec *executionContext) marshalNIssueRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueRepository(ctx context.Context, sel ast.SelectionSet, v *IssueRepository) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "IssueRepository!")
+		return graphql.Null
+	}
+	return ec._IssueRepository(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNIssueState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueState(ctx context.Context, v any) (IssueState, error) {
 	var res IssueState
 	err := res.UnmarshalGQL(v)
@@ -21145,6 +22152,16 @@ func (ec *executionContext) unmarshalNLineKind2cobranchᚗdevᚋinternalᚋadapt
 }
 
 func (ec *executionContext) marshalNLineKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLineKind(ctx context.Context, sel ast.SelectionSet, v LineKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx context.Context, v any) (LinkedBy, error) {
+	var res LinkedBy
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx context.Context, sel ast.SelectionSet, v LinkedBy) graphql.Marshaler {
 	return v
 }
 
@@ -21748,6 +22765,13 @@ func (ec *executionContext) marshalOBranch2ᚖcobranchᚗdevᚋinternalᚋadapte
 	return ec._Branch(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOBranchIssue2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchIssue(ctx context.Context, sel ast.SelectionSet, v *BranchIssue) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._BranchIssue(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalOBranchMerge2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchMerge(ctx context.Context, sel ast.SelectionSet, v *BranchMerge) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -21847,6 +22871,13 @@ func (ec *executionContext) marshalOIssue2ᚖcobranchᚗdevᚋinternalᚋadapter
 		return graphql.Null
 	}
 	return ec._Issue(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOIssueEventBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueEventBranch(ctx context.Context, sel ast.SelectionSet, v *IssueEventBranch) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._IssueEventBranch(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOIssueFilter2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueFilter(ctx context.Context, v any) (*IssueFilter, error) {

@@ -195,7 +195,8 @@ type Change struct {
 	ToID   uuid.UUID
 }
 
-// Event is something that happened to an issue, by whom and when: issue.created, or issue.changed with its changes.
+// Event is something that happened to an issue, by whom and when: issue.created, issue.changed with its changes, or
+// issue.branch_linked and issue.branch_unlinked with the branch.
 type Event struct {
 	ID   uuid.UUID
 	Kind string
@@ -203,6 +204,8 @@ type Event struct {
 	Actor   *Principal
 	At      time.Time
 	Changes []Change
+	// Branch is the branch a link or an unlink names; nil for the other kinds.
+	Branch *EventBranch
 }
 
 // The errors the domain answers; an adapter maps each to its status.

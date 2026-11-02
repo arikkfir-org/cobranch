@@ -81,3 +81,47 @@ func TestIssues(t *testing.T) {
 			want: []string{`"issueKey":"AC"`}},
 	})
 }
+
+// withLinks is withIssues with website's live branches main, feature and fix, and feature linked to ACME-1 by Olivia.
+func withLinks(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return withIssues(func(f *orgFixture) *auth.Authenticated {
+		for _, name := range []string{"main", "feature", "fix"} {
+			f.issueStore.AddBranch(f.website.ID, name)
+		}
+		if _, err := f.issues.Link(context.Background(), f.olivia.User, f.acme.ID, f.website.ID, "feature", 1); err != nil {
+			panic(err)
+		}
+		return viewer(f)
+	})
+}
+
+// onWebsite is document with $org and $repo naming Acme and website.
+func onWebsite(document string) func(*orgFixture) string {
+	return func(f *orgFixture) string {
+		return strings.NewReplacer("$org", f.acme.ID.String(), "$repo", f.website.ID.String()).Replace(document)
+	}
+}
+
+func TestBranchLinks(t *testing.T) {
+	runOrgCases(t, []orgCase{
+		{name: "a member links a branch", viewer: withLinks(maxim),
+			document: onWebsite(`mutation { linkBranch(organizationId: "$org", repositoryId: "$repo", branch: "fix", number: 3) { issue { identifier state } linkedBy } }`),
+			want:     []string{`"linkBranch":{"issue":{"identifier":"ACME-3","state":"IN_PROGRESS"},"linkedBy":"HAND"}`}},
+		{name: "main works on no issue", viewer: withLinks(maxim),
+			document: onWebsite(`mutation { linkBranch(organizationId: "$org", repositoryId: "$repo", branch: "main", number: 3) { linkedBy } }`),
+			wantCode: badUserInput, wantReason: "branch.default"},
+		{name: "a branch that doesn't live", viewer: withLinks(maxim),
+			document: onWebsite(`mutation { linkBranch(organizationId: "$org", repositoryId: "$repo", branch: "gone", number: 3) { linkedBy } }`),
+			wantCode: notFound, wantReason: "branch.not_found"},
+		{name: "a member unlinks a branch", viewer: withLinks(maxim),
+			document: onWebsite(`mutation { unlinkBranch(organizationId: "$org", repositoryId: "$repo", branch: "feature") }`),
+			want:     []string{`"unlinkBranch":true`}},
+		{name: "an issue's branches and the link in its activity", viewer: withLinks(maxim),
+			document: fixed(`{ organization(slug: "acme") { issue(number: 1) { state branches { repository { slug } name deleted linkedBy } activity { kind branch { repository name linkedBy } } } } }`),
+			want: []string{`"state":"IN_PROGRESS"`, `"branches":[{"repository":{"slug":"website"},"name":"feature","deleted":false,"linkedBy":"HAND"}]`,
+				`{"kind":"issue.branch_linked","branch":{"repository":"website","name":"feature","linkedBy":"HAND"}}`}},
+		{name: "a branch shows its issue", viewer: withLinks(olivia),
+			document: fixed(`{ organization(slug: "acme") { repository(slug: "website") { feature: branch(name: "feature") { issue { issue { identifier } linkedBy } } main: branch(name: "main") { issue { linkedBy } } } } }`),
+			want:     []string{`"feature":{"issue":{"issue":{"identifier":"ACME-1"},"linkedBy":"HAND"}}`, `"main":{"issue":null}`}},
+	})
+}

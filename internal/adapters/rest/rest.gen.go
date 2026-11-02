@@ -251,6 +251,24 @@ func (e IssueState) Valid() bool {
 	}
 }
 
+// Defines values for LinkedBy.
+const (
+	LinkedByHand LinkedBy = "hand"
+	LinkedByName LinkedBy = "name"
+)
+
+// Valid indicates whether the value is a known member of the LinkedBy enum.
+func (e LinkedBy) Valid() bool {
+	switch e {
+	case LinkedByHand:
+		return true
+	case LinkedByName:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MergeMethod.
 const (
 	FastForward MergeMethod = "fast_forward"
@@ -634,6 +652,9 @@ type Branch struct {
 	// Head The object it is at.
 	Head string `json:"head"`
 
+	// Issue The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
+	Issue *BranchIssue `json:"issue,omitempty"`
+
 	// Merge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
 	Merge *BranchMerge `json:"merge,omitempty"`
 
@@ -671,6 +692,23 @@ type BranchCheck struct {
 
 // BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
 type BranchCheckKind string
+
+// BranchIssue The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
+type BranchIssue struct {
+	// Identifier Its organization's issue key and its number, such as ACME-42.
+	Identifier string `json:"identifier"`
+
+	// LinkedBy How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+	LinkedBy LinkedBy `json:"linkedBy"`
+	Number   int      `json:"number"`
+
+	// Priority How urgent an issue is.
+	Priority IssuePriority `json:"priority"`
+
+	// State Where an issue stands; done and canceled close it.
+	State IssueState `json:"state"`
+	Title string     `json:"title"`
+}
 
 // BranchMerge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
 type BranchMerge struct {
@@ -917,6 +955,27 @@ type Issue struct {
 	Version int64 `json:"version"`
 }
 
+// IssueBranch A branch linked to an issue, of a repository the viewer reads: the commit it is at, its status as a request to merge while a push has worked it out, and how it was linked. A deleted branch stays linked.
+type IssueBranch struct {
+	Deleted bool `json:"deleted"`
+
+	// Head The object it is at, or was at when it was deleted.
+	Head     string    `json:"head"`
+	LinkedAt time.Time `json:"linkedAt"`
+
+	// LinkedBy How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+	LinkedBy LinkedBy `json:"linkedBy"`
+
+	// Name Its name, without refs/heads/.
+	Name string `json:"name"`
+
+	// Repository The repository an issue is about; absent for none, and for a viewer who doesn't read it.
+	Repository IssueRepository `json:"repository"`
+
+	// Status Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
+	Status *BranchStatus `json:"status,omitempty"`
+}
+
 // IssueChange A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
 type IssueChange struct {
 	Field IssueChangeField `json:"field"`
@@ -933,12 +992,27 @@ type IssueEvent struct {
 	Actor *Principal `json:"actor,omitempty"`
 	At    time.Time  `json:"at"`
 
+	// Branch The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out for a viewer who doesn't read the repository.
+	Branch *IssueEventBranch `json:"branch,omitempty"`
+
 	// Changes The fields an issue.changed changed.
 	Changes []IssueChange      `json:"changes"`
 	Id      openapi_types.UUID `json:"id"`
 
-	// Kind issue.created or issue.changed; more kinds come with branches.
+	// Kind issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
 	Kind string `json:"kind"`
+}
+
+// IssueEventBranch The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out for a viewer who doesn't read the repository.
+type IssueEventBranch struct {
+	// LinkedBy How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+	LinkedBy LinkedBy `json:"linkedBy"`
+
+	// Name Its name, without refs/heads/.
+	Name *string `json:"name,omitempty"`
+
+	// Repository Its repository's slug.
+	Repository *string `json:"repository,omitempty"`
 }
 
 // IssueInput What creates an issue.
@@ -1004,6 +1078,15 @@ type JoinRequest struct {
 	UserId    openapi_types.UUID `json:"userId"`
 	UserName  string             `json:"userName"`
 }
+
+// LinkBranchInput The issue to link a branch to.
+type LinkBranchInput struct {
+	// Number One of the organization's issues, by its number.
+	Number int `json:"number"`
+}
+
+// LinkedBy How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+type LinkedBy string
 
 // Member A user who belongs to the organization, with the roles they hold there.
 type Member struct {
@@ -1756,6 +1839,9 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
 
+// LinkBranchJSONRequestBody defines body for LinkBranch for application/json ContentType.
+type LinkBranchJSONRequestBody = LinkBranchInput
+
 // MergeBranchJSONRequestBody defines body for MergeBranch for application/json ContentType.
 type MergeBranchJSONRequestBody = MergeInput
 
@@ -1818,7 +1904,7 @@ type ServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
-	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
+	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(w http.ResponseWriter, r *http.Request)
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
@@ -1869,6 +1955,9 @@ type ServerInterface interface {
 	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
 	// (GET /orgs/{org}/issues/{number}/activity)
 	ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number)
+	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+	// (GET /orgs/{org}/issues/{number}/branches)
+	ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(w http.ResponseWriter, r *http.Request, org Org)
@@ -1899,7 +1988,7 @@ type ServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
-	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
@@ -1932,6 +2021,12 @@ type ServerInterface interface {
 	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffParams)
+	// UnlinkBranch Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write, and repo.read. A branch with no issue answers 204 too.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/issue)
+	UnlinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// LinkBranch Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
+	// (PUT /orgs/{org}/repos/{repo}/branches/{branch}/issue)
+	LinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -2934,6 +3029,41 @@ func (siw *ServerInterfaceWrapper) ListIssueActivity(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListIssueBranches operation middleware
+func (siw *ServerInterfaceWrapper) ListIssueBranches(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIssueBranches(w, r, org, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListJoinRequests operation middleware
 func (siw *ServerInterfaceWrapper) ListJoinRequests(w http.ResponseWriter, r *http.Request) {
 
@@ -3767,6 +3897,94 @@ func (siw *ServerInterfaceWrapper) GetBranchDiff(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetBranchDiff(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkBranch operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkBranch(w, r, org, repo, branchName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkBranch operation middleware
+func (siw *ServerInterfaceWrapper) LinkBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkBranch(w, r, org, repo, branchName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5159,6 +5377,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.DeleteIssue)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.GetIssue)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.UpdateIssue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/branches", wrapper.ListIssueBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/activity", wrapper.ListIssueActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.CreateRepository)
@@ -5173,6 +5392,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff", wrapper.GetBranchDiff)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deleted-branches/{branch}", wrapper.GetDeletedBranch)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/issue", wrapper.UnlinkBranch)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/issue", wrapper.LinkBranch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/merge", wrapper.MergeBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
@@ -7758,6 +7979,92 @@ func (response ListIssueActivitydefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type ListIssueBranchesRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+}
+
+type ListIssueBranchesResponseObject interface {
+	VisitListIssueBranchesResponse(w http.ResponseWriter) error
+}
+
+type ListIssueBranches200JSONResponse struct {
+	Branches []IssueBranch `json:"branches"`
+}
+
+func (response ListIssueBranches200JSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueBranches401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListIssueBranches401ApplicationProblemPlusJSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueBranches403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueBranches403ApplicationProblemPlusJSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueBranches404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueBranches404ApplicationProblemPlusJSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueBranchesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListIssueBranchesdefaultApplicationProblemPlusJSONResponse) VisitListIssueBranchesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListJoinRequestsRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -9731,6 +10038,185 @@ type GetBranchDiffdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetBranchDiffdefaultApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlinkBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+}
+
+type UnlinkBranchResponseObject interface {
+	VisitUnlinkBranchResponse(w http.ResponseWriter) error
+}
+
+type UnlinkBranch204Response struct {
+}
+
+func (response UnlinkBranch204Response) VisitUnlinkBranchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type UnlinkBranch401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UnlinkBranch401ApplicationProblemPlusJSONResponse) VisitUnlinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlinkBranch403ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlinkBranch403ApplicationProblemPlusJSONResponse) VisitUnlinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlinkBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response UnlinkBranch404ApplicationProblemPlusJSONResponse) VisitUnlinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UnlinkBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UnlinkBranchdefaultApplicationProblemPlusJSONResponse) VisitUnlinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Body       *LinkBranchJSONRequestBody
+}
+
+type LinkBranchResponseObject interface {
+	VisitLinkBranchResponse(w http.ResponseWriter) error
+}
+
+type LinkBranch200JSONResponse BranchIssue
+
+func (response LinkBranch200JSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response LinkBranch400ApplicationProblemPlusJSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranch401ApplicationProblemPlusJSONResponse Problem
+
+func (response LinkBranch401ApplicationProblemPlusJSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranch403ApplicationProblemPlusJSONResponse Problem
+
+func (response LinkBranch403ApplicationProblemPlusJSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response LinkBranch404ApplicationProblemPlusJSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type LinkBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response LinkBranchdefaultApplicationProblemPlusJSONResponse) VisitLinkBranchResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -12021,7 +12507,7 @@ type StrictServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(ctx context.Context, request RevokeMyTokenRequestObject) (RevokeMyTokenResponseObject, error)
-	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
+	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(ctx context.Context, request CreateOrganizationRequestObject) (CreateOrganizationResponseObject, error)
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
@@ -12072,6 +12558,9 @@ type StrictServerInterface interface {
 	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
 	// (GET /orgs/{org}/issues/{number}/activity)
 	ListIssueActivity(ctx context.Context, request ListIssueActivityRequestObject) (ListIssueActivityResponseObject, error)
+	// ListIssueBranches The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+	// (GET /orgs/{org}/issues/{number}/branches)
+	ListIssueBranches(ctx context.Context, request ListIssueBranchesRequestObject) (ListIssueBranchesResponseObject, error)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(ctx context.Context, request ListJoinRequestsRequestObject) (ListJoinRequestsResponseObject, error)
@@ -12102,7 +12591,7 @@ type StrictServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
-	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
@@ -12135,6 +12624,12 @@ type StrictServerInterface interface {
 	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(ctx context.Context, request GetBranchDiffRequestObject) (GetBranchDiffResponseObject, error)
+	// UnlinkBranch Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write, and repo.read. A branch with no issue answers 204 too.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/issue)
+	UnlinkBranch(ctx context.Context, request UnlinkBranchRequestObject) (UnlinkBranchResponseObject, error)
+	// LinkBranch Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
+	// (PUT /orgs/{org}/repos/{repo}/branches/{branch}/issue)
+	LinkBranch(ctx context.Context, request LinkBranchRequestObject) (LinkBranchResponseObject, error)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
@@ -13112,6 +13607,33 @@ func (sh *strictHandler) ListIssueActivity(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// ListIssueBranches operation middleware
+func (sh *strictHandler) ListIssueBranches(w http.ResponseWriter, r *http.Request, org Org, number Number) {
+	var request ListIssueBranchesRequestObject
+
+	request.Org = org
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIssueBranches(ctx, request.(ListIssueBranchesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIssueBranches")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIssueBranchesResponseObject); ok {
+		if err := validResponse.VisitListIssueBranchesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListJoinRequests operation middleware
 func (sh *strictHandler) ListJoinRequests(w http.ResponseWriter, r *http.Request, org Org) {
 	var request ListJoinRequestsRequestObject
@@ -13721,6 +14243,69 @@ func (sh *strictHandler) GetBranchDiff(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBranchDiffResponseObject); ok {
 		if err := validResponse.VisitGetBranchDiffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UnlinkBranch operation middleware
+func (sh *strictHandler) UnlinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request UnlinkBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UnlinkBranch(ctx, request.(UnlinkBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UnlinkBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UnlinkBranchResponseObject); ok {
+		if err := validResponse.VisitUnlinkBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// LinkBranch operation middleware
+func (sh *strictHandler) LinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request LinkBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	var body LinkBranchJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.LinkBranch(ctx, request.(LinkBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "LinkBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(LinkBranchResponseObject); ok {
+		if err := validResponse.VisitLinkBranchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
