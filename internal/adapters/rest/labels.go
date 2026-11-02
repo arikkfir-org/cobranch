@@ -33,12 +33,15 @@ func issueLabel(l issues.IssueLabel) IssueLabel {
 	return IssueLabel{Id: l.ID, Name: l.Name, Color: LabelColor(l.Color)}
 }
 
-// labelTag is a label's ETag: its version, quoted.
+// labelTag is a label's ETag: its version and how many issues carry it, quoted, since labelling an issue changes the
+// label's count but not its version.
 func labelTag(l issues.Label) string {
-	return `"` + strconv.FormatInt(l.Version, 10) + `"`
+	return `"` + strconv.FormatInt(l.Version, 10) + "-" + strconv.FormatInt(int64(l.Issues), 10) + `"`
 }
 
-// labelMatch is the version of a label that If-Match names: 428 without one, 412 for one that names none.
+// labelMatch is the version of a label that If-Match names, by the version its ETag starts with: 428 without one,
+// 412 for one that names none. A change made from before an issue was labelled still applies: it changes the label,
+// not its issues.
 func labelMatch(header *string) (int64, error) {
 	if header == nil || strings.TrimSpace(*header) == "" {
 		return 0, refuse(http.StatusPreconditionRequired, "precondition.required", "Name the label's ETag in If-Match.")
@@ -47,7 +50,8 @@ func labelMatch(header *string) (int64, error) {
 	if tag == "*" {
 		return 0, nil
 	}
-	version, err := strconv.ParseInt(strings.Trim(tag, `"`), 10, 64)
+	number, _, _ := strings.Cut(strings.Trim(tag, `"`), "-")
+	version, err := strconv.ParseInt(number, 10, 64)
 	if err != nil || version < 1 {
 		return 0, refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no version of the label.")
 	}

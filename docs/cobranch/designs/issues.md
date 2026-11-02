@@ -121,9 +121,10 @@ colour changes each issue that carries the label, so a client holding one reads 
   many issues carry each. A rename or a new colour changes each issue that carries the label, bumping its version, so a
   client holding the issue's ETag reads the new name; a new description shows on no issue, so it changes none. Deleting
   a label takes it off its issues the same way.
-- **A version, its ETag.** Each change bumps a label's version, and its ETag is the version, `"3"`; `PATCH` and `DELETE`
-  take it in `If-Match`, as for issues. The organization's events `label.created`, `label.changed` and `label.deleted`
-  name who did it.
+- **A version, its ETag.** Each change bumps a label's version. Its ETag is the version and how many issues carry the
+  label, `"3-12"`, since labelling an issue changes the count but not the label; `PATCH` and `DELETE` take it in
+  `If-Match`, by its version, as for issues. The organization's events `label.created`, `label.changed` and
+  `label.deleted` name who did it.
 
 ## Who may do what
 

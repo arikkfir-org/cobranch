@@ -57,7 +57,7 @@ func TestLabelsAPI(t *testing.T) {
 				}
 			}},
 		{name: "an Owner creates one", viewer: olivia, method: http.MethodPost, path: fixed("/v1/orgs/acme/labels"),
-			body: `{"name":"Docs","color":"green","description":"Guides"}`, wantStatus: 201, wantHeader: http.Header{"Etag": {`"1"`}},
+			body: `{"name":"Docs","color":"green","description":"Guides"}`, wantStatus: 201, wantHeader: http.Header{"Etag": {`"1-0"`}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if l := decode[Label](t, body); l.Name != "Docs" || l.Color != "green" || l.Description != "Guides" || l.Version != 1 {
 					t.Errorf("label = %s", body)
@@ -70,9 +70,11 @@ func TestLabelsAPI(t *testing.T) {
 		{name: "a colour that isn't", viewer: olivia, method: http.MethodPost, path: fixed("/v1/orgs/acme/labels"), body: `{"name":"x","color":"pink"}`,
 			wantStatus: 400},
 		{name: "one, by ID", viewer: withLabels(maxim), method: http.MethodGet, path: labelPath("UI"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"1"`}, "Cache-Control": {"private, no-cache"}}},
+			wantHeader: http.Header{"Etag": {`"1-0"`}, "Cache-Control": {"private, no-cache"}}},
 		{name: "one the caller holds", viewer: withLabels(maxim), method: http.MethodGet, path: labelPath("UI"),
-			header: http.Header{"If-None-Match": {`"1"`}}, wantStatus: 304},
+			header: http.Header{"If-None-Match": {`"1-0"`}}, wantStatus: 304},
+		{name: "one an issue took since the caller read it", viewer: withLabels(maxim), method: http.MethodGet, path: labelPath("Bug"),
+			header: http.Header{"If-None-Match": {`"1-0"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"1-1"`}}},
 		{name: "one that isn't there", viewer: maxim, method: http.MethodGet, path: fixed("/v1/orgs/acme/labels/" + uuid.NewString()),
 			wantStatus: 404, wantCode: "label.not_found"},
 		{name: "an outsider learns nothing", viewer: nia, method: http.MethodGet, path: fixed("/v1/orgs/acme/labels"), wantStatus: 404,
@@ -83,7 +85,7 @@ func TestLabelsAPI(t *testing.T) {
 func TestChangeLabelsAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "an Owner renames one", viewer: withLabels(olivia), method: http.MethodPatch, path: labelPath("Bug"), body: `{"name":"Defect","color":"yellow"}`,
-			header: mergePatchAt(`"1"`), wantStatus: 200, wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, f *orgFixture, body []byte) {
+			header: mergePatchAt(`"1-1"`), wantStatus: 200, wantHeader: http.Header{"Etag": {`"2-1"`}}, check: func(t *testing.T, f *orgFixture, body []byte) {
 				if l := decode[Label](t, body); l.Name != "Defect" || l.Color != "yellow" {
 					t.Errorf("label = %s", body)
 				}
@@ -91,6 +93,8 @@ func TestChangeLabelsAPI(t *testing.T) {
 					t.Errorf("ACME-1's labels = %+v, %v; want Defect", i.Labels, err)
 				}
 			}},
+		{name: "from before an issue took it", viewer: withLabels(olivia), method: http.MethodPatch, path: labelPath("Bug"), body: `{"name":"Defect"}`,
+			header: mergePatchAt(`"1-0"`), wantStatus: 200, wantHeader: http.Header{"Etag": {`"2-1"`}}},
 		{name: "without If-Match", viewer: withLabels(olivia), method: http.MethodPatch, path: labelPath("Bug"), body: `{"name":"Defect"}`,
 			header: mergePatch, wantStatus: 428},
 		{name: "a stale one", viewer: withLabels(olivia), method: http.MethodPatch, path: labelPath("Bug"), body: `{"name":"Defect"}`,
@@ -99,7 +103,7 @@ func TestChangeLabelsAPI(t *testing.T) {
 			header: mergePatchAt(`"1"`), wantStatus: 409, wantCode: "label.taken"},
 		{name: "a member changes none", viewer: withLabels(maxim), method: http.MethodPatch, path: labelPath("Bug"), body: `{"name":"Defect"}`,
 			header: mergePatchAt(`"1"`), wantStatus: 403},
-		{name: "an Owner deletes one", viewer: withLabels(olivia), method: http.MethodDelete, path: labelPath("Bug"), header: http.Header{"If-Match": {`"1"`}},
+		{name: "an Owner deletes one", viewer: withLabels(olivia), method: http.MethodDelete, path: labelPath("Bug"), header: http.Header{"If-Match": {`"1-1"`}},
 			wantStatus: 204, check: func(t *testing.T, f *orgFixture, _ []byte) {
 				if i, err := f.issues.Get(context.Background(), f.max.User, f.acme.ID, 1); err != nil || len(i.Labels) != 0 {
 					t.Errorf("ACME-1's labels = %+v, %v; want none", i.Labels, err)
