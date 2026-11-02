@@ -274,6 +274,7 @@ func schemaTableExists(t *testing.T, pool *pgxpool.Pool) bool {
 }
 
 func TestSchemaCheckOnceMigrated(t *testing.T) {
+	t.Parallel()
 	pool := testDatabase(t)
 	s := newSchema(t, pool, columnB)
 	if err := s.Check(context.Background()); err == nil {
