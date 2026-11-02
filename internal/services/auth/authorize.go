@@ -49,8 +49,8 @@ func NewAuthorizer(grants Grants) *Authorizer {
 }
 
 // Holds lists the permissions principalID holds at the scope, sorted: under a personal token of theirs, only those the
-// token lists too; under a run's token of theirs, also what the run may do there; under a task token of theirs,
-// only those the task's assigner holds there too.
+// token lists too; under a run's token of theirs, also what the run may do there; under a task token of theirs, only
+// those the task's assigner holds there too.
 func (a *Authorizer) Holds(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error) {
 	permissions, err := a.grants.Permissions(ctx, principalID, scope, scopeID)
 	if err != nil {
