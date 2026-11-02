@@ -91,6 +91,12 @@ type Agent struct {
 	Version int64
 	// Grants are the roles it holds, those at the organization first.
 	Grants []Grant
+	// Provider and Model are the provider and the model its tasks run on; empty until an admin picks them.
+	Provider string
+	Model    string
+	// Secrets are the secrets its tasks receive, each an environment variable named by its key from the secret its
+	// value names.
+	Secrets map[string]uuid.UUID
 }
 
 // Input is what a new agent holds: its name, description, instructions and first grants.

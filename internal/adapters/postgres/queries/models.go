@@ -22,6 +22,9 @@ type Agent struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Version      int64
+	Provider     *string
+	Model        *string
+	Secrets      []byte
 }
 
 type AgentTask struct {
@@ -301,6 +304,16 @@ type Membership struct {
 	OrgID    uuid.UUID
 	UserID   uuid.UUID
 	JoinedAt time.Time
+}
+
+type ModelProvider struct {
+	OrgID     uuid.UUID
+	Provider  string
+	SecretID  *uuid.UUID
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Version   int64
 }
 
 type Organization struct {

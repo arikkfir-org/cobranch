@@ -12,7 +12,7 @@ import (
 )
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
@@ -37,6 +37,9 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.CreatedAt,
 		&i.Agent.UpdatedAt,
 		&i.Agent.Version,
+		&i.Agent.Provider,
+		&i.Agent.Model,
+		&i.Agent.Secrets,
 		&i.CreatorName,
 	)
 	return i, err
@@ -86,7 +89,7 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
 `
@@ -117,6 +120,9 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.CreatedAt,
 			&i.Agent.UpdatedAt,
 			&i.Agent.Version,
+			&i.Agent.Provider,
+			&i.Agent.Model,
+			&i.Agent.Secrets,
 			&i.CreatorName,
 		); err != nil {
 			return nil, err
@@ -513,7 +519,7 @@ const updateAgent = `-- name: UpdateAgent :one
 UPDATE agents SET name = coalesce($1, name), description = coalesce($2, description),
     instructions = coalesce($3, instructions), updated_at = now()
 WHERE principal_id = $4 AND org_id = $5 AND ($6::bigint < 0 OR version = $6::bigint)
-RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version
+RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets
 `
 
 type UpdateAgentParams struct {
@@ -548,6 +554,9 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.Version,
+		&i.Provider,
+		&i.Model,
+		&i.Secrets,
 	)
 	return i, err
 }

@@ -137,14 +137,14 @@ credentials, kept as an organization secret its agents may read, and an admin pi
 
 ![An organization adds providers by their keys; each agent runs on one of them](agents/models.svg)
 
-Google and xAI are added the same way. Model names are the provider’s; Cobranch suggests current ones and accepts any.
+Google and xAI are added the same way. Model names are the provider’s; Cobranch accepts any, and suggests none.
 
 - **A provider is a row of the organization's settings:** one of Anthropic, Google, xAI, OpenAI or DeepSeek, and the ID
   of the organization secret that holds its API key. `org.manage` adds, changes and removes one. A provider whose secret
   is gone shows as broken.
 - **Picking a model** takes `org.principals.manage`: one of the providers the organization has, and the model's name.
-  The Console suggests each provider's current models; Cobranch never checks a name against the provider, so a new model
-  works the day it ships.
+  Cobranch never checks a name against the provider, and the Console suggests none, which would date: a new model works
+  the day it ships.
 - **The agent must read the key.** The controller gives a task its provider's key only if the agent holds `secrets.read`
   on that secret. The Console's model picker offers to grant Secret reader on it in the same step.
 - **Secrets a task receives** are the agent's `secrets` map, each an environment variable named after its key, from a
