@@ -116,6 +116,46 @@ func (q *Queries) HoldTask(ctx context.Context, reason string, iD uuid.UUID) err
 	return err
 }
 
+const reviewTasksAt = `-- name: ReviewTasksAt :many
+SELECT DISTINCT ON (t.branch_id) t.branch_id, t.number, t.state, t.reason
+FROM agent_tasks t JOIN branches b ON b.id = t.branch_id AND b.head = t.sha
+WHERE t.branch_id = ANY ($1::uuid[]) AND t.kind = 'review'
+ORDER BY t.branch_id, t.number DESC
+`
+
+type ReviewTasksAtRow struct {
+	BranchID *uuid.UUID
+	Number   int64
+	State    string
+	Reason   string
+}
+
+// ReviewTasksAt finds the latest review task of each of the branches at the head the branch is at.
+func (q *Queries) ReviewTasksAt(ctx context.Context, branchIds []uuid.UUID) ([]ReviewTasksAtRow, error) {
+	rows, err := q.db.Query(ctx, reviewTasksAt, branchIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReviewTasksAtRow
+	for rows.Next() {
+		var i ReviewTasksAtRow
+		if err := rows.Scan(
+			&i.BranchID,
+			&i.Number,
+			&i.State,
+			&i.Reason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reviewedBranch = `-- name: ReviewedBranch :one
 SELECT id, head FROM branches WHERE repo_id = $1 AND name = $2 AND deleted_at IS NULL
 `

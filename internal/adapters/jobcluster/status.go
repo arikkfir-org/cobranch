@@ -22,17 +22,27 @@ import (
 const minMasked = 4
 
 // Pods reports the organization's runs' pods, by run ID (runner.Cluster).
-func (c *Cluster) Pods(ctx context.Context, orgID uuid.UUID) (_ map[uuid.UUID]runner.Pod, err error) {
+func (c *Cluster) Pods(ctx context.Context, orgID uuid.UUID) (map[uuid.UUID]runner.Pod, error) {
+	return c.pods(ctx, orgID, runs)
+}
+
+// Renders reports the organization's render pods, by delivery ID (deliverer.Pods).
+func (c *Cluster) Renders(ctx context.Context, orgID uuid.UUID) (map[uuid.UUID]runner.Pod, error) {
+	return c.pods(ctx, orgID, renders)
+}
+
+// pods reports the organization's pods of the workload, by its ID.
+func (c *Cluster) pods(ctx context.Context, orgID uuid.UUID, w workload) (_ map[uuid.UUID]runner.Pod, err error) {
 	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Pods", orgAttr(orgID))
 	defer span.End()
 	defer func() { record(span, err) }()
-	list, err := c.client.CoreV1().Pods(c.namespace(orgID)).List(ctx, metav1.ListOptions{LabelSelector: labelRun})
+	list, err := c.client.CoreV1().Pods(c.namespace(orgID)).List(ctx, metav1.ListOptions{LabelSelector: w.label})
 	if err != nil {
 		return nil, fmt.Errorf("listing the pods in namespace %s: %w", c.namespace(orgID), err)
 	}
 	out := make(map[uuid.UUID]runner.Pod, len(list.Items))
 	for i := range list.Items {
-		if id, err := uuid.Parse(list.Items[i].Labels[labelRun]); err == nil {
+		if id, err := uuid.Parse(list.Items[i].Labels[w.label]); err == nil {
 			out[id] = outcomeOf(&list.Items[i])
 		}
 	}
@@ -74,11 +84,21 @@ func failureOf(pod *corev1.Pod) string {
 
 // Logs reads each of the run's pod's containers' logs, at most limit bytes each, with the run's masked values hidden,
 // by container; none for a pod that is gone, or a container that never started (runner.Cluster).
-func (c *Cluster) Logs(ctx context.Context, orgID, runID uuid.UUID, limit int64) (_ map[string][]byte, err error) {
-	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Logs", runAttrs(orgID, runID))
+func (c *Cluster) Logs(ctx context.Context, orgID, runID uuid.UUID, limit int64) (map[string][]byte, error) {
+	return c.logs(ctx, orgID, runs, runID, limit)
+}
+
+// RenderLogs reads each of the delivery's render pod's containers' logs, as Logs does a run's (deliverer.Pods).
+func (c *Cluster) RenderLogs(ctx context.Context, orgID, deliveryID uuid.UUID, limit int64) (map[string][]byte, error) {
+	return c.logs(ctx, orgID, renders, deliveryID, limit)
+}
+
+// logs reads each of the containers' logs of the workload's pod of id.
+func (c *Cluster) logs(ctx context.Context, orgID uuid.UUID, w workload, id uuid.UUID, limit int64) (_ map[string][]byte, err error) {
+	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Logs", w.attrs(orgID, id))
 	defer span.End()
 	defer func() { record(span, err) }()
-	pods, name := c.client.CoreV1().Pods(c.namespace(orgID)), podName(runID)
+	pods, name := c.client.CoreV1().Pods(c.namespace(orgID)), w.name(id)
 	pod, err := pods.Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
 		return nil, nil
@@ -141,10 +161,22 @@ func mask(log []byte, values []string) []byte {
 
 // Remove deletes the run's pod, and its Secret with it (runner.Cluster).
 func (c *Cluster) Remove(ctx context.Context, orgID, runID uuid.UUID) (err error) {
-	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Remove", runAttrs(orgID, runID))
+	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Remove", runs.attrs(orgID, runID))
 	defer span.End()
 	defer func() { record(span, err) }()
-	ns, name := c.namespace(orgID), podName(runID)
+	return c.remove(ctx, c.namespace(orgID), runs.name(runID))
+}
+
+// RemoveRender deletes the delivery's render pod, and its Secret with it (deliverer.Pods).
+func (c *Cluster) RemoveRender(ctx context.Context, orgID, deliveryID uuid.UUID) (err error) {
+	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Remove", renders.attrs(orgID, deliveryID))
+	defer span.End()
+	defer func() { record(span, err) }()
+	return c.remove(ctx, c.namespace(orgID), renders.name(deliveryID))
+}
+
+// remove deletes pod name in namespace ns, and its Secret.
+func (c *Cluster) remove(ctx context.Context, ns, name string) error {
 	if err := c.client.CoreV1().Pods(ns).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("deleting pod %s: %w", name, err)
 	}

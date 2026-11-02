@@ -1,7 +1,8 @@
 #!/bin/sh
 # Lints chart/cobranch with its defaults, packs in the database included, and validates what it renders: with the
 # bundled database, packs in a Google Cloud Storage bucket, a host per workload, SSH behind a load balancer, Google,
-# traces and metrics for Prometheus, and with an external database, packs moving from the database into an S3 bucket,
+# traces, metrics for Prometheus and delivery into the cluster, and with an external database, packs moving from the
+# database into an S3 bucket,
 # one host with a path per workload, SSH with the operator's host key, another provider, an autoscaled push worker, no
 # traces, its own limits, the demo data with its seed Job, job pods placed, bounded by a quota and held by the
 # cluster's own policies, and agents in an image of their own, pulled with a pull secret. Writes the bundled
@@ -23,7 +24,10 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranc
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' \
   --set telemetry.traces.endpoint=http://otel-collector.observability:4318 --set telemetry.traces.headersSecret=otlp \
   --set-json telemetry.traces.sampleRatio=0.25 --set telemetry.env.OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=ci \
-  --set telemetry.metrics.exporter=prometheus >"$out/routes.yaml"
+  --set telemetry.metrics.exporter=prometheus --set delivery.inCluster.enabled=true \
+  --set-json 'delivery.inCluster.ingressFrom=[{"matchLabels":{"kubernetes.io/metadata.name":"gateway"}}]' \
+  --set-json 'delivery.inCluster.rules=[{"apiGroups":["cert-manager.io"],"resources":["certificates"],"verbs":["*"]}]' \
+  >"$out/routes.yaml"
 helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranch-objects --set blob.moveFrom=postgres:// \
   --set postgresql.enabled=false --set externalDatabase.existingSecret=cobranch-database \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://cobranch.example.com/api \

@@ -117,7 +117,7 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 	if r.LinearHistory != nil {
 		b.Requirements = &git.Requirements{Branch: r.Name, Annotations: r.RequiredAnnotations, LinearHistory: *r.LinearHistory}
 		if r.RequiredApprovals != nil {
-			b.Requirements.Reviews = &git.ReviewRequirements{Approvals: int(*r.RequiredApprovals)}
+			b.Requirements.Reviews = &git.ReviewRequirements{Approvals: int(*r.RequiredApprovals), AI: r.RequiredAi != nil && *r.RequiredAi}
 		}
 	}
 	if r.MergedHead != nil && r.MergedAt != nil {

@@ -279,3 +279,15 @@ func deliveryView(d queries.Delivery, target, branch string, startedBy *string) 
 	}
 	return out
 }
+
+// KeepRender keeps a rendering delivery's render, once (code.EnvironmentStore).
+func (s *CodeStore) KeepRender(ctx context.Context, deliveryID uuid.UUID, manifests []byte) error {
+	kept, err := s.q.InsertDeliveryRender(ctx, manifests, deliveryID)
+	switch {
+	case err != nil:
+		return fmt.Errorf("keeping delivery %s's render: %w", deliveryID, err)
+	case kept == 0:
+		return code.ErrDeliveryNotRendering
+	}
+	return nil
+}

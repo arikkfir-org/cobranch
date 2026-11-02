@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
+	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
 )
 
@@ -172,8 +173,8 @@ func TestPreparePullSecrets(t *testing.T) {
 	registry := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "registry", Namespace: "cobranch"}, Type: corev1.SecretTypeDockerConfigJson,
 		Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte(`{"auths":{}}`)}}
 	stale := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "old-registry", Namespace: ns, Labels: map[string]string{labelPullSecret: "true"}}}
-	runs := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: podName(run), Namespace: ns, Labels: map[string]string{labelRun: run.String()}}}
-	client := installed(registry, stale, runs)
+	runSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: runs.name(run), Namespace: ns, Labels: map[string]string{labelRun: run.String()}}}
+	client := installed(registry, stale, runSecret)
 	cfg := config()
 	cfg.ImagePullSecrets = []string{"registry"}
 	if err := New(client, cfg).Prepare(ctx, org); err != nil {
@@ -187,7 +188,7 @@ func TestPreparePullSecrets(t *testing.T) {
 	if _, err := client.CoreV1().Secrets(ns).Get(ctx, stale.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Errorf("the copy the installation no longer names: error = %v, want not found", err)
 	}
-	if _, err := client.CoreV1().Secrets(ns).Get(ctx, runs.Name, metav1.GetOptions{}); err != nil {
+	if _, err := client.CoreV1().Secrets(ns).Get(ctx, runSecret.Name, metav1.GetOptions{}); err != nil {
 		t.Errorf("a run's Secret: %v, want it kept", err)
 	}
 	cfg.ImagePullSecrets = []string{"registry", "missing"}
@@ -436,13 +437,16 @@ func TestNamespacesAndDrop(t *testing.T) {
 	labelled := func(name, installation string) *corev1.Namespace {
 		return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{labelInstallation: installation}}}
 	}
+	// An environment's namespace carries the installation's label as well, whatever its name.
+	environment := labelled("cobranch-jobs-0193a8c0-0000-7000-8000-000000000003", "cobranch-cobranch")
+	environment.Labels[labelEnvironment] = uuid.NewString()
 	client := fake.NewClientset(labelled(ns, "cobranch-cobranch"), labelled("cobranch-jobs-"+other.String(), "cobranch-cobranch"),
-		labelled("elsewhere-jobs-"+other.String(), "another"), labelled("cobranch-jobs-x", "cobranch-cobranch"))
+		labelled("elsewhere-jobs-"+other.String(), "another"), labelled("cobranch-jobs-x", "cobranch-cobranch"), environment)
 	c := New(client, config())
 	got, err := c.Namespaces(ctx)
 	slices.SortFunc(got, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	if err != nil || !slices.Equal(got, []uuid.UUID{org, other}) {
-		t.Errorf("Namespaces() = %v, %v, want both organizations", got, err)
+		t.Errorf("Namespaces() = %v, %v, want both organizations, and no environment's", got, err)
 	}
 	if err := c.Drop(ctx, org); err != nil {
 		t.Fatal(err)
@@ -452,5 +456,58 @@ func TestNamespacesAndDrop(t *testing.T) {
 	}
 	if got, err := c.Namespaces(ctx); err != nil || !slices.Equal(got, []uuid.UUID{other}) {
 		t.Errorf("Namespaces() after Drop() = %v, %v", got, err)
+	}
+}
+
+// TestRenders starts a delivery's render pod beside a run's, and lists, reads and removes each apart from the other:
+// the runs never see a render pod, nor the renders a run's.
+func TestRenders(t *testing.T) {
+	ctx := context.Background()
+	delivery := uuid.MustParse("0193a8c0-0000-7000-8000-0000000000dd")
+	client := fake.NewClientset()
+	cfg := config()
+	cfg.RenderResources = corev1.ResourceRequirements{Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("2Gi")}}
+	c := New(client, cfg)
+	if err := c.Start(ctx, launch(nil)); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	render := deliverer.Render{Delivery: deliverer.Delivery{ID: delivery, OrgID: org}, Args: []string{"--target", "preview"},
+		Env: map[string]string{"COBRANCH_TOKEN": "cbd_token", "COBRANCH_UPLOAD_URL": "http://rest/v1/…"}, Masked: []string{"cbd_token"},
+		Timeout: 10 * time.Minute}
+	if err := c.StartRender(ctx, render); err != nil {
+		t.Fatalf("StartRender() = %v", err)
+	}
+	pod, err := client.CoreV1().Pods(ns).Get(ctx, "render-"+delivery.String(), metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := pod.Spec
+	main := s.Containers[0]
+	if pod.Labels[labelDelivery] != delivery.String() || pod.Labels[labelRun] != "" || *s.ActiveDeadlineSeconds != 600 ||
+		len(s.InitContainers) != 1 || s.InitContainers[0].Name != "cobranch-checkout" || main.Name != "render" || main.Image != "cobranch:v1" ||
+		!slices.Equal(main.Args, []string{"render", "--target", "preview"}) || main.Resources.Limits.Memory().String() != "2Gi" ||
+		main.WorkingDir != "/workspace" || len(main.Env) != 2 || main.Env[0].ValueFrom.SecretKeyRef.Name != pod.Name {
+		t.Errorf("render pod = %+v", pod)
+	}
+	secret, err := client.CoreV1().Secrets(ns).Get(ctx, pod.Name, metav1.GetOptions{})
+	if err != nil || string(secret.Data["COBRANCH_TOKEN"]) != "cbd_token" || string(secret.Data[keyMasked]) != `["cbd_token"]` {
+		t.Errorf("Secret = %+v, %v", secret, err)
+	}
+	runs, err := c.Pods(ctx, org)
+	if _, ok := runs[run]; err != nil || len(runs) != 1 || !ok {
+		t.Errorf("Pods() = %v, %v, want the run's alone", runs, err)
+	}
+	renders, err := c.Renders(ctx, org)
+	if _, ok := renders[delivery]; err != nil || len(renders) != 1 || !ok {
+		t.Errorf("Renders() = %v, %v, want the render's alone", renders, err)
+	}
+	if err := c.RemoveRender(ctx, org, delivery); err != nil {
+		t.Fatalf("RemoveRender() = %v", err)
+	}
+	if renders, err := c.Renders(ctx, org); err != nil || len(renders) != 0 {
+		t.Errorf("Renders() after RemoveRender = %v, %v", renders, err)
+	}
+	if runs, err := c.Pods(ctx, org); err != nil || len(runs) != 1 {
+		t.Errorf("Pods() after RemoveRender = %v, %v, want the run's still", runs, err)
 	}
 }

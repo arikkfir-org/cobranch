@@ -20,6 +20,57 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AICheckState.
+const (
+	AICheckStateApproved         AICheckState = "approved"
+	AICheckStateCancelled        AICheckState = "cancelled"
+	AICheckStateChangesRequested AICheckState = "changes_requested"
+	AICheckStateFailed           AICheckState = "failed"
+	AICheckStateMissing          AICheckState = "missing"
+	AICheckStateNoModel          AICheckState = "no_model"
+	AICheckStateNotApproved      AICheckState = "not_approved"
+	AICheckStateOff              AICheckState = "off"
+	AICheckStateQueued           AICheckState = "queued"
+	AICheckStateRunning          AICheckState = "running"
+	AICheckStateSuspended        AICheckState = "suspended"
+	AICheckStateUnreviewed       AICheckState = "unreviewed"
+	AICheckStateWaiting          AICheckState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the AICheckState enum.
+func (e AICheckState) Valid() bool {
+	switch e {
+	case AICheckStateApproved:
+		return true
+	case AICheckStateCancelled:
+		return true
+	case AICheckStateChangesRequested:
+		return true
+	case AICheckStateFailed:
+		return true
+	case AICheckStateMissing:
+		return true
+	case AICheckStateNoModel:
+		return true
+	case AICheckStateNotApproved:
+		return true
+	case AICheckStateOff:
+		return true
+	case AICheckStateQueued:
+		return true
+	case AICheckStateRunning:
+		return true
+	case AICheckStateSuspended:
+		return true
+	case AICheckStateUnreviewed:
+		return true
+	case AICheckStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AIReviewState.
 const (
 	AIReviewStateCancelled AIReviewState = "cancelled"
@@ -76,6 +127,7 @@ func (e AnnotationStatus) Valid() bool {
 
 // Defines values for BranchCheckKind.
 const (
+	BranchCheckKindAi               BranchCheckKind = "ai"
 	BranchCheckKindAnnotation       BranchCheckKind = "annotation"
 	BranchCheckKindApprovals        BranchCheckKind = "approvals"
 	BranchCheckKindChangesRequested BranchCheckKind = "changes_requested"
@@ -86,6 +138,8 @@ const (
 // Valid indicates whether the value is a known member of the BranchCheckKind enum.
 func (e BranchCheckKind) Valid() bool {
 	switch e {
+	case BranchCheckKindAi:
+		return true
 	case BranchCheckKindAnnotation:
 		return true
 	case BranchCheckKindApprovals:
@@ -256,25 +310,25 @@ func (e DiffLineKind) Valid() bool {
 
 // Defines values for EnvironmentHealth.
 const (
-	Degraded    EnvironmentHealth = "degraded"
-	Healthy     EnvironmentHealth = "healthy"
-	Missing     EnvironmentHealth = "missing"
-	Progressing EnvironmentHealth = "progressing"
-	Unknown     EnvironmentHealth = "unknown"
+	EnvironmentHealthDegraded    EnvironmentHealth = "degraded"
+	EnvironmentHealthHealthy     EnvironmentHealth = "healthy"
+	EnvironmentHealthMissing     EnvironmentHealth = "missing"
+	EnvironmentHealthProgressing EnvironmentHealth = "progressing"
+	EnvironmentHealthUnknown     EnvironmentHealth = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the EnvironmentHealth enum.
 func (e EnvironmentHealth) Valid() bool {
 	switch e {
-	case Degraded:
+	case EnvironmentHealthDegraded:
 		return true
-	case Healthy:
+	case EnvironmentHealthHealthy:
 		return true
-	case Missing:
+	case EnvironmentHealthMissing:
 		return true
-	case Progressing:
+	case EnvironmentHealthProgressing:
 		return true
-	case Unknown:
+	case EnvironmentHealthUnknown:
 		return true
 	default:
 		return false
@@ -920,6 +974,9 @@ func (e ListBuiltInRolesParamsScope) Valid() bool {
 	}
 }
 
+// AICheckState For ai, how the AI reviewer's approval of the head stands: waiting, queued or running, its review task for the head, which keeps the branch Processing; approved, the one that meets it; changes_requested or not_approved, its latest review of the head; unreviewed, neither a task nor a review of the head; failed or cancelled, its task for the head, with the reason; no_model, suspended or off, the reviewer reviewing none of the branch's pushes, for want of a model, suspended, or left out by main's /cobranch-review.yaml; missing, an organization without its reviewer.
+type AICheckState string
+
 // AIReview The AI reviewer's latest task for a branch's head, an agent task of kind review; left out of a branch it has none for, and of main, whose pushes it never reviews. Its review, once it submits one, is among the head's.
 type AIReview struct {
 	// Reason Why it waits, failed or was cancelled; left out otherwise.
@@ -1122,7 +1179,7 @@ type Branch struct {
 	// Behind How many commits its base has that it lacks; left out until a push works it out.
 	Behind *int `json:"behind,omitempty"`
 
-	// Checks How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	// Checks How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main.
 	Checks []BranchCheck `json:"checks"`
 
 	// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
@@ -1159,15 +1216,21 @@ type Branch struct {
 
 // BranchCheck One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
+	// Ai For ai, how the AI reviewer's approval of the head stands: waiting, queued or running, its review task for the head, which keeps the branch Processing; approved, the one that meets it; changes_requested or not_approved, its latest review of the head; unreviewed, neither a task nor a review of the head; failed or cancelled, its task for the head, with the reason; no_model, suspended or off, the reviewer reviewing none of the branch's pushes, for want of a model, suspended, or left out by main's /cobranch-review.yaml; missing, an organization without its reviewer.
+	Ai *AICheckState `json:"ai,omitempty"`
+
 	// Count For linear_history, the merges among its commits to merge; for approvals, the approvals that count; for up_to_date, the commits of its base it lacks.
 	Count *int `json:"count,omitempty"`
 
-	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
+	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; ai, the AI reviewer's approval of its head; up_to_date, its base's tip in it.
 	Kind BranchCheckKind `json:"kind"`
 	Met  bool            `json:"met"`
 
 	// Name The required annotation's name, for annotation; the reviewer's display name, for changes_requested.
 	Name *string `json:"name,omitempty"`
+
+	// Reason For ai, why the AI reviewer's task for the head failed or was cancelled.
+	Reason *string `json:"reason,omitempty"`
 
 	// Required For approvals, how many the base requires.
 	Required *int `json:"required,omitempty"`
@@ -1176,7 +1239,7 @@ type BranchCheck struct {
 	Status *AnnotationStatus `json:"status,omitempty"`
 }
 
-// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
+// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; ai, the AI reviewer's approval of its head; up_to_date, its base's tip in it.
 type BranchCheckKind string
 
 // BranchIssue The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
@@ -1968,7 +2031,7 @@ type MergeRequirements struct {
 	// LinearHistory Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
 
-	// Reviews The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+	// Reviews The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it.
 	Reviews *ReviewRequirements `json:"reviews,omitempty"`
 }
 
@@ -2334,9 +2397,10 @@ type ReviewInput struct {
 	State ReviewState `json:"state"`
 }
 
-// ReviewRequirements The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+// ReviewRequirements The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it.
 type ReviewRequirements struct {
-	Approvals int `json:"approvals"`
+	Ai        bool `json:"ai"`
+	Approvals int  `json:"approvals"`
 }
 
 // ReviewState A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
@@ -3772,6 +3836,9 @@ type ServerInterface interface {
 	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
 	GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams)
+	// UploadManifests Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/manifests)
+	UploadManifests(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
@@ -8750,6 +8817,50 @@ func (siw *ServerInterfaceWrapper) GetDelivery(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// UploadManifests operation middleware
+func (siw *ServerInterfaceWrapper) UploadManifests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadManifests(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartDelivery operation middleware
 func (siw *ServerInterfaceWrapper) StartDelivery(w http.ResponseWriter, r *http.Request) {
 
@@ -11229,6 +11340,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/resume", wrapper.ResumeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/manifests", wrapper.UploadManifests)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs", wrapper.GetRunLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs/{container}", wrapper.GetRunLog)
@@ -21599,6 +21711,120 @@ func (response GetDeliverydefaultApplicationProblemPlusJSONResponse) VisitGetDel
 	return err
 }
 
+type UploadManifestsRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+	Body   io.Reader
+}
+
+type UploadManifestsResponseObject interface {
+	VisitUploadManifestsResponse(w http.ResponseWriter) error
+}
+
+type UploadManifests201ResponseHeaders struct {
+	Location string
+}
+
+type UploadManifests201Response struct {
+	Headers UploadManifests201ResponseHeaders
+}
+
+func (response UploadManifests201Response) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	return nil
+}
+
+type UploadManifests401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadManifests401ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests403ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests403ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests404ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests404ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests409ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests409ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests413ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests413ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifestsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UploadManifestsdefaultApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartDeliveryRequestObject struct {
 	Org    Org            `json:"org"`
 	Repo   Repo           `json:"repo"`
@@ -26498,6 +26724,9 @@ type StrictServerInterface interface {
 	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
 	GetDelivery(ctx context.Context, request GetDeliveryRequestObject) (GetDeliveryResponseObject, error)
+	// UploadManifests Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/manifests)
+	UploadManifests(ctx context.Context, request UploadManifestsRequestObject) (UploadManifestsResponseObject, error)
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(ctx context.Context, request StartDeliveryRequestObject) (StartDeliveryResponseObject, error)
@@ -29762,6 +29991,36 @@ func (sh *strictHandler) GetDelivery(w http.ResponseWriter, r *http.Request, org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetDeliveryResponseObject); ok {
 		if err := validResponse.VisitGetDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadManifests operation middleware
+func (sh *strictHandler) UploadManifests(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber) {
+	var request UploadManifestsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadManifests(ctx, request.(UploadManifestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadManifests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadManifestsResponseObject); ok {
+		if err := validResponse.VisitUploadManifestsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

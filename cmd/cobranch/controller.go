@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"k8s.io/client-go/kubernetes"
@@ -14,11 +15,13 @@ import (
 	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/checkout"
 	"cobranch.dev/internal/adapters/controller"
+	"cobranch.dev/internal/adapters/incluster"
 	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/server"
 	"cobranch.dev/internal/adapters/webhook"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
 	"cobranch.dev/internal/services/secrets"
 	"cobranch.dev/internal/services/taskrunner"
@@ -27,7 +30,8 @@ import (
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runController runs the jobs' runs in the cluster it runs in, and serves the health endpoints, until ctx ends.
+// runController runs the jobs' runs and the agents' tasks in the cluster it runs in, delivers the deliveries, and
+// serves the health endpoints, until ctx ends.
 func runController(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "controller", buildinfo.Version())
 	if err != nil {
@@ -48,36 +52,32 @@ func runController(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the controller wrote
-	runners, closeRuns, err := runServices(ctx, cfg, pool)
+	loops, closeLoops, err := controllerLoops(ctx, cfg, pool)
 	if err != nil {
 		return err
 	}
-	defer closeRuns()
+	defer closeLoops()
 	work, stop := context.WithCancel(ctx)
-	worked := make(chan struct{})
-	go func() {
-		defer close(worked)
-		controller.Run(work, cfg.PollInterval, cfg.SweepInterval, runners...)
-	}()
-	// The loop stops with the server, even one that failed before ctx ended, and the run in hand finishes its step
-	// before the pool closes.
-	defer func() { stop(); <-worked }()
+	var worked sync.WaitGroup
+	for what, r := range loops {
+		worked.Go(func() { controller.Run(work, what, r, cfg.PollInterval, cfg.SweepInterval) })
+	}
+	// The loops stop with the server, even one that failed before ctx ended, and the run, task or delivery in hand
+	// finishes its step before the pool closes.
+	defer func() { stop(); worked.Wait() }()
 	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", http.NotFoundHandler(),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
-// The runs' domain queues the schedules' runs too, which the controller's loop asks of the runners that can.
-var _ controller.Scheduler = (*runner.Service)(nil)
-
-// runServices are the domains of jobs' runs and of agents' tasks over pool's database, the cluster the controller runs
-// in, unless it runs no pods, the secrets the key opens, the object store, which the returned func closes, and the
-// webhooks' receivers.
-func runServices(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) ([]controller.Runner, func(), error) {
-	j := cfg.Jobs
-	runsCluster, tasksCluster, err := jobsCluster(cfg)
+// controllerLoops are the runs' domain, the agents' tasks' and the deliveries' over pool's database, the cluster the
+// controller runs in, the secrets the key opens, the object store, which the returned func closes, and the webhooks'
+// receivers, by what each works through.
+func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (map[string]controller.Runner, func(), error) {
+	c, err := clusterOf(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
+	j, d := cfg.Jobs, cfg.Delivery
 	poster, err := webhook.New(j.EgressExcept, j.WebhooksAllowedCIDRs)
 	if err != nil {
 		return nil, nil, fmt.Errorf("configuring the webhooks: %w", err)
@@ -91,47 +91,82 @@ func runServices(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool)
 		return nil, nil, fmt.Errorf("opening the object store: %w", err)
 	}
 	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
-	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
-		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}
-	runs := runner.NewService(postgres.NewRunStore(pool), runsCluster, vault, blob.Logs{Bucket: bucket}, poster, settings)
+	archive := blob.Logs{Bucket: bucket}
+	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, poster, runner.Settings{Pods: j.Pods, Lease: j.Lease,
+		RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout, ScriptImage: j.ScriptImage, RESTURL: j.RESTURL,
+		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
 	a := cfg.Agents
-	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), tasksCluster, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
+	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), c.tasks, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
 		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
 		ShellTimeout: a.ShellTimeout, MaxTokens: a.MaxTokens})
-	return []controller.Runner{runs, tasks}, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
+	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
+		Lease: j.Lease, RoomRetry: j.RoomRetry, Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL,
+		LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished, HealthEvery: d.HealthInterval, KeepRenders: d.RendersKeep})
+	// A store closed as the controller exits has nothing left to flush.
+	return map[string]controller.Runner{"runs": runs, "tasks": tasks, "deliveries": deliveries}, func() { _ = bucket.Close() }, nil
 }
 
-// jobsCluster is where runs and agents' tasks execute: the cluster the controller runs in, through its pod's token, or,
-// for an installation that runs no pods, whose controller mounts no token, none.
-func jobsCluster(cfg config.Controller) (runner.Cluster, taskrunner.Cluster, error) {
+// kube is what the controller reaches the cluster it runs in through: the job namespaces, where runs, agents' tasks
+// and renders execute, and the environments' namespaces, where deliveries apply.
+type kube struct {
+	runs    runner.Cluster
+	tasks   taskrunner.Cluster
+	renders deliverer.Pods
+	target  deliverer.Target
+}
+
+// clusterOf is the cluster the controller runs in, through its pod's token, or, for an installation that runs no
+// pods, whose controller mounts no token, none. Without in-cluster delivery it has no target.
+func clusterOf(cfg config.Controller) (kube, error) {
 	j := cfg.Jobs
 	if !j.Pods {
-		return runner.NoPods{}, taskrunner.NoPods{}, nil
+		return kube{runs: runner.NoPods{}, tasks: taskrunner.NoPods{}, renders: deliverer.NoPods{}}, nil
 	}
-	client, err := inCluster()
+	rc, client, err := inClusterConfig()
 	if err != nil {
-		return nil, nil, err
+		return kube{}, err
 	}
-	cluster := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
+	jobs := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
 		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value,
-		Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value,
-		Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage, AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value,
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept,
+		DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value,
+		Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage,
+		RenderResources: cfg.RenderResources.Value, AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value,
 		ImagePullSecrets: j.ImagePullSecrets, ProviderURLs: cfg.Agents.ProviderURLs.Value})
-	return cluster, cluster, nil
+	k := kube{runs: jobs, tasks: jobs, renders: jobs}
+	if !cfg.InCluster {
+		return k, nil
+	}
+	d := cfg.Delivery
+	target, err := incluster.New(rc, incluster.Config{Installation: j.Installation, JobsPrefix: j.NamespacePrefix, PodSecurity: d.DeliveryPodSecurity,
+		Labels: d.DeliveryLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Account: d.Account, DeliveryRole: d.DeliveryRole,
+		FenceRole: d.FenceRole, IngressFrom: d.IngressFrom.Value, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value,
+		Resources: d.DeliveryResources.Value, Quota: d.DeliveryQuota.Value})
+	if err != nil {
+		return kube{}, fmt.Errorf("delivering into the cluster: %w", err)
+	}
+	k.target = target
+	return k, nil
 }
 
 // inCluster is a client of the cluster the workload runs in, as its pod's ServiceAccount.
 func inCluster() (kubernetes.Interface, error) {
+	_, client, err := inClusterConfig()
+	return client, err
+}
+
+// inClusterConfig is the configuration of a client of the cluster the workload runs in, as its pod's ServiceAccount,
+// and that client.
+func inClusterConfig() (*rest.Config, kubernetes.Interface, error) {
 	kube, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
+		return nil, nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
 	}
 	client, err := kubernetes.NewForConfig(kube)
 	if err != nil {
-		return nil, fmt.Errorf("making the cluster's client: %w", err)
+		return nil, nil, fmt.Errorf("making the cluster's client: %w", err)
 	}
-	return client, nil
+	return kube, client, nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

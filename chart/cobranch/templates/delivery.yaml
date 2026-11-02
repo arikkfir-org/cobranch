@@ -1,0 +1,164 @@
+{{- /* Delivery into this installation's cluster: the account the controller applies as, what it may do in an
+environment's namespace, what the controller itself does there, and the policy that keeps the account off the
+namespace's guards (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "This
+installation's cluster"). */}}
+{{- if include "cobranch.inCluster" . }}
+{{- $cluster := include "cobranch.cluster" . }}
+{{- $controller := include "cobranch.controller" . }}
+{{- $account := include "cobranch.deliveryAccount" . }}
+{{- $component := dict "root" . "component" "delivery" }}
+# The delivery account: no pod runs as it. The controller impersonates it to apply, prune and read health, so a render
+# can do only what the delivery role lets it, and only in its environment's namespace.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $account }}
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+automountServiceAccountToken: false
+---
+# The controller may act as the delivery account, and as no other.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $account }}-impersonation
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [serviceaccounts]
+    verbs: [impersonate]
+    resourceNames: [{{ $account }}]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $account }}-impersonation
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $account }}-impersonation
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ .Release.Namespace }}
+---
+# What a render may hold, in its environment's namespace, where the controller binds the delivery account to this role:
+# a namespace's admin's rules, but its NetworkPolicies, LimitRange and quota, which only the controller writes, and
+# the operator's.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $cluster }}-delivery
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [configmaps, endpoints, persistentvolumeclaims, pods, replicationcontrollers, secrets, serviceaccounts, services]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [""]
+    resources: [events, limitranges, namespaces, pods/log, pods/status, resourcequotas]
+    verbs: [get, list, watch]
+  - apiGroups: [apps]
+    resources: [controllerrevisions, daemonsets, deployments, replicasets, statefulsets]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [apps]
+    resources: [deployments/scale, replicasets/scale, statefulsets/scale]
+    verbs: [get, update, patch]
+  - apiGroups: [autoscaling]
+    resources: [horizontalpodautoscalers]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [batch]
+    resources: [cronjobs, jobs]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [policy]
+    resources: [poddisruptionbudgets]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch]
+  - apiGroups: [gateway.networking.k8s.io]
+    resources: [grpcroutes, httproutes]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [discovery.k8s.io]
+    resources: [endpointslices]
+    verbs: [get, list, watch]
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings, roles]
+    verbs: [get, list, watch, create, update, patch, delete, deletecollection]
+  {{- with .Values.delivery.inCluster.rules }}
+  {{- toYaml . | nindent 2 }}
+  {{- end }}
+---
+# What the controller does in an environment's namespace, where it binds itself to this role: its NetworkPolicies,
+# LimitRange and quota.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $cluster }}-environments
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [limitranges, resourcequotas]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- if .Values.jobs.admissionPolicy }}
+---
+# Keeps the delivery account off an environment's guards, whatever the delivery role grants it: the namespace's
+# NetworkPolicies, LimitRanges and quotas, and the controller's RoleBindings there.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $cluster }}-delivery
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [limitranges, resourcequotas]
+      - apiGroups: [networking.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [networkpolicies]
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [rolebindings]
+  matchConditions:
+    - name: account
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace $account | quote }}
+  variables:
+    - name: name
+      expression: "request.operation == 'DELETE' ? oldObject.metadata.name : object.metadata.name"
+  validations:
+    - expression: "request.resource.resource == 'rolebindings'"
+      message: Only Cobranch fences an environment's namespace.
+    - expression: {{ printf "!(variables.name in ['%s-delivery', '%s-environments'])" $cluster $cluster | quote }}
+      message: The controller's RoleBindings in an environment's namespace are its own.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $cluster }}-delivery
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+spec:
+  policyName: {{ $cluster }}-delivery
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

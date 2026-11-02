@@ -19,6 +19,7 @@ import (
 // recorded of it, if any.
 type statusBranch struct {
 	ID         uuid.UUID
+	Name       string
 	Head       string
 	Base       string
 	Facts      git.Facts
@@ -33,6 +34,8 @@ type checkJSON struct {
 	Status   code.AnnotationStatus `json:"status,omitempty"`
 	Count    int                   `json:"count,omitempty"`
 	Required int                   `json:"required,omitempty"`
+	AI       code.AIState          `json:"ai,omitempty"`
+	Reason   string                `json:"reason,omitempty"`
 	Met      bool                  `json:"met"`
 }
 
@@ -86,7 +89,7 @@ func replaceRequirements(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 		row := queries.InsertMergeRequirementsParams{RepoID: push.RepoID, Branch: r.Branch, OrgID: orgID,
 			Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
 		if r.Reviews != nil {
-			row.Approvals = int32Of(&r.Reviews.Approvals)
+			row.Approvals, row.Ai = int32Of(&r.Reviews.Approvals), r.Reviews.AI
 		}
 		rows = append(rows, row)
 	}
@@ -146,7 +149,7 @@ func restatusAt(ctx context.Context, q *queries.Queries, repoID uuid.UUID, sha s
 
 // branchOf is a branch's row as restatus takes it.
 func branchOf(r queries.BranchesWaitingForRow) statusBranch {
-	b := statusBranch{ID: r.ID, Head: r.Head, WaitsFor: r.WaitsFor, MergedHead: r.MergedHead}
+	b := statusBranch{ID: r.ID, Name: r.Name, Head: r.Head, WaitsFor: r.WaitsFor, MergedHead: r.MergedHead}
 	if r.Base != nil {
 		b.Base = *r.Base
 	}
@@ -163,8 +166,9 @@ func branchOf(r queries.BranchesWaitingForRow) statusBranch {
 	return b
 }
 
-// restatus works out each branch's status from its facts, its base's merge requirements and the annotations and
-// reviews on its head, and stores it with the checks behind it, ending its wait for the push worker.
+// restatus works out each branch's status from its facts, its base's merge requirements, the annotations and reviews
+// on its head and the AI reviewer's review task of it, and stores it with the checks behind it, ending its wait for
+// the push worker.
 func restatus(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branches []statusBranch) error {
 	if len(branches) == 0 {
 		return nil
@@ -191,10 +195,14 @@ func restatus(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branche
 	if err != nil {
 		return err
 	}
+	reviewers, err := reviewersFor(ctx, q, repoID, branches, requirements)
+	if err != nil {
+		return err
+	}
 	for _, b := range branches {
 		merged := b.MergedHead != nil && *b.MergedHead == b.Head
 		status, checks := code.Evaluate(code.Standing{Requirements: requirements[b.Base], Facts: b.Facts, Annotations: annotations[b.Head],
-			Reviews: reviews[b.Head], Authors: authors[b.Head], Merged: merged})
+			Reviews: reviews[b.Head], Authors: authors[b.Head], Reviewer: reviewers[b.ID], Merged: merged})
 		encoded, err := json.Marshal(checksJSON(checks))
 		if err != nil {
 			return fmt.Errorf("encoding the checks: %w", err)
@@ -217,7 +225,7 @@ func requirementsOf(ctx context.Context, q *queries.Queries, repoID uuid.UUID, b
 	}
 	req := git.Requirements{Branch: branch, Annotations: row.Annotations, LinearHistory: row.LinearHistory}
 	if row.Approvals != nil {
-		req.Reviews = &git.ReviewRequirements{Approvals: int(*row.Approvals)}
+		req.Reviews = &git.ReviewRequirements{Approvals: int(*row.Approvals), AI: row.Ai}
 	}
 	return req, nil
 }
@@ -238,6 +246,66 @@ func reviewsFor(ctx context.Context, q *queries.Queries, repoID uuid.UUID, heads
 		return reviews, authors, err
 	}
 	return nil, nil, nil
+}
+
+// reviewersFor works out where the AI reviewer stands on each of the branches, by ID, when any of requirements requires
+// its approval: whether it reviews the branch's pushes, and its latest review task of the branch's head. Nothing
+// otherwise.
+func reviewersFor(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branches []statusBranch,
+	requirements map[string]git.Requirements) (map[uuid.UUID]code.AIReviewer, error) {
+	required := false
+	for _, req := range requirements {
+		required = required || (req.Reviews != nil && req.Reviews.AI)
+	}
+	if !required {
+		return nil, nil
+	}
+	reviewer, err := reviewerOf(ctx, q, repoID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]uuid.UUID, 0, len(branches))
+	for _, b := range branches {
+		ids = append(ids, b.ID)
+	}
+	rows, err := q.ReviewTasksAt(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("reading the review tasks of the branches' heads: %w", err)
+	}
+	tasks := make(map[uuid.UUID]*code.AIReview, len(rows))
+	for _, r := range rows {
+		if r.BranchID != nil {
+			tasks[*r.BranchID] = &code.AIReview{Task: r.Number, State: code.ReviewTaskState(r.State), Reason: r.Reason}
+		}
+	}
+	out := make(map[uuid.UUID]code.AIReviewer, len(branches))
+	for _, b := range branches {
+		out[b.ID] = code.AIReviewer{ID: reviewer.row.PrincipalID, Off: reviewer.reviews(b.Name), Task: tasks[b.ID]}
+	}
+	return out, nil
+}
+
+// restatusRequiringAI works out again the status of the organization's live branches whose base requires the AI
+// reviewer's approval, but those that wait for the push worker, once the reviewer's model changes.
+func restatusRequiringAI(ctx context.Context, q *queries.Queries, orgID uuid.UUID) error {
+	rows, err := q.BranchesRequiringAI(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("finding the branches that require the AI reviewer's approval: %w", err)
+	}
+	byRepo := map[uuid.UUID][]statusBranch{}
+	var repos []uuid.UUID
+	for _, r := range rows {
+		if _, ok := byRepo[r.RepoID]; !ok {
+			repos = append(repos, r.RepoID)
+		}
+		byRepo[r.RepoID] = append(byRepo[r.RepoID], branchOf(queries.BranchesWaitingForRow(r)))
+	}
+	for _, repoID := range repos {
+		if err := restatus(ctx, q, repoID, byRepo[repoID]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // annotationsAt lists the annotations on the repository's commits that shas name, by commit.

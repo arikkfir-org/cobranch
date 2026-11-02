@@ -39,7 +39,30 @@
   "AFFINITY" (toJson $jobs.affinity)
   "IMAGE_PULL_SECRETS" (join "," $pullSecrets)
   "WEBHOOKS_ALLOWED_CIDRS" (join "," (dig "webhooks" "allowedCIDRs" list $jobs)) }}
-{{- $agents := .Values.agents }}
+{{- /* An upgrade with --reuse-values keeps an older version's values, which have no delivery or agents: the
+controller's defaults stand in for what is unset. */}}
+{{- $delivery := .Values.delivery | default dict }}
+{{- $render := $delivery.render | default dict }}
+{{- $deliveryInCluster := $delivery.inCluster | default dict }}
+{{- $inCluster := include "cobranch.inCluster" . }}
+{{- $deliveryEnv := dict
+  "IN_CLUSTER" (toString (not (empty $inCluster)))
+  "RENDER_TIMEOUT" $render.timeout
+  "RENDER_RESOURCES" (toJson $render.resources)
+  "HEALTH_INTERVAL" $delivery.healthInterval
+  "RENDERS_KEEP" ($delivery.renders | default dict).keep }}
+{{- if $inCluster }}
+{{- $_ := merge $deliveryEnv (dict
+  "POD_SECURITY" $deliveryInCluster.podSecurity
+  "NAMESPACE_LABELS" (toJson $deliveryInCluster.namespaceLabels)
+  "ACCOUNT" (include "cobranch.deliveryAccount" .)
+  "ROLE" (printf "%s-delivery" $cluster)
+  "FENCE_ROLE" (printf "%s-environments" $cluster)
+  "INGRESS_FROM" (toJson $deliveryInCluster.ingressFrom)
+  "RESOURCES" (toJson $deliveryInCluster.resources)
+  "QUOTA" (toJson $deliveryInCluster.quota)) }}
+{{- end }}
+{{- $agents := .Values.agents | default dict }}
 {{- $agentsEnv := dict
   "IMAGE" ($agents.image | default $image)
   "RESOURCES" (toJson $agents.resources)
@@ -53,7 +76,14 @@
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
 {{- end }}
 {{- range $name, $value := $agentsEnv }}
+{{- if not (has (toString $value) (list "" "null" "<nil>")) }}
 {{- $vars = append $vars (printf "- name: COBRANCH_AGENTS_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
+{{- end }}
+{{- range $name, $value := $deliveryEnv }}
+{{- if not (has (toString $value) (list "" "null" "<nil>")) }}
+{{- $vars = append $vars (printf "- name: COBRANCH_DELIVERY_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
 {{- end }}
 {{- /* Without pods, the controller only delivers webhooks: it reaches no Kubernetes API, so it mounts no token. */}}
 {{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" (ternary $controller "" $jobs.pods) "env" (join "\n" $vars)) }}
@@ -73,7 +103,8 @@ metadata:
 ---
 # Cluster-wide, the controller makes and deletes its job namespaces and binds there itself to the runner role and the
 # servers to the logs role, and nothing else. It reads this role, which each job namespace names as its owner, so that
-# uninstalling deletes them.
+# uninstalling deletes them. Delivering into this cluster, it makes environments' namespaces too, and binds itself
+# there to the fence role and the delivery account to the delivery role.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -90,7 +121,13 @@ rules:
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [get, bind]
-    resourceNames: [{{ $cluster }}-jobs-runner, {{ $cluster }}-jobs-logs]
+    resourceNames:
+      - {{ $cluster }}-jobs-runner
+      - {{ $cluster }}-jobs-logs
+      {{- if $inCluster }}
+      - {{ $cluster }}-delivery
+      - {{ $cluster }}-environments
+      {{- end }}
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [get]
@@ -177,7 +214,9 @@ rules:
 {{- if $jobs.admissionPolicy }}
 ---
 # Holds the controller to its own job namespaces, labelled as this release's, and its RoleBindings there to the
-# runner role for its own ServiceAccount and the logs role for the servers', whatever RBAC grants it.
+# runner role for its own ServiceAccount and the logs role for the servers', whatever RBAC grants it. Delivering into
+# this cluster, it also creates environments' namespaces, labelled as this release's and an environment's, changes and
+# deletes only those, and binds there only the fence role to itself and the delivery role to the delivery account.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -204,18 +243,68 @@ spec:
       expression: {{ include "cobranch.jobsPrefix" . | squote | quote }}
     - name: name
       expression: "request.operation == 'DELETE' ? oldObject.metadata.name : object.metadata.name"
+    {{- if $inCluster }}
+    - name: installation
+      expression: {{ $cluster | squote | quote }}
+    # Whether a namespace, as it is and as it was, is one of this installation's environments'.
+    - name: environment
+      expression: >-
+        request.operation != 'DELETE' && has(object.metadata.labels)
+        && 'cobranch.dev/installation' in object.metadata.labels && object.metadata.labels['cobranch.dev/installation'] == variables.installation
+        && 'cobranch.dev/environment' in object.metadata.labels
+    - name: wasEnvironment
+      expression: >-
+        request.operation != 'CREATE' && has(oldObject.metadata.labels)
+        && 'cobranch.dev/installation' in oldObject.metadata.labels && oldObject.metadata.labels['cobranch.dev/installation'] == variables.installation
+        && 'cobranch.dev/environment' in oldObject.metadata.labels
+    # Whether a RoleBinding is in one of this installation's environments' namespaces.
+    - name: inEnvironment
+      expression: >-
+        namespaceObject != null && has(namespaceObject.metadata.labels)
+        && 'cobranch.dev/installation' in namespaceObject.metadata.labels
+        && namespaceObject.metadata.labels['cobranch.dev/installation'] == variables.installation
+        && 'cobranch.dev/environment' in namespaceObject.metadata.labels
+    # The one ServiceAccount of this release's namespace a RoleBinding binds, or none.
+    - name: account
+      expression: >-
+        has(object.subjects) && size(object.subjects) == 1 && object.subjects[0].kind == 'ServiceAccount'
+        && has(object.subjects[0].namespace) && object.subjects[0].namespace == {{ .Release.Namespace | squote }} ? object.subjects[0].name : ''
+    {{- end }}
   validations:
+    {{- if $inCluster }}
+    - expression: >-
+        request.resource.resource != 'namespaces' || variables.name.startsWith(variables.prefix)
+        || request.operation == 'CREATE' || variables.wasEnvironment
+      messageExpression: "'The controller changes and deletes only its own job namespaces, ' + variables.prefix + '…, and the namespaces of its environments.'"
+    - expression: >-
+        request.resource.resource != 'namespaces' || request.operation == 'DELETE' || variables.name.startsWith(variables.prefix)
+        || variables.environment
+      message: The controller's environments' namespaces carry its installation's label and their environment's.
+    {{- else }}
     - expression: "request.resource.resource != 'namespaces' || variables.name.startsWith(variables.prefix)"
       messageExpression: "'The controller creates, changes and deletes only its own job namespaces, ' + variables.prefix + '….'"
+    {{- end }}
     - expression: >-
         request.resource.resource != 'namespaces' || request.operation == 'DELETE'
         || (has(object.metadata.labels) && 'cobranch.dev/installation' in object.metadata.labels
           && object.metadata.labels['cobranch.dev/installation'] == {{ $cluster | squote }})
-      message: The controller's job namespaces carry its installation's label.
+      message: The controller's namespaces carry its installation's label.
+    {{- if $inCluster }}
+    - expression: "request.resource.resource != 'rolebindings' || request.namespace.startsWith(variables.prefix) || variables.inEnvironment"
+      messageExpression: "'The controller binds roles only in its own job namespaces, ' + variables.prefix + '…, and the namespaces of its environments.'"
+    - expression: >-
+        request.resource.resource != 'rolebindings' || request.operation == 'DELETE' || request.namespace.startsWith(variables.prefix)
+        || (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == {{ printf "%s-environments" $cluster | squote }}
+          && variables.account == {{ $controller | squote }})
+        || (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == {{ printf "%s-delivery" $cluster | squote }}
+          && variables.account == {{ include "cobranch.deliveryAccount" . | squote }})
+      message: The controller binds, in its environments' namespaces, only the fence role to itself and the delivery role to the delivery account.
+    {{- else }}
     - expression: "request.resource.resource != 'rolebindings' || request.namespace.startsWith(variables.prefix)"
       messageExpression: "'The controller binds roles only in its own job namespaces, ' + variables.prefix + '….'"
+    {{- end }}
     - expression: >-
-        request.resource.resource != 'rolebindings' || request.operation == 'DELETE'
+        request.resource.resource != 'rolebindings' || request.operation == 'DELETE' || !request.namespace.startsWith(variables.prefix)
         || (object.roleRef.kind == 'ClusterRole' && has(object.subjects) && size(object.subjects) > 0
           && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == {{ .Release.Namespace | squote }}
             && ((object.roleRef.name == {{ printf "%s-jobs-runner" $cluster | squote }} && s.name == {{ $controller | squote }})

@@ -160,7 +160,7 @@ func (q *Queries) SecretRepository(ctx context.Context, iD uuid.UUID, orgID uuid
 const setAgentModel = `-- name: SetAgentModel :one
 UPDATE agents SET provider = $1, model = $2, updated_at = now()
 WHERE principal_id = $3 AND org_id = $4 AND ($5::bigint < 0 OR version = $5::bigint)
-RETURNING version
+RETURNING version, purpose
 `
 
 type SetAgentModelParams struct {
@@ -171,9 +171,14 @@ type SetAgentModelParams struct {
 	Version  int64
 }
 
+type SetAgentModelRow struct {
+	Version int64
+	Purpose *string
+}
+
 // SetAgentModel puts an agent on a model of a provider, or on none with nulls, when it is at version, or at any
-// version when version is negative: none otherwise.
-func (q *Queries) SetAgentModel(ctx context.Context, arg SetAgentModelParams) (int64, error) {
+// version when version is negative, and answers its version and what Cobranch made it for: none otherwise.
+func (q *Queries) SetAgentModel(ctx context.Context, arg SetAgentModelParams) (SetAgentModelRow, error) {
 	row := q.db.QueryRow(ctx, setAgentModel,
 		arg.Provider,
 		arg.Model,
@@ -181,9 +186,9 @@ func (q *Queries) SetAgentModel(ctx context.Context, arg SetAgentModelParams) (i
 		arg.OrgID,
 		arg.Version,
 	)
-	var version int64
-	err := row.Scan(&version)
-	return version, err
+	var i SetAgentModelRow
+	err := row.Scan(&i.Version, &i.Purpose)
+	return i, err
 }
 
 const setAgentSecrets = `-- name: SetAgentSecrets :one

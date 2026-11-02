@@ -1,5 +1,5 @@
-// Package jobcluster runs the job controller's runs in Kubernetes: runner.Cluster on client-go. Each organization's
-// runs execute in a namespace of their own, which the controller creates with the organization's first run, with no
+// Package jobcluster runs the job controller's runs, and its deliveries' render pods, in Kubernetes: runner.Cluster
+// and deliverer.Pods on client-go. Each organization's runs and renders execute in a namespace of their own, which the controller creates with the organization's first run, with no
 // ingress, egress only to DNS, the internet and the installation's own servers, the operator's defaults and quota, and
 // a RoleBinding that lets the controller run pods there
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Job namespaces").
@@ -23,6 +23,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
 )
 
@@ -36,8 +37,12 @@ const (
 	labelOrganization = "cobranch.dev/organization"
 	// labelRun names the run a pod is, by its ID.
 	labelRun = "cobranch.dev/run"
+	// labelDelivery names the delivery a render pod renders, by its ID.
+	labelDelivery = "cobranch.dev/delivery"
 	// labelManagedBy says Cobranch made it.
 	labelManagedBy = "app.kubernetes.io/managed-by"
+	// labelEnvironment marks an environment's namespace, which the deliverer makes, by the environment's ID.
+	labelEnvironment = "cobranch.dev/environment"
 )
 
 // fieldManager is the controller's name in what it applies.
@@ -84,9 +89,12 @@ type Config struct {
 	NodeSelector map[string]string
 	Tolerations  []corev1.Toleration
 	Affinity     *corev1.Affinity
-	// CheckoutImage is the image whose `cobranch checkout` fetches a run's commit: Cobranch's own. An agent task's pod
-	// copies the cobranch binary from it, and runs its model proxy in it.
+	// CheckoutImage is the image whose `cobranch checkout` fetches a run's commit, and whose `cobranch render` renders
+	// a delivery's: Cobranch's own. An agent task's pod copies the cobranch binary from it, and runs its model proxy in
+	// it.
 	CheckoutImage string
+	// RenderResources are a render pod's container's requests and limits.
+	RenderResources corev1.ResourceRequirements
 	// AgentImage is the image an agent's harness runs in, with the tools its agents use; AgentResources are its
 	// requests and limits, the namespace's defaults where it names none.
 	AgentImage     string
@@ -99,6 +107,22 @@ type Config struct {
 	ProviderURLs map[string]string
 }
 
+// workload is what a pod the controller starts in a job namespace is: a run, or a delivery's render. Each names its
+// pods, and labels them, by its own ID.
+type workload struct {
+	// prefix starts its pods' and Secrets' names, which its ID ends; label names its ID on them; attr in spans.
+	prefix, label, attr string
+}
+
+// The workloads of a job namespace.
+var (
+	runs    = workload{prefix: "run-", label: labelRun, attr: "cobranch.run.id"}
+	renders = workload{prefix: "render-", label: labelDelivery, attr: "cobranch.delivery.id"}
+)
+
+// name is the name of the pod, and of the Secret, of the workload's id.
+func (w workload) name(id uuid.UUID) string { return w.prefix + id.String() }
+
 // Cluster is runner.Cluster on a Kubernetes cluster.
 type Cluster struct {
 	client kubernetes.Interface
@@ -109,7 +133,10 @@ type Cluster struct {
 	prepared map[uuid.UUID]time.Time
 }
 
-var _ runner.Cluster = (*Cluster)(nil)
+var (
+	_ runner.Cluster = (*Cluster)(nil)
+	_ deliverer.Pods = (*Cluster)(nil)
+)
 
 // New returns a Cluster that runs pods through client, as cfg says.
 func New(client kubernetes.Interface, cfg Config) *Cluster {
@@ -119,15 +146,14 @@ func New(client kubernetes.Interface, cfg Config) *Cluster {
 // namespace is the name of the organization's job namespace.
 func (c *Cluster) namespace(orgID uuid.UUID) string { return c.cfg.Prefix + orgID.String() }
 
-// podName is the name of a run's pod, and of its Secret.
-func podName(runID uuid.UUID) string { return "run-" + runID.String() }
-
 // Namespaces lists the organizations that have a job namespace of this installation (runner.Cluster).
 func (c *Cluster) Namespaces(ctx context.Context) (_ []uuid.UUID, err error) {
 	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Namespaces")
 	defer span.End()
 	defer func() { record(span, err) }()
-	list, err := c.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: labelInstallation + "=" + c.cfg.Installation})
+	// An environment's namespace carries the installation's label too, but never names an organization's jobs.
+	selector := labelInstallation + "=" + c.cfg.Installation + ",!" + labelEnvironment
+	list, err := c.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return nil, fmt.Errorf("listing the job namespaces: %w", err)
 	}
@@ -180,9 +206,9 @@ func orgAttr(orgID uuid.UUID) trace.SpanStartOption {
 	return trace.WithAttributes(attribute.String("cobranch.org.id", orgID.String()))
 }
 
-// runAttrs are a span's attributes naming the run and its organization.
-func runAttrs(orgID, runID uuid.UUID) trace.SpanStartOption {
-	return trace.WithAttributes(attribute.String("cobranch.org.id", orgID.String()), attribute.String("cobranch.run.id", runID.String()))
+// attrs are a span's attributes naming the workload's id and its organization.
+func (w workload) attrs(orgID, id uuid.UUID) trace.SpanStartOption {
+	return trace.WithAttributes(attribute.String("cobranch.org.id", orgID.String()), attribute.String(w.attr, id.String()))
 }
 
 // record marks span failed with err, if any.

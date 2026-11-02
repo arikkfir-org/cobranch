@@ -175,7 +175,11 @@ type BranchCheck struct {
 	Count *int `json:"count,omitempty"`
 	// For APPROVALS, how many the base requires; null otherwise.
 	Required *int `json:"required,omitempty"`
-	Met      bool `json:"met"`
+	// For AI, how the AI reviewer's approval stands; null otherwise.
+	Ai *AICheckState `json:"ai,omitempty"`
+	// For AI, why its review task for the head failed or was cancelled; null otherwise.
+	Reason *string `json:"reason,omitempty"`
+	Met    bool    `json:"met"`
 }
 
 // The issue a branch works on, and how the branch was linked to it.
@@ -1083,10 +1087,12 @@ type ReviewInput struct {
 	Comments []*ReviewCommentInput `json:"comments"`
 }
 
-// The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+// The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it.
 type ReviewRequirements struct {
 	// 0 to 10.
 	Approvals int `json:"approvals"`
+	// Whether the AI reviewer's approval is required.
+	Ai bool `json:"ai"`
 }
 
 // A role granted at an organization: built in, or the organization's own.
@@ -1369,6 +1375,97 @@ type ViewerUsage struct {
 	Organizations *Usage `json:"organizations"`
 }
 
+// How the AI reviewer's approval of a branch's head stands.
+type AICheckState string
+
+const (
+	// Its review task for the head waits for a member to start it; the branch is Processing.
+	AICheckStateWaiting AICheckState = "WAITING"
+	// Its review task for the head waits to run; the branch is Processing.
+	AICheckStateQueued AICheckState = "QUEUED"
+	// It reviews the head; the branch is Processing.
+	AICheckStateRunning AICheckState = "RUNNING"
+	// Its latest review of the head approves it: the one state that meets the check.
+	AICheckStateApproved AICheckState = "APPROVED"
+	// Its latest review of the head requests changes.
+	AICheckStateChangesRequested AICheckState = "CHANGES_REQUESTED"
+	// Its review of the head ended without approving it.
+	AICheckStateNotApproved AICheckState = "NOT_APPROVED"
+	// Neither a review task nor a review of the head.
+	AICheckStateUnreviewed AICheckState = "UNREVIEWED"
+	// Its review task for the head failed, for the check's reason.
+	AICheckStateFailed AICheckState = "FAILED"
+	// Its review task for the head was cancelled, for the check's reason.
+	AICheckStateCancelled AICheckState = "CANCELLED"
+	// No admin gave it a model.
+	AICheckStateNoModel AICheckState = "NO_MODEL"
+	// It is suspended.
+	AICheckStateSuspended AICheckState = "SUSPENDED"
+	// main's /cobranch-review.yaml turns it off, or leaves the branch out.
+	AICheckStateOff AICheckState = "OFF"
+	// The organization has no AI reviewer.
+	AICheckStateMissing AICheckState = "MISSING"
+)
+
+var AllAICheckState = []AICheckState{
+	AICheckStateWaiting,
+	AICheckStateQueued,
+	AICheckStateRunning,
+	AICheckStateApproved,
+	AICheckStateChangesRequested,
+	AICheckStateNotApproved,
+	AICheckStateUnreviewed,
+	AICheckStateFailed,
+	AICheckStateCancelled,
+	AICheckStateNoModel,
+	AICheckStateSuspended,
+	AICheckStateOff,
+	AICheckStateMissing,
+}
+
+func (e AICheckState) IsValid() bool {
+	switch e {
+	case AICheckStateWaiting, AICheckStateQueued, AICheckStateRunning, AICheckStateApproved, AICheckStateChangesRequested, AICheckStateNotApproved, AICheckStateUnreviewed, AICheckStateFailed, AICheckStateCancelled, AICheckStateNoModel, AICheckStateSuspended, AICheckStateOff, AICheckStateMissing:
+		return true
+	}
+	return false
+}
+
+func (e AICheckState) String() string {
+	return string(e)
+}
+
+func (e *AICheckState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AICheckState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AICheckState", str)
+	}
+	return nil
+}
+
+func (e AICheckState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AICheckState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AICheckState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // Where the AI reviewer's task for a branch's head stands.
 type AIReviewState string
 
@@ -1509,6 +1606,8 @@ const (
 	BranchCheckKindApprovals BranchCheckKind = "APPROVALS"
 	// A reviewer whose latest review of its head requests changes; never met.
 	BranchCheckKindChangesRequested BranchCheckKind = "CHANGES_REQUESTED"
+	// The AI reviewer's approval of its head.
+	BranchCheckKindAi BranchCheckKind = "AI"
 	// Its base's tip in it.
 	BranchCheckKindUpToDate BranchCheckKind = "UP_TO_DATE"
 )
@@ -1518,12 +1617,13 @@ var AllBranchCheckKind = []BranchCheckKind{
 	BranchCheckKindLinearHistory,
 	BranchCheckKindApprovals,
 	BranchCheckKindChangesRequested,
+	BranchCheckKindAi,
 	BranchCheckKindUpToDate,
 }
 
 func (e BranchCheckKind) IsValid() bool {
 	switch e {
-	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindApprovals, BranchCheckKindChangesRequested, BranchCheckKindUpToDate:
+	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindApprovals, BranchCheckKindChangesRequested, BranchCheckKindAi, BranchCheckKindUpToDate:
 		return true
 	}
 	return false

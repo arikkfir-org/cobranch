@@ -41,11 +41,11 @@ SELECT count(*) FROM agents WHERE org_id = @org_id AND provider = @provider;
 SELECT repo_id FROM secrets WHERE id = @id AND org_id = @org_id;
 
 -- SetAgentModel puts an agent on a model of a provider, or on none with nulls, when it is at version, or at any
--- version when version is negative: none otherwise.
+-- version when version is negative, and answers its version and what Cobranch made it for: none otherwise.
 -- name: SetAgentModel :one
 UPDATE agents SET provider = sqlc.narg(provider), model = sqlc.narg(model), updated_at = now()
 WHERE principal_id = @id AND org_id = @org_id AND (@version::bigint < 0 OR version = @version::bigint)
-RETURNING version;
+RETURNING version, purpose;
 
 -- SetAgentSecrets names the secrets an agent's tasks receive, when it is at version, or at any version when version
 -- is negative: none otherwise.

@@ -55,6 +55,7 @@ type Code interface {
 	PauseEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	ResumeEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
+	UploadRender(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64, manifests []byte) error
 	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
 	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
@@ -111,7 +112,7 @@ func branch(b code.Branch) Branch {
 	if r := b.Requirements; r != nil {
 		out.Requirements = &MergeRequirements{Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
 		if r.Reviews != nil {
-			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals}
+			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals, Ai: r.Reviews.AI}
 		}
 	}
 	if m := b.Merge; m != nil {
@@ -144,6 +145,12 @@ func check(c code.Check) BranchCheck {
 		out.Name = &c.Name
 	case code.CheckApprovals:
 		out.Count, out.Required = &c.Count, &c.Required
+	case code.CheckAI:
+		state := AICheckState(c.AI)
+		out.Ai = &state
+		if c.Reason != "" {
+			out.Reason = &c.Reason
+		}
 	default:
 		out.Count = &c.Count
 	}

@@ -13,6 +13,7 @@ import (
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 )
 
 // credential is the domain's view of a credentials row.
@@ -49,11 +50,15 @@ func nilIfZero(t time.Time) *time.Time {
 }
 
 // Credential finds a credential by its token's hash, with the principal it acts as: an API key, a user with their
-// emails, or, for a running run's token, its job.
+// emails, for a running run's token its job, or for a rendering delivery's token its target.
 func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
 	row, err := s.q.CredentialByToken(ctx, tokenHash)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return s.runToken(ctx, tokenHash)
+		c, u, err := s.runToken(ctx, tokenHash)
+		if errors.Is(err, auth.ErrNotFound) {
+			return s.deliveryToken(ctx, tokenHash)
+		}
+		return c, u, err
 	}
 	if err != nil {
 		return auth.Credential{}, auth.User{}, wrap("reading the credential", err)
@@ -84,11 +89,29 @@ func (s *AuthStore) runToken(ctx context.Context, tokenHash []byte) (auth.Creden
 		CreatedAt: p.CreatedAt}, nil
 }
 
+// deliveryToken finds the token of a delivery that is queued or rendering by its hash, with the target it acts as: a
+// credential named by its delivery's ID, which reads the delivery's repository.
+func (s *AuthStore) deliveryToken(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
+	row, err := s.q.DeliveryTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return auth.Credential{}, auth.User{}, wrap("reading the delivery's token", err)
+	}
+	c := auth.Credential{ID: row.DeliveryID, Kind: auth.CredentialDeliveryToken, PrincipalID: row.Principal.ID, Hint: row.Hint,
+		CreatedAt: row.CreatedAt, ExpiresAt: row.ExpiresAt, LastUsedAt: orZero(row.LastUsedAt), Permissions: []string{repos.PermRead},
+		OrgID: row.OrgID, RepoID: row.RepoID}
+	p := row.Principal
+	return c, auth.User{Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
+		CreatedAt: p.CreatedAt}, nil
+}
+
 // TouchCredential records that credential id, of kind, was used at usedAt.
 func (s *AuthStore) TouchCredential(ctx context.Context, id uuid.UUID, kind auth.CredentialKind, usedAt time.Time) error {
 	touch := s.q.TouchCredential
-	if kind == auth.CredentialRunToken {
+	switch kind {
+	case auth.CredentialRunToken:
 		touch = s.q.TouchRunToken
+	case auth.CredentialDeliveryToken:
+		touch = s.q.TouchDeliveryToken
 	}
 	if err := touch(ctx, usedAt, id); err != nil {
 		return fmt.Errorf("marking the credential used: %w", err)

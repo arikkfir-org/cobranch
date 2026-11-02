@@ -210,7 +210,7 @@ job namespace, reaching Cobranch's servers as a job's run does.
 
 Every arrow into REST / GraphQL or Git carries the task token, so each is checked as the agent capped by Alice.
 
-- **The controller runs agent tasks** as a queue of its own, beside [jobs' runs](jobs.md#a-runs-life), in the same loop:
+- **The controller runs agent tasks** as a queue and a loop of their own, beside [jobs' runs](jobs.md#a-runs-life):
   a replica claims a queued task `FOR UPDATE SKIP LOCKED` under a lease kept in `agent_task_pods`, prepares the
   organization's namespace, opens the provider's key and the agent's secrets through the same call runs use, issues the
   task a token, creates its pod, `task-<id>-1`, labelled `cobranch.dev/task` and never `cobranch.dev/run`, then the

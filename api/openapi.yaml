@@ -4497,6 +4497,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}/manifests:
+    post:
+      operationId: uploadManifests
+      summary: Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+      requestBody:
+        required: true
+        description: What `cobranch render` printed for the delivery, one stream of YAML documents, each one object; at most 16 MiB.
+        content:
+          application/yaml:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: The render is kept; Location names it.
+          headers:
+            Location:
+              description: The render's URL.
+              required: true
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/runs/{number}/rerun:
     post:
       operationId: rerunRun
@@ -5472,7 +5509,7 @@ components:
           type: array
           description: >-
             How it meets its base's merge requirements, as its status last worked them out: each required annotation,
-            linear history when required, and being up to date. Empty for main.
+            linear history and reviews when required, and being up to date. Empty for main.
           items:
             $ref: "#/components/schemas/BranchCheck"
         ahead:
@@ -5663,8 +5700,9 @@ components:
           description: >-
             annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to
             merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested,
-            a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
-          enum: [annotation, linear_history, approvals, changes_requested, up_to_date]
+            a reviewer whose latest review of its head requests changes, never met; ai, the AI reviewer's approval of
+            its head; up_to_date, its base's tip in it.
+          enum: [annotation, linear_history, approvals, changes_requested, ai, up_to_date]
         name:
           type: string
           description: The required annotation's name, for annotation; the reviewer's display name, for changes_requested.
@@ -5676,8 +5714,23 @@ components:
         required:
           type: integer
           description: For approvals, how many the base requires.
+        ai:
+          $ref: "#/components/schemas/AICheckState"
+        reason:
+          type: string
+          description: For ai, why the AI reviewer's task for the head failed or was cancelled.
         met:
           type: boolean
+    AICheckState:
+      type: string
+      description: >-
+        For ai, how the AI reviewer's approval of the head stands: waiting, queued or running, its review task for the
+        head, which keeps the branch Processing; approved, the one that meets it; changes_requested or not_approved,
+        its latest review of the head; unreviewed, neither a task nor a review of the head; failed or cancelled, its
+        task for the head, with the reason; no_model, suspended or off, the reviewer reviewing none of the branch's
+        pushes, for want of a model, suspended, or left out by main's /cobranch-review.yaml; missing, an organization
+        without its reviewer.
+      enum: [waiting, queued, running, approved, changes_requested, not_approved, unreviewed, failed, cancelled, no_model, suspended, off, missing]
     MergeRequirements:
       type: object
       description: What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
@@ -5697,14 +5750,16 @@ components:
       type: object
       description: >-
         The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review
-        requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its
-        pusher's.
-      required: [approvals]
+        requesting changes, at least approvals people's latest reviews approving it, besides its author's and its
+        pusher's, and, when ai is true, the AI reviewer's latest review approving it.
+      required: [approvals, ai]
       properties:
         approvals:
           type: integer
           minimum: 0
           maximum: 10
+        ai:
+          type: boolean
     Commit:
       type: object
       description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.

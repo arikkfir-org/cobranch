@@ -628,6 +628,46 @@ func TestAuthenticateRunToken(t *testing.T) {
 	}
 }
 
+// TestAuthenticateDeliveryToken resolves deliveries' tokens: bearer tokens that act as a delivery's target while it
+// renders, until its timeout.
+func TestAuthenticateDeliveryToken(t *testing.T) {
+	target := auth.Principal{ID: uuid.New(), Kind: auth.KindTarget, DisplayName: "preview"}
+	tests := []struct {
+		name    string
+		kind    auth.CredentialKind
+		token   string // instead of the delivery's token
+		at      time.Time
+		wantErr error
+	}{
+		{name: "a rendering delivery's token", kind: auth.CredentialDeliveryToken, at: now},
+		{name: "past its render's timeout", kind: auth.CredentialDeliveryToken, at: now.Add(time.Hour), wantErr: auth.ErrUnauthenticated},
+		{name: "a token nobody has", kind: auth.CredentialDeliveryToken, token: auth.NewSecret(auth.PrefixDeliveryToken), at: now,
+			wantErr: auth.ErrUnauthenticated},
+		{name: "a run's token by a delivery's prefix", kind: auth.CredentialRunToken, at: now, wantErr: auth.ErrUnauthenticated},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, store, _ := newService(auth.Settings{}, alice)
+			secret := auth.NewSecret(auth.PrefixDeliveryToken)
+			c := store.AddCredential(secret, target, now.Add(time.Hour))
+			c.Kind, c.Permissions = tt.kind, []string{"repo.read"}
+			store.Credentials[string(auth.Hash(secret))] = c
+			s.SetClock(func() time.Time { return tt.at })
+			token := secret
+			if tt.token != "" {
+				token = tt.token
+			}
+			got, err := s.Authenticate(context.Background(), token)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
+			}
+			if err == nil && (got.User.ID != target.ID || got.Credential.Kind != auth.CredentialDeliveryToken) {
+				t.Errorf("Authenticate() = %+v", got)
+			}
+		})
+	}
+}
+
 func TestSignUpSettings(t *testing.T) {
 	on, off := true, false
 	invited := auth.PolicyInvited

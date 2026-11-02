@@ -116,6 +116,7 @@ var conflicts = map[error]string{
 	code.ErrEnvironmentPaused:    "environment.paused",
 	code.ErrEnvironmentNotPaused: "environment.not_paused",
 	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
+	code.ErrDeliveryNotRendering: "delivery.not_rendering",
 	code.ErrRunActive:            "run.active",
 	code.ErrNotManual:            "job.not_manual",
 }
@@ -133,6 +134,8 @@ func fail(err error, kind string) error {
 		return refuse(http.StatusConflict, "annotation.taken", taken.Error())
 	case errors.As(err, &exceeded):
 		return refuse(http.StatusConflict, "limit."+string(exceeded.Kind), exceeded.Error())
+	case errors.Is(err, code.ErrRenderTooLarge):
+		return refuse(http.StatusRequestEntityTooLarge, "render.too_large", "A render is at most 16 MiB.")
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The annotation changed since you read it: read it again.")
 	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged):

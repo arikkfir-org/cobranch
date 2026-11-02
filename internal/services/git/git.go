@@ -206,10 +206,11 @@ type Requirements struct {
 }
 
 // ReviewRequirements are the reviews a merge into a branch needs of the incoming head: no reviewer's latest review of
-// it requesting changes, and at least Approvals people's latest reviews approving it, besides its author's and its
-// pusher's.
+// it requesting changes, at least Approvals people's latest reviews approving it, besides its author's and its
+// pusher's, and, when AI is true, the AI reviewer's latest review approving it.
 type ReviewRequirements struct {
 	Approvals int
+	AI        bool
 }
 
 // MaxApprovals is the most approvals a branch's requirements name.

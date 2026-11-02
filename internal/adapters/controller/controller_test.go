@@ -58,9 +58,6 @@ func (r *runner) Schedule(context.Context) error {
 	return errors.New("one repository's settings don't decode")
 }
 
-// unscheduled is a Runner that queues nothing on schedules, as taskrunner.Service.
-type unscheduled struct{ controller.Runner }
-
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -76,7 +73,7 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			r := &runner{queue: tt.queue, stop: cancel}
-			controller.Run(ctx, time.Hour, time.Hour, r)
+			controller.Run(ctx, "runs", r, time.Hour, time.Hour)
 			if r.dispatched != tt.wantFirst || r.followed != 1 || r.swept != 1 || r.scheduled != 1 {
 				t.Errorf("one pass dispatched %d, followed %d, swept %d, scheduled %d, want %d, 1, 1, 1", r.dispatched, r.followed, r.swept,
 					r.scheduled, tt.wantFirst)
@@ -89,7 +86,7 @@ func TestRunPollsAndSweeps(t *testing.T) {
 	r := &runner{}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	controller.Run(ctx, 10*time.Millisecond, 50*time.Millisecond, r)
+	controller.Run(ctx, "runs", r, 10*time.Millisecond, 50*time.Millisecond)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.followed < 5 || r.swept < 2 || r.swept >= r.followed || r.scheduled != 1 {
@@ -98,18 +95,19 @@ func TestRunPollsAndSweeps(t *testing.T) {
 	}
 }
 
-func TestRunEveryRunner(t *testing.T) {
+// plain is a runner that queues no schedules, as the deliverer.
+type plain struct{ r *runner }
+
+func (p plain) Dispatch(ctx context.Context) (bool, error) { return p.r.Dispatch(ctx) }
+func (p plain) Follow(ctx context.Context) error           { return p.r.Follow(ctx) }
+func (p plain) Sweep(ctx context.Context) error            { return p.r.Sweep(ctx) }
+
+func TestRunWithoutSchedules(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	runs, tasks := &runner{queue: []error{nil}}, &runner{queue: []error{nil, nil}, stop: cancel}
-	controller.Run(ctx, time.Hour, time.Hour, runs, unscheduled{tasks})
-	for _, tt := range []struct {
-		name            string
-		r               *runner
-		want, scheduled int
-	}{{name: "runs", r: runs, want: 2, scheduled: 1}, {name: "tasks", r: tasks, want: 3}} {
-		if tt.r.dispatched != tt.want || tt.r.followed != 1 || tt.r.swept != 1 || tt.r.scheduled != tt.scheduled {
-			t.Errorf("one pass of %s dispatched %d, followed %d, swept %d, scheduled %d, want %d, 1, 1, %d", tt.name, tt.r.dispatched,
-				tt.r.followed, tt.r.swept, tt.r.scheduled, tt.want, tt.scheduled)
-		}
+	r := &runner{queue: []error{nil}, stop: cancel}
+	controller.Run(ctx, "deliveries", plain{r}, time.Hour, time.Hour)
+	if r.dispatched != 2 || r.followed != 1 || r.swept != 1 || r.scheduled != 0 {
+		t.Errorf("one pass dispatched %d, followed %d, swept %d, scheduled %d, want 2, 1, 1, 0", r.dispatched, r.followed, r.swept,
+			r.scheduled)
 	}
 }

@@ -3,6 +3,7 @@
 package repostest
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -25,16 +26,17 @@ type Store struct {
 	Slugs map[[2]string]uuid.UUID
 	// GitData is the bytes of each repository's active packs.
 	GitData map[uuid.UUID]int64
-	// Jobs are the job principals, by ID, each with its organization.
+	// Jobs are the job principals, and the delivery targets, by ID, each with its organization.
 	Jobs   map[uuid.UUID]Job
 	Events []string
 	Fail   error
 }
 
-// Job is a job principal of an organization.
+// Job is a job principal of an organization, or with Kind auth.KindTarget a delivery target.
 type Job struct {
 	OrgID uuid.UUID
 	Name  string
+	Kind  auth.Kind
 }
 
 var _ repos.Store = (*Store)(nil)
@@ -210,7 +212,8 @@ func (s *Store) Principal(_ context.Context, orgID, principalID uuid.UUID) (repo
 		return repos.Principal{ID: principalID, Kind: auth.KindAPIKey, DisplayName: k.Name}, nil
 	}
 	if j, ok := s.Jobs[principalID]; ok && j.OrgID == orgID {
-		return repos.Principal{ID: principalID, Kind: auth.KindJob, DisplayName: j.Name}, nil
+		kind := cmp.Or(j.Kind, auth.KindJob)
+		return repos.Principal{ID: principalID, Kind: kind, DisplayName: j.Name}, nil
 	}
 	return repos.Principal{}, repos.ErrNotFound
 }

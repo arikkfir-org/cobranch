@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -216,5 +217,55 @@ func TestDeliveryAPI(t *testing.T) {
 		{name: "one that doesn't wait", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(deliveriesPath + "/2/start"), wantStatus: 409, wantCode: "delivery.not_waiting"},
 		{name: "a Reader may not start", viewer: withEnvironments(maxReading), method: http.MethodPost, path: fixed(deliveriesPath + "/3/start"), wantStatus: 403},
 		{name: "starting one that isn't there", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(deliveriesPath + "/9/start"), wantStatus: 404},
+	})
+}
+
+// rendering is the token of production's delivery #2, which renders: what its render pod uploads with. other is
+// another delivery's token in its place.
+func rendering(other bool) func(*orgFixture) *auth.Authenticated {
+	return withEnvironments(func(f *orgFixture) *auth.Authenticated {
+		d := &f.codeStore.DeliveryList[f.website.ID][1]
+		d.State = code.DeliveryRendering
+		target := auth.Principal{ID: uuid.New(), Kind: auth.KindTarget, DisplayName: "production"}
+		id := d.ID
+		if other {
+			id = uuid.New()
+		}
+		return &auth.Authenticated{User: auth.User{Principal: target}, Credential: auth.Credential{ID: id, Kind: auth.CredentialDeliveryToken,
+			PrincipalID: target.ID, OrgID: f.acme.ID, RepoID: f.website.ID, Permissions: []string{"repo.read"}}}
+	})
+}
+
+func TestUploadManifestsAPI(t *testing.T) {
+	const path = "/v1/orgs/acme/repos/website/deliveries/2/manifests"
+	const render = "apiVersion: v1\nkind: ConfigMap\nmetadata:\n  name: site\n"
+	yaml := http.Header{"Content-Type": {"application/yaml"}}
+	kept := func(want string) func(*testing.T, *orgFixture, []byte) {
+		return func(t *testing.T, f *orgFixture, _ []byte) {
+			got, ok := f.codeStore.Renders[f.codeStore.DeliveryList[f.website.ID][1].ID]
+			if ok != (want != "") || string(got) != want {
+				t.Errorf("kept %q (%t), want %q", got, ok, want)
+			}
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "its render pod keeps its render", viewer: rendering(false), method: http.MethodPost, path: fixed(path), body: render, header: yaml,
+			wantStatus: 201, wantHeader: http.Header{"Location": {path}}, check: kept(render)},
+		{name: "past 16 MiB", viewer: rendering(false), method: http.MethodPost, path: fixed(path), header: yaml,
+			body: strings.Repeat("a", code.MaxRender+1), wantStatus: 413, wantCode: "render.too_large", check: kept("")},
+		{name: "a second time", viewer: func(f *orgFixture) *auth.Authenticated {
+			token := rendering(false)(f)
+			f.codeStore.Renders[f.codeStore.DeliveryList[f.website.ID][1].ID] = []byte("before")
+			return token
+		}, method: http.MethodPost, path: fixed(path), body: render, header: yaml, wantStatus: 409, wantCode: "delivery.not_rendering",
+			check: kept("before")},
+		{name: "another delivery's token", viewer: rendering(true), method: http.MethodPost, path: fixed(path), body: render, header: yaml,
+			wantStatus: 403, wantCode: "auth.forbidden", check: kept("")},
+		{name: "a delivery that doesn't render", viewer: rendering(false), method: http.MethodPost,
+			path: fixed("/v1/orgs/acme/repos/website/deliveries/1/manifests"), body: render, header: yaml, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "a member who reads the repository", viewer: withEnvironments(maxReading), method: http.MethodPost, path: fixed(path), body: render,
+			header: yaml, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "anonymous", viewer: withEnvironments(nil), method: http.MethodPost, path: fixed(path), body: render, header: yaml, wantStatus: 401,
+			wantCode: "auth.unauthenticated"},
 	})
 }

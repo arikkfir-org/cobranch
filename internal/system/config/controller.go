@@ -9,6 +9,7 @@ import (
 	"github.com/kelseyhightower/envconfig"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // JSON is a variable whose value is a JSON document, as the chart renders a value of its own that is a map or a list.
@@ -28,7 +29,8 @@ func (j *JSON[T]) Decode(value string) error {
 }
 
 // Controller configures controller, which runs the jobs' runs in the cluster it runs in
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Where a run executes").
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Where a run executes"), and
+// delivers into it (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "The chart").
 type Controller struct {
 	HTTPAddr        string        `envconfig:"HTTP_ADDR" default:":8080"`
 	DatabaseURL     string        `envconfig:"DATABASE_URL"`
@@ -43,6 +45,7 @@ type Controller struct {
 	SweepInterval time.Duration `envconfig:"JOBS_SWEEP_INTERVAL" default:"5m"`
 	Jobs
 	Agents Agents
+	Delivery
 }
 
 // Agents are the installation's settings for agents' tasks, from the chart's agents values, in the COBRANCH_AGENTS_
@@ -61,6 +64,36 @@ type Agents struct {
 	// ProviderURLs are where the model proxy sends a provider's requests, by provider, when not to its own address: a
 	// gateway of the operator's that speaks its protocol.
 	ProviderURLs JSON[map[string]string] `envconfig:"PROVIDER_URLS"`
+}
+
+// Delivery are the installation's settings for deliveries, from the chart's delivery values: each renders in a pod of
+// its organization's job namespace, and those of targets without a cluster apply into this installation's, when
+// InCluster, in namespaces fenced as the job namespaces are, with jobs' egress.
+type Delivery struct {
+	// InCluster is whether targets without a cluster deliver into this installation's cluster.
+	InCluster bool `envconfig:"DELIVERY_IN_CLUSTER" default:"false"`
+	// DeliveryPodSecurity is the Pod Security Standard level the environments' namespaces enforce, and
+	// DeliveryLabels more labels they carry, the operator's.
+	DeliveryPodSecurity string                  `envconfig:"DELIVERY_POD_SECURITY" default:"restricted"`
+	DeliveryLabels      JSON[map[string]string] `envconfig:"DELIVERY_NAMESPACE_LABELS"`
+	// Account is the ServiceAccount the controller applies as, in its own namespace; DeliveryRole the ClusterRole it
+	// grants the account in each environment's namespace, and FenceRole the one it grants itself there.
+	Account      string `envconfig:"DELIVERY_ACCOUNT"`
+	DeliveryRole string `envconfig:"DELIVERY_ROLE"`
+	FenceRole    string `envconfig:"DELIVERY_FENCE_ROLE"`
+	// IngressFrom selects the namespaces whose pods may reach an environment's.
+	IngressFrom JSON[[]metav1.LabelSelector] `envconfig:"DELIVERY_INGRESS_FROM"`
+	// DeliveryResources are a container's defaults in an environment's namespace; DeliveryQuota the most one
+	// environment takes.
+	DeliveryResources JSON[corev1.ResourceRequirements] `envconfig:"DELIVERY_RESOURCES"`
+	DeliveryQuota     JSON[corev1.ResourceList]         `envconfig:"DELIVERY_QUOTA"`
+	// RenderTimeout is how long a render may take, and RenderResources its pod's container's requests and limits.
+	RenderTimeout   time.Duration                     `envconfig:"DELIVERY_RENDER_TIMEOUT" default:"10m"`
+	RenderResources JSON[corev1.ResourceRequirements] `envconfig:"DELIVERY_RENDER_RESOURCES"`
+	// HealthInterval is how often a Progressing environment's health is read again.
+	HealthInterval time.Duration `envconfig:"DELIVERY_HEALTH_INTERVAL" default:"15s"`
+	// RendersKeep is how many renders each environment keeps; the controller's sweep deletes older ones.
+	RendersKeep int `envconfig:"DELIVERY_RENDERS_KEEP" default:"10"`
 }
 
 // Jobs are the installation's settings for runs, from the chart's jobs values.
@@ -139,6 +172,12 @@ func LoadController() (Controller, error) {
 		return Controller{}, errors.New("COBRANCH_JOBS_LOGS_MAX_BYTES must be positive")
 	case c.Agents.Timeout <= 0 || c.Agents.MaxTurns <= 0 || c.Agents.ShellTimeout <= 0 || c.Agents.MaxTokens <= 0:
 		return Controller{}, errors.New("COBRANCH_AGENTS_TIMEOUT, COBRANCH_AGENTS_MAX_TURNS, COBRANCH_AGENTS_SHELL_TIMEOUT and COBRANCH_AGENTS_MODEL_MAX_TOKENS must be positive")
+	case c.RenderTimeout <= 0 || c.HealthInterval <= 0:
+		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT and COBRANCH_DELIVERY_HEALTH_INTERVAL must be positive")
+	case c.RendersKeep < 1:
+		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDERS_KEEP must be positive: an environment keeps the render it delivered")
+	case c.InCluster && (c.Account == "" || c.DeliveryRole == "" || c.FenceRole == ""):
+		return Controller{}, errors.New("delivering into this installation's cluster needs COBRANCH_DELIVERY_ACCOUNT, COBRANCH_DELIVERY_ROLE and COBRANCH_DELIVERY_FENCE_ROLE")
 	}
 	if c.Agents.Image == "" {
 		c.Agents.Image = c.CheckoutImage
@@ -168,4 +207,23 @@ func LoadCheckout() (Checkout, error) {
 		return Checkout{}, fmt.Errorf("reading checkout's configuration from the COBRANCH_ variables: %w", err)
 	}
 	return c, nil
+}
+
+// Render configures `cobranch render` in a delivery's render pod: where it uploads the render, and the delivery's
+// token it uploads with. Without a URL, it prints the render.
+type Render struct {
+	URL   string `envconfig:"UPLOAD_URL"`
+	Token string `envconfig:"TOKEN"`
+}
+
+// LoadRender reads render's configuration from the environment, the variables a render pod's containers get.
+func LoadRender() (Render, error) {
+	var r Render
+	if err := envconfig.Process(Prefix, &r); err != nil {
+		return Render{}, fmt.Errorf("reading render's configuration from the COBRANCH_ variables: %w", err)
+	}
+	if r.URL != "" && r.Token == "" {
+		return Render{}, errors.New("COBRANCH_UPLOAD_URL needs COBRANCH_TOKEN, the delivery's token")
+	}
+	return r, nil
 }

@@ -379,8 +379,40 @@ enum BranchCheckKind {
   APPROVALS
   "A reviewer whose latest review of its head requests changes; never met."
   CHANGES_REQUESTED
+  "The AI reviewer's approval of its head."
+  AI
   "Its base's tip in it."
   UP_TO_DATE
+}
+
+"How the AI reviewer's approval of a branch's head stands."
+enum AICheckState {
+  "Its review task for the head waits for a member to start it; the branch is Processing."
+  WAITING
+  "Its review task for the head waits to run; the branch is Processing."
+  QUEUED
+  "It reviews the head; the branch is Processing."
+  RUNNING
+  "Its latest review of the head approves it: the one state that meets the check."
+  APPROVED
+  "Its latest review of the head requests changes."
+  CHANGES_REQUESTED
+  "Its review of the head ended without approving it."
+  NOT_APPROVED
+  "Neither a review task nor a review of the head."
+  UNREVIEWED
+  "Its review task for the head failed, for the check's reason."
+  FAILED
+  "Its review task for the head was cancelled, for the check's reason."
+  CANCELLED
+  "No admin gave it a model."
+  NO_MODEL
+  "It is suspended."
+  SUSPENDED
+  "main's /cobranch-review.yaml turns it off, or leaves the branch out."
+  OFF
+  "The organization has no AI reviewer."
+  MISSING
 }
 
 "One of a branch's merge requirements and how it stands."
@@ -394,6 +426,10 @@ type BranchCheck {
   count: Int
   "For APPROVALS, how many the base requires; null otherwise."
   required: Int
+  "For AI, how the AI reviewer's approval stands; null otherwise."
+  ai: AICheckState
+  "For AI, why its review task for the head failed or was cancelled; null otherwise."
+  reason: String
   met: Boolean!
 }
 
@@ -407,10 +443,12 @@ type MergeRequirements {
   reviews: ReviewRequirements
 }
 
-"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's."
+"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it."
 type ReviewRequirements {
   "0 to 10."
   approvals: Int!
+  "Whether the AI reviewer's approval is required."
+  ai: Boolean!
 }
 
 "A page of history, nearest first."

@@ -49,6 +49,11 @@ const (
 	ReviewCancelled ReviewTaskState = "cancelled"
 )
 
+// Open reports whether a review task in this state hasn't ended.
+func (s ReviewTaskState) Open() bool {
+	return s == ReviewWaiting || s == ReviewQueued || s == ReviewRunning
+}
+
 // AIReview is the AI reviewer's latest task for a branch's head: its number among its organization's tasks, its
 // state and why it is there, for one that waits or ended without a review.
 type AIReview struct {
