@@ -47,6 +47,9 @@ const fieldManager = "cobranch-controller"
 type Config struct {
 	// Installation labels the namespaces as this installation's.
 	Installation string
+	// JobsPrefix starts the job namespaces' names, which an environment's namespace never takes: the controller tells
+	// a job namespace by its name.
+	JobsPrefix string
 	// PodSecurity is the Pod Security Standard level the namespaces enforce: restricted, baseline or privileged.
 	PodSecurity string
 	// Labels are more labels the namespaces carry, the operator's.

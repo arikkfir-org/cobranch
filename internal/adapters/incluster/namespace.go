@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"maps"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -60,6 +61,10 @@ func (t *Target) Prepare(ctx context.Context, env deliverer.Environment) (err er
 // namespace creates env's namespace, or updates it when it is env's already, and refuses one that isn't: a repository
 // can't deliver into kube-system, another installation's namespaces, or another environment's.
 func (t *Target) namespace(ctx context.Context, env deliverer.Environment) error {
+	if t.cfg.JobsPrefix != "" && strings.HasPrefix(env.Namespace, t.cfg.JobsPrefix) {
+		return fmt.Errorf("%w: namespace %s starts with %s, which names this installation's job namespaces", deliverer.ErrRefused,
+			env.Namespace, t.cfg.JobsPrefix)
+	}
 	namespaces := t.client.CoreV1().Namespaces()
 	existing, err := namespaces.Get(ctx, env.Namespace, metav1.GetOptions{})
 	switch {

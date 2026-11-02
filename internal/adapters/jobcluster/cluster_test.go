@@ -363,13 +363,16 @@ func TestNamespacesAndDrop(t *testing.T) {
 	labelled := func(name, installation string) *corev1.Namespace {
 		return &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name, Labels: map[string]string{labelInstallation: installation}}}
 	}
+	// An environment's namespace carries the installation's label as well, whatever its name.
+	environment := labelled("cobranch-jobs-0193a8c0-0000-7000-8000-000000000003", "cobranch-cobranch")
+	environment.Labels[labelEnvironment] = uuid.NewString()
 	client := fake.NewClientset(labelled(ns, "cobranch-cobranch"), labelled("cobranch-jobs-"+other.String(), "cobranch-cobranch"),
-		labelled("elsewhere-jobs-"+other.String(), "another"), labelled("cobranch-jobs-x", "cobranch-cobranch"))
+		labelled("elsewhere-jobs-"+other.String(), "another"), labelled("cobranch-jobs-x", "cobranch-cobranch"), environment)
 	c := New(client, config())
 	got, err := c.Namespaces(ctx)
 	slices.SortFunc(got, func(a, b uuid.UUID) int { return strings.Compare(a.String(), b.String()) })
 	if err != nil || !slices.Equal(got, []uuid.UUID{org, other}) {
-		t.Errorf("Namespaces() = %v, %v, want both organizations", got, err)
+		t.Errorf("Namespaces() = %v, %v, want both organizations, and no environment's", got, err)
 	}
 	if err := c.Drop(ctx, org); err != nil {
 		t.Fatal(err)

@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -265,6 +266,21 @@ func TestPrepareRefusesANamespaceNotItsOwn(t *testing.T) {
 				t.Errorf("bindings = %v, %v, want none", bindings, err)
 			}
 		})
+	}
+}
+
+// TestPrepareRefusesAJobNamespacesName refuses an environment's namespace named as the installation's job namespaces
+// are, before it makes anything.
+func TestPrepareRefusesAJobNamespacesName(t *testing.T) {
+	f := newFixture(t, incluster.Config{JobsPrefix: "cobranch-jobs-"})
+	ctx := context.Background()
+	f.env.Namespace = "cobranch-jobs-" + uuid.NewString()
+	err := f.target.Prepare(ctx, f.env)
+	if !errors.Is(err, deliverer.ErrRefused) || !strings.Contains(err.Error(), "names this installation's job namespaces") {
+		t.Fatalf("Prepare() = %v, want the namespace refused", err)
+	}
+	if _, err := f.admin.CoreV1().Namespaces().Get(ctx, f.env.Namespace, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Errorf("Get(namespace) = %v, want it never made", err)
 	}
 }
 

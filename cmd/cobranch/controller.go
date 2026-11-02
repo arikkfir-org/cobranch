@@ -127,7 +127,7 @@ func clusterOf(cfg config.Controller) (kube, error) {
 		return k, nil
 	}
 	d := cfg.Delivery
-	target, err := incluster.New(rc, incluster.Config{Installation: j.Installation, PodSecurity: d.DeliveryPodSecurity,
+	target, err := incluster.New(rc, incluster.Config{Installation: j.Installation, JobsPrefix: j.NamespacePrefix, PodSecurity: d.DeliveryPodSecurity,
 		Labels: d.DeliveryLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Account: d.Account, DeliveryRole: d.DeliveryRole,
 		FenceRole: d.FenceRole, IngressFrom: d.IngressFrom.Value, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value,
 		Resources: d.DeliveryResources.Value, Quota: d.DeliveryQuota.Value})

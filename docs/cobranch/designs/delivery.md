@@ -286,7 +286,8 @@ renders none of it.
 
 - **The controller makes the namespace,** labelled with the installation and the environment, enforcing the chart's Pod
   Security level, `restricted` by default. A namespace that exists without those labels is refused, so a repository
-  can't deliver into `kube-system`, another installation's namespaces or another organization's.
+  can't deliver into `kube-system`, another installation's namespaces or another organization's. So is one named as job
+  namespaces are, starting with `jobs.namespacePrefix`, which the controller tells by their names.
 - **It fences it:** NetworkPolicies admitting traffic only from the namespace itself and from the namespaces
   `delivery.inCluster.ingressFrom` selects (the operator's Gateway, typically), and letting it out only to DNS and to
   every address outside `jobs.egress.except`, so an environment reaches neither Cobranch's PostgreSQL nor the cloud's

@@ -41,6 +41,8 @@ const (
 	labelDelivery = "cobranch.dev/delivery"
 	// labelManagedBy says Cobranch made it.
 	labelManagedBy = "app.kubernetes.io/managed-by"
+	// labelEnvironment marks an environment's namespace, which the deliverer makes, by the environment's ID.
+	labelEnvironment = "cobranch.dev/environment"
 )
 
 // fieldManager is the controller's name in what it applies.
@@ -134,7 +136,9 @@ func (c *Cluster) Namespaces(ctx context.Context) (_ []uuid.UUID, err error) {
 	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Namespaces")
 	defer span.End()
 	defer func() { record(span, err) }()
-	list, err := c.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: labelInstallation + "=" + c.cfg.Installation})
+	// An environment's namespace carries the installation's label too, but never names an organization's jobs.
+	selector := labelInstallation + "=" + c.cfg.Installation + ",!" + labelEnvironment
+	list, err := c.client.CoreV1().Namespaces().List(ctx, metav1.ListOptions{LabelSelector: selector})
 	if err != nil {
 		return nil, fmt.Errorf("listing the job namespaces: %w", err)
 	}
