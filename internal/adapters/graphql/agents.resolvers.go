@@ -321,7 +321,12 @@ func (r *queryResolver) MyTask(ctx context.Context) (*MyTask, error) {
 	if err != nil {
 		return nil, fail(ctx, err, "task", "finding the task")
 	}
-	return &MyTask{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions}, nil
+	my := &MyTask{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions, AgentEmail: w.AgentEmail}
+	if w.IssueNumber != 0 {
+		number := int(w.IssueNumber)
+		my.IssueNumber, my.IssueKey = &number, &w.IssueKey
+	}
+	return my, nil
 }
 
 // Transcript is the resolver for the transcript field.

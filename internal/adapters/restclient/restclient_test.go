@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -28,6 +29,8 @@ type api struct {
 	tokens  []string
 	// unavailable is how many calls answer 503 before the API answers.
 	unavailable int
+	// chats are the chat calls it took, each its method, its escaped path and its body.
+	chats []string
 }
 
 var agentID, assignerID = uuid.New(), uuid.New()
@@ -43,9 +46,12 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case r.Header.Get("Authorization") != "Bearer cba_valid":
 		problem(w, http.StatusUnauthorized, "auth.unauthenticated", "The token is not valid.")
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/me/task":
-		answer(w, http.StatusOK, MyTask{Organization: "acme", AgentInstructions: "Be brief.", Task: Task{Number: 7, Title: "Sweep", State: "running",
-			Agent: Principal{Id: agentID, DisplayName: "Scout"}, AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy"),
-			Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())}})
+		answer(w, http.StatusOK, MyTask{Organization: "acme", AgentInstructions: "Be brief.", AgentEmail: "scout@agents.example", IssueNumber: ptr(int64(12)), IssueKey: ptr("ACME"),
+			Task: Task{Number: 7, Title: "Sweep", State: "running", Agent: Principal{Id: agentID, DisplayName: "Scout"},
+				AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy"),
+				Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())}})
+	case strings.Contains(r.URL.Path, "/chat/"):
+		a.chat(w, r)
 	case r.URL.Path != "/v1/orgs/acme/tasks/7/transcript":
 		problem(w, http.StatusNotFound, "task.not_found", "No such task.")
 	case r.Method == http.MethodGet:
@@ -125,7 +131,7 @@ func TestWork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.OrgSlug != "acme" || w.AgentInstructions != "Be brief." || w.Task.Number != 7 || w.Task.State != agents.TaskRunning || w.Task.Agent.ID != agentID ||
+	if w.OrgSlug != "acme" || w.AgentInstructions != "Be brief." || w.AgentEmail != "scout@agents.example" || w.IssueNumber != 12 || w.IssueKey != "ACME" || w.Task.Number != 7 || w.Task.State != agents.TaskRunning || w.Task.Agent.ID != agentID ||
 		w.Task.Agent.DisplayName != "Scout" || w.Task.AssignedBy == nil || w.Task.AssignedBy.DisplayName != "Olivia" || w.Task.RepoSlug != "website" ||
 		w.Task.Branch != "tidy" || w.Task.ThreadID != uuid.Nil || w.Task.SHA != "0123456789abcdef0123456789abcdef01234567" ||
 		!w.Task.CreatedAt.Equal(time.Unix(10, 0)) || !w.Task.StartedAt.Equal(time.Unix(20, 0)) {
@@ -205,5 +211,68 @@ func TestRetries(t *testing.T) {
 	a.unavailable = 1
 	if e, err := c.Append(context.Background(), "acme", 7, agents.Entry{Seq: 1, Kind: agents.EntryInput, Body: json.RawMessage(`{"text":"Go."}`)}); err != nil || e.Seq != 1 {
 		t.Errorf("Append(after an outage) = %+v, %v; want the body sent again whole", e, err)
+	}
+}
+
+// threadID is the one thread the chats hold; forbiddenID one whose posts the API refuses.
+var threadID, forbiddenID = uuid.MustParse("0190f1b2-0000-7000-8000-000000000071"), uuid.MustParse("0190f1b2-0000-7000-8000-000000000072")
+
+// chat answers a chat call, recording it: thread threadID holds a person's message and one of task 7's.
+func (a *api) chat(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body) // a test's body always reads
+	a.chats = append(a.chats, r.Method+" "+r.URL.EscapedPath()+" "+strings.TrimSpace(string(body)))
+	switch {
+	case strings.Contains(r.URL.Path, forbiddenID.String()):
+		problem(w, http.StatusForbidden, "auth.forbidden", "You may not post here.")
+	case r.Method == http.MethodGet:
+		at := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+		answer(w, http.StatusOK, ChatThread{Id: threadID, CreatedAt: at, Messages: &[]ChatMessage{
+			{Id: uuid.New(), ThreadId: threadID, Body: "Please sweep.", Author: &Principal{Id: assignerID, DisplayName: "Olivia"}, CreatedAt: at},
+			{Id: uuid.New(), ThreadId: threadID, Body: "On it.", Author: &Principal{Id: agentID, DisplayName: "Scout"}, CreatedAt: at, TaskNumber: ptr(int64(7))},
+			{Id: uuid.New(), ThreadId: threadID, CreatedAt: at, DeletedAt: &at}}})
+	case strings.HasSuffix(r.URL.Path, "/messages"):
+		answer(w, http.StatusCreated, ChatMessage{Id: uuid.New(), ThreadId: threadID})
+	default:
+		answer(w, http.StatusCreated, ChatThread{Id: threadID})
+	}
+}
+
+func TestChats(t *testing.T) {
+	t.Parallel()
+	a := &api{}
+	c, _ := client(t, a)
+	ctx, message := context.Background(), uuid.MustParse("0190f1b2-0000-7000-8000-000000000073")
+	branch, issue := harness.Chat{Repo: "website", Branch: "fix/header"}, harness.Chat{Issue: 12}
+	messages, err := c.Thread(ctx, "acme", branch, threadID)
+	if err != nil || len(messages) != 3 || messages[0].Author != "Olivia" || messages[0].Body != "Please sweep." || messages[0].Task != 0 ||
+		messages[1].Task != 7 || !messages[2].Deleted || messages[2].Author != "" {
+		t.Errorf("Thread() = %+v, %v", messages, err)
+	}
+	if err := c.StartThread(ctx, "acme", branch, message, "Starting."); err != nil {
+		t.Errorf("StartThread() = %v", err)
+	}
+	if err := c.Post(ctx, "acme", issue, threadID, message, "Swept."); err != nil {
+		t.Errorf("Post() = %v", err)
+	}
+	if _, err := c.Thread(ctx, "acme", issue, threadID); err != nil {
+		t.Errorf("Thread() of an issue's chat = %v", err)
+	}
+	if err := c.Post(ctx, "acme", branch, forbiddenID, message, "Hi."); err == nil || !strings.Contains(err.Error(), "403") ||
+		!strings.Contains(err.Error(), "You may not post here.") || errors.Is(err, harness.ErrRefused) {
+		t.Errorf("Post() where it may not = %v", err)
+	}
+	want := []string{
+		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads/" + threadID.String() + " ",
+		`POST /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads {"body":"Starting.","id":"` + message.String() + `"}`,
+		"POST /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + `/messages {"body":"Swept.","id":"` + message.String() + `"}`,
+		"GET /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + " ",
+	}
+	if len(a.chats) < len(want) {
+		t.Fatalf("the API took %q", a.chats)
+	}
+	for i, w := range want {
+		if strings.TrimSpace(a.chats[i]) != strings.TrimSpace(w) {
+			t.Errorf("call %d = %q, want %q", i+1, a.chats[i], w)
+		}
 	}
 }

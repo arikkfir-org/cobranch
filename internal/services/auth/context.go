@@ -1,6 +1,10 @@
 package auth
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 type (
 	viewerKey struct{}
@@ -32,4 +36,15 @@ func WithToken(ctx context.Context, token string) context.Context {
 func Token(ctx context.Context) (string, bool) {
 	token, ok := ctx.Value(tokenKey{}).(string)
 	return token, ok && token != ""
+}
+
+// WorkingTask answers the task the request ctx belongs to works, when its credential is a task token of the principal
+// principalID names, an agent's: what the agent does through it, it does for that task. Any other credential answers
+// false.
+func WorkingTask(ctx context.Context, principalID uuid.UUID) (uuid.UUID, bool) {
+	a, ok := Viewer(ctx)
+	if !ok || a.Credential.Kind != CredentialTaskToken || a.User.ID != principalID {
+		return uuid.Nil, false
+	}
+	return a.Credential.Task.ID, true
 }

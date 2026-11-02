@@ -68,6 +68,10 @@ type ChatMessage {
   deletedAt: Time
   "Who deleted it; null while it is there, and once they are gone."
   deletedBy: CommitPrincipal
+  "The task of the agent that posted it; null for a person's message, and once the task is deleted."
+  taskId: ID
+  "That task's number in its organization."
+  taskNumber: Int
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
 }

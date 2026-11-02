@@ -122,8 +122,22 @@ type Message struct {
 	DeletedAt *time.Time
 	// DeletedBy is who deleted it; nil while it is there, and once they are gone.
 	DeletedBy *Principal
+	// Task is the task of the agent that posted it; nil for a person's message, and once the task is deleted.
+	Task *TaskRef
 	// Version counts its changes from 1: it is its ETag, which an edit or a deletion names.
 	Version int64
+}
+
+// TaskRef names an agent's task: its ID, and its number in its organization.
+type TaskRef struct {
+	ID     uuid.UUID
+	Number int64
+}
+
+// Poster is who starts a thread or posts a message: a principal, and, for an agent, the task it works, which its
+// messages link; uuid.Nil for none.
+type Poster struct {
+	ID, Task uuid.UUID
 }
 
 // Page is a page of a chat's threads, newest first, each with its messages.

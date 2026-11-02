@@ -56,12 +56,12 @@ func TestChatStoreIssueThreads(t *testing.T) {
 	t.Parallel()
 	f := newIssueChatFixture(t)
 	ctx := context.Background()
-	thread, created, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), nil, "Seen in Safari 18 too")
+	thread, created, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.chat, v7(), v7(), nil, "Seen in Safari 18 too")
 	if err != nil || !created || thread.Anchor != nil || len(thread.Messages) != 1 {
 		t.Fatalf("StartThread() = %+v, %v, %v", thread, created, err)
 	}
 	reply := v7()
-	if _, created, err := f.s.Post(ctx, f.nia, f.chat, thread.ID, reply, "Same here"); err != nil || !created {
+	if _, created, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, f.chat, thread.ID, reply, "Same here"); err != nil || !created {
 		t.Fatalf("Post() = %v, %v", created, err)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM chat_threads WHERE id = $1 AND issue_id = $2 AND repo_id IS NULL AND branch_id IS NULL", thread.ID,
@@ -79,12 +79,12 @@ func TestChatStoreIssueThreads(t *testing.T) {
 	if _, err := f.s.Message(ctx, f.feature, reply); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Message() through the branch = %v, want %v", err, repos.ErrNotFound)
 	}
-	if _, _, err := f.s.StartThread(ctx, f.max, f.feature, thread.ID, v7(), nil, "Elsewhere"); !errors.Is(err, chats.ErrIDTaken) {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.feature, thread.ID, v7(), nil, "Elsewhere"); !errors.Is(err, chats.ErrIDTaken) {
 		t.Errorf("StartThread(the issue's thread's ID on a branch) = %v, want %v", err, chats.ErrIDTaken)
 	}
 	// An issue's thread points at no file, whatever asks the store.
 	anchor := &chats.Anchor{SHA: shaC, Path: "src/main.go", StartLine: 1, EndLine: 1}
-	if _, _, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), anchor, "Here"); err == nil {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.chat, v7(), v7(), anchor, "Here"); err == nil {
 		t.Error("StartThread(anchored, on the issue) started a thread")
 	}
 }
@@ -93,7 +93,7 @@ func TestChatStoreIssueUpdates(t *testing.T) {
 	t.Parallel()
 	f := newIssueChatFixture(t)
 	ctx := context.Background()
-	thread, _, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), nil, "Hello")
+	thread, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.chat, v7(), v7(), nil, "Hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,14 +119,14 @@ func TestChatStoreDeletedIssue(t *testing.T) {
 	t.Parallel()
 	f := newIssueChatFixture(t)
 	ctx := context.Background()
-	thread, _, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), nil, "Hello")
+	thread, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.chat, v7(), v7(), nil, "Hello")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := f.is.Delete(ctx, f.olivia, f.issue, f.issue.Version); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.s.Post(ctx, f.max, f.chat, thread.ID, v7(), "Late"); !errors.Is(err, repos.ErrNotFound) {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, f.chat, thread.ID, v7(), "Late"); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Post() to a deleted issue's chat = %v, want %v", err, repos.ErrNotFound)
 	}
 	for what, query := range map[string]string{
@@ -143,7 +143,7 @@ func TestAgentStoreThreadBranchOfAnIssue(t *testing.T) {
 	t.Parallel()
 	f := newIssueChatFixture(t)
 	ctx := context.Background()
-	thread, _, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), nil, "Seen in Safari 18 too")
+	thread, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.chat, v7(), v7(), nil, "Seen in Safari 18 too")
 	if err != nil {
 		t.Fatal(err)
 	}

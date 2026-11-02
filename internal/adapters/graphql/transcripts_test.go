@@ -3,10 +3,12 @@ package graphql
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/issues"
 )
 
 // working is a viewer under a task token of Scout's for Acme's task number, Scout a Member of Acme.
@@ -21,6 +23,17 @@ func working(number int64) func(f *orgFixture) *auth.Authenticated {
 			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: f.scout.ID,
 				Task: auth.TaskGrant{ID: task.ID, OrgID: f.acme.ID, AssignerID: task.AssignedBy.ID}}}
 	}
+}
+
+// withScoutOnIssue is withIssues with ACME-1 assigned to Scout by Max, which gives Scout task 4.
+func withScoutOnIssue(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return withIssues(func(f *orgFixture) *auth.Authenticated {
+		scout := f.scout.ID
+		if _, err := f.issues.Update(context.Background(), f.max.User, f.acme.ID, 1, issues.Patch{AssigneeID: &scout}); err != nil {
+			panic(err)
+		}
+		return viewer(f)
+	})
 }
 
 // appended is a document with task 1's first n entries appended by its token first.
@@ -41,8 +54,16 @@ func appended(n int, document func(*orgFixture) string) func(*orgFixture) string
 func TestTranscriptQueries(t *testing.T) {
 	transcript := ofAcme(`task(number: 1) { organizationId transcript(after: 1, first: 1) { seq kind body } }`)
 	runOrgCases(t, []orgCase{
-		{name: "my task", viewer: working(2), document: fixed(`{ myTask { organization task { number title } agentInstructions } }`),
-			want: []string{`"myTask":{"organization":"acme","task":{"number":2,"title":"Fix the login"},"agentInstructions":"Be brief."}`}},
+		{name: "my task", viewer: working(2), document: fixed(`{ myTask { organization task { number title } agentInstructions agentEmail issueNumber issueKey } }`),
+			check: func(t *testing.T, f *orgFixture, body string) {
+				want := `"myTask":{"organization":"acme","task":{"number":2,"title":"Fix the login"},"agentInstructions":"Be brief.","agentEmail":"` +
+					agents.Email(f.scout.ID) + `","issueNumber":null,"issueKey":null}`
+				if !strings.Contains(body, want) {
+					t.Errorf("body = %s, want %s", body, want)
+				}
+			}},
+		{name: "my task on an issue", viewer: withScoutOnIssue(working(4)), document: fixed(`{ myTask { task { number } issueNumber issueKey } }`),
+			want: []string{`"myTask":{"task":{"number":4},"issueNumber":1,"issueKey":"ACME"}`}},
 		{name: "my task as a person", viewer: maxim, document: fixed(`{ myTask { organization } }`), wantCode: "FORBIDDEN"},
 		{name: "a page of the transcript as its assigner", viewer: maxim, document: appended(3, transcript),
 			want: []string{`"transcript":[{"seq":2,"kind":"TURN","body":{"n":12345678901234567890,"text":"Hm"}}]`}},

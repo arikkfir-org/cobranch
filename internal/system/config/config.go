@@ -383,6 +383,9 @@ func LoadHook() (Hook, error) {
 type Agent struct {
 	// REST is the REST server's URL as the pod reaches it; the API is under its /v1/.
 	REST URL `envconfig:"REST_URL"`
+	// Git is the Git server's URL as the pod reaches it, which the harness clones the task's repository from; empty
+	// when the installation gives its agents none, when it clones nothing.
+	Git string `envconfig:"GIT_URL"`
 	// TokenFile holds the task's token, which the controller renews in place.
 	TokenFile string `envconfig:"TOKEN_FILE"`
 	// ModelProvider and Model name the agent's model, and ModelKeyFile holds its provider's API key, which a proxy at

@@ -61,17 +61,20 @@ LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid) AND t.id = ANY (@ids::uuid[]);
 
 -- ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were
--- posted, with the display names of their authors and deleters.
+-- posted, with the display names of their authors and deleters, and the number of the task each came from.
 -- name: ChatMessagesOf :many
-SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name
+SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
+    LEFT JOIN agent_tasks tk ON tk.id = m.task_id
 WHERE m.thread_id = ANY (@thread_ids::uuid[])
 ORDER BY m.thread_id, m.created_at, m.id;
 
--- ChatMessagesByID finds the messages that ids name, with the display names of their authors and deleters.
+-- ChatMessagesByID finds the messages that ids name, with the display names of their authors and deleters, and the
+-- number of the task each came from.
 -- name: ChatMessagesByID :many
-SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name
+SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_name, tk.number AS task_number
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
+    LEFT JOIN agent_tasks tk ON tk.id = m.task_id
 WHERE m.id = ANY (@ids::uuid[]);
 
 -- InsertChatThread starts a thread of a branch's chat, in its repository, or of an issue's, perhaps a comment of a
@@ -83,12 +86,20 @@ VALUES (@id, @org_id, sqlc.narg(repo_id), sqlc.narg(branch_id), sqlc.narg(issue_
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 
--- InsertChatMessage posts a message: none when one of its ID is there already.
+-- InsertChatMessage posts a message, perhaps from an agent's task: none when one of its ID is there already.
 -- name: InsertChatMessage :one
-INSERT INTO chat_messages (id, thread_id, org_id, author_id, body)
-VALUES (@id, @thread_id, @org_id, @author_id, @body)
+INSERT INTO chat_messages (id, thread_id, org_id, author_id, body, task_id)
+VALUES (@id, @thread_id, @org_id, @author_id, @body, sqlc.narg(task_id))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
+
+-- SetTaskThread makes a thread the one a task talks in, when it talks in none yet and the thread is of its branch's
+-- chat, or of its issue's for a task without a branch.
+-- name: SetTaskThread :exec
+UPDATE agent_tasks t SET thread_id = th.id
+FROM chat_threads th
+WHERE t.id = @task_id AND t.thread_id IS NULL AND th.id = @thread_id
+    AND (th.branch_id = t.branch_id OR (t.branch_id IS NULL AND th.issue_id = t.issue_id));
 
 -- EditChatMessage changes a live message's body, when it is at version, or at any version when version is negative:
 -- none otherwise.

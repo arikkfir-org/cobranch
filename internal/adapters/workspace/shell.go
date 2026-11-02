@@ -46,7 +46,7 @@ func (w *Workspace) shell(ctx context.Context, a shellArgs) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "sh", "-c", a.Command)
-	cmd.Dir, cmd.Env = w.dir, environment()
+	cmd.Dir, cmd.Env = w.dir, w.environment()
 	out := &headTail{}
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -68,15 +68,16 @@ func (w *Workspace) shell(ctx context.Context, a shellArgs) (string, error) {
 	return out.String(), nil
 }
 
-// environment is the harness's environment without Cobranch's own variables.
-func environment() []string {
+// environment is the harness's environment without Cobranch's own variables, with Git reading the workspace's
+// configuration as the user's.
+func (w *Workspace) environment() []string {
 	var env []string
 	for _, kv := range os.Environ() {
-		if !strings.HasPrefix(kv, "COBRANCH_") {
+		if !strings.HasPrefix(kv, "COBRANCH_") && !strings.HasPrefix(kv, "GIT_CONFIG_GLOBAL=") {
 			env = append(env, kv)
 		}
 	}
-	return env
+	return append(env, "GIT_CONFIG_GLOBAL="+w.gitConfig())
 }
 
 // headTail keeps the start and the end of what is written to it.

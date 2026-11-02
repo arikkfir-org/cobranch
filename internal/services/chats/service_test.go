@@ -486,3 +486,39 @@ func TestFollow(t *testing.T) {
 		t.Errorf("an update after the viewer lost access: %+v", u)
 	}
 }
+
+// TestAgentPosts checks that an agent's messages link the task its token works, and only that task.
+func TestAgentPosts(t *testing.T) {
+	f := newFixture(t)
+	agent := chats.Viewer{Principal: auth.Principal{ID: uuid.New(), Kind: auth.KindAgent, DisplayName: "Scout"}}
+	f.store.Names[agent.ID] = agent.DisplayName
+	f.grants.o.Grant(agent.ID, auth.RoleDeveloper, auth.ScopeRepository, f.repo)
+	task := uuid.New()
+	f.store.Tasks[task] = 17
+	working := func(principal uuid.UUID) context.Context {
+		return auth.WithViewer(context.Background(), auth.Authenticated{User: agent, Credential: auth.Credential{Kind: auth.CredentialTaskToken,
+			PrincipalID: principal, Task: auth.TaskGrant{ID: task, OrgID: f.feature.OrgID, AssignerID: f.dev.ID}}})
+	}
+	th, err := f.service.StartThread(working(agent.ID), agent, f.feature, chats.ThreadInput{Body: "Starting."})
+	if err != nil || len(th.Messages) != 1 || th.Messages[0].Task == nil || *th.Messages[0].Task != (chats.TaskRef{ID: task, Number: 17}) {
+		t.Fatalf("StartThread() = %+v, %v", th, err)
+	}
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		viewer   chats.Viewer
+		wantTask bool
+	}{
+		{name: "the agent, through its task's token", ctx: working(agent.ID), viewer: agent, wantTask: true},
+		{name: "a person", ctx: context.Background(), viewer: f.dev},
+		{name: "a person, though the request's token is another's task's", ctx: working(agent.ID), viewer: f.dev},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, err := f.service.Post(tt.ctx, tt.viewer, f.feature, th.ID, chats.MessageInput{Body: "Hi"})
+			if err != nil || (m.Task != nil) != tt.wantTask || tt.wantTask && m.Task.ID != task {
+				t.Errorf("Post() = %+v, %v; want a task: %v", m, err, tt.wantTask)
+			}
+		})
+	}
+}

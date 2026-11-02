@@ -67,7 +67,8 @@ func (c *API) Work(ctx context.Context) (agents.Work, error) {
 		return agents.Work{}, refused("asking which task the token works", resp.StatusCode(), resp.Body)
 	}
 	my := resp.JSON200
-	return agents.Work{Task: task(my.Task), OrgSlug: my.Organization, AgentInstructions: my.AgentInstructions}, nil
+	return agents.Work{Task: task(my.Task), OrgSlug: my.Organization, AgentInstructions: my.AgentInstructions, AgentEmail: my.AgentEmail,
+		IssueNumber: deref(my.IssueNumber, 0), IssueKey: deref(my.IssueKey, "")}, nil
 }
 
 // Transcript lists every entry of the organization's task, in order, a page at a time (harness.Cobranch).

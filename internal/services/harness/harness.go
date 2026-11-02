@@ -10,6 +10,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 
 	"cobranch.dev/internal/services/agents"
@@ -42,6 +43,51 @@ type Cobranch interface {
 	// Append records e, the next entry of the organization's task, and answers it; an entry already numbered e.Seq
 	// answers that one.
 	Append(ctx context.Context, org string, number int64, e agents.Entry) (agents.Entry, error)
+	// Thread lists the messages of a thread of one of the organization's chats, in the order they were posted.
+	Thread(ctx context.Context, org string, chat Chat, threadID uuid.UUID) ([]ChatMessage, error)
+	// StartThread starts thread id of one of the organization's chats with its first message; starting it again
+	// changes nothing.
+	StartThread(ctx context.Context, org string, chat Chat, id uuid.UUID, body string) error
+	// Post posts message id to a thread of one of the organization's chats; posting it again changes nothing.
+	Post(ctx context.Context, org string, chat Chat, threadID, id uuid.UUID, body string) error
+}
+
+// Chat names one of an organization's chats: a branch's, by its repository and name, or an issue's, by its number.
+type Chat struct {
+	Repo, Branch string
+	Issue        int64
+}
+
+// ChatMessage is a message of a chat's thread, as the model reads it.
+type ChatMessage struct {
+	ID uuid.UUID
+	// Author is who posted it; empty once they are gone.
+	Author string
+	// Task is the number of the agent's task it came from; 0 for a person's message.
+	Task    int64
+	At      time.Time
+	Body    string
+	Deleted bool
+}
+
+// Checkout readies the task's workspace before the harness works it.
+type Checkout interface {
+	// Prepare readies the workspace for the task: Git's identity, the agent's, and its credentials; and, when the task
+	// names a repository that the workspace doesn't hold yet, the repository, cloned on the branch its work goes to
+	// (agents.Work.Branch). It answers the clone the workspace holds.
+	Prepare(ctx context.Context, w agents.Work) (Clone, error)
+}
+
+// Clone is the clone of the task's repository that its workspace holds.
+type Clone struct {
+	// Branch is the branch the clone is on, which the task's work goes to; empty when the workspace holds no clone,
+	// for a task without a repository or an installation without a Git server.
+	Branch string
+	// Commit is the commit the clone is at, detached, for a task that works at one, such as a review; empty for a clone
+	// on Branch's head.
+	Commit string
+	// Fresh is whether Prepare just made the clone.
+	Fresh bool
 }
 
 // Model is the agent's model, behind its provider's adapter.

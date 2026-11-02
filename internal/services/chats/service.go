@@ -43,12 +43,14 @@ type Store interface {
 	Thread(ctx context.Context, subj Subject, id uuid.UUID) (Thread, error)
 	// Message finds a message of one of the subject's threads, or repos.ErrNotFound.
 	Message(ctx context.Context, subj Subject, id uuid.UUID) (Message, error)
-	// StartThread starts the subject's thread id with its first message, messageID, for actor, and answers it and true;
-	// or, when a thread of id is there, answers it and false, and ErrIDTaken when it isn't the subject's.
-	StartThread(ctx context.Context, actor uuid.UUID, subj Subject, id, messageID uuid.UUID, anchor *Anchor, body string) (Thread, bool, error)
-	// Post posts message id to one of the subject's threads for actor, and answers it and true; or, when a message of
-	// id is there, answers it and false, and ErrIDTaken when it isn't the thread's.
-	Post(ctx context.Context, actor uuid.UUID, subj Subject, threadID, id uuid.UUID, body string) (Message, bool, error)
+	// StartThread starts the subject's thread id with its first message, messageID, for by, and answers it and true;
+	// or, when a thread of id is there, answers it and false, and ErrIDTaken when it isn't the subject's. A thread an
+	// agent's task starts in its branch's chat, or its issue's, becomes the one the task talks in, when it talks in
+	// none yet.
+	StartThread(ctx context.Context, by Poster, subj Subject, id, messageID uuid.UUID, anchor *Anchor, body string) (Thread, bool, error)
+	// Post posts message id to one of the subject's threads for by, and answers it and true; or, when a message of id
+	// is there, answers it and false, and ErrIDTaken when it isn't the thread's.
+	Post(ctx context.Context, by Poster, subj Subject, threadID, id uuid.UUID, body string) (Message, bool, error)
 	// Edit changes the body of a live message of the subject's, at version or at any version for AnyVersion, or
 	// ErrChanged.
 	Edit(ctx context.Context, actor uuid.UUID, subj Subject, id uuid.UUID, version int64, body string) (Message, error)
@@ -278,7 +280,7 @@ func (s *Service) StartThread(ctx context.Context, v Viewer, subj Subject, in Th
 		return Thread{}, failed(span, "starting the thread", fmt.Errorf("naming the message: %w", err))
 	}
 	span.SetAttributes(attribute.String("cobranch.chat.thread.id", id.String()))
-	t, created, err := s.store.StartThread(ctx, v.ID, subj, id, messageID, in.Anchor, in.Body)
+	t, created, err := s.store.StartThread(ctx, poster(ctx, v), subj, id, messageID, in.Anchor, in.Body)
 	if err == nil && !created && (t.StartedBy == nil || t.StartedBy.ID != v.ID) {
 		err = ErrIDTaken
 	}
@@ -336,7 +338,7 @@ func (s *Service) Post(ctx context.Context, v Viewer, subj Subject, threadID uui
 	if err != nil {
 		return Message{}, failed(span, "posting the message", err)
 	}
-	m, created, err := s.store.Post(ctx, v.ID, subj, threadID, id, in.Body)
+	m, created, err := s.store.Post(ctx, poster(ctx, v), subj, threadID, id, in.Body)
 	if err == nil && !created && (m.Author == nil || m.Author.ID != v.ID) {
 		err = ErrIDTaken
 	}
@@ -604,6 +606,12 @@ func (s *Service) render(ctx context.Context, subj Subject, m *Message) error {
 	}
 	m.HTML = html
 	return nil
+}
+
+// poster is the viewer as the poster of a message: an agent's messages link the task its token works.
+func poster(ctx context.Context, v Viewer) Poster {
+	task, _ := auth.WorkingTask(ctx, v.ID)
+	return Poster{ID: v.ID, Task: task}
 }
 
 // orNew is id, or a new UUIDv7 for uuid.Nil.
