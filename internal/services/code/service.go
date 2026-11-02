@@ -64,6 +64,7 @@ type Store interface {
 	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
 	Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error)
 	RunStore
+	EnvironmentStore
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the

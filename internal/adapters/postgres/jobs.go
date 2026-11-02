@@ -52,7 +52,7 @@ func recordSettings(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 // queuePushRuns queues the runs the claimed push triggers, in the push worker's transaction: for each branch it
 // creates or moves, and each tag that names a commit, the jobs that match. It takes the repository's run lock before
 // it reads where any ref stands, so a later push that another push worker processed meanwhile is seen: a ref that
-// moved on since this push queues nothing.
+// moved on since this push queues nothing. Each branch it creates or moves also queues its deliveries.
 func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	if err := q.LockRunQueue(ctx, claimed.RepoID); err != nil {
 		return fmt.Errorf("locking the repository's runs: %w", err)
@@ -78,6 +78,9 @@ func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.Clai
 			continue
 		}
 		if err := queueRuns(ctx, q, e); err != nil {
+			return err
+		}
+		if err := queueDeliveries(ctx, q, e); err != nil {
 			return err
 		}
 	}

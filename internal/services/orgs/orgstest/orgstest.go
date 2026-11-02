@@ -22,7 +22,7 @@ var (
 	Manager = orgs.Role{ID: uuid.MustParse("00000000-0000-7000-8000-000000000f01"), Name: "Manager", Permissions: []string{"org.read", "org.members.manage"}}
 	// The built-in repository roles, as migration 2 writes them.
 	Reader     = orgs.Role{ID: auth.RoleReader, Name: "Reader", BuiltIn: true, Permissions: []string{"repo.read"}}
-	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
+	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "delivery.run", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
 	Maintainer = orgs.Role{ID: auth.RoleMaintainer, Name: "Maintainer", BuiltIn: true, Permissions: slices.Clone(auth.RepositoryPermissions)}
 	Automation = orgs.Role{ID: auth.RoleAutomation, Name: "Automation", BuiltIn: true, Permissions: []string{"annotations.write", "messages.post", "repo.read", "reviews.submit"}}
 	// The installation's roles, which the authorizer reads too.

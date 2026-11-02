@@ -62,3 +62,20 @@ models:
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }
+      environments: { resolver: true }
+      environment: { resolver: true }
+      delivery: { resolver: true }
+  Branch:
+    fields:
+      environments: { resolver: true }
+    extraFields:
+      RepositoryID:
+        description: The ID of the branch's repository, which its environments read.
+        type: string
+  Environment:
+    fields:
+      deliveries: { resolver: true }
+    extraFields:
+      RepositoryID:
+        description: The ID of the environment's repository, which its deliveries read.
+        type: string

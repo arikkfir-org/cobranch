@@ -11,7 +11,7 @@ var (
 	RepositoryPermissions = []string{
 		"repo.read", "repo.push", "repo.merge", "repo.bypass", "repo.manage",
 		"annotations.write", "annotations.delete_any", "reviews.submit", "messages.post", "messages.moderate", "jobs.run",
-		"secrets.manage", "secrets.read",
+		"secrets.manage", "secrets.read", "delivery.run",
 	}
 )
 

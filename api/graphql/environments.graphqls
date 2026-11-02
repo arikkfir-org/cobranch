@@ -1,0 +1,141 @@
+# A repository's environments: a target of main's /cobranch.yaml and a live branch it delivers, with the deliveries that
+# pushes and members queue for each, and what a member does to them
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "The Console and APIs").
+
+extend type Repository {
+  "The repository's environments, by target and then branch, each with its newest delivery; takes repo.read."
+  environments: [Environment!]!
+  "One of the repository's environments by ID: null unless it is there; takes repo.read."
+  environment(id: ID!): Environment
+  "One of the repository's deliveries by number: null unless it is there; takes repo.read."
+  delivery(number: Int!): Delivery
+}
+
+extend type Branch {
+  "The branch's environments, by target, each with its newest delivery; takes repo.read."
+  environments: [Environment!]!
+}
+
+extend type Mutation {
+  "Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying, and answers it; takes delivery.run. A paused environment is refused (CONFLICT, environment.paused)."
+  redeliver(repositoryId: ID!, environmentId: ID!): Delivery!
+  "Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying, and answers it as it now is; takes delivery.run. A paused one is refused (CONFLICT, environment.paused)."
+  pauseEnvironment(repositoryId: ID!, environmentId: ID!): Environment!
+  "Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head, and answers it as it now is; takes delivery.run. One that isn't paused is refused (CONFLICT, environment.not_paused)."
+  resumeEnvironment(repositoryId: ID!, environmentId: ID!): Environment!
+  "Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer, and answers it as it now is; takes delivery.run. One that doesn't wait is refused (CONFLICT, delivery.not_waiting)."
+  startDelivery(repositoryId: ID!, number: Int!): Delivery!
+}
+
+"A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them."
+type Environment {
+  id: ID!
+  "The target's principal, named as the target."
+  target: CommitPrincipal!
+  "The branch's short name."
+  branch: String!
+  "The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster."
+  cluster: ID
+  namespace: String!
+  "The commit of its last successful delivery; null before one."
+  revision: String
+  "When a delivery last succeeded; null before one."
+  syncedAt: Time
+  sync: EnvironmentSync!
+  health: EnvironmentHealth!
+  "A paused environment takes no delivery until resumed."
+  paused: Boolean!
+  "Its newest delivery; null before one."
+  latest: Delivery
+  "A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100."
+  deliveries(first: Int! = 30, after: String): DeliveryPage!
+  createdAt: Time!
+  "Counts its changes from 1."
+  version: Int!
+}
+
+"Whether an environment's cluster holds its branch's newest commit."
+enum EnvironmentSync {
+  SYNCED
+  "A newer commit waits, or its last delivery failed."
+  OUT_OF_SYNC
+}
+
+"The worst of an environment's objects' health."
+enum EnvironmentHealth {
+  HEALTHY
+  PROGRESSING
+  "Not read yet."
+  UNKNOWN
+  "An object it should hold is gone."
+  MISSING
+  DEGRADED
+}
+
+"A page of an environment's deliveries, newest first."
+type DeliveryPage {
+  deliveries: [Delivery!]!
+  "Where the next page starts, as deliveries' after; null after the last page."
+  nextCursor: String
+}
+
+"One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes."
+type Delivery {
+  id: ID!
+  "Counts the repository's deliveries from 1."
+  number: Int!
+  "Its environment's ID."
+  environmentId: ID!
+  "Its environment's target's name."
+  target: String!
+  "Its environment's branch."
+  branch: String!
+  kind: DeliveryKind!
+  "The commit it delivers; null for a teardown."
+  sha: String
+  trigger: DeliveryTrigger!
+  "The push that queued it; null for any other."
+  push: ID
+  state: DeliveryState!
+  "Why it waits, failed or was cancelled; empty otherwise."
+  reason: String!
+  "Who redelivered it, resumed its environment or started it from WAITING; null for one a push queued that never waited."
+  startedBy: CommitPrincipal
+  queuedAt: Time!
+  startedAt: Time
+  endedAt: Time
+  "Counts its changes from 1."
+  version: Int!
+}
+
+"What a delivery does."
+enum DeliveryKind {
+  "Render a commit and apply it."
+  DELIVER
+  "Apply the last render again."
+  RESYNC
+  "Delete what the environment holds."
+  TEARDOWN
+}
+
+"What queued a delivery."
+enum DeliveryTrigger {
+  PUSH
+  REDELIVER
+  RESUME
+}
+
+"Where a delivery stands."
+enum DeliveryState {
+  "It waits for a member to start it: its tip was pushed from outside the organization."
+  WAITING
+  "It waits for the controller, or for its environment's applying delivery to end."
+  QUEUED
+  RENDERING
+  APPLYING
+  SUCCEEDED
+  "It ended badly, or never started."
+  FAILED
+  "It was cancelled, or superseded by a newer delivery."
+  CANCELLED
+}

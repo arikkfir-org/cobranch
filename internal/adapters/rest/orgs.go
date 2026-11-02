@@ -96,6 +96,10 @@ var conflicts = map[error]string{
 	code.ErrRunEnded:      "run.ended",
 	code.ErrRunNotWaiting: "run.not_waiting",
 	repos.ErrGranted:      "grant.exists",
+
+	code.ErrEnvironmentPaused:    "environment.paused",
+	code.ErrEnvironmentNotPaused: "environment.not_paused",
+	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
 }
 
 // fail maps the domain's errors to problems: kind names what wasn't found. Any other error stays one, which the

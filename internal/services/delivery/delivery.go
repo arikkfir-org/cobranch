@@ -127,7 +127,8 @@ var releaseName = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9](
 
 // PlanFor plans what a delivery of c renders for target from roots: the roots that serve target, in order, with their
 // variables expanded. A namespace that isn't a DNS label, a path that leaves the repository, or a release Helm
-// wouldn't take is ErrInvalid.
+// wouldn't take is ErrInvalid; with a root it can't plan, the plan still names the namespace, where the environment
+// lives whatever its roots.
 func PlanFor(roots []code.Root, target code.Target, c Context) (Plan, error) {
 	vars := map[string]string{"target": target.Name, "branch": c.Branch, "branch.slug": Slug(c.Branch)}
 	if c.Commit != "" {
@@ -154,7 +155,7 @@ func PlanFor(roots []code.Root, target code.Target, c Context) (Plan, error) {
 		}
 		p, err := planRoot(r, vars)
 		if err != nil {
-			return Plan{}, fmt.Errorf("%w: root %d: %w", ErrInvalid, i+1, err)
+			return Plan{Namespace: namespace, Variables: vars}, fmt.Errorf("%w: root %d: %w", ErrInvalid, i+1, err)
 		}
 		plan.Roots = append(plan.Roots, p)
 	}

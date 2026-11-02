@@ -232,7 +232,7 @@
     .badge .icon svg { width: 14px; height: 14px; }
     .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
     .annotations td { vertical-align: top; }
-    .annotations td.state, .runs td.state { width: 1%; white-space: nowrap; }
+    .annotations td.state, .runs td.state, .environments td.state, .deliveries td.state { width: 1%; white-space: nowrap; }
     .reviews { list-style: none; margin: 0; padding: 0; display: grid; }
     .reviews li { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--color-border-default); min-width: 0; }
     .reviews li:first-child { border-top: 0; }
@@ -628,7 +628,8 @@
     }
 
     // A repository's pages: its code (how to clone it, and a branch's history), its branches and each one's page, a
-    // commit, its jobs' runs and each one's page, who holds grants on it, and, with repo.manage, its settings.
+    // commit, its jobs' runs and each one's page, its environments and each one's page, who holds grants on it, and,
+    // with repo.manage, its settings.
     async function showRepository(org, main, orgCan, slug, sub, rest) {
       let repo;
       try {
@@ -640,11 +641,12 @@
       }
       if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub, ...rest].filter(Boolean).map(encodeURIComponent).join("/"), true);
       const can = (p) => repo.viewerPermissions.includes(p);
-      const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["access", "Access"]];
+      const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["environments", "Environments"], ["access", "Access"]];
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
       // A directory, a file, a branch's history and a commit are the Code tab's.
       const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "runs" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "runs" && rest.length > 1) ||
+        (sub === "environments" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -665,6 +667,8 @@
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "runs" && rest.length) sections = await repositoryRun(path, at, rest[0], can, fail);
       else if (sub === "runs") sections = [await runsPanel(path, at, can, fail, "")];
+      else if (sub === "environments" && rest.length) sections = await repositoryEnvironment(path, at, rest[0], can, fail);
+      else if (sub === "environments") sections = [await environmentsPanel(path, at, "")];
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
       else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
@@ -673,8 +677,8 @@
     }
 
     // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-    // parents, to a branch's page, to a commit, to a run, to a directory or a file at a ref, and to a file's bytes, which
-    // the REST API serves.
+    // parents, to a branch's page, to a commit, to a run, to an environment, to a directory or a file at a ref, and to a
+    // file's bytes, which the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
@@ -683,6 +687,7 @@
         branchPage: (name) => root + "/branches/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         run: (number) => root + "/runs/" + number,
+        environment: (id) => root + "/environments/" + id,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
         blob: (ref, path) => root + "/blob/" + parts(ref, path),
         raw: (commit, path, download) => config.restUrl + "/v1/orgs/" + org.slug + "/repos/" + repo.slug + "/raw?" +
@@ -769,6 +774,32 @@
     // reviewBadge is a review's state as a badge, the same way.
     function reviewBadge(state) {
       const s = reviewStates[state];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // The delivery states, and the environments' syncs and healths, drawn as the run states are.
+    const deliveryStates = {
+      waiting: { word: "Waiting", icon: "circle-pause", tone: "neutral" },
+      queued: { word: "Queued", icon: "clock", tone: "neutral" },
+      rendering: { word: "Rendering", icon: "loader-circle", tone: "info" },
+      applying: { word: "Applying", icon: "loader-circle", tone: "info" },
+      succeeded: { word: "Succeeded", icon: "circle-check", tone: "success" },
+      failed: { word: "Failed", icon: "circle-x", tone: "danger" },
+      cancelled: { word: "Cancelled", icon: "ban", tone: "neutral" },
+    };
+    const environmentSyncs = {
+      synced: { word: "Synced", icon: "circle-check", tone: "success" },
+      out_of_sync: { word: "Out of sync", icon: "circle-dashed", tone: "neutral" },
+    };
+    const environmentHealths = {
+      healthy: { word: "Healthy", icon: "circle-check", tone: "success" },
+      progressing: { word: "Progressing", icon: "loader-circle", tone: "info" },
+      unknown: { word: "Unknown", icon: "circle", tone: "neutral" },
+      missing: { word: "Missing", icon: "circle-dashed", tone: "danger" },
+      degraded: { word: "Degraded", icon: "octagon-alert", tone: "danger" },
+    };
+    // badgeOf is a value as a badge, as one of the tables above draws it.
+    function badgeOf(table, value) {
+      const s = table[value];
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
@@ -1184,9 +1215,9 @@
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
-    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, and the
-    // reviews, annotations and runs of its head. main's page names what merges into it need instead, and a branch that
-    // isn't live any more, its deletion.
+    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, the
+    // reviews, annotations and runs of its head, and its environments. main's page names what merges into it need
+    // instead, and its environments, and a branch that isn't live any more, its deletion.
     async function repositoryBranch(path, at, name, can, fail) {
       let b;
       try {
@@ -1197,13 +1228,15 @@
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("div", { class: "row" }, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
-      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), mergeRequirements([b])].filter(Boolean);
+      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), mergeRequirements([b]),
+        await environmentsPanel(path, at, b.name)].filter(Boolean);
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       if (b.settingsError) sections.push(settingsError(b));
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
       if (b.commit) sections.push(commitReviews(path, b.commit, can, fail), commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
+      sections.push(await environmentsPanel(path, at, b.name));
       return sections;
     }
 
@@ -1545,6 +1578,102 @@
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, h("code", {}, r.job.displayName), " #" + r.number), h("div", {}, runActions(path, r, can, fail))), facts),
         h("section", { class: "panel" }, h("h3", {}, "Job"), h("p", {}, "As ", h("code", {}, "/cobranch.yaml"), " declared it when the run was queued."), ...work, definition)];
     }
+
+    // environmentsPanel lists the repository's environments, of branch unless it is empty, by target and then branch:
+    // each with its sync and health, where it delivers, the commit its cluster holds, and its newest delivery.
+    async function environmentsPanel(path, at, branch) {
+      const list = (await api("GET", path + "/environments" + (branch ? "?" + new URLSearchParams({ branch }) : ""))).environments;
+      const rows = list.map((e) => h("tr", {},
+        h("td", { class: "state" }, badgeOf(environmentSyncs, e.sync), " ", badgeOf(environmentHealths, e.health)),
+        h("td", {}, h("a", { href: at.environment(e.id), "data-nav": "" }, h("code", {}, e.target.displayName), branch ? null : [" of ", h("code", {}, e.branch)]),
+          e.paused ? [" ", h("span", { class: "chip" }, "Paused")] : null,
+          h("p", { class: "muted" }, deliversTo(e), " · ", e.revision ? ["at ", h("a", { href: at.commit(e.revision), "data-nav": "" }, h("code", {}, shortSha(e.revision)))] : "nothing delivered yet"),
+          e.latest ? h("p", { class: "muted" }, "Latest: #" + e.latest.number + " ", badgeOf(deliveryStates, e.latest.state), e.latest.reason ? " " + capitalized(e.latest.reason) : null) : null)));
+      const none = h("p", {}, branch ? "This branch delivers to no environment. " : "No environments yet. ", "Each target that ", h("code", {}, "/cobranch.yaml"),
+        " declares under ", h("code", {}, "delivery"), " on ", h("code", {}, "main"), " makes one for every branch it matches, on that branch's first push.");
+      return h("section", { class: "panel" }, h("h3", {}, "Environments"), rows.length ? h("table", { class: "environments" }, h("tbody", {}, rows)) : none);
+    }
+
+    // deliversTo says where an environment delivers: its namespace, in its target's cluster or this installation's.
+    const deliversTo = (e) => ["Namespace ", h("code", {}, e.namespace), e.cluster ? [" of cluster ", h("code", {}, e.cluster)] : " of this installation's cluster"];
+
+    // repositoryEnvironment is an environment's page: its target and branch, where it delivers, its sync, health and
+    // revision, Redeliver, Pause and Resume for a viewer holding delivery.run, and its deliveries.
+    async function repositoryEnvironment(path, at, id, can, fail) {
+      let e;
+      try {
+        e = await api("GET", path + "/environments/" + encodeURIComponent(id));
+      } catch (err) {
+        if (err.status !== 404 && err.status !== 400) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Environment"), h("p", {}, "This repository has no such environment."))];
+      }
+      const facts = h("dl", { class: "facts" },
+        h("dt", {}, "Branch"), h("dd", {}, h("a", { href: at.branchPage(e.branch), "data-nav": "" }, h("code", {}, e.branch))),
+        h("dt", {}, "Delivers to"), h("dd", {}, deliversTo(e)),
+        h("dt", {}, "State"), h("dd", {}, badgeOf(environmentSyncs, e.sync), " ", badgeOf(environmentHealths, e.health), e.paused ? [" ", h("span", { class: "chip" }, "Paused")] : null),
+        h("dt", {}, "Revision"), h("dd", {}, e.revision ? [h("a", { href: at.commit(e.revision), "data-nav": "" }, h("code", {}, e.revision)), " since ", whenExactly(e.syncedAt)] : "Nothing delivered yet"),
+        h("dt", {}, "Created"), h("dd", {}, whenExactly(e.createdAt)));
+      const title = h("h2", {}, h("code", {}, e.target.displayName), " of ", h("code", {}, e.branch));
+      return [h("section", { class: "panel" }, h("div", { class: "row" }, title, h("div", {}, environmentActions(path, e, can, fail))), facts),
+        await deliveriesPanel(path, at, e, can, fail)];
+    }
+
+    // environmentActions are Redeliver and Pause for an environment that isn't paused, and Resume for one that is, for a
+    // viewer holding delivery.run.
+    function environmentActions(path, e, can, fail) {
+      if (!can("delivery.run")) return null;
+      const act = (verb, button) => {
+        button.disabled = true;
+        api("POST", path + "/environments/" + e.id + "/" + verb).then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      const button = (verb, label, tone, title) => h("button", { class: "button small" + tone, type: "button", title, onclick: (ev) => act(verb, ev.currentTarget) }, label);
+      const name = e.target.displayName + " of " + e.branch;
+      if (e.paused) return button("resume", "Resume", " primary", "Resume " + name + " and deliver the head of " + e.branch);
+      return [button("redeliver", "Redeliver", " primary", "Deliver the head of " + e.branch + " to " + name + " again"), " ",
+        button("pause", "Pause", "", "Pause " + name + ": it takes no delivery until resumed")];
+    }
+
+    // deliveriesPanel lists an environment's deliveries, newest first, a page at a time: each with its state and why, its
+    // commit, what queued it and when, and Start while it waits, for a viewer holding delivery.run.
+    async function deliveriesPanel(path, at, e, can, fail) {
+      const rows = h("tbody");
+      let next = null;
+      const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older deliveries");
+      const start = (d, button) => {
+        button.disabled = true;
+        api("POST", path + "/deliveries/" + d.number + "/start").then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      const row = (d) => h("tr", {},
+        h("td", { class: "state" }, badgeOf(deliveryStates, d.state)),
+        h("td", {}, "#" + d.number + " ", d.sha ? h("a", { href: at.commit(d.sha), "data-nav": "" }, h("code", {}, shortSha(d.sha))) : "Teardown",
+          d.reason ? h("p", {}, capitalized(d.reason)) : null, h("p", { class: "muted" }, queuedBy(d), " · ", whenExactly(d.queuedAt))),
+        h("td", { class: "actions" }, can("delivery.run") && d.state === "waiting" ? h("button", { class: "button small primary", type: "button",
+          title: "Start #" + d.number + ", delivering " + shortSha(d.sha) + " to " + e.target.displayName, onclick: (ev) => start(d, ev.currentTarget) }, "Start") : null));
+      async function load(from) {
+        older.disabled = true;
+        try {
+          const page = await apiPage(from);
+          rows.append(...page.data.deliveries.map(row));
+          next = page.next;
+          older.hidden = !next;
+        } catch (err) {
+          fail(err);
+        } finally {
+          older.disabled = false;
+        }
+      }
+      await load(path + "/environments/" + e.id + "/deliveries");
+      const none = h("p", {}, "No deliveries yet. A push to ", h("code", {}, e.branch), " delivers it.");
+      return h("section", { class: "panel" }, h("h3", {}, "Deliveries"), rows.children.length ? h("table", { class: "deliveries" }, rows) : none, h("div", {}, older));
+    }
+
+    // queuedBy says what queued a delivery, and who started it.
+    const queuedBy = (d) => {
+      const by = d.startedBy ? d.startedBy.displayName : "someone since gone";
+      if (d.trigger === "redeliver") return "Redelivered by " + by;
+      if (d.trigger === "resume") return "Resumed by " + by;
+      return "A push" + (d.startedBy ? ", started by " + by : "");
+    };
 
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants
     // and revokes them: roles of the repository, to the organization's members and API keys.

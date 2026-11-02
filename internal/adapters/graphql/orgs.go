@@ -77,6 +77,10 @@ var conflicts = map[error]string{
 	repos.ErrGranted:      "grant.exists",
 	code.ErrRunEnded:      "run.ended",
 	code.ErrRunNotWaiting: "run.not_waiting",
+
+	code.ErrEnvironmentPaused:    "environment.paused",
+	code.ErrEnvironmentNotPaused: "environment.not_paused",
+	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
