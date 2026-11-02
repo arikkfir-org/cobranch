@@ -31,7 +31,7 @@ type Agents interface {
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
-	Work(ctx context.Context, v agents.Viewer) (agents.Task, string, error)
+	Work(ctx context.Context, v agents.Viewer) (agents.Work, error)
 	Transcript(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, after, limit int) ([]agents.Entry, error)
 	Append(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, e agents.Entry) (agents.Entry, bool, error)
 }

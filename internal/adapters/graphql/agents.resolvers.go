@@ -317,11 +317,11 @@ func (r *queryResolver) MyTask(ctx context.Context) (*MyTask, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, slug, err := r.Agents.Work(ctx, v.User)
+	w, err := r.Agents.Work(ctx, v.User)
 	if err != nil {
 		return nil, fail(ctx, err, "task", "finding the task")
 	}
-	return &MyTask{Organization: slug, Task: task(t)}, nil
+	return &MyTask{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions}, nil
 }
 
 // Transcript is the resolver for the transcript field.

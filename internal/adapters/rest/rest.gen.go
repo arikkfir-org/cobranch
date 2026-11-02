@@ -1959,9 +1959,11 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
-// MyTask The task a task token works, and the slug of its organization, which the harness's calls name.
+// MyTask The task a task token works, the slug of its organization, which the harness's calls name, and its agent's standing instructions, which the task starts from.
 type MyTask struct {
-	Organization string `json:"organization"`
+	// AgentInstructions The standing instructions, in Markdown, of the task's agent; empty for none.
+	AgentInstructions string `json:"agentInstructions"`
+	Organization      string `json:"organization"`
 
 	// Task A task of one of the organization's agents, which the organization numbers.
 	Task Task `json:"task"`

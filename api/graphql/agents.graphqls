@@ -135,10 +135,12 @@ type Task {
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, and the slug of its organization."
+"The task a task token works, the slug of its organization, and its agent's standing instructions, which the task starts from."
 type MyTask {
   organization: String!
   task: Task!
+  "The standing instructions, in Markdown, of the task's agent; empty for none."
+  agentInstructions: String!
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."

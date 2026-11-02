@@ -16,11 +16,12 @@ func TestAgentStoreTaskByID(t *testing.T) {
 	t.Parallel()
 	f := newAgentFixture(t)
 	task := f.assigned(t, "Look around", true, uuid.Nil)
-	got, slug, err := f.a.TaskByID(context.Background(), task.ID)
-	if err != nil || got.ID != task.ID || got.Number != task.Number || got.RepoSlug != "website" || slug != f.acme.Slug {
-		t.Errorf("TaskByID() = %+v, %q, %v", got, slug, err)
+	got, err := f.a.TaskByID(context.Background(), task.ID)
+	if err != nil || got.Task.ID != task.ID || got.Task.Number != task.Number || got.Task.RepoSlug != "website" ||
+		got.OrgSlug != f.acme.Slug || got.AgentInstructions != "Be brief." {
+		t.Errorf("TaskByID() = %+v, %v", got, err)
 	}
-	if _, _, err := f.a.TaskByID(context.Background(), uuid.New()); !errors.Is(err, orgs.ErrNotFound) {
+	if _, err := f.a.TaskByID(context.Background(), uuid.New()); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("TaskByID(none) = %v, want %v", err, orgs.ErrNotFound)
 	}
 }

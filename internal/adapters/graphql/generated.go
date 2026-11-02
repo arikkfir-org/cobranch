@@ -572,8 +572,9 @@ type ComplexityRoot struct {
 	}
 
 	MyTask struct {
-		Organization func(childComplexity int) int
-		Task         func(childComplexity int) int
+		AgentInstructions func(childComplexity int) int
+		Organization      func(childComplexity int) int
+		Task              func(childComplexity int) int
 	}
 
 	Organization struct {
@@ -3756,6 +3757,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Mutation.UpdateSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(SecretChange), args["expectedVersion"].(*int)), true
 
+	case "MyTask.agentInstructions":
+		if e.ComplexityRoot.MyTask.AgentInstructions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MyTask.AgentInstructions(childComplexity), true
 	case "MyTask.organization":
 		if e.ComplexityRoot.MyTask.Organization == nil {
 			break
@@ -5454,10 +5461,12 @@ type Task {
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, and the slug of its organization."
+"The task a task token works, the slug of its organization, and its agent's standing instructions, which the task starts from."
 type MyTask {
   organization: String!
   task: Task!
+  "The standing instructions, in Markdown, of the task's agent; empty for none."
+  agentInstructions: String!
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
@@ -8158,6 +8167,8 @@ func (ec *executionContext) childFields_MyTask(ctx context.Context, field graphq
 		return ec.fieldContext_MyTask_organization(ctx, field)
 	case "task":
 		return ec.fieldContext_MyTask_task(ctx, field)
+	case "agentInstructions":
+		return ec.fieldContext_MyTask_agentInstructions(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MyTask", field.Name)
 }
@@ -22460,6 +22471,29 @@ func (ec *executionContext) fieldContext_MyTask_task(_ context.Context, field gr
 	return fc, nil
 }
 
+func (ec *executionContext) _MyTask_agentInstructions(ctx context.Context, field graphql.CollectedField, obj *MyTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MyTask_agentInstructions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.AgentInstructions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_MyTask_agentInstructions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("MyTask", field, false, false, "String")
+}
+
 func (ec *executionContext) _Organization_id(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -34498,6 +34532,11 @@ func (ec *executionContext) _MyTask(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "task":
 			out.Values[i] = ec._MyTask_task(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "agentInstructions":
+			out.Values[i] = ec._MyTask_agentInstructions(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
