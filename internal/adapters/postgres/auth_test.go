@@ -95,6 +95,7 @@ func signIn(t *testing.T, s *AuthStore, up auth.SignUp, token string) auth.Sessi
 }
 
 func TestAuthStoreFlows(t *testing.T) {
+	t.Parallel()
 	flow := auth.Flow{StateHash: []byte("s1"), BrowserHash: []byte("b1"), ProviderID: "google", ExpiresAt: now}
 	tests := []struct {
 		name    string
@@ -106,6 +107,7 @@ func TestAuthStoreFlows(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, _ := authStore(t)
 			ctx := context.Background()
 			if err := s.CreateFlow(ctx, flow); err != nil {
@@ -129,6 +131,7 @@ func TestAuthStoreFlows(t *testing.T) {
 }
 
 func TestAuthStoreCreateFlowTwice(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	if err := s.CreateFlow(ctx, auth.Flow{StateHash: []byte("s1"), BrowserHash: []byte("b1"), ExpiresAt: now}); err != nil {
@@ -140,6 +143,7 @@ func TestAuthStoreCreateFlowTwice(t *testing.T) {
 }
 
 func TestAuthStoreSignUp(t *testing.T) {
+	t.Parallel()
 	admin := auth.Grant{RoleID: auth.RoleInstallationAdmin, Source: auth.SourceAdmins}
 	user := auth.Grant{RoleID: auth.RoleInstallationUser, Source: auth.SourceSelfServe}
 	tests := []struct {
@@ -157,6 +161,7 @@ func TestAuthStoreSignUp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, pool := authStore(t)
 			ctx := context.Background()
 			if err := s.SignUp(ctx, tt.first); err != nil {
@@ -204,6 +209,7 @@ func checkHolder(t *testing.T, s *AuthStore, up auth.SignUp, wantHolder bool) {
 }
 
 func TestAuthStoreSignIn(t *testing.T) {
+	t.Parallel()
 	listed := auth.Grant{RoleID: auth.RoleInstallationAdmin, Source: auth.SourceAdmins}
 	made := auth.Grant{RoleID: auth.RoleInstallationAdmin, Source: auth.SourceGrant}
 	tests := []struct {
@@ -221,6 +227,7 @@ func TestAuthStoreSignIn(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, pool := authStore(t)
 			ctx := context.Background()
 			up := alice(t, s, tt.grants...)
@@ -244,6 +251,7 @@ func TestAuthStoreSignIn(t *testing.T) {
 }
 
 func TestAuthStoreSignInUnknownIdentity(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	err := s.SignIn(context.Background(), auth.Identity{Issuer: "x", Subject: "y", UserID: uuid.New()}, false, session(uuid.New(), "t"))
 	if !errors.Is(err, auth.ErrNotFound) {
@@ -252,6 +260,7 @@ func TestAuthStoreSignInUnknownIdentity(t *testing.T) {
 }
 
 func TestAuthStoreSession(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		lookup  string
@@ -262,6 +271,7 @@ func TestAuthStoreSession(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, _ := authStore(t)
 			up := alice(t, s)
 			want := signIn(t, s, up, "a")
@@ -283,6 +293,7 @@ func TestAuthStoreSession(t *testing.T) {
 }
 
 func TestAuthStoreRevoke(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)
@@ -310,6 +321,7 @@ func TestAuthStoreRevoke(t *testing.T) {
 }
 
 func TestAuthStoreTouch(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)
@@ -325,6 +337,7 @@ func TestAuthStoreTouch(t *testing.T) {
 }
 
 func TestAuthStoreDeleteExpired(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		at           time.Time
@@ -337,6 +350,7 @@ func TestAuthStoreDeleteExpired(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := expiring(t)
 			flows, sessions, err := s.DeleteExpired(context.Background(), tt.at)
 			if err != nil || flows != tt.wantFlows || sessions != tt.wantSessions {
@@ -364,6 +378,7 @@ func expiring(t *testing.T) *AuthStore {
 }
 
 func TestAuthStoreSeeded(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	seeded := signUp(auth.SeedIssuer, "alice", "alice@example.com", true)

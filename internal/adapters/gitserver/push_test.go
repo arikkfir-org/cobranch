@@ -21,6 +21,7 @@ func (s *stack) websiteURL(base string, user uuid.UUID) string {
 }
 
 func TestCloneAndPush(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	first := commit(t, dir, "README.md", "# Website\n")
@@ -86,6 +87,7 @@ func checkCommit(t *testing.T, s *stack, sha string) {
 }
 
 func TestTagsAndDeletes(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	head := commit(t, dir, "README.md", "# Website\n")
@@ -108,6 +110,7 @@ func TestTagsAndDeletes(t *testing.T) {
 }
 
 func TestRefusedPushes(t *testing.T) {
+	t.Parallel()
 	moved := func(ctx context.Context, push git.Push, next git.Store) error {
 		// Another push moves main first, as one that commits between this push's snapshot and its record would.
 		if err := next.Record(ctx, git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: push.RepoID, PusherID: olivia, Transport: git.TransportHTTPS,
@@ -132,6 +135,7 @@ func TestRefusedPushes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := newStack(t)
 			dir := clone(t, s.websiteURL(s.base, olivia))
 			commit(t, dir, "README.md", "# Website\n")
@@ -150,6 +154,7 @@ func TestRefusedPushes(t *testing.T) {
 }
 
 func TestLostAnswer(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	var calls atomic.Int32
 	s.record = func(ctx context.Context, push git.Push, next git.Store) error {
@@ -173,6 +178,7 @@ func TestLostAnswer(t *testing.T) {
 }
 
 func TestConcurrentPushes(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	base := clone(t, s.websiteURL(s.base, olivia))
 	commit(t, base, "README.md", "# Website\n")
@@ -213,6 +219,7 @@ func TestConcurrentPushes(t *testing.T) {
 // TestPushAgain pushes a branch, deletes it and pushes it again: the second push of the branch brings the same
 // objects, in a pack of the same name, which the repository lists already.
 func TestPushAgain(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	commit(t, dir, "README.md", "# Website\n")
