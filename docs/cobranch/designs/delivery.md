@@ -178,17 +178,21 @@ objects that still carry the environment’s label, and never a CRD.
 
 - **Every object is checked before any is applied.** A namespaced object without a namespace takes the environment's;
   one naming another is refused. A cluster-scoped object is refused in this installation's cluster; in another, the
-  kubeconfig's RBAC decides. A `Namespace` is refused everywhere: the environment's namespace is the environment's.
+  kubeconfig's RBAC decides. A `Namespace` is refused everywhere: the environment's namespace is the environment's. So
+  is an object of a kind the cluster doesn't serve, or one rendered twice, and a render with a refused object applies
+  nothing.
 - **Ownership.** Every object carries the label `cobranch.dev/environment` with the environment's ID. An object that
-  already exists without it, or with another environment's, is refused: Cobranch never adopts what it didn't create.
-- **Order.** Objects apply in Helm's install order by kind, CRDs first; the controller waits up to a minute for each CRD
-  to be Established before applying the rest.
+  already exists without it, or with another environment's, is refused: Cobranch never adopts what it didn't create. So
+  is one the delivery's credentials may not read, since Cobranch can't tell whose it is.
+- **Order.** Objects apply in Helm's install order by kind, CRDs first, and kinds Helm doesn't order last, by kind; the
+  controller waits up to a minute in all for the CRDs to be Established before applying the rest.
 - **Server-side apply,** field manager `cobranch`, forcing conflicts: what the repository declares is what the
   environment gets, and fields others set and the repository doesn't stay theirs.
 - **Inventory and pruning.** After a whole apply, the environment's inventory becomes the objects just applied, with
   their UIDs, in one transaction; then the objects of the previous inventory that this one lacks are deleted, in reverse
-  order, if they still carry the label. CRDs are never pruned: deleting one deletes every object of its kind in the
-  cluster.
+  order, if they still carry the label and the UID it recorded. An apply that fails partway adds what it applied to the
+  previous inventory and prunes nothing, so nothing it applied is forgotten. CRDs are never pruned: deleting one deletes
+  every object of its kind in the cluster.
 - **Resync.** Every `delivery.resync` (10 minutes by default) the controller re-applies each environment's last render
   and reads its health again, so a change made by hand is put back. A resync renders nothing and reports no annotation.
 
@@ -250,7 +254,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
   that render, Out of sync while a newer commit waits or a delivery failed, and Paused.
 - **Health** follows the kstatus rules Kubernetes' own tools share, so Deployments, StatefulSets, DaemonSets, Jobs,
   PersistentVolumeClaims, Services and any object with a `Ready` condition read as they do everywhere else; an object
-  without a status is Healthy once it exists.
+  without a status is Healthy once it exists. An object that is gone, or whose kind the cluster no longer serves, is
+  Missing, and one the controller can't read is Unknown, with why.
 - **The annotation** `delivery/<target>` on the delivered commit is the target's own, as a job's is its own: a merge
   requirement may name it, and a job may trigger on it, so tests run against a preview once it is up. Job names may not
   start with `delivery/`.

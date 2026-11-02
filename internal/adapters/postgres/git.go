@@ -19,6 +19,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/limits"
 )
 
 // GitStore keeps Git hosting's rows (db/migrations/00012_git.sql): git.Store on PostgreSQL, through the queries sqlc
@@ -204,6 +205,9 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	pack := ""
 	if push.Pack != nil {
 		pack = push.Pack.Name
+		if err := weighPack(ctx, q, orgID, push); err != nil {
+			return err
+		}
 		if err := q.InsertPack(ctx, queries.InsertPackParams{RepoID: push.RepoID, Name: pack, OrgID: orgID, Upload: push.Pack.Upload,
 			Size: push.Pack.Size, Objects: push.Pack.Objects}); err != nil {
 			return fmt.Errorf("listing the pack: %w", err)
@@ -224,6 +228,36 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 		return fmt.Errorf("recording the push: %w", err)
 	}
 	return insertCommits(ctx, q, orgID, push)
+}
+
+// weighPack refuses the push's pack, with a *git.RefusedError, when listing it would bring the organization's active
+// packs over the push's Git data limit: it sums them under the organization's lock for the limit, which pushes into
+// its other repositories take too, so two can't both fit on one sum. A pack the repository lists as active already
+// adds nothing.
+func weighPack(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+	if push.GitDataLimit == 0 {
+		return nil
+	}
+	if err := lockLimit(ctx, q, limits.KindGitData, orgID); err != nil {
+		return err
+	}
+	used, err := q.GitData(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("summing the organization's Git data: %w", err)
+	}
+	active, err := q.PackActive(ctx, push.RepoID, push.Pack.Name)
+	if err != nil {
+		return fmt.Errorf("looking the pack up: %w", err)
+	}
+	adding := push.Pack.Size
+	if active {
+		adding = 0
+	}
+	if limits.Exceeds(push.GitDataLimit, used, adding) {
+		exceeded := &limits.ExceededError{Kind: limits.KindGitData, Limit: push.GitDataLimit, Used: used, Adding: adding}
+		return &git.RefusedError{Message: exceeded.Error()}
+	}
+	return nil
 }
 
 // insertCommits records the push's commits in one batch; the push worker resolves their authors and committers.

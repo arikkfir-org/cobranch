@@ -4,6 +4,9 @@
 set -eu
 ns=cobranch
 job=maintenance-ci
+# Suspended, the CronJob starts no run of its own on the hour beside this one: Forbid doesn't count a Job made by hand,
+# and once both succeeded, successfulJobsHistoryLimit would delete this one, the older.
+kubectl -n "$ns" patch cronjob cobranch-maintenance --type=merge -p '{"spec":{"suspend":true}}'
 kubectl -n "$ns" create job "$job" --from=cronjob/cobranch-maintenance
 for _ in $(seq 60); do
   state=$(kubectl -n "$ns" get job "$job" -o jsonpath='{.status.succeeded}/{.status.conditions[?(@.type=="Failed")].status}')
