@@ -6,9 +6,12 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/pressly/goose/v3"
 
 	"cobranch.dev/db/migrations"
+	"cobranch.dev/db/seeds"
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/orgs"
@@ -104,6 +107,71 @@ func TestReviewerMigrationMakesReviewers(t *testing.T) {
 	}
 }
 
+// TestReviewerMigrationRollsBack checks that rolling migration 00040 back leaves nobody who held Automation at an
+// organization outside it: whoever held it alone there holds Member, the organization's members join as Member, and
+// its pending invitations to Automation invite to Member.
+func TestReviewerMigrationRollsBack(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	full := newSchema(t, pool, migrations.FS, migrations.Go...)
+	if err := full.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	org := insertOrganizationWithAgents(ctx, t, pool, nil)
+	exec(ctx, t, pool, "UPDATE organizations SET membership_role_id = $2 WHERE id = $1", org, auth.RoleOrgAutomation)
+	tests := []struct {
+		name  string
+		roles []uuid.UUID
+		want  []uuid.UUID
+	}{
+		{name: "a member who joined as Automation", roles: []uuid.UUID{auth.RoleOrgAutomation}, want: []uuid.UUID{auth.RoleMember}},
+		{name: "a Guest who also held Automation", roles: []uuid.UUID{auth.RoleGuest, auth.RoleOrgAutomation}, want: []uuid.UUID{auth.RoleGuest}},
+		{name: "a member who never held it", roles: []uuid.UUID{auth.RoleGuest}, want: []uuid.UUID{auth.RoleGuest}},
+	}
+	users := make([]uuid.UUID, len(tests))
+	for i, tt := range tests {
+		users[i] = uuid.New()
+		exec(ctx, t, pool, "INSERT INTO principals (id, kind, display_name) VALUES ($1, 'user', 'x')", users[i])
+		exec(ctx, t, pool, "INSERT INTO memberships (org_id, user_id) VALUES ($1, $2)", org, users[i])
+		for _, role := range tt.roles {
+			exec(ctx, t, pool, "INSERT INTO grants (principal_id, role_id, scope, scope_id, source) VALUES ($1, $2, 'organization', $3, 'grant')", users[i], role, org)
+		}
+	}
+	for _, state := range []string{"pending", "declined"} {
+		exec(ctx, t, pool, "INSERT INTO invitations (id, org_id, email, role_id, invited_by, state, expires_at) VALUES ($1, $2, $3, $4, $5, $6, now() + interval '1 day')",
+			uuid.New(), org, state+"@example.com", auth.RoleOrgAutomation, users[0], state)
+	}
+	if _, err := full.provider.DownTo(ctx, 39); err != nil {
+		t.Fatal(err)
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rows, err := pool.Query(ctx, "SELECT role_id FROM grants WHERE principal_id = $1 AND scope = 'organization' AND scope_id = $2 ORDER BY role_id", users[i], org)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, err := pgx.CollectRows(rows, pgx.RowTo[uuid.UUID]); err != nil || !slices.Equal(got, tt.want) {
+				t.Errorf("roles after rolling back = %v, %v; want %v", got, err, tt.want)
+			}
+		})
+	}
+	if n := count(t, pool, "SELECT count(*) FROM organizations WHERE id = $1 AND membership_role_id = $2", org, auth.RoleMember); n != 1 {
+		t.Errorf("the organization's membership role isn't Member after rolling back")
+	}
+	if n := count(t, pool, "SELECT count(*) FROM invitations WHERE org_id = $1 AND (state = 'pending') = (role_id = $2)", org, auth.RoleMember); n != 2 {
+		t.Errorf("%d invitations as expected after rolling back, want the pending one to Member and the declined one as it was", n)
+	}
+}
+
+// exec runs statement on pool's database, or fails the test.
+func exec(ctx context.Context, t *testing.T, pool *pgxpool.Pool, statement string, args ...any) {
+	t.Helper()
+	if _, err := pool.Exec(ctx, statement, args...); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // insertOrganizationWithAgents inserts an organization with an agent of each of names, as migration 00032 keeps them,
 // and returns its ID.
 func insertOrganizationWithAgents(ctx context.Context, t *testing.T, pool *pgxpool.Pool, names []string) uuid.UUID {
@@ -168,6 +236,43 @@ func TestAgentStoreAssignReview(t *testing.T) {
 			}
 			if read, err := f.a.Task(ctx, f.acme.ID, got.Number); err != nil || read.SHA != tt.sha {
 				t.Errorf("Task() = %+v, %v; want it at %q", read, err, tt.sha)
+			}
+		})
+	}
+}
+
+// TestReviewerSeed checks that seed 12 gives each demo organization one AI reviewer holding Automation: its own on a
+// fresh demo installation, where the seeds make the organizations after the schema's migrations, and the one migration
+// 00040 made on a demo installation upgraded in place, without a second.
+func TestReviewerSeed(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name     string
+		upgraded bool
+		wantIDs  int
+	}{
+		{name: "a fresh demo installation", wantIDs: 2},
+		{name: "a demo installation upgraded in place", upgraded: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			pool := testDatabase(t)
+			if tt.upgraded {
+				if err := newSchema(t, pool, migrationsBefore(t, "00040")).Migrate(context.Background()); err != nil {
+					t.Fatal(err)
+				}
+				seed(t, pool, slices.DeleteFunc(slices.Clone(seeds.Go), func(m *goose.Migration) bool { return m.Version >= 12 }))
+			}
+			if err := newSchema(t, pool, migrations.FS, migrations.Go...).Migrate(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			seed(t, pool, seeds.Go)
+			var reviewers, seeded int
+			if err := pool.QueryRow(context.Background(), "SELECT count(*), count(*) FILTER (WHERE a.principal_id::text LIKE '00000000-0000-7000-8000-00000000d7%') FROM organizations o "+
+				"JOIN agents a ON a.org_id = o.id AND a.purpose = 'review' JOIN grants g ON g.principal_id = a.principal_id AND g.role_id = $1 AND g.scope_id = o.id",
+				auth.RoleOrgAutomation).Scan(&reviewers, &seeded); err != nil || reviewers != 2 || seeded != tt.wantIDs {
+				t.Errorf("reviewers holding Automation = %d, %d of them the seed's (%v); want one for each of the 2 demo organizations, %d the seed's",
+					reviewers, seeded, err, tt.wantIDs)
 			}
 		})
 	}

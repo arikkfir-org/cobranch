@@ -21,7 +21,9 @@ ALTER TABLE agent_tasks ADD COLUMN sha text CHECK (sha ~ '^[0-9a-f]{40}$');
 ALTER TABLE agent_tasks ADD CONSTRAINT agent_tasks_review_head CHECK (kind <> 'review' OR (sha IS NOT NULL AND branch_id IS NOT NULL));
 
 -- Every organization already here gets its reviewer, as every new one does when it is created, named AI reviewer or,
--- where one of its agents has that name, the first of AI reviewer 2, 3 and on that is free.
+-- where one of its agents has that name, the first of AI reviewer 2, 3 and on that is free. Servers still on older
+-- code while this rolls out create organizations without one; the migration that starts queueing review tasks runs
+-- this again first, and it skips every organization that has its reviewer.
 -- +goose StatementBegin
 DO $$
 DECLARE
@@ -49,14 +51,23 @@ $$;
 -- +goose StatementEnd
 
 -- +goose Down
--- Rolling back deletes the reviewers, with their grants and tasks, and the other review tasks; an organization whose
--- members joined as Automation joins them as Member again. The audit log keeps what they did.
+-- Rolling back deletes the reviewers, with their grants and tasks, and the other review tasks; the audit log keeps
+-- what they did. Automation at an organization goes with them, so whoever held it there as their only role there holds
+-- Member instead, as an organization whose members joined as Automation joins them as Member again, and its pending
+-- invitations to Automation invite to Member.
 DELETE FROM principals WHERE id IN (SELECT principal_id FROM agents WHERE purpose IS NOT NULL);
+INSERT INTO grants (principal_id, role_id, scope, scope_id, source)
+SELECT g.principal_id, '00000000-0000-7000-8000-000000000202', 'organization', g.scope_id, 'grant' FROM grants g
+WHERE g.role_id = '00000000-0000-7000-8000-000000000204' AND g.scope = 'organization'
+  AND NOT EXISTS (SELECT 1 FROM grants o WHERE o.principal_id = g.principal_id AND o.scope = 'organization' AND o.scope_id = g.scope_id
+                    AND o.role_id <> g.role_id);
+UPDATE organizations SET membership_role_id = '00000000-0000-7000-8000-000000000202'
+WHERE membership_role_id = '00000000-0000-7000-8000-000000000204';
+UPDATE invitations SET role_id = '00000000-0000-7000-8000-000000000202'
+WHERE role_id = '00000000-0000-7000-8000-000000000204' AND state = 'pending';
+DELETE FROM roles WHERE id = '00000000-0000-7000-8000-000000000204';
 DELETE FROM agent_tasks WHERE kind = 'review';
 DELETE FROM task_kinds WHERE kind = 'review';
 ALTER TABLE agent_tasks DROP COLUMN sha;
 DROP INDEX agents_purpose;
 ALTER TABLE agents DROP COLUMN purpose;
-UPDATE organizations SET membership_role_id = '00000000-0000-7000-8000-000000000202'
-WHERE membership_role_id = '00000000-0000-7000-8000-000000000204';
-DELETE FROM roles WHERE id = '00000000-0000-7000-8000-000000000204';

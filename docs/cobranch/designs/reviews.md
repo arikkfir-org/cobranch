@@ -328,9 +328,11 @@ through its own `/cobranch.yaml`, and an organization into AI review by giving i
 - **The reviewer comes in three pull requests.** The first makes it: the reviewer in every organization, Automation at
   an organization, and review tasks' kind and head, on [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s agents and
   tasks. The second queues a review on every push, supersedes the open one, asks for another and adds the `ai`
-  requirement, once [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s models land. The third gives its harness the
-  two tools and renders bodies as Markdown, on [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s runtime, and
-  closes [ENG-216](https://linear.app/arikkfir/issue/ENG-216).
+  requirement, once [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s models land; its migration first runs the
+  first's backfill again, for the organizations that servers still on older code created while the first rolled out. The
+  third gives its harness the two tools and renders bodies as Markdown, on
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s runtime, and closes
+  [ENG-216](https://linear.app/arikkfir/issue/ENG-216).
 - **The settings come before the reviewer.** The fourth reads `main`'s `/cobranch-review.yaml` on every push that moves
   `main`, refuses one that doesn't parse, and keeps the parsed copy, so a repository's settings are in place when the
   reviewer starts reviewing.
