@@ -209,8 +209,9 @@ gains the review it belongs to.
   change.
 - **A thread outlives its review.** Reviews are never deleted by people; if one goes with its commit, its threads stay
   in the chat with their answers, no longer tied to it.
-- **Anchored to the reviewed commit,** so the thread still points at what the reviewer saw after the branch moves on;
-  the Console marks it outdated once the head changes those lines.
+- **Anchored where the reviewer saw it,** on the head's side of the diff or its base's, so the thread still points at
+  what the reviewer saw after the branch moves on; a comment is outdated once the branch moves on from the commit its
+  review reviewed, wherever on the diff it is anchored.
 - **Sent whole.** The Console keeps comments drafted on the diff in the browser tab until the reviewer submits, so a
   review never shows half its comments; a head that moved on starts afresh.
 - **Change requests stay whole for now.** A review that requests changes does so as a whole; resolving its threads one

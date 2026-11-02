@@ -132,7 +132,7 @@ func TestCodeStoreReviewComments(t *testing.T) {
 	}
 	for i, th := range threads { // newest first
 		c := in.Comments[len(in.Comments)-1-i]
-		if th.ReviewID == nil || *th.ReviewID != review.ID || th.Anchor == nil || *th.Anchor != c.Anchor || th.StartedBy == nil || th.StartedBy.ID != f.max ||
+		if th.ReviewID == nil || *th.ReviewID != review.ID || th.ReviewedSHA != shaC || th.Anchor == nil || *th.Anchor != c.Anchor || th.StartedBy == nil || th.StartedBy.ID != f.max ||
 			len(th.Messages) != 1 || th.Messages[0].Body != c.Body || th.Messages[0].Author == nil || th.Messages[0].Author.ID != f.max {
 			t.Errorf("thread %d = %+v, want comment %+v of review %s", i, th, c, review.ID)
 		}
@@ -149,7 +149,7 @@ func TestCodeStoreReviewComments(t *testing.T) {
 	if _, err := f.pool.Exec(ctx, "DELETE FROM reviews WHERE id = $1", review.ID); err != nil {
 		t.Fatal(err)
 	}
-	if kept, err := f.s.Thread(ctx, f.feature, threads[0].ID); err != nil || kept.ReviewID != nil || len(kept.Messages) != 1 {
+	if kept, err := f.s.Thread(ctx, f.feature, threads[0].ID); err != nil || kept.ReviewID != nil || kept.ReviewedSHA != "" || len(kept.Messages) != 1 {
 		t.Errorf("Thread() of a review that is gone = %+v, %v; want it kept, of no review", kept, err)
 	}
 

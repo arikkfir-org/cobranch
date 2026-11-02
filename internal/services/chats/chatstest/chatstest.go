@@ -75,6 +75,13 @@ func (s *Store) Move(branchID uuid.UUID, head string) {
 	s.heads[branchID] = head
 }
 
+// Review makes a thread a comment of review id, which reviewed commit sha.
+func (s *Store) Review(threadID, id uuid.UUID, sha string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.threads[threadID].ReviewID, s.threads[threadID].ReviewedSHA = &id, sha
+}
+
 // AddCommit makes the repository hold a commit.
 func (s *Store) AddCommit(repoID uuid.UUID, sha string) {
 	s.mu.Lock()

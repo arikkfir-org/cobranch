@@ -52,11 +52,14 @@ type Anchor = code.Anchor
 type Thread struct {
 	ID     uuid.UUID
 	Anchor *Anchor
-	// Outdated is whether the branch has moved on from the commit its anchor names; false without an anchor.
+	// Outdated is whether the branch has moved on from the commit its anchor names, or for a review's comment from the
+	// commit the review reviewed, whose diff it may anchor at its base; false without an anchor.
 	Outdated bool
 	// ReviewID names the review the thread is a comment of, which opened it; nil for a thread started in the chat, and
 	// once its review is gone.
 	ReviewID *uuid.UUID
+	// ReviewedSHA is the commit the review it is a comment of reviewed; "" for a thread that is none.
+	ReviewedSHA string
 	// StartedBy is who started it; nil once they are gone.
 	StartedBy *Principal
 	CreatedAt time.Time

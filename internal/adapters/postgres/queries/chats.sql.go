@@ -209,8 +209,9 @@ func (q *Queries) ChatSubject(ctx context.Context, repoID uuid.UUID, name string
 }
 
 const chatThreads = `-- name: ChatThreads :many
-SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.repo_id = $1 AND t.branch_id = $2 AND ($3::uuid IS NULL OR t.id < $3::uuid)
 ORDER BY t.id DESC LIMIT $4
 `
@@ -226,10 +227,12 @@ type ChatThreadsRow struct {
 	ChatThread   ChatThread
 	StarterName  *string
 	ResolverName *string
+	ReviewedSha  *string
 }
 
 // ChatThreads lists at most lim of a branch's chat threads, newest first, from the one before before names, or from
-// the newest when it is null, with the display names of their starters and resolvers.
+// the newest when it is null, with the display names of their starters and resolvers, and the commit each one's review
+// reviewed.
 func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]ChatThreadsRow, error) {
 	rows, err := q.db.Query(ctx, chatThreads,
 		arg.RepoID,
@@ -261,6 +264,7 @@ func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]Cha
 			&i.ChatThread.ReviewID,
 			&i.StarterName,
 			&i.ResolverName,
+			&i.ReviewedSha,
 		); err != nil {
 			return nil, err
 		}
@@ -273,8 +277,9 @@ func (q *Queries) ChatThreads(ctx context.Context, arg ChatThreadsParams) ([]Cha
 }
 
 const chatThreadsByID = `-- name: ChatThreadsByID :many
-SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT t.id, t.org_id, t.repo_id, t.branch_id, t.sha, t.path, t.start_line, t.end_line, t.created_by, t.created_at, t.resolved_at, t.resolved_by, t.version, t.review_id, s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.repo_id = $1 AND t.branch_id = $2 AND t.id = ANY ($3::uuid[])
 `
 
@@ -282,10 +287,11 @@ type ChatThreadsByIDRow struct {
 	ChatThread   ChatThread
 	StarterName  *string
 	ResolverName *string
+	ReviewedSha  *string
 }
 
 // ChatThreadsByID finds those of a branch's chat threads that ids name, with the display names of their starters and
-// resolvers.
+// resolvers, and the commit each one's review reviewed.
 func (q *Queries) ChatThreadsByID(ctx context.Context, repoID uuid.UUID, branchID uuid.UUID, ids []uuid.UUID) ([]ChatThreadsByIDRow, error) {
 	rows, err := q.db.Query(ctx, chatThreadsByID, repoID, branchID, ids)
 	if err != nil {
@@ -312,6 +318,7 @@ func (q *Queries) ChatThreadsByID(ctx context.Context, repoID uuid.UUID, branchI
 			&i.ChatThread.ReviewID,
 			&i.StarterName,
 			&i.ResolverName,
+			&i.ReviewedSha,
 		); err != nil {
 			return nil, err
 		}

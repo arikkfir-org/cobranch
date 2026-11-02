@@ -333,6 +333,42 @@ func TestResolve(t *testing.T) {
 	}
 }
 
+func TestOutdated(t *testing.T) {
+	tests := []struct {
+		name string
+		// at is the commit the thread's anchor names, reviewed the one its review reviewed, "" for none, and head the
+		// branch's.
+		at, reviewed, head string
+		want               bool
+	}{
+		{name: "a thread at the head", at: sha(2), head: sha(2)},
+		{name: "a thread at a commit the branch moved on from", at: sha(1), head: sha(2), want: true},
+		{name: "a review's comment on its diff's base, the reviewed commit still the head", at: sha(1), reviewed: sha(2), head: sha(2)},
+		{name: "a review's comment on the reviewed commit", at: sha(2), reviewed: sha(2), head: sha(2)},
+		{name: "a review's comment once the branch moved on", at: sha(1), reviewed: sha(2), head: sha(3), want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			ctx := context.Background()
+			th, err := f.service.StartThread(ctx, f.dev, f.feature, chats.ThreadInput{Body: "Here", Anchor: &chats.Anchor{SHA: tt.at, Path: "main.go", StartLine: 1, EndLine: 1}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tt.reviewed != "" {
+				f.store.Review(th.ID, uuid.New(), tt.reviewed)
+			}
+			subj := f.feature
+			subj.Head = tt.head
+			f.store.Move(subj.BranchID, tt.head)
+			got, err := f.service.Thread(ctx, f.rae, subj, th.ID)
+			if err != nil || got.Outdated != tt.want {
+				t.Errorf("Thread().Outdated = %v, %v; want %v", got.Outdated, err, tt.want)
+			}
+		})
+	}
+}
+
 func TestThreads(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()

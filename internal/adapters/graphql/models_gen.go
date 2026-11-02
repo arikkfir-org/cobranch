@@ -181,7 +181,7 @@ type ChatThread struct {
 	ID string `json:"id"`
 	// Where it points: lines of a file at a commit; null for none.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
-	// Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	// Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit the review reviewed, whose diff it may anchor at its base; false without an anchor.
 	Outdated bool `json:"outdated"`
 	// The review the thread is a comment of, which opened it; null for a thread started in the chat, and once its review is gone.
 	ReviewID *string `json:"reviewId,omitempty"`

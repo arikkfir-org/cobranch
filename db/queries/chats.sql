@@ -35,18 +35,21 @@ WHERE subject_id = @subject_id AND kind LIKE 'chat.%' AND seq > @after::bigint
 ORDER BY seq LIMIT @lim;
 
 -- ChatThreads lists at most lim of a branch's chat threads, newest first, from the one before before names, or from
--- the newest when it is null, with the display names of their starters and resolvers.
+-- the newest when it is null, with the display names of their starters and resolvers, and the commit each one's review
+-- reviewed.
 -- name: ChatThreads :many
-SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.repo_id = @repo_id AND t.branch_id = @branch_id AND (sqlc.narg(before)::uuid IS NULL OR t.id < sqlc.narg(before)::uuid)
 ORDER BY t.id DESC LIMIT @lim;
 
 -- ChatThreadsByID finds those of a branch's chat threads that ids name, with the display names of their starters and
--- resolvers.
+-- resolvers, and the commit each one's review reviewed.
 -- name: ChatThreadsByID :many
-SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name
+SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
+LEFT JOIN reviews rv ON rv.id = t.review_id
 WHERE t.repo_id = @repo_id AND t.branch_id = @branch_id AND t.id = ANY (@ids::uuid[]);
 
 -- ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were

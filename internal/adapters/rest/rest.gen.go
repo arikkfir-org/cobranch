@@ -850,7 +850,7 @@ type ChatThread struct {
 	// Messages Its messages in the order they were posted; absent from an update.
 	Messages *[]ChatMessage `json:"messages,omitempty"`
 
-	// Outdated Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	// Outdated Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit the review reviewed, whose diff it may anchor at its base; false without an anchor.
 	Outdated bool `json:"outdated"`
 
 	// ResolvedAt When it was resolved; absent while it is open.

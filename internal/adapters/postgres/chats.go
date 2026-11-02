@@ -93,7 +93,7 @@ func (s *ChatStore) Threads(ctx context.Context, subj chats.Subject, before uuid
 	}
 	list := make([]chats.Thread, len(rows))
 	for i, r := range rows {
-		list[i] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName)
+		list[i] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName, r.ReviewedSha)
 	}
 	if err := withMessages(ctx, s.q, list); err != nil {
 		return nil, 0, err
@@ -131,7 +131,7 @@ func chatThreads(ctx context.Context, q *queries.Queries, subj chats.Subject, id
 	}
 	out := make(map[uuid.UUID]chats.Thread, len(rows))
 	for _, r := range rows {
-		out[r.ChatThread.ID] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName)
+		out[r.ChatThread.ID] = chatThreadOf(r.ChatThread, r.StarterName, r.ResolverName, r.ReviewedSha)
 	}
 	return out, nil
 }
@@ -443,10 +443,14 @@ func (s *ChatStore) Updates(ctx context.Context, subj chats.Subject, after int64
 	return out, nil
 }
 
-// chatThreadOf is the domain's view of a chat_threads row, with the display names of its starter and resolver.
-func chatThreadOf(t queries.ChatThread, starter, resolver *string) chats.Thread {
+// chatThreadOf is the domain's view of a chat_threads row, with the display names of its starter and resolver, and the
+// commit its review reviewed, if any.
+func chatThreadOf(t queries.ChatThread, starter, resolver, reviewed *string) chats.Thread {
 	out := chats.Thread{ID: t.ID, StartedBy: principalOf(t.CreatedBy, starter), CreatedAt: t.CreatedAt, ResolvedAt: t.ResolvedAt,
 		ResolvedBy: principalOf(t.ResolvedBy, resolver), Version: t.Version, ReviewID: t.ReviewID}
+	if reviewed != nil {
+		out.ReviewedSHA = *reviewed
+	}
 	if t.Sha != nil && t.Path != nil && t.StartLine != nil && t.EndLine != nil {
 		out.Anchor = &chats.Anchor{SHA: *t.Sha, Path: *t.Path, StartLine: int(*t.StartLine), EndLine: int(*t.EndLine)}
 	}
