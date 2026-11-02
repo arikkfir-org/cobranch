@@ -1,10 +1,12 @@
 package rest
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
@@ -247,5 +249,83 @@ func TestMergeBranchAPI(t *testing.T) {
 			wantStatus: 409, wantCode: "branch.moved"},
 		{name: "an installation without a Git server", viewer: failingFor(code.ErrUnavailable), method: "POST", path: fixed(feature),
 			wantStatus: 503, wantCode: "git.unavailable"},
+	})
+}
+
+// deleted checks that the Git server was asked for one deletion of branch at head, for Olivia, past its
+// requirements when bypass.
+func deleted(branch, head string, bypass bool) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, f *orgFixture, _ []byte) {
+		want := code.DeleteRequest{Branch: branch, Head: head, By: f.olivia.User.ID, Bypass: bypass}
+		if len(f.objects.Deletions) != 1 || f.objects.Deletions[0] != want {
+			t.Errorf("the Git server was asked for %+v, want %+v", f.objects.Deletions, want)
+		}
+	}
+}
+
+func TestDeleteBranchAPI(t *testing.T) {
+	const feature = "/v1/orgs/acme/repos/website/branches/feature"
+	at := func(sha string) http.Header { return http.Header{"If-Match": {`"` + sha + `"`}} }
+	// failingFor is Olivia once the Git server fails every deletion with err.
+	failingFor := func(err error) func(f *orgFixture) *auth.Authenticated {
+		return func(f *orgFixture) *auth.Authenticated {
+			f.objects.Fail = err
+			return &f.olivia
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "at the head the viewer saw", viewer: olivia, method: "DELETE", path: fixed(feature), header: at(shaOf("d")), wantStatus: 204,
+			check: deleted("feature", shaOf("d"), false)},
+		{name: "wherever it is", viewer: olivia, method: "DELETE", path: fixed(feature), header: http.Header{"If-Match": {"*"}}, wantStatus: 204,
+			check: deleted("feature", shaOf("d"), false)},
+		{name: "a branch named with a slash, escaped", viewer: olivia, method: "DELETE", path: fixed(feature + "%2Flogin"), header: at(shaOf("c")),
+			wantStatus: 204, check: deleted("feature/login", shaOf("c"), false)},
+		{name: "a head the branch moved from", viewer: olivia, method: "DELETE", path: fixed(feature), header: at(shaOf("c")),
+			wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "a weak tag", viewer: olivia, method: "DELETE", path: fixed(feature), header: http.Header{"If-Match": {`W/"` + shaOf("d") + `"`}},
+			wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "no If-Match", viewer: olivia, method: "DELETE", path: fixed(feature), wantStatus: 428, wantCode: "precondition.required"},
+		{name: "main is never deleted", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme/repos/website/branches/main"), header: at(shaOf("c")),
+			wantStatus: 409, wantCode: code.DeleteDefault},
+		{name: "a token without repo.push may not delete", viewer: oliviaToken("repo.read", "repo.merge"), method: "DELETE", path: fixed(feature),
+			header: at(shaOf("d")), wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "a branch that doesn't live", viewer: olivia, method: "DELETE", path: fixed("/v1/orgs/acme/repos/website/branches/gone"),
+			header: http.Header{"If-Match": {"*"}}, wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a Member who doesn't read it finds no repository", viewer: maxim, method: "DELETE", path: fixed(feature), header: at(shaOf("d")),
+			wantStatus: 404, wantCode: "repository.not_found"},
+		{name: "a deletion the push refuses", viewer: failingFor(&code.DeleteError{Code: code.DeleteRefused, Message: "refused"}), method: "DELETE",
+			path: fixed(feature), header: at(shaOf("d")), wantStatus: 409, wantCode: code.DeleteRefused},
+		{name: "a branch that moved while the Git server deleted it", viewer: failingFor(code.ErrBranchMoved), method: "DELETE", path: fixed(feature),
+			header: at(shaOf("d")), wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "an installation without a Git server", viewer: failingFor(code.ErrUnavailable), method: "DELETE", path: fixed(feature),
+			header: at(shaOf("d")), wantStatus: 503, wantCode: "git.unavailable"},
+	})
+}
+
+func TestDeletedBranchAPI(t *testing.T) {
+	const old = "/v1/orgs/acme/repos/website/deleted-branches/old"
+	// withOld is viewer once old was deleted, at d, by Olivia, after she merged it.
+	withOld := func(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+		return func(f *orgFixture) *auth.Authenticated {
+			by := &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}
+			f.codeStore.Deleted[f.website.ID] = []code.DeletedBranch{{Name: "old", Head: shaOf("d"), CreatedAt: now, DeletedAt: now.Add(time.Hour),
+				DeletedBy: by, Merge: &code.Merge{Head: shaOf("d"), By: by, At: now}}}
+			return viewer(f)
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "who deleted it and when, and its merge", viewer: withOld(olivia), method: "GET", path: fixed(old), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, body []byte) {
+				got := decode[DeletedBranch](t, body)
+				if got.Name != "old" || got.Head != shaOf("d") || !got.DeletedAt.Equal(now.Add(time.Hour)) || got.DeletedBy == nil ||
+					got.DeletedBy.Id != f.olivia.User.ID || got.Merge == nil || got.Merge.Head != shaOf("d") {
+					t.Errorf("old = %s", body)
+				}
+			}},
+		{name: "a token with repo.read alone reads it", viewer: withOld(oliviaToken("repo.read")), method: "GET", path: fixed(old), wantStatus: 200},
+		{name: "a live branch's name", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/deleted-branches/feature"),
+			wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a Member who doesn't read it finds no repository", viewer: withOld(maxim), method: "GET", path: fixed(old),
+			wantStatus: 404, wantCode: "repository.not_found"},
 	})
 }
