@@ -42,6 +42,17 @@ type Store interface {
 	Member(ctx context.Context, orgID, principalID uuid.UUID) (Principal, error)
 	// Repository finds one of the organization's repositories, or ErrNotFound.
 	Repository(ctx context.Context, orgID, repoID uuid.UUID) (Repository, error)
+	// ByID finds an issue by its ID, or ErrNotFound.
+	ByID(ctx context.Context, issueID uuid.UUID) (Issue, error)
+	// Branches lists the branches linked to the issue, the live ones first, by repository and name.
+	Branches(ctx context.Context, issueID uuid.UUID) ([]LinkedBranch, error)
+	// Branch finds a live branch of the organization's repository by name, with its link, or ErrBranchNotFound.
+	Branch(ctx context.Context, orgID, repoID uuid.UUID, name string) (Branch, error)
+	// Link links a live branch to an issue by hand, or unlinks it by hand for nil, in place of the issue it works on
+	// when the change applies, which may differ from branch's: it records event issue.branch_unlinked on that one and
+	// issue.branch_linked on this one, and moves this one from a state of StartsFrom to In progress, recording
+	// issue.changed, all for actor. ErrBranchNotFound when the branch was deleted.
+	Link(ctx context.Context, actor uuid.UUID, branch Branch, issueID *uuid.UUID) error
 }
 
 // Renderer renders an issue's description, as the code browsing design renders a repository's Markdown.
@@ -196,6 +207,12 @@ func (s *Service) get(ctx context.Context, v Viewer, orgID uuid.UUID, number int
 	if err := s.require(ctx, v, orgID, permission); err != nil {
 		return Issue{}, err
 	}
+	return s.find(ctx, v, orgID, number)
+}
+
+// find finds one of the organization's issues by number, its repository hidden unless v reads it, whatever v holds of
+// issues' permissions: the answer to a change v was allowed to make, as Create's and Update's are.
+func (s *Service) find(ctx context.Context, v Viewer, orgID uuid.UUID, number int) (Issue, error) {
 	issue, err := s.store.Get(ctx, orgID, number)
 	if err != nil {
 		return Issue{}, wrap("finding the issue", err)
@@ -304,7 +321,7 @@ func failed(span trace.Span, what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, ErrNotFound), errors.Is(err, orgs.ErrNotFound), errors.Is(err, ErrChanged), errors.As(err, &verr),
-		errors.Is(err, auth.ErrForbidden):
+		errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrBranchNotFound):
 		return err
 	}
 	span.RecordError(err)
@@ -317,7 +334,7 @@ func wrap(what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, ErrNotFound), errors.Is(err, ErrChanged):
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrChanged), errors.Is(err, ErrBranchNotFound):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)

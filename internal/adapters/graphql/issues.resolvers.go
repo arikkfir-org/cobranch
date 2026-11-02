@@ -12,6 +12,19 @@ import (
 	"cobranch.dev/internal/services/issues"
 )
 
+// Issue is the resolver for the issue field.
+func (r *branchResolver) Issue(ctx context.Context, obj *Branch) (*BranchIssue, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	link, err := r.IssueService.OfBranch(ctx, v.User, obj.orgID, obj.repoID, obj.Name)
+	if err != nil || link == nil {
+		return nil, issueFail(ctx, err, "reading the branch's issue")
+	}
+	return branchIssue(*link), nil
+}
+
 // Activity is the resolver for the activity field.
 func (r *issueResolver) Activity(ctx context.Context, obj *Issue) ([]*IssueEvent, error) {
 	v, orgID, err := issueOrg(ctx, obj.OrganizationID)
@@ -23,6 +36,19 @@ func (r *issueResolver) Activity(ctx context.Context, obj *Issue) ([]*IssueEvent
 		return nil, issueFail(ctx, err, "reading the issue's activity")
 	}
 	return mapAll(events, issueEvent), nil
+}
+
+// Branches is the resolver for the branches field.
+func (r *issueResolver) Branches(ctx context.Context, obj *Issue) ([]*IssueBranch, error) {
+	v, orgID, err := issueOrg(ctx, obj.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	branches, err := r.IssueService.Branches(ctx, v, orgID, obj.Number)
+	if err != nil {
+		return nil, issueFail(ctx, err, "listing the issue's branches")
+	}
+	return mapAll(branches, issueBranch), nil
 }
 
 // CreateIssue is the resolver for the createIssue field.
@@ -74,6 +100,39 @@ func (r *mutationResolver) DeleteIssue(ctx context.Context, organizationID strin
 	}
 	if err := r.IssueService.Delete(ctx, v, orgID, number, version); err != nil {
 		return false, issueFail(ctx, err, "deleting the issue")
+	}
+	return true, nil
+}
+
+// LinkBranch is the resolver for the linkBranch field.
+func (r *mutationResolver) LinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string, number int) (*BranchIssue, error) {
+	v, orgID, err := issueOrg(ctx, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	repoID, err := parseID(ctx, repositoryID, "repository")
+	if err != nil {
+		return nil, err
+	}
+	link, err := r.IssueService.Link(ctx, v, orgID, repoID, branch, number)
+	if err != nil {
+		return nil, issueFail(ctx, err, "linking the branch")
+	}
+	return branchIssue(link), nil
+}
+
+// UnlinkBranch is the resolver for the unlinkBranch field.
+func (r *mutationResolver) UnlinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string) (bool, error) {
+	v, orgID, err := issueOrg(ctx, organizationID)
+	if err != nil {
+		return false, err
+	}
+	repoID, err := parseID(ctx, repositoryID, "repository")
+	if err != nil {
+		return false, err
+	}
+	if err := r.IssueService.Unlink(ctx, v, orgID, repoID, branch); err != nil {
+		return false, issueFail(ctx, err, "unlinking the branch")
 	}
 	return true, nil
 }

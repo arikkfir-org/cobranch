@@ -1,7 +1,7 @@
 # Cobranch Git hosting
 
 > **Snapshot.** This design lives in its [Git hosting page](https://claude.ai/artifact/Jv3DXEt77hRvrUe1R92QB2), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Agreed 2026-11-01 · [ENG-198](https://linear.app/arikkfir/issue/ENG-198) · Builds the [architecture’s Git
@@ -67,9 +67,9 @@ A rename, in either state, keeps the old slug as a redirect until another reposi
 - **Creating one** takes `repos.create` at the organization. Its creator becomes its Maintainer, so it starts
   [Private](principals-and-permissions.md#visibility): only the creator and the organization's Owners reach it.
 - **Slugs** are 1 to 100 lowercase letters, digits, hyphens, dots and underscores, starting with a letter or digit and
-  not ending in `.git`, and may not be one of the Console's pages under an organization (`members`, `roles`, `api-keys`,
-  `settings`, `repos`, `new`). A rename keeps the old slug as a redirect, in the API, the Console and Git's URLs alike,
-  until another repository of the organization takes it.
+  not ending in `.git`, and may not be one of the Console's pages under an organization (`issues`, `members`, `roles`,
+  `api-keys`, `settings`, `repos`, `new`). A rename keeps the old slug as a redirect, in the API, the Console and Git's
+  URLs alike, until another repository of the organization takes it.
 - **Empty until pushed.** A new repository has no refs and no packs; cloning it gives an empty repository. Git's `HEAD`
   names `refs/heads/main` from the start, whatever the first push creates.
 - **SHA-1 for now.** The schema keeps SHAs as `bytea` and each repository's object format, so SHA-256 repositories
@@ -238,7 +238,8 @@ authenticated.
 
 ![The Console gains a repository’s pages under its organization, and the viewer’s personal tokens](git-hosting/console.svg)
 
-An organization’s own pages (members, roles, API keys, settings) keep their paths, which no repository’s slug may take.
+An organization’s own pages (issues, members, roles, API keys, settings) keep their paths, which no repository’s slug
+may take.
 
 - **An organization's home** lists the repositories the viewer reaches, and offers a new one to members with
   `repos.create`.

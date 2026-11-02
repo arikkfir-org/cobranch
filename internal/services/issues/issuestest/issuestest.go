@@ -15,13 +15,14 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is an issues.Store in memory. Repos are the repositories issues may be about, by ID. Fail, when set, fails
-// every write.
+// Store is an issues.Store in memory. Repos are the repositories issues may be about, by ID, and Live their live
+// branches, by ID, each with its link. Fail, when set, fails every write.
 type Store struct {
 	Orgs   *orgstest.Store
 	Repos  map[uuid.UUID]repos.Repository
 	Issues []issues.Issue
 	Events map[uuid.UUID][]issues.Event
+	Live   map[uuid.UUID]issues.Branch
 	last   map[uuid.UUID]int
 	Fail   error
 }
@@ -30,12 +31,21 @@ var _ issues.Store = (*Store)(nil)
 
 // NewStore returns an empty Store over o.
 func NewStore(o *orgstest.Store) *Store {
-	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Events: map[uuid.UUID][]issues.Event{}, last: map[uuid.UUID]int{}}
+	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Events: map[uuid.UUID][]issues.Event{},
+		Live: map[uuid.UUID]issues.Branch{}, last: map[uuid.UUID]int{}}
 }
 
 // AddRepository makes repo one of its organization's, for the store and the authorizer.
 func (s *Store) AddRepository(repo repos.Repository) {
 	s.Repos[repo.ID], s.Orgs.Repos[repo.ID] = repo, repo.OrgID
+}
+
+// AddBranch makes a live branch of the repository, with no link, and returns it.
+func (s *Store) AddBranch(repoID uuid.UUID, name string) issues.Branch {
+	r := s.Repos[repoID]
+	b := issues.Branch{ID: uuid.New(), OrgID: r.OrgID, Repository: issues.Repository{ID: r.ID, Slug: r.Slug, Name: r.Name}, Name: name}
+	s.Live[b.ID] = b
+	return b
 }
 
 // filled is issue with its organization's slug and key, and the names of who and what it refers to.
@@ -57,6 +67,12 @@ func (s *Store) filled(issue issues.Issue) issues.Issue {
 func (s *Store) event(actor, issueID uuid.UUID, kind string, changes []issues.Change) {
 	s.Events[issueID] = append(s.Events[issueID], issues.Event{ID: uuid.New(), Kind: kind,
 		Actor: &issues.Principal{ID: actor, DisplayName: s.Orgs.Names[actor]}, Changes: changes})
+}
+
+func (s *Store) linkEvent(actor, issueID uuid.UUID, kind string, b issues.Branch) {
+	s.Events[issueID] = append(s.Events[issueID], issues.Event{ID: uuid.New(), Kind: kind,
+		Actor:  &issues.Principal{ID: actor, DisplayName: s.Orgs.Names[actor]},
+		Branch: &issues.EventBranch{RepositoryID: b.Repository.ID, Repository: b.Repository.Slug, Name: b.Name, LinkedBy: issues.LinkedByHand}})
 }
 
 // Create numbers and records the issue.
@@ -182,4 +198,69 @@ func (s *Store) Repository(_ context.Context, orgID, repoID uuid.UUID) (issues.R
 		return issues.Repository{}, issues.ErrNotFound
 	}
 	return issues.Repository{ID: r.ID, Slug: r.Slug, Name: r.Name}, nil
+}
+
+// ByID finds an issue by its ID.
+func (s *Store) ByID(_ context.Context, issueID uuid.UUID) (issues.Issue, error) {
+	i := slices.IndexFunc(s.Issues, func(i issues.Issue) bool { return i.ID == issueID })
+	if i < 0 {
+		return issues.Issue{}, issues.ErrNotFound
+	}
+	return s.filled(s.Issues[i]), nil
+}
+
+// Branches lists the branches linked to the issue, by repository and name.
+func (s *Store) Branches(_ context.Context, issueID uuid.UUID) ([]issues.LinkedBranch, error) {
+	var out []issues.LinkedBranch
+	for _, b := range s.Live {
+		if b.IssueID == issueID {
+			out = append(out, issues.LinkedBranch{Repository: b.Repository, Name: b.Name, LinkedBy: b.LinkedBy})
+		}
+	}
+	slices.SortFunc(out, func(a, b issues.LinkedBranch) int {
+		return strings.Compare(a.Repository.Slug+"/"+a.Name, b.Repository.Slug+"/"+b.Name)
+	})
+	return out, nil
+}
+
+// Branch finds a live branch by name.
+func (s *Store) Branch(_ context.Context, orgID, repoID uuid.UUID, name string) (issues.Branch, error) {
+	for _, b := range s.Live {
+		if b.OrgID == orgID && b.Repository.ID == repoID && b.Name == name {
+			return b, nil
+		}
+	}
+	return issues.Branch{}, issues.ErrBranchNotFound
+}
+
+// Link links the branch by hand, or unlinks it for nil, and starts the issue it links.
+func (s *Store) Link(_ context.Context, actor uuid.UUID, branch issues.Branch, issueID *uuid.UUID) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	cur, ok := s.Live[branch.ID]
+	if !ok {
+		return issues.ErrBranchNotFound
+	}
+	to := uuid.Nil
+	if issueID != nil {
+		to = *issueID
+	}
+	if cur.IssueID != uuid.Nil && cur.IssueID != to {
+		s.linkEvent(actor, cur.IssueID, "issue.branch_unlinked", cur)
+	}
+	was := cur.IssueID
+	cur.IssueID, cur.LinkedBy = to, issues.LinkedByHand
+	s.Live[branch.ID] = cur
+	if to == uuid.Nil || was == to {
+		return nil
+	}
+	s.linkEvent(actor, to, "issue.branch_linked", cur)
+	i := slices.IndexFunc(s.Issues, func(i issues.Issue) bool { return i.ID == to })
+	if i >= 0 && slices.Contains(issues.StartsFrom, s.Issues[i].State) {
+		from := s.Issues[i].State
+		s.Issues[i].State, s.Issues[i].Version = issues.StateInProgress, s.Issues[i].Version+1
+		s.event(actor, to, "issue.changed", []issues.Change{{Field: "state", From: string(from), To: string(issues.StateInProgress)}})
+	}
+	return nil
 }
