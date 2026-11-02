@@ -138,8 +138,9 @@ spec:
                 grep -q 'Pushed by helm test' README.md
                 wget -qO- --header "Authorization: Bearer $COBRANCH_TOKEN" "$COBRANCH_URL/v1/orgs/$COBRANCH_ORG/repos/$COBRANCH_REPO"
           YAML
+          # A test run after an upgrade finds the file pushed already, and pushes a commit of no change to run it.
           git -C website add cobranch.yaml
-          git -C website -c user.name='Helm test' -c user.email=helm-test@cobranch.example commit -qm 'Run a job'
+          git -C website -c user.name='Helm test' -c user.email=helm-test@cobranch.example commit -q --allow-empty -m 'Run a job'
           git -C website push origin HEAD:refs/heads/main
           sha=$(git -C website rev-parse HEAD)
           for _ in $(seq 90); do
