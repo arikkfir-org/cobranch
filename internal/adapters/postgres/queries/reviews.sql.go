@@ -161,3 +161,64 @@ func (q *Queries) ReviewsOf(ctx context.Context, repoID uuid.UUID, shas []string
 	}
 	return items, nil
 }
+
+const reviewsPage = `-- name: ReviewsPage :many
+SELECT r.id, r.org_id, r.repo_id, r.sha, r.reviewer_id, r.state, r.body, r.submitted_at, p.display_name AS reviewer_display_name, p.kind AS reviewer_kind
+FROM reviews r LEFT JOIN principals p ON p.id = r.reviewer_id
+WHERE r.repo_id = $1 AND r.sha = $2
+  AND ($3::uuid IS NULL OR (r.submitted_at, r.id) > (
+    SELECT a.submitted_at, a.id FROM reviews a WHERE a.id = $3 AND a.repo_id = $1 AND a.sha = $2))
+ORDER BY r.submitted_at, r.id
+LIMIT $4
+`
+
+type ReviewsPageParams struct {
+	RepoID uuid.UUID
+	Sha    string
+	After  *uuid.UUID
+	Lim    int32
+}
+
+type ReviewsPageRow struct {
+	Review              Review
+	ReviewerDisplayName *string
+	ReviewerKind        *string
+}
+
+// ReviewsPage lists at most lim of the reviews on one of a repository's commits, in the order they were submitted,
+// after the one named after, or from the first when after is null; none when after names no review of that commit.
+func (q *Queries) ReviewsPage(ctx context.Context, arg ReviewsPageParams) ([]ReviewsPageRow, error) {
+	rows, err := q.db.Query(ctx, reviewsPage,
+		arg.RepoID,
+		arg.Sha,
+		arg.After,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ReviewsPageRow
+	for rows.Next() {
+		var i ReviewsPageRow
+		if err := rows.Scan(
+			&i.Review.ID,
+			&i.Review.OrgID,
+			&i.Review.RepoID,
+			&i.Review.Sha,
+			&i.Review.ReviewerID,
+			&i.Review.State,
+			&i.Review.Body,
+			&i.Review.SubmittedAt,
+			&i.ReviewerDisplayName,
+			&i.ReviewerKind,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

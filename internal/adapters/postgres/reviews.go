@@ -14,19 +14,27 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Reviews lists the reviews on one of the repository's commits in the order they were submitted, or repos.ErrNotFound
-// when it holds no such commit (code.Store).
-func (s *CodeStore) Reviews(ctx context.Context, repoID uuid.UUID, sha string) ([]code.Review, error) {
+// Reviews lists at most limit of the reviews on one of the repository's commits in the order they were submitted, after
+// the one named after unless it is uuid.Nil, or repos.ErrNotFound when it holds no such commit (code.Store).
+func (s *CodeStore) Reviews(ctx context.Context, repoID uuid.UUID, sha string, after uuid.UUID, limit int) ([]code.Review, error) {
 	if _, err := s.q.CommitOrg(ctx, repoID, sha); errors.Is(err, pgx.ErrNoRows) {
 		return nil, repos.ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("finding commit %s: %w", sha, err)
 	}
-	byCommit, err := reviewsAt(ctx, s.q, repoID, []string{sha})
-	if err != nil {
-		return nil, err
+	params := queries.ReviewsPageParams{RepoID: repoID, Sha: sha, Lim: int32(min(limit, code.MaxPageSize+1))}
+	if after != uuid.Nil {
+		params.After = &after
 	}
-	return byCommit[sha], nil
+	rows, err := s.q.ReviewsPage(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("reading the reviews of commit %s: %w", sha, err)
+	}
+	out := make([]code.Review, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, reviewOf(r.Review, r.ReviewerDisplayName, r.ReviewerKind))
+	}
+	return out, nil
 }
 
 // Review finds one of the repository's reviews, or repos.ErrNotFound (code.Store).

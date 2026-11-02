@@ -47,6 +47,15 @@ type Usage struct {
 	GitData int64
 }
 
+// Quota is what a subject takes of one limit, against it: a user's organizations, or an organization's repositories
+// or Git data.
+type Quota struct {
+	// Used is what it takes.
+	Used int64
+	// Limit is the most it may take; 0 caps nothing.
+	Limit int64
+}
+
 // Resolve returns the limits that apply to an installation whose chart's values set values and whose database sets
 // db: each the values', else the database's, else the default.
 func Resolve(values, db Settings) Limits {

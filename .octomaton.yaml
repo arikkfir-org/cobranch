@@ -34,8 +34,9 @@ pipelines:
     disruptions:
       reruns: 2
 
-  # Publish both images of main's newest commit, tagged with its short SHA (also the version the binary reports), for
-  # an installation that follows main. Never give it a paths filter: main's newest commit must always have its images.
+  # Publish both images of main's newest commit, tagged with its short SHA (also the version the binary reports), and
+  # then its chart, at 0.0.0-main.<n>.g<short SHA>, for an installation that follows main: it installs the newest chart,
+  # whose images are always there. Never give it a paths filter: main's newest commit must always have its images.
   - name: main
     pipelineRun: .tekton/main.yaml
     on:
@@ -45,13 +46,13 @@ pipelines:
       repo-url: "{{ .Repository.CloneURL }}"
       revision: "{{ .Revision }}"
     timeout: 30m
-    # An installation runs the images of whatever commit main is at: only the newest waiting push needs building, so a
+    # An installation runs main's newest chart: only the newest waiting push needs building, so a
     # push that a newer one overtakes while it waits publishes nothing.
     concurrency:
       group: main
       policy: latest
-    # A build whose pod the cluster took away runs again, as a new run: an installation runs the images of the commit
-    # main is at, and pushing the same tags twice is harmless. Its task doesn't retry: Tekton leaves a failed attempt's
+    # A build whose pod the cluster took away runs again, as a new run: an installation runs main's newest chart, and
+    # pushing the same tags twice is harmless. Its task doesn't retry: Tekton leaves a failed attempt's
     # Docker daemon running.
     disruptions:
       reruns: 2

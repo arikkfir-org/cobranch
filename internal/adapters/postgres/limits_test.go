@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"sync"
 	"testing"
@@ -394,5 +395,73 @@ func TestOrgStoreAllOrganizationsUsage(t *testing.T) {
 	}
 	if acme := got[0]; acme.Usage != (limits.Usage{Repositories: 2, GitData: 100}) || acme.Own.Repositories != nil || acme.Own.GitData == nil || *acme.Own.GitData != 1<<20 {
 		t.Errorf("Acme = %+v, want 2 repositories, website's 100 bytes, and its own 1 MiB of Git data", acme)
+	}
+}
+
+func TestOrgStoreCreated(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	f.createForNia(t, 2, 3)
+	if _, err := f.pool.Exec(ctx, "DELETE FROM organizations WHERE slug = 'by-nia-0'"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name string
+		user uuid.UUID
+		want int64
+	}{
+		{name: "those Nia created herself that still exist", user: f.nia, want: 2},
+		{name: "none for someone who created none", user: f.max, want: 0},
+	} {
+		if got, err := f.s.Created(ctx, tt.user); err != nil || got != tt.want {
+			t.Errorf("%s: Created() = %d, %v, want %d", tt.name, got, err, tt.want)
+		}
+	}
+}
+
+func TestRepoStoreUsage(t *testing.T) {
+	t.Parallel()
+	f := newGitFixture(t)
+	ctx := context.Background()
+	// Each pack holds 100 bytes: website lists two active ones, and secret one that compaction superseded.
+	for _, p := range []git.Push{
+		pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}),
+		pushOf(f.website.ID, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/feature", Old: git.ZeroSHA, New: shaB}}),
+		pushOf(f.secret.ID, f.olivia, "pack-3", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaB}}),
+	} {
+		if err := f.g.Record(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.pool.Exec(ctx, "UPDATE packs SET state = 'superseded', superseded_at = now() WHERE repo_id = $1", f.secret.ID); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		ids  []uuid.UUID
+		want map[string]int64 // each listed repository's Git data, by slug
+	}{
+		{name: "the repositories asked, by slug", ids: []uuid.UUID{f.website.ID, f.secret.ID}, want: map[string]int64{"secret": 0, "website": 200}},
+		{name: "only the organization's", ids: []uuid.UUID{f.website.ID, uuid.New()}, want: map[string]int64{"website": 200}},
+		{name: "the totals without any", want: map[string]int64{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			used, byRepository, err := f.r.Usage(ctx, f.acme.ID, tt.ids)
+			if err != nil || used != (limits.Usage{Repositories: 2, GitData: 200}) {
+				t.Fatalf("Usage() = %+v, %v, want 2 repositories and website's 200 bytes", used, err)
+			}
+			got := map[string]int64{}
+			for i, r := range byRepository {
+				if i > 0 && byRepository[i-1].Repository.Slug >= r.Repository.Slug {
+					t.Errorf("Usage() lists %s after %s, want them by slug", r.Repository.Slug, byRepository[i-1].Repository.Slug)
+				}
+				got[r.Repository.Slug] = r.GitData
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("Usage() lists %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

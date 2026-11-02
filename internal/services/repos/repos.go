@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -53,6 +54,24 @@ type Input struct {
 	Slug        string
 	Name        string
 	Description string
+}
+
+// Usage is what an organization takes of what its limits cap, each against the limit that applies to it, with what
+// each of its repositories the viewer reads takes.
+type Usage struct {
+	// Repositories counts the organization's repositories, every one of them.
+	Repositories limits.Quota
+	// GitData is the bytes of the organization's repositories' active packs, every repository's.
+	GitData limits.Quota
+	// ByRepository lists the repositories the viewer reads, by slug, each with its Git data.
+	ByRepository []RepositoryUsage
+}
+
+// RepositoryUsage is one repository's share of its organization's Git data.
+type RepositoryUsage struct {
+	Repository Repository
+	// GitData is the bytes of its active packs.
+	GitData int64
 }
 
 // Principal is who may hold grants on an organization's repositories: one of its members, or one of its API keys.
