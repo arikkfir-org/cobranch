@@ -19,11 +19,11 @@ spec:
     workingDir: $(workspaces.source.path)
     env:
       - name: GOCACHE
-        value: /go-cache/build
+        value: /go-cache/lint
       - name: GOMODCACHE
         value: /go-cache/mod
       - name: GOLANGCI_LINT_CACHE
-        value: /go-cache/lint
+        value: /go-cache/golangci
       - name: GOTOOLCHAIN
         value: local
       - name: GOFLAGS
@@ -45,9 +45,13 @@ spec:
           value: $(params.revision)
     - name: restore
       ref: {name: go-cache-restore} # go-cache-restore.step.yaml
+      params:
+        - name: caches
+          value: mod lint golangci
     - name: lint
       image: docker.io/golangci/golangci-lint:v2.15.0
       command: [golangci-lint, run, ./...]
+    # In golangci-lint's image, whose Go compiles the packages as golangci-lint's did: vet reuses its compiles.
     - name: vet
-      image: docker.io/library/golang:1.27.1
+      image: docker.io/golangci/golangci-lint:v2.15.0
       command: [go, vet, ./...]
