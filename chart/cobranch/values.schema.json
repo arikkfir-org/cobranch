@@ -708,6 +708,18 @@
         "affinity": {
           "type": "object"
         },
+        "webhooks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowedCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
         "admissionPolicy": {
           "type": "boolean"
         }

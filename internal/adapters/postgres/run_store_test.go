@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/runner"
@@ -155,5 +156,74 @@ func TestRunStoreDropsTokens(t *testing.T) {
 	}
 	if _, _, err := f.auths.Credential(ctx, live); err != nil {
 		t.Errorf("Credential() of a queued run's token = %v, want it", err)
+	}
+}
+
+// hookFile declares a webhook job on every push.
+const hookFile = `jobs:
+  deploy:
+    on: {push: }
+    webhook: {url: "https://deploy.example.com/hook", signingSecret: 0b9e5a3c-7d1f-4e2a-9c8b-5f6d7e8a9b0c}
+`
+
+func TestRunStoreEndsWebhookRunsTheirReceiversReport(t *testing.T) {
+	t.Parallel()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", hookFile))
+	run := f.claim(t)
+	if run.Definition.Kind() != jobs.KindWebhook || run.Job != "deploy" || run.QueuedAt.IsZero() {
+		t.Fatalf("Claim() = %+v, want deploy's webhook run, with when it was queued", run)
+	}
+	hash := f.token(t, run.ID, time.Now().Add(time.Hour))
+	if marked, err := f.r.MarkRunning(ctx, run.ID); !marked || err != nil {
+		t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
+	if running, err := f.r.Running(ctx); err != nil || len(running) != 0 {
+		t.Errorf("Running() = %+v, %v, want no pod's run", running, err)
+	}
+	report := func(status code.AnnotationStatus) {
+		t.Helper()
+		in := code.AnnotationInput{Name: "deploy", Status: status, Summary: "Deploying", Version: code.AnyVersion}
+		if _, err := f.c.SetAnnotation(ctx, run.JobID, repo, shaA, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(code.AnnotationInProgress)
+	if running, err := f.r.RunningWebhooks(ctx); err != nil || len(running) != 1 || running[0].ID != run.ID || running[0].StartedAt.IsZero() {
+		t.Errorf("RunningWebhooks() after In progress = %+v, %v, want the run", running, err)
+	}
+	report(code.AnnotationSuccessful)
+	if got, want := f.runs(t, repo), []string{"#1 deploy main@a succeeded: its webhook's receiver reported successful"}; !slices.Equal(got, want) {
+		t.Errorf("runs = %q, want %q", got, want)
+	}
+	if got := f.note(t, repo, shaA, "deploy"); got != "successful: Deploying by deploy" {
+		t.Errorf("annotation = %q, want the receiver's", got)
+	}
+	if _, _, err := f.auths.Credential(ctx, hash); !errors.Is(err, auth.ErrNotFound) {
+		t.Errorf("Credential() of the reported run's token: error = %v, want not found", err)
+	}
+	if running, err := f.r.RunningWebhooks(ctx); err != nil || len(running) != 0 {
+		t.Errorf("RunningWebhooks() = %+v, %v, want none", running, err)
+	}
+}
+
+func TestRunStoreEndsNoPodRunItsAnnotationReports(t *testing.T) {
+	t.Parallel()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", jobsFile))
+	run := f.claim(t)
+	if marked, err := f.r.MarkRunning(ctx, run.ID); !marked || err != nil {
+		t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
+	in := code.AnnotationInput{Name: "ci/build", Status: code.AnnotationSuccessful, Version: code.AnyVersion}
+	if _, err := f.c.SetAnnotation(ctx, run.JobID, repo, shaA, in); err != nil {
+		t.Fatal(err)
+	}
+	if running, err := f.r.Running(ctx); err != nil || len(running) != 1 || running[0].ID != run.ID {
+		t.Errorf("Running() = %+v, %v, want the script's run, which its pod ends", running, err)
 	}
 }

@@ -325,8 +325,8 @@ controller:
 # The organizations' job namespaces and the pods jobs run in.
 jobs:
   # Whether runs execute pods at all. False renders no cluster-wide RBAC and no admission policy, for a cluster that
-  # can't grant them, and the controller mounts no token: runs of pods and scripts fail with "this installation runs
-  # no pods".
+  # can't grant them, and the controller mounts no token: it still delivers webhooks, and runs of pods and scripts
+  # fail with "this installation runs no pods".
   pods: true
   # Starts each job namespace's name, which the organization's ID ends. Empty: the release's namespace and -jobs-,
   # such as cobranch-jobs-0193a8c0-....
@@ -380,6 +380,10 @@ jobs:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  webhooks:
+    # Ranges of egress.except that webhooks may reach all the same, such as a private receiver's: the controller checks
+    # the address it connects to, so a webhook reaches only what a job pod could, and these.
+    allowedCIDRs: []
   # The ValidatingAdmissionPolicy that holds the controller to its job namespaces, and its RoleBindings there to its
   # own roles and ServiceAccounts. Off only where your cluster's own policies hold it so.
   admissionPolicy: true

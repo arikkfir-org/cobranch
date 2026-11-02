@@ -39,7 +39,7 @@ type ranRun struct {
 	Sha, Job                 string
 }
 
-// Claim claims the queued run of a pod or a script that waited longest and that no controller holds, until leaseUntil
+// Claim claims the queued run that waited longest and that no controller holds, until leaseUntil
 // (runner.Store). A run whose definition doesn't decode fails, so that it isn't claimed again and again.
 func (s *RunStore) Claim(ctx context.Context, leaseUntil time.Time) (runner.Run, bool, error) {
 	row, err := s.q.ClaimRun(ctx, leaseUntil)
@@ -58,7 +58,7 @@ func (s *RunStore) Claim(ctx context.Context, leaseUntil time.Time) (runner.Run,
 		return runner.Run{}, false, fmt.Errorf("decoding run %s's definition: %w", row.ID, err)
 	}
 	return runner.Run{ID: row.ID, OrgID: row.OrgID, RepoID: row.RepoID, JobID: row.JobID, Number: row.Number, Job: row.Job,
-		OrgSlug: row.OrgSlug, RepoSlug: row.RepoSlug, SHA: row.Sha, Ref: row.Ref, Event: row.Trigger, Definition: job}, true, nil
+		OrgSlug: row.OrgSlug, RepoSlug: row.RepoSlug, SHA: row.Sha, Ref: row.Ref, Event: row.Trigger, Definition: job, QueuedAt: row.QueuedAt}, true, nil
 }
 
 // Token records the run's token by its hash and hint, until expiresAt, replacing one made before (runner.Store).
@@ -151,6 +151,24 @@ func (s *RunStore) Running(ctx context.Context) ([]runner.Running, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listing the running runs: %w", err)
 	}
+	return runningOf(rows)
+}
+
+// RunningWebhooks lists the webhook runs that run, waiting for their receivers to report (runner.Store).
+func (s *RunStore) RunningWebhooks(ctx context.Context) ([]runner.Running, error) {
+	rows, err := s.q.RunningWebhookRuns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("listing the running webhook runs: %w", err)
+	}
+	running := make([]queries.RunningRunsRow, 0, len(rows))
+	for _, r := range rows {
+		running = append(running, queries.RunningRunsRow(r))
+	}
+	return runningOf(running)
+}
+
+// runningOf is the running runs rows hold, each with its job's timeout.
+func runningOf(rows []queries.RunningRunsRow) ([]runner.Running, error) {
 	out := make([]runner.Running, 0, len(rows))
 	for _, r := range rows {
 		var job jobs.Job

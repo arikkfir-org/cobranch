@@ -30,12 +30,13 @@
   "QUOTA" (toJson $jobs.quota)
   "NODE_SELECTOR" (toJson $jobs.nodeSelector)
   "TOLERATIONS" (toJson $jobs.tolerations)
-  "AFFINITY" (toJson $jobs.affinity) }}
+  "AFFINITY" (toJson $jobs.affinity)
+  "WEBHOOKS_ALLOWED_CIDRS" (join "," (dig "webhooks" "allowedCIDRs" list $jobs)) }}
 {{- $vars := list }}
 {{- range $name, $value := $env }}
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
 {{- end }}
-{{- /* Without pods, the controller mounts no token: it reaches nothing in the cluster but the database. */}}
+{{- /* Without pods, the controller only delivers webhooks: it reaches no Kubernetes API, so it mounts no token. */}}
 {{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" (ternary $controller "" $jobs.pods) "env" (join "\n" $vars)) }}
 {{- if $jobs.pods }}
 ---

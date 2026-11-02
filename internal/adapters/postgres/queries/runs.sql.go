@@ -15,7 +15,7 @@ import (
 const claimRun = `-- name: ClaimRun :one
 WITH claimed AS (
     SELECT r.id FROM job_runs r
-    WHERE r.state = 'queued' AND coalesce(r.lease_until, r.queued_at) <= now() AND r.definition -> 'webhook' IS NULL
+    WHERE r.state = 'queued' AND coalesce(r.lease_until, r.queued_at) <= now()
     ORDER BY coalesce(r.lease_until, r.queued_at)
     LIMIT 1
     FOR UPDATE SKIP LOCKED
@@ -121,6 +121,52 @@ DELETE FROM run_tokens WHERE run_id = $1
 func (q *Queries) DeleteRunToken(ctx context.Context, runID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteRunToken, runID)
 	return err
+}
+
+const finishReportedRuns = `-- name: FinishReportedRuns :many
+UPDATE job_runs r SET state = $1::text, reason = $2, ended_at = now(), lease_until = NULL
+FROM jobs j
+WHERE r.job_id = $3 AND r.repo_id = $4 AND r.sha = $5 AND r.state = 'running'
+    AND r.definition -> 'webhook' IS NOT NULL AND j.principal_id = r.job_id AND j.name = $6
+RETURNING r.id
+`
+
+type FinishReportedRunsParams struct {
+	State  string
+	Reason string
+	JobID  uuid.UUID
+	RepoID uuid.UUID
+	Sha    string
+	Name   string
+}
+
+// FinishReportedRuns ends the running webhook runs of a job at a commit as their receiver reported through the job's
+// own annotation, Successful or Failed, and answers them.
+func (q *Queries) FinishReportedRuns(ctx context.Context, arg FinishReportedRunsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, finishReportedRuns,
+		arg.State,
+		arg.Reason,
+		arg.JobID,
+		arg.RepoID,
+		arg.Sha,
+		arg.Name,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const finishRun = `-- name: FinishRun :one
@@ -306,6 +352,49 @@ func (q *Queries) RunningRuns(ctx context.Context) ([]RunningRunsRow, error) {
 	var items []RunningRunsRow
 	for rows.Next() {
 		var i RunningRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrgID,
+			&i.RepoID,
+			&i.Number,
+			&i.StartedAt,
+			&i.Definition,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const runningWebhookRuns = `-- name: RunningWebhookRuns :many
+SELECT id, org_id, repo_id, number, started_at, definition FROM job_runs
+WHERE state = 'running' AND definition -> 'webhook' IS NOT NULL
+ORDER BY started_at
+`
+
+type RunningWebhookRunsRow struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	RepoID     uuid.UUID
+	Number     int64
+	StartedAt  *time.Time
+	Definition []byte
+}
+
+// RunningWebhookRuns lists the webhook runs that run, waiting for their receivers to report.
+func (q *Queries) RunningWebhookRuns(ctx context.Context) ([]RunningWebhookRunsRow, error) {
+	rows, err := q.db.Query(ctx, runningWebhookRuns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RunningWebhookRunsRow
+	for rows.Next() {
+		var i RunningWebhookRunsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OrgID,

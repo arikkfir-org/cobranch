@@ -11,8 +11,8 @@ import (
 var ErrNoPods = errors.New("this installation runs no pods")
 
 // NoPods is the Cluster of an installation that runs no pods (Settings.Pods off), whose controller has no access to
-// the cluster: it holds no job namespaces and no pods, so runs still running when pods went off fail as their pods
-// vanish, and it starts none.
+// the cluster and only delivers webhooks: it holds no job namespaces and no pods, so runs still running when pods went
+// off fail as their pods vanish, and it starts none.
 type NoPods struct{}
 
 var _ Cluster = NoPods{}

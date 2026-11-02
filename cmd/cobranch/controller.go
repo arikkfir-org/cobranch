@@ -17,6 +17,7 @@ import (
 	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/server"
+	"cobranch.dev/internal/adapters/webhook"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/runner"
 	"cobranch.dev/internal/services/secrets"
@@ -64,12 +65,17 @@ func runController(ctx context.Context, logs io.Writer) error {
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
-// runService is the runs' domain over pool's database, the cluster the controller runs in, the secrets the key opens
-// and the object store, which the returned func closes.
+// runService is the runs' domain over pool's database, the cluster the controller runs in, unless it runs no pods, the
+// secrets the key opens, the object store, which the returned func closes, and the webhooks' receivers.
 func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (*runner.Service, func(), error) {
-	cluster, err := jobsCluster(cfg.Jobs)
+	j := cfg.Jobs
+	cluster, err := jobsCluster(j)
 	if err != nil {
 		return nil, nil, err
+	}
+	poster, err := webhook.New(j.EgressExcept, j.WebhooksAllowedCIDRs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configuring the webhooks: %w", err)
 	}
 	box, err := sealer(cfg.SecretsKey)
 	if err != nil {
@@ -80,10 +86,9 @@ func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) 
 		return nil, nil, fmt.Errorf("opening the object store: %w", err)
 	}
 	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
-	j := cfg.Jobs
 	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
 		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}
-	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, settings)
+	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, poster, settings)
 	return svc, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
 }
 

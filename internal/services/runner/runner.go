@@ -1,7 +1,8 @@
 // Package runner is the controller's domain: it takes the queued runs of pods and scripts, starts each in its
 // organization's job namespace with the secrets its job may read and a token of its own, follows it to its end, keeps
-// its logs and ends it with its pod's outcome. It reaches the runs, the cluster, the secrets and the object store only
-// through its ports (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Where a run
+// its logs and ends it with its pod's outcome; and it posts webhook runs to their receivers, signed, with a token to
+// report with. It reaches the runs, the cluster, the secrets, the object store and the receivers only through its
+// ports (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Where a run
 // executes").
 package runner
 
@@ -31,6 +32,8 @@ type Run struct {
 	Event json.RawMessage
 	// Definition is the job as it was declared when the run was queued.
 	Definition jobs.Job
+	// QueuedAt is when the run was queued, which a webhook run's tries and timeout count from.
+	QueuedAt time.Time
 }
 
 // Running is a run that runs: what the controller follows it by.
@@ -44,8 +47,8 @@ type Running struct {
 
 // Store keeps the runs: postgres's.
 type Store interface {
-	// Claim claims the queued run of a pod or a script that waited longest and that no controller holds, until
-	// leaseUntil, or answers false when none waits.
+	// Claim claims the queued run that waited longest and that no controller holds, until leaseUntil, or answers
+	// false when none waits.
 	Claim(ctx context.Context, leaseUntil time.Time) (Run, bool, error)
 	// Token records the run's token by its hash and hint, until expiresAt, replacing one made before.
 	Token(ctx context.Context, runID uuid.UUID, hash []byte, hint string, expiresAt time.Time) error
@@ -58,6 +61,8 @@ type Store interface {
 	Finish(ctx context.Context, runID uuid.UUID, state jobs.State, reason string) (bool, error)
 	// Running lists the runs of pods and scripts that run.
 	Running(ctx context.Context) ([]Running, error)
+	// RunningWebhooks lists the webhook runs that run: delivered, waiting for their receivers to report.
+	RunningWebhooks(ctx context.Context) ([]Running, error)
 	// Runs finds those of ids that are runs: where each stands, and its repository.
 	Runs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Standing, error)
 	// Organizations answers which of ids are organizations still.
@@ -184,14 +189,15 @@ type Service struct {
 	cluster  Cluster
 	secrets  Secrets
 	archive  Archive
+	poster   Poster
 	settings Settings
 	now      func() time.Time
 }
 
 // NewService returns a Service that runs store's runs on cluster, with the secrets secrets hands over, keeping their
-// logs in archive.
-func NewService(store Store, cluster Cluster, secrets Secrets, archive Archive, settings Settings) *Service {
-	return &Service{store: store, cluster: cluster, secrets: secrets, archive: archive, settings: settings, now: time.Now}
+// logs in archive, and posts webhook runs with poster.
+func NewService(store Store, cluster Cluster, secrets Secrets, archive Archive, poster Poster, settings Settings) *Service {
+	return &Service{store: store, cluster: cluster, secrets: secrets, archive: archive, poster: poster, settings: settings, now: time.Now}
 }
 
 // SetClock replaces the Service's clock, for tests.

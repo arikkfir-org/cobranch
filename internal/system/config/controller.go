@@ -64,6 +64,8 @@ type Jobs struct {
 	GitURL  string `envconfig:"JOBS_GIT_URL"`
 	// LogsMaxBytes is the most of each container's log the controller keeps.
 	LogsMaxBytes Size `envconfig:"JOBS_LOGS_MAX_BYTES" default:"10Mi"`
+	// WebhooksAllowedCIDRs are ranges of EgressExcept that webhooks may reach all the same: a private receiver's.
+	WebhooksAllowedCIDRs []string `envconfig:"JOBS_WEBHOOKS_ALLOWED_CIDRS"`
 	Namespaces
 }
 
