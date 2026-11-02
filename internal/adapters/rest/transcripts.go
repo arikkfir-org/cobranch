@@ -54,7 +54,11 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 	if err != nil {
 		return nil, fail(err, "task")
 	}
-	return GetMyTask200JSONResponse{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions}, nil
+	out := GetMyTask200JSONResponse{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions, AgentEmail: w.AgentEmail}
+	if w.IssueNumber != 0 {
+		out.IssueNumber = &w.IssueNumber
+	}
+	return out, nil
 }
 
 // ListTranscript lists a page of the entries of one of the organization's tasks, in order.

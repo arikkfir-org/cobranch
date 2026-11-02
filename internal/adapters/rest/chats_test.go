@@ -45,6 +45,18 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 	}
 }
 
+// agentOnTask is Scout, a Developer on the website, through the token of its task numbered number, whose number the
+// chats know.
+func agentOnTask(number int64) func(*orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		a := working(number)(f)
+		f.store.Grant(f.scout.ID, auth.RoleDeveloper, auth.ScopeRepository, f.website.ID)
+		f.chatStore.Names[f.scout.ID] = "Scout"
+		f.chatStore.Tasks[a.Credential.Task.ID] = number
+		return a
+	}
+}
+
 func TestChats(t *testing.T) {
 	const chat = "/v1/orgs/acme/repos/website/branches/feature%2Flogin/chat"
 	anchor := `"anchor":{"sha":"` + shaOf("c") + `","path":"README.md","startLine":1,"endLine":2}`
@@ -92,6 +104,8 @@ func TestChats(t *testing.T) {
 			want: []string{`"body":""`, `"deletedBy":{"displayName":"Olivia"`}},
 		{name: "a deleted reply takes no edit", viewer: maxAs(auth.RoleDeveloper), method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Back"}`, ifMatch: "*", wantStatus: 409, wantCode: "message.deleted"},
+		{name: "an agent posts through its task's token", viewer: agentOnTask(2), method: "POST", path: "/threads/{thread}/messages", body: `{"body":"Done."}`,
+			wantStatus: 201, want: []string{`"author":{"displayName":"Scout"`, `"taskId":"`, `"taskNumber":2`}},
 		{name: "a blank thread", viewer: olivia, method: "POST", path: "/threads", body: `{"body":" "}`, wantStatus: 400, wantCode: "body.empty"},
 		{name: "a commit the repository lacks", viewer: olivia, method: "POST", path: "/threads",
 			body: `{"body":"Hm","anchor":{"sha":"` + shaOf("f") + `","path":"a","startLine":1,"endLine":1}}`, wantStatus: 400, wantCode: "anchor.commit_not_found"},

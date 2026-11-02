@@ -239,6 +239,10 @@ type ChatMessage struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 	// Who deleted it; null while it is there, and once they are gone.
 	DeletedBy *CommitPrincipal `json:"deletedBy,omitempty"`
+	// The task of the agent that posted it; null for a person's message, and once the task is deleted.
+	TaskID *string `json:"taskId,omitempty"`
+	// That task's number in its organization.
+	TaskNumber *int `json:"taskNumber,omitempty"`
 	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 }

@@ -72,11 +72,17 @@ func (e TranscriptEntryKind) Valid() bool {
 	}
 }
 
-// MyTask The task a task token works, the slug of its organization, which the harness's calls name, and its agent's standing instructions, which the task starts from.
+// MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
 type MyTask struct {
+	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
+	AgentEmail string `json:"agentEmail"`
+
 	// AgentInstructions The standing instructions, in Markdown, of the task's agent; empty for none.
 	AgentInstructions string `json:"agentInstructions"`
-	Organization      string `json:"organization"`
+
+	// IssueNumber The number of the issue the task works on, whose chat it talks in; absent for none.
+	IssueNumber  *int64 `json:"issueNumber,omitempty"`
+	Organization string `json:"organization"`
 
 	// Task A task of one of the organization's agents, which the organization numbers.
 	Task Task `json:"task"`

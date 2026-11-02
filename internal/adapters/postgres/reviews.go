@@ -124,7 +124,7 @@ func openComments(ctx context.Context, q *queries.Queries, actor, repoID, review
 		if err != nil {
 			return fmt.Errorf("naming the comment's message: %w", err)
 		}
-		if _, err := insertThread(ctx, q, actor, subj, id, messageID, &c.Anchor, &reviewID, c.Body); err != nil {
+		if _, err := insertThread(ctx, q, chats.Poster{ID: actor}, subj, id, messageID, &c.Anchor, &reviewID, c.Body); err != nil {
 			return err
 		}
 		if err := chatChanged(ctx, q, actor, subj, chats.ThreadStarted, chatEvent{Thread: id, Message: &messageID}); err != nil {

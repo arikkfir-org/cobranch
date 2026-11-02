@@ -168,16 +168,18 @@ type ComplexityRoot struct {
 	}
 
 	ChatMessage struct {
-		Author    func(childComplexity int) int
-		Body      func(childComplexity int) int
-		CreatedAt func(childComplexity int) int
-		DeletedAt func(childComplexity int) int
-		DeletedBy func(childComplexity int) int
-		EditedAt  func(childComplexity int) int
-		HTML      func(childComplexity int) int
-		ID        func(childComplexity int) int
-		ThreadID  func(childComplexity int) int
-		Version   func(childComplexity int) int
+		Author     func(childComplexity int) int
+		Body       func(childComplexity int) int
+		CreatedAt  func(childComplexity int) int
+		DeletedAt  func(childComplexity int) int
+		DeletedBy  func(childComplexity int) int
+		EditedAt   func(childComplexity int) int
+		HTML       func(childComplexity int) int
+		ID         func(childComplexity int) int
+		TaskID     func(childComplexity int) int
+		TaskNumber func(childComplexity int) int
+		ThreadID   func(childComplexity int) int
+		Version    func(childComplexity int) int
 	}
 
 	ChatPage struct {
@@ -1646,6 +1648,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ChatMessage.ID(childComplexity), true
+	case "ChatMessage.taskId":
+		if e.ComplexityRoot.ChatMessage.TaskID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.TaskID(childComplexity), true
+	case "ChatMessage.taskNumber":
+		if e.ComplexityRoot.ChatMessage.TaskNumber == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ChatMessage.TaskNumber(childComplexity), true
 	case "ChatMessage.threadId":
 		if e.ComplexityRoot.ChatMessage.ThreadID == nil {
 			break
@@ -5812,6 +5826,10 @@ type ChatMessage {
   deletedAt: Time
   "Who deleted it; null while it is there, and once they are gone."
   deletedBy: CommitPrincipal
+  "The task of the agent that posted it; null for a person's message, and once the task is deleted."
+  taskId: ID
+  "That task's number in its organization."
+  taskNumber: Int
   "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
   version: Int!
 }
@@ -7798,6 +7816,10 @@ func (ec *executionContext) childFields_ChatMessage(ctx context.Context, field g
 		return ec.fieldContext_ChatMessage_deletedAt(ctx, field)
 	case "deletedBy":
 		return ec.fieldContext_ChatMessage_deletedBy(ctx, field)
+	case "taskId":
+		return ec.fieldContext_ChatMessage_taskId(ctx, field)
+	case "taskNumber":
+		return ec.fieldContext_ChatMessage_taskNumber(ctx, field)
 	case "version":
 		return ec.fieldContext_ChatMessage_version(ctx, field)
 	}
@@ -14313,6 +14335,52 @@ func (ec *executionContext) fieldContext_ChatMessage_deletedBy(_ context.Context
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _ChatMessage_taskId(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_taskId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TaskID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_taskId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, "ID")
+}
+
+func (ec *executionContext) _ChatMessage_taskNumber(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ChatMessage_taskNumber(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.TaskNumber, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ChatMessage_taskNumber(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ChatMessage", field, false, false, "Int")
 }
 
 func (ec *executionContext) _ChatMessage_version(ctx context.Context, field graphql.CollectedField, obj *ChatMessage) (ret graphql.Marshaler) {
@@ -32915,6 +32983,16 @@ func (ec *executionContext) _ChatMessage(ctx context.Context, sel ast.SelectionS
 			}
 		case "deletedBy":
 			out.Values[i] = ec._ChatMessage_deletedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "taskId":
+			out.Values[i] = ec._ChatMessage_taskId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "taskNumber":
+			out.Values[i] = ec._ChatMessage_taskNumber(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}

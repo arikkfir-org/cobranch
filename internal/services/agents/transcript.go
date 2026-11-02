@@ -120,19 +120,19 @@ func ValidateEntry(e Entry) (*StateChange, error) {
 
 // working answers the task the request's credential works, when it is a task token of v's.
 func working(ctx context.Context, v Viewer) (uuid.UUID, bool) {
-	a, ok := auth.Viewer(ctx)
-	if !ok || a.Credential.Kind != auth.CredentialTaskToken || a.User.ID != v.ID {
-		return uuid.Nil, false
-	}
-	return a.Credential.Task.ID, true
+	return auth.WorkingTask(ctx, v.ID)
 }
 
-// Work is a task as its harness starts from it: the task, its organization's slug, which the harness's calls name, and
-// its agent's standing instructions.
+// Work is a task as its harness starts from it: the task, its organization's slug, which the harness's calls name, its
+// agent's standing instructions and email, and the number of its issue, whose chat it talks in.
 type Work struct {
 	Task              Task
 	OrgSlug           string
 	AgentInstructions string
+	// AgentEmail is the email the harness commits with.
+	AgentEmail string
+	// IssueNumber is the number of the issue the task works on; 0 for none.
+	IssueNumber int64
 }
 
 // Work answers the task the request's task token works, for the harness to start from; auth.ErrForbidden for any

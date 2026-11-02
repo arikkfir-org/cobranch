@@ -61,7 +61,7 @@ func TestChatStoreSubject(t *testing.T) {
 // started starts a thread of by's on feature, and returns it.
 func (f *chatFixture) started(t *testing.T, by uuid.UUID, body string) chats.Thread {
 	t.Helper()
-	thread, _, err := f.s.StartThread(context.Background(), by, f.feature, v7(), v7(), nil, body)
+	thread, _, err := f.s.StartThread(context.Background(), chats.Poster{ID: by}, f.feature, v7(), v7(), nil, body)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestChatStoreStartThread(t *testing.T) {
 	f := newChatFixture(t)
 	ctx := context.Background()
 	anchor := &chats.Anchor{SHA: shaC, Path: "src/main.go", StartLine: 3, EndLine: 5}
-	first, created, err := f.s.StartThread(ctx, f.max, f.feature, v7(), v7(), anchor, "Why *this*?")
+	first, created, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.feature, v7(), v7(), anchor, "Why *this*?")
 	if err != nil || !created {
 		t.Fatalf("StartThread() = %v, %v", created, err)
 	}
@@ -102,7 +102,7 @@ func TestChatStoreStartThread(t *testing.T) {
 		len(first.Messages) != 1 || first.Messages[0].Body != "Why *this*?" || first.Messages[0].Author.ID != f.max {
 		t.Fatalf("StartThread() = %+v", first)
 	}
-	again, created, err := f.s.StartThread(ctx, f.nia, f.feature, first.ID, v7(), nil, "Again")
+	again, created, err := f.s.StartThread(ctx, chats.Poster{ID: f.nia}, f.feature, first.ID, v7(), nil, "Again")
 	if err != nil || created || again.ID != first.ID || len(again.Messages) != 1 {
 		t.Errorf("StartThread(its ID again) = %+v, %v, %v; want the thread, not started again", again, created, err)
 	}
@@ -110,7 +110,7 @@ func TestChatStoreStartThread(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.s.StartThread(ctx, f.max, main, first.ID, v7(), nil, "Elsewhere"); !errors.Is(err, chats.ErrIDTaken) {
+	if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, main, first.ID, v7(), nil, "Elsewhere"); !errors.Is(err, chats.ErrIDTaken) {
 		t.Errorf("StartThread(another chat's ID) = %v, want %v", err, chats.ErrIDTaken)
 	}
 }
@@ -120,21 +120,21 @@ func TestChatStorePost(t *testing.T) {
 	f := newChatFixture(t)
 	ctx := context.Background()
 	first, second, reply := f.started(t, f.max, "Why?"), f.started(t, f.nia, "Ship it"), v7()
-	if m, created, err := f.s.Post(ctx, f.nia, f.feature, first.ID, reply, "Because"); err != nil || !created || m.ThreadID != first.ID ||
+	if m, created, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, f.feature, first.ID, reply, "Because"); err != nil || !created || m.ThreadID != first.ID ||
 		m.Author.ID != f.nia {
 		t.Fatalf("Post() = %+v, %v, %v", m, created, err)
 	}
-	if _, created, err := f.s.Post(ctx, f.nia, f.feature, first.ID, reply, "Because"); err != nil || created {
+	if _, created, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, f.feature, first.ID, reply, "Because"); err != nil || created {
 		t.Errorf("Post(its ID again) = %v, %v; want it found", created, err)
 	}
-	if _, _, err := f.s.Post(ctx, f.nia, f.feature, second.ID, reply, "Because"); !errors.Is(err, chats.ErrIDTaken) {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, f.feature, second.ID, reply, "Because"); !errors.Is(err, chats.ErrIDTaken) {
 		t.Errorf("Post(another thread's message's ID) = %v, want %v", err, chats.ErrIDTaken)
 	}
 	main, err := f.s.Subject(ctx, f.website.ID, "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.s.Post(ctx, f.nia, main, first.ID, v7(), "Lost"); !errors.Is(err, repos.ErrNotFound) {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, main, first.ID, v7(), "Lost"); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Post() to another chat's thread = %v, want %v", err, repos.ErrNotFound)
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name IN ('chat_threads', 'chat_messages') AND principal_id = $1", f.nia); n != 4 {
@@ -147,7 +147,7 @@ func TestChatStoreThreads(t *testing.T) {
 	f := newChatFixture(t)
 	ctx := context.Background()
 	first, second, reply := f.started(t, f.max, "Why?"), f.started(t, f.nia, "Ship it"), v7()
-	if _, _, err := f.s.Post(ctx, f.nia, f.feature, first.ID, reply, "Because"); err != nil {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.nia}, f.feature, first.ID, reply, "Because"); err != nil {
 		t.Fatal(err)
 	}
 	page, after, err := f.s.Threads(ctx, f.feature, uuid.Nil, 10)
@@ -263,7 +263,7 @@ func TestChatStoreDeletedBranch(t *testing.T) {
 	if _, err := f.pool.Exec(ctx, "UPDATE branches SET deleted_at = now() WHERE id = $1", f.feature.BranchID); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := f.s.Post(ctx, f.max, f.feature, thread.ID, v7(), "Late"); !errors.Is(err, chats.ErrBranchDeleted) {
+	if _, _, err := f.s.Post(ctx, chats.Poster{ID: f.max}, f.feature, thread.ID, v7(), "Late"); !errors.Is(err, chats.ErrBranchDeleted) {
 		t.Errorf("Post() to a deleted branch's chat = %v, want %v", err, chats.ErrBranchDeleted)
 	}
 	if kept, err := f.s.Thread(ctx, f.feature, thread.ID); err != nil || len(kept.Messages) != 1 {
@@ -297,7 +297,7 @@ func TestChatHub(t *testing.T) {
 	for _, what := range []string{"listening", "a change"} {
 		if what == "a change" {
 			drain(other)
-			if _, _, err := f.s.StartThread(ctx, f.max, f.feature, v7(), v7(), nil, "Hi"); err != nil {
+			if _, _, err := f.s.StartThread(ctx, chats.Poster{ID: f.max}, f.feature, v7(), v7(), nil, "Hi"); err != nil {
 				t.Fatal(err)
 			}
 		}

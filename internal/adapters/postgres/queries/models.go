@@ -102,6 +102,7 @@ type ChatMessage struct {
 	DeletedAt *time.Time
 	DeletedBy *uuid.UUID
 	Version   int64
+	TaskID    *uuid.UUID
 }
 
 type ChatThread struct {

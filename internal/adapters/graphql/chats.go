@@ -49,8 +49,13 @@ func chatThread(t chats.Thread) *ChatThread {
 }
 
 func chatMessage(m chats.Message) *ChatMessage {
-	return &ChatMessage{ID: m.ID.String(), ThreadID: m.ThreadID.String(), Body: m.Body, HTML: m.HTML, Author: commitPrincipal(m.Author),
+	out := &ChatMessage{ID: m.ID.String(), ThreadID: m.ThreadID.String(), Body: m.Body, HTML: m.HTML, Author: commitPrincipal(m.Author),
 		CreatedAt: m.CreatedAt.UTC(), EditedAt: utc(m.EditedAt), DeletedAt: utc(m.DeletedAt), DeletedBy: commitPrincipal(m.DeletedBy), Version: int(m.Version)}
+	if m.Task != nil {
+		id, number := m.Task.ID.String(), int(m.Task.Number)
+		out.TaskID, out.TaskNumber = &id, &number
+	}
+	return out
 }
 
 // utc is *at in UTC, or nil for nil.

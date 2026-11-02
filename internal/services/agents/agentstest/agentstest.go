@@ -269,7 +269,7 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 	return s.tasks[i], nil
 }
 
-// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs and its agent's instructions.
+// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs and its agent's instructions and email.
 func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Work, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -278,7 +278,8 @@ func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Work, error) {
 		return agents.Work{}, orgs.ErrNotFound
 	}
 	t := s.tasks[i]
-	return agents.Work{Task: t, OrgSlug: s.OrgSlugs[t.OrgID], AgentInstructions: s.agents[t.Agent.ID].Instructions}, nil
+	return agents.Work{Task: t, OrgSlug: s.OrgSlugs[t.OrgID], AgentInstructions: s.agents[t.Agent.ID].Instructions,
+		AgentEmail: agents.Email(t.Agent.ID)}, nil
 }
 
 // Entries lists at most limit of a task's entries numbered above after.
