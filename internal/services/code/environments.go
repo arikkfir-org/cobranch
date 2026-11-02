@@ -108,7 +108,7 @@ type Environment struct {
 	// Paused environments take no delivery until resumed.
 	Paused    bool
 	CreatedAt time.Time
-	// Version counts its changes from 1: with its newest delivery's number and version, its ETag.
+	// Version counts its changes from 1: with a digest of how it reads, its ETag.
 	Version int64
 	// Latest is its newest delivery, nil before one.
 	Latest *Delivery
@@ -138,7 +138,7 @@ type Delivery struct {
 	QueuedAt  time.Time
 	StartedAt *time.Time
 	EndedAt   *time.Time
-	// Version counts its changes from 1: its ETag.
+	// Version counts its changes from 1: with a digest of how it reads, its ETag.
 	Version int64
 }
 

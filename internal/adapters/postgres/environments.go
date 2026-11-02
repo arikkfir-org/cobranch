@@ -239,9 +239,9 @@ func deliverHead(ctx context.Context, q *queries.Queries, row queries.Environmen
 }
 
 // environmentForUpdate finds a live environment and locks it, or answers repos.ErrNotFound. It first takes the
-// repository's delivery queue, as a push's queueDeliveries does before it reads the environment, so a redeliver, pause
-// or resume waits for a push that is queueing and the push for it: neither acts on what the other is changing, and
-// both lock the queue before the environment.
+// repository's delivery queue, as a push that delivers does before it locks a branch or reads the environment, so a
+// redeliver, pause or resume waits for a push that is queueing and the push for it: neither acts on what the other is
+// changing, and both lock the queue before the environment and the branches.
 func environmentForUpdate(ctx context.Context, q *queries.Queries, repoID, id uuid.UUID) (queries.EnvironmentForUpdateRow, error) {
 	if err := q.LockDeliveryQueue(ctx, repoID); err != nil {
 		return queries.EnvironmentForUpdateRow{}, fmt.Errorf("locking the repository's deliveries: %w", err)

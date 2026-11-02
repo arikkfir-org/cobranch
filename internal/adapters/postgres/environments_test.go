@@ -316,9 +316,40 @@ func TestCodeStoreWaitsForAQueueingPush(t *testing.T) {
 	}
 }
 
-// whileQueueing holds the website's delivery queue in a transaction, as a push worker does while it queues, starts act,
-// checks that it waits, runs push in the transaction and commits it, and waits for act.
-func (f *jobsFixture) whileQueueing(t *testing.T, push func(tx pgx.Tx), act func() error) {
+// TestCodeStorePushQueuesBeforeItLocksBranches checks that a push waits for an environment's action before it locks a
+// branch: the action holds the delivery queue and then locks the branches at its commit, so a push that locked a branch
+// first and waited for the queue after would deadlock with it.
+func TestCodeStorePushQueuesBeforeItLocksBranches(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	f.pushTwoDeliveries(t)
+	// Its job's run restatuses feature/login, at c, before its deliveries queue.
+	p := pushOf(f.website.ID, f.nia, "pack-3", []git.RefUpdate{{Name: "refs/heads/feature/login", Old: shaB, New: shaC}},
+		commit(shaC, person("Nia", "nia@example.com"), shaB))
+	p.Settings = []git.TipSettings{tip(t, "feature/login", "blob-2", deliveryFile+jobsFile)}
+	p.Facts = []git.Facts{{Branch: "feature/login", Ahead: 2}}
+	if err := f.g.Record(ctx, p); err != nil {
+		t.Fatal(err)
+	}
+	f.whileQueueing(t, func(tx pgx.Tx) {
+		if _, err := tx.Exec(ctx, "SELECT id FROM branches WHERE repo_id = $1 AND name = 'feature/login' FOR UPDATE", f.website.ID); err != nil {
+			t.Errorf("locking feature/login while the queue is held: %v", err)
+		}
+	}, func() error {
+		_, err := f.g.Process(ctx, git.RetryAfter)
+		return err
+	})
+	want := []string{"#1 production main@a queued", "#2 previews feature/login@b cancelled: superseded by #3",
+		"#3 previews feature/login@c waiting: waits for a member to start it"}
+	if got := f.deliveries(t, f.website.ID); !slices.Equal(got, want) {
+		t.Errorf("deliveries = %q, want %q", got, want)
+	}
+}
+
+// whileQueueing holds the website's delivery queue in a transaction, as a push worker or an environment's action does,
+// starts act, checks that it waits, runs then in the transaction and commits it, and waits for act.
+func (f *jobsFixture) whileQueueing(t *testing.T, then func(tx pgx.Tx), act func() error) {
 	t.Helper()
 	ctx := context.Background()
 	tx, err := f.pool.Begin(ctx)
@@ -333,10 +364,10 @@ func (f *jobsFixture) whileQueueing(t *testing.T, push func(tx pgx.Tx), act func
 	go func() { done <- act() }()
 	select {
 	case err := <-done:
-		t.Fatalf("acted while the push held the queue: %v", err)
+		t.Fatalf("acted while the queue was held: %v", err)
 	case <-time.After(200 * time.Millisecond):
 	}
-	push(tx)
+	then(tx)
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}

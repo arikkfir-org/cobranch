@@ -21,7 +21,7 @@ import (
 // made on its first delivery (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md,
 // "Targets and environments"). Its roots come from the file at e's commit, which must still be the branch's head. Each
 // delivery sets its target's annotation, delivery/<target>, on the commit, whose branches then get their status worked
-// out again.
+// out again. Its caller holds the repository's delivery queue, as lockDeliveries takes it.
 func queueDeliveries(ctx context.Context, q *queries.Queries, e jobs.Event) error {
 	branch, ok := git.Branch(e.Ref)
 	if !ok || e.Kind != jobs.EventPush {
@@ -43,9 +43,6 @@ func queueDeliveries(ctx context.Context, q *queries.Queries, e jobs.Event) erro
 	if err != nil {
 		return fmt.Errorf("finding commit %s: %w", e.SHA, err)
 	}
-	if err := q.LockDeliveryQueue(ctx, e.RepoID); err != nil {
-		return fmt.Errorf("locking the repository's deliveries: %w", err)
-	}
 	wait, err := waitsForMember(ctx, q, e.RepoID, e.ActorID)
 	if err != nil {
 		return err
@@ -66,6 +63,21 @@ func queueDeliveries(ctx context.Context, q *queries.Queries, e jobs.Event) erro
 		}
 	}
 	return restatusAt(ctx, q, e.RepoID, e.SHA)
+}
+
+// lockDeliveries takes the repository's delivery queue for a push, in its transaction, when the default branch's
+// /cobranch.yaml declares targets: before any of the push's steps locks a branch, since a redeliver, pause or resume
+// takes the queue before it locks the branches at its commit, and a push that took them in the other order could
+// deadlock with one. A repository that delivers nothing never takes it.
+func lockDeliveries(ctx context.Context, q *queries.Queries, repoID uuid.UUID) error {
+	main, err := mainSettings(ctx, q, repoID)
+	if err != nil || len(main.Delivery.Targets) == 0 {
+		return err
+	}
+	if err := q.LockDeliveryQueue(ctx, repoID); err != nil {
+		return fmt.Errorf("locking the repository's deliveries: %w", err)
+	}
+	return nil
 }
 
 // branchTip is a live branch's head and the delivery roots of the /cobranch.yaml there: none without the file, and
