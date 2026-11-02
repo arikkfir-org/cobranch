@@ -19,13 +19,16 @@ func controllerEnv(changes map[string]string) map[string]string {
 	return env
 }
 
+// controllerCase is a test of LoadController: the environment, and what it reads from it or the error it names.
+type controllerCase struct {
+	name    string
+	env     map[string]string
+	check   func(Controller) bool
+	wantErr string
+}
+
 func TestLoadController(t *testing.T) {
-	tests := []struct {
-		name    string
-		env     map[string]string
-		check   func(Controller) bool
-		wantErr string
-	}{
+	checkControllers(t, []controllerCase{
 		{name: "defaults", env: controllerEnv(nil), check: func(c Controller) bool {
 			return c.PollInterval == 5*time.Second && c.SweepInterval == 5*time.Minute && c.Pods && c.Lease == 2*time.Minute &&
 				c.Timeout == time.Hour && c.MaxTimeout == 24*time.Hour && c.LogsMaxBytes == 10<<20 && c.PodSecurity == "restricted" &&
@@ -35,32 +38,6 @@ func TestLoadController(t *testing.T) {
 				c.RenderTimeout == 10*time.Minute && c.HealthInterval == 15*time.Second && c.DeliveryPodSecurity == "restricted" &&
 				c.RendersKeep == 10
 		}},
-		{name: "agents' own", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_IMAGE": "tools:v2", "COBRANCH_AGENTS_TIMEOUT": "2h",
-			"COBRANCH_AGENTS_MAX_TURNS": "50", "COBRANCH_AGENTS_RESOURCES": `{"limits":{"memory":"4Gi"}}`}), check: func(c Controller) bool {
-			return c.Agents.Image == "tools:v2" && c.Agents.Timeout == 2*time.Hour && c.Agents.MaxTurns == 50 && c.Agents.Resources.Value.Limits.Memory().String() == "4Gi"
-		}},
-		{name: "no turns", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_MAX_TURNS": "0"}), wantErr: "COBRANCH_AGENTS_MAX_TURNS"},
-		{name: "a provider's gateway", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_PROVIDER_URLS": `{"anthropic":"https://gateway.example.com/anthropic"}`}),
-			check: func(c Controller) bool {
-				return c.Agents.ProviderURLs.Value["anthropic"] == "https://gateway.example.com/anthropic"
-			}},
-		{name: "a provider's gateway that isn't a URL", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_PROVIDER_URLS": `{"anthropic":"gateway:8080"}`}),
-			wantErr: "COBRANCH_AGENTS_PROVIDER_URLS names anthropic"},
-		{name: "delivery into this cluster", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true",
-			"COBRANCH_DELIVERY_ACCOUNT": "cobranch-delivery", "COBRANCH_DELIVERY_ROLE": "cobranch-cobranch-delivery",
-			"COBRANCH_DELIVERY_FENCE_ROLE": "cobranch-cobranch-environments", "COBRANCH_DELIVERY_POD_SECURITY": "baseline",
-			"COBRANCH_DELIVERY_INGRESS_FROM":   `[{"matchLabels":{"kubernetes.io/metadata.name":"gateway"}}]`,
-			"COBRANCH_DELIVERY_QUOTA":          `{"pods":"20"}`,
-			"COBRANCH_DELIVERY_RENDER_TIMEOUT": "5m", "COBRANCH_DELIVERY_RENDER_RESOURCES": `{"limits":{"memory":"512Mi"}}`}),
-			check: func(c Controller) bool {
-				return c.InCluster && c.Account == "cobranch-delivery" && c.DeliveryPodSecurity == "baseline" && len(c.IngressFrom.Value) == 1 &&
-					c.DeliveryQuota.Value.Pods().String() == "20" && c.RenderTimeout == 5*time.Minute &&
-					c.RenderResources.Value.Limits.Memory().String() == "512Mi" && c.PodSecurity == "restricted"
-			}},
-		{name: "delivery into this cluster without its account", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true"}),
-			wantErr: "COBRANCH_DELIVERY_ACCOUNT"},
-		{name: "no render timeout", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDER_TIMEOUT": "0s"}), wantErr: "must be positive"},
-		{name: "no renders kept", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDERS_KEEP": "0"}), wantErr: "COBRANCH_DELIVERY_RENDERS_KEEP"},
 		{name: "the chart's maps and lists", env: controllerEnv(map[string]string{
 			"COBRANCH_JOBS_NAMESPACE_LABELS": `{"example.com/team":"ci"}`, "COBRANCH_JOBS_EGRESS_EXCEPT": "10.0.0.0/8,fc00::/7",
 			"COBRANCH_JOBS_EGRESS_DNS": `[{"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}},"namespaceSelector":{}}]`,
@@ -78,7 +55,48 @@ func TestLoadController(t *testing.T) {
 		{name: "resources that aren't JSON", env: controllerEnv(map[string]string{"COBRANCH_JOBS_RESOURCES": "cpu=1"}), wantErr: "JOBS_RESOURCES"},
 		{name: "a default beyond the most", env: controllerEnv(map[string]string{"COBRANCH_JOBS_TIMEOUT": "25h"}), wantErr: "within the most"},
 		{name: "no poll", env: controllerEnv(map[string]string{"COBRANCH_JOBS_POLL_INTERVAL": "0s"}), wantErr: "must be positive"},
-	}
+	})
+}
+
+func TestLoadControllerAgents(t *testing.T) {
+	checkControllers(t, []controllerCase{
+		{name: "agents' own", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_IMAGE": "tools:v2", "COBRANCH_AGENTS_TIMEOUT": "2h",
+			"COBRANCH_AGENTS_MAX_TURNS": "50", "COBRANCH_AGENTS_RESOURCES": `{"limits":{"memory":"4Gi"}}`}), check: func(c Controller) bool {
+			return c.Agents.Image == "tools:v2" && c.Agents.Timeout == 2*time.Hour && c.Agents.MaxTurns == 50 && c.Agents.Resources.Value.Limits.Memory().String() == "4Gi"
+		}},
+		{name: "no turns", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_MAX_TURNS": "0"}), wantErr: "COBRANCH_AGENTS_MAX_TURNS"},
+		{name: "a provider's gateway", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_PROVIDER_URLS": `{"anthropic":"https://gateway.example.com/anthropic"}`}),
+			check: func(c Controller) bool {
+				return c.Agents.ProviderURLs.Value["anthropic"] == "https://gateway.example.com/anthropic"
+			}},
+		{name: "a provider's gateway that isn't a URL", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_PROVIDER_URLS": `{"anthropic":"gateway:8080"}`}),
+			wantErr: "COBRANCH_AGENTS_PROVIDER_URLS names anthropic"},
+	})
+}
+
+func TestLoadControllerDelivery(t *testing.T) {
+	checkControllers(t, []controllerCase{
+		{name: "delivery into this cluster", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true",
+			"COBRANCH_DELIVERY_ACCOUNT": "cobranch-delivery", "COBRANCH_DELIVERY_ROLE": "cobranch-cobranch-delivery",
+			"COBRANCH_DELIVERY_FENCE_ROLE": "cobranch-cobranch-environments", "COBRANCH_DELIVERY_POD_SECURITY": "baseline",
+			"COBRANCH_DELIVERY_INGRESS_FROM":   `[{"matchLabels":{"kubernetes.io/metadata.name":"gateway"}}]`,
+			"COBRANCH_DELIVERY_QUOTA":          `{"pods":"20"}`,
+			"COBRANCH_DELIVERY_RENDER_TIMEOUT": "5m", "COBRANCH_DELIVERY_RENDER_RESOURCES": `{"limits":{"memory":"512Mi"}}`}),
+			check: func(c Controller) bool {
+				return c.InCluster && c.Account == "cobranch-delivery" && c.DeliveryPodSecurity == "baseline" && len(c.IngressFrom.Value) == 1 &&
+					c.DeliveryQuota.Value.Pods().String() == "20" && c.RenderTimeout == 5*time.Minute &&
+					c.RenderResources.Value.Limits.Memory().String() == "512Mi" && c.PodSecurity == "restricted"
+			}},
+		{name: "delivery into this cluster without its account", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true"}),
+			wantErr: "COBRANCH_DELIVERY_ACCOUNT"},
+		{name: "no render timeout", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDER_TIMEOUT": "0s"}), wantErr: "must be positive"},
+		{name: "no renders kept", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDERS_KEEP": "0"}), wantErr: "COBRANCH_DELIVERY_RENDERS_KEEP"},
+	})
+}
+
+// checkControllers runs tests against LoadController.
+func checkControllers(t *testing.T, tests []controllerCase) {
+	t.Helper()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clean(t, tt.env)
