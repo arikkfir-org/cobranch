@@ -135,6 +135,7 @@ func (s *AgentStore) SecretRepository(ctx context.Context, orgID, secretID uuid.
 // SetModel puts one of the organization's agents on a model of a provider it added, or on none with both empty, for
 // actor, holding the provider against removal meanwhile, at version or at any version for agents.AnyVersion, and
 // answers it; agents.ErrChanged, and a validation error for a provider the organization hasn't added (agents.Store).
+// The AI reviewer's model changes the status of the branches whose base requires its approval.
 func (s *AgentStore) SetModel(ctx context.Context, actor, orgID, id uuid.UUID, version int64, provider, model string) (agents.Agent, error) {
 	return s.changeAgent(ctx, actor, orgID, id, "picking the agent's model", func(ctx context.Context, q *queries.Queries) error {
 		params := queries.SetAgentModelParams{ID: id, OrgID: orgID, Version: version}
@@ -146,10 +147,17 @@ func (s *AgentStore) SetModel(ctx context.Context, actor, orgID, id uuid.UUID, v
 			}
 			params.Provider, params.Model = &provider, &model
 		}
-		if _, err := q.SetAgentModel(ctx, params); err != nil {
+		set, err := q.SetAgentModel(ctx, params)
+		if err != nil {
 			return changed(err, fmt.Sprintf("picking agent %s's model", id))
 		}
-		return orgEvent(ctx, q, &orgID, actor, "agent.model_set", id, map[string]any{"provider": provider, "model": model})
+		if err := orgEvent(ctx, q, &orgID, actor, "agent.model_set", id, map[string]any{"provider": provider, "model": model}); err != nil {
+			return err
+		}
+		if set.Purpose != nil && *set.Purpose == agents.PurposeReview {
+			return restatusRequiringAI(ctx, q, orgID)
+		}
+		return nil
 	})
 }
 

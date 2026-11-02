@@ -77,6 +77,18 @@ func TestParseReviewRequirements(t *testing.T) {
 			wantErr: "/cobranch.yaml: line 4: approvals must be a whole number from 0 to 10"},
 		{name: "approvals as a string", settings: "branches:\n  main:\n    requires:\n      reviews: {approvals: \"2\"}\n",
 			wantErr: "/cobranch.yaml: line 4: approvals must be a whole number from 0 to 10"},
+		{name: "the AI reviewer's approval", settings: "branches:\n  main:\n    requires:\n      reviews:\n        ai: true\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{AI: true}}}},
+		{name: "the AI reviewer's approval beside people's", settings: "branches:\n  main:\n    requires:\n      reviews: {approvals: 1, ai: true}\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{Approvals: 1, AI: true}}}},
+		{name: "ai turned off", settings: "branches:\n  main:\n    requires:\n      reviews: {ai: false}\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{}}}},
+		{name: "ai of null", settings: "branches:\n  main:\n    requires:\n      reviews: {ai: null}\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{}}}},
+		{name: "ai as a string", settings: "branches:\n  main:\n    requires:\n      reviews: {ai: \"yes\"}\n",
+			wantErr: "/cobranch.yaml: line 4: ai must be true or false"},
+		{name: "ai as a list", settings: "branches:\n  main:\n    requires:\n      reviews:\n        ai: [true]\n",
+			wantErr: "/cobranch.yaml: line 5: ai must be true or false"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) { checkSettings(t, tt.settings, tt.want, tt.wantErr) })

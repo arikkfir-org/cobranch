@@ -1337,11 +1337,12 @@
       const needs = (r) => [...r.annotations.map((n) => h("li", {}, "Annotation ", h("code", {}, n), " Successful on its head")),
         r.linearHistory ? h("li", {}, "No merge commit among its commits to merge") : null,
         r.reviews && r.reviews.approvals ? h("li", {}, plural(r.reviews.approvals, "approval"), " of its head, by people other than its author and its pusher") : null,
+        r.reviews && r.reviews.ai ? h("li", {}, "The AI reviewer's approval of its head") : null,
         r.reviews ? h("li", {}, "No reviewer whose latest review of its head requests changes") : null];
       const named = (b) => {
         const r = b.requirements;
         const parts = [...r.annotations.map((n) => h("code", {}, n)), r.linearHistory ? "linear history" : null,
-          r.reviews ? (r.reviews.approvals ? plural(r.reviews.approvals, "approval") : "reviews") : null].filter(Boolean);
+          r.reviews ? (r.reviews.approvals ? plural(r.reviews.approvals, "approval") : "reviews") : null, r.reviews && r.reviews.ai ? "the AI reviewer's approval" : null].filter(Boolean);
         return h("li", {}, h("code", {}, b.name), ": ", parts.length ? parts.flatMap((x, i) => i ? [", ", x] : [x]) : "named, with no requirements");
       };
       const file = () => h("code", {}, "/cobranch.yaml");
@@ -1349,7 +1350,7 @@
         h("p", {}, "A branch merges into ", h("code", {}, "main"), " once it is up to date with it", main && main.requirements ? ", and needs:" : "."),
         main && main.requirements ? [h("ul", {}, needs(main.requirements)),
           h("p", {}, "A push into ", h("code", {}, "main"), " brings only Ready branches' commits; a principal holding ", h("code", {}, "repo.bypass"), " pushes past.")] : null,
-        main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations, linear history or approvals."),
+        main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations, linear history, approvals or the AI reviewer's."),
         others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
     }
 
@@ -1412,7 +1413,8 @@
     const checkLine = (iconName, tone, label, detail) => h("li", {}, h("span", { class: "tone-" + tone }, icon(iconName)), h("span", {}, label), h("span", { class: "detail" }, detail));
     const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
     // checkItem is one of b's checks as a line: a required annotation as it stands on b's head, linear history, the
-    // approvals of b's head and each reviewer requesting changes of it, and being up to date with b's base.
+    // approvals of b's head, the AI reviewer's, each reviewer requesting changes of it, and being up to date with b's
+    // base.
     function checkItem(b, c) {
       const on = " on " + shortSha(b.head);
       const met = c.met ? ["circle-check", "success"] : ["circle-x", "danger"];
@@ -1425,14 +1427,37 @@
       if (c.kind === "linear_history") return checkLine(...met, "Linear history", c.met ? "No merge commits" : c.count ? plural(c.count, "merge commit") : "Not worked out yet");
       if (c.kind === "approvals") return checkLine(...met, "Approvals", c.count + " of " + c.required + on);
       if (c.kind === "changes_requested") return checkLine("circle-alert", "warning", [c.name, " requested changes"], "On " + shortSha(b.head));
+      if (c.kind === "ai") {
+        const s = aiCheckStates[c.ai] || aiCheckStates.unreviewed;
+        return checkLine(s.icon, s.tone, "The AI reviewer's approval", s.word + (s.head ? on : ""));
+      }
       return checkLine(...met, ["Up to date with ", h("code", {}, b.base)], plural(c.count, "commit") + " behind");
     }
+    // aiCheckStates are the states of the AI reviewer's check: a word for each, its icon and tone, and whether it is of
+    // the head; why one blocks a branch, said in full; and the three that keep it Processing.
+    const aiCheckStates = {
+      waiting: { word: "Waits for a member to start its review", icon: "circle-pause", tone: "neutral", head: true, pending: true },
+      queued: { word: "Review queued", icon: "clock", tone: "neutral", head: true, pending: true },
+      running: { word: "Reviewing", icon: "loader-circle", tone: "info", head: true, pending: true },
+      approved: { word: "Approved", icon: "circle-check", tone: "success", head: true },
+      changes_requested: { word: "Changes requested", icon: "circle-alert", tone: "warning", head: true, why: "The AI reviewer requested changes on its head." },
+      not_approved: { word: "Not approved", icon: "circle-x", tone: "danger", head: true, why: "The AI reviewer reviewed its head without approving it." },
+      unreviewed: { word: "Not reviewed", icon: "circle-x", tone: "danger", head: true, why: "The AI reviewer hasn't reviewed its head: ask for a review." },
+      failed: { word: "Review failed", icon: "circle-x", tone: "danger", head: true, why: "The AI review failed: " },
+      cancelled: { word: "Review cancelled", icon: "circle-x", tone: "danger", head: true, why: "The AI review was cancelled: " },
+      no_model: { word: "No model", icon: "circle-x", tone: "danger", why: "The AI reviewer has no model: an organization admin picks one on its agent's page." },
+      suspended: { word: "Suspended", icon: "circle-x", tone: "danger", why: "The AI reviewer is suspended." },
+      off: { word: "Off for this branch", icon: "circle-x", tone: "danger", why: "main's /cobranch-review.yaml leaves this branch out of the AI reviewer's reviews." },
+      missing: { word: "No reviewer", icon: "circle-x", tone: "danger", why: "The organization has no AI reviewer." },
+    };
     // whyNot says, in a line, what holds b back when it is Blocked or Processing: the first requirement it fails, or
     // what it waits for.
     function whyNot(b) {
       if (b.status === "processing") {
         const running = b.checks.find((c) => c.kind === "annotation" && (c.status === "pending" || c.status === "in_progress"));
-        return running ? [h("code", {}, running.name), " is " + annotationStatuses[running.status].word.toLowerCase() + " on its head."]
+        const reviewing = b.checks.find((c) => c.kind === "ai" && aiCheckStates[c.ai] && aiCheckStates[c.ai].pending);
+        if (running) return [h("code", {}, running.name), " is " + annotationStatuses[running.status].word.toLowerCase() + " on its head."];
+        return reviewing ? "The AI reviewer's review of its head: " + aiCheckStates[reviewing.ai].word.toLowerCase() + "."
           : "Cobranch is processing the push that last moved it.";
       }
       const c = b.status === "blocked" && b.checks.find((c) => !c.met);
@@ -1441,6 +1466,10 @@
       if (c.kind === "linear_history") return [h("code", {}, b.base), " requires linear history, and ", c.count ? plural(c.count, "merge commit") : "a merge commit", " is among its commits."];
       if (c.kind === "approvals") return [h("code", {}, b.base), " requires ", plural(c.required, "approval"), " of its head, and it has ", c.count ? c.count : "none", "."];
       if (c.kind === "changes_requested") return [c.name, " requested changes on its head."];
+      if (c.kind === "ai") {
+        const s = aiCheckStates[c.ai] || aiCheckStates.unreviewed;
+        return s.why + (c.reason || "");
+      }
       return ["It is ", plural(c.count, "commit"), " behind ", h("code", {}, b.base), ": bring it up to date."];
     }
 

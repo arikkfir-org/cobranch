@@ -81,7 +81,8 @@ func (s *AgentStore) Append(ctx context.Context, actor, taskID uuid.UUID, e agen
 	return out, created, err
 }
 
-// moveTask moves the locked task t to the change's state, or answers agents.ErrTransition, and records its event.
+// moveTask moves the locked task t to the change's state, or answers agents.ErrTransition, and records its event; a
+// review task's move changes the status of the branches at its head.
 func moveTask(ctx context.Context, q *queries.Queries, actor, taskID uuid.UUID, t queries.LockTaskRow, change agents.StateChange) error {
 	from := make([]string, 0, 2)
 	for _, state := range change.From() {
@@ -95,5 +96,8 @@ func moveTask(ctx context.Context, q *queries.Queries, actor, taskID uuid.UUID, 
 	case n == 0:
 		return agents.ErrTransition
 	}
-	return orgEvent(ctx, q, &t.OrgID, actor, "task."+string(change.State), taskID, map[string]any{"number": t.Number})
+	if err := orgEvent(ctx, q, &t.OrgID, actor, "task."+string(change.State), taskID, map[string]any{"number": t.Number}); err != nil {
+		return err
+	}
+	return restatusReviewed(ctx, q, t.Kind, t.RepoID, t.Sha)
 }

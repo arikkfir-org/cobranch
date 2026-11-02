@@ -6,6 +6,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/git"
 )
 
 // reviewerOff is viewer with the organization's AI reviewer unable to review, for err.
@@ -66,6 +67,36 @@ func TestBranchAIReviewAPI(t *testing.T) {
 			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if b := decode[Branch](t, body); b.AiReview != nil {
 					t.Errorf("branch = %s", body)
+				}
+			}},
+	})
+}
+
+func TestBranchAICheckAPI(t *testing.T) {
+	failed := func(f *orgFixture) *auth.Authenticated {
+		f.codeStore.UpdateBranch(f.website.ID, "main", func(b *code.Branch) {
+			b.Requirements = &git.Requirements{Branch: "main", Reviews: &git.ReviewRequirements{Approvals: 1, AI: true}}
+		})
+		f.codeStore.UpdateBranch(f.website.ID, "feature", func(b *code.Branch) {
+			b.Checks = []code.Check{{Kind: code.CheckAI, AI: code.AIFailed, Reason: "The model's provider refused the credentials."},
+				{Kind: code.CheckUpToDate}}
+		})
+		return &f.olivia
+	}
+	runOrgCases(t, []orgCase{
+		{name: "the AI reviewer's check and why it failed", viewer: failed, method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/repos/website/branches/feature"), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				c := decode[Branch](t, body).Checks
+				if len(c) != 2 || c[0].Kind != BranchCheckKindAi || c[0].Ai == nil || *c[0].Ai != AICheckStateFailed ||
+					c[0].Reason == nil || *c[0].Reason != "The model's provider refused the credentials." || c[0].Count != nil ||
+					c[1].Ai != nil || c[1].Reason != nil {
+					t.Errorf("checks = %s", body)
+				}
+			}},
+		{name: "main requires the AI reviewer's approval", viewer: failed, method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/repos/website/branches/main"), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if r := decode[Branch](t, body).Requirements; r == nil || r.Reviews == nil || !r.Reviews.Ai || r.Reviews.Approvals != 1 {
+					t.Errorf("requirements = %s", body)
 				}
 			}},
 	})

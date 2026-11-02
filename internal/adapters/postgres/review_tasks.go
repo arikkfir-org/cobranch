@@ -131,33 +131,61 @@ func queueReview(ctx context.Context, q *queries.Queries, r reviewRequest) (code
 	return insertReview(ctx, q, actor, t, wait)
 }
 
+// aiReviewer is the AI reviewer of a repository's organization: its agent, why it reviews nothing (code.ErrNoReviewer,
+// code.ErrReviewerNoModel or code.ErrReviewerSuspended; nil when it can), and the repository's settings from the
+// default branch's /cobranch-review.yaml, or their defaults without one.
+type aiReviewer struct {
+	row      queries.ReviewerOfRow
+	off      error
+	settings git.ReviewSettings
+}
+
+// reviewerOf finds the AI reviewer of the repository's organization, and the repository's settings.
+func reviewerOf(ctx context.Context, q *queries.Queries, repoID uuid.UUID) (aiReviewer, error) {
+	out := aiReviewer{settings: git.DefaultReviewSettings()}
+	row, err := q.ReviewerOf(ctx, repoID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		out.off = code.ErrNoReviewer
+	case err != nil:
+		return out, fmt.Errorf("finding the AI reviewer: %w", err)
+	case !row.HasModel:
+		out.off = code.ErrReviewerNoModel
+	case row.Suspended:
+		out.off = code.ErrReviewerSuspended
+	}
+	out.row = row
+	settings, err := q.ReviewSettingsOf(ctx, repoID)
+	switch {
+	case err == nil:
+		out.settings.Enabled, out.settings.Branches = settings.Enabled, settings.Branches
+	case !errors.Is(err, pgx.ErrNoRows):
+		return out, fmt.Errorf("reading the AI review settings: %w", err)
+	}
+	return out, nil
+}
+
+// reviews answers why the reviewer reviews none of the branch's pushes: its own state, or settings that are off or
+// leave the branch out (code.ErrReviewOff); nil when it reviews them.
+func (r aiReviewer) reviews(branch string) error {
+	switch {
+	case r.off != nil:
+		return r.off
+	case !r.settings.Enabled || !slices.ContainsFunc(r.settings.Branches, func(p string) bool { return jobs.Match(p, branch) }):
+		return code.ErrReviewOff
+	}
+	return nil
+}
+
 // reviewerFor finds the AI reviewer of the repository's organization, when it reviews the branch's pushes: it has a
 // model and isn't suspended, and the default branch's /cobranch-review.yaml, or its defaults without one, takes the
 // branch in.
 func reviewerFor(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branch string) (queries.ReviewerOfRow, error) {
-	reviewer, err := q.ReviewerOf(ctx, repoID)
-	switch {
-	case errors.Is(err, pgx.ErrNoRows):
-		return reviewer, code.ErrNoReviewer
-	case err != nil:
-		return reviewer, fmt.Errorf("finding the AI reviewer: %w", err)
-	case !reviewer.HasModel:
-		return reviewer, code.ErrReviewerNoModel
-	case reviewer.Suspended:
-		return reviewer, code.ErrReviewerSuspended
+	reviewer, err := reviewerOf(ctx, q, repoID)
+	if err != nil {
+		return reviewer.row, err
 	}
-	settings := git.DefaultReviewSettings()
-	row, err := q.ReviewSettingsOf(ctx, repoID)
-	switch {
-	case err == nil:
-		settings.Enabled, settings.Branches = row.Enabled, row.Branches
-	case !errors.Is(err, pgx.ErrNoRows):
-		return reviewer, fmt.Errorf("reading the AI review settings: %w", err)
-	}
-	if !settings.Enabled || !slices.ContainsFunc(settings.Branches, func(p string) bool { return jobs.Match(p, branch) }) {
-		return reviewer, code.ErrReviewOff
-	}
-	return reviewer, nil
+	return reviewer.row, reviewer.reviews(branch)
 }
 
 // makeRoom makes room for r's review of the branch's head: a member's request cancels the branch's open review
@@ -213,7 +241,8 @@ func insertReview(ctx context.Context, q *queries.Queries, actor uuid.UUID, t ag
 }
 
 // RequestReview has the repository's organization's AI reviewer review the branch's head again for actor, under the
-// repository's run lock, as the push worker queues reviews (code.Store).
+// repository's run lock, as the push worker queues reviews, and works out the status of the branches at the head again
+// (code.Store).
 func (s *CodeStore) RequestReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, branch string) (code.AIReview, error) {
 	var out code.AIReview
 	err := transact(ctx, s.pool, s.q, "requesting a review", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -221,8 +250,24 @@ func (s *CodeStore) RequestReview(ctx context.Context, actor uuid.UUID, repoID u
 			return fmt.Errorf("locking the repository's runs: %w", err)
 		}
 		r, err := queueReview(ctx, q, reviewRequest{repoID: repoID, branch: branch, by: actor})
+		if err != nil {
+			return err
+		}
 		out = r
-		return err
+		reviewed, err := q.ReviewedBranch(ctx, repoID, branch)
+		if err != nil {
+			return fmt.Errorf("reading branch %s: %w", branch, err)
+		}
+		return restatusAt(ctx, q, repoID, reviewed.Head)
 	})
 	return out, err
+}
+
+// restatusReviewed works out again the status of the branches at the head a review task reviews, as the task moves:
+// nothing for a task of another kind.
+func restatusReviewed(ctx context.Context, q *queries.Queries, kind string, repoID *uuid.UUID, sha *string) error {
+	if kind != string(agents.KindReview) || repoID == nil || sha == nil {
+		return nil
+	}
+	return restatusAt(ctx, q, *repoID, *sha)
 }

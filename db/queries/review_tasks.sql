@@ -33,3 +33,11 @@ RETURNING id, org_id, number, agent_id;
 -- HoldTask has a task that hasn't started wait for a member, for a reason.
 -- name: HoldTask :exec
 UPDATE agent_tasks SET state = 'waiting', reason = @reason WHERE id = @id AND state = 'queued';
+
+-- ReviewTasksAt finds the latest review task of each of the branches at the head the branch is at.
+-- name: ReviewTasksAt :many
+SELECT DISTINCT ON (t.branch_id) t.branch_id, t.number, t.state, t.reason
+FROM agent_tasks t JOIN branches b ON b.id = t.branch_id AND b.head = t.sha
+WHERE t.branch_id = ANY (@branch_ids::uuid[]) AND t.kind = 'review'
+ORDER BY t.branch_id, t.number DESC;
+

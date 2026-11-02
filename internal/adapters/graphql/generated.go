@@ -139,10 +139,12 @@ type ComplexityRoot struct {
 	}
 
 	BranchCheck struct {
+		Ai       func(childComplexity int) int
 		Count    func(childComplexity int) int
 		Kind     func(childComplexity int) int
 		Met      func(childComplexity int) int
 		Name     func(childComplexity int) int
+		Reason   func(childComplexity int) int
 		Required func(childComplexity int) int
 		Status   func(childComplexity int) int
 	}
@@ -722,6 +724,7 @@ type ComplexityRoot struct {
 	}
 
 	ReviewRequirements struct {
+		Ai        func(childComplexity int) int
 		Approvals func(childComplexity int) int
 	}
 
@@ -1489,6 +1492,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Branch.UpdatedAt(childComplexity), true
 
+	case "BranchCheck.ai":
+		if e.ComplexityRoot.BranchCheck.Ai == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchCheck.Ai(childComplexity), true
 	case "BranchCheck.count":
 		if e.ComplexityRoot.BranchCheck.Count == nil {
 			break
@@ -1513,6 +1522,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BranchCheck.Name(childComplexity), true
+	case "BranchCheck.reason":
+		if e.ComplexityRoot.BranchCheck.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchCheck.Reason(childComplexity), true
 	case "BranchCheck.required":
 		if e.ComplexityRoot.BranchCheck.Required == nil {
 			break
@@ -4596,6 +4611,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Review.SubmittedAt(childComplexity), true
 
+	case "ReviewRequirements.ai":
+		if e.ComplexityRoot.ReviewRequirements.Ai == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReviewRequirements.Ai(childComplexity), true
 	case "ReviewRequirements.approvals":
 		if e.ComplexityRoot.ReviewRequirements.Approvals == nil {
 			break
@@ -6269,8 +6290,40 @@ enum BranchCheckKind {
   APPROVALS
   "A reviewer whose latest review of its head requests changes; never met."
   CHANGES_REQUESTED
+  "The AI reviewer's approval of its head."
+  AI
   "Its base's tip in it."
   UP_TO_DATE
+}
+
+"How the AI reviewer's approval of a branch's head stands."
+enum AICheckState {
+  "Its review task for the head waits for a member to start it; the branch is Processing."
+  WAITING
+  "Its review task for the head waits to run; the branch is Processing."
+  QUEUED
+  "It reviews the head; the branch is Processing."
+  RUNNING
+  "Its latest review of the head approves it: the one state that meets the check."
+  APPROVED
+  "Its latest review of the head requests changes."
+  CHANGES_REQUESTED
+  "Its review of the head ended without approving it."
+  NOT_APPROVED
+  "Neither a review task nor a review of the head."
+  UNREVIEWED
+  "Its review task for the head failed, for the check's reason."
+  FAILED
+  "Its review task for the head was cancelled, for the check's reason."
+  CANCELLED
+  "No admin gave it a model."
+  NO_MODEL
+  "It is suspended."
+  SUSPENDED
+  "main's /cobranch-review.yaml turns it off, or leaves the branch out."
+  OFF
+  "The organization has no AI reviewer."
+  MISSING
 }
 
 "One of a branch's merge requirements and how it stands."
@@ -6284,6 +6337,10 @@ type BranchCheck {
   count: Int
   "For APPROVALS, how many the base requires; null otherwise."
   required: Int
+  "For AI, how the AI reviewer's approval stands; null otherwise."
+  ai: AICheckState
+  "For AI, why its review task for the head failed or was cancelled; null otherwise."
+  reason: String
   met: Boolean!
 }
 
@@ -6297,10 +6354,12 @@ type MergeRequirements {
   reviews: ReviewRequirements
 }
 
-"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's."
+"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it."
 type ReviewRequirements {
   "0 to 10."
   approvals: Int!
+  "Whether the AI reviewer's approval is required."
+  ai: Boolean!
 }
 
 "A page of history, nearest first."
@@ -7673,6 +7732,10 @@ func (ec *executionContext) childFields_BranchCheck(ctx context.Context, field g
 		return ec.fieldContext_BranchCheck_count(ctx, field)
 	case "required":
 		return ec.fieldContext_BranchCheck_required(ctx, field)
+	case "ai":
+		return ec.fieldContext_BranchCheck_ai(ctx, field)
+	case "reason":
+		return ec.fieldContext_BranchCheck_reason(ctx, field)
 	case "met":
 		return ec.fieldContext_BranchCheck_met(ctx, field)
 	}
@@ -8653,6 +8716,8 @@ func (ec *executionContext) childFields_ReviewRequirements(ctx context.Context, 
 	switch field.Name {
 	case "approvals":
 		return ec.fieldContext_ReviewRequirements_approvals(ctx, field)
+	case "ai":
+		return ec.fieldContext_ReviewRequirements_ai(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type ReviewRequirements", field.Name)
 }
@@ -13729,6 +13794,52 @@ func (ec *executionContext) _BranchCheck_required(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_BranchCheck_required(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "Int")
+}
+
+func (ec *executionContext) _BranchCheck_ai(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchCheck_ai(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ai, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *AICheckState) graphql.Marshaler {
+			return ec.marshalOAICheckState2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAICheckState(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BranchCheck_ai(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "AICheckState")
+}
+
+func (ec *executionContext) _BranchCheck_reason(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchCheck_reason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BranchCheck_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "String")
 }
 
 func (ec *executionContext) _BranchCheck_met(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
@@ -26263,6 +26374,29 @@ func (ec *executionContext) fieldContext_ReviewRequirements_approvals(_ context.
 	return graphql.NewScalarFieldContext("ReviewRequirements", field, false, false, "Int")
 }
 
+func (ec *executionContext) _ReviewRequirements_ai(ctx context.Context, field graphql.CollectedField, obj *ReviewRequirements) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReviewRequirements_ai(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ai, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReviewRequirements_ai(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReviewRequirements", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _Role_id(ctx context.Context, field graphql.CollectedField, obj *Role) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32567,6 +32701,16 @@ func (ec *executionContext) _BranchCheck(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "ai":
+			out.Values[i] = ec._BranchCheck_ai(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._BranchCheck_reason(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "met":
 			out.Values[i] = ec._BranchCheck_met(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -36386,6 +36530,11 @@ func (ec *executionContext) _ReviewRequirements(ctx context.Context, sel ast.Sel
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "ai":
+			out.Values[i] = ec._ReviewRequirements_ai(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -39745,6 +39894,22 @@ func (ec *executionContext) marshalN__TypeKind2string(ctx context.Context, sel a
 		graphql.AddInvalidNullFromMarshaler(ctx, "__TypeKind!")
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalOAICheckState2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAICheckState(ctx context.Context, v any) (*AICheckState, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(AICheckState)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAICheckState2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAICheckState(ctx context.Context, sel ast.SelectionSet, v *AICheckState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) marshalOAIReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐAIReview(ctx context.Context, sel ast.SelectionSet, v *AIReview) graphql.Marshaler {

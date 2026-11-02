@@ -12,7 +12,7 @@ import (
 )
 
 const branchesAt = `-- name: BranchesAt :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
+SELECT id, repo_id, name, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE repo_id = $1 AND head = $2 AND deleted_at IS NULL AND base IS NOT NULL
 ORDER BY id
 FOR UPDATE
@@ -21,6 +21,7 @@ FOR UPDATE
 type BranchesAtRow struct {
 	ID         uuid.UUID
 	RepoID     uuid.UUID
+	Name       string
 	Head       string
 	Base       *string
 	Ahead      *int32
@@ -44,6 +45,61 @@ func (q *Queries) BranchesAt(ctx context.Context, repoID uuid.UUID, head string)
 		if err := rows.Scan(
 			&i.ID,
 			&i.RepoID,
+			&i.Name,
+			&i.Head,
+			&i.Base,
+			&i.Ahead,
+			&i.Behind,
+			&i.Merges,
+			&i.WaitsFor,
+			&i.MergedHead,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const branchesRequiringAI = `-- name: BranchesRequiringAI :many
+SELECT b.id, b.repo_id, b.name, b.head, b.base, b.ahead, b.behind, b.merges, b.waits_for, b.merged_head FROM branches b
+JOIN merge_requirements m ON m.repo_id = b.repo_id AND m.branch = b.base AND m.ai
+WHERE m.org_id = $1 AND b.deleted_at IS NULL AND b.waits_for IS NULL
+ORDER BY b.id
+FOR UPDATE OF b
+`
+
+type BranchesRequiringAIRow struct {
+	ID         uuid.UUID
+	RepoID     uuid.UUID
+	Name       string
+	Head       string
+	Base       *string
+	Ahead      *int32
+	Behind     *int32
+	Merges     *int32
+	WaitsFor   *uuid.UUID
+	MergedHead *string
+}
+
+// BranchesRequiringAI lists an organization's live branches whose base requires the AI reviewer's approval, but those
+// that wait for the push worker, by ID, locked until the transaction ends.
+func (q *Queries) BranchesRequiringAI(ctx context.Context, orgID uuid.UUID) ([]BranchesRequiringAIRow, error) {
+	rows, err := q.db.Query(ctx, branchesRequiringAI, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []BranchesRequiringAIRow
+	for rows.Next() {
+		var i BranchesRequiringAIRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepoID,
+			&i.Name,
 			&i.Head,
 			&i.Base,
 			&i.Ahead,
@@ -63,7 +119,7 @@ func (q *Queries) BranchesAt(ctx context.Context, repoID uuid.UUID, head string)
 }
 
 const branchesWaitingFor = `-- name: BranchesWaitingFor :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
+SELECT id, repo_id, name, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE waits_for = $1 AND deleted_at IS NULL
 ORDER BY id
 FOR UPDATE
@@ -72,6 +128,7 @@ FOR UPDATE
 type BranchesWaitingForRow struct {
 	ID         uuid.UUID
 	RepoID     uuid.UUID
+	Name       string
 	Head       string
 	Base       *string
 	Ahead      *int32
@@ -94,6 +151,7 @@ func (q *Queries) BranchesWaitingFor(ctx context.Context, waitsFor *uuid.UUID) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.RepoID,
+			&i.Name,
 			&i.Head,
 			&i.Base,
 			&i.Ahead,
@@ -204,13 +262,14 @@ func (q *Queries) LockLiveBranches(ctx context.Context, repoID uuid.UUID) error 
 }
 
 const mergeRequirementsOf = `-- name: MergeRequirementsOf :one
-SELECT annotations, linear_history, approvals FROM merge_requirements WHERE repo_id = $1 AND branch = $2
+SELECT annotations, linear_history, approvals, ai FROM merge_requirements WHERE repo_id = $1 AND branch = $2
 `
 
 type MergeRequirementsOfRow struct {
 	Annotations   []string
 	LinearHistory bool
 	Approvals     *int32
+	Ai            bool
 }
 
 // MergeRequirementsOf finds what a merge into a repository's branch needs: none when /cobranch.yaml names no such
@@ -218,7 +277,12 @@ type MergeRequirementsOfRow struct {
 func (q *Queries) MergeRequirementsOf(ctx context.Context, repoID uuid.UUID, branch string) (MergeRequirementsOfRow, error) {
 	row := q.db.QueryRow(ctx, mergeRequirementsOf, repoID, branch)
 	var i MergeRequirementsOfRow
-	err := row.Scan(&i.Annotations, &i.LinearHistory, &i.Approvals)
+	err := row.Scan(
+		&i.Annotations,
+		&i.LinearHistory,
+		&i.Approvals,
+		&i.Ai,
+	)
 	return i, err
 }
 

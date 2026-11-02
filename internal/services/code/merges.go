@@ -93,11 +93,36 @@ func blockedBy(b Incoming) string {
 			return fmt.Sprintf("%s of %d on %s", plural(c.Count, "approval"), c.Required, short)
 		case c.Kind == CheckChangesRequested:
 			return c.Name + " requested changes on " + short
+		case c.Kind == CheckAI:
+			return aiBlocked(c, short)
 		case c.Kind == CheckUpToDate:
 			return "it is " + plural(c.Count, "commit") + " behind " + b.Base
 		}
 	}
 	return "it is Blocked"
+}
+
+// aiBlocked says why the AI reviewer's check holds a branch at head short back.
+func aiBlocked(c Check, short string) string {
+	switch c.AI {
+	case AIChangesRequested:
+		return "the AI reviewer requested changes on " + short
+	case AIUnreviewed:
+		return "the AI reviewer hasn't reviewed " + short
+	case AIFailed:
+		return "the AI review of " + short + " failed: " + c.Reason
+	case AICancelled:
+		return "the AI review of " + short + " was cancelled: " + c.Reason
+	case AINoModel:
+		return "the AI reviewer has no model"
+	case AISuspended:
+		return "the AI reviewer is suspended"
+	case AIOff:
+		return "main's /cobranch-review.yaml leaves it out of the AI reviewer's reviews"
+	case AIMissing:
+		return "the organization has no AI reviewer"
+	}
+	return "the AI reviewer didn't approve " + short
 }
 
 // plural counts n of a word, which takes an s for more than one.

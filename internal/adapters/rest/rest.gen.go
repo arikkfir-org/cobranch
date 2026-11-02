@@ -20,6 +20,57 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AICheckState.
+const (
+	AICheckStateApproved         AICheckState = "approved"
+	AICheckStateCancelled        AICheckState = "cancelled"
+	AICheckStateChangesRequested AICheckState = "changes_requested"
+	AICheckStateFailed           AICheckState = "failed"
+	AICheckStateMissing          AICheckState = "missing"
+	AICheckStateNoModel          AICheckState = "no_model"
+	AICheckStateNotApproved      AICheckState = "not_approved"
+	AICheckStateOff              AICheckState = "off"
+	AICheckStateQueued           AICheckState = "queued"
+	AICheckStateRunning          AICheckState = "running"
+	AICheckStateSuspended        AICheckState = "suspended"
+	AICheckStateUnreviewed       AICheckState = "unreviewed"
+	AICheckStateWaiting          AICheckState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the AICheckState enum.
+func (e AICheckState) Valid() bool {
+	switch e {
+	case AICheckStateApproved:
+		return true
+	case AICheckStateCancelled:
+		return true
+	case AICheckStateChangesRequested:
+		return true
+	case AICheckStateFailed:
+		return true
+	case AICheckStateMissing:
+		return true
+	case AICheckStateNoModel:
+		return true
+	case AICheckStateNotApproved:
+		return true
+	case AICheckStateOff:
+		return true
+	case AICheckStateQueued:
+		return true
+	case AICheckStateRunning:
+		return true
+	case AICheckStateSuspended:
+		return true
+	case AICheckStateUnreviewed:
+		return true
+	case AICheckStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AIReviewState.
 const (
 	AIReviewStateCancelled AIReviewState = "cancelled"
@@ -76,6 +127,7 @@ func (e AnnotationStatus) Valid() bool {
 
 // Defines values for BranchCheckKind.
 const (
+	BranchCheckKindAi               BranchCheckKind = "ai"
 	BranchCheckKindAnnotation       BranchCheckKind = "annotation"
 	BranchCheckKindApprovals        BranchCheckKind = "approvals"
 	BranchCheckKindChangesRequested BranchCheckKind = "changes_requested"
@@ -86,6 +138,8 @@ const (
 // Valid indicates whether the value is a known member of the BranchCheckKind enum.
 func (e BranchCheckKind) Valid() bool {
 	switch e {
+	case BranchCheckKindAi:
+		return true
 	case BranchCheckKindAnnotation:
 		return true
 	case BranchCheckKindApprovals:
@@ -256,25 +310,25 @@ func (e DiffLineKind) Valid() bool {
 
 // Defines values for EnvironmentHealth.
 const (
-	Degraded    EnvironmentHealth = "degraded"
-	Healthy     EnvironmentHealth = "healthy"
-	Missing     EnvironmentHealth = "missing"
-	Progressing EnvironmentHealth = "progressing"
-	Unknown     EnvironmentHealth = "unknown"
+	EnvironmentHealthDegraded    EnvironmentHealth = "degraded"
+	EnvironmentHealthHealthy     EnvironmentHealth = "healthy"
+	EnvironmentHealthMissing     EnvironmentHealth = "missing"
+	EnvironmentHealthProgressing EnvironmentHealth = "progressing"
+	EnvironmentHealthUnknown     EnvironmentHealth = "unknown"
 )
 
 // Valid indicates whether the value is a known member of the EnvironmentHealth enum.
 func (e EnvironmentHealth) Valid() bool {
 	switch e {
-	case Degraded:
+	case EnvironmentHealthDegraded:
 		return true
-	case Healthy:
+	case EnvironmentHealthHealthy:
 		return true
-	case Missing:
+	case EnvironmentHealthMissing:
 		return true
-	case Progressing:
+	case EnvironmentHealthProgressing:
 		return true
-	case Unknown:
+	case EnvironmentHealthUnknown:
 		return true
 	default:
 		return false
@@ -920,6 +974,9 @@ func (e ListBuiltInRolesParamsScope) Valid() bool {
 	}
 }
 
+// AICheckState For ai, how the AI reviewer's approval of the head stands: waiting, queued or running, its review task for the head, which keeps the branch Processing; approved, the one that meets it; changes_requested or not_approved, its latest review of the head; unreviewed, neither a task nor a review of the head; failed or cancelled, its task for the head, with the reason; no_model, suspended or off, the reviewer reviewing none of the branch's pushes, for want of a model, suspended, or left out by main's /cobranch-review.yaml; missing, an organization without its reviewer.
+type AICheckState string
+
 // AIReview The AI reviewer's latest task for a branch's head, an agent task of kind review; left out of a branch it has none for, and of main, whose pushes it never reviews. Its review, once it submits one, is among the head's.
 type AIReview struct {
 	// Reason Why it waits, failed or was cancelled; left out otherwise.
@@ -1122,7 +1179,7 @@ type Branch struct {
 	// Behind How many commits its base has that it lacks; left out until a push works it out.
 	Behind *int `json:"behind,omitempty"`
 
-	// Checks How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	// Checks How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main.
 	Checks []BranchCheck `json:"checks"`
 
 	// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
@@ -1159,15 +1216,21 @@ type Branch struct {
 
 // BranchCheck One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
+	// Ai For ai, how the AI reviewer's approval of the head stands: waiting, queued or running, its review task for the head, which keeps the branch Processing; approved, the one that meets it; changes_requested or not_approved, its latest review of the head; unreviewed, neither a task nor a review of the head; failed or cancelled, its task for the head, with the reason; no_model, suspended or off, the reviewer reviewing none of the branch's pushes, for want of a model, suspended, or left out by main's /cobranch-review.yaml; missing, an organization without its reviewer.
+	Ai *AICheckState `json:"ai,omitempty"`
+
 	// Count For linear_history, the merges among its commits to merge; for approvals, the approvals that count; for up_to_date, the commits of its base it lacks.
 	Count *int `json:"count,omitempty"`
 
-	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
+	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; ai, the AI reviewer's approval of its head; up_to_date, its base's tip in it.
 	Kind BranchCheckKind `json:"kind"`
 	Met  bool            `json:"met"`
 
 	// Name The required annotation's name, for annotation; the reviewer's display name, for changes_requested.
 	Name *string `json:"name,omitempty"`
+
+	// Reason For ai, why the AI reviewer's task for the head failed or was cancelled.
+	Reason *string `json:"reason,omitempty"`
 
 	// Required For approvals, how many the base requires.
 	Required *int `json:"required,omitempty"`
@@ -1176,7 +1239,7 @@ type BranchCheck struct {
 	Status *AnnotationStatus `json:"status,omitempty"`
 }
 
-// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
+// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; ai, the AI reviewer's approval of its head; up_to_date, its base's tip in it.
 type BranchCheckKind string
 
 // BranchIssue The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
@@ -1968,7 +2031,7 @@ type MergeRequirements struct {
 	// LinearHistory Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
 
-	// Reviews The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+	// Reviews The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it.
 	Reviews *ReviewRequirements `json:"reviews,omitempty"`
 }
 
@@ -2334,9 +2397,10 @@ type ReviewInput struct {
 	State ReviewState `json:"state"`
 }
 
-// ReviewRequirements The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+// ReviewRequirements The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, at least approvals people's latest reviews approving it, besides its author's and its pusher's, and, when ai is true, the AI reviewer's latest review approving it.
 type ReviewRequirements struct {
-	Approvals int `json:"approvals"`
+	Ai        bool `json:"ai"`
+	Approvals int  `json:"approvals"`
 }
 
 // ReviewState A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.

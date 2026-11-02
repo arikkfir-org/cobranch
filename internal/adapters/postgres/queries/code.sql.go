@@ -184,7 +184,7 @@ func (q *Queries) FirstParents(ctx context.Context, repoID uuid.UUID, sha string
 
 const liveBranch = `-- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -212,6 +212,7 @@ type LiveBranchRow struct {
 	RequiredAnnotations []string
 	LinearHistory       *bool
 	RequiredApprovals   *int32
+	RequiredAi          *bool
 	MergedHead          *string
 	MergedBy            *uuid.UUID
 	MergedByName        *string
@@ -240,6 +241,7 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 		&i.RequiredAnnotations,
 		&i.LinearHistory,
 		&i.RequiredApprovals,
+		&i.RequiredAi,
 		&i.MergedHead,
 		&i.MergedBy,
 		&i.MergedByName,
@@ -255,7 +257,7 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 
 const liveBranches = `-- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
     coalesce(f.error, '')::text AS settings_error,
     (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
      WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
@@ -284,6 +286,7 @@ type LiveBranchesRow struct {
 	RequiredAnnotations []string
 	LinearHistory       *bool
 	RequiredApprovals   *int32
+	RequiredAi          *bool
 	MergedHead          *string
 	MergedBy            *uuid.UUID
 	MergedByName        *string
@@ -322,6 +325,7 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 			&i.RequiredAnnotations,
 			&i.LinearHistory,
 			&i.RequiredApprovals,
+			&i.RequiredAi,
 			&i.MergedHead,
 			&i.MergedBy,
 			&i.MergedByName,
