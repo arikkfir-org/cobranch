@@ -46,15 +46,30 @@ INSERT INTO roles (id, scope, name, description, permissions, built_in) VALUES
      'Receives the secrets where it is granted, in its job runs and agent tasks; reads nothing else.', '{secrets.read}', true)
 ON CONFLICT (id) DO NOTHING;
 
--- A repository whose slug is now one of the Console's pages under its organization, secrets, or issues since issues
--- came, moves to that slug and eight hex digits of its ID's hash, as a rename in its settings would, and the old slug
--- keeps redirecting to it: the Console reaches it again, and its URLs and remotes keep working.
-WITH renamed AS (
-    UPDATE repositories SET slug = slug || '-' || left(md5(id::text), 8) WHERE slug IN ('issues', 'secrets')
-    RETURNING org_id, slug, id
-)
-INSERT INTO repository_slugs (org_id, slug, repo_id) SELECT org_id, slug, id FROM renamed
-ON CONFLICT (org_id, slug) DO UPDATE SET repo_id = EXCLUDED.repo_id, created_at = now();
+-- The Console's Secrets page takes the slug secrets under an organization, as its Issues page took issues, so a
+-- repository that had one before moves to <slug>-repository, or the first of <slug>-repository-2, -3 and on that its
+-- organization has free. Its old slug stays among its slugs, so its API and Git URLs still lead to it.
+-- +goose StatementBegin
+DO $$
+DECLARE
+    r record;
+    candidate text;
+    n int;
+BEGIN
+    FOR r IN SELECT id, org_id, slug FROM repositories WHERE slug IN ('issues', 'secrets') LOOP
+        candidate := r.slug || '-repository';
+        n := 1;
+        WHILE EXISTS (SELECT 1 FROM repositories WHERE org_id = r.org_id AND slug = candidate) LOOP
+            n := n + 1;
+            candidate := r.slug || '-repository-' || n;
+        END LOOP;
+        UPDATE repositories SET slug = candidate WHERE id = r.id;
+        INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES (r.org_id, candidate, r.id)
+        ON CONFLICT (org_id, slug) DO UPDATE SET repo_id = EXCLUDED.repo_id, created_at = now();
+    END LOOP;
+END
+$$;
+-- +goose StatementEnd
 
 -- +goose Down
 DELETE FROM grants WHERE scope = 'secret';
