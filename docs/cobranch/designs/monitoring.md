@@ -61,7 +61,7 @@ Every metric carries the workload's resource, as traces do: `service.name` the w
 
 | Attribute | Values |
 | --- | --- |
-| `cobranch.console.page` | `sign-in`, `welcome`, `settings`, `organization`, `organization.members`, `organization.roles`, `organization.api-keys`, `organization.settings`, `organization.new-repository`, `repository.code`, `repository.file`, `repository.commits`, `repository.commit`, `repository.branches`, `repository.branch`, `repository.access`, `repository.settings` |
+| `cobranch.console.page` | `sign-in`, `welcome`, `settings`, `organization`, `organization.members`, `organization.roles`, `organization.api-keys`, `organization.settings`, `organization.new-repository`, `organization.issues`, `repository.code`, `repository.file`, `repository.commits`, `repository.commit`, `repository.branches`, `repository.branch`, `repository.access`, `repository.settings` |
 | `cobranch.console.navigation` | `load`, the browser loading the Console, from its navigation's start; `route`, a move inside it, from the click or Back |
 | `http.route` | The route's pattern, such as `/v1/orgs/{org}/repos/{repo}/tree`; `/` for a path no route serves |
 | `graphql.operation.type` | `query` or `mutation`; a subscription's stream isn't timed |

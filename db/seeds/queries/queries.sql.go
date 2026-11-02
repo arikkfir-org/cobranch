@@ -8,6 +8,7 @@ package queries
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -58,6 +59,29 @@ func (q *Queries) InsertSeedCredential(ctx context.Context, arg InsertSeedCreden
 		arg.CreatedBy,
 		arg.ExpiresAt,
 		arg.RevokedAt,
+	)
+	return err
+}
+
+const insertSeedEvent = `-- name: InsertSeedEvent :exec
+INSERT INTO events (actor_id, kind, subject_id, details, org_id) VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertSeedEventParams struct {
+	ActorID   uuid.UUID
+	Kind      string
+	SubjectID uuid.NullUUID
+	Details   json.RawMessage
+	OrgID     uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedEvent(ctx context.Context, arg InsertSeedEventParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedEvent,
+		arg.ActorID,
+		arg.Kind,
+		arg.SubjectID,
+		arg.Details,
+		arg.OrgID,
 	)
 	return err
 }
@@ -130,6 +154,50 @@ func (q *Queries) InsertSeedInvitation(ctx context.Context, arg InsertSeedInvita
 		arg.InvitedBy,
 		arg.ExpiresAt,
 	)
+	return err
+}
+
+const insertSeedIssue = `-- name: InsertSeedIssue :exec
+INSERT INTO issues (id, org_id, number, title, description, state, priority, assignee_id, repo_id, created_by, closed_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        CASE WHEN $6::text IN ('done', 'canceled') THEN now() END)
+`
+
+type InsertSeedIssueParams struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Number      int32
+	Title       string
+	Description string
+	State       string
+	Priority    int16
+	AssigneeID  uuid.NullUUID
+	RepoID      uuid.NullUUID
+	CreatedBy   uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedIssue(ctx context.Context, arg InsertSeedIssueParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedIssue,
+		arg.ID,
+		arg.OrgID,
+		arg.Number,
+		arg.Title,
+		arg.Description,
+		arg.State,
+		arg.Priority,
+		arg.AssigneeID,
+		arg.RepoID,
+		arg.CreatedBy,
+	)
+	return err
+}
+
+const insertSeedIssueNumber = `-- name: InsertSeedIssueNumber :exec
+INSERT INTO issue_numbers (org_id, last) VALUES ($1, $2)
+`
+
+func (q *Queries) InsertSeedIssueNumber(ctx context.Context, orgID uuid.UUID, last int32) error {
+	_, err := q.db.ExecContext(ctx, insertSeedIssueNumber, orgID, last)
 	return err
 }
 
