@@ -43,7 +43,7 @@ func TestSettings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)
-			f.store.Installation = tt.stored
+			f.store.Installation = admin.StoredSettings{InstallationSettings: tt.stored}
 			v := f.ada
 			if tt.viewer != nil {
 				v = tt.viewer(f)

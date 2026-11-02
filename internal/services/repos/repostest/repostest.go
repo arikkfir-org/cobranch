@@ -22,16 +22,18 @@ type Store struct {
 	Orgs  *orgstest.Store
 	Repos map[uuid.UUID]repos.Repository
 	// Slugs maps an organization and a slug, old or current, to its repository.
-	Slugs  map[[2]string]uuid.UUID
-	Events []string
-	Fail   error
+	Slugs map[[2]string]uuid.UUID
+	// GitData is the bytes of each repository's active packs.
+	GitData map[uuid.UUID]int64
+	Events  []string
+	Fail    error
 }
 
 var _ repos.Store = (*Store)(nil)
 
 // NewStore returns an empty Store over orgs.
 func NewStore(o *orgstest.Store) *Store {
-	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Slugs: map[[2]string]uuid.UUID{}}
+	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Slugs: map[[2]string]uuid.UUID{}, GitData: map[uuid.UUID]int64{}}
 }
 
 func slugKey(orgID uuid.UUID, slug string) [2]string {
@@ -117,6 +119,24 @@ func (s *Store) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]
 	}
 	slices.SortFunc(out, func(a, b repos.Repository) int { return strings.Compare(a.Slug, b.Slug) })
 	return out, nil
+}
+
+// Usage counts the organization's repositories and sums their Git data, and lists those of ids among them, by slug,
+// each with its Git data.
+func (s *Store) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []repos.RepositoryUsage, error) {
+	var used limits.Usage
+	for id, r := range s.Repos {
+		if r.OrgID == orgID {
+			used.Repositories++
+			used.GitData += s.GitData[id]
+		}
+	}
+	among, _ := s.Among(ctx, orgID, ids) // the fake's Among never fails
+	byRepository := make([]repos.RepositoryUsage, 0, len(among))
+	for _, r := range among {
+		byRepository = append(byRepository, repos.RepositoryUsage{Repository: r, GitData: s.GitData[r.ID]})
+	}
+	return used, byRepository, nil
 }
 
 // Update writes the repository and claims its slug.

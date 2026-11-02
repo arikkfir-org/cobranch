@@ -13,6 +13,8 @@ import (
 
 	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/chats/chatstest"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/git"
@@ -50,6 +52,9 @@ type orgFixture struct {
 	push             code.Push
 	issueStore       *issuestest.Store
 	issues           *issues.Service
+	chatStore        *chatstest.Store
+	notifier         *chatstest.Notifier
+	chats            *chats.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -104,6 +109,15 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	})
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.addChats()
+	f.commitObjects()
+	f.addIssues()
+	return f
+}
+
+// commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
+// history.
+func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -116,16 +130,31 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
-	f.setUpIssues(store)
-	return f
+	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
+	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 }
 
-// setUpIssues gives the fixture the issues' service, on a store that sees the organizations' and the repository.
-func (f *orgFixture) setUpIssues(store *orgstest.Store) {
-	f.issueStore = issuestest.NewStore(store)
+// addIssues gives the fixture the issues' service, over a store that knows website.
+func (f *orgFixture) addIssues() {
+	f.issueStore = issuestest.NewStore(f.store)
 	f.issueStore.Repos[f.website.ID] = f.website
-	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
 	f.issues.SetClock(func() time.Time { return now })
+}
+
+// addChats gives the fixture the chats' service, over a store that knows the people, website's commits and the chat of
+// its feature/login branch, at c.
+func (f *orgFixture) addChats() {
+	f.chatStore, f.notifier = chatstest.NewStore(), &chatstest.Notifier{}
+	f.chatStore.Now = now
+	for _, v := range []auth.Authenticated{f.olivia, f.max, f.nia} {
+		f.chatStore.Names[v.User.ID] = v.User.DisplayName
+	}
+	for _, letter := range []string{"a", "b", "c", "d"} {
+		f.chatStore.AddCommit(f.website.ID, shaOf(letter))
+	}
+	f.chatStore.SetBranch(chats.Subject{OrgID: f.acme.ID, RepoID: f.website.ID, Branch: "feature/login", Head: shaOf("c"), Org: "acme", Repo: "website"})
+	f.chats = chats.NewService(f.chatStore, f.notifier, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
 }
 
 // shaOf is the object name of 40 letter's.
@@ -146,22 +175,32 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
 	return rec
 }
 
 type orgCase struct {
-	name       string
-	viewer     func(f *orgFixture) *auth.Authenticated
-	method     string
-	path       func(f *orgFixture) string
-	body       string
+	name   string
+	viewer func(f *orgFixture) *auth.Authenticated
+	method string
+	path   func(f *orgFixture) string
+	body   string
+	// bodyOf is the body when it names the fixture's IDs, in place of body.
+	bodyOf     func(f *orgFixture) string
 	header     http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
 	// wantHeader holds fields the answer must carry, with their values.
 	wantHeader http.Header
+}
+
+// bodyFor is the case's body for the fixture f.
+func (tt orgCase) bodyFor(f *orgFixture) string {
+	if tt.bodyOf != nil {
+		return tt.bodyOf(f)
+	}
+	return tt.body
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -173,7 +212,7 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.callWith(viewer, tt.method, tt.path(f), tt.body, tt.header)
+			rec := f.callWith(viewer, tt.method, tt.path(f), tt.bodyFor(f), tt.header)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

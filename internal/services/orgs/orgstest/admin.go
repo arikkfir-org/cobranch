@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -40,7 +41,8 @@ func (s *Store) AllOrganizations(_ context.Context, page admin.Page) ([]admin.Or
 	for _, id := range newestFirst(ids, page.After) {
 		o := s.Orgs[id]
 		if holds(page.Query, o.Slug, o.Name) && len(out) < page.Limit {
-			out = append(out, admin.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: len(s.Memberships[id])})
+			out = append(out, admin.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: len(s.Memberships[id]),
+				Usage: limits.Usage{Repositories: s.repositories(id), GitData: s.GitData[id]}, Own: s.Limits[id].Overrides})
 		}
 	}
 	return out, nil
@@ -109,26 +111,61 @@ func (s *Store) Enter(_ context.Context, actor, orgID uuid.UUID, reason string, 
 	return nil
 }
 
+// repositories counts the organization's repositories.
+func (s *Store) repositories(orgID uuid.UUID) int64 {
+	var n int64
+	for _, org := range s.Repos {
+		if org == orgID {
+			n++
+		}
+	}
+	return n
+}
+
 // InstallationSettings reads the settings the Back-office changes.
-func (s *Store) InstallationSettings(context.Context) (auth.InstallationSettings, error) {
+func (s *Store) InstallationSettings(context.Context) (admin.StoredSettings, error) {
 	if s.Fail != nil {
-		return auth.InstallationSettings{}, s.Fail
+		return admin.StoredSettings{}, s.Fail
 	}
 	return s.Installation, nil
 }
 
 // ChangeInstallationSettings writes settings unless the stored version is no longer theirs, and bumps the version.
-func (s *Store) ChangeInstallationSettings(_ context.Context, actor uuid.UUID, settings auth.InstallationSettings, at time.Time) (auth.InstallationSettings, error) {
+func (s *Store) ChangeInstallationSettings(_ context.Context, actor uuid.UUID, settings admin.StoredSettings, at time.Time) (admin.StoredSettings, error) {
 	if s.Fail != nil {
-		return auth.InstallationSettings{}, s.Fail
+		return admin.StoredSettings{}, s.Fail
 	}
 	if settings.Version != s.Installation.Version {
-		return auth.InstallationSettings{}, admin.ErrStale
+		return admin.StoredSettings{}, admin.ErrStale
 	}
 	settings.Version++
 	settings.UpdatedAt, settings.UpdatedBy = at, actor
 	s.Installation = settings
 	return settings, nil
+}
+
+// OwnLimits reads the organization's own limits, at version 0 while it has none.
+func (s *Store) OwnLimits(_ context.Context, orgID uuid.UUID) (admin.OwnLimits, error) {
+	if s.Fail != nil {
+		return admin.OwnLimits{}, s.Fail
+	}
+	return s.Limits[orgID], nil
+}
+
+// ChangeOwnLimits writes the organization's own limits unless their stored version is no longer own's, bumps the
+// version and records the change.
+func (s *Store) ChangeOwnLimits(_ context.Context, actor, orgID uuid.UUID, own admin.OwnLimits, at time.Time) (admin.OwnLimits, error) {
+	if s.Fail != nil {
+		return admin.OwnLimits{}, s.Fail
+	}
+	if own.Version != s.Limits[orgID].Version {
+		return admin.OwnLimits{}, admin.ErrStale
+	}
+	own.Version++
+	own.UpdatedAt, own.UpdatedBy = at, actor
+	s.Limits[orgID] = own
+	s.Events = append(s.Events, "org.limits_changed")
+	return own, nil
 }
 
 // IdentityProviders lists the Back-office's providers by ID.

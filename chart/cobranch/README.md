@@ -17,6 +17,10 @@ helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cob
 helm test cobranch --namespace cobranch
 ```
 
+Each commit of `main` that CI builds is published there too, once its images are, at `0.0.0-main.<n>.g<short SHA>`: a
+prerelease that Helm installs only when asked. A commit that a newer push overtakes while its build waits is never
+published. An installation that follows `main` installs the newest, with `--version '>=0.0.0-main.0, <0.0.0'`.
+
 Every value has a default: `values.yaml` lists them, and `values.schema.json` checks them at install.
 
 - **Git's packs** live in the database by default, each a large object, so PostgreSQL is the one store to run and a
@@ -61,9 +65,11 @@ Every value has a default: `values.yaml` lists them, and `values.schema.json` ch
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md)). The REST and GraphQL servers read repositories' trees and files from the Git server's port 8081, behind Service `<fullname>-git-server-internal`, which no route names, each read carrying the viewer's own token, which the Git server checks itself; if your NetworkPolicies select the Git server's pods, admit the REST and GraphQL servers' pods to that port ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md)).
 - **Quotas.** A user creates 5 organizations for themselves, and an organization holds 100 repositories and stores 1 GiB
   of Git data, its repositories' packs, unless `limits.organizationsPerUser`, `limits.repositoriesPerOrganization` and
-  `limits.gitDataPerOrganization` (such as `5Gi`) say otherwise; 0 caps nothing. A creation or a push that would cross
-  one is refused with a message that names it, and nothing over it is stored. Organizations an administrator creates
-  for a user count against nobody
+  `limits.gitDataPerOrganization` (such as `5Gi`) say otherwise; 0 caps nothing. Left unset, they are the
+  Back-office's to change, for the installation and for any one organization; set, the Back-office only shows them,
+  and still sets an organization's own limits, which win over them. A creation or a push that would cross one is
+  refused with a message that names it, and nothing over it is stored. Organizations an administrator creates for a
+  user count against nobody
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md)).
 - **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
   with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the
@@ -99,7 +105,7 @@ which then lock those settings in the Back-office.
 
 From a version before quotas, the built-in limits apply as soon as the new pods serve: a user who already created 5
 organizations, or an organization that already holds 100 repositories or 1 GiB of Git data, keeps what it has and is
-refused more. Set `limits` before upgrading to lift them.
+refused more. Set `limits` before upgrading to lift them, or raise them in the Back-office once it serves.
 
 The new version's migrate Job brings the schema forward while the old pods serve; the new pods turn ready once it is
 done. Each version's migrations keep the previous version's pods working, so roll back one version at most.

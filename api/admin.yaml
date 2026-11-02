@@ -156,6 +156,90 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/limits:
+    parameters:
+      - name: org
+        in: path
+        required: true
+        description: The organization's slug, or an old slug of its.
+        schema:
+          type: string
+    get:
+      operationId: getOrganizationLimits
+      summary: >-
+        An organization's limits: its own, which an administrator sets, the installation's, and those that apply; takes
+        installation.manage.
+      parameters:
+        - name: If-None-Match
+          in: header
+          description: The limits' ETag the caller holds; while it is still theirs, the answer is 304.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The limits. A change names their ETag in If-Match.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationLimits"
+        "304":
+          description: The limits are still those If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: changeOrganizationLimits
+      summary: >-
+        Sets an organization's own limits the body names, or clears them with null (a JSON merge patch, RFC 7396),
+        unless they changed since the caller read them; takes installation.manage. The organization's audit trail
+        records the change, and the next creation or push follows it.
+      parameters:
+        - name: If-Match
+          in: header
+          description: The ETag of the limits the change was made from. Without it, the answer is 428.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/OrganizationLimitsChange"
+      responses:
+        "200":
+          description: The limits, changed.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationLimits"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /users:
     get:
       operationId: listUsers
@@ -508,7 +592,7 @@ components:
     Organization:
       type: object
       description: An organization as an administrator sees it, never its content.
-      required: [id, slug, name, createdAt, members]
+      required: [id, slug, name, createdAt, members, repositories, gitData]
       properties:
         id:
           type: string
@@ -523,6 +607,23 @@ components:
         members:
           type: integer
           description: How many members it has.
+        repositories:
+          $ref: "#/components/schemas/Usage"
+        gitData:
+          $ref: "#/components/schemas/Usage"
+    Usage:
+      type: object
+      description: What an organization takes of what a limit caps, against the limit that applies.
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int64
+          description: How many it holds, or the bytes it stores.
+        limit:
+          type: integer
+          format: int64
+          description: The limit that applies, its own else the installation's; 0 caps nothing.
     Entry:
       type: object
       description: An administrator's entry into an organization, whose Owner they now are.
@@ -578,8 +679,10 @@ components:
       type: object
       description: >-
         The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else
-        its default (anyone signs up, and creates organizations).
-      required: [signUp, signUpDomains, selfServe, locked, updatedAt]
+        its default (anyone signs up, and creates organizations; 5 organizations per user, 100 repositories and 1 GiB
+        of Git data per organization).
+      required: [signUp, signUpDomains, selfServe, organizationsPerUser, repositoriesPerOrganization, gitDataPerOrganization,
+        locked, updatedAt]
       properties:
         signUp:
           $ref: "#/components/schemas/SignUpPolicy"
@@ -591,12 +694,24 @@ components:
         selfServe:
           type: boolean
           description: Whether every new user may create organizations (Installation user).
+        organizationsPerUser:
+          type: integer
+          format: int64
+          description: The most organizations a user creates for themselves; 0 caps nothing.
+        repositoriesPerOrganization:
+          type: integer
+          format: int64
+          description: The most repositories an organization without its own limit holds; 0 caps nothing.
+        gitDataPerOrganization:
+          type: integer
+          format: int64
+          description: The most bytes of Git data an organization without its own limit stores; 0 caps nothing.
         locked:
           type: array
           description: The settings the chart's values set, which only they change.
           items:
             type: string
-            enum: [signUp, selfServe]
+            enum: [signUp, selfServe, organizationsPerUser, repositoriesPerOrganization, gitDataPerOrganization]
         updatedAt:
           type: string
           format: date-time
@@ -618,6 +733,83 @@ components:
             type: string
         selfServe:
           type: boolean
+        organizationsPerUser:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 0 caps nothing.
+        repositoriesPerOrganization:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 0 caps nothing.
+        gitDataPerOrganization:
+          type: integer
+          format: int64
+          minimum: 0
+          description: In bytes; 0 caps nothing.
+    OrganizationLimits:
+      type: object
+      description: >-
+        An organization's limits: for its repositories and its Git data, its own where an administrator set one, which
+        wins over the installation's.
+      required: [orgId, slug, name, repositories, gitData]
+      properties:
+        orgId:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        repositories:
+          $ref: "#/components/schemas/OrganizationLimit"
+        gitData:
+          $ref: "#/components/schemas/OrganizationLimit"
+        updatedAt:
+          type: string
+          format: date-time
+          description: When an administrator last changed its own limits; absent when nobody has.
+        updatedBy:
+          type: string
+          format: uuid
+          description: Who last changed them; absent when nobody has, or they're gone.
+    OrganizationLimit:
+      type: object
+      description: One of an organization's limits, 0 capping nothing; Git data's in bytes.
+      required: [installation, applies]
+      properties:
+        own:
+          type: integer
+          format: int64
+          description: Its own limit; absent when it takes the installation's.
+        installation:
+          type: integer
+          format: int64
+          description: The installation's limit.
+        applies:
+          type: integer
+          format: int64
+          description: The limit that applies, its own else the installation's.
+    OrganizationLimitsChange:
+      type: object
+      description: >-
+        The organization's own limits to change, each 0 or more (0 caps nothing), or null to take the installation's
+        again; those it leaves out stay as they are.
+      properties:
+        repositories:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          x-go-type: LimitChange
+          x-go-type-skip-optional-pointer: true
+        gitData:
+          type: [integer, "null"]
+          format: int64
+          minimum: 0
+          description: In bytes.
+          x-go-type: LimitChange
+          x-go-type-skip-optional-pointer: true
     SignUpPolicy:
       type: string
       description: >-

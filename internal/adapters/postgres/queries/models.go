@@ -42,6 +42,35 @@ type Blob struct {
 	WrittenAt          time.Time
 }
 
+type ChatMessage struct {
+	ID        uuid.UUID
+	ThreadID  uuid.UUID
+	OrgID     uuid.UUID
+	AuthorID  *uuid.UUID
+	Body      string
+	CreatedAt time.Time
+	EditedAt  *time.Time
+	DeletedAt *time.Time
+	DeletedBy *uuid.UUID
+	Version   int64
+}
+
+type ChatThread struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	RepoID     uuid.UUID
+	BranchID   uuid.UUID
+	Sha        *string
+	Path       *string
+	StartLine  *int32
+	EndLine    *int32
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
+	ResolvedBy *uuid.UUID
+	Version    int64
+}
+
 type Commit struct {
 	RepoID         uuid.UUID
 	Sha            string
@@ -219,6 +248,17 @@ type JoinRequest struct {
 	DecidedBy *uuid.UUID
 }
 
+type Label struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Color       string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type Membership struct {
 	OrgID    uuid.UUID
 	UserID   uuid.UUID
@@ -235,6 +275,15 @@ type Organization struct {
 	CreatedAt           time.Time
 	IssueKey            string
 	CreatedBy           *uuid.UUID
+}
+
+type OrganizationLimit struct {
+	OrgID        uuid.UUID
+	Repositories *int64
+	GitData      *int64
+	Version      int64
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
 }
 
 type Principal struct {

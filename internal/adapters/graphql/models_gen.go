@@ -113,6 +113,109 @@ type BranchMerge struct {
 	At time.Time `json:"at"`
 }
 
+// Lines startLine to endLine of the file at path of a commit, where a thread points; it stays there when the branch moves on.
+type ChatAnchor struct {
+	// The commit's full name, in lowercase hexadecimal.
+	Sha string `json:"sha"`
+	// The file's path from the repository's root, as names separated by /.
+	Path string `json:"path"`
+	// The first line, from 1.
+	StartLine int `json:"startLine"`
+	// The last line, at or after startLine.
+	EndLine int `json:"endLine"`
+}
+
+// Lines of a file at a commit the repository holds, where a thread points.
+type ChatAnchorInput struct {
+	// The commit's full name, in lowercase hexadecimal.
+	Sha string `json:"sha"`
+	// The file's path from the repository's root, as names separated by /.
+	Path string `json:"path"`
+	// The first line, from 1.
+	StartLine int `json:"startLine"`
+	// The last line, at or after startLine.
+	EndLine int `json:"endLine"`
+}
+
+// One of a thread's messages, in Markdown.
+type ChatMessage struct {
+	ID       string `json:"id"`
+	ThreadID string `json:"threadId"`
+	// Its Markdown; empty once it is deleted.
+	Body string `json:"body"`
+	// Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
+	HTML string `json:"html"`
+	// Who posted it; null once they are gone.
+	Author    *CommitPrincipal `json:"author,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	// When its author last edited it; null until they do.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
+	// When it was deleted; null while it is there.
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	// Who deleted it; null while it is there, and once they are gone.
+	DeletedBy *CommitPrincipal `json:"deletedBy,omitempty"`
+	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// A message to post.
+type ChatMessageInput struct {
+	// The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out.
+	ID *string `json:"id,omitempty"`
+	// Its Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+}
+
+// A page of a branch's chat.
+type ChatPage struct {
+	// Its threads, newest first.
+	Threads []*ChatThread `json:"threads"`
+	// Where the next page starts, as chat's after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+	// Where the chat's updates stood when the page was read: chatUpdates after it sends every change the page may lack.
+	After string `json:"after"`
+}
+
+// One of a branch's chat threads.
+type ChatThread struct {
+	ID string `json:"id"`
+	// Where it points: lines of a file at a commit; null for none.
+	Anchor *ChatAnchor `json:"anchor,omitempty"`
+	// Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	Outdated bool `json:"outdated"`
+	// Who started it; null once they are gone.
+	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	// When it was resolved; null while it is open.
+	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+	// Who resolved it; null while it is open, and once they are gone.
+	ResolvedBy *CommitPrincipal `json:"resolvedBy,omitempty"`
+	// Counts its changes and its messages' from 1: resolveChatThread names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+	// Its messages in the order they were posted; null in an update.
+	Messages []*ChatMessage `json:"messages,omitempty"`
+}
+
+// A thread to start, with its first message.
+type ChatThreadInput struct {
+	// The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
+	ID     *string          `json:"id,omitempty"`
+	Anchor *ChatAnchorInput `json:"anchor,omitempty"`
+	// Its first message's Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+}
+
+// A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is.
+type ChatUpdate struct {
+	// Where it stands among the chat's updates: chatUpdates after it sends those that follow.
+	Cursor string         `json:"cursor"`
+	Kind   ChatUpdateKind `json:"kind"`
+	// The thread it changed, or the thread of the message it changed, without its messages.
+	Thread *ChatThread `json:"thread"`
+	// The message it posted, edited or deleted, or a started thread's first; null when it resolved a thread or opened one again.
+	Message *ChatMessage `json:"message,omitempty"`
+}
+
 // A commit a push brought, as the push recorded it.
 type Commit struct {
 	Sha  string `json:"sha"`
@@ -197,6 +300,36 @@ type DeliveryPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
+// A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
+type Diff struct {
+	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+	Base *string `json:"base,omitempty"`
+	// A branch's base's tip, which its merge base is reckoned from; null for a commit.
+	BaseTip *string `json:"baseTip,omitempty"`
+	// The commit it runs to.
+	Head string `json:"head"`
+	// The files it changes, in Git's order, by path.
+	Files []*FileDiff `json:"files"`
+	// How many files it changes past the 3000 it lists.
+	FilesLeftOut int `json:"filesLeftOut"`
+	// The lines it adds, in every file it changes, those it left out included.
+	Additions int `json:"additions"`
+	// The lines it removes, in every file it changes, those it left out included.
+	Deletions int `json:"deletions"`
+}
+
+// One of a hunk's lines, without its newline.
+type DiffLine struct {
+	Kind LineKind `json:"kind"`
+	// Its number in the old file; null for an added line.
+	Old *int `json:"old,omitempty"`
+	// Its number in the new file; null for a removed line.
+	New  *int   `json:"new,omitempty"`
+	Text string `json:"text"`
+	// Whether the file ends on it without a newline.
+	NoNewline bool `json:"noNewline"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
@@ -256,6 +389,39 @@ type File struct {
 	HTML *string `json:"html,omitempty"`
 }
 
+// One file's change.
+type FileDiff struct {
+	Status FileStatus `json:"status"`
+	// Its path from the repository's root; a deleted file's old one.
+	Path string `json:"path"`
+	// The path it had before, for a renamed file; null otherwise.
+	OldPath *string `json:"oldPath,omitempty"`
+	// Its mode before, as Git writes it; null for an added file.
+	OldMode *string `json:"oldMode,omitempty"`
+	// Its mode after; null for a deleted file.
+	Mode *string `json:"mode,omitempty"`
+	// Whether Git reads it as binary, which shows no lines.
+	Binary    bool `json:"binary"`
+	Additions int  `json:"additions"`
+	Deletions int  `json:"deletions"`
+	// Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay.
+	Truncated bool    `json:"truncated"`
+	Hunks     []*Hunk `json:"hunks"`
+}
+
+// One run of a file's changes, with up to three lines around them.
+type Hunk struct {
+	// Its first line in the old file, or the line before it when it spans none.
+	OldStart int `json:"oldStart"`
+	OldLines int `json:"oldLines"`
+	// Its first line in the new file, or the line before it when it spans none.
+	NewStart int `json:"newStart"`
+	NewLines int `json:"newLines"`
+	// The heading Git found above it, such as a function's; empty when it found none.
+	Section string      `json:"section"`
+	Lines   []*DiffLine `json:"lines"`
+}
+
 // An invitation to an email; only a user who holds it, verified, accepts it.
 type Invitation struct {
 	ID               string `json:"id"`
@@ -289,6 +455,8 @@ type Issue struct {
 	Assignee *IssuePrincipal `json:"assignee,omitempty"`
 	// The repository it is about; null for none, and for a viewer who doesn't read it.
 	Repository *IssueRepository `json:"repository,omitempty"`
+	// The organization's labels it carries, by name.
+	Labels []*IssueLabel `json:"labels"`
 	// Who created it; null once they are gone.
 	CreatedBy *IssuePrincipal `json:"createdBy,omitempty"`
 	CreatedAt time.Time       `json:"createdAt"`
@@ -317,9 +485,9 @@ type IssueBranch struct {
 	LinkedAt time.Time     `json:"linkedAt"`
 }
 
-// A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads.
+// A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads.
 type IssueChange struct {
-	// title, description, state, priority, assignee or repository.
+	// title, description, state, priority, assignee, repository or labels.
 	Field string  `json:"field"`
 	From  *string `json:"from,omitempty"`
 	To    *string `json:"to,omitempty"`
@@ -356,6 +524,8 @@ type IssueFilter struct {
 	AssigneeID *string `json:"assigneeId,omitempty"`
 	// Those about one repository, by ID, or about none, for none.
 	RepositoryID *string `json:"repositoryId,omitempty"`
+	// Those that carry every one of these labels, by ID, at most 20.
+	LabelIds []string `json:"labelIds,omitempty"`
 	// Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
 	Text *string `json:"text,omitempty"`
 }
@@ -374,6 +544,15 @@ type IssueInput struct {
 	AssigneeID *string `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads.
 	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The organization's labels it carries, at most 20.
+	LabelIds []string `json:"labelIds,omitempty"`
+}
+
+// A label as an issue shows it.
+type IssueLabel struct {
+	ID    string     `json:"id"`
+	Name  string     `json:"name"`
+	Color LabelColor `json:"color"`
 }
 
 // A page of an organization's issues.
@@ -394,6 +573,8 @@ type IssuePatch struct {
 	AssigneeID graphql.Omittable[*string] `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads, or null for none.
 	RepositoryID graphql.Omittable[*string] `json:"repositoryId,omitempty"`
+	// The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+	LabelIds []string `json:"labelIds,omitempty"`
 }
 
 // Who an issue is assigned to, who created it, or who changed it.
@@ -445,6 +626,37 @@ type JoinRequest struct {
 	Note             string    `json:"note"`
 	CreatedAt        time.Time `json:"createdAt"`
 	ExpiresAt        time.Time `json:"expiresAt"`
+}
+
+// One of an organization's labels, which its issues carry.
+type Label struct {
+	ID string `json:"id"`
+	// 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+	Name  string     `json:"name"`
+	Color LabelColor `json:"color"`
+	// What it is for, at most 200 characters on one line.
+	Description string `json:"description"`
+	// How many issues carry it.
+	Issues    int       `json:"issues"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What creates a label.
+type LabelInput struct {
+	Name string `json:"name"`
+	// GRAY when left out.
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
+}
+
+// What changes a label: a field left out keeps its value.
+type LabelPatch struct {
+	Name        *string     `json:"name,omitempty"`
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
 }
 
 // A user who belongs to an organization, with the roles they hold there.
@@ -516,10 +728,14 @@ type Organization struct {
 	Issues *IssuePage `json:"issues"`
 	// One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read.
 	Issue *Issue `json:"issue,omitempty"`
+	// The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+	Labels []*Label `json:"labels"`
 	// The repositories the viewer reads, by slug; takes org.read.
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
 	Repository *Repository `json:"repository,omitempty"`
+	// What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	Usage *OrganizationUsage `json:"usage"`
 }
 
 type OrganizationSettings struct {
@@ -531,6 +747,16 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 	// 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before.
 	IssueKey *string `json:"issueKey,omitempty"`
+}
+
+// What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+type OrganizationUsage struct {
+	// Its repositories, every one of them.
+	Repositories *Usage `json:"repositories"`
+	// The bytes of its repositories' active packs, as the object store keeps them.
+	GitData *Usage `json:"gitData"`
+	// The repositories the viewer reads, by slug, each with its Git data.
+	ByRepository []*RepositoryUsage `json:"byRepository"`
 }
 
 // A commit's author or committer as the commit writes them.
@@ -609,6 +835,8 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
+	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
+	Chat *ChatPage `json:"chat,omitempty"`
 	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	Branches []*Branch `json:"branches"`
 	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
@@ -627,6 +855,10 @@ type Repository struct {
 	Tree *Tree `json:"tree,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
+	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
+	BranchDiff *Diff `json:"branchDiff,omitempty"`
+	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
+	CommitDiff *Diff `json:"commitDiff,omitempty"`
 	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
 	Environments []*Environment `json:"environments"`
 	// One of the repository's environments by ID: null unless it is there; takes repo.read.
@@ -656,6 +888,13 @@ type RepositoryInput struct {
 	// The slug when null or empty.
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// One repository's share of its organization's Git data.
+type RepositoryUsage struct {
+	Repository *Repository `json:"repository"`
+	// The bytes of its active packs.
+	GitData int64 `json:"gitData"`
 }
 
 // A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
@@ -798,6 +1037,9 @@ type Session struct {
 	Current bool `json:"current"`
 }
 
+type Subscription struct {
+}
+
 // One of a repository's tags and the object it names, a commit or an annotated tag.
 type Tag struct {
 	// Its name, without refs/tags/.
@@ -834,6 +1076,14 @@ type TreeEntry struct {
 	Size *int `json:"size,omitempty"`
 }
 
+// What a user or an organization takes of what one limit caps, against the limit that applies.
+type Usage struct {
+	// How many it holds, or the bytes it stores.
+	Used int64 `json:"used"`
+	// The most it may hold or store; 0 caps nothing.
+	Limit int64 `json:"limit"`
+}
+
 // A person: a principal of kind user.
 type User struct {
 	ID          string `json:"id"`
@@ -854,6 +1104,14 @@ type User struct {
 	Invitations []*Invitation `json:"invitations"`
 	// The viewer's pending requests to join organizations.
 	JoinRequests []*JoinRequest `json:"joinRequests"`
+	// What the viewer takes of what the limits cap; the viewer's own, so it takes no permission.
+	Usage *ViewerUsage `json:"usage"`
+}
+
+// What the viewer takes of what the limits cap.
+type ViewerUsage struct {
+	// The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+	Organizations *Usage `json:"organizations"`
 }
 
 // Where an annotation stands, in any order its principal sets them.
@@ -1045,6 +1303,70 @@ func (e *BranchStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e BranchStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What changed in a chat.
+type ChatUpdateKind string
+
+const (
+	ChatUpdateKindThreadStarted  ChatUpdateKind = "THREAD_STARTED"
+	ChatUpdateKindMessagePosted  ChatUpdateKind = "MESSAGE_POSTED"
+	ChatUpdateKindMessageEdited  ChatUpdateKind = "MESSAGE_EDITED"
+	ChatUpdateKindMessageDeleted ChatUpdateKind = "MESSAGE_DELETED"
+	ChatUpdateKindThreadResolved ChatUpdateKind = "THREAD_RESOLVED"
+	ChatUpdateKindThreadReopened ChatUpdateKind = "THREAD_REOPENED"
+)
+
+var AllChatUpdateKind = []ChatUpdateKind{
+	ChatUpdateKindThreadStarted,
+	ChatUpdateKindMessagePosted,
+	ChatUpdateKindMessageEdited,
+	ChatUpdateKindMessageDeleted,
+	ChatUpdateKindThreadResolved,
+	ChatUpdateKindThreadReopened,
+}
+
+func (e ChatUpdateKind) IsValid() bool {
+	switch e {
+	case ChatUpdateKindThreadStarted, ChatUpdateKindMessagePosted, ChatUpdateKindMessageEdited, ChatUpdateKindMessageDeleted, ChatUpdateKindThreadResolved, ChatUpdateKindThreadReopened:
+		return true
+	}
+	return false
+}
+
+func (e ChatUpdateKind) String() string {
+	return string(e)
+}
+
+func (e *ChatUpdateKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ChatUpdateKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ChatUpdateKind", str)
+	}
+	return nil
+}
+
+func (e ChatUpdateKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ChatUpdateKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ChatUpdateKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil
@@ -1420,6 +1742,69 @@ func (e EnvironmentSync) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// What a change did to a file.
+type FileStatus string
+
+const (
+	FileStatusAdded    FileStatus = "ADDED"
+	FileStatusModified FileStatus = "MODIFIED"
+	FileStatusDeleted  FileStatus = "DELETED"
+	FileStatusRenamed  FileStatus = "RENAMED"
+	// A path whose kind changed, such as a symlink that became a file.
+	FileStatusTypeChanged FileStatus = "TYPE_CHANGED"
+)
+
+var AllFileStatus = []FileStatus{
+	FileStatusAdded,
+	FileStatusModified,
+	FileStatusDeleted,
+	FileStatusRenamed,
+	FileStatusTypeChanged,
+}
+
+func (e FileStatus) IsValid() bool {
+	switch e {
+	case FileStatusAdded, FileStatusModified, FileStatusDeleted, FileStatusRenamed, FileStatusTypeChanged:
+		return true
+	}
+	return false
+}
+
+func (e FileStatus) String() string {
+	return string(e)
+}
+
+func (e *FileStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FileStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FileStatus", str)
+	}
+	return nil
+}
+
+func (e FileStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FileStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FileStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // Which parents of each commit a history follows.
 type HistoryParents string
 
@@ -1605,6 +1990,126 @@ func (e *IssueState) UnmarshalJSON(b []byte) error {
 }
 
 func (e IssueState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// A label's colour, which the Console draws in its tones of both themes.
+type LabelColor string
+
+const (
+	LabelColorGray   LabelColor = "GRAY"
+	LabelColorBlue   LabelColor = "BLUE"
+	LabelColorGreen  LabelColor = "GREEN"
+	LabelColorYellow LabelColor = "YELLOW"
+	LabelColorRed    LabelColor = "RED"
+)
+
+var AllLabelColor = []LabelColor{
+	LabelColorGray,
+	LabelColorBlue,
+	LabelColorGreen,
+	LabelColorYellow,
+	LabelColorRed,
+}
+
+func (e LabelColor) IsValid() bool {
+	switch e {
+	case LabelColorGray, LabelColorBlue, LabelColorGreen, LabelColorYellow, LabelColorRed:
+		return true
+	}
+	return false
+}
+
+func (e LabelColor) String() string {
+	return string(e)
+}
+
+func (e *LabelColor) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LabelColor(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LabelColor", str)
+	}
+	return nil
+}
+
+func (e LabelColor) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LabelColor) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LabelColor) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What a hunk's line is.
+type LineKind string
+
+const (
+	LineKindContext LineKind = "CONTEXT"
+	LineKindAdded   LineKind = "ADDED"
+	LineKindRemoved LineKind = "REMOVED"
+)
+
+var AllLineKind = []LineKind{
+	LineKindContext,
+	LineKindAdded,
+	LineKindRemoved,
+}
+
+func (e LineKind) IsValid() bool {
+	switch e {
+	case LineKindContext, LineKindAdded, LineKindRemoved:
+		return true
+	}
+	return false
+}
+
+func (e LineKind) String() string {
+	return string(e)
+}
+
+func (e *LineKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LineKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LineKind", str)
+	}
+	return nil
+}
+
+func (e LineKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LineKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LineKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

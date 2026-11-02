@@ -11,6 +11,8 @@ import (
 
 	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/chats/chatstest"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/git"
@@ -47,6 +49,9 @@ type orgFixture struct {
 	push             code.Push
 	issueStore       *issuestest.Store
 	issues           *issues.Service
+	chatStore        *chatstest.Store
+	notifier         *chatstest.Notifier
+	chats            *chats.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -100,6 +105,18 @@ func newOrgFixture() *orgFixture {
 	})
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.addChats()
+	f.commitObjects()
+	f.issueStore = issuestest.NewStore(store)
+	f.issueStore.Repos[f.website.ID] = f.website
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.issues.SetClock(func() time.Time { return now })
+	return f
+}
+
+// commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
+// history.
+func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -112,16 +129,23 @@ func newOrgFixture() *orgFixture {
 	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
-	f.setUpIssues(store)
-	return f
+	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
+	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 }
 
-// setUpIssues gives the fixture the issues' service, on a store that sees the organizations' and the repository.
-func (f *orgFixture) setUpIssues(store *orgstest.Store) {
-	f.issueStore = issuestest.NewStore(store)
-	f.issueStore.Repos[f.website.ID] = f.website
-	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
-	f.issues.SetClock(func() time.Time { return now })
+// addChats gives the fixture the chats' service, over a store that knows the people, website's commits and the chat of
+// its feature/login branch, at c.
+func (f *orgFixture) addChats() {
+	f.chatStore, f.notifier = chatstest.NewStore(), &chatstest.Notifier{}
+	f.chatStore.Now = now
+	for _, v := range []auth.Authenticated{f.olivia, f.max, f.nia} {
+		f.chatStore.Names[v.User.ID] = v.User.DisplayName
+	}
+	for _, letter := range []string{"a", "b", "c", "d"} {
+		f.chatStore.AddCommit(f.website.ID, shaOf(letter))
+	}
+	f.chatStore.SetBranch(chats.Subject{OrgID: f.acme.ID, RepoID: f.website.ID, Branch: "feature/login", Head: shaOf("c"), Org: "acme", Repo: "website"})
+	f.chats = chats.NewService(f.chatStore, f.notifier, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
 }
 
 // shaOf is the object name of 40 letter's.
@@ -132,7 +156,7 @@ func (f *orgFixture) query(viewer *auth.Authenticated, document string) string {
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"query":`+jsonString(document)+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", "", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
 	return rec.Body.String()
 }
 

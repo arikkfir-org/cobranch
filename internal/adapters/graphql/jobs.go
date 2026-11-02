@@ -123,12 +123,3 @@ func nonEmpty(s string) *string {
 	}
 	return &s
 }
-
-// utc is t in UTC, or nil without one.
-func utc(t *time.Time) *time.Time {
-	if t == nil {
-		return nil
-	}
-	at := t.UTC()
-	return &at
-}

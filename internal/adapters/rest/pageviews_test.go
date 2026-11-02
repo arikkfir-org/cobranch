@@ -31,6 +31,8 @@ func TestReportPageViews(t *testing.T) {
 			want: []string{"sign-in load 1 0.3", "sign-in load 1 0"}},
 		{name: "an organization's issues", body: views(view("organization.issues", "route", 200, 0)), wantStatus: 204,
 			want: []string{"organization.issues route 1 0.2", "organization.issues route 1 0"}},
+		{name: "a branch's changes", body: views(view("repository.changes", "route", 400, 3)), wantStatus: 204,
+			want: []string{"repository.changes route 1 0.4", "repository.changes route 1 3"}},
 		{name: "the same page twice", body: views(view("organization", "route", 100, 0), view("organization", "route", 300, 0)), wantStatus: 204,
 			want: []string{"organization route 2 0.4", "organization route 2 0"}},
 		{name: "twenty views", body: views(slices.Repeat([]string{view("welcome", "route", 10, 0)}, 20)...), wantStatus: 204,
@@ -48,7 +50,7 @@ func TestReportPageViews(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := sdkmetric.NewManualReader()
-			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
+			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
 			req := httptest.NewRequest("POST", "/v1/page-views", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()

@@ -253,6 +253,31 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/usage:
+    get:
+      operationId: getMyUsage
+      summary: What the user takes of what the limits cap, each against the limit that applies; the user's own, so it takes no permission.
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The user's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewerUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/invitations:
     get:
       operationId: listMyInvitations
@@ -477,6 +502,34 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/usage:
+    get:
+      operationId: getOrganizationUsage
+      summary: What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The organization's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1041,6 +1094,15 @@ paths:
           description: Those about one repository, by ID, or about none, for none.
           schema:
             type: string
+        - name: label
+          in: query
+          description: Those that carry every one of these labels, by ID, one parameter each, at most 20.
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
         - name: q
           in: query
           description: Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
@@ -1267,6 +1329,163 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels:
+    get:
+      operationId: listLabels
+      summary: The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The labels.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labels]
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Label"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createLabel
+      summary: Creates a label in the organization, named unlike its others whatever their case; takes issues.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelInput"
+      responses:
+        "201":
+          description: The label.
+          headers:
+            Location:
+              description: The label's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels/{label}:
+    get:
+      operationId: getLabel
+      summary: One of the organization's labels; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The label.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "304":
+          description: The label is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateLabel
+      summary: Changes the fields the merge patch (RFC 7396) names of one of the organization's labels, which its issues then show; takes issues.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/LabelPatch"
+      responses:
+        "200":
+          description: The label as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteLabel
+      summary: Deletes one of the organization's labels, which takes it off every issue; takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1567,6 +1786,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/diff:
+    get:
+      operationId: getBranchDiff
+      summary: >-
+        The branch's change as a request to merge into its base: from the merge base of its base's tip and its head
+        to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers
+        400 branch.default. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The branch's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/deleted-branches/{branch}:
     get:
       operationId: getDeletedBranch
@@ -1681,6 +1937,368 @@ paths:
         "409":
           $ref: "#/components/responses/Problem"
         "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat:
+    get:
+      operationId: listChatThreads
+      summary: >-
+        A page of the branch's chat, its threads newest first, each with its messages in the order they were posted;
+        takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it
+        answers every change the page may lack.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many threads the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's threads, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threads, after]
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatThread"
+                  after:
+                    type: string
+                    description: Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads:
+    post:
+      operationId: startChatThread
+      summary: >-
+        Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file
+        at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked
+        answers it as it is, and an ID of another's thread answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadInput"
+      responses:
+        "201":
+          description: The thread, with its message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}:
+    get:
+      operationId: getChatThread
+      summary: One of the branch's chat threads, with its messages in the order they were posted; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The thread.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "304":
+          description: The thread is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateChatThread
+      summary: >-
+        Resolves one of the branch's chat threads, or opens it again; takes messages.post for a thread the viewer started
+        and messages.moderate for another's. The change names the thread's ETag in If-Match; without it, the answer is
+        428. A thread already so is answered as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadPatch"
+      responses:
+        "200":
+          description: The thread as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages:
+    post:
+      operationId: postChatMessage
+      summary: >-
+        Posts a message to one of the branch's chat threads for the viewer; takes messages.post. Posting the viewer's
+        message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "201":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}:
+    get:
+      operationId: getChatMessage
+      summary: One of the messages of one of the branch's chat threads; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "304":
+          description: The message is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: editChatMessage
+      summary: >-
+        Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. The
+        edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatMessagePatch"
+      responses:
+        "200":
+          description: The message as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteChatMessage
+      summary: >-
+        Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes
+        messages.post for the viewer's own and messages.moderate for another's. The deletion names the message's ETag in
+        If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates:
+    get:
+      operationId: listChatUpdates
+      summary: >-
+        The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now;
+        takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows
+        the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID,
+        holds the chat as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - name: after
+          in: query
+          required: true
+          description: Where the updates start, as listChatThreads' after or a previous answer's names it. Opaque.
+          schema:
+            type: string
+        - name: wait
+          in: query
+          description: How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+            default: 0
+      responses:
+        "200":
+          description: The updates, at most 100, in order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updates, after]
+                properties:
+                  updates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatUpdate"
+                  after:
+                    type: string
+                    description: Where the next read starts, after the last update; the request's after when there is none. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1895,17 +2513,74 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
-  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+  /orgs/{org}/repos/{repo}/commits/{sha}/diff:
     get:
-      operationId: listReviews
-      summary: The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      operationId: getCommitDiff
+      summary: >-
+        The commit's change against its first parent, or against the empty tree when it has none; takes repo.read.
+        It reads the Git server: an installation without one answers 503.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: The reviews.
+          description: The commit's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+    get:
+      operationId: listReviews
+      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many reviews the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The page's reviews, in the order they were submitted.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1916,6 +2591,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Review"
+        "304":
+          description: The page is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -1973,13 +2653,22 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The review.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Review"
+        "304":
+          description: The review is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -2604,6 +3293,21 @@ components:
       description: The issue's number in its organization, such as 42 for ACME-42.
       schema:
         type: integer
+    label:
+      name: label
+      in: path
+      required: true
+      description: The label's ID.
+      x-go-name: LabelID
+      schema:
+        type: string
+        format: uuid
+    ifMatchLabel:
+      name: If-Match
+      in: header
+      description: The ETag of the label the change was made from; a change made meanwhile is refused with 412.
+      schema:
+        type: string
     ifMatchIssue:
       name: If-Match
       in: header
@@ -2632,6 +3336,30 @@ components:
       required: true
       description: The annotation's name, such as ci/build; a slash in it travels escaped, as ci%2Fbuild.
       x-go-name: Name
+      schema:
+        type: string
+    thread:
+      name: thread
+      in: path
+      required: true
+      description: One of the chat's threads, by ID.
+      x-go-name: ThreadID
+      schema:
+        type: string
+        format: uuid
+    message:
+      name: message
+      in: path
+      required: true
+      description: One of the thread's messages, by ID.
+      x-go-name: MessageID
+      schema:
+        type: string
+        format: uuid
+    ifMatchChat:
+      name: If-Match
+      in: header
+      description: The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
       schema:
         type: string
     ifMatchAnnotation:
@@ -2745,6 +3473,11 @@ components:
       required: true
       schema:
         type: string
+    Location:
+      description: Where what the request made is, relative to the API's base.
+      required: true
+      schema:
+        type: string
     RawCacheControl:
       description: >-
         private, max-age=31536000, immutable when the ref is the full name of the commit it resolved to, whose bytes
@@ -2781,7 +3514,7 @@ components:
           enum: [sign-in, welcome, settings, organization, organization.members, organization.roles,
             organization.api-keys, organization.settings, organization.new-repository, organization.issues, repository.code,
             repository.file, repository.commits, repository.commit, repository.branches, repository.branch,
-            repository.access, repository.settings]
+            repository.changes, repository.access, repository.settings]
         navigation:
           type: string
           description: load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
@@ -2973,6 +3706,59 @@ components:
           description: The permissions the viewer holds on the repository.
           items:
             type: string
+    Usage:
+      type: object
+      description: What a user or an organization takes of what one limit caps, against the limit that applies.
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int64
+          description: How many it holds, or the bytes it stores.
+        limit:
+          type: integer
+          format: int64
+          description: The most it may hold or store; 0 caps nothing.
+    ViewerUsage:
+      type: object
+      description: What the user takes of what the limits cap.
+      required: [organizations]
+      properties:
+        organizations:
+          $ref: "#/components/schemas/Usage"
+          description: The organizations the user created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+    OrganizationUsage:
+      type: object
+      description: What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+      required: [repositories, gitData, byRepository]
+      properties:
+        repositories:
+          $ref: "#/components/schemas/Usage"
+          description: Its repositories, every one of them.
+        gitData:
+          $ref: "#/components/schemas/Usage"
+          description: The bytes of its repositories' active packs, as the object store keeps them.
+        byRepository:
+          type: array
+          description: The repositories the viewer reads, by slug, each with its Git data.
+          items:
+            $ref: "#/components/schemas/RepositoryUsage"
+    RepositoryUsage:
+      type: object
+      description: One repository's share of its organization's Git data.
+      required: [id, slug, name, gitData]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        gitData:
+          type: integer
+          format: int64
+          description: The bytes of its active packs.
     RepositoryInput:
       type: object
       description: What makes a repository.
@@ -3313,7 +4099,7 @@ components:
     Issue:
       type: object
       description: A piece of the organization's work, named by its organization's issue key and its number.
-      required: [id, number, identifier, title, description, state, priority, createdAt, updatedAt, version]
+      required: [id, number, identifier, title, description, state, priority, labels, createdAt, updatedAt, version]
       properties:
         id:
           type: string
@@ -3339,6 +4125,11 @@ components:
           $ref: "#/components/schemas/Principal"
         repository:
           $ref: "#/components/schemas/IssueRepository"
+        labels:
+          type: array
+          description: The organization's labels it carries, by name.
+          items:
+            $ref: "#/components/schemas/IssueLabel"
         createdBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -3390,6 +4181,12 @@ components:
           type: string
           format: uuid
           description: One of the organization's repositories, which the viewer reads.
+        labelIds:
+          type: array
+          description: The organization's labels it carries, at most 20.
+          items:
+            type: string
+            format: uuid
     IssuePatch:
       type: object
       description: What changes an issue, as a merge patch; a field left out keeps its value.
@@ -3410,6 +4207,78 @@ components:
           type: [string, "null"]
           format: uuid
           description: One of the organization's repositories, which the viewer reads, or null for none.
+        labelIds:
+          type: array
+          description: The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+          items:
+            type: string
+            format: uuid
+    IssueLabel:
+      type: object
+      description: A label as an issue shows it.
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+    LabelColor:
+      type: string
+      description: A label's colour, which the Console draws in its tones of both themes.
+      enum: [gray, blue, green, yellow, red]
+    Label:
+      type: object
+      description: One of an organization's labels, which its issues carry.
+      required: [id, name, color, description, issues, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+          description: What it is for, at most 200 characters on one line.
+        issues:
+          type: integer
+          description: How many issues carry it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1; its ETag.
+    LabelInput:
+      type: object
+      description: What creates a label.
+      required: [name]
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+    LabelPatch:
+      type: object
+      description: What changes a label, as a merge patch; a field left out keeps its value.
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
     IssueEvent:
       type: object
       description: Something that happened to an issue.
@@ -3450,12 +4319,12 @@ components:
           $ref: "#/components/schemas/LinkedBy"
     IssueChange:
       type: object
-      description: A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+      description: A field a change changed, with its values as people read them, a labels' change their names by name, comma-separated; a description's change names no values, and a repository's only those the viewer reads.
       required: [field]
       properties:
         field:
           type: string
-          enum: [title, description, state, priority, assignee, repository]
+          enum: [title, description, state, priority, assignee, repository, labels]
         from:
           type: string
         to:
@@ -3488,6 +4357,153 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded it.
+    ChatAnchor:
+      type: object
+      description: Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+      required: [sha, path, startLine, endLine]
+      properties:
+        sha:
+          type: string
+          description: The commit's full name, in lowercase hexadecimal.
+        path:
+          type: string
+          description: The file's path from the repository's root, as names separated by /.
+        startLine:
+          type: integer
+          minimum: 1
+        endLine:
+          type: integer
+          minimum: 1
+          description: The last line, at or after startLine.
+    ChatThread:
+      type: object
+      description: One of a branch's chat threads.
+      required: [id, outdated, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        anchor:
+          $ref: "#/components/schemas/ChatAnchor"
+        outdated:
+          type: boolean
+          description: Whether the branch has moved on from the commit its anchor names; false without an anchor.
+        startedBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          description: When it was resolved; absent while it is open.
+        resolvedBy:
+          $ref: "#/components/schemas/Principal"
+        version:
+          type: integer
+          format: int64
+          description: >-
+            Counts its changes and its messages' from 1. Its ETag is this number and a digest of how it reads, which the
+            branch's head, the slugs its links name and its people's names shape too, in quotes; If-Match names it, or
+            this number alone in quotes, to refuse a change made meanwhile.
+        messages:
+          type: array
+          description: Its messages in the order they were posted; absent from an update.
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+    ChatMessage:
+      type: object
+      description: One of a thread's messages, in Markdown.
+      required: [id, threadId, body, html, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        threadId:
+          type: string
+          format: uuid
+        body:
+          type: string
+          description: Its Markdown; empty once it is deleted.
+        html:
+          type: string
+          description: Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
+        author:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        editedAt:
+          type: string
+          format: date-time
+          description: When its author last edited it; absent until they do.
+        deletedAt:
+          type: string
+          format: date-time
+          description: When it was deleted; absent while it is there.
+        deletedBy:
+          $ref: "#/components/schemas/Principal"
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the branch's head, the slugs its links name and its people's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    ChatThreadInput:
+      type: object
+      description: A thread to start, with its first message.
+      required: [body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
+        anchor:
+          $ref: "#/components/schemas/ChatAnchor"
+        body:
+          type: string
+          description: Its first message's Markdown, at most 20,000 characters.
+    ChatThreadPatch:
+      type: object
+      description: How a thread changes.
+      required: [resolved]
+      properties:
+        resolved:
+          type: boolean
+          description: Whether it is resolved, or open.
+    ChatMessageInput:
+      type: object
+      description: A message to post.
+      required: [body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out.
+        body:
+          type: string
+          description: Its Markdown, at most 20,000 characters.
+    ChatMessagePatch:
+      type: object
+      description: How a message changes.
+      required: [body]
+      properties:
+        body:
+          type: string
+          description: Its Markdown, at most 20,000 characters.
+    ChatUpdate:
+      type: object
+      description: A change to a chat, with the thread and the message it changed as they are now.
+      required: [cursor, kind, thread]
+      properties:
+        cursor:
+          type: string
+          description: Where it stands among the chat's updates. Opaque.
+        kind:
+          type: string
+          enum: [thread.started, message.posted, message.edited, message.deleted, thread.resolved, thread.reopened]
+        thread:
+          $ref: "#/components/schemas/ChatThread"
+        message:
+          $ref: "#/components/schemas/ChatMessage"
     Annotation:
       type: object
       description: A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -4223,6 +5239,117 @@ components:
           type: integer
           format: int64
           description: A file's or a symlink's size in bytes.
+    Diff:
+      type: object
+      description: >-
+        A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of
+        hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left
+        out rather than show it.
+      required: [head, files, filesLeftOut, additions, deletions]
+      properties:
+        base:
+          type: string
+          description: >-
+            The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent
+            when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+        baseTip:
+          type: string
+          description: A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+        head:
+          type: string
+          description: The commit it runs to.
+        files:
+          type: array
+          description: The files it changes, in Git's order, by path.
+          items:
+            $ref: "#/components/schemas/FileDiff"
+        filesLeftOut:
+          type: integer
+          description: How many files it changes past the 3000 it lists.
+        additions:
+          type: integer
+          description: The lines it adds, in every file it changes, those it left out included.
+        deletions:
+          type: integer
+          description: The lines it removes, in every file it changes, those it left out included.
+    FileDiff:
+      type: object
+      description: One file's change.
+      required: [status, path, binary, additions, deletions, truncated, hunks]
+      properties:
+        status:
+          type: string
+          description: What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+          enum: [added, modified, deleted, renamed, type_changed]
+        path:
+          type: string
+          description: Its path from the repository's root; a deleted file's old one.
+        oldPath:
+          type: string
+          description: The path it had before, for a renamed file.
+        oldMode:
+          type: string
+          description: Its mode before, as Git writes it; absent for an added file.
+        mode:
+          type: string
+          description: Its mode after; absent for a deleted file.
+        binary:
+          type: boolean
+          description: Whether Git reads it as binary, which shows no lines.
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        truncated:
+          type: boolean
+          description: >-
+            Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the
+            diff passed 20000 lines or 4 MiB before it. Its counts stay.
+        hunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hunk"
+    Hunk:
+      type: object
+      description: One run of a file's changes, with up to three lines around them.
+      required: [oldStart, oldLines, newStart, newLines, section, lines]
+      properties:
+        oldStart:
+          type: integer
+          description: Its first line in the old file, or the line before it when it spans none.
+        oldLines:
+          type: integer
+        newStart:
+          type: integer
+          description: Its first line in the new file, or the line before it when it spans none.
+        newLines:
+          type: integer
+        section:
+          type: string
+          description: The heading Git found above it, such as a function's; empty when it found none.
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffLine"
+    DiffLine:
+      type: object
+      description: One of a hunk's lines, without its newline.
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [context, added, removed]
+        old:
+          type: integer
+          description: Its number in the old file; absent for an added line.
+        new:
+          type: integer
+          description: Its number in the new file; absent for a removed line.
+        text:
+          type: string
+        noNewline:
+          type: boolean
+          description: Present and true when the file ends on it without a newline.
     File:
       type: object
       description: A file or a symlink at a commit, and its text when it isn't binary.

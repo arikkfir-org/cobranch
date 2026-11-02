@@ -6,5 +6,4 @@ RUN --mount=type=bind,source=scripts/go-cache-restore.sh,target=/go-cache-restor
     --mount=type=secret,id=gcs-token \
     --mount=type=cache,id=/root/.cache/go-build,target=/go-cache/build \
     --mount=type=cache,id=/go/pkg/mod,target=/go-cache/mod \
-    --mount=type=cache,id=golangci-lint,target=/go-cache/lint \
-    sh /go-cache-restore.sh
+    sh /go-cache-restore.sh mod build

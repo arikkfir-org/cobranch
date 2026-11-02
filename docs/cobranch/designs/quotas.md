@@ -151,7 +151,9 @@ Sizes are entered and shown in binary units (MiB, GiB), as the chart’s values 
 - **An organization's settings show its usage:** repositories and Git data, each against the limit that applies, with a
   meter that turns to a warning at 90% and to danger at the limit, and each repository's own Git data beside it. Anyone
   with `org.read` there sees it.
-- **The APIs carry the same:** `GET /v1/orgs/{org}/usage` in REST and `Organization.usage` in GraphQL, `org.read`.
+- **The APIs carry the same:** `GET /v1/orgs/{org}/usage` in REST and `Organization.usage` in GraphQL, `org.read`. A
+  user's own count, which creating an organization shows, is `GET /v1/me/usage` and `User.usage`, which take no
+  permission.
 - **Creating an organization** shows how many the user has created against their limit, and the button gives way to the
   reason once they reach it.
 

@@ -39,6 +39,8 @@ type Code interface {
 	PauseEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	ResumeEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
+	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
+	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 }
 
 // unavailable is the code of the error a field answers when the installation lacks what it needs: a Git server.
@@ -94,6 +96,51 @@ func file(f code.File) *File {
 		out.HTML = &f.HTML
 	}
 	return out
+}
+
+// fileStatuses and lineKinds map the domain's diffs' statuses and kinds to the schema's.
+var (
+	fileStatuses = map[code.FileStatus]FileStatus{
+		code.FileAdded: FileStatusAdded, code.FileModified: FileStatusModified, code.FileDeleted: FileStatusDeleted,
+		code.FileRenamed: FileStatusRenamed, code.FileTypeChanged: FileStatusTypeChanged,
+	}
+	lineKinds = map[code.LineKind]LineKind{code.LineContext: LineKindContext, code.LineAdded: LineKindAdded, code.LineRemoved: LineKindRemoved}
+)
+
+// diff is d as the API shows it.
+func diff(d code.Diff) *Diff {
+	return &Diff{Base: optional(d.Base), BaseTip: optional(d.BaseTip), Head: d.Head, Files: mapAll(d.Files, fileDiff),
+		FilesLeftOut: d.FilesLeftOut, Additions: d.Additions, Deletions: d.Deletions}
+}
+
+func fileDiff(f code.FileDiff) *FileDiff {
+	return &FileDiff{Status: fileStatuses[f.Status], Path: f.Path, OldPath: optional(f.OldPath), OldMode: optional(f.OldMode),
+		Mode: optional(f.Mode), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+		Hunks: mapAll(f.Hunks, hunk)}
+}
+
+func hunk(h code.Hunk) *Hunk {
+	return &Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section,
+		Lines: mapAll(h.Lines, diffLine)}
+}
+
+func diffLine(l code.DiffLine) *DiffLine {
+	out := &DiffLine{Kind: lineKinds[l.Kind], Text: l.Text, NoNewline: l.NoNewline}
+	if l.Kind != code.LineAdded {
+		out.Old = &l.Old
+	}
+	if l.Kind != code.LineRemoved {
+		out.New = &l.New
+	}
+	return out
+}
+
+// optional is s, or nil when it is empty.
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func commitPrincipal(p *code.Principal) *CommitPrincipal {

@@ -1,7 +1,7 @@
 # Task warm of .tekton/main.yaml: check out the commit, restore main's Go caches, compile what ci compiles as ci compiles
-# it (build.task.yaml, lint.task.yaml, test.task.yaml) and the image build's static binary, then save the caches as
-# main's, which every run restores. A step that fails costs later runs time, never main its images: each continues.
-# Octomaton inlines it, and the step it references, into the PipelineRun.
+# it (build.task.yaml, lint.task.yaml, test.task.yaml) and the image build's static binary, each step in the cache ci's
+# step restores, then save the caches as main's, which every run restores. A step that fails costs later runs time,
+# never main its images: each continues. Octomaton inlines it, and the step it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -20,12 +20,8 @@ spec:
   stepTemplate:
     workingDir: $(workspaces.source.path)
     env:
-      - name: GOCACHE
-        value: /go-cache/build
       - name: GOMODCACHE
         value: /go-cache/mod
-      - name: GOLANGCI_LINT_CACHE
-        value: /go-cache/lint
       - name: GOTOOLCHAIN
         value: local
       - name: GOFLAGS
@@ -47,31 +43,50 @@ spec:
           value: $(params.revision)
     - name: restore
       ref: {name: go-cache-restore} # go-cache-restore.step.yaml
+      params:
+        - name: caches
+          value: mod generate build race lint golangci
     # The generators, which go tool builds and caches.
     - name: generate
       image: docker.io/library/golang:1.27.1
+      env:
+        - name: GOCACHE
+          value: /go-cache/generate
       command: [go, generate, ./...]
       onError: continue
     # Build's binaries, and the image build's: the same packages, compiled the same way, link alone differing.
     - name: build
       image: docker.io/library/golang:1.27.1
       env:
+        - name: GOCACHE
+          value: /go-cache/build
         - name: CGO_ENABLED
           value: "0"
       command: [go, build, -trimpath, -o, .ci/bin/, ./cmd/...]
       onError: continue
-    - name: vet
-      image: docker.io/library/golang:1.27.1
-      command: [go, vet, ./...]
-      onError: continue
     # The tests with the race detector, linked but never run.
     - name: test
       image: docker.io/library/golang:1.27.1
+      env:
+        - name: GOCACHE
+          value: /go-cache/race
       command: [go, test, -race, -count=1, -run, '^$', -exec, /bin/true, ./...]
       onError: continue
     - name: lint
       image: docker.io/golangci/golangci-lint:v2.15.0
+      env:
+        - name: GOCACHE
+          value: /go-cache/lint
+        - name: GOLANGCI_LINT_CACHE
+          value: /go-cache/golangci
       command: [golangci-lint, run, ./...]
+      onError: continue
+    - name: vet
+      image: docker.io/golangci/golangci-lint:v2.15.0
+      env:
+        - name: GOCACHE
+          value: /go-cache/lint
+      command: [go, vet, ./...]
       onError: continue
     - name: save
       image: docker.io/curlimages/curl:8.22.0

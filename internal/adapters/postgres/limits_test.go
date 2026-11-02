@@ -4,18 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sync"
 	"testing"
 
 	"github.com/google/uuid"
 
 	"cobranch.dev/db/migrations"
+	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
+
+// of points at n.
+func of(n int64) *int64 { return &n }
 
 // newOrganization is a new organization of slug.
 func newOrganization(slug string) orgs.Organization {
@@ -287,5 +293,175 @@ func TestLimitsMigrationNamesCreators(t *testing.T) {
 	}
 	if by, ok := creators[globex.ID]; !ok || by != nil {
 		t.Errorf("Globex was created by %v, want nobody: an administrator created it for Nia", by)
+	}
+}
+
+func TestOrgStoreInstallationLimits(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	stored, err := f.s.InstallationSettings(ctx)
+	if err != nil || stored.Limits != (limits.Settings{}) {
+		t.Fatalf("InstallationSettings() = %+v, %v; want no limits set", stored, err)
+	}
+	none, five := int64(0), int64(5<<30)
+	stored.Limits = limits.Settings{RepositoriesPerOrganization: &none, GitDataPerOrganization: &five}
+	written, err := f.s.ChangeInstallationSettings(ctx, f.olivia, stored, now)
+	if err != nil || written.Version != 2 || written.Limits.OrganizationsPerUser != nil || *written.Limits.RepositoriesPerOrganization != 0 ||
+		*written.Limits.GitDataPerOrganization != 5<<30 {
+		t.Fatalf("ChangeInstallationSettings() = %+v, %v; want no repositories limit and 5 GiB at version 2", written, err)
+	}
+	if got, err := NewLimitStore(f.pool).InstallationLimits(ctx); err != nil || got.GitDataPerOrganization == nil || *got.GitDataPerOrganization != 5<<30 {
+		t.Errorf("InstallationLimits() = %+v, %v; want the Back-office's 5 GiB", got, err)
+	}
+	log := auditLog(t, f.pool, "installation_settings")
+	if len(log) != 1 || !slices.Equal(keys(log[0].After), []string{"git_data_per_organization", "repositories_per_organization", "updated_at", "updated_by", "version"}) {
+		t.Errorf("audit log = %+v, want the limits' change", log)
+	}
+}
+
+func TestOrgStoreOwnLimits(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	if got, err := f.s.OwnLimits(ctx, f.acme.ID); err != nil || got != (admin.OwnLimits{}) {
+		t.Fatalf("OwnLimits() = %+v, %v; want none, at version 0", got, err)
+	}
+	steps := []struct {
+		name        string
+		own         admin.OwnLimits
+		wantErr     error
+		wantVersion int64
+	}{
+		{name: "the first", own: admin.OwnLimits{Overrides: limits.Overrides{Repositories: of(500)}}, wantVersion: 1},
+		{name: "another first, meanwhile", own: admin.OwnLimits{Overrides: limits.Overrides{Repositories: of(7)}}, wantErr: admin.ErrStale, wantVersion: 1},
+		{name: "a change", own: admin.OwnLimits{Overrides: limits.Overrides{GitData: of(0)}, Version: 1}, wantVersion: 2},
+		{name: "a change from an old version", own: admin.OwnLimits{Version: 1}, wantErr: admin.ErrStale, wantVersion: 2},
+	}
+	for _, step := range steps {
+		got, err := f.s.ChangeOwnLimits(ctx, f.olivia, f.acme.ID, step.own, now)
+		if !errors.Is(err, step.wantErr) {
+			t.Fatalf("%s: ChangeOwnLimits() error = %v, want %v", step.name, err, step.wantErr)
+		}
+		stored, err := f.s.OwnLimits(ctx, f.acme.ID)
+		if err != nil || stored.Version != step.wantVersion {
+			t.Fatalf("%s: OwnLimits() = %+v, %v; want version %d", step.name, stored, err, step.wantVersion)
+		}
+		if step.wantErr == nil && (!sameOwn(got, stored) || !sameOwn(got, step.own) || got.UpdatedBy != f.olivia || !got.UpdatedAt.Equal(now)) {
+			t.Errorf("%s: ChangeOwnLimits() = %+v, want %+v, by Olivia", step.name, got, stored)
+		}
+	}
+	if got, err := f.s.OwnLimits(ctx, f.acme.ID); err != nil || got.Repositories != nil || got.GitData == nil || *got.GitData != 0 {
+		t.Errorf("OwnLimits() = %+v, %v; want no Git data limit, and the installation's repositories", got, err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = 'org.limits_changed' AND org_id = $1 AND actor_id = $2", f.acme.ID, f.olivia); n != 2 {
+		t.Errorf("Acme's trail records %d changes of its limits, want 2", n)
+	}
+	if log := auditLog(t, f.pool, "organization_limits"); len(log) != 2 || log[0].Action != "insert" || log[1].Action != "update" {
+		t.Errorf("audit log = %+v, want the insert and the update", log)
+	}
+	if _, err := f.s.ChangeOwnLimits(ctx, f.olivia, uuid.New(), admin.OwnLimits{}, now); !errors.Is(err, orgs.ErrNotFound) {
+		t.Errorf("ChangeOwnLimits() of an organization that isn't there = %v, want ErrNotFound", err)
+	}
+}
+
+// sameOwn reports whether a and b set the same limits.
+func sameOwn(a, b admin.OwnLimits) bool {
+	same := func(x, y *int64) bool { return (x == nil) == (y == nil) && (x == nil || *x == *y) }
+	return same(a.Repositories, b.Repositories) && same(a.GitData, b.GitData)
+}
+
+func TestOrgStoreAllOrganizationsUsage(t *testing.T) {
+	t.Parallel()
+	f := newGitFixture(t)
+	ctx := context.Background()
+	for _, p := range []git.Push{
+		pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}),
+		pushOf(f.secret.ID, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaB}}),
+	} {
+		if err := f.g.Record(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.pool.Exec(ctx, "UPDATE packs SET state = 'superseded', superseded_at = now() WHERE repo_id = $1", f.secret.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.s.ChangeOwnLimits(ctx, f.olivia, f.acme.ID, admin.OwnLimits{Overrides: limits.Overrides{GitData: of(1 << 20)}}, now); err != nil {
+		t.Fatal(err)
+	}
+	got, err := f.s.AllOrganizations(ctx, admin.Page{Limit: 10})
+	if err != nil || len(got) != 1 {
+		t.Fatalf("AllOrganizations() = %+v, %v; want Acme", got, err)
+	}
+	if acme := got[0]; acme.Usage != (limits.Usage{Repositories: 2, GitData: 100}) || acme.Own.Repositories != nil || acme.Own.GitData == nil || *acme.Own.GitData != 1<<20 {
+		t.Errorf("Acme = %+v, want 2 repositories, website's 100 bytes, and its own 1 MiB of Git data", acme)
+	}
+}
+
+func TestOrgStoreCreated(t *testing.T) {
+	t.Parallel()
+	f := newOrgFixture(t)
+	ctx := context.Background()
+	f.createForNia(t, 2, 3)
+	if _, err := f.pool.Exec(ctx, "DELETE FROM organizations WHERE slug = 'by-nia-0'"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name string
+		user uuid.UUID
+		want int64
+	}{
+		{name: "those Nia created herself that still exist", user: f.nia, want: 2},
+		{name: "none for someone who created none", user: f.max, want: 0},
+	} {
+		if got, err := f.s.Created(ctx, tt.user); err != nil || got != tt.want {
+			t.Errorf("%s: Created() = %d, %v, want %d", tt.name, got, err, tt.want)
+		}
+	}
+}
+
+func TestRepoStoreUsage(t *testing.T) {
+	t.Parallel()
+	f := newGitFixture(t)
+	ctx := context.Background()
+	// Each pack holds 100 bytes: website lists two active ones, and secret one that compaction superseded.
+	for _, p := range []git.Push{
+		pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}),
+		pushOf(f.website.ID, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/feature", Old: git.ZeroSHA, New: shaB}}),
+		pushOf(f.secret.ID, f.olivia, "pack-3", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaB}}),
+	} {
+		if err := f.g.Record(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.pool.Exec(ctx, "UPDATE packs SET state = 'superseded', superseded_at = now() WHERE repo_id = $1", f.secret.ID); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name string
+		ids  []uuid.UUID
+		want map[string]int64 // each listed repository's Git data, by slug
+	}{
+		{name: "the repositories asked, by slug", ids: []uuid.UUID{f.website.ID, f.secret.ID}, want: map[string]int64{"secret": 0, "website": 200}},
+		{name: "only the organization's", ids: []uuid.UUID{f.website.ID, uuid.New()}, want: map[string]int64{"website": 200}},
+		{name: "the totals without any", want: map[string]int64{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			used, byRepository, err := f.r.Usage(ctx, f.acme.ID, tt.ids)
+			if err != nil || used != (limits.Usage{Repositories: 2, GitData: 200}) {
+				t.Fatalf("Usage() = %+v, %v, want 2 repositories and website's 200 bytes", used, err)
+			}
+			got := map[string]int64{}
+			for i, r := range byRepository {
+				if i > 0 && byRepository[i-1].Repository.Slug >= r.Repository.Slug {
+					t.Errorf("Usage() lists %s after %s, want them by slug", r.Repository.Slug, byRepository[i-1].Repository.Slug)
+				}
+				got[r.Repository.Slug] = r.GitData
+			}
+			if !maps.Equal(got, tt.want) {
+				t.Errorf("Usage() lists %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

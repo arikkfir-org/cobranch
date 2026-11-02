@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
@@ -21,6 +22,7 @@ type Organizations interface {
 	Permissions(ctx context.Context, v orgs.Viewer) ([]string, error)
 	Create(ctx context.Context, v orgs.Viewer, slug, name string) (orgs.Organization, error)
 	Organizations(ctx context.Context, v orgs.Viewer) ([]orgs.Organization, error)
+	Created(ctx context.Context, v orgs.Viewer) (limits.Quota, error)
 	Get(ctx context.Context, v orgs.Viewer, slug string) (orgs.Organization, error)
 	ViewerPermissions(ctx context.Context, v orgs.Viewer, orgID uuid.UUID) ([]string, error)
 	Update(ctx context.Context, v orgs.Viewer, orgID uuid.UUID, settings orgs.Settings) (orgs.Organization, error)
@@ -82,21 +84,24 @@ func viewer(ctx context.Context) (orgs.Viewer, error) {
 
 // conflicts maps the domain's conflicts to their codes.
 var conflicts = map[error]string{
-	orgs.ErrSlugTaken:     "slug.taken",
-	orgs.ErrInvited:       "invitation.exists",
-	orgs.ErrRequested:     "join_request.exists",
-	orgs.ErrAlreadyMember: "member.exists",
-	orgs.ErrLastOwner:     "org.last_owner",
-	orgs.ErrInviterGone:   "invitation.inviter_gone",
-	orgs.ErrRoleNameTaken: "role.name_taken",
-	orgs.ErrRoleInUse:     "role.in_use",
-	orgs.ErrBuiltInRole:   "role.built_in",
-	orgs.ErrGranted:       "grant.exists",
-	orgs.ErrTwoSecrets:    "api_key.two_secrets",
-	repos.ErrSlugTaken:    "slug.taken",
-	code.ErrRunEnded:      "run.ended",
-	code.ErrRunNotWaiting: "run.not_waiting",
-	repos.ErrGranted:      "grant.exists",
+	orgs.ErrSlugTaken:      "slug.taken",
+	orgs.ErrInvited:        "invitation.exists",
+	orgs.ErrRequested:      "join_request.exists",
+	orgs.ErrAlreadyMember:  "member.exists",
+	orgs.ErrLastOwner:      "org.last_owner",
+	orgs.ErrInviterGone:    "invitation.inviter_gone",
+	orgs.ErrRoleNameTaken:  "role.name_taken",
+	orgs.ErrRoleInUse:      "role.in_use",
+	orgs.ErrBuiltInRole:    "role.built_in",
+	orgs.ErrGranted:        "grant.exists",
+	orgs.ErrTwoSecrets:     "api_key.two_secrets",
+	repos.ErrSlugTaken:     "slug.taken",
+	repos.ErrGranted:       "grant.exists",
+	chats.ErrIDTaken:       "chat.id_taken",
+	chats.ErrDeleted:       "message.deleted",
+	chats.ErrBranchDeleted: "branch.deleted",
+	code.ErrRunEnded:       "run.ended",
+	code.ErrRunNotWaiting:  "run.not_waiting",
 
 	code.ErrEnvironmentPaused:    "environment.paused",
 	code.ErrEnvironmentNotPaused: "environment.not_paused",
@@ -118,6 +123,8 @@ func fail(err error, kind string) error {
 		return refuse(http.StatusConflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The annotation changed since you read it: read it again.")
+	case errors.Is(err, chats.ErrChanged):
+		return refuse(http.StatusPreconditionFailed, "precondition.failed", "It changed since you read it: read it again.")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(http.StatusForbidden, "auth.forbidden", "You lack the permission this takes.")
 	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):

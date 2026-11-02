@@ -10,11 +10,13 @@ INSERT INTO issues (id, org_id, number, title, description, state, priority, ass
 VALUES (@id, @org_id, @number, @title, @description, @state, @priority, sqlc.narg(assignee_id), sqlc.narg(repo_id), sqlc.narg(created_by),
         @created_at, @created_at, sqlc.narg(closed_at));
 
--- IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, and the names of
--- who it is assigned to, who created it and the repository it is about.
+-- IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
+-- is assigned to, who created it and the repository it is about, and its labels by name.
 -- name: IssueByNumber :one
 SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name
+       r.slug AS repo_slug, r.name AS repo_name,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -24,11 +26,13 @@ WHERE i.org_id = $1 AND i.number = $2;
 
 -- ListIssues lists a page of an organization's issues, newest first, as IssueByNumber answers each: those in the
 -- states, assigned to the assignee (nobody for the nil UUID, anyone for none), about the repository (none for the nil
--- UUID, any for none), whose title or description matches the pattern or whose number the text names (any for an
--- empty pattern), and numbered below below (any for 0).
+-- UUID, any for none), carrying every one of the labels, whose title or description matches the pattern or whose
+-- number the text names (any for an empty pattern), and numbered below below (any for 0).
 -- name: ListIssues :many
 SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name
+       r.slug AS repo_slug, r.name AS repo_name,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -40,6 +44,7 @@ WHERE i.org_id = @org_id
        OR i.assignee_id IS NOT DISTINCT FROM nullif(sqlc.narg(assignee_id)::uuid, '00000000-0000-0000-0000-000000000000'))
   AND (sqlc.narg(repo_id)::uuid IS NULL
        OR i.repo_id IS NOT DISTINCT FROM nullif(sqlc.narg(repo_id)::uuid, '00000000-0000-0000-0000-000000000000'))
+  AND (SELECT count(*) FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id = ANY (@label_ids::uuid[])) = cardinality(@label_ids::uuid[])
   AND (@pattern::text = '' OR i.title ILIKE @pattern OR i.description ILIKE @pattern OR i.number = @number::integer)
   AND (@below::integer = 0 OR i.number < @below::integer)
 ORDER BY i.number DESC

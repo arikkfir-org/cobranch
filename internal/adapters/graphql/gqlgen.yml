@@ -17,8 +17,11 @@ resolver:
 omit_gqlgen_version_in_file_notice: true
 skip_mod_tidy: true
 models:
+  Int64:
+    model: github.com/99designs/gqlgen/graphql.Int64
   User:
     fields:
+      usage: { resolver: true }
       sessions: { resolver: true }
       personalTokens: { resolver: true }
       sshKeys: { resolver: true }
@@ -36,8 +39,10 @@ models:
       apiKeys: { resolver: true }
       repositories: { resolver: true }
       repository: { resolver: true }
+      usage: { resolver: true }
       issues: { resolver: true }
       issue: { resolver: true }
+      labels: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
@@ -69,6 +74,9 @@ models:
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }
+      chat: { resolver: true }
+      branchDiff: { resolver: true }
+      commitDiff: { resolver: true }
       environments: { resolver: true }
       environment: { resolver: true }
       delivery: { resolver: true }
