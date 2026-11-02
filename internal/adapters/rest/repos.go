@@ -13,6 +13,7 @@ import (
 type Repositories interface {
 	Create(ctx context.Context, v repos.Viewer, orgID uuid.UUID, in repos.Input) (repos.Repository, error)
 	List(ctx context.Context, v repos.Viewer, orgID uuid.UUID) ([]repos.Repository, error)
+	Usage(ctx context.Context, v repos.Viewer, orgID uuid.UUID) (repos.Usage, error)
 	Get(ctx context.Context, v repos.Viewer, orgID uuid.UUID, slug string) (repos.Repository, []string, error)
 	Locate(ctx context.Context, v repos.Viewer, orgSlug, slug string) (repos.Repository, []string, error)
 	ByID(ctx context.Context, v repos.Viewer, repoID uuid.UUID) (repos.Repository, []string, error)

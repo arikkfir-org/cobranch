@@ -2,6 +2,7 @@ package code_test
 
 import (
 	"cmp"
+	"encoding/base64"
 	"errors"
 	"slices"
 	"strings"
@@ -75,9 +76,9 @@ func checkSubmitted(t *testing.T, f *annotators, v code.Viewer, at string, in co
 	if got.State != in.State || got.Body != in.Body || got.SHA != at || got.Reviewer == nil || got.Reviewer.ID != v.ID || got.Person != wantPerson {
 		t.Errorf("SubmitReview() = %+v", got)
 	}
-	list, err := f.service.Reviews(t.Context(), f.rae, f.repo, at)
-	if err != nil || len(list) != 1 || list[0].ID != got.ID {
-		t.Errorf("Reviews() = %+v, %v; want the review submitted", list, err)
+	page, err := f.service.Reviews(t.Context(), f.rae, f.repo, at, code.ReviewQuery{})
+	if err != nil || len(page.Reviews) != 1 || page.Reviews[0].ID != got.ID || page.Next != "" {
+		t.Errorf("Reviews() = %+v, %v; want the review submitted", page, err)
 	}
 	found, err := f.service.Review(t.Context(), f.rae, f.repo, got.ID)
 	if err != nil || found.ID != got.ID {
@@ -108,12 +109,12 @@ func TestReviews(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			list, err := f.service.Reviews(t.Context(), tt.viewer(f), f.repo, tt.sha)
+			page, err := f.service.Reviews(t.Context(), tt.viewer(f), f.repo, tt.sha, code.ReviewQuery{})
 			if !sameError(err, tt.wantErr) {
 				t.Fatalf("Reviews() error = %v, want %v", err, tt.wantErr)
 			}
 			var states []code.ReviewState
-			for _, r := range list {
+			for _, r := range page.Reviews {
 				states = append(states, r.State)
 			}
 			if !slices.Equal(states, tt.want) {
@@ -121,6 +122,66 @@ func TestReviews(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReviewsPages(t *testing.T) {
+	f := newAnnotators()
+	var ids []uuid.UUID
+	for range 5 {
+		r, err := f.service.SubmitReview(t.Context(), f.mia, f.repo, sha(3), code.ReviewInput{State: code.ReviewNeutral, Body: "Reviewed"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, r.ID)
+	}
+	other, err := f.service.SubmitReview(t.Context(), f.mia, f.repo, sha(2), code.ReviewInput{State: code.ReviewApproved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []uuid.UUID
+	pages, cursor := 0, ""
+	for {
+		page, err := f.service.Reviews(t.Context(), f.rae, f.repo, sha(3), code.ReviewQuery{Cursor: cursor, Limit: 2})
+		if err != nil {
+			t.Fatalf("page %d: %v", pages+1, err)
+		}
+		for _, r := range page.Reviews {
+			got = append(got, r.ID)
+		}
+		if pages++; page.Next == "" || pages > 3 {
+			break
+		}
+		cursor = page.Next
+	}
+	if pages != 3 || !slices.Equal(got, ids) {
+		t.Errorf("paged %d times through %v, want 3 through %v", pages, got, ids)
+	}
+
+	badCursor, badLimit := invalid("cursor.invalid"), invalid("limit.invalid")
+	tests := []struct {
+		name    string
+		q       code.ReviewQuery
+		wantErr error
+	}{
+		{name: "a cursor that isn't one", q: code.ReviewQuery{Cursor: "not a cursor"}, wantErr: badCursor},
+		{name: "a cursor of no review", q: code.ReviewQuery{Cursor: base64.RawURLEncoding.EncodeToString(uuid.Nil[:])}, wantErr: badCursor},
+		{name: "a cursor of a review that isn't there", q: code.ReviewQuery{Cursor: cursorOf(uuid.New())}, wantErr: badCursor},
+		{name: "a cursor of another commit's review", q: code.ReviewQuery{Cursor: cursorOf(other.ID)}, wantErr: badCursor},
+		{name: "a page too large", q: code.ReviewQuery{Limit: code.MaxPageSize + 1}, wantErr: badLimit},
+		{name: "a page of none", q: code.ReviewQuery{Limit: -1}, wantErr: badLimit},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := f.service.Reviews(t.Context(), f.rae, f.repo, sha(3), tt.q); !sameError(err, tt.wantErr) {
+				t.Errorf("Reviews() error = %v, want %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// cursorOf is the cursor of the page of reviews after the one named id, as the service writes it.
+func cursorOf(id uuid.UUID) string {
+	return base64.RawURLEncoding.EncodeToString(id[:])
 }
 
 func TestReview(t *testing.T) {

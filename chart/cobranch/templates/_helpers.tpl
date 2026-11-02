@@ -11,6 +11,13 @@
 {{- define "cobranch.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" }}
 app.kubernetes.io/version: {{ .root.Chart.AppVersion | quote }}
+{{ include "cobranch.stableLabels" . }}
+{{- end -}}
+
+{{/* The labels of cobranch.labels that every upgrade keeps, without the chart's version and app version: those of a pod
+that an upgrade must not restart unless the pod itself changes, as PostgreSQL's; pass a dict of the root context and the
+component. */}}
+{{- define "cobranch.stableLabels" -}}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 app.kubernetes.io/part-of: cobranch
 {{ include "cobranch.selectorLabels" . }}
@@ -313,7 +320,7 @@ they leave unset are the Back-office's. */}}
 {{- end -}}
 
 {{/* The limits the values set, which the API servers and the Git server hold creations and pushes to; those they
-leave unset are the built-in defaults. */}}
+leave unset are the Back-office's (the built-in defaults until an administrator changes them). */}}
 {{- define "cobranch.limitsEnv" -}}
 {{- with .Values.limits }}
 {{- if not (kindIs "invalid" .organizationsPerUser) }}

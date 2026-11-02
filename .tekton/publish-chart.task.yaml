@@ -1,0 +1,38 @@
+# Task publish-chart of .tekton/main.yaml: package the commit's chart for an installation that follows main and push it
+# beside its images (publish-chart.sh), once task publish has pushed them. Octomaton inlines it, and the step it
+# references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: publish-chart
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+    # Where the chart goes: beside main's images.
+    - name: registry
+      type: string
+  workspaces:
+    - name: source
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: REPO_URL
+        value: $(params.repo-url)
+      - name: REVISION
+        value: $(params.revision)
+      - name: REGISTRY
+        value: $(params.registry)
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+    - name: publish
+      image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
+      command: [sh, .tekton/scripts/publish-chart.sh]
