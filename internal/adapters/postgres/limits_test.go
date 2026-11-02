@@ -190,12 +190,13 @@ func TestGitStoreRecordHeldToGitDataLimit(t *testing.T) {
 	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
-	// Each pack holds 100 bytes; Acme may store 250.
-	push := func(repo uuid.UUID, pack, branch string) git.Push {
+	// Each pack holds 100 bytes; Acme may store 250, until an administrator lowers its limit to 150.
+	pushUnder := func(limit int64, repo uuid.UUID, pack, branch string) git.Push {
 		p := pushOf(repo, f.olivia, pack, []git.RefUpdate{{Name: "refs/heads/" + branch, Old: git.ZeroSHA, New: shaA}})
-		p.OrgID, p.GitDataLimit = f.acme.ID, 250
+		p.OrgID, p.GitDataLimit = f.acme.ID, limit
 		return p
 	}
+	push := func(repo uuid.UUID, pack, branch string) git.Push { return pushUnder(250, repo, pack, branch) }
 	steps := []struct {
 		name string
 		push git.Push
@@ -206,6 +207,9 @@ func TestGitStoreRecordHeldToGitDataLimit(t *testing.T) {
 		{name: "one too many", push: push(f.secret.ID, "pack-3", "feature"),
 			want: "This organization stores 200 B of Git data, and this push adds 100 B: over its limit of 250 B. Nothing changed; an administrator can raise the limit."},
 		{name: "a pack the repository holds already adds nothing", push: push(f.website.ID, "pack-1", "again")},
+		{name: "nor over a limit lowered below what Acme stores", push: pushUnder(150, f.website.ID, "pack-1", "lowered")},
+		{name: "where a new pack is refused", push: pushUnder(150, f.website.ID, "pack-4", "new"),
+			want: "This organization stores 200 B of Git data, and this push adds 100 B: over its limit of 150 B. Nothing changed; an administrator can raise the limit."},
 	}
 	for _, step := range steps {
 		err := f.g.Record(ctx, step.push)

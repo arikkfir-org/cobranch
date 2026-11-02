@@ -67,9 +67,10 @@ func first(fallback int64, sources ...*int64) int64 {
 	return fallback
 }
 
-// Exceeds reports whether adding to used crosses limit; 0 caps nothing.
+// Exceeds reports whether adding to used crosses limit; 0 caps nothing, and adding nothing crosses no limit, even one
+// that used is over already.
 func Exceeds(limit, used, adding int64) bool {
-	return limit > 0 && used+adding > limit
+	return limit > 0 && adding > 0 && used+adding > limit
 }
 
 // Kind names a limit, as the APIs' problem codes do (limit.<kind>).

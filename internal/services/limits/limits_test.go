@@ -66,7 +66,8 @@ func TestExceeds(t *testing.T) {
 		{name: "under", limit: 5, used: 3, adding: 1},
 		{name: "up to it", limit: 5, used: 4, adding: 1},
 		{name: "over", limit: 5, used: 5, adding: 1, want: true},
-		{name: "already over", limit: 5, used: 7, adding: 0, want: true},
+		{name: "already over, adding some", limit: 5, used: 7, adding: 1, want: true},
+		{name: "already over, adding nothing", limit: 5, used: 7, adding: 0},
 		{name: "no limit", limit: 0, used: 1 << 40, adding: 1 << 40},
 	}
 	for _, tt := range tests {
