@@ -250,21 +250,25 @@ func TestSchemaCheck(t *testing.T) {
 		reach    bool
 		migrated fs.FS // the migrations the database has had, if any
 		needs    fs.FS // the migrations of the build that checks
-		wantErr  bool
+		wantErr  string
 	}{
-		{name: "a database never migrated", reach: true, needs: tableA, wantErr: true},
-		{name: "a schema behind the build", reach: true, migrated: tableA, needs: columnB, wantErr: true},
+		{name: "a database never migrated", reach: true, needs: tableA, wantErr: "lacks migration 1, which this build has"},
+		{name: "a schema behind the build", reach: true, migrated: tableA, needs: columnB, wantErr: "lacks migration 2, which this build has"},
 		{name: "a schema at the build's version", reach: true, migrated: columnB, needs: columnB},
 		{name: "a schema ahead of the build, mid-upgrade", reach: true, migrated: columnB, needs: tableA},
-		{name: "a schema past the build's version that lacks one of its migrations", reach: true, migrated: tableAC, needs: columnsBC, wantErr: true},
-		{name: "a database that never answers", needs: tableA, wantErr: true},
+		{
+			name: "a schema past the build's version that lacks one of its migrations", reach: true, migrated: tableAC, needs: columnsBC,
+			wantErr: "lacks migration 2, which this build has",
+		},
+		{name: "a database that never answers", needs: tableA, wantErr: "reading the schema's migrations"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := migratedDatabase(t, tt.reach, tt.migrated)
 			s := newSchema(t, pool, tt.needs)
-			if err := s.Check(context.Background()); (err != nil) != tt.wantErr {
-				t.Errorf("Check() = %v, want error %t", err, tt.wantErr)
+			err := s.Check(context.Background())
+			if (err != nil) != (tt.wantErr != "") || err != nil && !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Check() = %v, want an error saying %q", err, tt.wantErr)
 			}
 			if tt.reach && tt.migrated == nil && schemaTableExists(t, pool) {
 				t.Error("Check() created the migrations' table; it must only read")
@@ -514,6 +518,12 @@ func TestSeedsMigrate(t *testing.T) {
 		{
 			name:          "a newer build, only the new seed",
 			runs:          [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1), seedA(2, 2)}},
+			wantRows:      2,
+			wantSeedTable: 2,
+		},
+		{
+			name:          "a lower seed merged after a higher one",
+			runs:          [][]*goose.Migration{{seedA(2, 2)}, {seedA(1, 1), seedA(2, 2)}},
 			wantRows:      2,
 			wantSeedTable: 2,
 		},

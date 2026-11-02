@@ -55,7 +55,8 @@ func runMigrate(ctx context.Context, logs io.Writer) error {
 	return seed(ctx, pool)
 }
 
-// seed adds the demo data the database lacks, once its schema is current: only the seeds newer than the last it has.
+// seed adds the demo data the database lacks, once its schema is current: only the seeds it doesn't have yet, lower ones
+// that merged after a higher one included.
 func seed(ctx context.Context, pool *pgxpool.Pool) error {
 	demo, err := postgres.NewSeeds(pool, seeds.Go...)
 	if err != nil {

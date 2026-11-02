@@ -198,13 +198,16 @@ func (s *Schema) Check(ctx context.Context) error {
 
 // applied returns the migrations the database records, none before the first.
 func (s *Schema) applied(ctx context.Context) (map[int64]bool, error) {
+	// A missing table fails Query where pgx prepares it first, as it does by default, or else reading the rows.
 	rows, err := s.pool.Query(ctx, "SELECT version_id FROM "+s.table+" WHERE is_applied")
+	if missingTable(err) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("reading the schema's migrations: %w", err)
 	}
 	versions, err := pgx.CollectRows(rows, pgx.RowTo[int64])
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == undefinedTable {
+	if missingTable(err) {
 		return nil, nil
 	}
 	if err != nil {
@@ -215,4 +218,10 @@ func (s *Schema) applied(ctx context.Context) (map[int64]bool, error) {
 		out[v] = true
 	}
 	return out, nil
+}
+
+// missingTable reports whether err is PostgreSQL's answer to a query of a table that doesn't exist.
+func missingTable(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == undefinedTable
 }

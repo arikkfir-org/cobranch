@@ -1,6 +1,7 @@
 // Package migrations holds Cobranch's PostgreSQL schema migrations, which goose applies in order: numbered SQL files,
-// and Go for what SQL can't say. The migrate Job applies them before the servers roll out (internal/adapters/postgres),
-// and a server turns ready only once the schema is at the highest version they number.
+// and Go for what SQL can't say. The migrate Job applies those the database lacks before the servers roll out
+// (internal/adapters/postgres), lower ones that merged after a higher one included, and a server turns ready only once
+// the database has every one of them. So a migration never relies on one numbered below it that merges after it.
 //
 // Each release's migrations keep the previous release's pods working, since both run side by side through a rolling
 // upgrade: a column is dropped only once neither the new release nor the one before it reads it, so a rollback goes
