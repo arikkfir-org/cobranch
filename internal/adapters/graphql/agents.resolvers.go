@@ -75,6 +75,97 @@ func (r *mutationResolver) DeleteAgent(ctx context.Context, organizationID strin
 	}, "deleting the agent")
 }
 
+// SetAgentModel is the resolver for the setAgentModel field.
+func (r *mutationResolver) SetAgentModel(ctx context.Context, organizationID string, id string, provider *string, model *string, expectedVersion *int) (*Agent, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	version, err := agentVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	orgID, agentID, err := agentTarget(ctx, organizationID, id)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := r.Agents.SetModel(ctx, v.User, orgID, agentID, orEmpty(provider), orEmpty(model), version)
+	if err != nil {
+		return nil, fail(ctx, err, "agent", "picking the agent's model")
+	}
+	return agent(changed), nil
+}
+
+// SetAgentSecrets is the resolver for the setAgentSecrets field.
+func (r *mutationResolver) SetAgentSecrets(ctx context.Context, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) (*Agent, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	version, err := agentVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	named, err := agentSecrets(ctx, secrets)
+	if err != nil {
+		return nil, err
+	}
+	orgID, agentID, err := agentTarget(ctx, organizationID, id)
+	if err != nil {
+		return nil, err
+	}
+	changed, err := r.Agents.SetSecrets(ctx, v.User, orgID, agentID, named, version)
+	if err != nil {
+		return nil, fail(ctx, err, "agent", "naming the agent's secrets")
+	}
+	return agent(changed), nil
+}
+
+// SetModelProvider is the resolver for the setModelProvider field.
+func (r *mutationResolver) SetModelProvider(ctx context.Context, organizationID string, provider string, secretID string, expectedVersion *int) (*ModelProvider, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	version, err := providerVersion(ctx, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	secret, err := inputID(ctx, &secretID, "model_provider.secret_invalid")
+	if err != nil {
+		return nil, err
+	}
+	set, _, err := r.Agents.SetModelProvider(ctx, v.User, orgID, provider, secret, version)
+	if err != nil {
+		return nil, fail(ctx, err, "model_provider", "setting the model provider")
+	}
+	return modelProvider(set), nil
+}
+
+// RemoveModelProvider is the resolver for the removeModelProvider field.
+func (r *mutationResolver) RemoveModelProvider(ctx context.Context, organizationID string, provider string, expectedVersion *int) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return false, err
+	}
+	version, err := agentVersion(ctx, expectedVersion)
+	if err != nil {
+		return false, err
+	}
+	if err := r.Agents.RemoveModelProvider(ctx, v.User, orgID, provider, version); err != nil {
+		return false, fail(ctx, err, "model_provider", "removing the model provider")
+	}
+	return true, nil
+}
+
 // AssignTask is the resolver for the assignTask field.
 func (r *mutationResolver) AssignTask(ctx context.Context, organizationID string, input TaskInput) (*Task, error) {
 	v, err := viewer(ctx)
@@ -183,4 +274,18 @@ func (r *organizationResolver) Task(ctx context.Context, obj *Organization, numb
 		return nil, fail(ctx, err, "organization", "reading the task")
 	}
 	return task(found), nil
+}
+
+// ModelProviders is the resolver for the modelProviders field.
+func (r *organizationResolver) ModelProviders(ctx context.Context, obj *Organization) ([]*ModelProvider, error) {
+	list, err := resolveOrg(ctx, obj, r.Resolver.Agents.ModelProviders, "listing the model providers")
+	if err != nil {
+		return nil, err
+	}
+	return mapAll(list, modelProvider), nil
+}
+
+// AvailableModelProviders is the resolver for the availableModelProviders field.
+func (r *organizationResolver) AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error) {
+	return nonNil(r.Resolver.Agents.ProviderNames()), nil
 }

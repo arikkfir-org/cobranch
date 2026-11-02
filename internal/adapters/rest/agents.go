@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 
 // Agents is what the API needs of the agents' service.
 type Agents interface {
+	Models
 	Agents(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.Agent, error)
 	Agent(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID) (agents.Agent, error)
 	CreateAgent(ctx context.Context, v agents.Viewer, orgID uuid.UUID, in agents.Input) (agents.Agent, error)
@@ -59,6 +61,11 @@ func agent(a agents.Agent) Agent {
 		out.Grants = append(out.Grants, AgentGrant{RoleId: g.RoleID, RoleName: g.RoleName, RepositoryId: optionalID(g.RepoID),
 			RepositorySlug: optional(g.RepoSlug)})
 	}
+	if a.Provider != "" {
+		out.Provider, out.Model = &a.Provider, &a.Model
+	}
+	out.Secrets = make(map[string]uuid.UUID, len(a.Secrets))
+	maps.Copy(out.Secrets, a.Secrets)
 	return out
 }
 

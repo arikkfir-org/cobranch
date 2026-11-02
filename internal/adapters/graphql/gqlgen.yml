@@ -48,6 +48,8 @@ models:
       task: { resolver: true }
       labels: { resolver: true }
       secrets: { resolver: true }
+      modelProviders: { resolver: true }
+      availableModelProviders: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }

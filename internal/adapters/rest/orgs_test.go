@@ -65,6 +65,8 @@ type orgFixture struct {
 	scout            agents.Agent
 	secretStore      *secretstest.Store
 	secrets          *secrets.Service
+	// providerKey and deployKey are Acme's own secret and website's, as the agents' store knows them.
+	providerKey, deployKey uuid.UUID
 }
 
 func viewerOf(name, email string) auth.Authenticated {

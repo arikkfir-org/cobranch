@@ -52,6 +52,26 @@ type Store interface {
 	// Cancel cancels one of the organization's active tasks for actor, at version or at any version for AnyVersion,
 	// and answers it; ErrEnded once it has ended, ErrChanged.
 	Cancel(ctx context.Context, actor, orgID uuid.UUID, number, version int64) (Task, error)
+	// ModelProviders lists the providers the organization added, by name.
+	ModelProviders(ctx context.Context, orgID uuid.UUID) ([]ModelProvider, error)
+	// ModelProvider finds a provider the organization added, by name.
+	ModelProvider(ctx context.Context, orgID uuid.UUID, name string) (ModelProvider, error)
+	// SetModelProvider adds the provider for actor with its secret, or names another secret for the one there, as
+	// Service.SetModelProvider's version says, and answers it and whether it added it; ErrChanged.
+	SetModelProvider(ctx context.Context, actor, orgID uuid.UUID, name string, secretID uuid.UUID, version int64) (ModelProvider, bool, error)
+	// RemoveModelProvider removes the provider for actor, at version or at any version for AnyVersion; ErrChanged,
+	// ErrProviderInUse while agents run on it.
+	RemoveModelProvider(ctx context.Context, actor, orgID uuid.UUID, name string, version int64) error
+	// SecretRepository finds one of the organization's secrets and answers the repository holding it: uuid.Nil for
+	// the organization's own.
+	SecretRepository(ctx context.Context, orgID, secretID uuid.UUID) (uuid.UUID, error)
+	// SetModel puts one of the organization's agents on a model of a provider it added, or on none with both empty,
+	// for actor, at version or at any version for AnyVersion, and answers it; ErrChanged, and a validation error for a
+	// provider the organization hasn't added.
+	SetModel(ctx context.Context, actor, orgID, id uuid.UUID, version int64, provider, model string) (Agent, error)
+	// SetSecrets names the secrets one of the organization's agents' tasks receive, for actor, at version or at any
+	// version for AnyVersion, and answers it; ErrChanged.
+	SetSecrets(ctx context.Context, actor, orgID, id uuid.UUID, version int64, named map[string]uuid.UUID) (Agent, error)
 }
 
 // Service keeps an organization's agents and tasks for the viewers who read the organization: every operation checks
@@ -59,9 +79,11 @@ type Store interface {
 // there. A task that names a repository is the same to a viewer who doesn't read the repository, and a task of a
 // guarded kind to a viewer who lacks the kind's permission (Guard).
 type Service struct {
-	store  Store
-	authz  *auth.Authorizer
-	guards map[string]string
+	store Store
+	authz *auth.Authorizer
+	// providers are the names of the model providers the installation knows, sorted.
+	providers []string
+	guards    map[string]string
 }
 
 // NewService returns a Service over store that checks permissions with authz.
@@ -156,7 +178,7 @@ func wrap(what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.As(err, &verr), errors.Is(err, orgs.ErrNotFound), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrNameTaken),
-		errors.Is(err, ErrBuiltIn), errors.Is(err, ErrEnded), errors.Is(err, ErrChanged):
+		errors.Is(err, ErrBuiltIn), errors.Is(err, ErrEnded), errors.Is(err, ErrChanged), errors.Is(err, ErrProviderInUse):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)
