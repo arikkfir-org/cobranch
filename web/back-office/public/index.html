@@ -6,7 +6,7 @@
   <title>Cobranch Back-office</title>
   <!-- The Back-office: where an installation's administrators run it, through the Admin API at the URL config.json
        names (docs/cobranch/designs/back-office). Its pages: the organizations (search, create one for a user, enter
-       one), the users and the installation's settings. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
+       one, set its own limits), the users and the installation's settings, its limits among them. Sign-in is the Auth server's, at the other URL config.json names, and returns here. The
        design system's colours (docs/cobranch/designs/design-system), as the Console's. Caddy serves this page for every
        path, and it routes on the path. -->
   <style>
@@ -173,6 +173,8 @@
     form.search { grid-template-columns: 1fr auto; align-items: end; }
     form.create { grid-template-columns: repeat(3, 1fr) auto; align-items: end; }
     @media (max-width: 720px) { form.create { grid-template-columns: 1fr; } }
+    .size { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+    .size select { width: auto; }
     tr.entering td { background: var(--color-bg-raised); }
   </style>
 </head>
@@ -215,6 +217,31 @@
       return el;
     };
     const when = (at) => new Date(at).toLocaleDateString(undefined, { dateStyle: "medium" });
+    // bytes writes n bytes in binary units, as the chart's values write sizes, rounded down: 1 GiB, 980 MiB, 2.5 KiB.
+    const bytes = (n) => {
+      const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+      let value = n, unit = 0;
+      for (; value >= 1024 && unit < units.length - 1; unit++) value /= 1024;
+      const tenths = Math.floor(value * 10) / 10;
+      return (unit > 0 && value < 10 && tenths % 1 ? tenths.toFixed(1) : Math.floor(value)) + " " + units[unit];
+    };
+    const number = (n) => n.toLocaleString();
+    // limit writes a limit with fmt, 0 capping nothing.
+    const limit = (n, fmt) => n === 0 ? "no limit" : fmt(n);
+    // sizeField is an input of a size in binary units, filled from n bytes (null for none), whose value() is the bytes
+    // it says, or null when it is empty.
+    function sizeField(n, attrs = {}) {
+      const units = [["MiB", 2 ** 20], ["GiB", 2 ** 30], ["TiB", 2 ** 40]];
+      const amount = h("input", { type: "number", min: 0, step: "any", ...attrs });
+      const unit = h("select", { disabled: attrs.disabled }, units.map(([u, f]) => h("option", { value: f }, u)));
+      unit.value = String(2 ** 30);
+      if (n !== null && n !== undefined) {
+        const [, f] = n === 0 ? units[1] : [...units].reverse().find(([, f]) => n % f === 0) || units[0];
+        unit.value = String(f);
+        amount.value = String(n / f);
+      }
+      return { el: h("div", { class: "size" }, amount, unit), value: () => amount.value === "" ? null : Math.round(Number(amount.value) * Number(unit.value)) };
+    }
     function go(path, replace) {
       history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
       render();
@@ -334,15 +361,42 @@
             .catch((err) => { error.textContent = err.message; error.hidden = false; });
         } }, h("label", {}, "Why you enter " + o.name, h("span", {}, "You become one of its Owners. Its Owners read this reason in its audit trail."), reason), error,
           h("div", {}, h("button", { class: "button primary", type: "submit" }, "Enter " + o.name), " ", h("button", { class: "button", type: "button", onclick: () => form.closest("tr").remove() }, "Cancel")));
-        tr.after(h("tr", { class: "entering" }, h("td", { colspan: 5 }, form)));
+        tr.after(h("tr", { class: "entering" }, h("td", { colspan: 7 }, form)));
         reason.focus();
       };
+      // setLimits reads the organization's limits, for their ETag, and opens a form under its row that sets its own,
+      // or clears them back to the installation's.
+      const setLimits = (o, tr) => api("GET", "/orgs/" + encodeURIComponent(o.slug) + "/limits").then(({ data, etag }) => {
+        const repositories = h("input", { type: "number", min: 0, step: 1, value: data.repositories.own ?? "", placeholder: String(data.repositories.installation) });
+        const gitData = sizeField(data.gitData.own ?? null);
+        const error = h("p", { class: "alert", hidden: true });
+        const form = h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          const change = { repositories: repositories.value === "" ? null : Number(repositories.value), gitData: gitData.value() };
+          api("PATCH", "/orgs/" + encodeURIComponent(o.slug) + "/limits", change, { "If-Match": etag }).then(() => orgs.reload()).catch((err) => {
+            error.textContent = err.status === 412 ? "Someone changed its limits, or the installation's, while you had them open. Open them again." : err.message;
+            error.hidden = false;
+          });
+        } }, h("p", {}, o.name + "'s own limits win over the installation's. Leave one empty to take the installation's; 0 caps nothing. Its Owners see the change in its audit trail."),
+          h("label", {}, "Repositories", h("span", {}, "The installation's: " + limit(data.repositories.installation, number) + "."), repositories),
+          h("label", {}, "Git data", h("span", {}, "The installation's: " + limit(data.gitData.installation, bytes) + "."), gitData.el), error,
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => form.closest("tr").remove() }, "Cancel")));
+        tr.after(h("tr", { class: "entering" }, h("td", { colspan: 7 }, form)));
+        repositories.focus();
+      }).catch((err) => tr.after(h("tr", { class: "entering" }, h("td", { colspan: 7 }, h("div", { class: "row" }, h("p", { class: "alert" }, err.message),
+        h("button", { class: "button small", type: "button", onclick: (e) => e.target.closest("tr").remove() }, "Close"))))));
+      // usage writes what an organization takes against its limit, with fmt.
+      const usage = (u, fmt) => h("td", { class: "number" }, fmt(u.used), h("span", { class: "muted" }, u.limit ? " of " + fmt(u.limit) : " (no limit)"),
+        u.limit && u.used >= u.limit ? [" ", h("span", { class: "chip" }, "at its limit")] : null);
+      const open = (fn, o, tr) => (e) => !e.target.closest("tr").nextElementSibling?.classList.contains("entering") && fn(o, tr);
       const row = (o) => {
-        const tr = h("tr", {}, h("td", {}, h("strong", {}, o.name)), h("td", {}, h("code", {}, o.slug)), h("td", { class: "number" }, String(o.members)), h("td", {}, when(o.createdAt)),
-          h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: (e) => !e.target.closest("tr").nextElementSibling?.classList.contains("entering") && enter(o, tr) }, "Enter")));
+        const tr = h("tr", {}, h("td", {}, h("strong", {}, o.name)), h("td", {}, h("code", {}, o.slug)), h("td", { class: "number" }, String(o.members)),
+          usage(o.repositories, number), usage(o.gitData, bytes), h("td", {}, when(o.createdAt)), h("td", { class: "actions" }));
+        tr.lastChild.append(h("button", { class: "button small", type: "button", onclick: open(setLimits, o, tr) }, "Limits"), " ",
+          h("button", { class: "button small", type: "button", onclick: open(enter, o, tr) }, "Enter"));
         return tr;
       };
-      const orgs = list({ path: "/orgs", key: "organizations", head: ["Name", "Slug", "Members", "Created", ""], row, placeholder: "A slug or a name" });
+      const orgs = list({ path: "/orgs", key: "organizations", head: ["Name", "Slug", "Members", "Repositories", "Git data", "Created", ""], row, placeholder: "A slug or a name" });
       const sections = [h("h1", {}, "Organizations"), orgs.panel];
       if (can("orgs.create") && can("installation.users.manage")) {
         const name = h("input", { required: true, placeholder: "Acme" });
@@ -491,13 +545,25 @@
         policy.addEventListener("change", () => { domainsLabel.hidden = policy.value !== "domains"; });
         const selfServe = h("input", { type: "checkbox", disabled: selfServeLocked });
         selfServe.checked = s.selfServe;
+        // The limits, each locked where the values set it.
+        const limits = [["organizationsPerUser", "Organizations per user", "Those a user creates for themselves. An administrator can create more for them here."],
+          ["repositoriesPerOrganization", "Repositories per organization", "Unless the organization has a limit of its own."],
+          ["gitDataPerOrganization", "Git data per organization", "The packs its repositories store, unless it has a limit of its own."]].map(([name, label, help]) => {
+          const locked = s.locked.includes(name);
+          const field = name === "gitDataPerOrganization" ? sizeField(s[name], { required: true, disabled: locked })
+            : ((input) => ({ el: input, value: () => Number(input.value) }))(h("input", { type: "number", min: 0, step: 1, required: true, disabled: locked, value: s[name] }));
+          return { name, locked, field, el: [h("label", {}, label, h("span", {}, help), field.el), lock(locked, "limits." + name)] };
+        });
         form.replaceChildren(...[
           h("h3", {}, "Sign-up"),
           h("label", {}, "Who may sign up", h("span", {}, "The first administrators' emails always may."), policy), domainsLabel, lock(signUpLocked, "auth.signUp"),
           h("h3", {}, "Organizations"),
           h("label", { class: "check" }, selfServe, "Every new user may create organizations"), lock(selfServeLocked, "organizations.selfServe"),
+          h("h3", {}, "Limits"),
+          h("p", {}, "0 caps nothing. A limit refuses only what would cross it: whatever anyone already has stays."),
+          ...limits.flatMap((l) => l.el),
           s.updatedBy ? h("p", { class: "muted" }, "Last changed on " + when(s.updatedAt) + (s.updatedBy === me.id ? ", by you." : ".")) : null,
-          h("div", {}, h("button", { class: "button primary", type: "submit", disabled: signUpLocked && selfServeLocked }, "Save"))].filter(Boolean));
+          h("div", {}, h("button", { class: "button primary", type: "submit", disabled: s.locked.length === 2 + limits.length }, "Save"))].filter(Boolean));
         form.onsubmit = (e) => {
           e.preventDefault();
           done.hidden = error.hidden = true;
@@ -507,10 +573,11 @@
             if (policy.value === "domains") change.signUpDomains = domains.value.split(/[\s,]+/).filter(Boolean);
           }
           if (!selfServeLocked) change.selfServe = selfServe.checked;
+          for (const l of limits) if (!l.locked) change[l.name] = l.field.value();
           api("PATCH", "/settings", change, { "If-Match": etag }).then((r) => {
             etag = r.etag;
             draw(r.data);
-            done.textContent = "Saved. The next sign-up follows them.";
+            done.textContent = "Saved. The next sign-up, creation and push follow them.";
             done.hidden = false;
           }).catch((err) => err.status === 412
             ? load().then(() => fail(new Error("Someone changed the settings while you had them open: these are theirs. Make your change again.")))
@@ -519,7 +586,7 @@
       };
       const load = () => api("GET", "/settings").then((r) => { etag = r.etag; draw(r.data); }).catch(fail);
       main.append(h("h1", {}, "Settings"), h("section", { class: "panel" },
-        h("p", {}, "Who may sign up, and whether new users create organizations. Until the chart's values or an administrator set them, anyone signs up, and creates organizations."),
+        h("p", {}, "Who may sign up, whether new users create organizations, and how much each user and organization may take. Until the chart's values or an administrator set them, anyone signs up and creates organizations, up to 5 each, and an organization holds up to 100 repositories and 1 GiB of Git data."),
         done, error, form));
       load();
     }

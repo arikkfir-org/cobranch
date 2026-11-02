@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
@@ -63,7 +64,10 @@ type Store struct {
 	// Entered records each entry into an organization from the Back-office.
 	Entered []Entry
 	// Installation is the settings the Back-office changes, Version 1 at first.
-	Installation auth.InstallationSettings
+	Installation admin.StoredSettings
+	// Limits are each organization's own limits, and GitData the bytes it stores.
+	Limits  map[uuid.UUID]admin.OwnLimits
+	GitData map[uuid.UUID]int64
 	// Providers are the identity providers the Back-office added, by ID.
 	Providers map[string]auth.StoredProvider
 	// CreatedBy maps each organization a user created for themselves to that user, against whom it counts.
@@ -86,7 +90,8 @@ func NewStore() *Store {
 		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation},
 		Repos: map[uuid.UUID]uuid.UUID{},
 		Keys:  map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
-		Installation: auth.InstallationSettings{Version: 1}, Providers: map[string]auth.StoredProvider{},
+		Installation: admin.StoredSettings{InstallationSettings: auth.InstallationSettings{Version: 1}},
+		Limits:       map[uuid.UUID]admin.OwnLimits{}, GitData: map[uuid.UUID]int64{}, Providers: map[string]auth.StoredProvider{},
 		CreatedBy: map[uuid.UUID]uuid.UUID{},
 	}
 }

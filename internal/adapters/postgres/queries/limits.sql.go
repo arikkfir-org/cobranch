@@ -7,9 +7,49 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const changeOwnLimits = `-- name: ChangeOwnLimits :one
+UPDATE organization_limits
+SET repositories = $1, git_data = $2, updated_at = $3, updated_by = $4
+WHERE org_id = $5 AND version = $6
+RETURNING org_id, repositories, git_data, version, updated_at, updated_by
+`
+
+type ChangeOwnLimitsParams struct {
+	Repositories *int64
+	GitData      *int64
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
+	OrgID        uuid.UUID
+	Version      int64
+}
+
+// ChangeOwnLimits writes an organization's own limits, by who, unless their version is no longer the one the change
+// read: then it changes no row.
+func (q *Queries) ChangeOwnLimits(ctx context.Context, arg ChangeOwnLimitsParams) (OrganizationLimit, error) {
+	row := q.db.QueryRow(ctx, changeOwnLimits,
+		arg.Repositories,
+		arg.GitData,
+		arg.UpdatedAt,
+		arg.UpdatedBy,
+		arg.OrgID,
+		arg.Version,
+	)
+	var i OrganizationLimit
+	err := row.Scan(
+		&i.OrgID,
+		&i.Repositories,
+		&i.GitData,
+		&i.Version,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
+}
 
 const countRepositories = `-- name: CountRepositories :one
 SELECT count(*) FROM repositories WHERE org_id = $1
@@ -33,6 +73,42 @@ func (q *Queries) GitData(ctx context.Context, orgID uuid.UUID) (int64, error) {
 	var column_1 int64
 	err := row.Scan(&column_1)
 	return column_1, err
+}
+
+const insertOwnLimits = `-- name: InsertOwnLimits :one
+INSERT INTO organization_limits (org_id, repositories, git_data, updated_at, updated_by)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (org_id) DO NOTHING
+RETURNING org_id, repositories, git_data, version, updated_at, updated_by
+`
+
+type InsertOwnLimitsParams struct {
+	OrgID        uuid.UUID
+	Repositories *int64
+	GitData      *int64
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
+}
+
+// InsertOwnLimits writes an organization's first own limits, by who; no row when another change wrote them first.
+func (q *Queries) InsertOwnLimits(ctx context.Context, arg InsertOwnLimitsParams) (OrganizationLimit, error) {
+	row := q.db.QueryRow(ctx, insertOwnLimits,
+		arg.OrgID,
+		arg.Repositories,
+		arg.GitData,
+		arg.UpdatedAt,
+		arg.UpdatedBy,
+	)
+	var i OrganizationLimit
+	err := row.Scan(
+		&i.OrgID,
+		&i.Repositories,
+		&i.GitData,
+		&i.Version,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
+	return i, err
 }
 
 const installationLimits = `-- name: InstallationLimits :one
@@ -82,6 +158,25 @@ func (q *Queries) OrganizationLimits(ctx context.Context, orgID uuid.UUID) (Orga
 	row := q.db.QueryRow(ctx, organizationLimits, orgID)
 	var i OrganizationLimitsRow
 	err := row.Scan(&i.Repositories, &i.GitData)
+	return i, err
+}
+
+const ownLimits = `-- name: OwnLimits :one
+SELECT org_id, repositories, git_data, version, updated_at, updated_by FROM organization_limits WHERE org_id = $1
+`
+
+// OwnLimits reads the organization's own limits, with their version; no row for an organization without any yet.
+func (q *Queries) OwnLimits(ctx context.Context, orgID uuid.UUID) (OrganizationLimit, error) {
+	row := q.db.QueryRow(ctx, ownLimits, orgID)
+	var i OrganizationLimit
+	err := row.Scan(
+		&i.OrgID,
+		&i.Repositories,
+		&i.GitData,
+		&i.Version,
+		&i.UpdatedAt,
+		&i.UpdatedBy,
+	)
 	return i, err
 }
 

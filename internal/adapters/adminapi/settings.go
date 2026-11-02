@@ -40,7 +40,9 @@ func (a api) ChangeSettings(ctx context.Context, req ChangeSettingsRequestObject
 	if err != nil {
 		return nil, err
 	}
-	change := admin.SettingsChange{SignUpDomains: req.Body.SignUpDomains, SelfServe: req.Body.SelfServe}
+	change := admin.SettingsChange{SignUpDomains: req.Body.SignUpDomains, SelfServe: req.Body.SelfServe,
+		OrganizationsPerUser: req.Body.OrganizationsPerUser, RepositoriesPerOrganization: req.Body.RepositoriesPerOrganization,
+		GitDataPerOrganization: req.Body.GitDataPerOrganization}
 	if req.Body.SignUp != nil {
 		policy := auth.Policy(*req.Body.SignUp)
 		change.SignUp = &policy
@@ -79,7 +81,8 @@ func matches(header, tag string) bool {
 
 func settings(s admin.Settings) Settings {
 	out := Settings{SignUp: SignUpPolicy(s.SignUp), SignUpDomains: nonNil(s.SignUpDomains), SelfServe: s.SelfServe,
-		Locked: make([]SettingsLocked, 0, len(s.Locked)), UpdatedAt: s.UpdatedAt}
+		OrganizationsPerUser: s.Limits.OrganizationsPerUser, RepositoriesPerOrganization: s.Limits.RepositoriesPerOrganization,
+		GitDataPerOrganization: s.Limits.GitDataPerOrganization, Locked: make([]SettingsLocked, 0, len(s.Locked)), UpdatedAt: s.UpdatedAt}
 	for _, l := range s.Locked {
 		out.Locked = append(out.Locked, SettingsLocked(l))
 	}

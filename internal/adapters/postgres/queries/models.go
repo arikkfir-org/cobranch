@@ -189,6 +189,15 @@ type Organization struct {
 	CreatedBy           *uuid.UUID
 }
 
+type OrganizationLimit struct {
+	OrgID        uuid.UUID
+	Repositories *int64
+	GitData      *int64
+	Version      int64
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
+}
+
 type Principal struct {
 	ID          uuid.UUID
 	Kind        string
