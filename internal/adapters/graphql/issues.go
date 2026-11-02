@@ -11,8 +11,12 @@ import (
 	"cobranch.dev/internal/services/issues"
 )
 
-// Issues is what the API needs of the issues' service.
+// Issues is what the API needs of the issues' service, its organizations' labels included.
 type Issues interface {
+	Labels(ctx context.Context, v issues.Viewer, orgID uuid.UUID) ([]issues.Label, error)
+	CreateLabel(ctx context.Context, v issues.Viewer, orgID uuid.UUID, in issues.LabelInput) (issues.Label, error)
+	UpdateLabel(ctx context.Context, v issues.Viewer, orgID, labelID uuid.UUID, p issues.LabelPatch) (issues.Label, error)
+	DeleteLabel(ctx context.Context, v issues.Viewer, orgID, labelID uuid.UUID, version int64) error
 	List(ctx context.Context, v issues.Viewer, orgID uuid.UUID, f issues.Filter) (issues.Page, error)
 	Create(ctx context.Context, v issues.Viewer, orgID uuid.UUID, in issues.Input) (issues.Issue, error)
 	Get(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (issues.Issue, error)
@@ -72,6 +76,9 @@ func issueOf(i issues.Issue) *Issue {
 	if r := i.Repository; r != nil {
 		out.Repository = &IssueRepository{ID: r.ID.String(), Slug: r.Slug, Name: r.Name}
 	}
+	out.Labels = mapAll(i.Labels, func(l issues.IssueLabel) *IssueLabel {
+		return &IssueLabel{ID: l.ID.String(), Name: l.Name, Color: labelColors[l.Color]}
+	})
 	if i.ClosedAt != nil {
 		at := i.ClosedAt.UTC()
 		out.ClosedAt = &at
@@ -118,7 +125,8 @@ func issueBranch(b issues.LinkedBranch) *IssueBranch {
 	return out
 }
 
-// issueFail is fail for issues: NOT_FOUND for an issue or a branch that isn't there, CONFLICT for an issue that changed.
+// issueFail is fail for issues: NOT_FOUND for an issue, a branch or a label that isn't there, CONFLICT for an issue or
+// a label that changed and for a label's name that another has.
 func issueFail(ctx context.Context, err error, what string) error {
 	switch {
 	case err == nil:
@@ -129,6 +137,12 @@ func issueFail(ctx context.Context, err error, what string) error {
 		return refuse(ctx, notFound, "branch.not_found", "there is no such branch, or you may not see it")
 	case errors.Is(err, issues.ErrChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the issue changed since you read it: read it again")
+	case errors.Is(err, issues.ErrLabelNotFound):
+		return refuse(ctx, notFound, "label.not_found", "there is no such label, or you may not see it")
+	case errors.Is(err, issues.ErrLabelChanged):
+		return refuse(ctx, conflict, "precondition.failed", "the label changed since you read it: read it again")
+	case errors.Is(err, issues.ErrLabelTaken):
+		return refuse(ctx, conflict, "label.taken", "the organization has a label of that name")
 	}
 	return fail(ctx, err, "organization", what)
 }
@@ -170,8 +184,24 @@ func issueFilter(ctx context.Context, filter *IssueFilter, first int, after *str
 	if f.AssigneeID, err = idOrNone(ctx, "assignee", filter.AssigneeID); err != nil {
 		return f, err
 	}
+	if f.LabelIDs, err = ids(ctx, "labelIds", filter.LabelIds); err != nil {
+		return f, err
+	}
 	f.RepositoryID, err = idOrNone(ctx, "repository", filter.RepositoryID)
 	return f, err
+}
+
+// ids are the IDs a list names, or BAD_USER_INPUT for one that isn't an ID.
+func ids(ctx context.Context, field string, values []string) ([]uuid.UUID, error) {
+	out := make([]uuid.UUID, 0, len(values))
+	for _, v := range values {
+		id, err := uuid.Parse(v)
+		if err != nil {
+			return nil, refuse(ctx, badUserInput, field+".invalid", "not an ID")
+		}
+		out = append(out, id)
+	}
+	return out, nil
 }
 
 // issueInput is input as the domain takes it.
@@ -200,7 +230,9 @@ func issueInput(ctx context.Context, input IssueInput) (issues.Input, error) {
 		}
 		*id.into = parsed
 	}
-	return in, nil
+	var err error
+	in.LabelIDs, err = ids(ctx, "labelIds", input.LabelIds)
+	return in, err
 }
 
 // issuePatch is input as the domain takes it: null clears an assignee or a repository.
@@ -217,6 +249,13 @@ func issuePatch(ctx context.Context, input IssuePatch) (issues.Patch, error) {
 	var err error
 	if p.AssigneeID, err = idOrClear(ctx, "assigneeId", input.AssigneeID); err != nil {
 		return p, err
+	}
+	if input.LabelIds != nil {
+		labels, err := ids(ctx, "labelIds", input.LabelIds)
+		if err != nil {
+			return p, err
+		}
+		p.LabelIDs = &labels
 	}
 	p.RepositoryID, err = idOrClear(ctx, "repositoryId", input.RepositoryID)
 	return p, err
@@ -260,4 +299,44 @@ func issueOrg(ctx context.Context, organizationID string) (issues.Viewer, uuid.U
 		return issues.Viewer{}, uuid.Nil, err
 	}
 	return v.User, orgID, nil
+}
+
+// labelColors maps the domain's colours to the schema's.
+var labelColors = map[issues.Color]LabelColor{issues.ColorGray: LabelColorGray, issues.ColorBlue: LabelColorBlue, issues.ColorGreen: LabelColorGreen,
+	issues.ColorYellow: LabelColorYellow, issues.ColorRed: LabelColorRed}
+
+// colorOf is the domain's colour of the schema's.
+func colorOf(c LabelColor) issues.Color {
+	for domain, schema := range labelColors {
+		if schema == c {
+			return domain
+		}
+	}
+	return issues.Color(c)
+}
+
+// labelOf is l as the API shows it.
+func labelOf(l issues.Label) *Label {
+	return &Label{ID: l.ID.String(), Name: l.Name, Color: labelColors[l.Color], Description: l.Description, Issues: l.Issues,
+		CreatedAt: l.CreatedAt.UTC(), UpdatedAt: l.UpdatedAt.UTC(), Version: int(l.Version)}
+}
+
+// labelOrg is the viewer, the organization and the label a label's change names, and the version it expects, from 1,
+// or 0 for whichever is there.
+func labelOrg(ctx context.Context, organizationID, id string, expectedVersion *int) (issues.Viewer, uuid.UUID, uuid.UUID, int64, error) {
+	v, orgID, err := issueOrg(ctx, organizationID)
+	if err != nil {
+		return issues.Viewer{}, uuid.Nil, uuid.Nil, 0, err
+	}
+	labelID, err := parseID(ctx, id, "label")
+	if err != nil {
+		return issues.Viewer{}, uuid.Nil, uuid.Nil, 0, err
+	}
+	if expectedVersion == nil {
+		return v, orgID, labelID, 0, nil
+	}
+	if *expectedVersion < 1 {
+		return issues.Viewer{}, uuid.Nil, uuid.Nil, 0, refuse(ctx, badUserInput, "version.invalid", "a version of the label, from 1")
+	}
+	return v, orgID, labelID, int64(*expectedVersion), nil
 }

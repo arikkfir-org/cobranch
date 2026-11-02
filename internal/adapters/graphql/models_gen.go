@@ -224,6 +224,8 @@ type Issue struct {
 	Assignee *IssuePrincipal `json:"assignee,omitempty"`
 	// The repository it is about; null for none, and for a viewer who doesn't read it.
 	Repository *IssueRepository `json:"repository,omitempty"`
+	// The organization's labels it carries, by name.
+	Labels []*IssueLabel `json:"labels"`
 	// Who created it; null once they are gone.
 	CreatedBy *IssuePrincipal `json:"createdBy,omitempty"`
 	CreatedAt time.Time       `json:"createdAt"`
@@ -252,9 +254,9 @@ type IssueBranch struct {
 	LinkedAt time.Time     `json:"linkedAt"`
 }
 
-// A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads.
+// A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads.
 type IssueChange struct {
-	// title, description, state, priority, assignee or repository.
+	// title, description, state, priority, assignee, repository or labels.
 	Field string  `json:"field"`
 	From  *string `json:"from,omitempty"`
 	To    *string `json:"to,omitempty"`
@@ -291,6 +293,8 @@ type IssueFilter struct {
 	AssigneeID *string `json:"assigneeId,omitempty"`
 	// Those about one repository, by ID, or about none, for none.
 	RepositoryID *string `json:"repositoryId,omitempty"`
+	// Those that carry every one of these labels, by ID, at most 20.
+	LabelIds []string `json:"labelIds,omitempty"`
 	// Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
 	Text *string `json:"text,omitempty"`
 }
@@ -309,6 +313,15 @@ type IssueInput struct {
 	AssigneeID *string `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads.
 	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The organization's labels it carries, at most 20.
+	LabelIds []string `json:"labelIds,omitempty"`
+}
+
+// A label as an issue shows it.
+type IssueLabel struct {
+	ID    string     `json:"id"`
+	Name  string     `json:"name"`
+	Color LabelColor `json:"color"`
 }
 
 // A page of an organization's issues.
@@ -329,6 +342,8 @@ type IssuePatch struct {
 	AssigneeID graphql.Omittable[*string] `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads, or null for none.
 	RepositoryID graphql.Omittable[*string] `json:"repositoryId,omitempty"`
+	// The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+	LabelIds []string `json:"labelIds,omitempty"`
 }
 
 // Who an issue is assigned to, who created it, or who changed it.
@@ -355,6 +370,37 @@ type JoinRequest struct {
 	Note             string    `json:"note"`
 	CreatedAt        time.Time `json:"createdAt"`
 	ExpiresAt        time.Time `json:"expiresAt"`
+}
+
+// One of an organization's labels, which its issues carry.
+type Label struct {
+	ID string `json:"id"`
+	// 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+	Name  string     `json:"name"`
+	Color LabelColor `json:"color"`
+	// What it is for, at most 200 characters on one line.
+	Description string `json:"description"`
+	// How many issues carry it.
+	Issues    int       `json:"issues"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// What creates a label.
+type LabelInput struct {
+	Name string `json:"name"`
+	// GRAY when left out.
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
+}
+
+// What changes a label: a field left out keeps its value.
+type LabelPatch struct {
+	Name        *string     `json:"name,omitempty"`
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
 }
 
 // A user who belongs to an organization, with the roles they hold there.
@@ -426,6 +472,8 @@ type Organization struct {
 	Issues *IssuePage `json:"issues"`
 	// One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read.
 	Issue *Issue `json:"issue,omitempty"`
+	// The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+	Labels []*Label `json:"labels"`
 	// The repositories the viewer reads, by slug; takes org.read.
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
@@ -1142,6 +1190,68 @@ func (e *IssueState) UnmarshalJSON(b []byte) error {
 }
 
 func (e IssueState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// A label's colour, which the Console draws in its tones of both themes.
+type LabelColor string
+
+const (
+	LabelColorGray   LabelColor = "GRAY"
+	LabelColorBlue   LabelColor = "BLUE"
+	LabelColorGreen  LabelColor = "GREEN"
+	LabelColorYellow LabelColor = "YELLOW"
+	LabelColorRed    LabelColor = "RED"
+)
+
+var AllLabelColor = []LabelColor{
+	LabelColorGray,
+	LabelColorBlue,
+	LabelColorGreen,
+	LabelColorYellow,
+	LabelColorRed,
+}
+
+func (e LabelColor) IsValid() bool {
+	switch e {
+	case LabelColorGray, LabelColorBlue, LabelColorGreen, LabelColorYellow, LabelColorRed:
+		return true
+	}
+	return false
+}
+
+func (e LabelColor) String() string {
+	return string(e)
+}
+
+func (e *LabelColor) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LabelColor(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LabelColor", str)
+	}
+	return nil
+}
+
+func (e LabelColor) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LabelColor) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LabelColor) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

@@ -190,6 +190,7 @@ type ComplexityRoot struct {
 		DescriptionHTML func(childComplexity int) int
 		ID              func(childComplexity int) int
 		Identifier      func(childComplexity int) int
+		Labels          func(childComplexity int) int
 		Number          func(childComplexity int) int
 		OrganizationID  func(childComplexity int) int
 		Priority        func(childComplexity int) int
@@ -231,6 +232,12 @@ type ComplexityRoot struct {
 		Repository func(childComplexity int) int
 	}
 
+	IssueLabel struct {
+		Color func(childComplexity int) int
+		ID    func(childComplexity int) int
+		Name  func(childComplexity int) int
+	}
+
 	IssuePage struct {
 		Issues     func(childComplexity int) int
 		NextCursor func(childComplexity int) int
@@ -259,6 +266,17 @@ type ComplexityRoot struct {
 		UserName         func(childComplexity int) int
 	}
 
+	Label struct {
+		Color       func(childComplexity int) int
+		CreatedAt   func(childComplexity int) int
+		Description func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Issues      func(childComplexity int) int
+		Name        func(childComplexity int) int
+		UpdatedAt   func(childComplexity int) int
+		Version     func(childComplexity int) int
+	}
+
 	Member struct {
 		DisplayName func(childComplexity int) int
 		JoinedAt    func(childComplexity int) int
@@ -285,6 +303,7 @@ type ComplexityRoot struct {
 		CancelInvitation     func(childComplexity int, organizationID string, id string) int
 		CreateAPIKey         func(childComplexity int, organizationID string, input APIKeyInput) int
 		CreateIssue          func(childComplexity int, organizationID string, input IssueInput) int
+		CreateLabel          func(childComplexity int, organizationID string, input LabelInput) int
 		CreateOrganization   func(childComplexity int, slug string, name string) int
 		CreatePersonalToken  func(childComplexity int, input PersonalTokenInput) int
 		CreateRepository     func(childComplexity int, organizationID string, input RepositoryInput) int
@@ -295,6 +314,7 @@ type ComplexityRoot struct {
 		DeleteAnnotation     func(childComplexity int, repositoryID string, sha string, name string, expectedVersion *int) int
 		DeleteBranch         func(childComplexity int, repositoryID string, branch string, expectedHead *string) int
 		DeleteIssue          func(childComplexity int, organizationID string, number int, expectedVersion *int) int
+		DeleteLabel          func(childComplexity int, organizationID string, id string, expectedVersion *int) int
 		DeleteRole           func(childComplexity int, organizationID string, id string) int
 		DeleteSSHKey         func(childComplexity int, id string) int
 		GrantRepositoryRole  func(childComplexity int, repositoryID string, principalID string, roleID string) int
@@ -315,6 +335,7 @@ type ComplexityRoot struct {
 		SubmitReview         func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
 		UnlinkBranch         func(childComplexity int, organizationID string, repositoryID string, branch string) int
 		UpdateIssue          func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
+		UpdateLabel          func(childComplexity int, organizationID string, id string, input LabelPatch, expectedVersion *int) int
 		UpdateOrganization   func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRepository     func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole           func(childComplexity int, organizationID string, id string, input RoleInput) int
@@ -330,6 +351,7 @@ type ComplexityRoot struct {
 		IssueKey            func(childComplexity int) int
 		Issues              func(childComplexity int, filter *IssueFilter, first int, after *string) int
 		JoinRequests        func(childComplexity int) int
+		Labels              func(childComplexity int) int
 		Members             func(childComplexity int) int
 		MembershipRoleID    func(childComplexity int) int
 		Name                func(childComplexity int) int
@@ -514,6 +536,9 @@ type MutationResolver interface {
 	UpdateIssue(ctx context.Context, organizationID string, number int, input IssuePatch, expectedVersion *int) (*Issue, error)
 	DeleteIssue(ctx context.Context, organizationID string, number int, expectedVersion *int) (bool, error)
 	LinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string, number int) (*BranchIssue, error)
+	CreateLabel(ctx context.Context, organizationID string, input LabelInput) (*Label, error)
+	UpdateLabel(ctx context.Context, organizationID string, id string, input LabelPatch, expectedVersion *int) (*Label, error)
+	DeleteLabel(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
 	UnlinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string) (bool, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
@@ -550,6 +575,7 @@ type OrganizationResolver interface {
 
 	Issues(ctx context.Context, obj *Organization, filter *IssueFilter, first int, after *string) (*IssuePage, error)
 	Issue(ctx context.Context, obj *Organization, number int) (*Issue, error)
+	Labels(ctx context.Context, obj *Organization) ([]*Label, error)
 	Repositories(ctx context.Context, obj *Organization) ([]*Repository, error)
 	Repository(ctx context.Context, obj *Organization, slug string) (*Repository, error)
 }
@@ -1235,6 +1261,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Issue.Identifier(childComplexity), true
+	case "Issue.labels":
+		if e.ComplexityRoot.Issue.Labels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Issue.Labels(childComplexity), true
 	case "Issue.number":
 		if e.ComplexityRoot.Issue.Number == nil {
 			break
@@ -1402,6 +1434,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.IssueEventBranch.Repository(childComplexity), true
 
+	case "IssueLabel.color":
+		if e.ComplexityRoot.IssueLabel.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueLabel.Color(childComplexity), true
+	case "IssueLabel.id":
+		if e.ComplexityRoot.IssueLabel.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueLabel.ID(childComplexity), true
+	case "IssueLabel.name":
+		if e.ComplexityRoot.IssueLabel.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueLabel.Name(childComplexity), true
+
 	case "IssuePage.issues":
 		if e.ComplexityRoot.IssuePage.Issues == nil {
 			break
@@ -1501,6 +1552,55 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.JoinRequest.UserName(childComplexity), true
+
+	case "Label.color":
+		if e.ComplexityRoot.Label.Color == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.Color(childComplexity), true
+	case "Label.createdAt":
+		if e.ComplexityRoot.Label.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.CreatedAt(childComplexity), true
+	case "Label.description":
+		if e.ComplexityRoot.Label.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.Description(childComplexity), true
+	case "Label.id":
+		if e.ComplexityRoot.Label.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.ID(childComplexity), true
+	case "Label.issues":
+		if e.ComplexityRoot.Label.Issues == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.Issues(childComplexity), true
+	case "Label.name":
+		if e.ComplexityRoot.Label.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.Name(childComplexity), true
+	case "Label.updatedAt":
+		if e.ComplexityRoot.Label.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.UpdatedAt(childComplexity), true
+	case "Label.version":
+		if e.ComplexityRoot.Label.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Label.Version(childComplexity), true
 
 	case "Member.displayName":
 		if e.ComplexityRoot.Member.DisplayName == nil {
@@ -1631,6 +1731,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateIssue(childComplexity, args["organizationId"].(string), args["input"].(IssueInput)), true
+	case "Mutation.createLabel":
+		if e.ComplexityRoot.Mutation.CreateLabel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createLabel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateLabel(childComplexity, args["organizationId"].(string), args["input"].(LabelInput)), true
 	case "Mutation.createOrganization":
 		if e.ComplexityRoot.Mutation.CreateOrganization == nil {
 			break
@@ -1741,6 +1852,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteIssue(childComplexity, args["organizationId"].(string), args["number"].(int), args["expectedVersion"].(*int)), true
+	case "Mutation.deleteLabel":
+		if e.ComplexityRoot.Mutation.DeleteLabel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteLabel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteLabel(childComplexity, args["organizationId"].(string), args["id"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.deleteRole":
 		if e.ComplexityRoot.Mutation.DeleteRole == nil {
 			break
@@ -1961,6 +2083,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateIssue(childComplexity, args["organizationId"].(string), args["number"].(int), args["input"].(IssuePatch), args["expectedVersion"].(*int)), true
+	case "Mutation.updateLabel":
+		if e.ComplexityRoot.Mutation.UpdateLabel == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateLabel_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateLabel(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(LabelPatch), args["expectedVersion"].(*int)), true
 	case "Mutation.updateOrganization":
 		if e.ComplexityRoot.Mutation.UpdateOrganization == nil {
 			break
@@ -2059,6 +2192,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.JoinRequests(childComplexity), true
+	case "Organization.labels":
+		if e.ComplexityRoot.Organization.Labels == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Labels(childComplexity), true
 	case "Organization.members":
 		if e.ComplexityRoot.Organization.Members == nil {
 			break
@@ -2787,6 +2926,8 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("IssueFilter", ec.unmarshalInputIssueFilter),
 			graphql.NewInputUnmarshaler("IssueInput", ec.unmarshalInputIssueInput),
 			graphql.NewInputUnmarshaler("IssuePatch", ec.unmarshalInputIssuePatch),
+			graphql.NewInputUnmarshaler("LabelInput", ec.unmarshalInputLabelInput),
+			graphql.NewInputUnmarshaler("LabelPatch", ec.unmarshalInputLabelPatch),
 			graphql.NewInputUnmarshaler("MergeInput", ec.unmarshalInputMergeInput),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
@@ -3263,6 +3404,8 @@ extend type Organization {
   issues(filter: IssueFilter, first: Int! = 50, after: String): IssuePage!
   "One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read."
   issue(number: Int!): Issue
+  "The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read."
+  labels: [Label!]!
 }
 
 "Which of an organization's issues a list shows."
@@ -3273,6 +3416,8 @@ input IssueFilter {
   assigneeId: ID
   "Those about one repository, by ID, or about none, for none."
   repositoryId: ID
+  "Those that carry every one of these labels, by ID, at most 20."
+  labelIds: [ID!]
   "Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42."
   text: String
 }
@@ -3329,6 +3474,8 @@ type Issue {
   assignee: IssuePrincipal
   "The repository it is about; null for none, and for a viewer who doesn't read it."
   repository: IssueRepository
+  "The organization's labels it carries, by name."
+  labels: [IssueLabel!]!
   "Who created it; null once they are gone."
   createdBy: IssuePrincipal
   createdAt: Time!
@@ -3385,6 +3532,53 @@ type IssueEventBranch {
   linkedBy: LinkedBy!
 }
 
+"A label as an issue shows it."
+type IssueLabel {
+  id: ID!
+  name: String!
+  color: LabelColor!
+}
+
+"A label's colour, which the Console draws in its tones of both themes."
+enum LabelColor {
+  GRAY
+  BLUE
+  GREEN
+  YELLOW
+  RED
+}
+
+"One of an organization's labels, which its issues carry."
+type Label {
+  id: ID!
+  "1 to 50 characters on one line, unlike the organization's other labels' whatever their case."
+  name: String!
+  color: LabelColor!
+  "What it is for, at most 200 characters on one line."
+  description: String!
+  "How many issues carry it."
+  issues: Int!
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"What creates a label."
+input LabelInput {
+  name: String!
+  "GRAY when left out."
+  color: LabelColor
+  description: String
+}
+
+"What changes a label: a field left out keeps its value."
+input LabelPatch {
+  name: String
+  color: LabelColor
+  description: String
+}
+
 "Who an issue is assigned to, who created it, or who changed it."
 type IssuePrincipal {
   id: ID!
@@ -3412,9 +3606,9 @@ type IssueEvent {
   branch: IssueEventBranch
 }
 
-"A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads."
+"A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads."
 type IssueChange {
-  "title, description, state, priority, assignee or repository."
+  "title, description, state, priority, assignee, repository or labels."
   field: String!
   from: String
   to: String
@@ -3434,6 +3628,8 @@ input IssueInput {
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads."
   repositoryId: ID
+  "The organization's labels it carries, at most 20."
+  labelIds: [ID!]
 }
 
 "What changes an issue: a field left out keeps its value, and null clears an assignee or a repository."
@@ -3446,6 +3642,8 @@ input IssuePatch {
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads, or null for none."
   repositoryId: ID
+  "The organization's labels it carries from now on, at most 20, in place of those it did; empty for none."
+  labelIds: [ID!]
 }
 
 extend input OrganizationSettings {
@@ -3462,6 +3660,12 @@ extend type Mutation {
   deleteIssue(organizationId: ID!, number: Int!, expectedVersion: Int): Boolean!
   "Links one of the organization's repository's live branches to one of its issues by hand, in place of any issue it works on, for the viewer, and answers the link; takes issues.write, and repo.read. An issue in BACKLOG or TODO moves to IN_PROGRESS. main works on no issue (BAD_USER_INPUT, branch.default), as for an issue the organization doesn't have (issue.invalid)."
   linkBranch(organizationId: ID!, repositoryId: ID!, branch: String!, number: Int!): BranchIssue!
+  "Creates a label in the organization, named unlike its others whatever their case (CONFLICT, label.taken); takes issues.manage."
+  createLabel(organizationId: ID!, input: LabelInput!): Label!
+  "Changes the fields input names of one of the organization's labels, which its issues then show, and answers it as it now is; takes issues.manage. With expectedVersion, a label at another version is refused (CONFLICT, precondition.failed)."
+  updateLabel(organizationId: ID!, id: ID!, input: LabelPatch!, expectedVersion: Int): Label!
+  "Deletes one of the organization's labels, which takes it off every issue, and answers true; takes issues.manage. With expectedVersion, a label at another version is refused (CONFLICT, precondition.failed)."
+  deleteLabel(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
   "Unlinks one of the organization's repository's live branches from its issue by hand, for the viewer, so its name never links it again, and answers true; takes issues.write, and repo.read."
   unlinkBranch(organizationId: ID!, repositoryId: ID!, branch: String!): Boolean!
 }
@@ -4158,6 +4362,8 @@ func (ec *executionContext) childFields_Issue(ctx context.Context, field graphql
 		return ec.fieldContext_Issue_assignee(ctx, field)
 	case "repository":
 		return ec.fieldContext_Issue_repository(ctx, field)
+	case "labels":
+		return ec.fieldContext_Issue_labels(ctx, field)
 	case "createdBy":
 		return ec.fieldContext_Issue_createdBy(ctx, field)
 	case "createdAt":
@@ -4238,6 +4444,18 @@ func (ec *executionContext) childFields_IssueEventBranch(ctx context.Context, fi
 	return nil, fmt.Errorf("no field named %q was found under type IssueEventBranch", field.Name)
 }
 
+func (ec *executionContext) childFields_IssueLabel(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_IssueLabel_id(ctx, field)
+	case "name":
+		return ec.fieldContext_IssueLabel_name(ctx, field)
+	case "color":
+		return ec.fieldContext_IssueLabel_color(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type IssueLabel", field.Name)
+}
+
 func (ec *executionContext) childFields_IssuePage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "issues":
@@ -4292,6 +4510,28 @@ func (ec *executionContext) childFields_JoinRequest(ctx context.Context, field g
 		return ec.fieldContext_JoinRequest_expiresAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type JoinRequest", field.Name)
+}
+
+func (ec *executionContext) childFields_Label(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Label_id(ctx, field)
+	case "name":
+		return ec.fieldContext_Label_name(ctx, field)
+	case "color":
+		return ec.fieldContext_Label_color(ctx, field)
+	case "description":
+		return ec.fieldContext_Label_description(ctx, field)
+	case "issues":
+		return ec.fieldContext_Label_issues(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Label_createdAt(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Label_updatedAt(ctx, field)
+	case "version":
+		return ec.fieldContext_Label_version(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Label", field.Name)
 }
 
 func (ec *executionContext) childFields_Member(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4366,6 +4606,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_issues(ctx, field)
 	case "issue":
 		return ec.fieldContext_Organization_issue(ctx, field)
+	case "labels":
+		return ec.fieldContext_Organization_labels(ctx, field)
 	case "repositories":
 		return ec.fieldContext_Organization_repositories(ctx, field)
 	case "repository":
@@ -4890,6 +5132,28 @@ func (ec *executionContext) field_Mutation_createIssue_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createLabel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (LabelInput, error) {
+			return ec.unmarshalNLabelInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_createOrganization_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -5115,6 +5379,36 @@ func (ec *executionContext) field_Mutation_deleteIssue_args(ctx context.Context,
 		return nil, err
 	}
 	args["number"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_deleteLabel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
 	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
 		func(ctx context.Context, v any) (*int, error) {
 			return ec.unmarshalOInt2ᚖint(ctx, v)
@@ -5654,6 +5948,44 @@ func (ec *executionContext) field_Mutation_updateIssue_args(ctx context.Context,
 	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
 		func(ctx context.Context, v any) (IssuePatch, error) {
 			return ec.unmarshalNIssuePatch2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssuePatch(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateLabel_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (LabelPatch, error) {
+			return ec.unmarshalNLabelPatch2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelPatch(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -8668,6 +9000,38 @@ func (ec *executionContext) fieldContext_Issue_repository(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Issue_labels(ctx context.Context, field graphql.CollectedField, obj *Issue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Issue_labels(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Labels, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*IssueLabel) graphql.Marshaler {
+			return ec.marshalNIssueLabel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueLabelᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Issue_labels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Issue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueLabel(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Issue_createdBy(ctx context.Context, field graphql.CollectedField, obj *Issue) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9329,6 +9693,75 @@ func (ec *executionContext) fieldContext_IssueEventBranch_linkedBy(_ context.Con
 	return graphql.NewScalarFieldContext("IssueEventBranch", field, false, false, "LinkedBy")
 }
 
+func (ec *executionContext) _IssueLabel_id(ctx context.Context, field graphql.CollectedField, obj *IssueLabel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueLabel_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueLabel_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueLabel", field, false, false, "ID")
+}
+
+func (ec *executionContext) _IssueLabel_name(ctx context.Context, field graphql.CollectedField, obj *IssueLabel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueLabel_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueLabel_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueLabel", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueLabel_color(ctx context.Context, field graphql.CollectedField, obj *IssueLabel) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueLabel_color(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LabelColor) graphql.Marshaler {
+			return ec.marshalNLabelColor2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueLabel_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueLabel", field, false, false, "LabelColor")
+}
+
 func (ec *executionContext) _IssuePage_issues(ctx context.Context, field graphql.CollectedField, obj *IssuePage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -9704,6 +10137,190 @@ func (ec *executionContext) _JoinRequest_expiresAt(ctx context.Context, field gr
 }
 func (ec *executionContext) fieldContext_JoinRequest_expiresAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("JoinRequest", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Label_id(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Label_name(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "String")
+}
+
+func (ec *executionContext) _Label_color(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_color(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Color, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LabelColor) graphql.Marshaler {
+			return ec.marshalNLabelColor2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_color(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "LabelColor")
+}
+
+func (ec *executionContext) _Label_description(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "String")
+}
+
+func (ec *executionContext) _Label_issues(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_issues(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Issues, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_issues(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Label_createdAt(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Label_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Label_version(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Label_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Label_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Label", field, false, false, "Int")
 }
 
 func (ec *executionContext) _Member_userId(ctx context.Context, field graphql.CollectedField, obj *Member) (ret graphql.Marshaler) {
@@ -10564,6 +11181,138 @@ func (ec *executionContext) fieldContext_Mutation_linkBranch(ctx context.Context
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_linkBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_createLabel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createLabel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateLabel(ctx, fc.Args["organizationId"].(string), fc.Args["input"].(LabelInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Label) graphql.Marshaler {
+			return ec.marshalNLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createLabel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Label(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createLabel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateLabel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateLabel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateLabel(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["input"].(LabelPatch), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Label) graphql.Marshaler {
+			return ec.marshalNLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabel(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateLabel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Label(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateLabel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteLabel(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteLabel(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteLabel(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteLabel(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteLabel_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -12121,6 +12870,38 @@ func (ec *executionContext) fieldContext_Organization_issue(ctx context.Context,
 	if fc.Args, err = ec.field_Organization_issue_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Organization_labels(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_labels(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().Labels(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Label) graphql.Marshaler {
+			return ec.marshalNLabel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_labels(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Label(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -16122,7 +16903,7 @@ func (ec *executionContext) unmarshalInputIssueFilter(ctx context.Context, obj a
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"states", "assigneeId", "repositoryId", "text"}
+	fieldsInOrder := [...]string{"states", "assigneeId", "repositoryId", "labelIds", "text"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -16150,6 +16931,13 @@ func (ec *executionContext) unmarshalInputIssueFilter(ctx context.Context, obj a
 				return it, err
 			}
 			it.RepositoryID = data
+		case "labelIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labelIds"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LabelIds = data
 		case "text":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("text"))
 			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
@@ -16185,7 +16973,7 @@ func (ec *executionContext) unmarshalInputIssueInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"title", "description", "state", "priority", "assigneeId", "repositoryId"}
+	fieldsInOrder := [...]string{"title", "description", "state", "priority", "assigneeId", "repositoryId", "labelIds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -16234,6 +17022,13 @@ func (ec *executionContext) unmarshalInputIssueInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.RepositoryID = data
+		case "labelIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labelIds"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LabelIds = data
 		}
 	}
 	return it, nil
@@ -16262,7 +17057,7 @@ func (ec *executionContext) unmarshalInputIssuePatch(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"title", "description", "state", "priority", "assigneeId", "repositoryId"}
+	fieldsInOrder := [...]string{"title", "description", "state", "priority", "assigneeId", "repositoryId", "labelIds"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -16311,6 +17106,13 @@ func (ec *executionContext) unmarshalInputIssuePatch(ctx context.Context, obj an
 				return it, err
 			}
 			it.RepositoryID = graphql.OmittableOf(data)
+		case "labelIds":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("labelIds"))
+			data, err := ec.unmarshalOID2ᚕstringᚄ(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.LabelIds = data
 		}
 	}
 	return it, nil
@@ -16325,6 +17127,118 @@ func (ec *executionContext) unmarshalInputIssuePatch(ctx context.Context, obj an
 func UnmarshalIssuePatch(ctx context.Context, raw any) (IssuePatch, error) {
 	var out IssuePatch
 	err := graphql.UnmarshalNamedInputFromContext(ctx, "IssuePatch", raw, &out)
+	return out, err
+}
+
+func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj any) (LabelInput, error) {
+	var it LabelInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "color", "description"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "color":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("color"))
+			data, err := ec.unmarshalOLabelColor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Color = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalLabelInput unmarshals raw into the LabelInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalLabelInput(ctx context.Context, raw any) (LabelInput, error) {
+	var out LabelInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "LabelInput", raw, &out)
+	return out, err
+}
+
+func (ec *executionContext) unmarshalInputLabelPatch(ctx context.Context, obj any) (LabelPatch, error) {
+	var it LabelPatch
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "color", "description"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "color":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("color"))
+			data, err := ec.unmarshalOLabelColor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Color = data
+		case "description":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("description"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Description = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalLabelPatch unmarshals raw into the LabelPatch input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalLabelPatch(ctx context.Context, raw any) (LabelPatch, error) {
+	var out LabelPatch
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "LabelPatch", raw, &out)
 	return out, err
 }
 
@@ -17733,6 +18647,11 @@ func (ec *executionContext) _Issue(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "labels":
+			out.Values[i] = ec._Issue_labels(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "createdBy":
 			out.Values[i] = ec._Issue_createdBy(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -17994,6 +18913,49 @@ func (ec *executionContext) _IssueEventBranch(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var issueLabelImplementors = []string{"IssueLabel"}
+
+func (ec *executionContext) _IssueLabel(ctx context.Context, sel ast.SelectionSet, obj *IssueLabel) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, issueLabelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IssueLabel")
+		case "id":
+			out.Values[i] = ec._IssueLabel_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._IssueLabel_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "color":
+			out.Values[i] = ec._IssueLabel_color(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var issuePageImplementors = []string{"IssuePage"}
 
 func (ec *executionContext) _IssuePage(ctx context.Context, sel ast.SelectionSet, obj *IssuePage) graphql.Marshaler {
@@ -18166,6 +19128,74 @@ func (ec *executionContext) _JoinRequest(ctx context.Context, sel ast.SelectionS
 			}
 		case "expiresAt":
 			out.Values[i] = ec._JoinRequest_expiresAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var labelImplementors = []string{"Label"}
+
+func (ec *executionContext) _Label(ctx context.Context, sel ast.SelectionSet, obj *Label) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, labelImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Label")
+		case "id":
+			out.Values[i] = ec._Label_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "name":
+			out.Values[i] = ec._Label_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "color":
+			out.Values[i] = ec._Label_color(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "description":
+			out.Values[i] = ec._Label_description(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "issues":
+			out.Values[i] = ec._Label_issues(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._Label_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Label_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "version":
+			out.Values[i] = ec._Label_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -18433,6 +19463,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "linkBranch":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_linkBranch(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "createLabel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createLabel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateLabel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateLabel(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteLabel":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteLabel(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -18727,6 +19778,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_issue(ctx, field, obj)
+				})
+		case "labels":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_labels(ctx, field, obj)
 				})
 		case "repositories":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -20541,6 +21598,30 @@ func (ec *executionContext) unmarshalNIssueInput2cobranchᚗdevᚋinternalᚋada
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNIssueLabel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueLabelᚄ(ctx context.Context, sel ast.SelectionSet, v []*IssueLabel) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNIssueLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueLabel(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNIssueLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueLabel(ctx context.Context, sel ast.SelectionSet, v *IssueLabel) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "IssueLabel!")
+		return graphql.Null
+	}
+	return ec._IssueLabel(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNIssuePage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssuePage(ctx context.Context, sel ast.SelectionSet, v *IssuePage) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "IssuePage!")
@@ -20604,6 +21685,50 @@ func (ec *executionContext) marshalNJoinRequest2ᚖcobranchᚗdevᚋinternalᚋa
 		return graphql.Null
 	}
 	return ec._JoinRequest(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNLabel2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelᚄ(ctx context.Context, sel ast.SelectionSet, v []*Label) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabel(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNLabel2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabel(ctx context.Context, sel ast.SelectionSet, v *Label) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Label!")
+		return graphql.Null
+	}
+	return ec._Label(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLabelColor2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx context.Context, v any) (LabelColor, error) {
+	var res LabelColor
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLabelColor2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx context.Context, sel ast.SelectionSet, v LabelColor) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNLabelInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelInput(ctx context.Context, v any) (LabelInput, error) {
+	res, err := ec.unmarshalInputLabelInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNLabelPatch2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelPatch(ctx context.Context, v any) (LabelPatch, error) {
+	res, err := ec.unmarshalInputLabelPatch(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) unmarshalNLinkedBy2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLinkedBy(ctx context.Context, v any) (LinkedBy, error) {
@@ -21274,6 +22399,41 @@ func (ec *executionContext) marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadapters
 	return ec._File(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]string, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNID2string(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOID2ᚕstringᚄ(ctx context.Context, sel ast.SelectionSet, v []string) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNID2string(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
 func (ec *executionContext) unmarshalOID2ᚖstring(ctx context.Context, v any) (*string, error) {
 	if v == nil {
 		return nil, nil
@@ -21408,6 +22568,22 @@ func (ec *executionContext) unmarshalOIssueState2ᚖcobranchᚗdevᚋinternalᚋ
 }
 
 func (ec *executionContext) marshalOIssueState2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueState(ctx context.Context, sel ast.SelectionSet, v *IssueState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
+func (ec *executionContext) unmarshalOLabelColor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx context.Context, v any) (*LabelColor, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(LabelColor)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOLabelColor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx context.Context, sel ast.SelectionSet, v *LabelColor) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
 	}

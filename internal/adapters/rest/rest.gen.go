@@ -120,6 +120,7 @@ func (e FileKind) Valid() bool {
 const (
 	IssueChangeFieldAssignee    IssueChangeField = "assignee"
 	IssueChangeFieldDescription IssueChangeField = "description"
+	IssueChangeFieldLabels      IssueChangeField = "labels"
 	IssueChangeFieldPriority    IssueChangeField = "priority"
 	IssueChangeFieldRepository  IssueChangeField = "repository"
 	IssueChangeFieldState       IssueChangeField = "state"
@@ -132,6 +133,8 @@ func (e IssueChangeField) Valid() bool {
 	case IssueChangeFieldAssignee:
 		return true
 	case IssueChangeFieldDescription:
+		return true
+	case IssueChangeFieldLabels:
 		return true
 	case IssueChangeFieldPriority:
 		return true
@@ -197,6 +200,33 @@ func (e IssueState) Valid() bool {
 	case IssueStateInReview:
 		return true
 	case IssueStateTodo:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for LabelColor.
+const (
+	Blue   LabelColor = "blue"
+	Gray   LabelColor = "gray"
+	Green  LabelColor = "green"
+	Red    LabelColor = "red"
+	Yellow LabelColor = "yellow"
+)
+
+// Valid indicates whether the value is a known member of the LabelColor enum.
+func (e LabelColor) Valid() bool {
+	switch e {
+	case Blue:
+		return true
+	case Gray:
+		return true
+	case Green:
+		return true
+	case Red:
+		return true
+	case Yellow:
 		return true
 	default:
 		return false
@@ -798,7 +828,10 @@ type Issue struct {
 
 	// Identifier Its organization's issue key and its number, such as ACME-42; a changed key renames it.
 	Identifier string `json:"identifier"`
-	Number     int    `json:"number"`
+
+	// Labels The organization's labels it carries, by name.
+	Labels []IssueLabel `json:"labels"`
+	Number int          `json:"number"`
 
 	// Priority How urgent an issue is.
 	Priority IssuePriority `json:"priority"`
@@ -836,7 +869,7 @@ type IssueBranch struct {
 	Status *BranchStatus `json:"status,omitempty"`
 }
 
-// IssueChange A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+// IssueChange A field a change changed, with its values as people read them, a labels' change their names by name, comma-separated; a description's change names no values, and a repository's only those the viewer reads.
 type IssueChange struct {
 	Field IssueChangeField `json:"field"`
 	From  *string          `json:"from,omitempty"`
@@ -883,6 +916,9 @@ type IssueInput struct {
 	// Description Markdown, at most 65536 characters.
 	Description *string `json:"description,omitempty"`
 
+	// LabelIds The organization's labels it carries, at most 20.
+	LabelIds *[]openapi_types.UUID `json:"labelIds,omitempty"`
+
 	// Priority How urgent an issue is.
 	Priority *IssuePriority `json:"priority,omitempty"`
 
@@ -896,11 +932,22 @@ type IssueInput struct {
 	Title string `json:"title"`
 }
 
+// IssueLabel A label as an issue shows it.
+type IssueLabel struct {
+	// Color A label's colour, which the Console draws in its tones of both themes.
+	Color LabelColor         `json:"color"`
+	Id    openapi_types.UUID `json:"id"`
+	Name  string             `json:"name"`
+}
+
 // IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
 type IssuePatch struct {
 	// AssigneeId One of the organization's members, or null for nobody.
 	AssigneeId  nullable.Nullable[openapi_types.UUID] `json:"assigneeId,omitempty"`
 	Description *string                               `json:"description,omitempty"`
+
+	// LabelIds The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+	LabelIds *[]openapi_types.UUID `json:"labelIds,omitempty"`
 
 	// Priority How urgent an issue is.
 	Priority *IssuePriority `json:"priority,omitempty"`
@@ -937,6 +984,46 @@ type JoinRequest struct {
 	OrgSlug   string             `json:"orgSlug"`
 	UserId    openapi_types.UUID `json:"userId"`
 	UserName  string             `json:"userName"`
+}
+
+// Label One of an organization's labels, which its issues carry.
+type Label struct {
+	// Color A label's colour, which the Console draws in its tones of both themes.
+	Color     LabelColor `json:"color"`
+	CreatedAt time.Time  `json:"createdAt"`
+
+	// Description What it is for, at most 200 characters on one line.
+	Description string             `json:"description"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Issues How many issues carry it.
+	Issues int `json:"issues"`
+
+	// Name 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+	Name      string    `json:"name"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Version Counts its changes from 1; its ETag.
+	Version int64 `json:"version"`
+}
+
+// LabelColor A label's colour, which the Console draws in its tones of both themes.
+type LabelColor string
+
+// LabelInput What creates a label.
+type LabelInput struct {
+	// Color A label's colour, which the Console draws in its tones of both themes.
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	Name        string      `json:"name"`
+}
+
+// LabelPatch What changes a label, as a merge patch; a field left out keeps its value.
+type LabelPatch struct {
+	// Color A label's colour, which the Console draws in its tones of both themes.
+	Color       *LabelColor `json:"color,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	Name        *string     `json:"name,omitempty"`
 }
 
 // LinkBranchInput The issue to link a branch to.
@@ -1408,6 +1495,9 @@ type IfMatchBranch = string
 // IfMatchIssue defines model for ifMatchIssue.
 type IfMatchIssue = string
 
+// IfMatchLabel defines model for ifMatchLabel.
+type IfMatchLabel = string
+
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
 
@@ -1416,6 +1506,9 @@ type IfNoneMatchAnnotation = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
+
+// LabelID defines model for label.
+type LabelID = openapi_types.UUID
 
 // Number defines model for number.
 type Number = int
@@ -1474,6 +1567,9 @@ type ListIssuesParams struct {
 	// Repository Those about one repository, by ID, or about none, for none.
 	Repository *string `form:"repository,omitempty" json:"repository,omitempty"`
 
+	// Label Those that carry every one of these labels, by ID, one parameter each, at most 20.
+	Label *[]openapi_types.UUID `form:"label,omitempty" json:"label,omitempty"`
+
 	// Text Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
 	Text *string `form:"q,omitempty" json:"q,omitempty"`
 
@@ -1512,6 +1608,24 @@ type RequestToJoinJSONBody struct {
 type ApproveJoinRequestJSONBody struct {
 	// RoleId The role the requester gets; the organization's membership role when left out.
 	RoleId *openapi_types.UUID `json:"roleId,omitempty"`
+}
+
+// DeleteLabelParams defines parameters for DeleteLabel.
+type DeleteLabelParams struct {
+	// IfMatch The ETag of the label the change was made from; a change made meanwhile is refused with 412.
+	IfMatch *IfMatchLabel `json:"If-Match,omitempty"`
+}
+
+// GetLabelParams defines parameters for GetLabel.
+type GetLabelParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateLabelParams defines parameters for UpdateLabel.
+type UpdateLabelParams struct {
+	// IfMatch The ETag of the label the change was made from; a change made meanwhile is refused with 412.
+	IfMatch *IfMatchLabel `json:"If-Match,omitempty"`
 }
 
 // GrantRoleJSONBody defines parameters for GrantRole.
@@ -1657,6 +1771,12 @@ type RequestToJoinJSONRequestBody RequestToJoinJSONBody
 // ApproveJoinRequestJSONRequestBody defines body for ApproveJoinRequest for application/json ContentType.
 type ApproveJoinRequestJSONRequestBody ApproveJoinRequestJSONBody
 
+// CreateLabelJSONRequestBody defines body for CreateLabel for application/json ContentType.
+type CreateLabelJSONRequestBody = LabelInput
+
+// UpdateLabelApplicationMergePatchPlusJSONRequestBody defines body for UpdateLabel for application/merge-patch+json ContentType.
+type UpdateLabelApplicationMergePatchPlusJSONRequestBody = LabelPatch
+
 // GrantRoleJSONRequestBody defines body for GrantRole for application/json ContentType.
 type GrantRoleJSONRequestBody GrantRoleJSONBody
 
@@ -1800,6 +1920,21 @@ type ServerInterface interface {
 	// DeclineJoinRequest Declines a request that waits; takes org.members.manage.
 	// (POST /orgs/{org}/join-requests/{id}/decline)
 	DeclineJoinRequest(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// ListLabels The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+	// (GET /orgs/{org}/labels)
+	ListLabels(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateLabel Creates a label in the organization, named unlike its others whatever their case; takes issues.manage.
+	// (POST /orgs/{org}/labels)
+	CreateLabel(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteLabel Deletes one of the organization's labels, which takes it off every issue; takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/labels/{label})
+	DeleteLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params DeleteLabelParams)
+	// GetLabel One of the organization's labels; takes issues.read.
+	// (GET /orgs/{org}/labels/{label})
+	GetLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params GetLabelParams)
+	// UpdateLabel Changes the fields the merge patch (RFC 7396) names of one of the organization's labels, which its issues then show; takes issues.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/labels/{label})
+	UpdateLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params UpdateLabelParams)
 	// LeaveOrganization Leaves the organization, dropping every role held there; its last Owner can't.
 	// (POST /orgs/{org}/leave)
 	LeaveOrganization(w http.ResponseWriter, r *http.Request, org Org)
@@ -2565,6 +2700,19 @@ func (siw *ServerInterfaceWrapper) ListIssues(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// ------------- Optional query parameter "label" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "label", r.URL.Query(), &params.Label, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "label"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "q" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Text, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -3001,6 +3149,235 @@ func (siw *ServerInterfaceWrapper) DeclineJoinRequest(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeclineJoinRequest(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLabels operation middleware
+func (siw *ServerInterfaceWrapper) ListLabels(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLabels(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateLabel operation middleware
+func (siw *ServerInterfaceWrapper) CreateLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateLabel(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteLabel operation middleware
+func (siw *ServerInterfaceWrapper) DeleteLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "label" -------------
+	var labelID LabelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &labelID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchLabel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteLabel(w, r, org, labelID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLabel operation middleware
+func (siw *ServerInterfaceWrapper) GetLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "label" -------------
+	var labelID LabelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &labelID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLabel(w, r, org, labelID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateLabel operation middleware
+func (siw *ServerInterfaceWrapper) UpdateLabel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "label" -------------
+	var labelID LabelID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "label", r.PathValue("label"), &labelID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "label", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateLabelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchLabel
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateLabel(w, r, org, labelID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4993,6 +5370,11 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.UpdateIssue)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/branches", wrapper.ListIssueBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/activity", wrapper.ListIssueActivity)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/labels", wrapper.ListLabels)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/labels", wrapper.CreateLabel)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/labels/{label}", wrapper.DeleteLabel)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/labels/{label}", wrapper.GetLabel)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/labels/{label}", wrapper.UpdateLabel)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}", wrapper.GetRepository)
@@ -8034,6 +8416,577 @@ type DeclineJoinRequestdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response DeclineJoinRequestdefaultApplicationProblemPlusJSONResponse) VisitDeclineJoinRequestResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLabelsRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListLabelsResponseObject interface {
+	VisitListLabelsResponse(w http.ResponseWriter) error
+}
+
+type ListLabels200JSONResponse struct {
+	Labels []Label `json:"labels"`
+}
+
+func (response ListLabels200JSONResponse) VisitListLabelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLabels401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListLabels401ApplicationProblemPlusJSONResponse) VisitListLabelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLabels403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListLabels403ApplicationProblemPlusJSONResponse) VisitListLabelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLabels404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListLabels404ApplicationProblemPlusJSONResponse) VisitListLabelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListLabelsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListLabelsdefaultApplicationProblemPlusJSONResponse) VisitListLabelsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabelRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateLabelJSONRequestBody
+}
+
+type CreateLabelResponseObject interface {
+	VisitCreateLabelResponse(w http.ResponseWriter) error
+}
+
+type CreateLabel201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateLabel201JSONResponse struct {
+	Body    Label
+	Headers CreateLabel201ResponseHeaders
+}
+
+func (response CreateLabel201JSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabel400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateLabel400ApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabel401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateLabel401ApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabel403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateLabel403ApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabel404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateLabel404ApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabel409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateLabel409ApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateLabeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateLabeldefaultApplicationProblemPlusJSONResponse) VisitCreateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabelRequestObject struct {
+	Org     Org     `json:"org"`
+	LabelID LabelID `json:"label"`
+	Params  DeleteLabelParams
+}
+
+type DeleteLabelResponseObject interface {
+	VisitDeleteLabelResponse(w http.ResponseWriter) error
+}
+
+type DeleteLabel204Response struct {
+}
+
+func (response DeleteLabel204Response) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteLabel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteLabel401ApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabel403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteLabel403ApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabel404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteLabel404ApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabel412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteLabel412ApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabel428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteLabel428ApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteLabeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteLabeldefaultApplicationProblemPlusJSONResponse) VisitDeleteLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLabelRequestObject struct {
+	Org     Org     `json:"org"`
+	LabelID LabelID `json:"label"`
+	Params  GetLabelParams
+}
+
+type GetLabelResponseObject interface {
+	VisitGetLabelResponse(w http.ResponseWriter) error
+}
+
+type GetLabel200ResponseHeaders struct {
+	ETag string
+}
+
+type GetLabel200JSONResponse struct {
+	Body    Label
+	Headers GetLabel200ResponseHeaders
+}
+
+func (response GetLabel200JSONResponse) VisitGetLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLabel304ResponseHeaders struct {
+	ETag string
+}
+
+type GetLabel304Response struct {
+	Headers GetLabel304ResponseHeaders
+}
+
+func (response GetLabel304Response) VisitGetLabelResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetLabel401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetLabel401ApplicationProblemPlusJSONResponse) VisitGetLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLabel403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetLabel403ApplicationProblemPlusJSONResponse) VisitGetLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLabel404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetLabel404ApplicationProblemPlusJSONResponse) VisitGetLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetLabeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetLabeldefaultApplicationProblemPlusJSONResponse) VisitGetLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabelRequestObject struct {
+	Org     Org     `json:"org"`
+	LabelID LabelID `json:"label"`
+	Params  UpdateLabelParams
+	Body    *UpdateLabelApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateLabelResponseObject interface {
+	VisitUpdateLabelResponse(w http.ResponseWriter) error
+}
+
+type UpdateLabel200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateLabel200JSONResponse struct {
+	Body    Label
+	Headers UpdateLabel200ResponseHeaders
+}
+
+func (response UpdateLabel200JSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateLabel400ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel401ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel403ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel404ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel409ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel412ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabel428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateLabel428ApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateLabeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateLabeldefaultApplicationProblemPlusJSONResponse) VisitUpdateLabelResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11891,6 +12844,21 @@ type StrictServerInterface interface {
 	// DeclineJoinRequest Declines a request that waits; takes org.members.manage.
 	// (POST /orgs/{org}/join-requests/{id}/decline)
 	DeclineJoinRequest(ctx context.Context, request DeclineJoinRequestRequestObject) (DeclineJoinRequestResponseObject, error)
+	// ListLabels The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+	// (GET /orgs/{org}/labels)
+	ListLabels(ctx context.Context, request ListLabelsRequestObject) (ListLabelsResponseObject, error)
+	// CreateLabel Creates a label in the organization, named unlike its others whatever their case; takes issues.manage.
+	// (POST /orgs/{org}/labels)
+	CreateLabel(ctx context.Context, request CreateLabelRequestObject) (CreateLabelResponseObject, error)
+	// DeleteLabel Deletes one of the organization's labels, which takes it off every issue; takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/labels/{label})
+	DeleteLabel(ctx context.Context, request DeleteLabelRequestObject) (DeleteLabelResponseObject, error)
+	// GetLabel One of the organization's labels; takes issues.read.
+	// (GET /orgs/{org}/labels/{label})
+	GetLabel(ctx context.Context, request GetLabelRequestObject) (GetLabelResponseObject, error)
+	// UpdateLabel Changes the fields the merge patch (RFC 7396) names of one of the organization's labels, which its issues then show; takes issues.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/labels/{label})
+	UpdateLabel(ctx context.Context, request UpdateLabelRequestObject) (UpdateLabelResponseObject, error)
 	// LeaveOrganization Leaves the organization, dropping every role held there; its last Owner can't.
 	// (POST /orgs/{org}/leave)
 	LeaveOrganization(ctx context.Context, request LeaveOrganizationRequestObject) (LeaveOrganizationResponseObject, error)
@@ -13062,6 +14030,156 @@ func (sh *strictHandler) DeclineJoinRequest(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeclineJoinRequestResponseObject); ok {
 		if err := validResponse.VisitDeclineJoinRequestResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListLabels operation middleware
+func (sh *strictHandler) ListLabels(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListLabelsRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListLabels(ctx, request.(ListLabelsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListLabels")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListLabelsResponseObject); ok {
+		if err := validResponse.VisitListLabelsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateLabel operation middleware
+func (sh *strictHandler) CreateLabel(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateLabelRequestObject
+
+	request.Org = org
+
+	var body CreateLabelJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateLabel(ctx, request.(CreateLabelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateLabel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateLabelResponseObject); ok {
+		if err := validResponse.VisitCreateLabelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteLabel operation middleware
+func (sh *strictHandler) DeleteLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params DeleteLabelParams) {
+	var request DeleteLabelRequestObject
+
+	request.Org = org
+	request.LabelID = labelID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteLabel(ctx, request.(DeleteLabelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteLabel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteLabelResponseObject); ok {
+		if err := validResponse.VisitDeleteLabelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetLabel operation middleware
+func (sh *strictHandler) GetLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params GetLabelParams) {
+	var request GetLabelRequestObject
+
+	request.Org = org
+	request.LabelID = labelID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetLabel(ctx, request.(GetLabelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetLabel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetLabelResponseObject); ok {
+		if err := validResponse.VisitGetLabelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateLabel operation middleware
+func (sh *strictHandler) UpdateLabel(w http.ResponseWriter, r *http.Request, org Org, labelID LabelID, params UpdateLabelParams) {
+	var request UpdateLabelRequestObject
+
+	request.Org = org
+	request.LabelID = labelID
+	request.Params = params
+
+	var body UpdateLabelApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateLabel(ctx, request.(UpdateLabelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateLabel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateLabelResponseObject); ok {
+		if err := validResponse.VisitUpdateLabelResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

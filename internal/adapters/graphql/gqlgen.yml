@@ -38,6 +38,7 @@ models:
       repository: { resolver: true }
       issues: { resolver: true }
       issue: { resolver: true }
+      labels: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
