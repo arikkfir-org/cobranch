@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,44 @@ func TestTools(t *testing.T) {
 	t.Setenv("COBRANCH_TOKEN_FILE", "/var/run/cobranch/token")
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) { runTool(t, tc) })
+	}
+}
+
+func TestLargeFiles(t *testing.T) {
+	// A file of any size costs read_file only the lines it shows, each cut; edit_file, which reads a file whole, refuses
+	// one past its limit.
+	w := workspace(t)
+	var big strings.Builder
+	for i := 1; big.Len() <= maxEdited; i++ {
+		big.WriteString("line " + strconv.Itoa(i) + "\n")
+	}
+	files := map[string]string{"big.log": big.String(), "long.txt": strings.Repeat("é", maxLine) + "\nend"}
+	for name, content := range files {
+		if err := os.WriteFile(filepath.Join(w.dir, name), []byte(content), 0o640); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lines := strings.Count(big.String(), "\n")
+	tt := []toolCase{
+		{name: "read a window of a large file", tool: "read_file", args: `{"path":"big.log","offset":500000,"limit":2}`,
+			want: "500000\tline 500000\n500001\tline 500001\n[" + strconv.Itoa(lines-500001) + " more lines: read on from line 500002]\n"},
+		{name: "read past the end of a large file", tool: "read_file", args: `{"path":"big.log","offset":` + strconv.Itoa(lines+1) + `}`,
+			wantErr: "big.log has " + strconv.Itoa(lines) + " lines"},
+		{name: "read a long line", tool: "read_file", args: `{"path":"long.txt"}`,
+			want: "     1\t" + strings.Repeat("é", maxLine/2) + "…\n     2\tend\n"},
+		{name: "edit a large file", tool: "edit_file", args: `{"path":"big.log","old":"line 1\n","new":""}`,
+			wantErr: "big.log holds " + strconv.Itoa(big.Len()) + " bytes, over the 8 MiB edit_file takes"},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := run(t, w, tc.tool, tc.args)
+			if (tc.wantErr == "" && err != nil) || (tc.wantErr != "" && (err == nil || !strings.HasPrefix(err.Error(), tc.wantErr))) {
+				t.Fatalf("%s(%s) = %.200q, %v; want the error %q", tc.tool, tc.args, got, err, tc.wantErr)
+			}
+			if tc.wantErr == "" && got != tc.want {
+				t.Errorf("%s(%s) = %.200q, want %.200q", tc.tool, tc.args, got, tc.want)
+			}
+		})
 	}
 }
 

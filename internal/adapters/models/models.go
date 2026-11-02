@@ -3,6 +3,7 @@
 package models
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -11,10 +12,18 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
+	// The newest conventions that still hold GenAI's; later versions left them out.
+	genai "go.opentelemetry.io/otel/semconv/v1.41.0"
+	"go.opentelemetry.io/otel/trace"
 
 	"cobranch.dev/internal/services/harness"
 )
+
+var tracer = otel.Tracer("cobranch.dev/internal/adapters/models")
 
 // Providers names the model providers Cobranch has adapters for: those an organization may add, by the name the API
 // and the Console show.
@@ -69,11 +78,11 @@ func New(s Settings) (harness.Model, error) {
 	url := base(s.URL, addresses[s.Provider])
 	switch s.Provider {
 	case "anthropic":
-		return anthropic{caller: c, url: url, settings: s}, nil
+		return model{anthropic{caller: c, url: url, settings: s}, s}, nil
 	case "google":
-		return gemini{caller: c, url: url, settings: s}, nil
+		return model{gemini{caller: c, url: url, settings: s}, s}, nil
 	default:
-		return openAI{caller: c, url: url, settings: s}, nil
+		return model{openAI{caller: c, url: url, settings: s}, s}, nil
 	}
 }
 
@@ -99,6 +108,61 @@ func keyHeader(provider, key string) map[string]string {
 	default:
 		return map[string]string{"Authorization": "Bearer " + key}
 	}
+}
+
+// adapter is a provider's adapter: it asks the model for its next turn in its provider's protocol.
+type adapter interface {
+	chat(ctx context.Context, r harness.Request) (harness.Turn, answered, error)
+}
+
+// answered is what a provider's answer says beside the turn: the model that answered, the tokens it took in and gave
+// out, and why the provider stopped the turn for its content, when it did.
+type answered struct {
+	model         string
+	input, output int
+	blocked       string
+}
+
+// genAIProviders are the providers as OpenTelemetry's GenAI conventions name them.
+var genAIProviders = map[string]attribute.KeyValue{
+	"anthropic": genai.GenAIProviderNameAnthropic,
+	"deepseek":  genai.GenAIProviderNameDeepseek,
+	"google":    genai.GenAIProviderNameGCPGemini,
+	"openai":    genai.GenAIProviderNameOpenAI,
+	"xai":       genai.GenAIProviderNameXAI,
+}
+
+// model is a provider's model, behind its adapter (harness.Model).
+type model struct {
+	adapter
+	settings Settings
+}
+
+// Next asks the model for its next turn (harness.Model), in a span of OpenTelemetry's GenAI conventions that records
+// the tokens it took and how it ended. A turn the provider stopped for its content fails with harness.ErrModelRefused
+// and the provider's reason, since asking again would be stopped again.
+func (m model) Next(ctx context.Context, r harness.Request) (harness.Turn, error) {
+	ctx, span := tracer.Start(ctx, "chat "+m.settings.Model, trace.WithSpanKind(trace.SpanKindClient), trace.WithAttributes(
+		genai.GenAIOperationNameChat, genAIProviders[m.settings.Provider], genai.GenAIRequestModel(m.settings.Model),
+		genai.GenAIRequestMaxTokens(m.settings.MaxTokens)))
+	defer span.End()
+	t, meta, err := m.chat(ctx, r)
+	span.SetAttributes(genai.GenAIUsageInputTokens(meta.input), genai.GenAIUsageOutputTokens(meta.output))
+	if meta.model != "" {
+		span.SetAttributes(genai.GenAIResponseModel(meta.model))
+	}
+	if t.Stop != "" {
+		span.SetAttributes(genai.GenAIResponseFinishReasons(t.Stop))
+	}
+	if err == nil && meta.blocked != "" {
+		err = fmt.Errorf("%w (%s): it stopped the turn: %s", harness.ErrModelRefused, m.settings.Provider, meta.blocked)
+	}
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return harness.Turn{}, err
+	}
+	return t, nil
 }
 
 // base is url without its trailing slash, or fallback for none.

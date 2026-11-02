@@ -16,6 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
+
 	"cobranch.dev/internal/services/harness"
 )
 
@@ -139,12 +145,6 @@ func TestNextReadsWhatProvidersVary(t *testing.T) {
 					t.Errorf("Next() = %+v, want a call with an ID of its own and no arguments", got)
 				}
 			}},
-		{name: "a blocked prompt", provider: "google", answer: `{"promptFeedback":{"blockReason":"SAFETY"}}`,
-			check: func(t *testing.T, got harness.Turn) {
-				if got.Stop != "blocked: SAFETY" || len(got.Calls) != 0 {
-					t.Errorf("Next() = %+v, want a blocked turn", got)
-				}
-			}},
 		{name: "arguments that aren't JSON", provider: "openai", answer: `{"choices":[{"message":{"tool_calls":[{"id":"c","function":{"name":"echo","arguments":"{\"text\":"}}]}}]}`,
 			check: func(t *testing.T, got harness.Turn) {
 				if len(got.Calls) != 1 || string(got.Calls[0].Arguments) != `"{\"text\":"` {
@@ -168,6 +168,101 @@ func TestNextReadsWhatProvidersVary(t *testing.T) {
 			tc.check(t, got)
 		})
 	}
+}
+
+func TestNextRefusesATurnTheProviderBlocked(t *testing.T) {
+	// Asked again, a blocked turn is blocked again: the harness fails the task on ErrModelRefused instead of nudging.
+	tt := []struct {
+		name, provider, answer, want string
+	}{
+		{name: "a blocked prompt", provider: "google", answer: `{"promptFeedback":{"blockReason":"PROHIBITED_CONTENT"}}`,
+			want: "the model's provider refused the request (google): it stopped the turn: the prompt was blocked: PROHIBITED_CONTENT"},
+		{name: "a blocked prompt without a reason", provider: "google", answer: `{}`,
+			want: "the model's provider refused the request (google): it stopped the turn: the prompt was blocked: no reason given"},
+		{name: "a candidate stopped for safety", provider: "google", answer: `{"candidates":[{"content":{"parts":[{"text":"Par"}]},"finishReason":"SAFETY"}]}`,
+			want: "the model's provider refused the request (google): it stopped the turn: SAFETY"},
+		{name: "a filtered completion", provider: "openai", answer: `{"choices":[{"message":{"content":"Par"},"finish_reason":"content_filter"}]}`,
+			want: "the model's provider refused the request (openai): it stopped the turn: content_filter"},
+		{name: "a refusal", provider: "anthropic", answer: `{"content":[],"stop_reason":"refusal"}`,
+			want: "the model's provider refused the request (anthropic): it stopped the turn: refusal"},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, tc.answer) }))
+			defer srv.Close()
+			m, err := New(Settings{Provider: tc.provider, Model: "test-model", Key: "test-key", URL: srv.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := m.Next(context.Background(), harness.Request{Messages: []harness.Message{{Role: harness.RoleUser, Text: "Go."}}})
+			if !errors.Is(err, harness.ErrModelRefused) || err.Error() != tc.want {
+				t.Errorf("Next() = %+v, %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestNextRecordsAGenAISpan(t *testing.T) {
+	// Not parallel: it sets the tracer provider every test of the package uses, and tells its spans by their models.
+	recorder := tracetest.NewSpanRecorder()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)))
+	tt := []struct {
+		name, provider, model, answer string
+		want                          map[string]string
+		wantStatus                    codes.Code
+	}{
+		{name: "a turn", provider: "anthropic", model: "traced-anthropic",
+			answer: `{"model":"traced-anthropic-1","content":[{"type":"text","text":"Done."}],"stop_reason":"end_turn","usage":{"input_tokens":12,"output_tokens":3}}`,
+			want: map[string]string{"gen_ai.operation.name": "chat", "gen_ai.provider.name": "anthropic", "gen_ai.request.model": "traced-anthropic",
+				"gen_ai.request.max_tokens": "8192", "gen_ai.response.model": "traced-anthropic-1", "gen_ai.response.finish_reasons": `["end_turn"]`,
+				"gen_ai.usage.input_tokens": "12", "gen_ai.usage.output_tokens": "3"},
+			wantStatus: codes.Unset},
+		{name: "a turn of an OpenAI-compatible provider", provider: "xai", model: "traced-xai",
+			answer:     `{"model":"traced-xai","choices":[{"message":{"content":"Done."},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":2}}`,
+			want:       map[string]string{"gen_ai.provider.name": "x_ai", "gen_ai.response.model": "traced-xai", "gen_ai.usage.input_tokens": "7", "gen_ai.usage.output_tokens": "2"},
+			wantStatus: codes.Unset},
+		{name: "a blocked prompt", provider: "google", model: "traced-google",
+			answer:     `{"promptFeedback":{"blockReason":"SAFETY"},"usageMetadata":{"promptTokenCount":5},"modelVersion":"traced-google-1"}`,
+			want:       map[string]string{"gen_ai.provider.name": "gcp.gemini", "gen_ai.usage.input_tokens": "5", "gen_ai.usage.output_tokens": "0"},
+			wantStatus: codes.Error},
+	}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, tc.answer) }))
+			defer srv.Close()
+			m, err := New(Settings{Provider: tc.provider, Model: tc.model, Key: "test-key", URL: srv.URL})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = m.Next(context.Background(), harness.Request{Messages: []harness.Message{{Role: harness.RoleUser, Text: "Go."}}}) // the span tells
+			span := spanNamed(t, recorder, "chat "+tc.model)
+			got := map[string]string{}
+			for _, kv := range span.Attributes() {
+				got[string(kv.Key)] = kv.Value.String()
+			}
+			for k, v := range tc.want {
+				if got[k] != v {
+					t.Errorf("%s = %q, want %q (%v)", k, got[k], v, got)
+				}
+			}
+			if span.SpanKind() != trace.SpanKindClient || span.Status().Code != tc.wantStatus {
+				t.Errorf("span of kind %v, status %v; want a client's, %v", span.SpanKind(), span.Status(), tc.wantStatus)
+			}
+		})
+	}
+}
+
+// spanNamed is the span name that recorder saw end.
+func spanNamed(t *testing.T, recorder *tracetest.SpanRecorder, name string) sdktrace.ReadOnlySpan {
+	t.Helper()
+	for _, s := range recorder.Ended() {
+		if s.Name() == name {
+			return s
+		}
+	}
+	t.Fatalf("no span %s among %d", name, len(recorder.Ended()))
+	return nil
 }
 
 func TestMessagesTheProvidersRefuseEmpty(t *testing.T) {
