@@ -1,10 +1,9 @@
-# Task ci of .tekton/ci.yaml: check out the commit, check its generated code, then lint, vet, test (with the race
-# detector, against a PostgreSQL sidecar) and build it, and run the binary it built. Octomaton inlines it, and the
-# step it references, into the PipelineRun.
+# Task test of .tekton/ci.yaml: check out the commit and test it, with the race detector, against a PostgreSQL sidecar.
+# Octomaton inlines it, and the step it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
-  name: ci
+  name: test
 spec:
   params:
     - name: repo-url
@@ -23,13 +22,11 @@ spec:
         value: /go-cache/build
       - name: GOMODCACHE
         value: /go-cache/mod
-      - name: GOLANGCI_LINT_CACHE
-        value: /go-cache/lint
       - name: GOTOOLCHAIN
         value: local
       - name: GOFLAGS
         value: -mod=readonly
-      # Compiles and lint run this many at once, whatever the node's CPUs: their memory, which ci.yaml reserves, grows
+      # Compiles and tests run this many at once, whatever the node's CPUs: their memory, which ci.yaml reserves, grows
       # with it.
       - name: GOMAXPROCS
         value: "4"
@@ -44,10 +41,12 @@ spec:
       env:
         - name: POSTGRES_HOST_AUTH_METHOD
           value: trust
+      # With the tests in parallel, creating and migrating their databases keeps about a core busy, bursting to two,
+      # and peaks near 300Mi.
       computeResources:
         requests:
-          cpu: 100m
-          memory: 128Mi
+          cpu: "1"
+          memory: 256Mi
         limits:
           memory: 512Mi
       readinessProbe:
@@ -62,15 +61,6 @@ spec:
           value: $(params.repo-url)
         - name: revision
           value: $(params.revision)
-    - name: generated
-      image: docker.io/library/golang:1.27.1
-      command: [sh, .tekton/scripts/generated.sh]
-    - name: lint
-      image: docker.io/golangci/golangci-lint:v2.15.0
-      command: [golangci-lint, run, ./...]
-    - name: vet
-      image: docker.io/library/golang:1.27.1
-      command: [go, vet, ./...]
     - name: test
       image: docker.io/library/golang:1.27.1
       env:
@@ -80,12 +70,3 @@ spec:
         - name: CI
           value: "true"
       command: [go, test, -race, -count=1, ./...]
-    - name: build
-      image: docker.io/library/golang:1.27.1
-      env:
-        - name: CGO_ENABLED
-          value: "0"
-      command: [go, build, -trimpath, -o, .ci/bin/, ./cmd/...]
-    - name: version
-      image: docker.io/library/golang:1.27.1
-      command: [$(workspaces.source.path)/.ci/bin/cobranch, version]

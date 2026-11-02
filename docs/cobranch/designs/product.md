@@ -51,11 +51,11 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Git object storage](git-object-storage.md) | Where Git objects live: PostgreSQL by default, a bucket or local files by choice, and moving between them. | Proposed |
 | [Jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y) | Jobs from /cobranch.yaml: triggers, runs in per-organization job namespaces, annotations, secrets. | Proposed |
 | [Delivery](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd) | The built-in GitOps controller: delivery roots in /cobranch.yaml, an environment per branch, apply, prune and health. | Proposed |
-| [Monitoring](https://claude.ai/artifact/1merS4FjzGF2DNSwr4uSUU) | Metrics for page-view times, code reads and the pack cache, exported over OpenTelemetry. | Proposed |
+| [Monitoring](monitoring.md) | Metrics for page-view times, code reads and the pack cache, exported over OpenTelemetry. | Proposed |
 | [Agents](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4) | Agents as principals, tasks, the agent pod and its harness, and branch chats. | Proposed |
 | [Reviews](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys) | Reviews on commits, required approvals, and the built-in AI reviewer. | Proposed |
 | [Quotas](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
-| [Issues](issues.md) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
+| [Issues](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -125,7 +125,7 @@ A branch is the request to merge into its base: there is no separate pull reques
 threaded chat whose messages can point at a file and line range, which is how review comments point at code.
 Annotations, merge requirements, how a branch's status is computed and how a merge is recorded are in [Branch status and
 merges](branch-status.md). Deleting a merged branch from the Console and the APIs is in progress
-([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md)).
+([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)).
 
 **A branch’s status is computed; the first rule that matches wins**
 
@@ -173,8 +173,8 @@ An Argo CD-like GitOps controller, built in. Delivery roots, environments per br
 
 Issues are Linear-like and belong to an organization. A branch is linked to an issue by its name, or by hand, so an
 issue shows the branches that work on it and a branch shows its issue; agents take issues as tasks. The details are in
-[Issues](issues.md). Identity providers are the first integration, Slack comes in phase 2 with several use cases still
-to design, and more follow.
+[Issues](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n). Identity providers are the first integration, Slack comes
+in phase 2 with several use cases still to design, and more follow.
 
 ## Architecture
 
@@ -244,14 +244,14 @@ slice after the ones it waits for. Where it stands:
   ([ENG-237](https://linear.app/arikkfir/issue/ENG-237), [design](git-object-storage.md)).
 - **In progress, in parallel:** jobs from `/cobranch.yaml` ([ENG-214](https://linear.app/arikkfir/issue/ENG-214),
   [design](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y)); operators' metrics for page views, code reads and caches
-  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](https://claude.ai/artifact/1merS4FjzGF2DNSwr4uSUU));
-  agents and branch chats ([ENG-215](https://linear.app/arikkfir/issue/ENG-215),
-  [design](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4)); reviews and the built-in AI reviewer
-  ([ENG-216](https://linear.app/arikkfir/issue/ENG-216), [design](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys));
-  issues linked to branches ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](issues.md)); delivery
-  through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
+  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)); agents and branch chats
+  ([ENG-215](https://linear.app/arikkfir/issue/ENG-215), [design](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4));
+  reviews and the built-in AI reviewer ([ENG-216](https://linear.app/arikkfir/issue/ENG-216),
+  [design](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys)); issues linked to branches
+  ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n));
+  delivery through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
   [design](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd)); deleting a branch from the Console and the APIs once it
-  has merged ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md)); and
+  has merged ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)); and
   storage and push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
   [design](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6)), brought forward from phase 2 because an installation
   open to sign-up needs them. The designs are Proposed and each slice builds on them while they are reviewed; each

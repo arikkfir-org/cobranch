@@ -47,6 +47,7 @@ func (f *gitFixture) activePacks(t *testing.T, repo uuid.UUID) []string {
 }
 
 func TestGitStoreCrowded(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	f.pushPacks(t, f.website.ID, "pack-1", "pack-2", "pack-3")
@@ -77,6 +78,7 @@ func sortedIDs(ids ...uuid.UUID) []uuid.UUID {
 }
 
 func TestGitStoreCompact(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	f.pushPacks(t, f.website.ID, "pack-1", "pack-2", "pack-3")
@@ -115,6 +117,7 @@ func TestGitStoreCompact(t *testing.T) {
 }
 
 func TestGitStoreSupersededAndForget(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	pushed := f.pushPacks(t, f.website.ID, "pack-1", "pack-2")
