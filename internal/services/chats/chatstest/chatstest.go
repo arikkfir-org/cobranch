@@ -15,12 +15,13 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a chats.Store in memory: each repository's branches by name, the commits it holds, and the chats' threads,
-// messages and updates. Names names the principals by ID; Now is the time it records changes at. It is safe for
+// Store is a chats.Store in memory: each repository's branches by name, the commits it holds, each organization's
+// issues by number, and the chats' threads, messages and updates. Names names the principals by ID; Now is the time it records changes at. It is safe for
 // concurrent use, so a test may change it while a follower reads.
 type Store struct {
 	mu       sync.Mutex
 	branches map[uuid.UUID]map[string]chats.Subject
+	issues   map[uuid.UUID]map[int]chats.Subject
 	heads    map[uuid.UUID]string
 	commits  map[uuid.UUID]map[string]bool
 	threads  map[uuid.UUID]*thread
@@ -31,12 +32,12 @@ type Store struct {
 }
 
 type thread struct {
-	branch uuid.UUID
+	subject uuid.UUID
 	chats.Thread
 }
 
 type update struct {
-	branch  uuid.UUID
+	subject uuid.UUID
 	cursor  int64
 	kind    chats.UpdateKind
 	thread  uuid.UUID
@@ -47,7 +48,7 @@ var _ chats.Store = (*Store)(nil)
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
+	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
 		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, Names: map[uuid.UUID]string{}}
 }
 
@@ -66,6 +67,28 @@ func (s *Store) SetBranch(subj chats.Subject) chats.Subject {
 	s.heads[subj.BranchID] = subj.Head
 	s.addCommit(subj.RepoID, subj.Head)
 	return subj
+}
+
+// SetIssue makes subj's issue one of its organization's, by its number, and answers subj with an issue ID when it had
+// none.
+func (s *Store) SetIssue(subj chats.Subject) chats.Subject {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if subj.IssueID == uuid.Nil {
+		subj.IssueID = uuid.New()
+	}
+	if s.issues[subj.OrgID] == nil {
+		s.issues[subj.OrgID] = map[int]chats.Subject{}
+	}
+	s.issues[subj.OrgID][subj.Number] = subj
+	return subj
+}
+
+// DeleteIssue deletes an issue, as its chat's subject, by its organization and number.
+func (s *Store) DeleteIssue(orgID uuid.UUID, number int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.issues[orgID], number)
 }
 
 // Move moves a branch to head.
@@ -101,6 +124,17 @@ func (s *Store) Subject(_ context.Context, repoID uuid.UUID, branch string) (cha
 	return subj, nil
 }
 
+// Issue finds one of the organization's issues by number as a chat's subject, or repos.ErrNotFound.
+func (s *Store) Issue(_ context.Context, orgID uuid.UUID, number int) (chats.Subject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	subj, ok := s.issues[orgID][number]
+	if !ok {
+		return chats.Subject{}, repos.ErrNotFound
+	}
+	return subj, nil
+}
+
 // Head finds the object a branch is at now, or repos.ErrNotFound.
 func (s *Store) Head(_ context.Context, branchID uuid.UUID) (string, error) {
 	s.mu.Lock()
@@ -126,18 +160,18 @@ func (s *Store) Threads(_ context.Context, subj chats.Subject, before uuid.UUID,
 	defer s.mu.Unlock()
 	var out []chats.Thread
 	for _, t := range s.threads {
-		if t.branch == subj.BranchID && (before == uuid.Nil || t.ID.String() < before.String()) {
+		if t.subject == subj.ID() && (before == uuid.Nil || t.ID.String() < before.String()) {
 			out = append(out, s.withMessages(t.Thread))
 		}
 	}
 	slices.SortFunc(out, func(a, b chats.Thread) int { return cmp.Compare(b.ID.String(), a.ID.String()) })
-	return out[:min(limit, len(out))], s.cursor(subj.BranchID), nil
+	return out[:min(limit, len(out))], s.cursor(subj.ID()), nil
 }
 
-func (s *Store) cursor(branch uuid.UUID) int64 {
+func (s *Store) cursor(subject uuid.UUID) int64 {
 	var c int64
 	for _, u := range s.updates {
-		if u.branch == branch {
+		if u.subject == subject {
 			c = u.cursor
 		}
 	}
@@ -149,7 +183,7 @@ func (s *Store) Thread(_ context.Context, subj chats.Subject, id uuid.UUID) (cha
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.threads[id]
-	if !ok || t.branch != subj.BranchID {
+	if !ok || t.subject != subj.ID() {
 		return chats.Thread{}, repos.ErrNotFound
 	}
 	return s.withMessages(t.Thread), nil
@@ -177,7 +211,7 @@ func (s *Store) Message(_ context.Context, subj chats.Subject, id uuid.UUID) (ch
 
 func (s *Store) message(subj chats.Subject, id uuid.UUID) (chats.Message, error) {
 	m, ok := s.messages[id]
-	if !ok || s.threads[m.ThreadID].branch != subj.BranchID {
+	if !ok || s.threads[m.ThreadID].subject != subj.ID() {
 		return chats.Message{}, repos.ErrNotFound
 	}
 	return *m, nil
@@ -189,7 +223,7 @@ func (s *Store) principal(id uuid.UUID) *chats.Principal {
 }
 
 func (s *Store) record(subj chats.Subject, kind chats.UpdateKind, threadID uuid.UUID, messageID *uuid.UUID) {
-	s.updates = append(s.updates, update{branch: subj.BranchID, cursor: int64(len(s.updates) + 1), kind: kind, thread: threadID, message: messageID})
+	s.updates = append(s.updates, update{subject: subj.ID(), cursor: int64(len(s.updates) + 1), kind: kind, thread: threadID, message: messageID})
 }
 
 // StartThread starts the subject's thread id with its first message for actor, or answers the thread of id that is
@@ -198,12 +232,12 @@ func (s *Store) StartThread(_ context.Context, actor uuid.UUID, subj chats.Subje
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[id]; ok {
-		if t.branch != subj.BranchID {
+		if t.subject != subj.ID() {
 			return chats.Thread{}, false, chats.ErrIDTaken
 		}
 		return s.withMessages(t.Thread), false, nil
 	}
-	s.threads[id] = &thread{branch: subj.BranchID, Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(actor), CreatedAt: s.Now, Version: 1}}
+	s.threads[id] = &thread{subject: subj.ID(), Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(actor), CreatedAt: s.Now, Version: 1}}
 	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: body, Author: s.principal(actor), CreatedAt: s.Now, Version: 1}
 	s.record(subj, chats.ThreadStarted, id, &messageID)
 	return s.withMessages(s.threads[id].Thread), true, nil
@@ -213,7 +247,7 @@ func (s *Store) StartThread(_ context.Context, actor uuid.UUID, subj chats.Subje
 func (s *Store) Post(_ context.Context, actor uuid.UUID, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if t, ok := s.threads[threadID]; !ok || t.branch != subj.BranchID {
+	if t, ok := s.threads[threadID]; !ok || t.subject != subj.ID() {
 		return chats.Message{}, false, repos.ErrNotFound
 	}
 	if m, ok := s.messages[id]; ok {
@@ -270,7 +304,7 @@ func (s *Store) Resolve(_ context.Context, actor uuid.UUID, subj chats.Subject, 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	t, ok := s.threads[id]
-	if !ok || t.branch != subj.BranchID {
+	if !ok || t.subject != subj.ID() {
 		return chats.Thread{}, repos.ErrNotFound
 	}
 	if version >= 0 && version != t.Version {
@@ -293,7 +327,7 @@ func (s *Store) Updates(_ context.Context, subj chats.Subject, after int64, limi
 	defer s.mu.Unlock()
 	var out []chats.Update
 	for _, u := range s.updates {
-		if u.branch != subj.BranchID || u.cursor <= after || len(out) == limit {
+		if u.subject != subj.ID() || u.cursor <= after || len(out) == limit {
 			continue
 		}
 		next := chats.Update{Cursor: u.cursor, Kind: u.kind, Thread: s.threads[u.thread].Thread}
