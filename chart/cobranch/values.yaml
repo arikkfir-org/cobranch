@@ -74,10 +74,11 @@ auth:
   # are never touched.
   admins: []
 
-# The key that seals the secrets Cobranch keeps in its database, the Back-office's identity providers' client secrets:
-# 32 characters at least. A Secret of yours that holds it under secretKey; without one, the chart generates a key on
-# install and keeps it on upgrade, which needs the cluster at render time: under Argo CD, or anything else that renders
-# without the cluster, give one. A lost key loses those secrets, which administrators then enter again.
+# The key that seals the secrets Cobranch keeps in its database, the Back-office's identity providers' client secrets
+# and the organizations' and repositories' secrets, which their jobs receive: 32 characters at least. A Secret of yours
+# that holds it under secretKey; without one, the chart generates a key on install and keeps it on upgrade, which needs
+# the cluster at render time: under Argo CD, or anything else that renders without the cluster, give one. A lost key
+# loses those secrets, which administrators and organizations then enter again.
 secretsKey:
   existingSecret: ""
   secretKey: key

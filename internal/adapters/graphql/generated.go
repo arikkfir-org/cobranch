@@ -34,6 +34,7 @@ type ResolverRoot interface {
 	Organization() OrganizationResolver
 	Query() QueryResolver
 	Repository() RepositoryResolver
+	Secret() SecretResolver
 	Subscription() SubscriptionResolver
 	User() UserResolver
 }
@@ -266,6 +267,12 @@ type ComplexityRoot struct {
 		Truncated func(childComplexity int) int
 	}
 
+	Grantee struct {
+		DisplayName func(childComplexity int) int
+		Kind        func(childComplexity int) int
+		PrincipalID func(childComplexity int) int
+	}
+
 	Hunk struct {
 		Lines    func(childComplexity int) int
 		NewLines func(childComplexity int) int
@@ -441,6 +448,7 @@ type ComplexityRoot struct {
 		CreatePersonalToken    func(childComplexity int, input PersonalTokenInput) int
 		CreateRepository       func(childComplexity int, organizationID string, input RepositoryInput) int
 		CreateRole             func(childComplexity int, organizationID string, input RoleInput) int
+		CreateSecret           func(childComplexity int, organizationID string, repositoryID *string, input NewSecret) int
 		DeclineInvitation      func(childComplexity int, id string) int
 		DeclineJoinRequest     func(childComplexity int, organizationID string, id string) int
 		DeleteAPIKey           func(childComplexity int, organizationID string, id string) int
@@ -453,10 +461,12 @@ type ComplexityRoot struct {
 		DeleteLabel            func(childComplexity int, organizationID string, id string, expectedVersion *int) int
 		DeleteRole             func(childComplexity int, organizationID string, id string) int
 		DeleteSSHKey           func(childComplexity int, id string) int
+		DeleteSecret           func(childComplexity int, organizationID string, id string, expectedVersion *int) int
 		EditChatMessage        func(childComplexity int, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) int
 		EditIssueChatMessage   func(childComplexity int, organizationID string, number int, thread string, message string, body string, expectedVersion *int) int
 		GrantRepositoryRole    func(childComplexity int, repositoryID string, principalID string, roleID string) int
 		GrantRole              func(childComplexity int, organizationID string, userID string, roleID string) int
+		GrantSecret            func(childComplexity int, organizationID string, id string, principalID string) int
 		InviteMember           func(childComplexity int, organizationID string, email string, roleID string) int
 		LeaveOrganization      func(childComplexity int, id string) int
 		LinkBranch             func(childComplexity int, organizationID string, repositoryID string, branch string, number int) int
@@ -471,6 +481,7 @@ type ComplexityRoot struct {
 		RevokePersonalToken    func(childComplexity int, id string) int
 		RevokeRepositoryRole   func(childComplexity int, repositoryID string, principalID string, roleID string) int
 		RevokeRole             func(childComplexity int, organizationID string, userID string, roleID string) int
+		RevokeSecret           func(childComplexity int, organizationID string, id string, principalID string) int
 		RevokeSession          func(childComplexity int, id string) int
 		RotateAPIKey           func(childComplexity int, organizationID string, id string, input *SecretInput) int
 		SetAnnotation          func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
@@ -485,6 +496,7 @@ type ComplexityRoot struct {
 		UpdateOrganization     func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRepository       func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole             func(childComplexity int, organizationID string, id string, input RoleInput) int
+		UpdateSecret           func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
 	}
 
 	Organization struct {
@@ -507,6 +519,7 @@ type ComplexityRoot struct {
 		Repositories        func(childComplexity int) int
 		Repository          func(childComplexity int, slug string) int
 		Roles               func(childComplexity int) int
+		Secrets             func(childComplexity int) int
 		Slug                func(childComplexity int) int
 		Task                func(childComplexity int, number int) int
 		Tasks               func(childComplexity int, agent *string, states []TaskState, repositoryID *string, first int, after *string) int
@@ -573,6 +586,7 @@ type ComplexityRoot struct {
 		Description       func(childComplexity int) int
 		History           func(childComplexity int, branch string, ref *string, parents HistoryParents, first int, after *string) int
 		ID                func(childComplexity int) int
+		JobPrincipals     func(childComplexity int) int
 		Name              func(childComplexity int) int
 		ObjectFormat      func(childComplexity int) int
 		OrganizationID    func(childComplexity int) int
@@ -580,6 +594,7 @@ type ComplexityRoot struct {
 		Roles             func(childComplexity int) int
 		Run               func(childComplexity int, number int) int
 		Runs              func(childComplexity int, sha *string, first int, after *string) int
+		Secrets           func(childComplexity int) int
 		Slug              func(childComplexity int) int
 		Tags              func(childComplexity int) int
 		Tree              func(childComplexity int, ref string, path string) int
@@ -662,6 +677,19 @@ type ComplexityRoot struct {
 		LastUsedAt  func(childComplexity int) int
 		Name        func(childComplexity int) int
 		PublicKey   func(childComplexity int) int
+	}
+
+	Secret struct {
+		Access         func(childComplexity int) int
+		CreatedAt      func(childComplexity int) int
+		CreatedBy      func(childComplexity int) int
+		ID             func(childComplexity int) int
+		Name           func(childComplexity int) int
+		OrganizationID func(childComplexity int) int
+		RepositoryID   func(childComplexity int) int
+		UpdatedAt      func(childComplexity int) int
+		UpdatedBy      func(childComplexity int) int
+		Version        func(childComplexity int) int
 	}
 
 	Session struct {
@@ -825,6 +853,11 @@ type MutationResolver interface {
 	RotateAPIKey(ctx context.Context, organizationID string, id string, input *SecretInput) (*APIKeyCreated, error)
 	RevokeAPIKeySecret(ctx context.Context, organizationID string, id string, secretID string) (bool, error)
 	DeleteAPIKey(ctx context.Context, organizationID string, id string) (bool, error)
+	CreateSecret(ctx context.Context, organizationID string, repositoryID *string, input NewSecret) (*Secret, error)
+	UpdateSecret(ctx context.Context, organizationID string, id string, input SecretChange, expectedVersion *int) (*Secret, error)
+	DeleteSecret(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
+	GrantSecret(ctx context.Context, organizationID string, id string, principalID string) (bool, error)
+	RevokeSecret(ctx context.Context, organizationID string, id string, principalID string) (bool, error)
 }
 type OrganizationResolver interface {
 	ViewerPermissions(ctx context.Context, obj *Organization) ([]string, error)
@@ -843,6 +876,7 @@ type OrganizationResolver interface {
 	Labels(ctx context.Context, obj *Organization) ([]*Label, error)
 	Repositories(ctx context.Context, obj *Organization) ([]*Repository, error)
 	Repository(ctx context.Context, obj *Organization, slug string) (*Repository, error)
+	Secrets(ctx context.Context, obj *Organization) ([]*Secret, error)
 	Usage(ctx context.Context, obj *Organization) (*OrganizationUsage, error)
 }
 type QueryResolver interface {
@@ -870,6 +904,11 @@ type RepositoryResolver interface {
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
 	Runs(ctx context.Context, obj *Repository, sha *string, first int, after *string) (*RunPage, error)
 	Run(ctx context.Context, obj *Repository, number int) (*Run, error)
+	Secrets(ctx context.Context, obj *Repository) ([]*Secret, error)
+	JobPrincipals(ctx context.Context, obj *Repository) ([]*Grantee, error)
+}
+type SecretResolver interface {
+	Access(ctx context.Context, obj *Secret) ([]*Grantee, error)
 }
 type SubscriptionResolver interface {
 	ChatUpdates(ctx context.Context, repositoryID string, branch string, after string) (<-chan *ChatUpdate, error)
@@ -1840,6 +1879,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.FileDiff.Truncated(childComplexity), true
 
+	case "Grantee.displayName":
+		if e.ComplexityRoot.Grantee.DisplayName == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Grantee.DisplayName(childComplexity), true
+	case "Grantee.kind":
+		if e.ComplexityRoot.Grantee.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Grantee.Kind(childComplexity), true
+	case "Grantee.principalId":
+		if e.ComplexityRoot.Grantee.PrincipalID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Grantee.PrincipalID(childComplexity), true
+
 	case "Hunk.lines":
 		if e.ComplexityRoot.Hunk.Lines == nil {
 			break
@@ -2658,6 +2716,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.CreateRole(childComplexity, args["organizationId"].(string), args["input"].(RoleInput)), true
+	case "Mutation.createSecret":
+		if e.ComplexityRoot.Mutation.CreateSecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_createSecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.CreateSecret(childComplexity, args["organizationId"].(string), args["repositoryId"].(*string), args["input"].(NewSecret)), true
 	case "Mutation.declineInvitation":
 		if e.ComplexityRoot.Mutation.DeclineInvitation == nil {
 			break
@@ -2790,6 +2859,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteSSHKey(childComplexity, args["id"].(string)), true
+	case "Mutation.deleteSecret":
+		if e.ComplexityRoot.Mutation.DeleteSecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteSecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.editChatMessage":
 		if e.ComplexityRoot.Mutation.EditChatMessage == nil {
 			break
@@ -2834,6 +2914,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.GrantRole(childComplexity, args["organizationId"].(string), args["userId"].(string), args["roleId"].(string)), true
+	case "Mutation.grantSecret":
+		if e.ComplexityRoot.Mutation.GrantSecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_grantSecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.GrantSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["principalId"].(string)), true
 	case "Mutation.inviteMember":
 		if e.ComplexityRoot.Mutation.InviteMember == nil {
 			break
@@ -2988,6 +3079,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RevokeRole(childComplexity, args["organizationId"].(string), args["userId"].(string), args["roleId"].(string)), true
+	case "Mutation.revokeSecret":
+		if e.ComplexityRoot.Mutation.RevokeSecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_revokeSecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RevokeSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["principalId"].(string)), true
 	case "Mutation.revokeSession":
 		if e.ComplexityRoot.Mutation.RevokeSession == nil {
 			break
@@ -3142,6 +3244,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateRole(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(RoleInput)), true
+	case "Mutation.updateSecret":
+		if e.ComplexityRoot.Mutation.UpdateSecret == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateSecret_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(SecretChange), args["expectedVersion"].(*int)), true
 
 	case "Organization.apiKeys":
 		if e.ComplexityRoot.Organization.APIKeys == nil {
@@ -3277,6 +3390,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Roles(childComplexity), true
+	case "Organization.secrets":
+		if e.ComplexityRoot.Organization.Secrets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Secrets(childComplexity), true
 	case "Organization.slug":
 		if e.ComplexityRoot.Organization.Slug == nil {
 			break
@@ -3619,6 +3738,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.ID(childComplexity), true
+	case "Repository.jobPrincipals":
+		if e.ComplexityRoot.Repository.JobPrincipals == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.JobPrincipals(childComplexity), true
 	case "Repository.name":
 		if e.ComplexityRoot.Repository.Name == nil {
 			break
@@ -3676,6 +3801,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Runs(childComplexity, args["sha"].(*string), args["first"].(int), args["after"].(*string)), true
+	case "Repository.secrets":
+		if e.ComplexityRoot.Repository.Secrets == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Repository.Secrets(childComplexity), true
 	case "Repository.slug":
 		if e.ComplexityRoot.Repository.Slug == nil {
 			break
@@ -4020,6 +4151,67 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.SSHKey.PublicKey(childComplexity), true
+
+	case "Secret.access":
+		if e.ComplexityRoot.Secret.Access == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.Access(childComplexity), true
+	case "Secret.createdAt":
+		if e.ComplexityRoot.Secret.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.CreatedAt(childComplexity), true
+	case "Secret.createdBy":
+		if e.ComplexityRoot.Secret.CreatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.CreatedBy(childComplexity), true
+	case "Secret.id":
+		if e.ComplexityRoot.Secret.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.ID(childComplexity), true
+	case "Secret.name":
+		if e.ComplexityRoot.Secret.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.Name(childComplexity), true
+	case "Secret.organizationId":
+		if e.ComplexityRoot.Secret.OrganizationID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.OrganizationID(childComplexity), true
+	case "Secret.repositoryId":
+		if e.ComplexityRoot.Secret.RepositoryID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.RepositoryID(childComplexity), true
+	case "Secret.updatedAt":
+		if e.ComplexityRoot.Secret.UpdatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.UpdatedAt(childComplexity), true
+	case "Secret.updatedBy":
+		if e.ComplexityRoot.Secret.UpdatedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.UpdatedBy(childComplexity), true
+	case "Secret.version":
+		if e.ComplexityRoot.Secret.Version == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Secret.Version(childComplexity), true
 
 	case "Session.createdAt":
 		if e.ComplexityRoot.Session.CreatedAt == nil {
@@ -4412,6 +4604,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("LabelInput", ec.unmarshalInputLabelInput),
 			graphql.NewInputUnmarshaler("LabelPatch", ec.unmarshalInputLabelPatch),
 			graphql.NewInputUnmarshaler("MergeInput", ec.unmarshalInputMergeInput),
+			graphql.NewInputUnmarshaler("NewSecret", ec.unmarshalInputNewSecret),
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
@@ -4419,6 +4612,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("ReviewInput", ec.unmarshalInputReviewInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
 			graphql.NewInputUnmarshaler("SSHKeyInput", ec.unmarshalInputSSHKeyInput),
+			graphql.NewInputUnmarshaler("SecretChange", ec.unmarshalInputSecretChange),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
 			graphql.NewInputUnmarshaler("TaskInput", ec.unmarshalInputTaskInput),
 		)
@@ -5730,7 +5924,7 @@ extend type Mutation {
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
   "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
-  "Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there."
+  "Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there."
   grantRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
   "Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there."
   revokeRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
@@ -5761,7 +5955,7 @@ type Repository {
 "A principal's grants on a repository."
 type RepositoryAccess {
   principalId: ID!
-  "user or api_key."
+  "user, api_key, job or agent."
   kind: String!
   displayName: String!
   "The roles it holds on the repository, each with the permissions it gives there."
@@ -6090,6 +6284,76 @@ type JoinRequest {
   note: String!
   createdAt: Time!
   expiresAt: Time!
+}
+`, BuiltIn: false},
+	{Name: "../../../api/graphql/secrets.graphqls", Input: `# The secrets of an organization and of its repositories, sealed with the installation's secrets key, and who receives
+# them (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "Secrets").
+
+extend type Organization {
+  "The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization."
+  secrets: [Secret!]!
+}
+
+extend type Repository {
+  "The repository's own secrets, by name and never with their values; takes secrets.manage on the repository."
+  secrets: [Secret!]!
+  "The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run."
+  jobPrincipals: [Grantee!]!
+}
+
+extend type Mutation {
+  "Adds a secret to the organization's settings or, with repositoryId, to one of its repositories', sealed with the installation's secrets key, and answers it without its value; takes secrets.manage there. Without a secrets key, it is refused (CONFLICT, secrets_key.missing); a name taken there too (CONFLICT, secret.name_taken)."
+  createSecret(organizationId: ID!, repositoryId: ID, input: NewSecret!): Secret!
+  "Renames one of the organization's secrets, its repositories' included, and, when the input gives one, replaces its value; takes secrets.manage on it. With expectedVersion, a secret at another version is refused (CONFLICT, precondition.failed)."
+  updateSecret(organizationId: ID!, id: ID!, input: SecretChange!, expectedVersion: Int): Secret!
+  "Deletes a secret and every grant on it, and answers true; takes secrets.manage on it. Jobs that still name it fail as they start. With expectedVersion, a secret at another version is refused (CONFLICT, precondition.failed)."
+  deleteSecret(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
+  "Lets one of the organization's members, API keys, jobs or agents receive a secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret."
+  grantSecret(organizationId: ID!, id: ID!, principalId: ID!): Boolean!
+  "Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it."
+  revokeSecret(organizationId: ID!, id: ID!, principalId: ID!): Boolean!
+}
+
+"A secret of the organization's or of one of its repositories, as its manager sees it: never with its value, which only the jobs it is granted to receive."
+type Secret {
+  id: ID!
+  organizationId: ID!
+  "The repository it belongs to; null for the organization's own."
+  repositoryId: ID
+  "The name it is listed under; jobs name it by its ID."
+  name: String!
+  "Counts its changes from 1."
+  version: Int!
+  "Who added it; null once they are gone."
+  createdBy: ID
+  createdAt: Time!
+  "Who last changed it; null once they are gone."
+  updatedBy: ID
+  updatedAt: Time!
+  "Who holds Secret reader on the secret itself, by name; takes secrets.manage on it, or org.grants.manage. Grants on its repository and at the organization reach it too."
+  access: [Grantee!]!
+}
+
+"A principal holding a grant, by name."
+type Grantee {
+  principalId: ID!
+  "user, api_key, job or agent."
+  kind: String!
+  displayName: String!
+}
+
+"What makes a secret."
+input NewSecret {
+  "At most 100 characters, unique where the secret lives."
+  name: String!
+  "At most 64 KiB; sealed as it arrives and never shown again."
+  value: String!
+}
+
+"What changes a secret; without a value, it keeps the one it has."
+input SecretChange {
+  name: String!
+  value: String
 }
 `, BuiltIn: false},
 	{Name: "../../../api/graphql/usage.graphqls", Input: `# Usage: what users and organizations take of what the installation's limits cap
@@ -6594,6 +6858,18 @@ func (ec *executionContext) childFields_FileDiff(ctx context.Context, field grap
 	return nil, fmt.Errorf("no field named %q was found under type FileDiff", field.Name)
 }
 
+func (ec *executionContext) childFields_Grantee(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "principalId":
+		return ec.fieldContext_Grantee_principalId(ctx, field)
+	case "kind":
+		return ec.fieldContext_Grantee_kind(ctx, field)
+	case "displayName":
+		return ec.fieldContext_Grantee_displayName(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Grantee", field.Name)
+}
+
 func (ec *executionContext) childFields_Hunk(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "oldStart":
@@ -6960,6 +7236,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_repositories(ctx, field)
 	case "repository":
 		return ec.fieldContext_Organization_repository(ctx, field)
+	case "secrets":
+		return ec.fieldContext_Organization_secrets(ctx, field)
 	case "usage":
 		return ec.fieldContext_Organization_usage(ctx, field)
 	}
@@ -7092,6 +7370,10 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_runs(ctx, field)
 	case "run":
 		return ec.fieldContext_Repository_run(ctx, field)
+	case "secrets":
+		return ec.fieldContext_Repository_secrets(ctx, field)
+	case "jobPrincipals":
+		return ec.fieldContext_Repository_jobPrincipals(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Repository", field.Name)
 }
@@ -7248,6 +7530,32 @@ func (ec *executionContext) childFields_SSHKey(ctx context.Context, field graphq
 		return ec.fieldContext_SSHKey_lastUsedAt(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type SSHKey", field.Name)
+}
+
+func (ec *executionContext) childFields_Secret(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Secret_id(ctx, field)
+	case "organizationId":
+		return ec.fieldContext_Secret_organizationId(ctx, field)
+	case "repositoryId":
+		return ec.fieldContext_Secret_repositoryId(ctx, field)
+	case "name":
+		return ec.fieldContext_Secret_name(ctx, field)
+	case "version":
+		return ec.fieldContext_Secret_version(ctx, field)
+	case "createdBy":
+		return ec.fieldContext_Secret_createdBy(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_Secret_createdAt(ctx, field)
+	case "updatedBy":
+		return ec.fieldContext_Secret_updatedBy(ctx, field)
+	case "updatedAt":
+		return ec.fieldContext_Secret_updatedAt(ctx, field)
+	case "access":
+		return ec.fieldContext_Secret_access(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Secret", field.Name)
 }
 
 func (ec *executionContext) childFields_Session(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -7876,6 +8184,36 @@ func (ec *executionContext) field_Mutation_createRole_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_createSecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (NewSecret, error) {
+			return ec.unmarshalNNewSecret2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐNewSecret(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_declineInvitation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -8220,6 +8558,36 @@ func (ec *executionContext) field_Mutation_deleteSSHKey_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteSecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_editChatMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -8385,6 +8753,36 @@ func (ec *executionContext) field_Mutation_grantRole_args(ctx context.Context, r
 		return nil, err
 	}
 	args["roleId"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_grantSecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg2
 	return args, nil
 }
 
@@ -8816,6 +9214,36 @@ func (ec *executionContext) field_Mutation_revokeRole_args(ctx context.Context, 
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_revokeSecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_revokeSession_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -9233,6 +9661,44 @@ func (ec *executionContext) field_Mutation_updateRole_args(ctx context.Context, 
 		return nil, err
 	}
 	args["input"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_updateSecret_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "organizationId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["organizationId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (SecretChange, error) {
+			return ec.unmarshalNSecretChange2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretChange(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
 	return args, nil
 }
 
@@ -13597,6 +14063,75 @@ func (ec *executionContext) fieldContext_FileDiff_hunks(_ context.Context, field
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Grantee_principalId(ctx context.Context, field graphql.CollectedField, obj *Grantee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Grantee_principalId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.PrincipalID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Grantee_principalId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Grantee", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Grantee_kind(ctx context.Context, field graphql.CollectedField, obj *Grantee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Grantee_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Grantee_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Grantee", field, false, false, "String")
+}
+
+func (ec *executionContext) _Grantee_displayName(ctx context.Context, field graphql.CollectedField, obj *Grantee) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Grantee_displayName(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DisplayName, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Grantee_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Grantee", field, false, false, "String")
 }
 
 func (ec *executionContext) _Hunk_oldStart(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
@@ -18766,6 +19301,226 @@ func (ec *executionContext) fieldContext_Mutation_deleteApiKey(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_createSecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_createSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().CreateSecret(ctx, fc.Args["organizationId"].(string), fc.Args["repositoryId"].(*string), fc.Args["input"].(NewSecret))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Secret) graphql.Marshaler {
+			return ec.marshalNSecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecret(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_createSecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Secret(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_createSecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateSecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateSecret(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["input"].(SecretChange), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Secret) graphql.Marshaler {
+			return ec.marshalNSecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecret(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateSecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Secret(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateSecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteSecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteSecret(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteSecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteSecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_grantSecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_grantSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().GrantSecret(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["principalId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_grantSecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_grantSecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_revokeSecret(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_revokeSecret(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RevokeSecret(ctx, fc.Args["organizationId"].(string), fc.Args["id"].(string), fc.Args["principalId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_revokeSecret(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_revokeSecret_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_id(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -19489,6 +20244,38 @@ func (ec *executionContext) fieldContext_Organization_repository(ctx context.Con
 	if fc.Args, err = ec.field_Organization_repository_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Organization_secrets(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_secrets(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().Secrets(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Secret) graphql.Marshaler {
+			return ec.marshalNSecret2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_secrets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Secret(ctx, field)
+		},
 	}
 	return fc, nil
 }
@@ -21211,6 +21998,70 @@ func (ec *executionContext) fieldContext_Repository_run(ctx context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_secrets(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_secrets(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().Secrets(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Secret) graphql.Marshaler {
+			return ec.marshalNSecret2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_secrets(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Secret(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_jobPrincipals(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_jobPrincipals(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Repository().JobPrincipals(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Grantee) graphql.Marshaler {
+			return ec.marshalNGrantee2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐGranteeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_jobPrincipals(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Grantee(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RepositoryAccess_principalId(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -22431,6 +23282,245 @@ func (ec *executionContext) _SSHKey_lastUsedAt(ctx context.Context, field graphq
 }
 func (ec *executionContext) fieldContext_SSHKey_lastUsedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("SSHKey", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Secret_id(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Secret_organizationId(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_organizationId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OrganizationID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_organizationId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Secret_repositoryId(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_repositoryId(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RepositoryID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_repositoryId(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Secret_name(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "String")
+}
+
+func (ec *executionContext) _Secret_version(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_version(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Version, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Secret_createdBy(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_createdBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_createdBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Secret_createdAt(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Secret_updatedBy(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_updatedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOID2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_updatedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Secret_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_updatedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.UpdatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Secret", field, false, false, "Time")
+}
+
+func (ec *executionContext) _Secret_access(ctx context.Context, field graphql.CollectedField, obj *Secret) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Secret_access(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Secret().Access(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Grantee) graphql.Marshaler {
+			return ec.marshalNGrantee2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐGranteeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Secret_access(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Secret",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Grantee(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Session_id(ctx context.Context, field graphql.CollectedField, obj *Session) (ret graphql.Marshaler) {
@@ -25878,6 +26968,55 @@ func UnmarshalMergeInput(ctx context.Context, raw any) (MergeInput, error) {
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputNewSecret(ctx context.Context, obj any) (NewSecret, error) {
+	var it NewSecret
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalNewSecret unmarshals raw into the NewSecret input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalNewSecret(ctx context.Context, raw any) (NewSecret, error) {
+	var out NewSecret
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "NewSecret", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputOrganizationSettings(ctx context.Context, obj any) (OrganizationSettings, error) {
 	var it OrganizationSettings
 	if obj == nil {
@@ -26288,6 +27427,55 @@ func (ec *executionContext) unmarshalInputSSHKeyInput(ctx context.Context, obj a
 func UnmarshalSSHKeyInput(ctx context.Context, raw any) (SSHKeyInput, error) {
 	var out SSHKeyInput
 	err := graphql.UnmarshalNamedInputFromContext(ctx, "SSHKeyInput", raw, &out)
+	return out, err
+}
+
+func (ec *executionContext) unmarshalInputSecretChange(ctx context.Context, obj any) (SecretChange, error) {
+	var it SecretChange
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"name", "value"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "name":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("name"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Name = data
+		case "value":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("value"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Value = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalSecretChange unmarshals raw into the SecretChange input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalSecretChange(ctx context.Context, raw any) (SecretChange, error) {
+	var out SecretChange
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "SecretChange", raw, &out)
 	return out, err
 }
 
@@ -27865,6 +29053,49 @@ func (ec *executionContext) _FileDiff(ctx context.Context, sel ast.SelectionSet,
 	return out
 }
 
+var granteeImplementors = []string{"Grantee"}
+
+func (ec *executionContext) _Grantee(ctx context.Context, sel ast.SelectionSet, obj *Grantee) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, granteeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Grantee")
+		case "principalId":
+			out.Values[i] = ec._Grantee_principalId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "kind":
+			out.Values[i] = ec._Grantee_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "displayName":
+			out.Values[i] = ec._Grantee_displayName(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var hunkImplementors = []string{"Hunk"}
 
 func (ec *executionContext) _Hunk(ctx context.Context, sel ast.SelectionSet, obj *Hunk) graphql.Marshaler {
@@ -29329,6 +30560,41 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "createSecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_createSecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "updateSecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateSecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteSecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteSecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "grantSecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_grantSecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "revokeSecret":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_revokeSecret(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -29486,6 +30752,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_repository(ctx, field, obj)
+				})
+		case "secrets":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_secrets(ctx, field, obj)
 				})
 		case "usage":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -29993,6 +31265,18 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_run(ctx, field, obj)
 				})
+		case "secrets":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_secrets(ctx, field, obj)
+				})
+		case "jobPrincipals":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_jobPrincipals(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -30495,6 +31779,85 @@ func (ec *executionContext) _SSHKey(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var secretImplementors = []string{"Secret"}
+
+func (ec *executionContext) _Secret(ctx context.Context, sel ast.SelectionSet, obj *Secret) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, secretImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Secret")
+		case "id":
+			out.Values[i] = ec._Secret_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "organizationId":
+			out.Values[i] = ec._Secret_organizationId(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "repositoryId":
+			out.Values[i] = ec._Secret_repositoryId(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "name":
+			out.Values[i] = ec._Secret_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "version":
+			out.Values[i] = ec._Secret_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdBy":
+			out.Values[i] = ec._Secret_createdBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "createdAt":
+			out.Values[i] = ec._Secret_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "updatedBy":
+			out.Values[i] = ec._Secret_updatedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "updatedAt":
+			out.Values[i] = ec._Secret_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "access":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Secret_access(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -31884,6 +33247,30 @@ func (ec *executionContext) marshalNFileStatus2cobranchᚗdevᚋinternalᚋadapt
 	return v
 }
 
+func (ec *executionContext) marshalNGrantee2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐGranteeᚄ(ctx context.Context, sel ast.SelectionSet, v []*Grantee) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNGrantee2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐGrantee(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNGrantee2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐGrantee(ctx context.Context, sel ast.SelectionSet, v *Grantee) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Grantee!")
+		return graphql.Null
+	}
+	return ec._Grantee(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, v any) (HistoryParents, error) {
 	var res HistoryParents
 	err := res.UnmarshalGQL(v)
@@ -32325,6 +33712,11 @@ func (ec *executionContext) marshalNMergeResult2ᚖcobranchᚗdevᚋinternalᚋa
 	return ec._MergeResult(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalNNewSecret2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐNewSecret(ctx context.Context, v any) (NewSecret, error) {
+	res, err := ec.unmarshalInputNewSecret(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
 func (ec *executionContext) marshalNOrganization2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Organization) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -32667,6 +34059,35 @@ func (ec *executionContext) marshalNSSHKey2ᚖcobranchᚗdevᚋinternalᚋadapte
 
 func (ec *executionContext) unmarshalNSSHKeyInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSSHKeyInput(ctx context.Context, v any) (SSHKeyInput, error) {
 	res, err := ec.unmarshalInputSSHKeyInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNSecret2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretᚄ(ctx context.Context, sel ast.SelectionSet, v []*Secret) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNSecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecret(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNSecret2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecret(ctx context.Context, sel ast.SelectionSet, v *Secret) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Secret!")
+		return graphql.Null
+	}
+	return ec._Secret(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNSecretChange2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretChange(ctx context.Context, v any) (SecretChange, error) {
+	res, err := ec.unmarshalInputSecretChange(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 

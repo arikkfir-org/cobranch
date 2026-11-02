@@ -13,6 +13,8 @@ var (
 		"annotations.write", "annotations.delete_any", "reviews.submit", "messages.post", "messages.moderate", "jobs.run",
 		"secrets.manage", "secrets.read",
 	}
+	// SecretPermissions are the repository permissions a grant on one secret may give.
+	SecretPermissions = []string{"secrets.manage", "secrets.read"}
 )
 
 // Permissions is every permission of the catalog.

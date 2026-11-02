@@ -27,6 +27,8 @@ var (
 	Developer  = orgs.Role{ID: auth.RoleDeveloper, Name: "Developer", BuiltIn: true, Permissions: []string{"annotations.write", "jobs.run", "messages.post", "repo.merge", "repo.push", "repo.read", "reviews.submit"}}
 	Maintainer = orgs.Role{ID: auth.RoleMaintainer, Name: "Maintainer", BuiltIn: true, Permissions: slices.Clone(auth.RepositoryPermissions)}
 	Automation = orgs.Role{ID: auth.RoleAutomation, Name: "Automation", BuiltIn: true, Permissions: []string{"annotations.write", "messages.post", "repo.read", "reviews.submit"}}
+	// SecretReader is the built-in role migration 30 writes.
+	SecretReader = orgs.Role{ID: auth.RoleSecretReader, Name: "Secret reader", BuiltIn: true, Permissions: []string{"secrets.read"}}
 	// The installation's roles, which the authorizer reads too.
 	installationAdmin = orgs.Role{ID: auth.RoleInstallationAdmin, Name: "Installation admin", BuiltIn: true, Permissions: auth.InstallationPermissions}
 	installationUser  = orgs.Role{ID: auth.RoleInstallationUser, Name: "Installation user", BuiltIn: true, Permissions: []string{"orgs.create"}}
@@ -57,6 +59,9 @@ type Store struct {
 	// authorizer's reads at a repository see the roles at its organization too.
 	RepositoryRoles []orgs.Role
 	Repos           map[uuid.UUID]uuid.UUID
+	// Secrets maps each secret to its organization and its repository (uuid.Nil for the organization's own), so the
+	// authorizer's reads at a secret see the grants on both.
+	Secrets map[uuid.UUID][2]uuid.UUID
 	// Keys are the API keys by ID; Hashes the hash of each secret, by secret ID, so a test can tell what was kept.
 	Keys   map[uuid.UUID]orgs.APIKey
 	Hashes map[uuid.UUID][]byte
@@ -87,9 +92,9 @@ func NewStore() *Store {
 		Orgs: map[uuid.UUID]orgs.Organization{}, Slugs: map[string]uuid.UUID{}, Memberships: map[uuid.UUID][]uuid.UUID{},
 		Names: map[uuid.UUID]string{}, Emails: map[uuid.UUID][]string{}, Invites: map[uuid.UUID]orgs.Invitation{},
 		Reqs: map[uuid.UUID]orgs.JoinRequest{}, RoleList: []orgs.Role{Owner, Member, Guest, Manager},
-		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation},
-		Repos: map[uuid.UUID]uuid.UUID{},
-		Keys:  map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
+		installation: []orgs.Role{installationAdmin, installationUser}, RepositoryRoles: []orgs.Role{Reader, Developer, Maintainer, Automation, SecretReader},
+		Repos: map[uuid.UUID]uuid.UUID{}, Secrets: map[uuid.UUID][2]uuid.UUID{},
+		Keys: map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: admin.StoredSettings{InstallationSettings: auth.InstallationSettings{Version: 1}},
 		Limits:       map[uuid.UUID]admin.OwnLimits{}, GitData: map[uuid.UUID]int64{}, Providers: map[string]auth.StoredProvider{},
 		CreatedBy: map[uuid.UUID]uuid.UUID{},
@@ -128,10 +133,18 @@ func (s *Store) role(id uuid.UUID) (orgs.Role, bool) {
 // roles at the repository's organization, kept to the repository's own.
 func (s *Store) Permissions(_ context.Context, principal uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
 	out := s.held(principal, scope, scopeID)
-	if scope == auth.ScopeRepository {
+	switch scope {
+	case auth.ScopeRepository:
 		out = slices.DeleteFunc(append(out, s.held(principal, auth.ScopeOrganization, s.Repos[scopeID])...), func(p string) bool {
 			return !slices.Contains(auth.RepositoryPermissions, p)
 		})
+	case auth.ScopeSecret:
+		at := s.Secrets[scopeID]
+		out = append(out, s.held(principal, auth.ScopeOrganization, at[0])...)
+		if at[1] != uuid.Nil {
+			out = append(out, s.held(principal, auth.ScopeRepository, at[1])...)
+		}
+		out = slices.DeleteFunc(out, func(p string) bool { return !slices.Contains(auth.SecretPermissions, p) })
 	}
 	slices.Sort(out)
 	return slices.Compact(out), nil

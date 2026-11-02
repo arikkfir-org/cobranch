@@ -47,6 +47,7 @@ models:
       tasks: { resolver: true }
       task: { resolver: true }
       labels: { resolver: true }
+      secrets: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
@@ -81,3 +82,8 @@ models:
       chat: { resolver: true }
       branchDiff: { resolver: true }
       commitDiff: { resolver: true }
+      secrets: { resolver: true }
+      jobPrincipals: { resolver: true }
+  Secret:
+    fields:
+      access: { resolver: true }

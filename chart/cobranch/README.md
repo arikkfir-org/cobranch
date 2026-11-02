@@ -72,9 +72,9 @@ Every value has a default: `values.yaml` lists them, and `values.schema.json` ch
   user count against nobody
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md)).
 - **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
-  with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the
+  and the REST and GraphQL servers the organizations' and repositories' secrets, which their jobs receive, with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the
   cluster, set `secretsKey.existingSecret`, a Secret holding 32 characters or more under `key` (`secretsKey.secretKey`). A lost key loses those
-  client secrets, which administrators then enter again.
+  secrets, which administrators and organizations then enter again.
 - **Database.** The bundled PostgreSQL generates its password on install and keeps it. Under Argo CD, or anything else
   that renders without the cluster, set `postgresql.auth.existingSecret`. For your own database, set
   `postgresql.enabled=false` and `externalDatabase.existingSecret`, a Secret holding its URL.

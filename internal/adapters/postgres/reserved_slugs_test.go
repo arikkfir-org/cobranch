@@ -73,6 +73,44 @@ func TestAgentsMigrationMovesReservedSlugs(t *testing.T) {
 	}
 }
 
+// TestSecretsMigrationMovesReservedSlugs checks that migration 00030, which gives the Console the page secrets, moves the
+// repositories that had that slug, or issues, which the Issues page took before it, to free ones, and keeps their old
+// slugs leading to them.
+func TestSecretsMigrationMovesReservedSlugs(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	if err := newSchema(t, pool, migrationsBefore(t, "00030")).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	// Each repository's slugs before the migration, its current one first.
+	ids := insertRepositories(ctx, t, pool, map[string][]string{"secrets": {"secrets"}, "issues": {"issues"}, "taken": {"secrets-repository"},
+		"website": {"website"}})
+	if err := newSchema(t, pool, migrations.FS, migrations.Go...).Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		repo      string
+		wantSlug  string
+		wantSlugs []string
+	}{
+		{repo: "secrets", wantSlug: "secrets-repository-2", wantSlugs: []string{"secrets", "secrets-repository-2"}},
+		{repo: "issues", wantSlug: "issues-repository", wantSlugs: []string{"issues", "issues-repository"}},
+		{repo: "taken", wantSlug: "secrets-repository", wantSlugs: []string{"secrets-repository"}},
+		{repo: "website", wantSlug: "website", wantSlugs: []string{"website"}},
+	} {
+		t.Run(tt.repo, func(t *testing.T) {
+			var slug string
+			if err := pool.QueryRow(ctx, "SELECT slug FROM repositories WHERE id = $1", ids[tt.repo]).Scan(&slug); err != nil || slug != tt.wantSlug {
+				t.Errorf("slug = %q, %v; want %q", slug, err, tt.wantSlug)
+			}
+			if all := repositorySlugs(ctx, t, pool, ids[tt.repo]); !slices.Equal(all, tt.wantSlugs) {
+				t.Errorf("slugs = %v, want %v", all, tt.wantSlugs)
+			}
+		})
+	}
+}
+
 // insertRepositories inserts an organization with a repository of each name, which has the slugs slugs names, its
 // current one first, and returns their IDs by name.
 func insertRepositories(ctx context.Context, t *testing.T, pool *pgxpool.Pool, slugs map[string][]string) map[string]uuid.UUID {

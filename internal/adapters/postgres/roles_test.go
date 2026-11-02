@@ -31,8 +31,8 @@ func TestBuiltInRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(roles) != 9 {
-		t.Fatalf("got %d built-in roles, want 9", len(roles))
+	if len(roles) != 10 {
+		t.Fatalf("got %d built-in roles, want 10", len(roles))
 	}
 	allowed := map[string][]string{
 		"installation": auth.InstallationPermissions,

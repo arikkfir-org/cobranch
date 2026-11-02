@@ -400,6 +400,14 @@ type FileDiff struct {
 	Hunks     []*Hunk `json:"hunks"`
 }
 
+// A principal holding a grant, by name.
+type Grantee struct {
+	PrincipalID string `json:"principalId"`
+	// user, api_key, job or agent.
+	Kind        string `json:"kind"`
+	DisplayName string `json:"displayName"`
+}
+
 // One run of a file's changes, with up to three lines around them.
 type Hunk struct {
 	// Its first line in the old file, or the line before it when it spans none.
@@ -700,6 +708,14 @@ type MergeResult struct {
 type Mutation struct {
 }
 
+// What makes a secret.
+type NewSecret struct {
+	// At most 100 characters, unique where the secret lives.
+	Name string `json:"name"`
+	// At most 64 KiB; sealed as it arrives and never shown again.
+	Value string `json:"value"`
+}
+
 // An organization: a slug for its URLs, a name, and its settings.
 type Organization struct {
 	ID   string `json:"id"`
@@ -744,6 +760,8 @@ type Organization struct {
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
 	Repository *Repository `json:"repository,omitempty"`
+	// The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+	Secrets []*Secret `json:"secrets"`
 	// What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
 	Usage *OrganizationUsage `json:"usage"`
 }
@@ -873,12 +891,16 @@ type Repository struct {
 	Runs *RunPage `json:"runs"`
 	// One of the repository's runs by number: null unless it is there; takes repo.read.
 	Run *Run `json:"run,omitempty"`
+	// The repository's own secrets, by name and never with their values; takes secrets.manage on the repository.
+	Secrets []*Secret `json:"secrets"`
+	// The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
+	JobPrincipals []*Grantee `json:"jobPrincipals"`
 }
 
 // A principal's grants on a repository.
 type RepositoryAccess struct {
 	PrincipalID string `json:"principalId"`
-	// user or api_key.
+	// user, api_key, job or agent.
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
 	// The roles it holds on the repository, each with the permissions it gives there.
@@ -1029,6 +1051,32 @@ type SSHKeyInput struct {
 	Name *string `json:"name,omitempty"`
 	// One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
 	PublicKey string `json:"publicKey"`
+}
+
+// A secret of the organization's or of one of its repositories, as its manager sees it: never with its value, which only the jobs it is granted to receive.
+type Secret struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// The repository it belongs to; null for the organization's own.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The name it is listed under; jobs name it by its ID.
+	Name string `json:"name"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+	// Who added it; null once they are gone.
+	CreatedBy *string   `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// Who last changed it; null once they are gone.
+	UpdatedBy *string   `json:"updatedBy,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Who holds Secret reader on the secret itself, by name; takes secrets.manage on it, or org.grants.manage. Grants on its repository and at the organization reach it too.
+	Access []*Grantee `json:"access"`
+}
+
+// What changes a secret; without a value, it keeps the one it has.
+type SecretChange struct {
+	Name  string  `json:"name"`
+	Value *string `json:"value,omitempty"`
 }
 
 // When a new secret stops working; a year from now when neither is given.

@@ -413,7 +413,7 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 - **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
   runs.
 - **An organization's Secrets page and a repository's Secrets tab** list their secrets, by name, with who is granted
-  each, add, change and delete them, and grant them to the organization's members, API keys and jobs.
+  each, add, change and delete them, and grant them to the organization's members, API keys, jobs and agents.
 
 ## Data model
 

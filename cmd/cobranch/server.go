@@ -25,6 +25,7 @@ import (
 	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
+	"cobranch.dev/internal/services/secrets"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
 	"cobranch.dev/internal/system/telemetry"
@@ -47,7 +48,8 @@ type api struct {
 }
 
 // services are the domain's services an API serves: sign-in's for the viewer's sessions, the organizations', the
-// repositories', their code's, their branches' chats, the organizations' agents and the installation's administration.
+// repositories', their code's, their branches' chats, the organizations' agents, their secrets and the installation's
+// administration.
 type services struct {
 	sessions       *auth.Service
 	organizations  *orgs.Service
@@ -56,6 +58,7 @@ type services struct {
 	issues         *issues.Service
 	chats          *chats.Service
 	agents         *agents.Service
+	secrets        *secrets.Service
 	administration *admin.Service
 }
 
@@ -65,12 +68,12 @@ func backOffice(u config.URLs) config.URL { return u.BackOffice }
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
 	restServer = api{workload: "rest-server", pattern: "/", pages: console, follows: true, handler: func(version, _ string, s services) http.Handler {
-		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents)
+		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents, s.secrets)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
 	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, handler: func(version, pages string, s services) http.Handler {
-		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents)
+		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents, s.secrets)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
 	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version, _ string, s services) http.Handler {
@@ -115,15 +118,20 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
+	box, err := sealer(cfg.SecretsKey)
+	if err != nil {
+		return fmt.Errorf("configuring: %w", err)
+	}
 	quotas := limitsService(pool, cfg.Limits)
 	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
 	agentStore := postgres.NewAgentStore(pool)
 	agentService := agents.NewService(agentStore, authorizer)
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas),
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
-		issues: issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
-		chats:  chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer),
-		agents: agentService, administration: administration}
+		issues:  issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
+		chats:   chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer),
+		agents:  agentService,
+		secrets: secrets.NewService(postgres.NewSecretStore(pool), authorizer, box), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
