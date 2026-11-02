@@ -207,6 +207,12 @@ func (s *Service) get(ctx context.Context, v Viewer, orgID uuid.UUID, number int
 	if err := s.require(ctx, v, orgID, permission); err != nil {
 		return Issue{}, err
 	}
+	return s.find(ctx, v, orgID, number)
+}
+
+// find finds one of the organization's issues by number, its repository hidden unless v reads it, whatever v holds of
+// issues' permissions: the answer to a change v was allowed to make, as Create's and Update's are.
+func (s *Service) find(ctx context.Context, v Viewer, orgID uuid.UUID, number int) (Issue, error) {
 	issue, err := s.store.Get(ctx, orgID, number)
 	if err != nil {
 		return Issue{}, wrap("finding the issue", err)

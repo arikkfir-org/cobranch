@@ -11,6 +11,7 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
+	"cobranch.dev/internal/services/repos"
 )
 
 func TestNamed(t *testing.T) {
@@ -44,6 +45,16 @@ func TestNamed(t *testing.T) {
 	}
 }
 
+// writer is Wren, of a custom role of Acme that writes issues and reads repositories but reads no issues.
+func (f *fixture) writer() issues.Viewer {
+	wren := user("Wren")
+	f.orgs.AddUser(wren.ID, wren.DisplayName)
+	role := orgs.Role{ID: uuid.New(), Name: "Writer", OrgID: f.acme.ID, Permissions: []string{orgs.PermRead, issues.PermWrite, repos.PermRead}}
+	f.orgs.RoleList = append(f.orgs.RoleList, role)
+	f.orgs.AddMember(f.acme.ID, wren.ID, role.ID)
+	return wren
+}
+
 func TestLink(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
@@ -60,6 +71,7 @@ func TestLink(t *testing.T) {
 			nil, issues.StateDone},
 		{"a guest", func(f *fixture) issues.Viewer { return f.gwen }, "login", func(f *fixture) uuid.UUID { return f.website.ID }, 1, auth.ErrForbidden,
 			issues.StateBacklog},
+		{"a writer who reads no issues", (*fixture).writer, "login", func(f *fixture) uuid.UUID { return f.website.ID }, 1, nil, issues.StateInProgress},
 		{"a repository the viewer doesn't read", func(f *fixture) issues.Viewer { return f.max }, "deploy", func(f *fixture) uuid.UUID { return f.secret.ID },
 			1, issues.ErrBranchNotFound, issues.StateBacklog},
 		{"no such branch", func(f *fixture) issues.Viewer { return f.max }, "nope", func(f *fixture) uuid.UUID { return f.website.ID }, 1,

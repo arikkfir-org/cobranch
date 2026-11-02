@@ -186,8 +186,8 @@ func (s *Service) branch(ctx context.Context, v Viewer, orgID, repoID uuid.UUID,
 }
 
 // Link links a live branch of the organization's repository to one of its issues by hand, for v, in place of any
-// issue it worked on, and answers the link; it takes issues.write, and repo.read on the repository. An issue in Backlog
-// or Todo moves to In progress, for v. The default branch works on no issue.
+// issue it worked on, and answers the link, with the issue as the link left it; it takes issues.write, and repo.read on
+// the repository. An issue in Backlog or Todo moves to In progress, for v. The default branch works on no issue.
 func (s *Service) Link(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, name string, number int) (Link, error) {
 	ctx, span := tracer.Start(ctx, "issues.Service.Link")
 	defer span.End()
@@ -217,7 +217,7 @@ func (s *Service) Link(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, n
 		}
 		how = LinkedByHand
 	}
-	if issue, err = s.get(ctx, v, orgID, number, PermRead); err != nil {
+	if issue, err = s.find(ctx, v, orgID, number); err != nil {
 		return Link{}, failed(span, "linking the branch", fmt.Errorf("reading the issue back: %w", err))
 	}
 	return Link{Issue: issue, LinkedBy: how}, nil
