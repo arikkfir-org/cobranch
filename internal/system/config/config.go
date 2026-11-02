@@ -94,6 +94,30 @@ type Server struct {
 	// GitInternalURL is the Git server's internal port, where the REST and GraphQL servers read repositories' trees
 	// and files; empty, as in an installation without a Git server, those reads answer 503.
 	GitInternalURL URL `envconfig:"GIT_INTERNAL_URL"`
+	// Limits are the organizations, repositories and Git data the values allow.
+	Limits
+}
+
+// Limits are the limits the chart's values set: nil where they set none, which leaves it to the Back-office, else to
+// the built-in default. 0 caps nothing.
+type Limits struct {
+	// OrganizationsPerUser caps the organizations a user creates for themselves.
+	OrganizationsPerUser *int64 `envconfig:"LIMITS_ORGANIZATIONS_PER_USER"`
+	// RepositoriesPerOrganization caps an organization's repositories.
+	RepositoriesPerOrganization *int64 `envconfig:"LIMITS_REPOSITORIES_PER_ORGANIZATION"`
+	// GitDataPerOrganization caps the bytes of Git data an organization stores, such as 1Gi.
+	GitDataPerOrganization Quota `envconfig:"LIMITS_GIT_DATA_PER_ORGANIZATION"`
+}
+
+// check refuses a limit below 0.
+func (l Limits) check() error {
+	switch {
+	case l.OrganizationsPerUser != nil && *l.OrganizationsPerUser < 0:
+		return fmt.Errorf("COBRANCH_LIMITS_ORGANIZATIONS_PER_USER is %d: a limit is 0, for none, or more", *l.OrganizationsPerUser)
+	case l.RepositoriesPerOrganization != nil && *l.RepositoriesPerOrganization < 0:
+		return fmt.Errorf("COBRANCH_LIMITS_REPOSITORIES_PER_ORGANIZATION is %d: a limit is 0, for none, or more", *l.RepositoriesPerOrganization)
+	}
+	return nil
 }
 
 // SignUpSettings are the sign-up settings the chart's values give. Each they leave unset is the Back-office's, kept in
@@ -114,6 +138,9 @@ func LoadServer() (Server, error) {
 		return Server{}, fmt.Errorf("reading the server's configuration from the COBRANCH_ variables: %w", err)
 	}
 	lower(c.SignUpDomains)
+	if err := c.check(); err != nil {
+		return Server{}, err
+	}
 	return c, nil
 }
 
@@ -277,6 +304,8 @@ type GitServer struct {
 	// port no route names.
 	InternalAddr    string        `envconfig:"GIT_INTERNAL_ADDR" default:":8081"`
 	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"20s"`
+	// Limits are the API servers', of which the Git server holds pushes to the Git data's.
+	Limits
 }
 
 // LoadGitServer reads git-server's configuration from the environment.
@@ -287,6 +316,9 @@ func LoadGitServer() (GitServer, error) {
 	}
 	if c.SSHAddr != "" && c.SSHHostKey == "" {
 		return GitServer{}, errors.New("COBRANCH_GIT_SSH_ADDR needs COBRANCH_GIT_SSH_HOST_KEY, the private key SSH clients know the server by")
+	}
+	if err := c.check(); err != nil {
+		return GitServer{}, err
 	}
 	return c, nil
 }
@@ -348,5 +380,24 @@ func (s *Size) Decode(value string) error {
 		return fmt.Errorf("%q is not a size, such as 10Gi", value)
 	}
 	*s = Size(n * factor)
+	return nil
+}
+
+// Quota is a limit in bytes, written as a Size or as 0, which caps nothing: Bytes is nil while its variable is unset.
+type Quota struct {
+	Bytes *int64
+}
+
+// Decode reads value, such as 1Gi, 1073741824 or 0.
+func (q *Quota) Decode(value string) error {
+	var n int64
+	if strings.TrimSpace(value) != "0" {
+		var s Size
+		if s.Decode(value) != nil {
+			return fmt.Errorf("%q is not a size, such as 1Gi, or 0", value)
+		}
+		n = int64(s)
+	}
+	q.Bytes = &n
 	return nil
 }

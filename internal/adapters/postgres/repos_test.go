@@ -28,7 +28,7 @@ func newRepoFixture(t *testing.T) *repoFixture {
 	}
 	f.website.Slug, f.secret.Slug = "website", "secret"
 	for _, r := range []repos.Repository{f.website, f.secret} {
-		if err := f.r.Create(context.Background(), f.olivia, r); err != nil {
+		if err := f.r.Create(context.Background(), f.olivia, r, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -48,7 +48,7 @@ func TestRepoStoreCreate(t *testing.T) {
 	}
 	dup := f.website
 	dup.ID = uuid.New()
-	if err := f.r.Create(ctx, f.olivia, dup); !errors.Is(err, repos.ErrSlugTaken) {
+	if err := f.r.Create(ctx, f.olivia, dup, 0); !errors.Is(err, repos.ErrSlugTaken) {
 		t.Errorf("Create() of a taken slug = %v, want %v", err, repos.ErrSlugTaken)
 	}
 	access, err := f.r.Access(ctx, f.website.ID)

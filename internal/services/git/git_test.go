@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/limits"
 )
 
 var (
@@ -137,6 +138,102 @@ func TestServiceRecord(t *testing.T) {
 			}
 			if len(s.recorded) != tt.wantRecorded || s.calls != tt.wantCalls {
 				t.Errorf("the store recorded %d pushes in %d calls, want %d in %d", len(s.recorded), s.calls, tt.wantRecorded, tt.wantCalls)
+			}
+		})
+	}
+}
+
+// quotas are the same limits for every organization, and Git data already used.
+type quotas struct {
+	limit, used int64
+	err         error
+}
+
+func (q quotas) Organization(context.Context, uuid.UUID) (limits.Limits, error) {
+	return limits.Limits{GitDataPerOrganization: q.limit}, q.err
+}
+
+func (q quotas) WeighPush(_ context.Context, _ uuid.UUID, size int64) (int64, error) {
+	if q.err != nil {
+		return 0, q.err
+	}
+	if limits.Exceeds(q.limit, q.used, size) {
+		return q.limit, &limits.ExceededError{Kind: limits.KindGitData, Limit: q.limit, Used: q.used, Adding: size}
+	}
+	return q.limit, nil
+}
+
+func TestServiceRecordHoldsThePackToItsLimit(t *testing.T) {
+	broken := errors.New("broken")
+	pack := &git.Pack{Name: "pack-" + a, Upload: uuid.New(), Size: 10 << 20, Objects: 3}
+	tests := []struct {
+		name      string
+		quotas    *quotas
+		pack      *git.Pack
+		wantLimit int64
+		wantErr   error
+	}{
+		{name: "the organization's limit", quotas: &quotas{limit: 1 << 30}, pack: pack, wantLimit: 1 << 30},
+		{name: "no limit", quotas: &quotas{}, pack: pack},
+		{name: "no quotas", pack: pack},
+		{name: "no pack", quotas: &quotas{limit: 1 << 30}},
+		{name: "the limits can't be read", quotas: &quotas{err: broken}, pack: pack, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &store{}
+			service := git.NewService(s)
+			if tt.quotas != nil {
+				service.WithQuotas(tt.quotas)
+			}
+			push := git.Push{ID: uuid.New(), RepoID: uuid.New(), OrgID: uuid.New(), PusherID: uuid.New(), Transport: git.TransportHTTPS,
+				Updates: []git.RefUpdate{{Name: "refs/heads/main", Old: a, New: b}}, Pack: tt.pack}
+			_, err := service.Record(t.Context(), push)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Record() = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantErr == nil && (len(s.recorded) != 1 || s.recorded[0].GitDataLimit != tt.wantLimit) {
+				t.Errorf("the store recorded %+v, want one push held to %d bytes", s.recorded, tt.wantLimit)
+			}
+		})
+	}
+}
+
+func TestServiceWeigh(t *testing.T) {
+	broken := errors.New("broken")
+	pack := "pack-" + b
+	tests := []struct {
+		name    string
+		quotas  *quotas
+		store   *store
+		size    int64
+		want    string
+		wantErr error
+	}{
+		{name: "fits", quotas: &quotas{limit: 1 << 30, used: 900 << 20}, size: 100 << 20},
+		{name: "over", quotas: &quotas{limit: 1 << 30, used: 1000 << 20}, size: 100 << 20,
+			want: "This organization stores 1000 MiB of Git data, and this push adds 100 MiB: over its limit of 1 GiB. Nothing changed; an administrator can raise the limit."},
+		{name: "over, but the repository lists the pack already", quotas: &quotas{limit: 1 << 30, used: 1 << 30}, size: 100 << 20,
+			store: &store{snapshot: git.Snapshot{Packs: []git.Pack{{Name: pack, Upload: uuid.New()}}}}},
+		{name: "over, and the repository lists other packs", quotas: &quotas{limit: 1 << 30, used: 1 << 30}, size: 100 << 20,
+			store: &store{snapshot: git.Snapshot{Packs: []git.Pack{{Name: "pack-" + a, Upload: uuid.New()}}}},
+			want:  "This organization stores 1 GiB of Git data, and this push adds 100 MiB: over its limit of 1 GiB. Nothing changed; an administrator can raise the limit."},
+		{name: "no quotas", size: 1 << 40},
+		{name: "the limits can't be read", quotas: &quotas{err: broken}, size: 1, wantErr: broken},
+		{name: "the repository's packs can't be read", quotas: &quotas{limit: 1 << 30}, store: &store{err: broken}, size: 1, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.store == nil {
+				tt.store = &store{}
+			}
+			service := git.NewService(tt.store)
+			if tt.quotas != nil {
+				service.WithQuotas(tt.quotas)
+			}
+			got, err := service.Weigh(t.Context(), uuid.New(), uuid.New(), pack, tt.size)
+			if got != tt.want || !errors.Is(err, tt.wantErr) {
+				t.Errorf("Weigh() = %q, %v, want %q, %v", got, err, tt.want, tt.wantErr)
 			}
 		})
 	}
