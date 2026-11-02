@@ -245,13 +245,14 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
 - **A pod that dies is replaced.** On each pass, every few seconds, the controller checks each running or waiting task's
   newest pod: one that failed, exited while its task hadn't ended, or vanished for a minute, it removes and replaces
   with the next, `task-<id>-2` and so on, with a fresh token, and the harness resumes from the transcript; the fourth
-  pod's death fails the task, naming how it died. A task past `agents.timeout` fails, and its pod goes. The sweep, every
-  five minutes, removes the pods of tasks that ended, which their harness left once Cobranch refused their token.
+  death fails the task, whichever pod it is, naming how it died. A task past `agents.timeout` fails, and its pod goes.
+  The sweep, every five minutes, removes the pods of tasks that ended, which their harness left once Cobranch refused
+  their token.
 - **A waiting task's pod stops.** A task that has waited `agents.idle` for an answer, 30 minutes unless the operator
   says otherwise, loses its pod, and `agent_task_pods.stopped_at` records it. Once someone else posts in the task's
   thread, the controller starts its next pod with a fresh token, and its harness runs the `ask` call again and finds the
   answer; the quota may keep it waiting for room, as it does a run. A stop isn't a death: it counts towards none of the
-  task's four pods.
+  task's four deaths, so a task that stopped has more than four pods.
 
 **An agent pod: the harness in the operator’s image, and the key in a proxy beside it**
 
@@ -470,11 +471,11 @@ land.
 | A task's permissions are the agent's intersected with the assigner's, checked at every call | The assigner cap; revocation applies at once | Agreed |
 | A task receives the agent's secrets whoever assigned it | The principals design | Agreed |
 | One pod per task, kept while the task lives, stopped when it waits past `agents.idle` | Tasks never share a workspace across assigners; resuming already exists | Agreed |
-| A stopped task stays Waiting, and the next message someone else posts in its thread starts its next pod, which isn't counted as a death | The task never left its question; a reply wakes it at once, and stops don't use up its four pods | Proposed |
+| A stopped task stays Waiting, and the next message someone else posts in its thread starts its next pod, which isn't counted as a death | The task never left its question; a reply wakes it at once, and stops don't count towards its four deaths | Proposed |
 | Asking is one tool call that waits, its question named by its key, rather than a turn that ends and an input that comes later | The transcript stays one conversation; a pod that starts again runs the call again and finds the answer | Proposed |
 | Agent tasks are the controller's queue beside runs, in the same namespaces, through the same secrets call | One runtime for jobs and agents | Proposed |
 | The provider's key stays in a model proxy beside the harness, in Cobranch's image; the harness runs in the operator's image, from the `cobranch` binary copied in | The tools never read the key; operators choose their agents' tools without building on Cobranch's image | Proposed |
-| A task has at most four pods, numbered, and the controller replaces only its newest | A pod that keeps dying stops costing; numbers tell a leftover from the one that runs | Proposed |
+| A task's pods are numbered, its fourth death fails it, and the controller replaces only its newest pod | A pod that keeps dying stops costing; numbers tell a leftover from the one that runs | Proposed |
 | Task tokens are files the controller renews every half hour, each valid for an hour | The principals design's one-hour token for long tasks | Agreed |
 | Task tokens are a table of their own, hashed, not a kind of personal token or API key | They act for a task, not a person or a key, and end with it; slices' migrations don't contend for one constraint | Agreed |
 | The Console's task page reads the transcript every few seconds while the task hasn't ended, not over a subscription | Entries come a turn at a time; one poll path for REST and the Console | Proposed |
