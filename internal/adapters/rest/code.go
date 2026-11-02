@@ -36,6 +36,8 @@ type Code interface {
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
+	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 }
 
 func principal(p *code.Principal) *Principal {
@@ -187,6 +189,90 @@ func (a api) MergeBranch(ctx context.Context, req MergeBranchRequestObject) (Mer
 		return nil, mergeFail(err)
 	}
 	return MergeBranch200JSONResponse(MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}), nil
+}
+
+// DeleteBranch deletes a branch for the viewer at the head If-Match names.
+func (a api) DeleteBranch(ctx context.Context, req DeleteBranchRequestObject) (DeleteBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	head, err := headIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.code.DeleteBranch(ctx, v, repo.ID, req.BranchName, head); err != nil {
+		return nil, deleteFail(err)
+	}
+	return DeleteBranch204Response{}, nil
+}
+
+// headIfMatch is the head a deletion's If-Match names: "" for *, which deletes the branch wherever it is; a refusal
+// with 428 without the header, and with 412 for a tag that names no commit, a weak one included, since If-Match
+// compares strongly.
+func headIfMatch(header *IfMatchBranch) (string, error) {
+	if header == nil || strings.TrimSpace(*header) == "" {
+		return "", refuse(http.StatusPreconditionRequired, "precondition.required",
+			"Name the head you saw in If-Match to delete the branch, quoted, or * to delete it wherever it is.")
+	}
+	tag := strings.TrimSpace(*header)
+	if tag == "*" {
+		return "", nil
+	}
+	head := strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`)
+	if code.ValidateSHA("head", head) != nil {
+		return "", refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no head of the branch.")
+	}
+	return head, nil
+}
+
+// deleteFail is fail for deletions: 412 for a branch that moved, 409 for a deletion Cobranch won't make, and 503
+// without a Git server.
+func deleteFail(err error) error {
+	var refused *code.DeleteError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The branch moved since you read it: read it again.")
+	case errors.As(err, &refused):
+		return refuse(http.StatusConflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(http.StatusServiceUnavailable, "git.unavailable", "This installation runs no Git server to delete with.")
+	}
+	return fail(err, "branch")
+}
+
+// GetDeletedBranch finds the latest deletion of a branch of a name.
+func (a api) GetDeletedBranch(ctx context.Context, req GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	b, err := a.code.DeletedBranch(ctx, v, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, fail(err, "branch")
+	}
+	return GetDeletedBranch200JSONResponse(deletedBranch(b)), nil
+}
+
+// deletedBranch is b as the API shows it.
+func deletedBranch(b code.DeletedBranch) DeletedBranch {
+	out := DeletedBranch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt.UTC(), DeletedAt: b.DeletedAt.UTC(), DeletedBy: principal(b.DeletedBy)}
+	if b.Commit != nil {
+		c := commit(*b.Commit)
+		out.Commit = &c
+	}
+	if m := b.Merge; m != nil {
+		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
+	}
+	return out
 }
 
 // mergeFail is fail for merges: 409 for a branch that moved and a merge Cobranch won't make, and 503 without a Git
