@@ -233,18 +233,10 @@ func TestNextRecordsAGenAISpan(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, _ = m.Next(context.Background(), harness.Request{Messages: []harness.Message{{Role: harness.RoleUser, Text: "Go."}}}) // the span tells
-			var span sdktrace.ReadOnlySpan
-			for _, s := range recorder.Ended() {
-				if s.Name() == "chat "+tc.model {
-					span = s
-				}
-			}
-			if span == nil {
-				t.Fatalf("no span chat %s among %d", tc.model, len(recorder.Ended()))
-			}
+			span := spanNamed(t, recorder, "chat "+tc.model)
 			got := map[string]string{}
 			for _, kv := range span.Attributes() {
-				got[string(kv.Key)] = kv.Value.Emit()
+				got[string(kv.Key)] = kv.Value.String()
 			}
 			for k, v := range tc.want {
 				if got[k] != v {
@@ -256,6 +248,18 @@ func TestNextRecordsAGenAISpan(t *testing.T) {
 			}
 		})
 	}
+}
+
+// spanNamed is the span name that recorder saw end.
+func spanNamed(t *testing.T, recorder *tracetest.SpanRecorder, name string) sdktrace.ReadOnlySpan {
+	t.Helper()
+	for _, s := range recorder.Ended() {
+		if s.Name() == name {
+			return s
+		}
+	}
+	t.Fatalf("no span %s among %d", name, len(recorder.Ended()))
+	return nil
 }
 
 func TestMessagesTheProvidersRefuseEmpty(t *testing.T) {
