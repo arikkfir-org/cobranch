@@ -70,6 +70,9 @@ func (s *RunStore) Token(ctx context.Context, runID uuid.UUID, hash []byte, hint
 // Defer puts a queued run off until until, its job's annotation saying why (runner.Store).
 func (s *RunStore) Defer(ctx context.Context, runID uuid.UUID, until time.Time, reason string) error {
 	return transact(ctx, s.pool, s.q, "putting the run off", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
+			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
+		}
 		row, err := q.DeferRun(ctx, until, reason, runID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -86,6 +89,9 @@ func (s *RunStore) Defer(ctx context.Context, runID uuid.UUID, until time.Time, 
 func (s *RunStore) MarkRunning(ctx context.Context, runID uuid.UUID) (bool, error) {
 	marked := false
 	err := transact(ctx, s.pool, s.q, "marking the run running", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
+			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
+		}
 		row, err := q.MarkRunRunning(ctx, runID)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
@@ -104,6 +110,9 @@ func (s *RunStore) MarkRunning(ctx context.Context, runID uuid.UUID) (bool, erro
 func (s *RunStore) Finish(ctx context.Context, runID uuid.UUID, state jobs.State, reason string) (bool, error) {
 	finished := false
 	err := transact(ctx, s.pool, s.q, "ending the run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockRunQueueOfRun(ctx, runID); err != nil {
+			return fmt.Errorf("locking run %s's repository's runs: %w", runID, err)
+		}
 		if err := q.DeleteRunToken(ctx, runID); err != nil {
 			return fmt.Errorf("deleting run %s's token: %w", runID, err)
 		}

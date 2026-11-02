@@ -10,6 +10,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -50,16 +51,17 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		if err != nil {
 			return fmt.Errorf("finding commit %s: %w", sha, err)
 		}
+		follows, err := lockForTriggers(ctx, q, repoID, sha, jobs.EventAnnotation)
+		if err != nil {
+			return err
+		}
 		row, created, err := lockAnnotation(ctx, q, actor, orgID, repoID, sha, in)
 		out = row
 		switch {
 		case err != nil:
 			return err
 		case created:
-			if err := restatusAt(ctx, q, repoID, sha); err != nil {
-				return err
-			}
-			return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
+			return annotationSet(ctx, q, actor, repoID, sha, in, follows)
 		case row.Principal == nil || row.Principal.ID != actor:
 			return &code.TakenError{Name: in.Name, By: row.Principal}
 		case in.Version == code.NoAnnotation, code.Stale(in.Version, row.Version):
@@ -75,12 +77,18 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		if err := annotationEvent(ctx, q, orgID, actor, "set", repoID, out); err != nil {
 			return err
 		}
-		if err := restatusAt(ctx, q, repoID, sha); err != nil || row.Status == in.Status {
-			return err
-		}
-		return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
+		return annotationSet(ctx, q, actor, repoID, sha, in, follows && row.Status != in.Status)
 	})
 	return out, err
+}
+
+// annotationSet works out again the status of the branches at the commit of an annotation actor set to in and, when
+// queue says a job follows it and its status moved, queues the runs it triggers.
+func annotationSet(ctx context.Context, q *queries.Queries, actor, repoID uuid.UUID, sha string, in code.AnnotationInput, queue bool) error {
+	if err := restatusAt(ctx, q, repoID, sha); err != nil || !queue {
+		return err
+	}
+	return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
 }
 
 // lockAnnotation answers the annotation in.Name on the commit, locked until the transaction ends, and false; or, when

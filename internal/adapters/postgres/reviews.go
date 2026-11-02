@@ -65,6 +65,10 @@ func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uu
 		if err != nil {
 			return fmt.Errorf("finding commit %s: %w", sha, err)
 		}
+		follows, err := lockForTriggers(ctx, q, repoID, sha, jobs.EventReview)
+		if err != nil {
+			return err
+		}
 		id, err := uuid.NewV7()
 		if err != nil {
 			return fmt.Errorf("naming the review: %w", err)
@@ -85,7 +89,7 @@ func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uu
 		if err := orgEvent(ctx, q, &orgID, actor, "review.submitted", id, details); err != nil {
 			return err
 		}
-		if err := restatusAt(ctx, q, repoID, sha); err != nil {
+		if err := restatusAt(ctx, q, repoID, sha); err != nil || !follows {
 			return err
 		}
 		return queueBranchRuns(ctx, q, jobs.Event{Kind: jobs.EventReview, RepoID: repoID, SHA: sha, State: string(in.State), ActorID: actor})

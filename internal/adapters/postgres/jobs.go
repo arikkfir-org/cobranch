@@ -50,13 +50,10 @@ func recordSettings(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 }
 
 // queuePushRuns queues the runs the claimed push triggers, in the push worker's transaction: for each branch it
-// creates or moves, and each tag that names a commit, the jobs that match. It takes the repository's run lock before
-// it reads where any ref stands, so a later push that another push worker processed meanwhile is seen: a ref that
-// moved on since this push queues nothing. Each branch it creates or moves also queues its deliveries.
+// creates or moves, and each tag that names a commit, the jobs that match. It reads where any ref stands under the
+// repository's run lock, which followPush took, so a later push that another push worker processed meanwhile is seen:
+// a ref that moved on since this push queues nothing. Each branch it creates or moves also queues its deliveries.
 func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
-	if err := q.LockRunQueue(ctx, claimed.RepoID); err != nil {
-		return fmt.Errorf("locking the repository's runs: %w", err)
-	}
 	var updates []refUpdateJSON
 	if err := json.Unmarshal(claimed.RefUpdates, &updates); err != nil {
 		return fmt.Errorf("reading the push's ref updates: %w", err)
@@ -177,6 +174,31 @@ func queueBranchRuns(ctx context.Context, q *queries.Queries, e jobs.Event) erro
 		}
 	}
 	return nil
+}
+
+// lockForTriggers takes the repository's run queue when a job of a live branch whose head is the commit follows
+// events of kind, an annotation's or a review's, and answers whether it did: a change on the commit that may queue runs
+// calls it first, before it locks anything else, and one that it answers false for queues none. Most changes of
+// annotations and reviews then don't wait for each other, or for pushes, on the queue.
+func lockForTriggers(ctx context.Context, q *queries.Queries, repoID uuid.UUID, sha string, kind jobs.EventKind) (bool, error) {
+	names, err := q.LiveBranchesAt(ctx, repoID, sha)
+	if err != nil {
+		return false, fmt.Errorf("finding the branches at commit %s: %w", sha, err)
+	}
+	for _, name := range names {
+		head, settings, err := settingsOf(ctx, q, repoID, name)
+		if err != nil {
+			return false, err
+		}
+		if settings == nil || head != sha || !slices.ContainsFunc(settings.Jobs, func(j jobs.Job) bool { return j.Follows(kind) }) {
+			continue
+		}
+		if err := q.LockRunQueue(ctx, repoID); err != nil {
+			return false, fmt.Errorf("locking the repository's runs: %w", err)
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // annotationRuns queues the runs that annotation name reaching status on a commit triggers, set by actor; when actor

@@ -33,6 +33,29 @@ func (j Job) Matches(e Event) bool {
 	return false
 }
 
+// Follows reports whether the job has a trigger for events of kind at all, whatever they say: a change that may
+// trigger it asks first, so that one no job follows needn't take the repository's run queue.
+func (j Job) Follows(kind EventKind) bool {
+	on := j.On
+	switch kind {
+	case EventPush:
+		return on.Push != nil
+	case EventTag:
+		return on.Tag != nil
+	case EventAnnotation:
+		return on.Annotation != nil
+	case EventReview:
+		return on.Review != nil
+	case EventPosted:
+		return on.Event != nil
+	case EventSchedule:
+		return len(on.Schedule) > 0
+	case EventManual:
+		return on.Manual != nil
+	}
+	return false
+}
+
 // DueSlot is the latest minute within late of now, now included, that one of the job's schedules fires at, and true;
 // false when none fires then. A controller that queues each slot once, on a pass at least every late, so misses none,
 // and one that was down longer skips the slots it missed.
@@ -43,7 +66,8 @@ func (j Job) DueSlot(now time.Time, late time.Duration) (time.Time, bool) {
 		if err != nil {
 			continue // the file's parser refused it already; a definition kept from before then fires never
 		}
-		for slot := c.Next(now.Add(-late)); !slot.IsZero() && !slot.After(now); slot = c.Next(slot) {
+		// Next skips the minute its time falls in: from a nanosecond earlier, a slot exactly late ago counts.
+		for slot := c.Next(now.Add(-late - time.Nanosecond)); !slot.IsZero() && !slot.After(now); slot = c.Next(slot) {
 			if slot.After(due) {
 				due = slot
 			}

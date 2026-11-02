@@ -1,5 +1,6 @@
 -- LockLiveBranches locks a repository's live branches, by ID, as every transaction that changes their status locks
--- them, so that those transactions never wait for each other in a circle.
+-- them, so that those transactions never wait for each other in a circle. One that may queue runs takes the
+-- repository's run queue first (LockRunQueue).
 -- name: LockLiveBranches :exec
 SELECT id FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY id FOR UPDATE;
 

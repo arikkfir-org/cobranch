@@ -196,7 +196,8 @@ SELECT id FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY id FO
 `
 
 // LockLiveBranches locks a repository's live branches, by ID, as every transaction that changes their status locks
-// them, so that those transactions never wait for each other in a circle.
+// them, so that those transactions never wait for each other in a circle. One that may queue runs takes the
+// repository's run queue first (LockRunQueue).
 func (q *Queries) LockLiveBranches(ctx context.Context, repoID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockLiveBranches, repoID)
 	return err

@@ -1,6 +1,7 @@
 package jobs_test
 
 import (
+	"slices"
 	"testing"
 	"time"
 
@@ -102,6 +103,43 @@ func TestJobKind(t *testing.T) {
 	}
 }
 
+func TestJobFollows(t *testing.T) {
+	review := jobs.Job{Name: "deploy", On: jobs.Triggers{Review: &jobs.ReviewTrigger{States: []string{"approved"}}}}
+	every := jobs.Job{Name: "all", On: jobs.Triggers{
+		Push:       &jobs.PushTrigger{},
+		Tag:        &jobs.TagTrigger{},
+		Annotation: &jobs.AnnotationTrigger{Names: []string{"ci/build"}, Statuses: []string{"successful"}},
+		Review:     &jobs.ReviewTrigger{States: []string{"approved"}},
+		Event:      &jobs.EventTrigger{Names: []string{"deploy"}},
+		Schedule:   []jobs.Schedule{{Cron: "0 * * * *"}},
+		Manual:     &jobs.ManualTrigger{},
+	}}
+	kinds := []jobs.EventKind{jobs.EventPush, jobs.EventTag, jobs.EventAnnotation, jobs.EventReview, jobs.EventPosted, jobs.EventSchedule,
+		jobs.EventManual}
+	tests := []struct {
+		name string
+		job  jobs.Job
+		want []jobs.EventKind
+	}{
+		{"reviews alone", review, []jobs.EventKind{jobs.EventReview}},
+		{"every kind", every, kinds},
+		{"none", jobs.Job{Name: "idle"}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got []jobs.EventKind
+			for _, k := range kinds {
+				if tt.job.Follows(k) {
+					got = append(got, k)
+				}
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Follows() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestJobDueSlot(t *testing.T) {
 	at := func(hhmm string) time.Time {
 		t, err := time.Parse("2006-01-02 15:04:05", "2026-11-02 "+hhmm)
@@ -121,6 +159,7 @@ func TestJobDueSlot(t *testing.T) {
 	}{
 		{"on its minute", hourly, at("04:00:00"), at("04:00:00")},
 		{"late within the window", hourly, at("04:09:59"), at("04:00:00")},
+		{"exactly as late as the window", hourly, at("04:10:00"), at("04:00:00")},
 		{"too late", hourly, at("04:10:01"), time.Time{}},
 		{"before its minute", hourly, at("03:59:59"), time.Time{}},
 		{"the later of two schedules", twice, at("04:06:00"), at("04:05:00")},

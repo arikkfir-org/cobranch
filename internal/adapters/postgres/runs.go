@@ -149,6 +149,9 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 // again (code.Store).
 func (s *CodeStore) CancelRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
 	err := transact(ctx, s.pool, s.q, "cancelling the run", actor, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockRunQueue(ctx, repoID); err != nil { // first, before the run, as every transaction that locks one
+			return fmt.Errorf("locking the repository's runs: %w", err)
+		}
 		row, err := runForUpdate(ctx, q, repoID, number)
 		if err != nil {
 			return err
@@ -183,6 +186,9 @@ func (s *CodeStore) CancelRun(ctx context.Context, actor uuid.UUID, repoID uuid.
 // job's annotation stays Pending, now Queued (code.Store).
 func (s *CodeStore) StartRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
 	err := transact(ctx, s.pool, s.q, "starting the run", actor, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockRunQueue(ctx, repoID); err != nil { // first, before the run, as every transaction that locks one
+			return fmt.Errorf("locking the repository's runs: %w", err)
+		}
 		row, err := runForUpdate(ctx, q, repoID, number)
 		if err != nil {
 			return err
