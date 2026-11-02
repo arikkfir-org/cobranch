@@ -126,6 +126,9 @@ type Kit struct {
 	// Timeout is how long the task may run from its start, after which it fails; 0 for as long as the controller lets
 	// its pod run.
 	Timeout time.Duration
+	// Quiet keeps the task out of its chat, without its tools or a prompt that sends it there: for a kind whose work
+	// reaches people another way, such as a review, whose comments open threads of the branch's chat themselves.
+	Quiet bool
 }
 
 // Spec describes a tool to the model: its name, what it does, and the JSON Schema of the object its arguments are.

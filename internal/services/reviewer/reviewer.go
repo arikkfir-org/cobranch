@@ -83,7 +83,7 @@ func (r *Reviewer) Prepare(ctx context.Context, w agents.Work) (harness.Kit, err
 		return harness.Kit{}, failed(span, err)
 	}
 	return harness.Kit{Tools: []harness.Tool{readDiff{rv}, submitReview{rv}}, Instructions: instructions, Unfinished: rv.unfinished,
-		Timeout: Timeout}, nil
+		Timeout: Timeout, Quiet: true}, nil
 }
 
 // review is the review task the harness works: its organization and task, and once read, the change it reviews with
