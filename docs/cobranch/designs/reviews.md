@@ -107,7 +107,8 @@ status](branch-status.md#branch-status), in the same order of rules: Processing 
 | `Dana requested changes on its head` | A reviewer's latest review of the head requests changes |
 | `The AI reviewer requested changes on its head` | `ai` is required and its latest review of the head requests changes |
 | `The AI reviewer reviewed its head without approving it` | `ai` is required and its latest review of the head, or its task for it, ended without approving it |
-| `The AI review failed: the model's provider refused the credentials` | `ai` is required and its task for the head failed, or was cancelled, for that reason |
+| `The AI review failed: the model's provider refused the credentials` | `ai` is required and its task for the head failed, for that reason |
+| `The AI review was cancelled: <reason>` | `ai` is required and its task for the head was cancelled, for that reason |
 | `The AI reviewer has no model` | `ai` is required and no admin gave the organization's reviewer a model; likewise a suspended reviewer, and `/cobranch-review.yaml` leaving the branch out |
 | `The AI reviewer hasn't reviewed its head` | `ai` is required and the head has neither a review task nor a review of the reviewer's: Ask for a review |
 

@@ -118,6 +118,22 @@ func (s aiSteps) cancel(number int64) func() {
 	}
 }
 
+// requiresAI fails t unless the repository's branch main, read alone and with the others, requires the AI reviewer's
+// approval.
+func requiresAI(t *testing.T, f *jobsFixture, repoID uuid.UUID) {
+	t.Helper()
+	ctx := context.Background()
+	b, err := f.c.Branch(ctx, repoID, "main")
+	if err != nil || b.Requirements == nil || b.Requirements.Reviews == nil || !b.Requirements.Reviews.AI {
+		t.Fatalf("Branch(main).Requirements = %+v, %v; want reviews.ai", b.Requirements, err)
+	}
+	branches, err := f.c.Branches(ctx, repoID)
+	if err != nil || len(branches) != 1 || branches[0].Requirements == nil || branches[0].Requirements.Reviews == nil ||
+		!branches[0].Requirements.Reviews.AI {
+		t.Fatalf("Branches() = %+v, %v; want main with reviews.ai", branches, err)
+	}
+}
+
 func TestAIRequirementStatus(t *testing.T) {
 	t.Parallel()
 	f := newJobsFixture(t)
@@ -125,6 +141,7 @@ func TestAIRequirementStatus(t *testing.T) {
 	main := refs(f.website.ID, f.olivia, []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com")))
 	main.Requirements = []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{AI: true}}}
 	f.push(t, main)
+	requiresAI(t, f, f.website.ID)
 	exec(context.Background(), t, f.pool, "INSERT INTO model_providers (org_id, provider) VALUES ($1, 'acme-models')", f.acme.ID)
 	shaD, failure := strings.Repeat("d", 40), "The model's provider refused the credentials."
 	steps := []struct {
