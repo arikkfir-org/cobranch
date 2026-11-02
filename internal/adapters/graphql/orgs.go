@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
@@ -83,6 +84,9 @@ var conflicts = map[error]string{
 	chats.ErrBranchDeleted: "branch.deleted",
 	code.ErrRunEnded:       "run.ended",
 	code.ErrRunNotWaiting:  "run.not_waiting",
+	agents.ErrNameTaken:    "agent.name_taken",
+	agents.ErrBuiltIn:      "agent.built_in",
+	agents.ErrEnded:        "task.ended",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
@@ -109,7 +113,7 @@ func fail(ctx context.Context, err error, kind, what string) error {
 		return refuse(ctx, conflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
-	case errors.Is(err, chats.ErrChanged):
+	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged):
 		return refuse(ctx, conflict, "precondition.failed", "it changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(ctx, forbidden, "", "you lack the permission this takes")

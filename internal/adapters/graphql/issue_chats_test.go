@@ -59,7 +59,7 @@ func TestIssueChatUpdatesSubscription(t *testing.T) {
 	withIssue(t, f)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.secrets)))
+	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets)))
 	defer srv.Close()
 	conn, err := dialWS(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), "https://console.example.com")
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/base64"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -65,6 +67,65 @@ func TestSubmitReview(t *testing.T) {
 			}
 			if err == nil {
 				checkSubmitted(t, f, v, at, tt.in, tt.wantPerson, got)
+			}
+		})
+	}
+}
+
+func TestSubmitReviewComments(t *testing.T) {
+	on := func(sha string, start, end int, body string) code.ReviewComment {
+		return code.ReviewComment{Anchor: code.Anchor{SHA: sha, Path: "cmd/main.go", StartLine: start, EndLine: end}, Body: body}
+	}
+	review := func(state code.ReviewState, branch string, comments ...code.ReviewComment) code.ReviewInput {
+		return code.ReviewInput{State: state, Branch: branch, Comments: comments}
+	}
+	many := make([]code.ReviewComment, code.MaxReviewComments+1)
+	for i := range many {
+		many[i] = on(sha(3), 1, 1, "Here")
+	}
+	tests := []struct {
+		name    string
+		viewer  func(*annotators) code.Viewer
+		in      code.ReviewInput
+		wantErr error
+	}{
+		{name: "changes requested in comments alone", in: review(code.ReviewChangesRequested, "feature", on(sha(3), 3, 4, "Rename this"), on(sha(2), 7, 7, "Why go?"))},
+		{name: "a comment beside a body", in: code.ReviewInput{State: code.ReviewNeutral, Body: "Two notes", Branch: "feature",
+			Comments: []code.ReviewComment{on(sha(3), 1, 1, "First")}}},
+		{name: "Automation comments", viewer: func(f *annotators) code.Viewer { return f.ci }, in: review(code.ReviewApproved, "feature", on(sha(3), 1, 2, "Fine"))},
+		{name: "as many comments as a review carries", in: review(code.ReviewNeutral, "feature", many[1:]...)},
+		{name: "one comment too many", in: review(code.ReviewNeutral, "feature", many...), wantErr: invalid("comments.too_many")},
+		{name: "comments without a branch", in: review(code.ReviewNeutral, "", on(sha(3), 1, 1, "Here")), wantErr: invalid("branch.required")},
+		{name: "a branch the repository doesn't have", in: review(code.ReviewNeutral, "gone", on(sha(3), 1, 1, "Here")), wantErr: invalid("branch.unknown")},
+		{name: "a commit the repository doesn't hold", in: review(code.ReviewNeutral, "feature", on(sha(3), 1, 1, "Here"), on(sha(9), 1, 1, "There")),
+			wantErr: invalid("anchor.commit_not_found")},
+		{name: "an anchor before the first line", in: review(code.ReviewNeutral, "feature", on(sha(3), 0, 1, "Here")), wantErr: invalid("anchor.invalid")},
+		{name: "an anchor on an abbreviated commit", in: review(code.ReviewNeutral, "feature", on("0000003", 1, 1, "Here")), wantErr: invalid("anchor.invalid")},
+		{name: "a comment of blanks", in: review(code.ReviewNeutral, "feature", on(sha(3), 1, 1, " \n")), wantErr: invalid("body.empty")},
+		{name: "a comment of 20,001 characters", in: review(code.ReviewNeutral, "feature", on(sha(3), 1, 1, strings.Repeat("é", code.MaxMessageBody+1))),
+			wantErr: invalid("body.too_long")},
+		{name: "a reviewer who may not post to the chat", viewer: func(f *annotators) code.Viewer { return f.nia },
+			in: review(code.ReviewNeutral, "feature", on(sha(3), 1, 1, "Here")), wantErr: auth.ErrForbidden},
+		{name: "a reviewer who may not post to the chat approves without comments", viewer: func(f *annotators) code.Viewer { return f.nia },
+			in: code.ReviewInput{State: code.ReviewApproved}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newAnnotators()
+			f.store.BranchList[f.repo] = []code.Branch{{Name: "feature", Head: sha(3)}}
+			reviewer := orgs.Role{ID: uuid.New(), Name: "Reviewer", Permissions: []string{"repo.read", code.PermReview}}
+			f.orgs.RepositoryRoles = append(f.orgs.RepositoryRoles, reviewer)
+			f.orgs.Grant(f.nia.ID, reviewer.ID, auth.ScopeRepository, f.repo)
+			v := f.dev
+			if tt.viewer != nil {
+				v = tt.viewer(f)
+			}
+			got, err := f.service.SubmitReview(t.Context(), v, f.repo, sha(3), tt.in)
+			if !sameError(err, tt.wantErr) {
+				t.Fatalf("SubmitReview() error = %v, want %v", err, tt.wantErr)
+			}
+			if submitted := f.store.Submitted[got.ID]; err == nil && !reflect.DeepEqual(submitted, tt.in) {
+				t.Errorf("the store took %+v, want %+v", submitted, tt.in)
 			}
 		})
 	}

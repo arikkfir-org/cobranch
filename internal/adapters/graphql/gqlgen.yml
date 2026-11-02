@@ -42,6 +42,10 @@ models:
       usage: { resolver: true }
       issues: { resolver: true }
       issue: { resolver: true }
+      agents: { resolver: true }
+      agent: { resolver: true }
+      tasks: { resolver: true }
+      task: { resolver: true }
       labels: { resolver: true }
       secrets: { resolver: true }
   Issue:

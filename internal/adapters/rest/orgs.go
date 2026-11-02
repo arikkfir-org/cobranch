@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
@@ -101,6 +102,9 @@ var conflicts = map[error]string{
 	chats.ErrDeleted:       "message.deleted",
 	chats.ErrBranchDeleted: "branch.deleted",
 	code.ErrRunEnded:       "run.ended",
+	agents.ErrNameTaken:    "agent.name_taken",
+	agents.ErrBuiltIn:      "agent.built_in",
+	agents.ErrEnded:        "task.ended",
 	code.ErrRunNotWaiting:  "run.not_waiting",
 }
 
@@ -119,7 +123,7 @@ func fail(err error, kind string) error {
 		return refuse(http.StatusConflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The annotation changed since you read it: read it again.")
-	case errors.Is(err, chats.ErrChanged):
+	case errors.Is(err, chats.ErrChanged), errors.Is(err, agents.ErrChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "It changed since you read it: read it again.")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(http.StatusForbidden, "auth.forbidden", "You lack the permission this takes.")

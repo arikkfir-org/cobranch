@@ -7,13 +7,7 @@ package chats
 
 import (
 	"errors"
-	"fmt"
-	"math"
-	"path"
-	"regexp"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -25,7 +19,7 @@ import (
 // The permissions a branch's chat takes, on the repository.
 const (
 	// PermPost starts threads and posts messages, and resolves, opens again, edits and deletes the viewer's own.
-	PermPost = "messages.post"
+	PermPost = code.PermPostMessages
 	// PermModerate resolves and opens again any thread, and deletes any message.
 	PermModerate = "messages.moderate"
 )
@@ -82,20 +76,21 @@ func (s Subject) OfIssue() bool {
 }
 
 // Anchor points a thread at lines StartLine to EndLine, from 1, of the file at Path of commit SHA. It stays there when
-// the branch moves on.
-type Anchor struct {
-	SHA       string
-	Path      string
-	StartLine int
-	EndLine   int
-}
+// the branch moves on. A review's comments are anchored threads too, so the code package holds it.
+type Anchor = code.Anchor
 
 // Thread is one of a chat's threads, with its messages in the order they were posted.
 type Thread struct {
 	ID     uuid.UUID
 	Anchor *Anchor
-	// Outdated is whether the branch has moved on from the commit its anchor names; false without an anchor.
+	// Outdated is whether the branch has moved on from the commit its anchor names, or for a review's comment from the
+	// commit the review reviewed, whose diff it may anchor at its base; false without an anchor.
 	Outdated bool
+	// ReviewID names the review the thread is a comment of, which opened it; nil for a thread started in the chat, and
+	// once its review is gone.
+	ReviewID *uuid.UUID
+	// ReviewedSHA is the commit the review it is a comment of reviewed; "" for a thread that is none.
+	ReviewedSHA string
 	// StartedBy is who started it; nil once they are gone.
 	StartedBy *Principal
 	CreatedAt time.Time
@@ -193,10 +188,7 @@ const (
 )
 
 // MaxBody is the longest message, in characters.
-const MaxBody = 20000
-
-// maxPath is the longest path an anchor names, in bytes.
-const maxPath = 4096
+const MaxBody = code.MaxMessageBody
 
 // MaxPage is the most threads a page holds.
 const MaxPage = 100
@@ -214,43 +206,16 @@ var ErrBranchDeleted = errors.New("the branch was deleted; its chat stays as it 
 // ErrDeleted is an edit of a message that was deleted.
 var ErrDeleted = errors.New("the message was deleted")
 
-// hexName is a commit's full name: 40 lowercase hexadecimal digits in a SHA-1 repository, 64 in a SHA-256 one.
-var hexName = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-
 // ValidateBody reports whether body is a message: not blank, and at most MaxBody characters of UTF-8.
 func ValidateBody(body string) error {
-	switch {
-	case strings.TrimSpace(body) == "":
-		return &orgs.ValidationError{Field: "body", Code: "body.empty", Message: "a message says something"}
-	case !utf8.ValidString(body):
-		return &orgs.ValidationError{Field: "body", Code: "body.invalid", Message: "a message is UTF-8 text"}
-	case utf8.RuneCountInString(body) > MaxBody:
-		return &orgs.ValidationError{Field: "body", Code: "body.too_long", Message: fmt.Sprintf("a message is at most %d characters", MaxBody)}
-	}
-	return nil
+	return code.ValidateMessage("body", body) //nolint:wrapcheck // a validation error is the caller's answer as it is
 }
 
 // ValidateAnchor reports whether a points at lines of a file at a commit: the commit's full name, a path relative to
 // the root as names separated by /, without . or .. and at most 4096 bytes, and lines from 1, the last at or after
 // the first.
 func ValidateAnchor(a Anchor) error {
-	invalid := func(field, message string) error {
-		return &orgs.ValidationError{Field: "anchor." + field, Code: "anchor.invalid", Message: message}
-	}
-	switch {
-	case !hexName.MatchString(a.SHA):
-		return invalid("sha", "an anchor names its commit by its full name, in lowercase hexadecimal")
-	case a.Path == "", len(a.Path) > maxPath, path.Clean(a.Path) != a.Path, strings.HasPrefix(a.Path, "/"), a.Path == ".",
-		a.Path == "..", strings.HasPrefix(a.Path, "../"), !utf8.ValidString(a.Path):
-		return invalid("path", "an anchor names a file by its path from the root, as names separated by /")
-	case a.StartLine < 1:
-		return invalid("startLine", "an anchor's lines start at 1")
-	case a.EndLine < a.StartLine:
-		return invalid("endLine", "an anchor's last line is at or after its first")
-	case a.EndLine > math.MaxInt32:
-		return invalid("endLine", fmt.Sprintf("an anchor's lines end by %d", math.MaxInt32))
-	}
-	return nil
+	return code.ValidateAnchor("anchor", a) //nolint:wrapcheck // a validation error is the caller's answer as it is
 }
 
 // validateID reports whether id, when it is set, is a UUIDv7, which orders threads and messages by when they came.

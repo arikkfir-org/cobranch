@@ -161,6 +161,18 @@ var reviewStates = map[code.ReviewState]ReviewState{
 	code.ReviewApproved: ReviewStateApproved, code.ReviewChangesRequested: ReviewStateChangesRequested, code.ReviewNeutral: ReviewStateNeutral,
 }
 
+// reviewInput is the review in submits, as the code service takes it.
+func reviewInput(in ReviewInput) code.ReviewInput {
+	out := code.ReviewInput{State: reviewStateOf(in.State), Body: in.Body, Comments: make([]code.ReviewComment, len(in.Comments))}
+	if in.Branch != nil {
+		out.Branch = *in.Branch
+	}
+	for i, c := range in.Comments {
+		out.Comments[i] = code.ReviewComment{Anchor: *anchorOf(c.Anchor), Body: c.Body}
+	}
+	return out
+}
+
 // reviewStateOf is the domain's review state that state is.
 func reviewStateOf(state ReviewState) code.ReviewState {
 	for domain, schema := range reviewStates {

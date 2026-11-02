@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 )
 
 // chatStep is one document of a conversation on feature/login's chat, or an issue's, against one fixture: it may name
@@ -216,7 +217,7 @@ func TestChatUpdatesSubscription(t *testing.T) {
 	f := newOrgFixture()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.secrets)))
+	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets)))
 	defer srv.Close()
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
 	if conn, err := dialWS(ctx, url, "https://elsewhere.example.com"); err == nil {
@@ -243,5 +244,25 @@ func TestChatUpdatesSubscription(t *testing.T) {
 	if m := c.read(); m.Type != "next" || m.ID != "1" || !strings.Contains(string(m.Payload), `"cursor":"1","kind":"THREAD_STARTED"`) ||
 		!strings.Contains(string(m.Payload), `"message":{"body":"Hello"}`) {
 		t.Fatalf("update = %s %s, want the thread started", m.Type, m.Payload)
+	}
+}
+
+func TestChatThreadNamesItsReview(t *testing.T) {
+	review := uuid.New()
+	tests := []struct {
+		name   string
+		review *uuid.UUID
+		want   *string
+	}{
+		{name: "a review's comment", review: &review, want: new(review.String())},
+		{name: "a thread started in the chat"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := chatThread(chats.Thread{ID: uuid.New(), ReviewID: tt.review}).ReviewID
+			if (got == nil) != (tt.want == nil) || got != nil && *got != *tt.want {
+				t.Errorf("chatThread().ReviewID = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

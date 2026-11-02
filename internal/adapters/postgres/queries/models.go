@@ -11,6 +11,41 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Agent struct {
+	PrincipalID  uuid.UUID
+	OrgID        uuid.UUID
+	Name         string
+	Description  string
+	Instructions string
+	BuiltIn      bool
+	CreatedBy    *uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	Version      int64
+}
+
+type AgentTask struct {
+	ID           uuid.UUID
+	OrgID        uuid.UUID
+	Number       int64
+	AgentID      uuid.UUID
+	Kind         string
+	AssignedBy   *uuid.UUID
+	Title        string
+	Instructions string
+	RepoID       *uuid.UUID
+	BranchID     *uuid.UUID
+	ThreadID     *uuid.UUID
+	State        string
+	Reason       string
+	Summary      string
+	CancelledBy  *uuid.UUID
+	CreatedAt    time.Time
+	StartedAt    *time.Time
+	EndedAt      *time.Time
+	Version      int64
+}
+
 type Annotation struct {
 	ID          uuid.UUID
 	OrgID       uuid.UUID
@@ -69,6 +104,7 @@ type ChatThread struct {
 	ResolvedAt *time.Time
 	ResolvedBy *uuid.UUID
 	Version    int64
+	ReviewID   *uuid.UUID
 	IssueID    *uuid.UUID
 }
 

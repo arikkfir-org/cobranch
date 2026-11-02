@@ -23,6 +23,8 @@ const (
 	KindAPIKey Kind = "api_key"
 	// KindJob is a job a repository declares: a principal of its organization that the job's runs act as.
 	KindJob Kind = "job"
+	// KindAgent is an agent: a principal of an organization that does the tasks its members assign it.
+	KindAgent Kind = "agent"
 )
 
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.

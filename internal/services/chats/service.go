@@ -1,6 +1,7 @@
 package chats
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -576,7 +577,9 @@ func (s *Service) read(ctx context.Context, v Viewer, subj Subject, after int64)
 
 // present works out whether t is outdated, and renders its messages.
 func (s *Service) present(ctx context.Context, subj Subject, t *Thread) error {
-	t.Outdated = t.Anchor != nil && t.Anchor.SHA != subj.Head
+	if t.Anchor != nil {
+		t.Outdated = cmp.Or(t.ReviewedSHA, t.Anchor.SHA) != subj.Head
+	}
 	for i := range t.Messages {
 		if err := s.render(ctx, subj, &t.Messages[i]); err != nil {
 			return err

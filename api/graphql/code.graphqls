@@ -199,15 +199,26 @@ extend type Mutation {
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
   "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved); without it, the branch is deleted wherever it is, at its new head when it moves meanwhile, and refused so only once it kept moving. main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
   deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
-  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and answers it; takes reviews.submit. A review is never changed: its reviewer submits another, and their latest is the one that counts."
+  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, opens its comments as threads of the chat of the branch it names, and answers it; takes reviews.submit, and messages.post with comments. A review is never changed: its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is refused (CONFLICT, branch.deleted)."
   submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
 }
 
 "The review a principal submits."
 input ReviewInput {
   state: ReviewState!
-  "What the reviewer writes, at most 65,536 characters, which only an approval may leave blank."
+  "What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may leave blank."
   body: String! = ""
+  "The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments needs none."
+  branch: String
+  "The review's comments on lines of files, at most 100, each a thread of the branch's chat that the review's transaction opens, anchored there, its first message the comment."
+  comments: [ReviewCommentInput!]! = []
+}
+
+"A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff, or its base's."
+input ReviewCommentInput {
+  anchor: ChatAnchorInput!
+  "The comment's Markdown, at most 20,000 characters, not blank."
+  body: String!
 }
 
 "A review's verdict on a commit."
