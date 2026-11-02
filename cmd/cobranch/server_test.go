@@ -3,9 +3,13 @@ package main
 import (
 	"context"
 	"io"
+	"math/rand/v2"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -13,15 +17,59 @@ import (
 	"cobranch.dev/internal/system/buildinfo"
 )
 
-// freeAddr returns a local address no one listens on yet.
+// ports holds the next port freeAddr tries, from a random start, so that two runs on one machine rarely meet.
+var ports struct {
+	sync.Mutex
+	next int
+}
+
+// freeAddr returns a local address no one listens on yet, for a workload to bind. Its port lies below the kernel's
+// ephemeral range, from which the kernel takes the ports of outgoing connections and of listeners on port 0: the tests,
+// this package's and those running beside it, connect all the time, and one of their connections could take a port of
+// that range between freeAddr's check and the workload's bind. Below the range only a bind that names a port takes it,
+// and freeAddr never hands out a port twice in a run.
 func freeAddr(t *testing.T) string {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
+	ports.Lock()
+	defer ports.Unlock()
+	const first, room = 10000, 1000 // The lowest port it tries, and the ports a run has after its random start.
+	low := ephemeralLow()
+	if low < first+2*room {
+		// No room below the range: a port the kernel picks is the best there is.
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = ln.Close() // Only the address matters: the workload binds it anew.
+		return ln.Addr().String()
 	}
-	defer func() { _ = ln.Close() }()
-	return ln.Addr().String()
+	if ports.next == 0 {
+		ports.next = first + rand.IntN(low-first-room)
+	}
+	var err error
+	for ; ports.next < low; ports.next++ {
+		var ln net.Listener
+		if ln, err = net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(ports.next))); err == nil {
+			_ = ln.Close() // Only the address matters: the workload binds it anew.
+			ports.next++
+			return ln.Addr().String()
+		}
+	}
+	t.Fatalf("no free port below %d, the ephemeral range's first: %v", low, err)
+	return ""
+}
+
+// ephemeralLow returns the first port of the kernel's ephemeral range: Linux's, or else 32768, its default, which lies
+// below the ranges of macOS and Windows.
+func ephemeralLow() int {
+	if b, err := os.ReadFile("/proc/sys/net/ipv4/ip_local_port_range"); err == nil {
+		if f := strings.Fields(string(b)); len(f) == 2 {
+			if low, err := strconv.Atoi(f[0]); err == nil {
+				return low
+			}
+		}
+	}
+	return 32768
 }
 
 // noRedirects answers a redirect as it is, so a test sees where the server sent the browser.
