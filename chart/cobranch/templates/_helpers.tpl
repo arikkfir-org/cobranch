@@ -11,6 +11,13 @@
 {{- define "cobranch.labels" -}}
 helm.sh/chart: {{ printf "%s-%s" .root.Chart.Name .root.Chart.Version | replace "+" "_" }}
 app.kubernetes.io/version: {{ .root.Chart.AppVersion | quote }}
+{{ include "cobranch.stableLabels" . }}
+{{- end -}}
+
+{{/* The labels of cobranch.labels that every upgrade keeps, without the chart's version and app version: those of a pod
+that an upgrade must not restart unless the pod itself changes, as PostgreSQL's; pass a dict of the root context and the
+component. */}}
+{{- define "cobranch.stableLabels" -}}
 app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 app.kubernetes.io/part-of: cobranch
 {{ include "cobranch.selectorLabels" . }}
