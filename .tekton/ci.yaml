@@ -13,7 +13,8 @@ spec:
   # Reserved once for all of a task's steps (step-level requests would add up as if the steps ran at once), measured
   # on the runs of 2026-11-01 at GOMAXPROCS=4 on a cold cache, with Go Cloud's drivers (the AWS, Azure and Google Cloud
   # SDKs): the compiles, lint and tests each keep about two cores busy and burst to four, and peak near 2.1Gi
-  # (generated), 1.5Gi (lint, test) and 1.4Gi (build). Size them again from real runs as the code grows.
+  # (generated), 1.5Gi (lint) and 1.4Gi (build), and on the runs of 2026-11-02, 2.6Gi (test). Size them again from real
+  # runs as the code grows.
   taskRunSpecs:
     - pipelineTaskName: build
       computeResources:
@@ -33,7 +34,7 @@ spec:
       computeResources:
         requests:
           cpu: "2"
-          memory: 1536Mi
+          memory: 2560Mi
         limits:
           memory: 3Gi
     # The steps only drive the Docker daemon and the cluster, which its sidecar holds, with resources of its own; helm

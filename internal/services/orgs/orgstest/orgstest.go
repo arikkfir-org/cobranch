@@ -16,7 +16,7 @@ import (
 // The built-in organization roles, as migration 2 writes them.
 var (
 	Owner  = orgs.Role{ID: auth.RoleOwner, Name: "Owner", BuiltIn: true, Permissions: slices.Concat(auth.OrganizationPermissions, auth.RepositoryPermissions)}
-	Member = orgs.Role{ID: auth.RoleMember, Name: "Member", BuiltIn: true, Permissions: []string{"org.read", "repos.create", "agents.create", "agents.assign"}}
+	Member = orgs.Role{ID: auth.RoleMember, Name: "Member", BuiltIn: true, Permissions: []string{"org.read", "repos.create", "agents.create", "agents.assign", "issues.read", "issues.write"}}
 	Guest  = orgs.Role{ID: auth.RoleGuest, Name: "Guest", BuiltIn: true, Permissions: []string{"org.read"}}
 	// Manager is a custom role for tests: it manages members but holds no grants.
 	Manager = orgs.Role{ID: uuid.MustParse("00000000-0000-7000-8000-000000000f01"), Name: "Manager", Permissions: []string{"org.read", "org.members.manage"}}

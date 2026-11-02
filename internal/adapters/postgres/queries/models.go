@@ -157,6 +157,23 @@ type Invitation struct {
 	DecidedBy *uuid.UUID
 }
 
+type Issue struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Number      int32
+	Title       string
+	Description string
+	State       string
+	Priority    int16
+	AssigneeID  *uuid.UUID
+	RepoID      *uuid.UUID
+	CreatedBy   *uuid.UUID
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	ClosedAt    *time.Time
+	Version     int64
+}
+
 type JoinRequest struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
@@ -183,6 +200,7 @@ type Organization struct {
 	AcceptsJoinRequests bool
 	Providers           []string
 	CreatedAt           time.Time
+	IssueKey            string
 }
 
 type Principal struct {

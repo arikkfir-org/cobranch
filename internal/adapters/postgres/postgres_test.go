@@ -364,6 +364,9 @@ func TestSchemaMigrateUntilDone(t *testing.T) {
 		{name: "a database that never answers", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantErr: true, wantDeadline: true},
 		{name: "a broken migration", reach: true, sqlFiles: broken, wantErr: true},
 	}
+	// A database that never answers is retried until the deadline, so its case waits all of it; one that answers
+	// migrates as fast as the tests beside it, which set up their databases at the same time, leave it.
+	deadlines := map[bool]time.Duration{false: 3 * time.Second, true: time.Minute}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -371,7 +374,7 @@ func TestSchemaMigrateUntilDone(t *testing.T) {
 			if tt.reach {
 				pool = testDatabase(t)
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), deadlines[tt.reach])
 			defer cancel()
 			s := newSchema(t, pool, tt.sqlFiles, tt.goMigrations...)
 			err := s.MigrateUntilDone(ctx, 10*time.Millisecond)

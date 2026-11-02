@@ -5,3 +5,6 @@ generate:
   models: true
   std-http-server: true
   strict-server: true
+output-options:
+  # A merge patch tells a null (clear the field) from a field left out (keep it).
+  nullable-type: true

@@ -21,6 +21,7 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/system/buildinfo"
@@ -51,6 +52,7 @@ type services struct {
 	organizations  *orgs.Service
 	repositories   *repos.Service
 	code           *code.Service
+	issues         *issues.Service
 	chats          *chats.Service
 	administration *admin.Service
 }
@@ -61,12 +63,12 @@ func backOffice(u config.URLs) config.URL { return u.BackOffice }
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
 	restServer = api{workload: "rest-server", pattern: "/", pages: console, follows: true, handler: func(version, _ string, s services) http.Handler {
-		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.chats)
+		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
 	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, handler: func(version, pages string, s services) http.Handler {
-		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.chats)
+		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
 	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version, _ string, s services) http.Handler {
@@ -114,7 +116,8 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
-		chats: chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer), administration: administration}
+		issues: issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer),
+		chats:  chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {

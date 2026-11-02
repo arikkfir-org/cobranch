@@ -37,6 +37,8 @@ type Organization struct {
 	// Providers lists the identity providers its members may sign in with, or nil for all of the installation's;
 	// an empty list is nil too.
 	Providers []string
+	// IssueKey starts its issues' identifiers, such as ACME in ACME-42.
+	IssueKey  string
 	CreatedAt time.Time
 }
 
@@ -47,6 +49,8 @@ type Settings struct {
 	MembershipRoleID    uuid.UUID
 	AcceptsJoinRequests bool
 	Providers           []string
+	// IssueKey is the key its issues' identifiers start with; "" keeps it.
+	IssueKey string
 }
 
 // Role is a role granted at an organization: one of the built-in ones, or a custom role the organization defined.
@@ -311,7 +315,39 @@ func NewOrganization(slug, name string, at time.Time) (Organization, error) {
 	if err != nil {
 		return Organization{}, fmt.Errorf("making an ID: %w", err)
 	}
-	return Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: at}, nil
+	return Organization{ID: id, Slug: slug, Name: name, MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true,
+		IssueKey: DefaultIssueKey(slug), CreatedAt: at}, nil
+}
+
+// issueKeyPattern is 1 to 10 uppercase letters and digits, starting with a letter.
+var issueKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{0,9}$`)
+
+// ValidateIssueKey reports whether key may start an organization's issue identifiers.
+func ValidateIssueKey(key string) error {
+	if !issueKeyPattern.MatchString(key) {
+		return &ValidationError{Field: "issueKey", Code: "issue_key.invalid", Message: "an issue key is 1 to 10 uppercase letters and digits, starting with a letter"}
+	}
+	return nil
+}
+
+// DefaultIssueKey is the issue key an organization of slug starts with: the letters of its slug's first word, at most
+// five, uppercased, or ISSUE when it has none. The database's default_issue_key() is the same, for the organizations
+// the database makes without one.
+func DefaultIssueKey(slug string) string {
+	word, _, _ := strings.Cut(slug, "-")
+	key := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r - 'a' + 'A'
+		}
+		return -1
+	}, word)
+	if len(key) > 5 {
+		key = key[:5]
+	}
+	if key == "" {
+		return "ISSUE"
+	}
+	return key
 }
 
 // ValidateEmail reports whether email can be invited: something@somewhere, lowercase.
