@@ -239,6 +239,7 @@
     .checks li:first-child { border-top: 0; }
     .checks li .detail { margin-left: auto; color: var(--color-fg-muted); font-size: 13px; text-align: right; }
     section.panel.blocked { border-color: var(--color-status-danger-border); }
+    section.panel.blocked pre { margin: 0; white-space: pre-wrap; font: 13px/20px var(--font-mono); }
     .why { display: flex; gap: 8px; align-items: flex-start; padding: 12px; border-radius: 8px; border: 1px solid var(--tone-border); background: var(--tone-bg); color: var(--tone-fg); }
     .why p { color: inherit; }
     .why strong { font-weight: 600; }
@@ -1122,13 +1123,22 @@
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"));
-      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
+      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), mergeRequirements([b])].filter(Boolean);
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
+      if (b.settingsError) sections.push(settingsError(b));
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
       if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
       return sections;
+    }
+
+    // settingsError says why the /cobranch.yaml at b's head doesn't parse, and that its jobs run nothing until it does;
+    // null when it parses.
+    function settingsError(b) {
+      if (!b.settingsError) return null;
+      return h("section", { class: "panel blocked" }, h("h3", {}, h("code", {}, "/cobranch.yaml"), " doesn't parse"),
+        h("p", {}, "Its jobs run nothing at this head until it does:"), h("pre", {}, b.settingsError));
     }
 
     // branchChecks lists how b meets each merge requirement, as its status last worked them out, under why it is

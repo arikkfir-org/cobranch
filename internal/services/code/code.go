@@ -79,6 +79,9 @@ type Branch struct {
 	Requirements *git.Requirements
 	// Merge is the last merge recorded of it into Base; nil when none was. It is Merged while its head is Merge's.
 	Merge *Merge
+	// SettingsError is why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing
+	// until it does. "" when it parses, or there is none.
+	SettingsError string
 }
 
 // Merge is a merge of a branch into its base that a push made: the head it brought in, who pushed it, nil once they

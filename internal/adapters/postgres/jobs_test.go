@@ -176,6 +176,13 @@ func (f *jobsFixture) checkQueued(t *testing.T) {
 	if n := count(t, f.pool, "SELECT count(*) FROM settings_files WHERE repo_id = $1 AND error <> ''", repo); n != 1 {
 		t.Errorf("%d recorded files that don't parse, want broken's", n)
 	}
+	broken, err := f.c.Branch(context.Background(), repo, "broken")
+	if err != nil || !strings.Contains(broken.SettingsError, "line 1") {
+		t.Errorf("broken's settings error = %q, %v, want its line", broken.SettingsError, err)
+	}
+	if main, err := f.c.Branch(context.Background(), repo, "main"); err != nil || main.SettingsError != "" {
+		t.Errorf("main's settings error = %q, %v, want none", main.SettingsError, err)
+	}
 	if n := count(t, f.pool, "SELECT count(*) FROM branches WHERE repo_id = $1 AND settings_blob IS NULL AND deleted_at IS NULL", repo); n != 1 {
 		t.Errorf("%d branches without a file, want bare", n)
 	}
@@ -245,6 +252,61 @@ func TestGitStoreQueuesTagRunsOfItsLatestPush(t *testing.T) {
 		t.Fatalf("processed %d pushes, want the earlier one", n)
 	}
 	want := []string{"#1 ci/build main@a queued", "#2 ci/build next@b queued", "#3 release tags/v2@b queued"}
+	if got := f.runs(t, repo); !slices.Equal(got, want) {
+		t.Errorf("runs = %q, want %q", got, want)
+	}
+}
+
+// TestGitStoreQueuesNothingForATagThatMovedWhileItWaited has a push worker wait for the repository's runs with a push
+// that set a tag, while a later push moves the tag again: once it gets them, it sees the tag moved on and queues
+// nothing, and the later push queues the tag's run.
+func TestGitStoreQueuesNothingForATagThatMovedWhileItWaited(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	repo := f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
+		tip(t, "main", "blob-1", jobsFile))
+	f.push(t, pushOf(repo, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/next", Old: git.ZeroSHA, New: shaB}}, commit(shaB, person("Olivia", "olivia@example.com"), shaA)),
+		tip(t, "next", "blob-1", jobsFile))
+	tagA, tagB := strings.Repeat("1", 40), strings.Repeat("2", 40)
+	if err := f.g.Record(ctx, withPeeled(pushOf(repo, f.olivia, "", []git.RefUpdate{{Name: "refs/tags/v2", Old: git.ZeroSHA, New: tagA}}), "refs/tags/v2", shaA)); err != nil {
+		t.Fatal(err)
+	}
+	gate, err := acquire(t, f.pool).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gate.Exec(ctx, "SELECT last FROM run_numbers WHERE repo_id = $1 FOR UPDATE", repo); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := f.g.Process(ctx, git.RetryAfter)
+		done <- err
+	}()
+	for i := 0; count(t, f.pool, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()
+		AND wait_event_type = 'Lock' AND query LIKE '%run_numbers%'`) < 1; i++ {
+		if i == 500 {
+			t.Fatal("the push worker doesn't wait for the repository's runs")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := f.g.Record(ctx, withPeeled(pushOf(repo, f.olivia, "", []git.RefUpdate{{Name: "refs/tags/v2", Old: tagA, New: tagB}}), "refs/tags/v2", shaB)); err != nil {
+		t.Fatal(err)
+	}
+	if err := gate.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("Process() = %v", err)
+	}
+	want := []string{"#1 ci/build main@a queued", "#2 ci/build next@b queued"}
+	if got := f.runs(t, repo); !slices.Equal(got, want) {
+		t.Errorf("runs once the overtaken push is processed = %q, want %q", got, want)
+	}
+	f.process(t)
+	want = append(want, "#3 release tags/v2@b queued")
 	if got := f.runs(t, repo); !slices.Equal(got, want) {
 		t.Errorf("runs = %q, want %q", got, want)
 	}

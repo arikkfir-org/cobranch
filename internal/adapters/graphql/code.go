@@ -180,6 +180,9 @@ func branch(b code.Branch) *Branch {
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: commitPrincipal(m.By), At: m.At.UTC()}
 	}
+	if b.SettingsError != "" {
+		out.SettingsError = &b.SettingsError
+	}
 	return out
 }
 

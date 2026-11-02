@@ -2299,6 +2299,11 @@ components:
           $ref: "#/components/schemas/MergeRequirements"
         merge:
           $ref: "#/components/schemas/BranchMerge"
+        settingsError:
+          type: string
+          description: >-
+            Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it
+            does. Left out when it parses, or there is none.
     BranchMerge:
       type: object
       description: >-

@@ -65,8 +65,9 @@ func TestBranchesAPI(t *testing.T) {
 		{name: "a branch named with a slash, escaped, that no push has worked out", viewer: olivia, method: "GET",
 			path: fixed("/v1/orgs/acme/repos/website/branches/feature%2Flogin"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if b := decode[Branch](t, body); b.Name != "feature/login" || b.Status == nil || *b.Status != Processing || b.Ahead != nil {
-					t.Errorf("feature/login = %s, want it processing, with no facts", body)
+				if b := decode[Branch](t, body); b.Name != "feature/login" || b.Status == nil || *b.Status != Processing || b.Ahead != nil ||
+					b.SettingsError == nil || *b.SettingsError != "/cobranch.yaml line 3: jobs is a map of jobs by name" {
+					t.Errorf("feature/login = %s, want it processing, with no facts and its file's error", body)
 				}
 			}},
 		{name: "a branch that doesn't live", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/repos/website/branches/gone"),

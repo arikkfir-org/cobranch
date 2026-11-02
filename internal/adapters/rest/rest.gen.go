@@ -558,6 +558,9 @@ type Branch struct {
 	// Requirements What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
 	Requirements *MergeRequirements `json:"requirements,omitempty"`
 
+	// SettingsError Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Left out when it parses, or there is none.
+	SettingsError *string `json:"settingsError,omitempty"`
+
 	// Status Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
 	Status *BranchStatus `json:"status,omitempty"`
 

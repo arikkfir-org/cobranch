@@ -106,6 +106,8 @@ type Branch struct {
 	Requirements *MergeRequirements `json:"requirements,omitempty"`
 	// The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's.
 	Merge *BranchMerge `json:"merge,omitempty"`
+	// Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Null when it parses, or there is none.
+	SettingsError *string `json:"settingsError,omitempty"`
 }
 
 // One of a branch's merge requirements and how it stands.

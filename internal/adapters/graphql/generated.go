@@ -78,18 +78,19 @@ type ComplexityRoot struct {
 	}
 
 	Branch struct {
-		Ahead        func(childComplexity int) int
-		Base         func(childComplexity int) int
-		Behind       func(childComplexity int) int
-		Checks       func(childComplexity int) int
-		Commit       func(childComplexity int) int
-		CreatedAt    func(childComplexity int) int
-		Head         func(childComplexity int) int
-		Merge        func(childComplexity int) int
-		Name         func(childComplexity int) int
-		Requirements func(childComplexity int) int
-		Status       func(childComplexity int) int
-		UpdatedAt    func(childComplexity int) int
+		Ahead         func(childComplexity int) int
+		Base          func(childComplexity int) int
+		Behind        func(childComplexity int) int
+		Checks        func(childComplexity int) int
+		Commit        func(childComplexity int) int
+		CreatedAt     func(childComplexity int) int
+		Head          func(childComplexity int) int
+		Merge         func(childComplexity int) int
+		Name          func(childComplexity int) int
+		Requirements  func(childComplexity int) int
+		SettingsError func(childComplexity int) int
+		Status        func(childComplexity int) int
+		UpdatedAt     func(childComplexity int) int
 	}
 
 	BranchCheck struct {
@@ -743,6 +744,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Branch.Requirements(childComplexity), true
+	case "Branch.settingsError":
+		if e.ComplexityRoot.Branch.SettingsError == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.SettingsError(childComplexity), true
 	case "Branch.status":
 		if e.ComplexityRoot.Branch.Status == nil {
 			break
@@ -2678,6 +2685,8 @@ type Branch {
   requirements: MergeRequirements
   "The last merge recorded of it into its base; null when none was. It is MERGED while its head is the merge's."
   merge: BranchMerge
+  "Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Null when it parses, or there is none."
+  settingsError: String
 }
 
 "A merge of a branch into its base that a push made."
@@ -3431,6 +3440,8 @@ func (ec *executionContext) childFields_Branch(ctx context.Context, field graphq
 		return ec.fieldContext_Branch_requirements(ctx, field)
 	case "merge":
 		return ec.fieldContext_Branch_merge(ctx, field)
+	case "settingsError":
+		return ec.fieldContext_Branch_settingsError(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Branch", field.Name)
 }
@@ -6177,6 +6188,29 @@ func (ec *executionContext) fieldContext_Branch_merge(_ context.Context, field g
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Branch_settingsError(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_settingsError(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SettingsError, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_settingsError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "String")
 }
 
 func (ec *executionContext) _BranchCheck_kind(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
@@ -14831,6 +14865,11 @@ func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "merge":
 			out.Values[i] = ec._Branch_merge(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "settingsError":
+			out.Values[i] = ec._Branch_settingsError(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}

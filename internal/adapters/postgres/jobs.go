@@ -50,8 +50,13 @@ func recordSettings(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 }
 
 // queuePushRuns queues the runs the claimed push triggers, in the push worker's transaction: for each branch it
-// creates or moves, and each tag that names a commit, the jobs that match.
+// creates or moves, and each tag that names a commit, the jobs that match. It takes the repository's run lock before
+// it reads where any ref stands, so a later push that another push worker processed meanwhile is seen: a ref that
+// moved on since this push queues nothing.
 func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	if err := q.LockRunQueue(ctx, claimed.RepoID); err != nil {
+		return fmt.Errorf("locking the repository's runs: %w", err)
+	}
 	var updates []refUpdateJSON
 	if err := json.Unmarshal(claimed.RefUpdates, &updates); err != nil {
 		return fmt.Errorf("reading the push's ref updates: %w", err)
@@ -110,8 +115,9 @@ func pushEvent(ctx context.Context, q *queries.Queries, pushed jobs.Event, u ref
 // queueRuns queues, in the transaction of the change that caused e, a run of each job whose triggers match it, by
 // name, each with its job's annotation set on e's commit: Pending, or Failed with the reason when it can't run. Jobs
 // come from e's branch's head for events on a branch, which must still be e's commit, and from the default branch's
-// head for tags, posted events and schedules. The branches at e's commit get their status worked out again, unless they
-// wait for the push worker, which then does.
+// head for tags, posted events and schedules, read under the repository's run lock, so a change queued meanwhile is
+// seen. The branches at e's commit get their status worked out again, unless they wait for the push worker, which then
+// does.
 func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) error {
 	orgID, err := q.CommitOrg(ctx, e.RepoID, e.SHA)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -120,12 +126,12 @@ func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) error {
 	if err != nil {
 		return fmt.Errorf("finding commit %s: %w", e.SHA, err)
 	}
+	if err := q.LockRunQueue(ctx, e.RepoID); err != nil {
+		return fmt.Errorf("locking the repository's runs: %w", err)
+	}
 	defined, err := definitionsFor(ctx, q, e)
 	if err != nil || len(defined) == 0 {
 		return err
-	}
-	if err := q.LockRunQueue(ctx, e.RepoID); err != nil {
-		return fmt.Errorf("locking the repository's runs: %w", err)
 	}
 	wait := false
 	if e.Kind == jobs.EventPush {

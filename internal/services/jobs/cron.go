@@ -11,8 +11,8 @@ import (
 // fires at, in UTC, each as a set of bits.
 type Cron struct {
 	minutes, hours, days, months, weekdays uint64
-	// anyDay and anyWeekday record a field that starts with *: cron fires on a day that either field matches when both are
-	// restricted, and on those the restricted one matches otherwise.
+	// anyDay and anyWeekday record a field that starts with *, stepped or not: cron fires on a day that either field
+	// matches when neither does, and on a day both match otherwise.
 	anyDay, anyWeekday bool
 }
 
@@ -128,18 +128,13 @@ func (c Cron) Next(t time.Time) time.Time {
 	return time.Time{}
 }
 
-// dayMatches reports whether c fires on t's day: by its day of the month or its day of the week, either one when both
-// are restricted.
+// dayMatches reports whether c fires on t's day: by its day of the month and its day of the week when either field
+// starts with *, as a bare * takes every day, and by either one when both are restricted.
 func (c Cron) dayMatches(t time.Time) bool {
 	day := c.days&(1<<uint(t.Day())) != 0
 	weekday := c.weekdays&(1<<uint(t.Weekday())) != 0
-	switch {
-	case c.anyDay && c.anyWeekday:
-		return true
-	case c.anyDay:
-		return weekday
-	case c.anyWeekday:
-		return day
+	if c.anyDay || c.anyWeekday {
+		return day && weekday
 	}
 	return day || weekday
 }
