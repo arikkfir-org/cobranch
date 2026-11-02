@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -116,6 +117,34 @@ func (e *echo) Run(_ context.Context, c harness.Call) (string, error) {
 	return args.Text, nil
 }
 
+// named is a tool of its name that answers "ok".
+type named string
+
+func (n named) Spec() harness.Spec {
+	return harness.Spec{Name: string(n), Description: "Says ok.", Parameters: json.RawMessage(`{"type":"object"}`)}
+}
+
+func (n named) Run(context.Context, harness.Call) (string, error) { return "ok", nil }
+
+// kind is a task's Kind that gives it kit, or fails with err; left counts down the times its task is unfinished.
+type kind struct {
+	kit  harness.Kit
+	err  error
+	left int
+}
+
+func (k *kind) Prepare(context.Context, agents.Work) (harness.Kit, error) {
+	if k.left > 0 {
+		k.kit.Unfinished = func(context.Context) (string, error) {
+			if k.left--; k.left >= 0 {
+				return "submit the review first", nil
+			}
+			return "", nil
+		}
+	}
+	return k.kit, k.err
+}
+
 // call is a call of tool name with the arguments args, a JSON object.
 func call(id, name, args string) harness.Call {
 	return harness.Call{ID: id, Name: name, Arguments: json.RawMessage(args)}
@@ -146,6 +175,9 @@ type harnessCase struct {
 	wantErr  bool
 	want     []agents.EntryKind
 	check    func(t *testing.T, c *cobranch, m *model, e *echo)
+	// kind, when set, prepares the task, of kind review, which started startedAgo.
+	kind       *kind
+	startedAgo time.Duration
 }
 
 func TestRun(t *testing.T) {
@@ -186,6 +218,7 @@ func TestRun(t *testing.T) {
 		{name: "a refused token", refuseAt: 2, turns: []harness.Turn{done}, want: kinds("input")},
 	}
 	tt = append(tt, callCases()...)
+	tt = append(tt, kindCases()...)
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -235,6 +268,51 @@ func callCases() []harnessCase {
 	}
 }
 
+// kindCases are the cases of tasks of a kind the harness handles.
+func kindCases() []harnessCase {
+	asked := func(n int) func(t *testing.T, _ *cobranch, m *model, _ *echo) {
+		return func(t *testing.T, _ *cobranch, m *model, _ *echo) {
+			if len(m.requests) != n {
+				t.Errorf("asked the model %d times, want %d", len(m.requests), n)
+			}
+		}
+	}
+	return []harnessCase{
+		{name: "a kind's tools and instructions", kind: &kind{kit: harness.Kit{Tools: []harness.Tool{named("stamp")}, Instructions: "Stamp it."}},
+			turns: []harness.Turn{calling(call("a", "stamp", `{}`)), done}, want: kinds("input", "turn", "result", "turn", "state"),
+			check: func(t *testing.T, c *cobranch, m *model, e *echo) {
+				var names []string
+				for _, s := range m.requests[0].Tools {
+					names = append(names, s.Name)
+				}
+				if !slices.Equal(names, []string{"echo", "stamp", "finish"}) || !strings.HasSuffix(m.requests[0].System, "Be brief.\n\nStamp it.") {
+					t.Errorf("the model is offered %v, with %q", names, m.requests[0].System)
+				}
+				resultAt(2, "ok", false)(t, c, m, e)
+			}},
+		{name: "a task its kind ends", kind: &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Nothing to stamp."}}},
+			want: kinds("input", "state"), check: asked(0)},
+		{name: "a success its kind refuses until the task is done", kind: &kind{left: 1}, turns: []harness.Turn{done, done},
+			want: kinds("input", "turn", "result", "turn", "state"), check: resultAt(2, "finish can't end the task yet: submit the review first", true)},
+		{name: "a failure its kind doesn't hold back", kind: &kind{left: 5},
+			turns: []harness.Turn{calling(call("f", "finish", `{"outcome":"failed","reason":"No floor."}`))}, want: kinds("input", "turn", "state"),
+			check: failedWith("No floor.")},
+		{name: "a task past its kind's timeout", kind: &kind{kit: harness.Kit{Timeout: time.Minute}}, startedAgo: 2 * time.Minute,
+			turns: []harness.Turn{done}, want: kinds("state"), check: failedWith("Timed out after 1m0s.")},
+		{name: "a task its kind ended, resumed past its timeout",
+			kind:       &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Reviewed it."}, Timeout: time.Minute}},
+			startedAgo: 2 * time.Minute, want: kinds("input", "state"), check: func(t *testing.T, c *cobranch, m *model, e *echo) {
+				if body := c.last(t); body["state"] != "succeeded" || c.work.Task.State != agents.TaskSucceeded {
+					t.Errorf("the task ended with %v, want succeeded as its kind said", body)
+				}
+				asked(0)(t, c, m, e)
+			}},
+		{name: "a task within its kind's timeout", kind: &kind{kit: harness.Kit{Timeout: time.Hour}}, startedAgo: time.Minute,
+			turns: []harness.Turn{done}, want: kinds("input", "turn", "state")},
+		{name: "a kind that can't prepare the task", kind: &kind{err: errors.New("no diff")}, wantErr: true, check: asked(0)},
+	}
+}
+
 // runCase works tc's task with an echo tool, and checks the transcript it leaves.
 func runCase(t *testing.T, tc harnessCase) {
 	state := tc.state
@@ -245,7 +323,12 @@ func runCase(t *testing.T, tc harnessCase) {
 		Task: agents.Task{Number: 7, Title: "Sweep", Instructions: "Sweep the floor.", State: state, Agent: agents.Principal{DisplayName: "Scout"},
 			AssignedBy: &agents.Principal{ID: uuid.New(), DisplayName: "Olivia"}, RepoSlug: "website", Branch: "tidy"}}}
 	m, e := &model{turns: tc.turns, err: tc.modelErr}, &echo{}
-	err := harness.New(c, m, tc.maxTurns, e).Run(context.Background())
+	h := harness.New(c, m, tc.maxTurns, e)
+	if tc.kind != nil {
+		c.work.Task.Kind, c.work.Task.StartedAt = "review", time.Now().Add(-tc.startedAgo)
+		h.Handle("review", tc.kind)
+	}
+	err := h.Run(context.Background())
 	if (err != nil) != tc.wantErr {
 		t.Fatalf("Run() = %v, want an error: %v", err, tc.wantErr)
 	}

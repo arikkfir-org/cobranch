@@ -1,5 +1,6 @@
 // Package restclient calls Cobranch's REST API as an agent's harness does, as its task's own token, through the client
-// oapi-codegen generates from api/openapi.yaml (restclient.gen.go). It implements the harness's Cobranch port.
+// oapi-codegen generates from api/openapi.yaml (restclient.gen.go). It implements the harness's Cobranch port, and the
+// AI reviewer's API.
 package restclient
 
 import (
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -134,7 +136,8 @@ func task(t Task) agents.Task {
 	}
 	out.RepoID, out.RepoSlug = deref(t.RepositoryId, uuid.Nil), deref(t.RepositorySlug, "")
 	out.BranchID, out.Branch = deref(t.BranchId, uuid.Nil), deref(t.Branch, "")
-	out.ThreadID = deref(t.ThreadId, uuid.Nil)
+	out.ThreadID, out.SHA = deref(t.ThreadId, uuid.Nil), deref(t.Sha, "")
+	out.CreatedAt, out.StartedAt = t.CreatedAt, deref(t.StartedAt, time.Time{})
 	return out
 }
 

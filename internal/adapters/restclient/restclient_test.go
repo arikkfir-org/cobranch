@@ -44,7 +44,8 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		problem(w, http.StatusUnauthorized, "auth.unauthenticated", "The token is not valid.")
 	case r.Method == http.MethodGet && r.URL.Path == "/v1/me/task":
 		answer(w, http.StatusOK, MyTask{Organization: "acme", AgentInstructions: "Be brief.", Task: Task{Number: 7, Title: "Sweep", State: "running",
-			Agent: Principal{Id: agentID, DisplayName: "Scout"}, AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy")}})
+			Agent: Principal{Id: agentID, DisplayName: "Scout"}, AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy"),
+			Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())}})
 	case r.URL.Path != "/v1/orgs/acme/tasks/7/transcript":
 		problem(w, http.StatusNotFound, "task.not_found", "No such task.")
 	case r.Method == http.MethodGet:
@@ -126,7 +127,8 @@ func TestWork(t *testing.T) {
 	}
 	if w.OrgSlug != "acme" || w.AgentInstructions != "Be brief." || w.Task.Number != 7 || w.Task.State != agents.TaskRunning || w.Task.Agent.ID != agentID ||
 		w.Task.Agent.DisplayName != "Scout" || w.Task.AssignedBy == nil || w.Task.AssignedBy.DisplayName != "Olivia" || w.Task.RepoSlug != "website" ||
-		w.Task.Branch != "tidy" || w.Task.ThreadID != uuid.Nil {
+		w.Task.Branch != "tidy" || w.Task.ThreadID != uuid.Nil || w.Task.SHA != "0123456789abcdef0123456789abcdef01234567" ||
+		!w.Task.CreatedAt.Equal(time.Unix(10, 0)) || !w.Task.StartedAt.Equal(time.Unix(20, 0)) {
 		t.Errorf("Work() = %+v", w)
 	}
 }

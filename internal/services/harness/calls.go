@@ -35,8 +35,8 @@ var errDropped = errors.New("the turn was too large to record whole, so this cal
 
 // specs describes the tools to the model, finish last.
 func (r *run) specs() []Spec {
-	out := make([]Spec, 0, len(r.tools)+1)
-	for _, t := range r.tools {
+	out := make([]Spec, 0, len(r.toolset)+1)
+	for _, t := range r.toolset {
 		out = append(out, t.Spec())
 	}
 	return append(out, finishSpec)
@@ -88,7 +88,7 @@ func (r *run) invoke(ctx context.Context, c Call) (string, error) {
 	if c.Dropped {
 		return "", errDropped
 	}
-	for _, t := range r.tools {
+	for _, t := range r.toolset {
 		if t.Spec().Name != c.Name {
 			continue
 		}
@@ -101,10 +101,19 @@ func (r *run) invoke(ctx context.Context, c Call) (string, error) {
 	return "", fmt.Errorf("there is no tool called %q", c.Name)
 }
 
-// finish ends the task as the call says, and reports whether it did: a call the task can't end with records its
-// failure instead, for the model to call it again.
+// finish ends the task as the call says, and reports whether it did: a call the task can't end with, such as a success
+// its kind says the task hasn't earned yet, records its failure instead, for the model to call it again.
 func (r *run) finish(ctx context.Context, c Call) (bool, error) {
 	change, err := finishing(c.Arguments)
+	if err == nil && change.State == agents.TaskSucceeded && r.kit.Unfinished != nil {
+		var left string
+		if left, err = r.kit.Unfinished(ctx); err != nil {
+			return false, fmt.Errorf("finding what the task has left to do: %w", err)
+		}
+		if left != "" {
+			err = errors.New("finish can't end the task yet: " + left)
+		}
+	}
 	if err != nil {
 		return false, r.append(ctx, agents.EntryResult, result{CallID: c.ID, Name: c.Name, Text: err.Error(), Error: true}.cut())
 	}

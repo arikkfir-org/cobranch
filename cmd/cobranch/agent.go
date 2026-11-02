@@ -14,7 +14,9 @@ import (
 	"cobranch.dev/internal/adapters/models"
 	"cobranch.dev/internal/adapters/restclient"
 	"cobranch.dev/internal/adapters/workspace"
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/harness"
+	"cobranch.dev/internal/services/reviewer"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
 	"cobranch.dev/internal/system/telemetry"
@@ -24,7 +26,7 @@ import (
 const restTimeout = time.Minute
 
 // runAgent works the task its token names until the task ends: the harness in the task's pod, which the controller
-// starts. It exits cleanly once the task ends or Cobranch refuses its token, and fails on what a restart may get past,
+// starts, fitted to the AI reviewer's review tasks. It exits cleanly once the task ends or Cobranch refuses its token, and fails on what a restart may get past,
 // for the controller to start the pod again.
 func runAgent(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "agent", buildinfo.Version())
@@ -49,7 +51,8 @@ func runAgent(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("preparing the workspace: %w", err)
 	}
 	defer func() { _ = ws.Close() }() // only reads the directory's handle
-	if err := harness.New(api, model, cfg.MaxTurns, ws.Tools()...).Run(ctx); err != nil {
+	h := harness.New(api, model, cfg.MaxTurns, ws.Tools()...).Handle(agents.KindReview, reviewer.New(api))
+	if err := h.Run(ctx); err != nil {
 		return fmt.Errorf("working the task: %w", err)
 	}
 	return nil

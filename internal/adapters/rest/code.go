@@ -80,7 +80,7 @@ func commit(c code.Commit) Commit {
 }
 
 func review(r code.Review) Review {
-	return Review{Id: r.ID, Sha: r.SHA, State: ReviewState(r.State), Body: r.Body, Reviewer: principal(r.Reviewer), Person: r.Person,
+	return Review{Id: r.ID, Sha: r.SHA, State: ReviewState(r.State), Body: r.Body, Html: r.HTML, Reviewer: principal(r.Reviewer), Person: r.Person,
 		SubmittedAt: r.SubmittedAt.UTC()}
 }
 

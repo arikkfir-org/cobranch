@@ -1,6 +1,7 @@
 package restclient
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,7 +9,8 @@ import (
 )
 
 // Retries of a call of the API, which are safe to repeat: the harness reads, and appends entries that name their
-// numbers, so a repeat answers the entry already there.
+// numbers, so a repeat answers the entry already there. A call sent once, such as a review's submission, is the
+// exception.
 const (
 	attempts       = 6
 	defaultBackoff = time.Second
@@ -30,12 +32,21 @@ func retrying(client *http.Client) *retrier {
 	return &retrier{client: client, backoff: defaultBackoff}
 }
 
+// onceKey marks the context of a request sent once (once).
+type onceKey struct{}
+
+// once is ctx for a request that acts each time the API takes it, so a retry after an answer that got lost would act
+// twice: it is sent again only after an answer the API gave without acting, too many requests.
+func once(ctx context.Context) context.Context {
+	return context.WithValue(ctx, onceKey{}, true)
+}
+
 // Do sends req until an answer stands or its attempts run out, waiting longer before each (HttpRequestDoer).
 func (r *retrier) Do(req *http.Request) (*http.Response, error) {
-	wait := r.backoff
+	wait, single := r.backoff, req.Context().Value(onceKey{}) != nil
 	for attempt := 1; ; attempt++ {
 		resp, err := r.client.Do(req)
-		if attempt == attempts || (err == nil && !retryable(resp.StatusCode)) || req.Context().Err() != nil {
+		if attempt == attempts || !retry(resp, err, single) || req.Context().Err() != nil {
 			if err != nil {
 				return nil, fmt.Errorf("calling the API: %w", err)
 			}
@@ -55,6 +66,18 @@ func (r *retrier) Do(req *http.Request) (*http.Response, error) {
 		}
 		wait = min(wait*2, maxBackoff)
 	}
+}
+
+// retry reports whether to send a request again after its answer resp, or its failure err: for a request sent once,
+// only after an answer the API gave without acting on it.
+func retry(resp *http.Response, err error, single bool) bool {
+	switch {
+	case single:
+		return err == nil && resp.StatusCode == http.StatusTooManyRequests
+	case err != nil:
+		return true
+	}
+	return retryable(resp.StatusCode)
 }
 
 // retryable reports whether an answer of status may differ when asked again.
