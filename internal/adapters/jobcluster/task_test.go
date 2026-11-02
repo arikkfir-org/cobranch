@@ -34,6 +34,7 @@ func taskConfig() Config {
 	cfg.AgentImage = "agents:v1"
 	cfg.AgentResources = corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("500m")}}
 	cfg.ProviderURLs = map[string]string{"anthropic": "https://gateway.example.com/anthropic", "openai": "https://gateway.example.com/openai"}
+	cfg.ImagePullSecrets = []string{"registry", "mirror"}
 	return cfg
 }
 
@@ -56,7 +57,8 @@ func TestStartTask(t *testing.T) {
 	s := pod.Spec
 	if pod.Labels[labelTask] != taskID.String() || pod.Labels[labelTaskPod] != "2" || pod.Labels[labelRun] != "" ||
 		s.RestartPolicy != corev1.RestartPolicyNever || *s.ActiveDeadlineSeconds != 86400 || *s.AutomountServiceAccountToken ||
-		*s.EnableServiceLinks || s.NodeSelector["pool"] != "ci" || !*s.SecurityContext.RunAsNonRoot {
+		*s.EnableServiceLinks || s.NodeSelector["pool"] != "ci" || !*s.SecurityContext.RunAsNonRoot ||
+		!slices.Equal(s.ImagePullSecrets, []corev1.LocalObjectReference{{Name: "registry"}, {Name: "mirror"}}) {
 		t.Errorf("pod = %+v", pod)
 	}
 	checkTaskContainers(t, s)

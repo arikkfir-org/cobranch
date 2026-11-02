@@ -231,7 +231,8 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   the agent's provider and model (`COBRANCH_MODEL_PROVIDER`, `COBRANCH_MODEL`), the model proxy's address
   (`COBRANCH_MODEL_URL`), the operator's limits (`COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT`,
   `COBRANCH_MODEL_MAX_TOKENS`), and the agent's secrets by their names. No tool's environment holds a `COBRANCH_`
-  variable.
+  variable. Both images are pulled with the installation's `imagePullSecrets`: the controller copies those Secrets from
+  its own namespace into each job namespace as it prepares it, and deletes a copy the chart no longer names.
 - **The provider's key stays in the model proxy.** A sidecar in Cobranch's image, `cobranch model-proxy`, is the one
   container that mounts the key; it listens on `127.0.0.1:8090` and sends each of the harness's requests on to the
   provider, with the key in place of any the request carries, and without its trace context or cookies. The harness and
@@ -334,7 +335,9 @@ as its work.
 
 ## The chart
 
-Agents add no workload and no RBAC: the controller and its role over job namespaces come with [jobs](jobs.md#the-chart).
+Agents add no workload, and one RBAC object, only when `imagePullSecrets` is set: a Role in the installation's
+namespace that lets the controller read those Secrets alone, to copy them. The controller and its role over job
+namespaces come with [jobs](jobs.md#the-chart).
 
 | Value | Default | What it sets |
 | --- | --- | --- |

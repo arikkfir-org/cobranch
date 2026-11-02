@@ -162,6 +162,36 @@ func checkPrepared(t *testing.T, client *fake.Clientset) {
 	}
 }
 
+func TestPreparePullSecrets(t *testing.T) {
+	ctx := context.Background()
+	registry := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "registry", Namespace: "cobranch"}, Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte(`{"auths":{}}`)}}
+	stale := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "old-registry", Namespace: ns, Labels: map[string]string{labelPullSecret: "true"}}}
+	runs := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: podName(run), Namespace: ns, Labels: map[string]string{labelRun: run.String()}}}
+	client := installed(registry, stale, runs)
+	cfg := config()
+	cfg.ImagePullSecrets = []string{"registry"}
+	if err := New(client, cfg).Prepare(ctx, org); err != nil {
+		t.Fatalf("Prepare() = %v", err)
+	}
+	copied, err := client.CoreV1().Secrets(ns).Get(ctx, "registry", metav1.GetOptions{})
+	if err != nil || copied.Type != corev1.SecretTypeDockerConfigJson || string(copied.Data[corev1.DockerConfigJsonKey]) != `{"auths":{}}` ||
+		copied.Labels[labelPullSecret] != "true" || copied.Labels[labelManagedBy] != "cobranch" {
+		t.Errorf("the copy = %+v, %v", copied, err)
+	}
+	if _, err := client.CoreV1().Secrets(ns).Get(ctx, stale.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Errorf("the copy the installation no longer names: error = %v, want not found", err)
+	}
+	if _, err := client.CoreV1().Secrets(ns).Get(ctx, runs.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("a run's Secret: %v, want it kept", err)
+	}
+	cfg.ImagePullSecrets = []string{"registry", "missing"}
+	err = New(installed(registry), cfg).Prepare(ctx, org)
+	if err == nil || !strings.Contains(err.Error(), "image pull secret missing in namespace cobranch") {
+		t.Errorf("Prepare() naming a missing Secret = %v, want it named", err)
+	}
+}
+
 func TestPrepareWaitsForItsBinding(t *testing.T) {
 	client := installed()
 	refusals := 2

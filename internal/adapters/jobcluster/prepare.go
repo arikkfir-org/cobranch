@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net/netip"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,6 +28,10 @@ const (
 	limitRange        = "cobranch-defaults"
 	resourceQuota     = "cobranch-quota"
 )
+
+// labelPullSecret marks the copies of the installation's image pull secrets in a job namespace, so that Prepare deletes
+// a copy the installation no longer names.
+const labelPullSecret = "cobranch.dev/image-pull-secret"
 
 // serverComponents are the installation's servers a run may call: the REST and GraphQL servers with its token, and
 // the Git server for its checkout.
@@ -81,6 +86,9 @@ func (c *Cluster) Prepare(ctx context.Context, orgID uuid.UUID) (err error) {
 		return fmt.Errorf("applying the defaults in namespace %s: %w", ns, err)
 	}
 	if err := c.quota(ctx, ns, apply); err != nil {
+		return err
+	}
+	if err := c.pullSecrets(ctx, ns, apply); err != nil {
 		return err
 	}
 	c.remember(orgID)
@@ -202,6 +210,37 @@ func (c *Cluster) quota(ctx context.Context, ns string, apply metav1.ApplyOption
 		WithSpec(corev1ac.ResourceQuotaSpec().WithHard(c.cfg.Quota))
 	if _, err := quotas.Apply(ctx, q, apply); err != nil {
 		return fmt.Errorf("applying the quota in namespace %s: %w", ns, err)
+	}
+	return nil
+}
+
+// pullSecrets copies the installation's image pull secrets from its namespace into job namespace ns, where the agents'
+// task pods name them, since a pod names only Secrets of its own namespace, and deletes the copies of those it no longer
+// names. Each Prepare copies them again, so that a rotated credential reaches every namespace.
+func (c *Cluster) pullSecrets(ctx context.Context, ns string, apply metav1.ApplyOptions) error {
+	home, secrets := c.client.CoreV1().Secrets(c.cfg.Home), c.client.CoreV1().Secrets(ns)
+	labels := map[string]string{labelManagedBy: "cobranch", labelPullSecret: "true"}
+	for _, name := range c.cfg.ImagePullSecrets {
+		s, err := home.Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("reading image pull secret %s in namespace %s: %w", name, c.cfg.Home, err)
+		}
+		copied := corev1ac.Secret(name, ns).WithLabels(labels).WithType(s.Type).WithData(s.Data)
+		if _, err := secrets.Apply(ctx, copied, apply); err != nil {
+			return fmt.Errorf("copying image pull secret %s into namespace %s: %w", name, ns, err)
+		}
+	}
+	copies, err := secrets.List(ctx, metav1.ListOptions{LabelSelector: labelPullSecret})
+	if err != nil {
+		return fmt.Errorf("listing the image pull secrets in namespace %s: %w", ns, err)
+	}
+	for _, s := range copies.Items {
+		if slices.Contains(c.cfg.ImagePullSecrets, s.Name) {
+			continue
+		}
+		if err := secrets.Delete(ctx, s.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("deleting image pull secret %s, which the installation no longer names, in namespace %s: %w", s.Name, ns, err)
+		}
 	}
 	return nil
 }

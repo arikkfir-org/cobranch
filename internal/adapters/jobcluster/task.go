@@ -148,9 +148,18 @@ func (c *Cluster) taskPodOf(l taskrunner.Launch) *corev1.Pod {
 		Spec: corev1.PodSpec{InitContainers: []corev1.Container{copyBin, proxy}, Containers: []corev1.Container{harness},
 			RestartPolicy: corev1.RestartPolicyNever, ActiveDeadlineSeconds: &deadline, EnableServiceLinks: new(false),
 			AutomountServiceAccountToken: new(false), NodeSelector: c.cfg.NodeSelector, Tolerations: c.cfg.Tolerations, Affinity: c.cfg.Affinity,
-			SecurityContext: podSecurity(nil),
+			SecurityContext: podSecurity(nil), ImagePullSecrets: c.pullSecretRefs(),
 			Volumes: []corev1.Volume{emptyDir(volumeWorkspace), emptyDir(volumeHome), emptyDir(volumeBin), secretVolume(volumeToken, keyToken, "token"),
 				secretVolume(volumeKey, keyKey, "key")}}}
+}
+
+// pullSecretRefs are the pod's references to the copies of the installation's image pull secrets in its namespace.
+func (c *Cluster) pullSecretRefs() []corev1.LocalObjectReference {
+	var refs []corev1.LocalObjectReference
+	for _, name := range c.cfg.ImagePullSecrets {
+		refs = append(refs, corev1.LocalObjectReference{Name: name})
+	}
+	return refs
 }
 
 // taskEnv is the harness's variables of env, each read from the task's pod's Secret, in order.

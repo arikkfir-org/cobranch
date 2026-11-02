@@ -87,6 +87,9 @@ type Config struct {
 	// requests and limits, the namespace's defaults where it names none.
 	AgentImage     string
 	AgentResources corev1.ResourceRequirements
+	// ImagePullSecrets name the Secrets in Home that pull the agents' and Cobranch's images, which Prepare copies into
+	// every job namespace and an agent task's pod names.
+	ImagePullSecrets []string
 	// ProviderURLs are where a task's model proxy sends its provider's requests, by provider, when not to the
 	// provider's own address.
 	ProviderURLs map[string]string

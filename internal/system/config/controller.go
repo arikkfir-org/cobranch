@@ -113,6 +113,9 @@ type Namespaces struct {
 	NodeSelector JSON[map[string]string]   `envconfig:"JOBS_NODE_SELECTOR"`
 	Tolerations  JSON[[]corev1.Toleration] `envconfig:"JOBS_TOLERATIONS"`
 	Affinity     JSON[*corev1.Affinity]    `envconfig:"JOBS_AFFINITY"`
+	// ImagePullSecrets name the Secrets in Home that pull the images the agents' tasks run, which the controller copies
+	// into every job namespace.
+	ImagePullSecrets []string `envconfig:"JOBS_IMAGE_PULL_SECRETS"`
 }
 
 // LoadController reads controller's configuration from the environment.

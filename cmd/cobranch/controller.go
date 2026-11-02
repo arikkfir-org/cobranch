@@ -111,7 +111,8 @@ func jobsCluster(cfg config.Controller) (runner.Cluster, taskrunner.Cluster, err
 		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
 		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
 		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage,
-		AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value, ProviderURLs: cfg.Agents.ProviderURLs.Value})
+		AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value, ImagePullSecrets: j.ImagePullSecrets,
+		ProviderURLs: cfg.Agents.ProviderURLs.Value})
 	return cluster, cluster, nil
 }
 

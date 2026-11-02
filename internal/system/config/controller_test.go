@@ -2,6 +2,7 @@ package config
 
 import (
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -48,11 +49,12 @@ func TestLoadController(t *testing.T) {
 			"COBRANCH_JOBS_EGRESS_DNS": `[{"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}},"namespaceSelector":{}}]`,
 			"COBRANCH_JOBS_RESOURCES":  `{"requests":{"cpu":"100m"},"limits":{"memory":"1Gi"}}`, "COBRANCH_JOBS_QUOTA": `{"pods":"10"}`,
 			"COBRANCH_JOBS_TOLERATIONS": `[{"key":"pool","operator":"Equal","value":"ci","effect":"NoSchedule"}]`,
-			"COBRANCH_JOBS_AFFINITY":    `{"nodeAffinity":{}}`}),
+			"COBRANCH_JOBS_AFFINITY":    `{"nodeAffinity":{}}`, "COBRANCH_JOBS_IMAGE_PULL_SECRETS": "registry,mirror"}),
 			check: func(c Controller) bool {
 				return c.NamespaceLabels.Value["example.com/team"] == "ci" && len(c.EgressExcept) == 2 && len(c.EgressDNS.Value) == 1 &&
 					c.Resources.Value.Limits.Memory().String() == "1Gi" && c.Quota.Value.Pods().String() == "10" &&
-					len(c.Tolerations.Value) == 1 && c.Affinity.Value.NodeAffinity != nil
+					len(c.Tolerations.Value) == 1 && c.Affinity.Value.NodeAffinity != nil &&
+					slices.Equal(c.ImagePullSecrets, []string{"registry", "mirror"})
 			}},
 		{name: "no checkout image", env: controllerEnv(map[string]string{"COBRANCH_JOBS_CHECKOUT_IMAGE": ""}), wantErr: "JOBS_CHECKOUT_IMAGE"},
 		{name: "no owner role", env: controllerEnv(map[string]string{"COBRANCH_JOBS_OWNER_ROLE": ""}), wantErr: "JOBS_OWNER_ROLE"},

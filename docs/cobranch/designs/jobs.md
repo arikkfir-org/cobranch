@@ -281,7 +281,8 @@ namespace names the installation’s controller ClusterRole as its owner, so uni
   to every address outside `jobs.egress.except`, which lists the private, link-local and shared ranges, cloud metadata
   servers included), a LimitRange whose defaults are `jobs.resources`, an optional ResourceQuota from `jobs.quota`, and
   RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other lets the REST and GraphQL
-  servers read their pods, logs and Secrets.
+  servers read their pods, logs and Secrets. Copies of the installation's `imagePullSecrets` sit beside them, for
+  [agents' pods](agents.md#the-agents-pod).
 - **It goes with the organization,** whose deletion deletes it, **and with the installation:** it names the
   installation's controller ClusterRole as its owner, so uninstalling the chart, which deletes that role, has
   Kubernetes's garbage collector delete the namespace and every run in it, with no controller left to clean up.
@@ -386,6 +387,7 @@ job namespaces name the controller’s role as their owner, so uninstalling dele
 | --- | --- |
 | Deployment `<release>-controller` | 2 replicas, a disruption budget of one, rolling out by surging; the only workload with Kubernetes write access |
 | ClusterRole and binding `<namespace>-<release>-controller` | Create and delete namespaces, which name this role as their owner; create RoleBindings, and `bind` only the ClusterRoles below; read itself |
+| Role and binding `<release>-controller-image-pull-secrets` | Read only the Secrets `imagePullSecrets` names, in the release's namespace, to copy them into each job namespace; rendered only when it names any |
 | ClusterRole `<namespace>-<release>-jobs-runner` | Pods, their logs, Secrets, NetworkPolicies, LimitRanges and ResourceQuotas, bound to the controller in each job namespace |
 | ClusterRole `<namespace>-<release>-jobs-logs` | Read pods, their logs and Secrets, the last for the values the logs mask, bound to the servers' ServiceAccount in each job namespace, whose token the REST and GraphQL servers mount |
 | ValidatingAdmissionPolicy `<namespace>-<release>-jobs` | Holds the controller to namespaces carrying its prefix and installation label, and its RoleBindings to the runner role for itself and the logs role for the servers |
