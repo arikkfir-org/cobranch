@@ -1252,8 +1252,10 @@ type Task struct {
 	BranchID *string `json:"branchId,omitempty"`
 	Branch   *string `json:"branch,omitempty"`
 	// The thread of that branch's chat it talks in; null for none.
-	ThreadID *string   `json:"threadId,omitempty"`
-	State    TaskState `json:"state"`
+	ThreadID *string `json:"threadId,omitempty"`
+	// The commit it works at, such as the head a review task reviews; null for none.
+	Sha   *string   `json:"sha,omitempty"`
+	State TaskState `json:"state"`
 	// Why it failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
 	// What the agent said it did, once it ended.

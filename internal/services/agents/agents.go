@@ -83,6 +83,9 @@ type Agent struct {
 	Instructions string
 	// BuiltIn is whether Cobranch made it for the organization: it is never deleted.
 	BuiltIn bool
+	// Purpose is what Cobranch made a built-in agent for, such as PurposeReview: the organization has one agent for
+	// each. Empty for the agents people make.
+	Purpose string
 	// CreatedBy is who created it; nil for a built-in agent, and once its creator is gone.
 	CreatedBy *Principal
 	CreatedAt time.Time
@@ -165,7 +168,9 @@ type Task struct {
 	ThreadID uuid.UUID
 	// IssueID is the issue it works on, for a task its assignment to the issue gave it; uuid.Nil for none.
 	IssueID uuid.UUID
-	State   TaskState
+	// SHA is the commit it works at, such as the head a review task reviews; empty for none.
+	SHA   string
+	State TaskState
 	// Reason says why it failed or was cancelled; empty otherwise.
 	Reason string
 	// Summary is what the agent said it did, once it ended.

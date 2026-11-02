@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/admin"
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
@@ -145,7 +146,8 @@ func (s *OrgStore) CreateFor(ctx context.Context, actor, owner uuid.UUID, org or
 	})
 }
 
-// create makes the organization with owner its first Owner, by actor, counted against createdBy unless it is nil.
+// create makes the organization with owner its first Owner and its AI reviewer, by actor, counted against createdBy
+// unless it is nil.
 func create(ctx context.Context, q *queries.Queries, actor, owner uuid.UUID, createdBy *uuid.UUID, org orgs.Organization) error {
 	if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
 		ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
@@ -164,7 +166,14 @@ func create(ctx context.Context, q *queries.Queries, actor, owner uuid.UUID, cre
 	if err := orgEvent(ctx, q, &org.ID, actor, "org.created", org.ID, details); err != nil {
 		return err
 	}
-	return join(ctx, q, org.ID, actor, owner, auth.RoleOwner, org.CreatedAt, "created")
+	if err := join(ctx, q, org.ID, actor, owner, auth.RoleOwner, org.CreatedAt, "created"); err != nil {
+		return err
+	}
+	reviewer, err := uuid.NewV7()
+	if err != nil {
+		return fmt.Errorf("making the AI reviewer's ID: %w", err)
+	}
+	return insertAgent(ctx, q, actor, agents.Reviewer(reviewer, org.ID))
 }
 
 // join makes userID a member of orgID holding roleID, and records it: how says what made them one. It holds the

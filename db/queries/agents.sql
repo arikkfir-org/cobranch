@@ -2,10 +2,10 @@
 -- name: InsertAgentPrincipal :exec
 INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id, 'agent', @name, @org_id, sqlc.narg(created_by));
 
--- InsertAgent records an agent of its organization.
+-- InsertAgent records an agent of its organization, perhaps a built-in one made for a purpose.
 -- name: InsertAgent :exec
-INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, created_by)
-VALUES (@id, @org_id, @name, @description, @instructions, @built_in, sqlc.narg(created_by));
+INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, purpose, created_by)
+VALUES (@id, @org_id, @name, @description, @instructions, @built_in, sqlc.narg(purpose), sqlc.narg(created_by));
 
 -- Agents lists an organization's agents by name, with the display names of their creators.
 -- name: Agents :many
@@ -68,9 +68,9 @@ RETURNING last;
 
 -- InsertTask records a task, Queued.
 -- name: InsertTask :exec
-INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id)
+INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha)
 VALUES (@id, @org_id, @number, @agent_id, @kind, sqlc.narg(assigned_by), @title, @instructions, sqlc.narg(repo_id), sqlc.narg(branch_id),
-    sqlc.narg(thread_id), sqlc.narg(issue_id));
+    sqlc.narg(thread_id), sqlc.narg(issue_id), sqlc.narg(sha));
 
 -- Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 -- agent, the states and the repository when they're given, naming no repository or one of readable, and of none of

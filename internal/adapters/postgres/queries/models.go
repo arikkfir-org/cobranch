@@ -25,6 +25,7 @@ type Agent struct {
 	Provider     *string
 	Model        *string
 	Secrets      []byte
+	Purpose      *string
 }
 
 type AgentTask struct {
@@ -48,6 +49,7 @@ type AgentTask struct {
 	EndedAt      *time.Time
 	Version      int64
 	IssueID      *uuid.UUID
+	Sha          *string
 }
 
 type AgentTaskEntry struct {

@@ -203,3 +203,24 @@ func TestTaskChanges(t *testing.T) {
 		{name: "cancel on a repository the viewer doesn't read", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/tasks/2/cancel"), wantStatus: 404, wantCode: "task.not_found"},
 	})
 }
+
+// TestTaskCommit checks that a task answers the commit it works at, such as a review task's head, and leaves sha out
+// for none.
+func TestTaskCommit(t *testing.T) {
+	head := "0123456789abcdef0123456789abcdef01234567"
+	for _, tt := range []struct {
+		name string
+		sha  string
+		want *string
+	}{
+		{name: "a review task at its head", sha: head, want: &head},
+		{name: "a task at no commit"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := task(agents.Task{Kind: agents.KindReview, SHA: tt.sha}).Sha
+			if (got == nil) != (tt.want == nil) || got != nil && *got != *tt.want {
+				t.Errorf("sha = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

@@ -280,9 +280,9 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 
 ## Roles
 
-**Ten built-in roles; each repository role includes the one before**
+**Eleven built-in roles; each repository role includes the one before**
 
-![Ten built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
+![Eleven built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
 
 Whoever creates a repository becomes its Maintainer, with every repository permission; nobody else but the
 organization’s Owners can reach it until someone grants more. Built-in roles are fixed; an organization defines custom
@@ -292,8 +292,11 @@ roles from the same permissions.
   organization or on a repository like built-in ones. Editing one changes every grant of it on the next check; one that
   is still granted cannot be deleted.
 - **Built-in roles are fixed**, and the installation has no custom roles.
-- **Jobs add a tenth, Secret reader,** a repository role holding `secrets.read` alone, granted to a job on its
-  repository or on one secret ([jobs](jobs.md#secrets)).
+- **Jobs add Secret reader,** a repository role holding `secrets.read` alone, granted to a job on its repository or on
+  one secret ([jobs](jobs.md#secrets)).
+- **The AI reviewer adds Automation at an organization,** an organization role holding `org.read` and the repositories'
+  Automation, which reaches every repository of the organization: the role of its built-in reviewer, since a role has
+  one scope ([AI review](reviews.md#the-ai-reviewer)).
 
 ## How a check runs
 
@@ -372,7 +375,8 @@ and their consents add tables in their own slice.
 | Organizations provision their members from their identity provider (SCIM) | Review, 2026-10-27: yes, in phase 2 | Planned |
 | How phase 2's pinned job security meets the job ceiling | Belongs to phase 2's jobs design | Deferred |
 
-The ten built-in roles and the 25 permissions are agreed too; the review added the two secret permissions.
+The eleven built-in roles and the 25 permissions are agreed too; the review added the two secret permissions, and the AI
+reviewer Automation at an organization.
 
 ## Open questions
 

@@ -7,7 +7,7 @@
 **Status**: Proposed 2026-11-02 · [ENG-216](https://linear.app/arikkfir/issue/ENG-216) · Builds the [product’s AI
 review](product.md#agents-and-ai-review) on [branch status](branch-status.md) and the agents of
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Adds no workload and no chart value · Built by
-[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in five pull requests
+[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in seven pull requests
 
 People and agents review commits, and `main`’s `/cobranch.yaml` can require approvals before a branch merges. Every push
 of a branch gets a review from the organization’s built-in AI reviewer, an agent whose model an admin picks and whose
@@ -110,10 +110,18 @@ status](branch-status.md#branch-status), in the same order of rules: Processing 
 **Agreed** ([principals](principals-and-permissions.md#agents)): the AI reviewer is a built-in agent of every
 organization, holding Automation there.
 
-- **One per organization,** created with it, and for every organization already there when this slice lands. It is an
-  agent of [ENG-215](https://linear.app/arikkfir/issue/ENG-215) marked built in: nobody deletes it, and
-  `org.principals.manage` picks its provider and model, or suspends it, as for any agent
+- **One per organization,** created with it, and for every organization already there when this slice lands, named AI
+  reviewer, or AI reviewer 2 and on where an agent already has the name. It is an agent of
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215) marked built in, whose `purpose`, `review`, tells it from any
+  other built-in agent; an organization has one agent of each purpose. Nobody deletes it, and `org.principals.manage`
+  renames it, picks its provider and model, or suspends it, as for any agent
   ([models](architecture.md#settings-secrets-and-models)). Until it has a model, it reviews nothing.
+- **Automation at an organization.** A role has one scope, and an agent holds no repository role at its organization, so
+  a built-in organization role, Automation, holds what the repositories' Automation holds, in every repository, and
+  `org.read`. The reviewer holds it from the start; an admin may grant it to anyone else.
+- **It leaves repositories Private.** [Visibility](principals-and-permissions.md#visibility) counts users alone: an
+  agent or API key reading a repository doesn't make it Internal, so the reviewer reading every repository changes no
+  label.
 - **It reviews every push of a branch,** but `main`, to a new head, in a repository it reviews: the push worker's
   transaction queues a review task for it at that head, the way it queues [job runs](jobs.md#triggers). A newer push of
   the branch, or its deletion, cancels the branch's open review task.
@@ -144,9 +152,9 @@ States are [ENG-215](https://linear.app/arikkfir/issue/ENG-215)’s for every ag
 kind, `review`, and names the repository, the branch and the head.
 
 - **A task of kind `review`,** in [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s `agent_tasks`, naming the
-  repository, the branch and the head, with no assigner: a task Cobranch starts runs on its agent's own grants. Its
-  harness gets two tools of this slice beside its own: read the branch's diff, and submit the review; its comments go
-  with the review.
+  repository, the branch and the head (`sha`, which every task may carry and a review task must), assigned by the
+  reviewer itself: a task Cobranch starts runs on its agent's own grants. Its harness gets two tools of this slice
+  beside its own: read the branch's diff, and submit the review; its comments go with the review.
 - **Outside pushes wait.** A head pushed from outside the organization doesn't spend the organization's model on its
   own: when `main`'s `repository.jobs.outsidePushes` keeps [jobs waiting](jobs.md#the-outside-push-gate), the review
   task waits too, until a member with `repo.push` starts it.
@@ -307,24 +315,31 @@ history is Git’s. Every new row carries `org_id`.
 
 ## Rollout
 
-**Five pull requests, each with its tests and its Console pages**
+**Seven pull requests, each with its tests and its Console pages**
 
-![Five pull requests, each with its tests and its Console pages](reviews/rollout.svg)
+![Seven pull requests, each with its tests and its Console pages](reviews/rollout.svg)
 
 Nothing changes for an operator: no workload and no chart value is added. A repository opts into required reviews
 through its own `/cobranch.yaml`, and an organization into AI review by giving its reviewer a model.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-216](https://linear.app/arikkfir/issue/ENG-216); the
-  fifth closes it. The first, second and fourth need nothing of the slices beside it; the third stacks on
-  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them, and the fifth waits for its
-  agents, tasks and harness.
+  last closes it. The first, second and fourth need nothing of the slices beside it; the third stacks on
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them.
+- **The reviewer comes in three pull requests.** The first makes it: the reviewer in every organization, Automation at
+  an organization, and review tasks' kind and head, on [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s agents and
+  tasks. The second queues a review on every push, supersedes the open one, asks for another and adds the `ai`
+  requirement, once [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s models land; its migration first runs the
+  first's backfill again, for the organizations that servers still on older code created while the first rolled out. The
+  third gives its harness the two tools and renders bodies as Markdown, on
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s runtime, and closes
+  [ENG-216](https://linear.app/arikkfir/issue/ENG-216).
 - **The settings come before the reviewer.** The fourth reads `main`'s `/cobranch-review.yaml` on every push that moves
   `main`, refuses one that doesn't parse, and keeps the parsed copy, so a repository's settings are in place when the
-  fifth starts reviewing.
-- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the fifth pull request's
-  migration, and it reviews nothing until an admin gives it a model.
+  reviewer starts reviewing.
+- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the migration of the reviewer's
+  first pull request, and it reviews nothing until an admin gives it a model.
 - **A repository adopts required reviews** by pushing a `reviews` key under `branches` into `main`.
-- **Bodies show as written until the fifth,** which renders them as Markdown, as the chat renders its messages.
+- **Bodies show as written until the last,** which renders them as Markdown, as the chat renders its messages.
 
 ## Risks
 
@@ -342,6 +357,7 @@ through its own `/cobranch.yaml`, and an organization into AI review by giving i
 | Proposal | Why | Decision |
 | --- | --- | --- |
 | The AI reviewer is a built-in agent of every organization, holding Automation; it reads `main`'s `/cobranch-review.yaml` | The principals design and the architecture | Agreed |
+| Automation at an organization is a built-in organization role of its own, and visibility counts users alone | A role has one scope; the principals design counts users toward Internal, and an agent reading everything must not make every repository Internal | Proposed |
 | A review is of a commit, in one of three states, never edited; a reviewer's latest review of a commit is their verdict there | Reviews and annotations are verdicts on commits, as the product's model has them; a record nobody rewrites | Proposed |
 | `requires.reviews` names `approvals`, counting people's approvals of the head but its pusher's and author's, and `ai`, the reviewer's | The two requirements the issue asks for; people's eyes and the reviewer's are different requirements | Proposed |
 | Changes requested by anyone blocks where the base requires reviews; elsewhere reviews only show | A requested change is a veto only where reviews matter | Proposed |
