@@ -66,9 +66,10 @@ spec:
             - name: {{ .name }}
               containerPort: {{ .containerPort }}
             {{- end }}
-            {{- if eq $root.Values.telemetry.metrics.exporter "prometheus" }}
+            {{- $metrics := $root.Values.telemetry.metrics | default dict }}
+            {{- if eq ($metrics.exporter | default "") "prometheus" }}
             - name: metrics
-              containerPort: {{ $root.Values.telemetry.metrics.port }}
+              containerPort: {{ $metrics.port }}
             {{- end }}
           env:
             - name: COBRANCH_HTTP_ADDR

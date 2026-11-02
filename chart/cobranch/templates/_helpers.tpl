@@ -144,19 +144,21 @@ securityContext:
 - name: OTEL_TRACES_SAMPLER_ARG
   value: {{ $t.traces.sampleRatio | quote }}
 {{- end }}
-{{- with $t.metrics.exporter }}
+{{- /* An upgrade with --reuse-values keeps an older version's values, which have no telemetry.metrics. */ -}}
+{{- $m := $t.metrics | default dict -}}
+{{- with $m.exporter }}
 - name: OTEL_METRICS_EXPORTER
   value: {{ . | quote }}
 {{- end }}
-{{- with $t.metrics.endpoint }}
+{{- with $m.endpoint }}
 - name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
   value: {{ . | quote }}
 {{- end }}
-{{- if eq $t.metrics.exporter "prometheus" }}
+{{- if eq ($m.exporter | default "") "prometheus" }}
 - name: OTEL_EXPORTER_PROMETHEUS_HOST
   value: "0.0.0.0"
 - name: OTEL_EXPORTER_PROMETHEUS_PORT
-  value: {{ $t.metrics.port | quote }}
+  value: {{ $m.port | quote }}
 {{- end }}
 {{- with $t.traces.headersSecret }}
 - name: OTEL_EXPORTER_OTLP_HEADERS
