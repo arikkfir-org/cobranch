@@ -1,0 +1,10 @@
+# oapi-codegen's settings for restclient.gen.go: a client of the REST API's calls that an agent's harness makes, and the
+# models they take.
+package: restclient
+output: restclient.gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  include-operation-ids: [getMyTask, listTranscript, appendTranscript]
+  nullable-type: true
