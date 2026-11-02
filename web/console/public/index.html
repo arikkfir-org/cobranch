@@ -939,7 +939,7 @@
         } else if (err.code === "git.unavailable") {
           needsGit();
           return panel;
-        } else if (err.code === "ref.not_found" || err.code === "ref.invalid") {
+        } else if (err.code === "ref.not_found" || err.code === "ref.invalid" || err.code === "branch.not_found") {
           panel.append(h("p", {}, "This repository has no branch, tag or commit ", h("code", {}, ref), "."));
           return panel;
         } else throw err;
