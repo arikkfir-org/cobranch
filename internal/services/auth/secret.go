@@ -18,6 +18,8 @@ const (
 	PrefixPersonalToken = "cbp_"
 	// PrefixRunToken starts a run's token.
 	PrefixRunToken = "cbr_"
+	// PrefixTaskToken starts an agent task's token.
+	PrefixTaskToken = "cba_"
 )
 
 const (

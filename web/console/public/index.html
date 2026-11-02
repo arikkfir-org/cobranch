@@ -313,6 +313,12 @@
     .message .body table { border-collapse: collapse; display: block; overflow-x: auto; }
     .message .body th, .message .body td { padding: 4px 8px; border: 1px solid var(--color-border-default); }
     .message .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    ol.transcript { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    ol.transcript > li { border-left: 3px solid var(--color-border-default); padding-left: 12px; display: grid; gap: 4px; min-width: 0; }
+    ol.transcript > li.state { border-left-color: var(--color-accent); }
+    ol.transcript .text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    ol.transcript pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/18px var(--font-mono); color: var(--color-fg-muted); }
+    p.instructions { white-space: pre-wrap; overflow-wrap: anywhere; }
     .thread form textarea, .chat > form textarea { min-height: 64px; resize: vertical; }
     .diff-summary { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; margin: 0; }
     .added-count { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
@@ -698,7 +704,7 @@
       if (page === "roles") return showRoles(org, main, can);
       if (page === "api-keys") return showApiKeys(org, main, can);
       if (page === "agents") return showAgents(org, main, can);
-      if (page === "tasks") return showTasks(org, main, can);
+      if (page === "tasks") return sub ? showTask(org, main, can, sub) : showTasks(org, main, can);
       if (page === "secrets" && can("secrets.manage")) return showOrgSecrets(org, main, can);
       if (page === "settings") return showSettings(org, main, can);
       if (page === "new" && can("repos.create")) return showNewRepository(org, main);
@@ -3084,6 +3090,101 @@
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     const activeTask = (t) => ["queued", "running", "waiting"].includes(t.state);
+    // taskByline says whose a task is, where it works, who assigned it and when.
+    function taskByline(org, t) {
+      const where = !t.repositorySlug ? h("span", { class: "muted" }, "Anywhere") : [h("a", { href: base + org.slug + "/" + t.repositorySlug, "data-nav": "" }, t.repositorySlug),
+        t.branch ? [" · ", h("a", { href: repoLinks(org, { slug: t.repositorySlug }).branchPage(t.branch), "data-nav": "" }, icon("git-branch"), t.branch)] : null];
+      return h("p", { class: "muted" }, t.agent.displayName, " · ", where, " · ", t.assignedBy ? "assigned by " + t.assignedBy.displayName : "its assigner is gone",
+        " · ", whenExactly(t.createdAt));
+    }
+    // The transcript's entry kinds, as the task's page names them.
+    const entryKinds = { input: "Input", turn: "Model", result: "Tool result", state: "State" };
+    // transcriptEntry draws an entry of a task's transcript: its text, a state it moved the task to, and the rest of
+    // what the harness recorded, folded away.
+    function transcriptEntry(e) {
+      const { text, ...others } = e.body;
+      const { state, summary, reason, ...rest } = others;
+      const extra = e.kind === "state" ? rest : others;
+      return h("li", { class: e.kind, id: "entry-" + e.seq },
+        h("p", { class: "muted" }, "#" + e.seq, " · ", entryKinds[e.kind] || e.kind, " · ", whenExactly(e.createdAt)),
+        e.kind === "state" && taskStates[state] ? h("p", {}, taskBadge(state), summary ? [" ", summary] : null, reason ? [" ", capitalized(reason)] : null) : null,
+        typeof text === "string" ? h("p", { class: "text" }, text) : null,
+        Object.keys(extra).length ? h("details", {}, h("summary", { class: "muted" }, "Details"), h("pre", {}, JSON.stringify(extra, null, 2))) : null);
+    }
+
+    // showTask renders one of the organization's tasks and its transcript, following both until the task ends. The
+    // transcript is its assigner's, org.principals.manage's and its repository's readers'; others see the task alone.
+    async function showTask(org, main, can, number) {
+      const path = "/orgs/" + org.slug + "/tasks/" + encodeURIComponent(number);
+      let t;
+      try {
+        t = await api("GET", path);
+      } catch (err) {
+        if (err.status === 404 || err.status === 400) return main.replaceChildren(h("h1", {}, "Task #" + number), h("p", {}, "There is no such task, or you may not see it."));
+        throw err;
+      }
+      const error = h("p", { class: "alert", hidden: true });
+      const head = h("section", { class: "panel" });
+      const entries = h("ol", { class: "transcript" });
+      const live = h("span", { class: "muted" });
+      const note = h("p", { class: "muted", hidden: true });
+      const cancel = (button) => {
+        button.disabled = true;
+        api("POST", path + "/cancel", undefined, { "If-Match": `"${t.version}"` }).then((got) => { t = got; draw(); })
+          .catch((err) => { button.disabled = false; error.textContent = err.message; error.hidden = false; });
+      };
+      // replaceChildren would write a null as text, so the parts left out are dropped first.
+      const draw = () => head.replaceChildren(...[
+        h("div", { class: "row" }, taskBadge(t.state), h("span", { class: "spacer" }),
+          activeTask(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"))
+            ? h("button", { class: "button small danger", type: "button", onclick: (e) => confirm("Cancel #" + t.number + ", " + t.title + "?") && cancel(e.currentTarget) }, "Cancel") : null),
+        taskByline(org, t),
+        t.instructions ? h("p", { class: "instructions" }, t.instructions) : null,
+        t.reason ? h("p", {}, capitalized(t.reason)) : null,
+        t.summary ? h("p", {}, h("strong", {}, "Summary: "), t.summary) : null].filter(Boolean));
+      draw();
+      main.replaceChildren(h("h1", {}, t.title, " ", h("span", { class: "muted" }, "#" + t.number)), error, head,
+        h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, "Transcript"), h("span", { class: "spacer" }), live), note, entries));
+      let after = 0;
+      // read appends the entries after the last one drawn, a page at a time, and answers false once the viewer may not.
+      const read = async () => {
+        for (;;) {
+          let page;
+          try {
+            page = await api("GET", path + "/transcript?" + new URLSearchParams({ after, limit: 500 }));
+          } catch (err) {
+            if (err.status !== 403) throw err;
+            note.textContent = "Its assigner, the organization's admins and whoever reads its repository read its transcript.";
+            note.hidden = false;
+            return false;
+          }
+          entries.append(...page.entries.map(transcriptEntry));
+          if (page.entries.length) after = page.entries[page.entries.length - 1].seq;
+          if (page.entries.length < 500) break;
+        }
+        note.textContent = "Nothing yet: the agent records each step here as it works.";
+        note.hidden = entries.children.length > 0;
+        return true;
+      };
+      if (!(await read())) return;
+      // While the task hasn't ended, its page follows it every few seconds, until the viewer leaves the page.
+      let delay = 3000;
+      while (activeTask(t) && head.isConnected) {
+        live.textContent = "Live";
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        if (!head.isConnected) return;
+        try {
+          const got = await api("GET", path);
+          await read();
+          if (got.version !== t.version) { t = got; draw(); }
+          delay = 3000;
+        } catch {
+          live.textContent = "Reconnecting…";
+          delay = Math.min(delay * 2, 60000);
+        }
+      }
+      live.textContent = "";
+    }
     // grantChips names an agent's grants: a role at the organization, or a role on one of its repositories.
     const grantChips = (grants) => grants.length ? grants.map((g) => h("span", { class: "chip" }, g.roleName, g.repositorySlug ? " on " + g.repositorySlug : ""))
       : h("span", { class: "muted" }, "None");
@@ -3267,12 +3368,10 @@
         api("POST", "/orgs/" + org.slug + "/tasks/" + t.number + "/cancel", undefined, { "If-Match": `"${t.version}"` })
           .then(() => showTasks(org, main, can)).catch((err) => { button.disabled = false; fail(err); });
       };
-      const where = (t) => !t.repositorySlug ? h("span", { class: "muted" }, "Anywhere") : [h("a", { href: base + org.slug + "/" + t.repositorySlug, "data-nav": "" }, t.repositorySlug),
-        t.branch ? [" · ", h("a", { href: repoLinks(org, { slug: t.repositorySlug }).branchPage(t.branch), "data-nav": "" }, icon("git-branch"), t.branch)] : null];
       const row = (t) => h("tr", {},
         h("td", { class: "state" }, taskBadge(t.state)),
-        h("td", {}, t.title, " ", h("span", { class: "muted" }, "#" + t.number), t.reason ? h("p", {}, capitalized(t.reason)) : null, t.summary ? h("p", {}, t.summary) : null,
-          h("p", { class: "muted" }, t.agent.displayName, " · ", where(t), " · ", t.assignedBy ? "assigned by " + t.assignedBy.displayName : "its assigner is gone", " · ", whenExactly(t.createdAt))),
+        h("td", {}, h("a", { href: base + org.slug + "/tasks/" + t.number, "data-nav": "" }, t.title), " ", h("span", { class: "muted" }, "#" + t.number),
+          t.reason ? h("p", {}, capitalized(t.reason)) : null, t.summary ? h("p", {}, t.summary) : null, taskByline(org, t)),
         h("td", { class: "actions" }, activeTask(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"))
           ? h("button", { class: "button small danger", type: "button", title: "Cancel #" + t.number, onclick: (e) => confirm("Cancel #" + t.number + ", " + t.title + "?") && cancel(t, e.currentTarget) }, "Cancel") : null));
       async function load(from) {

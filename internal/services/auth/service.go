@@ -64,6 +64,15 @@ type Store interface {
 	Credential(ctx context.Context, tokenHash []byte) (Credential, User, error)
 	// TouchCredential records that credential id, of kind, was used at usedAt.
 	TouchCredential(ctx context.Context, id uuid.UUID, kind CredentialKind, usedAt time.Time) error
+	// CreateTaskToken records a token of task taskID, its secret hashed to hash, acting until expiresAt; ErrNotFound for
+	// a task that isn't there or has ended.
+	CreateTaskToken(ctx context.Context, taskID uuid.UUID, hash []byte, expiresAt time.Time) error
+	// TaskToken finds a task token by its secret's hash, as a credential of kind CredentialTaskToken on the task's agent,
+	// with the agent, or ErrNotFound, also for a task that has ended. An assigner who is suspended counts as gone.
+	TaskToken(ctx context.Context, tokenHash []byte) (Credential, User, error)
+	// DeleteExpiredTaskTokens deletes the task tokens that expired before now, and those of tasks that ended, and
+	// returns how many.
+	DeleteExpiredTaskTokens(ctx context.Context, now time.Time) (int64, error)
 	// CreateToken records personal token t, its secret hashed to hash, and its event, as its user.
 	CreateToken(ctx context.Context, t Credential, hash []byte) error
 	// Tokens lists a user's personal tokens that are not revoked, newest first.
@@ -354,7 +363,8 @@ func (s *Service) SeededUsers(ctx context.Context) ([]Seeded, error) {
 }
 
 // Authenticated is who a credential resolved to: a user and the session it came from if a cookie's, a user and their
-// personal token, an API key's principal and its secret, or a job and its run's token.
+// personal token, an API key's principal and its secret, a job and its run's token, or an agent and the task token
+// it works a task with.
 type Authenticated struct {
 	User       User
 	Session    Session
@@ -362,9 +372,9 @@ type Authenticated struct {
 }
 
 // Authenticate resolves a token to who it acts as: a session token (the cookie's) to its user, a personal token to
-// its user, an API key's secret to the key, a run's token to the run's job. ErrUnauthenticated when it matches
-// nothing, expired, was revoked or its principal is suspended. A live credential is marked used, at most once a
-// minute.
+// its user, an API key's secret to the key, a run's token to the run's job, a task token to its task's agent.
+// ErrUnauthenticated when it matches nothing, expired, was revoked or its principal is suspended. A live credential is
+// marked used, at most once a minute.
 func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated, error) {
 	switch {
 	case ValidSecret(PrefixSession, token):
@@ -375,6 +385,8 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 		return s.authenticateCredential(ctx, Hash(token), CredentialAPIKey)
 	case ValidSecret(PrefixRunToken, token):
 		return s.authenticateCredential(ctx, Hash(token), CredentialRunToken)
+	case ValidSecret(PrefixTaskToken, token):
+		return s.authenticateTaskToken(ctx, Hash(token))
 	}
 	return Authenticated{}, ErrUnauthenticated
 }

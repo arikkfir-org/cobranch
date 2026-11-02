@@ -208,6 +208,27 @@ func (r *mutationResolver) CancelTask(ctx context.Context, organizationID string
 	return task(t), nil
 }
 
+// AppendTranscriptEntry is the resolver for the appendTranscriptEntry field.
+func (r *mutationResolver) AppendTranscriptEntry(ctx context.Context, organizationID string, number int, input TranscriptEntryInput) (*TranscriptEntry, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	in, err := entryInput(input)
+	if err != nil {
+		return nil, err
+	}
+	e, _, err := r.Agents.Append(ctx, v.User, orgID, int64(number), in)
+	if err != nil {
+		return nil, fail(ctx, err, "task", "appending to the transcript")
+	}
+	return transcriptEntry(e)
+}
+
 // Agents is the resolver for the agents field.
 func (r *organizationResolver) Agents(ctx context.Context, obj *Organization) ([]*Agent, error) {
 	list, err := resolveOrg(ctx, obj, r.Resolver.Agents.Agents, "listing the agents")
@@ -289,3 +310,53 @@ func (r *organizationResolver) ModelProviders(ctx context.Context, obj *Organiza
 func (r *organizationResolver) AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error) {
 	return nonNil(r.Resolver.Agents.ProviderNames()), nil
 }
+
+// MyTask is the resolver for the myTask field.
+func (r *queryResolver) MyTask(ctx context.Context) (*MyTask, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	t, slug, err := r.Agents.Work(ctx, v.User)
+	if err != nil {
+		return nil, fail(ctx, err, "task", "finding the task")
+	}
+	return &MyTask{Organization: slug, Task: task(t)}, nil
+}
+
+// Transcript is the resolver for the transcript field.
+func (r *taskResolver) Transcript(ctx context.Context, obj *Task, after *int, first *int) ([]*TranscriptEntry, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, obj.OrganizationID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	from, limit := 0, defaultTranscriptPage
+	if after != nil {
+		from = *after
+	}
+	if first != nil {
+		limit = *first
+	}
+	entries, err := r.Agents.Transcript(ctx, v.User, orgID, int64(obj.Number), from, limit)
+	if err != nil {
+		return nil, fail(ctx, err, "task", "reading the transcript")
+	}
+	out := make([]*TranscriptEntry, 0, len(entries))
+	for _, e := range entries {
+		shown, err := transcriptEntry(e)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, shown)
+	}
+	return out, nil
+}
+
+// Task returns TaskResolver implementation.
+func (r *Resolver) Task() TaskResolver { return &taskResolver{r} }
+
+type taskResolver struct{ *Resolver }

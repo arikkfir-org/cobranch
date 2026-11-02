@@ -172,3 +172,71 @@ func TestRepositoriesUnderARunToken(t *testing.T) {
 		})
 	}
 }
+
+// byPrincipal is an auth.Grants that answers each principal's own permissions and repositories, the same at every
+// scope.
+type byPrincipal map[uuid.UUID]grants
+
+func (g byPrincipal) Permissions(ctx context.Context, principalID uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
+	return g[principalID].Permissions(ctx, principalID, scope, scopeID)
+}
+
+func (g byPrincipal) Repositories(ctx context.Context, principalID, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
+	return g[principalID].Repositories(ctx, principalID, orgID, permission)
+}
+
+func TestAuthorizerUnderATaskToken(t *testing.T) {
+	agent, alice, bob, repo, other := uuid.New(), uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	g := byPrincipal{
+		agent: {held: []string{"org.read", "repo.push", "repo.read"}, repos: []uuid.UUID{repo, other}},
+		alice: {held: []string{"org.read", "repo.manage", "repo.read"}, repos: []uuid.UUID{repo}},
+		bob:   {held: []string{"org.read"}},
+	}
+	token := func(assigner uuid.UUID) *auth.Authenticated {
+		return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: agent, Kind: auth.KindAgent}},
+			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: agent, Task: auth.TaskGrant{ID: uuid.New(), AssignerID: assigner}}}
+	}
+	tests := []struct {
+		name      string
+		viewer    *auth.Authenticated
+		principal uuid.UUID
+		wantHeld  []string
+		wantRepos []uuid.UUID
+		wantCan   map[string]bool
+	}{
+		{name: "the assigner caps the agent", viewer: token(alice), principal: agent,
+			wantHeld: []string{"org.read", "repo.read"}, wantRepos: []uuid.UUID{repo},
+			wantCan: map[string]bool{"repo.read": true, "repo.push": false, "repo.manage": false}},
+		{name: "an assigner who holds little leaves little", viewer: token(bob), principal: agent,
+			wantHeld: []string{"org.read"}, wantCan: map[string]bool{"repo.read": false, "org.read": true}},
+		{name: "a task Cobranch started holds the agent's own", viewer: token(agent), principal: agent,
+			wantHeld: []string{"org.read", "repo.push", "repo.read"}, wantRepos: []uuid.UUID{repo, other},
+			wantCan: map[string]bool{"repo.push": true, "repo.manage": false}},
+		{name: "a task whose assigner is gone holds nothing", viewer: token(uuid.Nil), principal: agent,
+			wantCan: map[string]bool{"org.read": false, "repo.read": false}},
+		{name: "a task token never caps someone else", viewer: token(bob), principal: alice,
+			wantHeld: []string{"org.read", "repo.manage", "repo.read"}, wantRepos: []uuid.UUID{repo},
+			wantCan: map[string]bool{"repo.manage": true}},
+		{name: "the agent without a task token holds its own", principal: agent,
+			wantHeld: []string{"org.read", "repo.push", "repo.read"}, wantRepos: []uuid.UUID{repo, other},
+			wantCan: map[string]bool{"repo.push": true}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.viewer != nil {
+				ctx = auth.WithViewer(ctx, *tt.viewer)
+			}
+			a := auth.NewAuthorizer(g)
+			held, err := a.Holds(ctx, tt.principal, auth.ScopeRepository, repo)
+			if err != nil || !slices.Equal(held, tt.wantHeld) {
+				t.Errorf("Holds() = %v, %v, want %v", held, err, tt.wantHeld)
+			}
+			repos, err := a.Repositories(ctx, tt.principal, uuid.New(), "repo.read")
+			if err != nil || !slices.Equal(repos, tt.wantRepos) {
+				t.Errorf("Repositories() = %v, %v, want %v", repos, err, tt.wantRepos)
+			}
+			checkCan(ctx, t, a, tt.principal, repo, tt.wantCan)
+		})
+	}
+}
