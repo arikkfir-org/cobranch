@@ -14,7 +14,7 @@ var previewsCluster = uuid.MustParse("6f1c2b8e-3d4a-4e5f-9a1b-2c3d4e5f6a7b")
 var parseDeliveryTests = []struct {
 	name     string
 	settings string
-	want     code.Delivery
+	want     code.DeliverySettings
 	wantErr  string
 }{
 	{name: "an empty file", settings: ""},
@@ -43,7 +43,7 @@ var parseDeliveryTests = []struct {
     - path: deploy/extras
       targets: [previews]
       substitute: true
-`, want: code.Delivery{
+`, want: code.DeliverySettings{
 		Targets: []code.Target{
 			{Name: "production", Branches: []string{"main"}, Namespace: "shop"},
 			{Name: "previews", Branches: []string{"feature/**", "fix-*"}, Cluster: &previewsCluster, Namespace: "shop-${branch.slug}"},
@@ -56,13 +56,13 @@ var parseDeliveryTests = []struct {
 		},
 	}},
 	{name: "a chart with nothing set", settings: "delivery:\n  roots:\n    - path: chart\n      helm:\n",
-		want: code.Delivery{Roots: []code.Root{{Path: "chart", Helm: &code.HelmRoot{}}}}},
+		want: code.DeliverySettings{Roots: []code.Root{{Path: "chart", Helm: &code.HelmRoot{}}}}},
 	{name: "a kustomization of null", settings: "delivery:\n  roots:\n    - path: k\n      kustomize:\n",
-		want: code.Delivery{Roots: []code.Root{{Path: "k", Kustomize: &code.KustomizeRoot{}}}}},
+		want: code.DeliverySettings{Roots: []code.Root{{Path: "k", Kustomize: &code.KustomizeRoot{}}}}},
 	{name: "an escaped variable", settings: "delivery:\n  roots:\n    - path: $${dir}\n",
-		want: code.Delivery{Roots: []code.Root{{Path: "$${dir}"}}}},
-	{name: "keys for others left alone", settings: "jobs: [whatever]\ndelivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: prod\n",
-		want: code.Delivery{Targets: []code.Target{{Name: "prod", Branches: []string{"main"}, Namespace: "prod"}}}},
+		want: code.DeliverySettings{Roots: []code.Root{{Path: "$${dir}"}}}},
+	{name: "beside other keys", settings: "branches:\n  main:\ndelivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: prod\n",
+		want: code.DeliverySettings{Targets: []code.Target{{Name: "prod", Branches: []string{"main"}, Namespace: "prod"}}}},
 	{name: "not a mapping", settings: "- delivery\n", wantErr: "/cobranch.yaml: line 1: the settings must be a mapping"},
 	{name: "delivery twice", settings: "delivery:\ndelivery:\n", wantErr: `/cobranch.yaml: line 2: the settings names "delivery" twice`},
 	{name: "delivery as a list", settings: "delivery: [prod]\n", wantErr: "/cobranch.yaml: line 1: delivery must be a mapping"},
@@ -75,16 +75,18 @@ var parseDeliveryTests = []struct {
 	{name: "a target's unknown key", settings: "delivery:\n  targets:\n    prod:\n      branch: main\n", wantErr: `/cobranch.yaml: line 4: prod takes no "branch"`},
 	{name: "a target without branches", settings: "delivery:\n  targets:\n    prod:\n      namespace: p\n", wantErr: "/cobranch.yaml: line 4: prod needs branches"},
 	{name: "branches as a string", settings: "delivery:\n  targets:\n    prod:\n      branches: main\n      namespace: p\n",
-		wantErr: "/cobranch.yaml: line 4: branches must be a list of branch patterns"},
+		wantErr: "/cobranch.yaml: line 4: branches must list one or more branch patterns"},
 	{name: "no branches", settings: "delivery:\n  targets:\n    prod:\n      branches: []\n      namespace: p\n",
-		wantErr: "/cobranch.yaml: line 4: branches must name at least one branch pattern"},
+		wantErr: "/cobranch.yaml: line 4: branches must list one or more branch patterns"},
 	{name: "a cluster that isn't an ID", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      cluster: production\n      namespace: p\n",
 		wantErr: "/cobranch.yaml: line 5: cluster must be the ID of the secret that holds its kubeconfig"},
 	{name: "a target without a namespace", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n", wantErr: "/cobranch.yaml: line 4: prod needs a namespace"},
 	{name: "a namespace that is a number", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: 42\n",
 		wantErr: "/cobranch.yaml: line 5: namespace must be a string"},
 	{name: "a namespace naming itself", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: x-${namespace}\n",
-		wantErr: "/cobranch.yaml: line 5: ${namespace} is not a variable: use ${target}, ${branch}, ${branch.slug}, ${commit}, ${commit.short}, ${namespace}, ${repository}, ${organization}"},
+		wantErr: "/cobranch.yaml: line 5: a namespace takes no ${namespace}: an environment keeps one namespace"},
+	{name: "a namespace naming the commit", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: x-${commit.short}\n",
+		wantErr: "/cobranch.yaml: line 5: a namespace takes no ${commit.short}: an environment keeps one namespace"},
 	{name: "an unknown variable", settings: "delivery:\n  targets:\n    prod:\n      branches: [main]\n      namespace: x-${env}\n",
 		wantErr: "/cobranch.yaml: line 5: ${env} is not a variable: use ${target}, ${branch}, ${branch.slug}, ${commit}, ${commit.short}, ${namespace}, ${repository}, ${organization}"},
 	{name: "roots as a mapping", settings: "delivery:\n  roots:\n    chart: {}\n", wantErr: "/cobranch.yaml: line 3: roots must be a list of directories to render"},
@@ -100,7 +102,7 @@ var parseDeliveryTests = []struct {
 	{name: "a release that is a number", settings: "delivery:\n  roots:\n    - path: c\n      helm:\n        release: 7\n",
 		wantErr: "/cobranch.yaml: line 5: release must be a string"},
 	{name: "values files as a string", settings: "delivery:\n  roots:\n    - path: c\n      helm:\n        valuesFiles: values.yaml\n",
-		wantErr: "/cobranch.yaml: line 5: valuesFiles must be a list of files"},
+		wantErr: "/cobranch.yaml: line 5: valuesFiles must list one or more files"},
 	{name: "a values file's unknown variable", settings: "delivery:\n  roots:\n    - path: c\n      helm:\n        valuesFiles:\n          - values-${env}.yaml\n",
 		wantErr: "/cobranch.yaml: line 6: ${env} is not a variable: use ${target}, ${branch}, ${branch.slug}, ${commit}, ${commit.short}, ${namespace}, ${repository}, ${organization}"},
 	{name: "values as a list", settings: "delivery:\n  roots:\n    - path: c\n      helm:\n        values: [a]\n",
@@ -112,24 +114,25 @@ var parseDeliveryTests = []struct {
 	{name: "a value's key writing a variable", settings: "delivery:\n  roots:\n    - path: c\n      helm:\n        values:\n          $${target}: on\n",
 		wantErr: `/cobranch.yaml: line 6: values' keys take no variables: "$${target}"`},
 	{name: "a root's targets as a name", settings: "delivery:\n  roots:\n    - path: c\n      targets: prod\n",
-		wantErr: "/cobranch.yaml: line 4: targets must be a list of targets' names"},
+		wantErr: "/cobranch.yaml: line 4: targets must list one or more targets' names"},
 	{name: "a root's target twice", settings: "delivery:\n  roots:\n    - path: c\n      targets:\n        - prod\n        - prod\n",
-		wantErr: "/cobranch.yaml: line 6: target prod is named twice"},
+		wantErr: "/cobranch.yaml: line 6: targets names \"prod\" twice"},
 	{name: "a root's bad target", settings: "delivery:\n  roots:\n    - path: c\n      targets: [Prod]\n",
-		wantErr: "/cobranch.yaml: line 4: targets must be a list of targets' names"},
+		wantErr: "/cobranch.yaml: line 4: targets must list one or more targets' names"},
 	{name: "substitute as a string", settings: "delivery:\n  roots:\n    - path: c\n      substitute: \"yes\"\n",
 		wantErr: "/cobranch.yaml: line 4: substitute must be true or false"},
 	{name: "not YAML", settings: "delivery: [\n", wantErr: "/cobranch.yaml: line 1: did not find expected node content"},
 }
 
-func TestParseDelivery(t *testing.T) {
+func TestParseSettingsDelivery(t *testing.T) {
 	for _, tt := range parseDeliveryTests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := code.ParseDelivery([]byte(tt.settings))
+			settings, err := code.ParseSettings([]byte(tt.settings))
+			got := settings.Delivery
 			if tt.wantErr != "" {
 				var bad *code.SettingsError
 				if !errors.As(err, &bad) || err.Error() != tt.wantErr {
-					t.Fatalf("ParseDelivery() = %v, want *SettingsError %q", err, tt.wantErr)
+					t.Fatalf("ParseSettings() = %v, want *SettingsError %q", err, tt.wantErr)
 				}
 				return
 			}
@@ -137,7 +140,7 @@ func TestParseDelivery(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseDelivery() = %+v, want %+v", got, tt.want)
+				t.Errorf("ParseSettings().Delivery = %+v, want %+v", got, tt.want)
 			}
 		})
 	}

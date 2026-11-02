@@ -106,6 +106,10 @@ var conflicts = map[error]string{
 	agents.ErrBuiltIn:      "agent.built_in",
 	agents.ErrEnded:        "task.ended",
 	code.ErrRunNotWaiting:  "run.not_waiting",
+
+	code.ErrEnvironmentPaused:    "environment.paused",
+	code.ErrEnvironmentNotPaused: "environment.not_paused",
+	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
 }
 
 // fail maps the domain's errors to problems: kind names what wasn't found. Any other error stays one, which the

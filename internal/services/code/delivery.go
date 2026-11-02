@@ -1,10 +1,8 @@
 package code
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"slices"
 	"strings"
@@ -13,12 +11,12 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-// Delivery is the delivery key of a SettingsFile: the targets that map branch patterns to a cluster and a namespace,
+// DeliverySettings are the delivery key of a SettingsFile: the targets that map branch patterns to a cluster and a namespace,
 // which count only at the default branch's tip, and the roots each branch renders for its environments, which count
 // at the tip being delivered
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "/cobranch.yaml"). Its JSON
 // form is how a push records it.
-type Delivery struct {
+type DeliverySettings struct {
 	Targets []Target `json:"targets,omitempty"`
 	Roots   []Root   `json:"roots,omitempty"`
 }
@@ -82,14 +80,21 @@ func Expand(s string, values map[string]string) (string, error) {
 	return out, bad
 }
 
-// checkVariables reports a ${name} in s that Variables doesn't list, or ${namespace} where it would name itself.
-func checkVariables(s string, self bool) error {
+// namespaceRefuses are the Variables a namespace takes none of: itself, and the commit, since an environment keeps
+// one namespace whatever commit it delivers.
+var namespaceRefuses = []string{"namespace", "commit", "commit.short"}
+
+// checkVariables reports a ${name} in s that Variables doesn't list or, for a namespace, one of namespaceRefuses.
+func checkVariables(s string, namespace bool) error {
 	for _, m := range variable.FindAllStringSubmatch(s, -1) {
 		if strings.HasPrefix(m[0], "$$") {
 			continue
 		}
-		if !slices.Contains(Variables, m[1]) || (self && m[1] == "namespace") {
+		if !slices.Contains(Variables, m[1]) {
 			return fmt.Errorf("${%s} is not a variable: use %s", m[1], "${"+strings.Join(Variables, "}, ${")+"}")
+		}
+		if namespace && slices.Contains(namespaceRefuses, m[1]) {
+			return fmt.Errorf("a namespace takes no ${%s}: an environment keeps one namespace", m[1])
 		}
 	}
 	return nil
@@ -98,32 +103,9 @@ func checkVariables(s string, self bool) error {
 // targetName is a target's name: 1 to 40 lowercase letters, digits and '-', starting with a letter.
 var targetName = regexp.MustCompile(`^[a-z][a-z0-9-]{0,39}$`)
 
-// ParseDelivery reads the delivery key of a SettingsFile, or a *SettingsError naming the line at fault. A file without
-// one delivers nothing. Every key under delivery is checked, so a misspelt setting refuses the file rather than
-// delivering something else.
-func ParseDelivery(content []byte) (Delivery, error) {
-	var doc yaml.Node
-	if err := yaml.NewDecoder(bytes.NewReader(content)).Decode(&doc); errors.Is(err, io.EOF) {
-		return Delivery{}, nil
-	} else if err != nil {
-		return Delivery{}, yamlError(err)
-	}
-	if len(doc.Content) == 0 || isNull(doc.Content[0]) {
-		return Delivery{}, nil
-	}
-	root := doc.Content[0]
-	if root.Kind != yaml.MappingNode {
-		return Delivery{}, &SettingsError{Line: root.Line, Message: "the settings must be a mapping"}
-	}
-	if err := uniqueKeys(root, "the settings"); err != nil {
-		return Delivery{}, err
-	}
-	return parseDelivery(valueOf(root, "delivery"))
-}
-
 // parseDelivery reads the delivery key's value, node, which may be nil when the file has none.
-func parseDelivery(node *yaml.Node) (Delivery, error) {
-	var d Delivery
+func parseDelivery(node *yaml.Node) (DeliverySettings, error) {
+	var d DeliverySettings
 	if node == nil || isNull(node) {
 		return d, nil
 	}
@@ -183,12 +165,9 @@ func parseTarget(name string, node *yaml.Node) (Target, error) {
 	if branches == nil {
 		return t, &SettingsError{Line: node.Line, Message: name + " needs branches"}
 	}
-	patterns, err := stringList(branches, "branches must be a list of branch patterns")
+	patterns, err := distinctList(branches, "branches", "branches must list one or more branch patterns", anyText)
 	if err != nil {
 		return t, err
-	}
-	if len(patterns) == 0 {
-		return t, &SettingsError{Line: branches.Line, Message: "branches must name at least one branch pattern"}
 	}
 	t.Branches = patterns
 	if n := valueOf(node, "cluster"); n != nil && !isNull(n) {
@@ -304,7 +283,7 @@ func parseHelm(node *yaml.Node) (*HelmRoot, error) {
 
 // valuesFiles reads a chart's values files: a list of paths, which may name Variables.
 func valuesFiles(node *yaml.Node) ([]string, error) {
-	files, err := stringList(node, "valuesFiles must be a list of files")
+	files, err := distinctList(node, "valuesFiles", "valuesFiles must list one or more files", anyText)
 	if err != nil {
 		return nil, err
 	}
@@ -356,44 +335,19 @@ func checkValues(node *yaml.Node) error {
 
 // targetNames reads a root's targets: a list of targets' names, each once.
 func targetNames(node *yaml.Node) ([]string, error) {
-	const message = "targets must be a list of targets' names"
-	names, err := stringList(node, message)
-	if err != nil {
-		return nil, err
-	}
-	for i, name := range names {
-		if !targetName.MatchString(name) {
-			return nil, &SettingsError{Line: node.Content[i].Line, Message: message}
-		}
-		if slices.Contains(names[:i], name) {
-			return nil, &SettingsError{Line: node.Content[i].Line, Message: "target " + name + " is named twice"}
-		}
-	}
-	return names, nil
+	return distinctList(node, "targets", "targets must list one or more targets' names", targetName.MatchString)
 }
 
-// templated reads a non-empty string that may name Variables; self refuses ${namespace}, which would name itself.
-func templated(node *yaml.Node, what string, self bool) (string, error) {
+// templated reads a non-empty string that may name Variables; a namespace takes none of namespaceRefuses.
+func templated(node *yaml.Node, what string, namespace bool) (string, error) {
 	if node.Kind != yaml.ScalarNode || node.Tag != "!!str" || node.Value == "" {
 		return "", &SettingsError{Line: node.Line, Message: what + " must be a string"}
 	}
-	if err := checkVariables(node.Value, self); err != nil {
+	if err := checkVariables(node.Value, namespace); err != nil {
 		return "", &SettingsError{Line: node.Line, Message: err.Error()}
 	}
 	return node.Value, nil
 }
 
-// stringList reads a list of non-empty strings, or a *SettingsError with message.
-func stringList(node *yaml.Node, message string) ([]string, error) {
-	if node.Kind != yaml.SequenceNode {
-		return nil, &SettingsError{Line: node.Line, Message: message}
-	}
-	out := make([]string, 0, len(node.Content))
-	for _, n := range node.Content {
-		if n.Kind != yaml.ScalarNode || n.Tag != "!!str" || n.Value == "" {
-			return nil, &SettingsError{Line: n.Line, Message: message}
-		}
-		out = append(out, n.Value)
-	}
-	return out, nil
-}
+// anyText accepts any string, for a list whose entries are checked after.
+func anyText(string) bool { return true }
