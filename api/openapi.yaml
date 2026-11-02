@@ -6838,13 +6838,18 @@ components:
           description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its people's, its agent's and its repository's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
     MyTask:
       type: object
-      description: The task a task token works, and the slug of its organization, which the harness's calls name.
-      required: [organization, task]
+      description: >-
+        The task a task token works, the slug of its organization, which the harness's calls name, and its agent's
+        standing instructions, which the task starts from.
+      required: [organization, task, agentInstructions]
       properties:
         organization:
           type: string
         task:
           $ref: "#/components/schemas/Task"
+        agentInstructions:
+          type: string
+          description: The standing instructions, in Markdown, of the task's agent; empty for none.
     TranscriptEntryKind:
       type: string
       description: >-

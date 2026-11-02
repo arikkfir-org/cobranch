@@ -31,11 +31,11 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 	if err != nil {
 		return nil, err
 	}
-	t, slug, err := a.agents.Work(ctx, v)
+	w, err := a.agents.Work(ctx, v)
 	if err != nil {
 		return nil, fail(err, "task")
 	}
-	return GetMyTask200JSONResponse{Organization: slug, Task: task(t)}, nil
+	return GetMyTask200JSONResponse{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions}, nil
 }
 
 // ListTranscript lists a page of the entries of one of the organization's tasks, in order.

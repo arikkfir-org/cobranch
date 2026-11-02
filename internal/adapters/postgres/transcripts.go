@@ -17,13 +17,14 @@ func entry(r queries.AgentTaskEntry) agents.Entry {
 	return agents.Entry{Seq: int(r.Seq), Kind: agents.EntryKind(r.Kind), Body: r.Body, CreatedAt: r.CreatedAt}
 }
 
-// TaskByID finds a task by its ID, with its organization's slug (agents.Store).
-func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Task, string, error) {
+// TaskByID finds a task by its ID, with its organization's slug and its agent's standing instructions (agents.Store).
+func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, error) {
 	r, err := s.q.TaskByID(ctx, id)
 	if err != nil {
-		return agents.Task{}, "", fmt.Errorf("finding task %s: %w", id, notFound(err))
+		return agents.Work{}, fmt.Errorf("finding task %s: %w", id, notFound(err))
 	}
-	return task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName}), r.OrgSlug, nil
+	t := task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName})
+	return agents.Work{Task: t, OrgSlug: r.OrgSlug, AgentInstructions: r.AgentInstructions}, nil
 }
 
 // Entries lists at most limit of a task's transcript entries numbered above after, in order (agents.Store).
