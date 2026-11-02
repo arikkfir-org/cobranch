@@ -4201,6 +4201,266 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments:
+    get:
+      operationId: listEnvironments
+      summary: The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: branch
+          in: query
+          description: Only the environments of this branch, by its short name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The environments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [environments]
+                properties:
+                  environments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}:
+    get:
+      operationId: getEnvironment
+      summary: One of the repository's environments, with its newest delivery; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The environment.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "304":
+          description: The environment is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/deliveries:
+    get:
+      operationId: listDeliveries
+      summary: A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many deliveries the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's deliveries, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Delivery"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/redeliver:
+    post:
+      operationId: redeliver
+      summary: Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "202":
+          description: The delivery, queued; Location names it, where it reports how it goes.
+          headers:
+            Location:
+              description: The delivery's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/pause:
+    post:
+      operationId: pauseEnvironment
+      summary: Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "200":
+          description: The environment, paused.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/resume:
+    post:
+      operationId: resumeEnvironment
+      summary: Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "200":
+          description: The environment, resumed, with the delivery it queued as its newest.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}:
+    get:
+      operationId: getDelivery
+      summary: One of the repository's deliveries by its number; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The delivery.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "304":
+          description: The delivery is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}/start:
+    post:
+      operationId: startDelivery
+      summary: Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+      responses:
+        "202":
+          description: The delivery, queued; Location names it, where it reports how it goes.
+          headers:
+            Location:
+              description: The delivery's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags
@@ -4381,6 +4641,23 @@ paths:
           $ref: "#/components/responses/Problem"
 components:
   parameters:
+    environmentId:
+      name: environment
+      in: path
+      required: true
+      description: The environment's ID.
+      schema:
+        type: string
+        format: uuid
+    deliveryNumber:
+      name: number
+      in: path
+      required: true
+      description: The delivery's number in its repository.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     runNumber:
       name: number
       in: path
@@ -5912,6 +6189,117 @@ components:
           type: array
           items:
             type: string
+    Environment:
+      type: object
+      description: A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+      required: [id, target, branch, namespace, sync, health, paused, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        target:
+          $ref: "#/components/schemas/Principal"
+        branch:
+          type: string
+          description: The branch's short name.
+        cluster:
+          type: string
+          format: uuid
+          description: The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+        namespace:
+          type: string
+        revision:
+          type: string
+          description: The commit of its last successful delivery; absent before one.
+        syncedAt:
+          type: string
+          format: date-time
+          description: When a delivery last succeeded; absent before one.
+        sync:
+          $ref: "#/components/schemas/EnvironmentSync"
+        health:
+          $ref: "#/components/schemas/EnvironmentHealth"
+        paused:
+          type: boolean
+          description: A paused environment takes no delivery until resumed.
+        latest:
+          $ref: "#/components/schemas/Delivery"
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
+    EnvironmentSync:
+      type: string
+      description: Whether the environment's cluster holds its branch's newest commit.
+      enum: [synced, out_of_sync]
+    EnvironmentHealth:
+      type: string
+      description: The worst of the environment's objects' health; unknown until a delivery reads it.
+      enum: [healthy, progressing, unknown, missing, degraded]
+    Delivery:
+      type: object
+      description: One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+      required: [id, number, environment, target, branch, kind, trigger, state, reason, queuedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int64
+          description: Counts the repository's deliveries from 1.
+        environment:
+          type: string
+          format: uuid
+          description: Its environment's ID.
+        target:
+          type: string
+          description: Its environment's target's name.
+        branch:
+          type: string
+          description: Its environment's branch.
+        kind:
+          type: string
+          description: What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+          enum: [deliver, resync, teardown]
+        sha:
+          type: string
+          description: The commit it delivers; absent for a teardown.
+        trigger:
+          type: string
+          description: What queued it.
+          enum: [push, redeliver, resume]
+        push:
+          type: string
+          format: uuid
+          description: The push that queued it; absent for any other.
+        state:
+          $ref: "#/components/schemas/DeliveryState"
+        reason:
+          type: string
+          description: Why it waits, failed or was cancelled; empty otherwise.
+        startedBy:
+          $ref: "#/components/schemas/Principal"
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
+    DeliveryState:
+      type: string
+      description: Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+      enum: [waiting, queued, rendering, applying, succeeded, failed, cancelled]
     AnnotationStatus:
       type: string
       description: Where an annotation stands, in any order its principal sets them.

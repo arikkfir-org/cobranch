@@ -5,8 +5,8 @@
 > Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-02 · [ENG-218](https://linear.app/arikkfir/issue/ENG-218) · Builds the [product’s
-delivery](product.md#delivery) on [jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y) · A task of the controller ·
-Built by [ENG-218](https://linear.app/arikkfir/issue/ENG-218), in five pull requests, the first
+delivery](product.md#delivery) on [jobs](jobs.md) · A task of the controller · Built by
+[ENG-218](https://linear.app/arikkfir/issue/ENG-218), in five pull requests, the first
 [cobranch#45](https://github.com/arikkfir-org/cobranch/pull/45)
 
 Cobranch delivers what a repository declares, like Argo CD but built in: `main`’s `/cobranch.yaml` maps branch patterns
@@ -21,9 +21,8 @@ and targets declared in `/cobranch.yaml`, an environment per target and branch, 
 down, the clusters Cobranch reaches, and each environment's revision and health. The [product
 design](product.md#delivery) fixed an Argo CD-like controller built in, an environment per branch, and target clusters
 by branch pattern; the [architecture](architecture.md#events-and-background-work) fixed that every reaction is queued
-with its change and run by the controller. Delivery runs in the controller
-[jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y) introduce, from the same branch events, in the same job
-namespaces, and with the same secrets.
+with its change and run by the controller. Delivery runs in the controller [jobs](jobs.md) introduce, from the same
+branch events, in the same job namespaces, and with the same secrets.
 
 **This slice delivers every matching branch end to end; promotion, waves and cloud identities come later**
 
@@ -124,6 +123,8 @@ none.
   widens its `branches`: the push worker's transaction makes the environment and queues its first delivery.
 - **One namespace, one environment.** Two environments may not share a cluster and namespace: the second fails, naming
   the first. Two targets naming the same secret count as one cluster.
+- **Its namespace is set when it is made,** and kept for its life, so `namespace` takes no `${commit}`,
+  `${commit.short}` or `${namespace}`.
 - **Each target is a principal,** created on first use, kind `target`, owned by the repository, never signing in, as
   each job name is ([Who delivers](#who-delivers)).
 - **Ends with its branch,** with its target, or when `main` stops matching the branch: its teardown deletes what it
@@ -140,16 +141,15 @@ same way; a resync re-applies the last render without rendering again.
 
 - **Rendered in a pod, never in the controller.** A chart's templates and a kustomization are the repository's code:
   they can loop for ever, read files, or fetch remote bases. The controller holds the cluster's credentials, so a
-  delivery renders in a pod in the organization's [job
-  namespace](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#namespaces), which has no ingress and reaches only DNS
-  and the internet, under its LimitRange, as a run does.
-- **The render pod** is Cobranch's own image running `cobranch render`, after the
-  [checkout](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#pods) init container fetches the commit. It reads the
-  roots from the commit's `/cobranch.yaml` and the target from the controller, its name and the environment's namespace,
-  which `main`'s grants (`--target`, `--namespace`), since the commit's own targets count for nothing; it renders each
-  root in order, and uploads the manifests with `PUT /v1/orgs/{org}/repos/{repo}/deliveries/{id}/manifests`, using a
-  token scoped to that one delivery, `cbd_…`, valid for the render's timeout, 10 minutes by default. The REST server
-  stores the render in the object store, under `deliveries/<repo-id>/<delivery-id>`, at most 16 MiB.
+  delivery renders in a pod in the organization's [job namespace](jobs.md#job-namespaces), which has no ingress and
+  reaches only DNS and the internet, under its LimitRange, as a run does.
+- **The render pod** is Cobranch's own image running `cobranch render`, after the [checkout](jobs.md#pods-and-scripts)
+  init container fetches the commit. It reads the roots from the commit's `/cobranch.yaml` and the target from the
+  controller, its name and the environment's namespace, which `main`'s grants (`--target`, `--namespace`), since the
+  commit's own targets count for nothing; it renders each root in order, and uploads the manifests with
+  `PUT /v1/orgs/{org}/repos/{repo}/deliveries/{id}/manifests`, using a token scoped to that one delivery, `cbd_…`, valid
+  for the render's timeout, 10 minutes by default. The REST server stores the render in the object store, under
+  `deliveries/<repo-id>/<delivery-id>`, at most 16 MiB.
 - **Helm** renders the chart at `path` as `helm template` would, release `release`, namespace the environment's, its
   values from `valuesFiles` (relative to `path`, in order) then `values`. `.Capabilities` are the target cluster's: the
   controller reads its version and API groups before the render and passes them in, so charts that check for an API
@@ -207,7 +207,7 @@ Deleting and ends Succeeded with its environment.
 
 | Delivery | `delivery/<target>` | When |
 | --- | --- | --- |
-| Waiting | Pending: `waits for a member to start it` | The branch's tip was pushed from outside the organization and `main`'s `repository.outsidePushes` is `wait`, the default ([the gate](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#outside)): a member with `delivery.run` starts it |
+| Waiting | Pending: `waits for a member to start it` | The branch's tip was pushed from outside the organization and `main`'s `repository.outsidePushes` is `wait`, the default ([the gate](jobs.md#the-outside-push-gate)): a member with `delivery.run` starts it |
 | Queued | Pending | Waiting for the controller, or for the environment's running delivery to end |
 | Rendering | In progress | Its render pod runs |
 | Applying | In progress | The controller applies, prunes and records |
@@ -220,7 +220,10 @@ Deleting and ends Succeeded with its environment.
   delivery's pod; an applying one finishes first.
 - **Redeliver, start, pause, resume.** `delivery.run` redelivers an environment's branch head, starts a waiting
   delivery, and pauses an environment, which then takes no delivery and no resync until resumed; resuming delivers the
-  head. A teardown still runs on a paused environment.
+  head. A teardown still runs on a paused environment. A push to a paused environment's branch queues nothing: its
+  target's annotation on the commit is Pending, `the environment is paused`, and the environment turns Out of sync.
+- **What a tip holds decides what it delivers.** A tip whose `/cobranch.yaml` doesn't parse fails its deliveries with
+  the file's error; a tip without the file, or without `roots`, renders nothing, so its environments hold nothing.
 - **Each delivery has a number** in its repository, `#17`, for the Console and the reasons.
 
 ## Teardown
@@ -251,7 +254,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
 `delivery/preview`, so a branch merges only once its preview runs.
 
 - **Revision** is the commit of the environment's last successful delivery; **sync** is Synced when the cluster holds
-  that render, Out of sync while a newer commit waits or a delivery failed, and Paused.
+  that render, and Out of sync while a newer commit waits or a delivery failed; a paused environment shows Paused beside
+  it.
 - **Health** follows the kstatus rules Kubernetes' own tools share, so Deployments, StatefulSets, DaemonSets, Jobs,
   PersistentVolumeClaims, Services and any object with a `Ready` condition read as they do everywhere else; an object
   without a status is Healthy once it exists. An object that is gone, or whose kind the cluster no longer serves, is
@@ -381,6 +385,10 @@ An operator upgrading to the fourth grants the chart’s delivery RBAC, or sets 
 
 - **The first two need nothing of jobs:** the schema, rendering and `cobranch render`, then applying, pruning and
   health, tested against a real API server. Nothing delivers until the fourth.
+- **The third queues without applying:** a push to a branch makes its environments and queues their deliveries, which
+  members list, redeliver, pause, resume and start through the APIs and the Console. A push into `main` that adds a
+  target or widens its `branches` makes the other branches' environments from the fifth on; until then, from each
+  branch's next push.
 - **The fourth needs the operator's consent:** the chart starts granting the controller namespaces, `bind` on the
   delivery roles and impersonation. An operator who can't grant them sets `delivery.inCluster.enabled: false` and
   delivers only to other clusters.
