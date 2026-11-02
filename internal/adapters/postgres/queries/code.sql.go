@@ -185,10 +185,13 @@ func (q *Queries) FirstParents(ctx context.Context, repoID uuid.UUID, sha string
 const liveBranch = `-- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
     r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
-    coalesce(f.error, '')::text AS settings_error
+    coalesce(f.error, '')::text AS settings_error, coalesce(rt.number, 0)::bigint AS review_task,
+    coalesce(rt.state, '')::text AS review_state, coalesce(rt.reason, '')::text AS review_reason
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+LEFT JOIN LATERAL (SELECT t.number, t.state, t.reason FROM agent_tasks t
+    WHERE t.branch_id = b.id AND t.sha = b.head AND t.kind = 'review' ORDER BY t.number DESC LIMIT 1) rt ON true
 WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL
 `
 
@@ -211,6 +214,9 @@ type LiveBranchRow struct {
 	MergedByName        *string
 	MergedAt            *time.Time
 	SettingsError       string
+	ReviewTask          int64
+	ReviewState         string
+	ReviewReason        string
 }
 
 func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string) (LiveBranchRow, error) {
@@ -235,6 +241,9 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 		&i.MergedByName,
 		&i.MergedAt,
 		&i.SettingsError,
+		&i.ReviewTask,
+		&i.ReviewState,
+		&i.ReviewReason,
 	)
 	return i, err
 }
@@ -242,10 +251,13 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 const liveBranches = `-- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
     r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
-    coalesce(f.error, '')::text AS settings_error
+    coalesce(f.error, '')::text AS settings_error, coalesce(rt.number, 0)::bigint AS review_task,
+    coalesce(rt.state, '')::text AS review_state, coalesce(rt.reason, '')::text AS review_reason
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+LEFT JOIN LATERAL (SELECT t.number, t.state, t.reason FROM agent_tasks t
+    WHERE t.branch_id = b.id AND t.sha = b.head AND t.kind = 'review' ORDER BY t.number DESC LIMIT 1) rt ON true
 WHERE b.repo_id = $1 AND b.deleted_at IS NULL
 ORDER BY b.name
 `
@@ -269,11 +281,14 @@ type LiveBranchesRow struct {
 	MergedByName        *string
 	MergedAt            *time.Time
 	SettingsError       string
+	ReviewTask          int64
+	ReviewState         string
+	ReviewReason        string
 }
 
 // LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it,
-// each with its status as a request to merge into its base, the last merge recorded of it, and what a merge into it
-// needs, when /cobranch.yaml names it.
+// each with its status as a request to merge into its base, the last merge recorded of it, what a merge into it
+// needs, when /cobranch.yaml names it, and the AI reviewer's latest task for its head.
 func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBranchesRow, error) {
 	rows, err := q.db.Query(ctx, liveBranches, repoID)
 	if err != nil {
@@ -302,6 +317,9 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 			&i.MergedByName,
 			&i.MergedAt,
 			&i.SettingsError,
+			&i.ReviewTask,
+			&i.ReviewState,
+			&i.ReviewReason,
 		); err != nil {
 			return nil, err
 		}

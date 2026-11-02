@@ -31,6 +31,7 @@ type Code interface {
 	Reviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, q code.ReviewQuery) (code.ReviewPage, error)
 	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
 	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
+	RequestReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.AIReview, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
@@ -113,6 +114,10 @@ func branch(b code.Branch) Branch {
 	}
 	if b.SettingsError != "" {
 		out.SettingsError = &b.SettingsError
+	}
+	if b.AIReview != nil {
+		r := aiReview(*b.AIReview)
+		out.AiReview = &r
 	}
 	return out
 }
@@ -492,6 +497,34 @@ func (a api) SubmitReview(ctx context.Context, req SubmitReviewRequestObject) (S
 	}
 	location := "../../reviews/" + r.ID.String()
 	return SubmitReview201JSONResponse{Body: review(r), Headers: SubmitReview201ResponseHeaders{Location: &location}}, nil
+}
+
+// RequestReview asks the organization's AI reviewer for another review of the branch's head: 202 with the review,
+// whose task Location names.
+func (a api) RequestReview(ctx context.Context, req RequestReviewRequestObject) (RequestReviewResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	r, err := a.code.RequestReview(ctx, v, repo.ID, string(req.BranchName))
+	if err != nil {
+		return nil, fail(err, "branch")
+	}
+	location := "/v1/orgs/" + url.PathEscape(req.Org) + "/tasks/" + strconv.FormatInt(r.Task, 10)
+	return RequestReview202JSONResponse{Body: aiReview(r), Headers: RequestReview202ResponseHeaders{Location: location}}, nil
+}
+
+// aiReview is the AI reviewer's task for a branch's head as the API shows it.
+func aiReview(r code.AIReview) AIReview {
+	out := AIReview{Task: r.Task, State: AIReviewState(r.State)}
+	if r.Reason != "" {
+		out.Reason = &r.Reason
+	}
+	return out
 }
 
 // reviewInput is the review a request submits.

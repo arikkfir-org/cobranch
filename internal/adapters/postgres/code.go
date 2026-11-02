@@ -128,6 +128,9 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 	if r.Name == git.DefaultBranch {
 		return b, nil
 	}
+	if r.ReviewTask > 0 {
+		b.AIReview = &code.AIReview{Task: r.ReviewTask, State: code.ReviewTaskState(r.ReviewState), Reason: r.ReviewReason}
+	}
 	b.Base, b.Status = git.DefaultBranch, code.StatusProcessing
 	if r.Status != nil {
 		b.Status = code.BranchStatus(*r.Status)

@@ -201,6 +201,8 @@ extend type Mutation {
   deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
   "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, opens its comments as threads of the chat of the branch it names, and answers it; takes reviews.submit, and messages.post with comments. A review is never changed: its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is refused (CONFLICT, branch.deleted)."
   submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
+  "Asks the organization's AI reviewer for another review of the branch's head, and answers its task; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. main's pushes are never reviewed, and a branch main's /cobranch-review.yaml leaves out is refused (CONFLICT, review.off); so is a reviewer without a model (CONFLICT, reviewer.no_model) or a suspended one (CONFLICT, reviewer.suspended)."
+  requestReview(repositoryId: ID!, branch: String!): AIReview!
 }
 
 "The review a principal submits."
@@ -298,6 +300,31 @@ type Branch {
   merge: BranchMerge
   "Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Null when it parses, or there is none."
   settingsError: String
+  "The AI reviewer's latest task for its head; null when it has none, and for main, whose pushes it never reviews."
+  aiReview: AIReview
+}
+
+"The AI reviewer's task for a branch's head, an agent task of kind review. Its review, once it submits one, is among the head's."
+type AIReview {
+  "The task's number among its organization's tasks."
+  task: Int!
+  state: AIReviewState!
+  "Why it waits, failed or was cancelled; null otherwise."
+  reason: String
+}
+
+"Where the AI reviewer's task for a branch's head stands."
+enum AIReviewState {
+  "Waits for a member to ask for it: the head was pushed from outside the organization."
+  WAITING
+  QUEUED
+  RUNNING
+  "Ended with its review submitted."
+  SUCCEEDED
+  "Ended without a review, for its reason."
+  FAILED
+  "Superseded by a newer push, the branch's deletion or a request for another review."
+  CANCELLED
 }
 
 "A merge of a branch into its base that a push made."

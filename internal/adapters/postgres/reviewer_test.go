@@ -277,3 +277,48 @@ func TestReviewerSeed(t *testing.T) {
 		})
 	}
 }
+
+// TestReviewTasksMigrationMakesMissingReviewers checks that migration 00044 gives an organization that servers on older
+// code created without a reviewer its reviewer, and leaves one that has its reviewer alone.
+func TestReviewTasksMigrationMakesMissingReviewers(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	pool := testDatabase(t)
+	schema := newSchema(t, pool, migrationsBefore(t, "00044"))
+	if err := schema.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	without := insertOrganizationWithAgents(ctx, t, pool, []string{"Scout"})
+	with := insertOrganizationWithAgents(ctx, t, pool, nil)
+	exec(ctx, t, pool, `WITH p AS (INSERT INTO principals (id, kind, display_name, org_id) VALUES (uuidv7(), 'agent', 'Critic', $1) RETURNING id)
+		INSERT INTO agents (principal_id, org_id, name, built_in, purpose) SELECT id, $1, 'Critic', true, 'review' FROM p`, with)
+	full := newSchema(t, pool, migrations.FS, migrations.Go...)
+	if err := full.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name  string
+		orgID uuid.UUID
+		want  string
+	}{{name: "an organization without its reviewer", orgID: without, want: "AI reviewer"}, {name: "one with its reviewer", orgID: with, want: "Critic"}} {
+		var names []string
+		rows, err := pool.Query(ctx, "SELECT name FROM agents WHERE org_id = $1 AND purpose = 'review'", tt.orgID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				t.Fatal(err)
+			}
+			names = append(names, name)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			t.Fatal(err)
+		}
+		if len(names) != 1 || names[0] != tt.want {
+			t.Errorf("%s: reviewers = %q, want %q", tt.name, names, tt.want)
+		}
+	}
+}
