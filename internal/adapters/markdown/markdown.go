@@ -263,7 +263,7 @@ func (r *Renderer) organizationLink(u *url.URL, doc code.Document) string {
 		out += "?" + u.RawQuery
 	}
 	if u.Fragment != "" {
-		out += "#" + url.PathEscape(u.Fragment)
+		out += "#" + anchor(u.Fragment)
 	}
 	return out
 }

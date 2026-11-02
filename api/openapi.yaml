@@ -2110,7 +2110,7 @@ components:
           type: string
           description: The Console's page.
           enum: [sign-in, welcome, settings, organization, organization.members, organization.roles,
-            organization.api-keys, organization.settings, organization.new-repository, repository.code,
+            organization.api-keys, organization.settings, organization.new-repository, organization.issues, repository.code,
             repository.file, repository.commits, repository.commit, repository.branches, repository.branch,
             repository.access, repository.settings]
         navigation:

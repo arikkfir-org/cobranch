@@ -118,6 +118,7 @@ func TestRenderOrganizationDocument(t *testing.T) {
 	issue := code.Document{Org: "acme", Path: "issues/ACME-3"}
 	for src, want := range map[string]string{
 		"[next](ACME-4)\n":              `href="https://console.example.com/acme/issues/ACME-4"`,
+		"[part](ACME-4#why)\n":          `href="https://console.example.com/acme/issues/ACME-4#user-content-why"`,
 		"[site](../website)\n":          `href="https://console.example.com/acme/website"`,
 		"[root](/globex/issues?x=1)\n":  `href="https://console.example.com/globex/issues?x=1"`,
 		"[out](../../../x)\n":           `<p>out</p>`,

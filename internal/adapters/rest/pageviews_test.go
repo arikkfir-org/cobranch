@@ -29,6 +29,8 @@ func TestReportPageViews(t *testing.T) {
 			want: []string{"repository.code load 1 1.25", "repository.file route 1 0.0805", "repository.code load 1 2", "repository.file route 1 1"}},
 		{name: "the sign-in page", body: views(view("sign-in", "load", 300, 0)), wantStatus: 204,
 			want: []string{"sign-in load 1 0.3", "sign-in load 1 0"}},
+		{name: "an organization's issues", body: views(view("organization.issues", "route", 200, 0)), wantStatus: 204,
+			want: []string{"organization.issues route 1 0.2", "organization.issues route 1 0"}},
 		{name: "the same page twice", body: views(view("organization", "route", 100, 0), view("organization", "route", 300, 0)), wantStatus: 204,
 			want: []string{"organization route 2 0.4", "organization route 2 0"}},
 		{name: "twenty views", body: views(slices.Repeat([]string{view("welcome", "route", 10, 0)}, 20)...), wantStatus: 204,

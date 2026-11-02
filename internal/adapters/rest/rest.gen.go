@@ -237,6 +237,7 @@ func (e PageViewNavigation) Valid() bool {
 const (
 	PageViewPageOrganization              PageViewPage = "organization"
 	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationIssues        PageViewPage = "organization.issues"
 	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
 	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
 	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
@@ -260,6 +261,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageOrganization:
 		return true
 	case PageViewPageOrganizationApiKeys:
+		return true
+	case PageViewPageOrganizationIssues:
 		return true
 	case PageViewPageOrganizationMembers:
 		return true
