@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 )
 
@@ -92,4 +94,37 @@ func (tt reviewSettingsPush) check(t *testing.T, s *stack) {
 	}
 	// Elsewhere than main, the file is only a file.
 	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/feature")
+}
+
+func TestMergeByAPIReadsReviewSettings(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name     string
+		settings string
+		want     git.ReviewSettings
+		wantErr  error
+	}{
+		{name: "the settings it brings into main", settings: "maxDiffLines: 800\n",
+			want: func() git.ReviewSettings { d := git.DefaultReviewSettings(); d.MaxDiffLines = 800; return d }()},
+		{name: "a file that doesn't parse", settings: "maxDiffLine: 800\n", wantErr: &code.MergeError{Code: code.MergeRefused}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s, client, feature, _ := apiMergeRepo(t, apiMergeCase{featureFile: "cobranch-review.yaml", featureContent: tt.settings})
+			_, err := client.Merge(auth.WithToken(t.Context(), s.token(olivia, "repo.read", "repo.merge")), website,
+				code.MergeRequest{Branch: "feature", Head: feature, Base: "main", Method: code.MethodMerge,
+					By: code.Merger{ID: olivia, Name: "Olivia", Email: "olivia@example.com"}})
+			if !sameRefusal(err, tt.wantErr) {
+				t.Fatalf("Merge = %v, want %v", err, tt.wantErr)
+			}
+			want := tt.want
+			if tt.wantErr != nil {
+				want = git.DefaultReviewSettings()
+			}
+			if got := reviewSettings(t, s); !reflect.DeepEqual(got, want) {
+				t.Errorf("the settings = %+v, want %+v", got, want)
+			}
+		})
+	}
 }

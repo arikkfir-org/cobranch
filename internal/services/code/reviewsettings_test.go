@@ -42,6 +42,7 @@ func reviewSettingsCases() []reviewSettingsCase {
 		{name: "disabled", settings: "enabled: false\n", want: with(func(s *git.ReviewSettings) { s.Enabled = false })},
 		{name: "some branches", settings: "branches: [feature/*, fix/**]\n", want: with(func(s *git.ReviewSettings) { s.Branches = []string{"feature/*", "fix/**"} })},
 		{name: "paths of nothing", settings: "paths:\n", want: defaults},
+		{name: "empty lists of paths", settings: "paths:\n  ignore: []\ninclude: []\n", want: defaults},
 		{name: "the most diff lines", settings: "maxDiffLines: 20000\n", want: with(func(s *git.ReviewSettings) { s.MaxDiffLines = 20000 })},
 		{name: "the longest instructions", settings: "instructions: " + strings.Repeat("é", code.MaxReviewInstructions) + "\n",
 			want: with(func(s *git.ReviewSettings) { s.Instructions = strings.Repeat("é", code.MaxReviewInstructions) })},

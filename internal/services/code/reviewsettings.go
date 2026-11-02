@@ -108,9 +108,9 @@ func reviewPaths(out *git.ReviewSettings, root *yaml.Node) error {
 }
 
 // pathList reads a list of at most most paths or patterns of paths under key, each once: relative to the root, at most
-// maxAnchorPath bytes; empty when the key is absent.
+// maxAnchorPath bytes; empty when the key is absent or the list is.
 func pathList(node *yaml.Node, key string, most int) ([]string, error) {
-	if node == nil || isNull(node) {
+	if node == nil || isNull(node) || node.Kind == yaml.SequenceNode && len(node.Content) == 0 {
 		return []string{}, nil
 	}
 	list, err := distinctList(node, key, key+" must be a list of paths from the root, or their patterns such as docs/**/*.md", validPathPattern)
