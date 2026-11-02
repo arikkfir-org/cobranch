@@ -61,11 +61,17 @@ spec:
           value: $(params.repo-url)
         - name: revision
           value: $(params.revision)
+    # The cluster adapter's tests start a throwaway API server from these binaries.
+    - name: kube-assets
+      image: docker.io/library/golang:1.27.1
+      command: [sh, .tekton/scripts/kube-assets.sh]
     - name: test
       image: docker.io/library/golang:1.27.1
       env:
         - name: COBRANCH_TEST_DATABASE_URL
           value: postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable
+        - name: COBRANCH_TEST_KUBE_ASSETS
+          value: $(workspaces.source.path)/.ci/kube
         # A test that needs the database fails without it, rather than skip.
         - name: CI
           value: "true"

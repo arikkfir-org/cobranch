@@ -23,7 +23,7 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 | Path | What it holds |
 | --- | --- |
 | `cmd/cobranch/` | The one binary: a subcommand per workload (the API servers `auth-server`, `rest-server`, `graphql-server` and `admin-server`, the `migrate` Job, Git server, push worker, controller, `maintenance`, agent), so every workload runs the same build at one version; today `auth-server`, `rest-server`, `graphql-server`, `admin-server`, `migrate`, `git-server`, `push-worker` (with `git-hook`, the Git server's pre-receive hook), `maintenance`, `render` (what a delivery renders, which a delivery's pod and a developer's checkout run) and `version` |
-| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions, personal tokens, SSH keys and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys; `repos`, repositories and the grants on them; `git`, what a fetch serves and the record of pushes; `code`, a repository's branches, history, commits, directories and files as people browse them, the annotations principals set on its commits, and each branch's status with the merge requirements behind it; `delivery`, the targets a branch delivers to and what a delivery renders for each, from `/cobranch.yaml`'s `delivery` key, which `code` parses; `admin`, the installation's administration), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `adminapi`, `server`, `blob`, `gitserver`, `gitinternal`, `markdown`, `pushworker`, `render`, which renders a delivery's charts, kustomizations and manifests) and `system/` (configuration, telemetry, build information) |
+| `internal/` | The Go packages: `services/` (the domain: `auth`, sign-in, sessions, personal tokens, SSH keys and the authorizer; `orgs`, organizations, members, invitations, join requests, roles, grants and API keys; `repos`, repositories and the grants on them; `git`, what a fetch serves and the record of pushes; `code`, a repository's branches, history, commits, directories and files as people browse them, the annotations principals set on its commits, and each branch's status with the merge requirements behind it; `delivery`, the targets a branch delivers to and what a delivery renders for each, from `/cobranch.yaml`'s `delivery` key, which `code` parses; `admin`, the installation's administration), `adapters/` (transports, storage, outside systems: `authserver`, `oidc`, `postgres`, `rest`, `graphql`, `adminapi`, `server`, `blob`, `gitserver`, `gitinternal`, `markdown`, `pushworker`, `render`, which renders a delivery's charts, kustomizations and manifests, `cluster`, which applies a render to its target cluster, prunes what it dropped and reads its objects' health) and `system/` (configuration, telemetry, build information) |
 | `web/console/` | The Console, which Caddy serves as static files (image `cobranch-console`): sign-in, the welcome page (create, join, invitations), an organization's home, members, roles, API keys and settings under its slug, its repositories' pages under theirs, with their files at any branch, tag or commit, Markdown and READMEs rendered, branches with their status and a Merge button, history through every parent with its graph, and commits with their annotations, and the viewer's settings with their personal tokens and SSH keys, routed in the browser |
 | `web/back-office/` | The Back-office, which Caddy serves as static files (image `cobranch-back-office`): an installation's organizations (search, create one for a user, enter one) and its users, routed in the browser |
 | `web/ui/` | _Planned_: the components the web apps share |
@@ -40,7 +40,7 @@ One repository holds every part of Cobranch, laid out as the [technical architec
 ## Development
 
 Go 1.27, [golangci-lint](https://golangci-lint.run) 2.15 and a PostgreSQL 18 server for the tests that need one (each
-makes its own database there; without `COBRANCH_TEST_DATABASE_URL` they are skipped):
+makes its own database there; without `COBRANCH_TEST_DATABASE_URL` they are skipped). The cluster adapter's tests also start a throwaway API server, from the `kube-apiserver` and `etcd` binaries in the directory `COBRANCH_TEST_KUBE_ASSETS` names, which `.tekton/scripts/kube-assets.sh` downloads into `.ci/kube` on Linux, at the versions CI pins; without it they are skipped:
 
 ```bash
 docker run -d --name cobranch-postgres -p 5432:5432 -e POSTGRES_HOST_AUTH_METHOD=trust postgres:18.6-alpine
@@ -48,6 +48,7 @@ export COBRANCH_TEST_DATABASE_URL='postgres://postgres@localhost:5432/postgres?s
 
 go generate ./...                      # the REST and GraphQL stubs from api/, the queries from db/; CI fails if they differ
 go vet ./... && go test -race ./...    # every test
+sh .tekton/scripts/kube-assets.sh && COBRANCH_TEST_KUBE_ASSETS=$PWD/.ci/kube go test ./internal/adapters/cluster/    # also against an API server
 golangci-lint run ./...                # the house rules' linters (.golangci.yml)
 go build -o bin/ ./cmd/...             # bin/cobranch
 bin/cobranch version
