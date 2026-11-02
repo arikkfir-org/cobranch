@@ -56,7 +56,7 @@ func TestPersonalTokens(t *testing.T) {
 			req := httptest.NewRequest("POST", "/", strings.NewReader(`{"query":`+jsonString(tt.query(token.ID))+`}`))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()
-			as(viewer, NewHandler("v1", service, emptyOrgs(), nil, nil)).ServeHTTP(rec, req)
+			as(viewer, NewHandler("v1", "", service, emptyOrgs(), nil, nil, nil)).ServeHTTP(rec, req)
 			for _, want := range tt.wantBody {
 				if !strings.Contains(rec.Body.String(), want) {
 					t.Errorf("body = %s, want %s in it", rec.Body, want)

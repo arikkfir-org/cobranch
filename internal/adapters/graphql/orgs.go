@@ -10,6 +10,7 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
@@ -62,19 +63,22 @@ const (
 
 // conflicts maps the domain's conflicts to their reasons.
 var conflicts = map[error]string{
-	orgs.ErrSlugTaken:     "slug.taken",
-	orgs.ErrInvited:       "invitation.exists",
-	orgs.ErrRequested:     "join_request.exists",
-	orgs.ErrAlreadyMember: "member.exists",
-	orgs.ErrLastOwner:     "org.last_owner",
-	orgs.ErrInviterGone:   "invitation.inviter_gone",
-	orgs.ErrRoleNameTaken: "role.name_taken",
-	orgs.ErrRoleInUse:     "role.in_use",
-	orgs.ErrBuiltInRole:   "role.built_in",
-	orgs.ErrGranted:       "grant.exists",
-	orgs.ErrTwoSecrets:    "api_key.two_secrets",
-	repos.ErrSlugTaken:    "slug.taken",
-	repos.ErrGranted:      "grant.exists",
+	orgs.ErrSlugTaken:      "slug.taken",
+	orgs.ErrInvited:        "invitation.exists",
+	orgs.ErrRequested:      "join_request.exists",
+	orgs.ErrAlreadyMember:  "member.exists",
+	orgs.ErrLastOwner:      "org.last_owner",
+	orgs.ErrInviterGone:    "invitation.inviter_gone",
+	orgs.ErrRoleNameTaken:  "role.name_taken",
+	orgs.ErrRoleInUse:      "role.in_use",
+	orgs.ErrBuiltInRole:    "role.built_in",
+	orgs.ErrGranted:        "grant.exists",
+	orgs.ErrTwoSecrets:     "api_key.two_secrets",
+	repos.ErrSlugTaken:     "slug.taken",
+	repos.ErrGranted:       "grant.exists",
+	chats.ErrIDTaken:       "chat.id_taken",
+	chats.ErrDeleted:       "message.deleted",
+	chats.ErrBranchDeleted: "branch.deleted",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
@@ -98,6 +102,8 @@ func fail(ctx context.Context, err error, kind, what string) error {
 		return refuse(ctx, conflict, "annotation.taken", taken.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
+	case errors.Is(err, chats.ErrChanged):
+		return refuse(ctx, conflict, "precondition.failed", "it changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):
 		return refuse(ctx, forbidden, "", "you lack the permission this takes")
 	case errors.Is(err, orgs.ErrNotFound), errors.Is(err, repos.ErrNotFound):

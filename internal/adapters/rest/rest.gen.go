@@ -91,6 +91,36 @@ func (e BranchStatus) Valid() bool {
 	}
 }
 
+// Defines values for ChatUpdateKind.
+const (
+	MessageDeleted ChatUpdateKind = "message.deleted"
+	MessageEdited  ChatUpdateKind = "message.edited"
+	MessagePosted  ChatUpdateKind = "message.posted"
+	ThreadReopened ChatUpdateKind = "thread.reopened"
+	ThreadResolved ChatUpdateKind = "thread.resolved"
+	ThreadStarted  ChatUpdateKind = "thread.started"
+)
+
+// Valid indicates whether the value is a known member of the ChatUpdateKind enum.
+func (e ChatUpdateKind) Valid() bool {
+	switch e {
+	case MessageDeleted:
+		return true
+	case MessageEdited:
+		return true
+	case MessagePosted:
+		return true
+	case ThreadReopened:
+		return true
+	case ThreadResolved:
+		return true
+	case ThreadStarted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FileKind.
 const (
 	FileKindBlob    FileKind = "blob"
@@ -433,6 +463,121 @@ type BranchMerge struct {
 
 // BranchStatus Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
 type BranchStatus string
+
+// ChatAnchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+type ChatAnchor struct {
+	// EndLine The last line, at or after startLine.
+	EndLine int `json:"endLine"`
+
+	// Path The file's path from the repository's root, as names separated by /.
+	Path string `json:"path"`
+
+	// Sha The commit's full name, in lowercase hexadecimal.
+	Sha       string `json:"sha"`
+	StartLine int    `json:"startLine"`
+}
+
+// ChatMessage One of a thread's messages, in Markdown.
+type ChatMessage struct {
+	// Author Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	Author *Principal `json:"author,omitempty"`
+
+	// Body Its Markdown; empty once it is deleted.
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DeletedAt When it was deleted; absent while it is there.
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+
+	// DeletedBy Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	DeletedBy *Principal `json:"deletedBy,omitempty"`
+
+	// EditedAt When its author last edited it; absent until they do.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
+
+	// Html Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
+	Html     string             `json:"html"`
+	Id       openapi_types.UUID `json:"id"`
+	ThreadId openapi_types.UUID `json:"threadId"`
+
+	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// ChatMessageInput A message to post.
+type ChatMessageInput struct {
+	// Body Its Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+
+	// Id The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+}
+
+// ChatMessagePatch How a message changes.
+type ChatMessagePatch struct {
+	// Body Its Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+}
+
+// ChatThread One of a branch's chat threads.
+type ChatThread struct {
+	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+	Anchor    *ChatAnchor        `json:"anchor,omitempty"`
+	CreatedAt time.Time          `json:"createdAt"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Messages Its messages in the order they were posted; absent from an update.
+	Messages *[]ChatMessage `json:"messages,omitempty"`
+
+	// Outdated Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	Outdated bool `json:"outdated"`
+
+	// ResolvedAt When it was resolved; absent while it is open.
+	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+
+	// ResolvedBy Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	ResolvedBy *Principal `json:"resolvedBy,omitempty"`
+
+	// StartedBy Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	StartedBy *Principal `json:"startedBy,omitempty"`
+
+	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// ChatThreadInput A thread to start, with its first message.
+type ChatThreadInput struct {
+	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+	Anchor *ChatAnchor `json:"anchor,omitempty"`
+
+	// Body Its first message's Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+
+	// Id The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+}
+
+// ChatThreadPatch How a thread changes.
+type ChatThreadPatch struct {
+	// Resolved Whether it is resolved, or open.
+	Resolved bool `json:"resolved"`
+}
+
+// ChatUpdate A change to a chat, with the thread and the message it changed as they are now.
+type ChatUpdate struct {
+	// Cursor Where it stands among the chat's updates. Opaque.
+	Cursor string         `json:"cursor"`
+	Kind   ChatUpdateKind `json:"kind"`
+
+	// Message One of a thread's messages, in Markdown.
+	Message *ChatMessage `json:"message,omitempty"`
+
+	// Thread One of a branch's chat threads.
+	Thread ChatThread `json:"thread"`
+}
+
+// ChatUpdateKind defines model for ChatUpdate.Kind.
+type ChatUpdateKind string
 
 // Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
 type Commit struct {
@@ -910,6 +1055,9 @@ type Id = openapi_types.UUID
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
 
+// IfMatchChat defines model for ifMatchChat.
+type IfMatchChat = string
+
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
 
@@ -918,6 +1066,9 @@ type IfNoneMatchAnnotation = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
+
+// MessageID defines model for message.
+type MessageID = openapi_types.UUID
 
 // Org defines model for org.
 type Org = string
@@ -942,6 +1093,9 @@ type SecretID = openapi_types.UUID
 
 // SHA defines model for sha.
 type SHA = string
+
+// ThreadID defines model for thread.
+type ThreadID = openapi_types.UUID
 
 // UserID defines model for user.
 type UserID = openapi_types.UUID
@@ -994,6 +1148,42 @@ type GetBlobParams struct {
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListChatThreadsParams defines parameters for ListChatThreads.
+type ListChatThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UpdateChatThreadParams defines parameters for UpdateChatThread.
+type UpdateChatThreadParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// DeleteChatMessageParams defines parameters for DeleteChatMessage.
+type DeleteChatMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// EditChatMessageParams defines parameters for EditChatMessage.
+type EditChatMessageParams struct {
+	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// ListChatUpdatesParams defines parameters for ListChatUpdates.
+type ListChatUpdatesParams struct {
+	// After Where the updates start, as listChatThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // ListCommitsParams defines parameters for ListCommits.
@@ -1116,6 +1306,18 @@ type UpdateRepositoryJSONRequestBody = RepositorySettings
 
 // GrantRepositoryRoleJSONRequestBody defines body for GrantRepositoryRole for application/json ContentType.
 type GrantRepositoryRoleJSONRequestBody GrantRepositoryRoleJSONBody
+
+// StartChatThreadJSONRequestBody defines body for StartChatThread for application/json ContentType.
+type StartChatThreadJSONRequestBody = ChatThreadInput
+
+// UpdateChatThreadApplicationMergePatchPlusJSONRequestBody defines body for UpdateChatThread for application/merge-patch+json ContentType.
+type UpdateChatThreadApplicationMergePatchPlusJSONRequestBody = ChatThreadPatch
+
+// PostChatMessageJSONRequestBody defines body for PostChatMessage for application/json ContentType.
+type PostChatMessageJSONRequestBody = ChatMessageInput
+
+// EditChatMessageApplicationMergePatchPlusJSONRequestBody defines body for EditChatMessage for application/merge-patch+json ContentType.
+type EditChatMessageApplicationMergePatchPlusJSONRequestBody = ChatMessagePatch
 
 // MergeBranchJSONRequestBody defines body for MergeBranch for application/json ContentType.
 type MergeBranchJSONRequestBody = MergeInput
@@ -1263,6 +1465,33 @@ type ServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat)
+	ListChatThreads(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatThreadsParams)
+	// StartChatThread Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads)
+	StartChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// GetChatThread One of the branch's chat threads, with its messages in the order they were posted; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
+	GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID)
+	// UpdateChatThread Resolves one of the branch's chat threads, or opens it again; takes messages.post for a thread the viewer started and messages.moderate for another's. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
+	UpdateChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, params UpdateChatThreadParams)
+	// PostChatMessage Posts a message to one of the branch's chat threads for the viewer; takes messages.post. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages)
+	PostChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID)
+	// DeleteChatMessage Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes messages.post for the viewer's own and messages.moderate for another's. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	DeleteChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params DeleteChatMessageParams)
+	// GetChatMessage One of the messages of one of the branch's chat threads; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID)
+	// EditChatMessage Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	EditChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params EditChatMessageParams)
+	// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates)
+	ListChatUpdates(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatUpdatesParams)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -2608,6 +2837,613 @@ func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// ListChatThreads operation middleware
+func (siw *ServerInterfaceWrapper) ListChatThreads(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListChatThreadsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChatThreads(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartChatThread operation middleware
+func (siw *ServerInterfaceWrapper) StartChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartChatThread(w, r, org, repo, branchName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChatThread operation middleware
+func (siw *ServerInterfaceWrapper) GetChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChatThread(w, r, org, repo, branchName, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateChatThread operation middleware
+func (siw *ServerInterfaceWrapper) UpdateChatThread(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateChatThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateChatThread(w, r, org, repo, branchName, threadID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostChatMessage(w, r, org, repo, branchName, threadID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) DeleteChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteChatMessage(w, r, org, repo, branchName, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) GetChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetChatMessage(w, r, org, repo, branchName, threadID, messageID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EditChatMessage operation middleware
+func (siw *ServerInterfaceWrapper) EditChatMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "thread" -------------
+	var threadID ThreadID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "thread", r.PathValue("thread"), &threadID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "thread", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "message" -------------
+	var messageID MessageID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EditChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchChat
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditChatMessage(w, r, org, repo, branchName, threadID, messageID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListChatUpdates operation middleware
+func (siw *ServerInterfaceWrapper) ListChatUpdates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListChatUpdatesParams
+
+	// ------------- Required query parameter "after" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "after", r.URL.Query(), &params.After, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "after"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "after", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "wait" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "wait", r.URL.Query(), &params.Wait, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "wait"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "wait", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListChatUpdates(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MergeBranch operation middleware
 func (siw *ServerInterfaceWrapper) MergeBranch(w http.ResponseWriter, r *http.Request) {
 
@@ -3664,6 +4500,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/merge", wrapper.MergeBranch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat", wrapper.ListChatThreads)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads", wrapper.StartChatThread)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}", wrapper.GetChatThread)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}", wrapper.UpdateChatThread)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages", wrapper.PostChatMessage)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}", wrapper.DeleteChatMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}", wrapper.GetChatMessage)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}", wrapper.EditChatMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/chat/updates", wrapper.ListChatUpdates)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
@@ -7302,6 +8147,1007 @@ func (response GetBranchdefaultApplicationProblemPlusJSONResponse) VisitGetBranc
 	return err
 }
 
+type ListChatThreadsRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     ListChatThreadsParams
+}
+
+type ListChatThreadsResponseObject interface {
+	VisitListChatThreadsResponse(w http.ResponseWriter) error
+}
+
+type ListChatThreads200ResponseHeaders struct {
+	Link *string
+}
+
+type ListChatThreads200JSONResponse struct {
+	Body struct {
+		// After Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	Headers ListChatThreads200ResponseHeaders
+}
+
+func (response ListChatThreads200JSONResponse) VisitListChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatThreads400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListChatThreads400ApplicationProblemPlusJSONResponse) VisitListChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatThreads401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListChatThreads401ApplicationProblemPlusJSONResponse) VisitListChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatThreads404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListChatThreads404ApplicationProblemPlusJSONResponse) VisitListChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatThreadsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListChatThreadsdefaultApplicationProblemPlusJSONResponse) VisitListChatThreadsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThreadRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Body       *StartChatThreadJSONRequestBody
+}
+
+type StartChatThreadResponseObject interface {
+	VisitStartChatThreadResponse(w http.ResponseWriter) error
+}
+
+type StartChatThread201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartChatThread201JSONResponse struct {
+	Body    ChatThread
+	Headers StartChatThread201ResponseHeaders
+}
+
+func (response StartChatThread201JSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartChatThread400ApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response StartChatThread401ApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartChatThread403ApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartChatThread404ApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThread409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartChatThread409ApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartChatThreaddefaultApplicationProblemPlusJSONResponse) VisitStartChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatThreadRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+}
+
+type GetChatThreadResponseObject interface {
+	VisitGetChatThreadResponse(w http.ResponseWriter) error
+}
+
+type GetChatThread200ResponseHeaders struct {
+	ETag string
+}
+
+type GetChatThread200JSONResponse struct {
+	Body    ChatThread
+	Headers GetChatThread200ResponseHeaders
+}
+
+func (response GetChatThread200JSONResponse) VisitGetChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatThread401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetChatThread401ApplicationProblemPlusJSONResponse) VisitGetChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetChatThread404ApplicationProblemPlusJSONResponse) VisitGetChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetChatThreaddefaultApplicationProblemPlusJSONResponse) VisitGetChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThreadRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+	Params     UpdateChatThreadParams
+	Body       *UpdateChatThreadApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateChatThreadResponseObject interface {
+	VisitUpdateChatThreadResponse(w http.ResponseWriter) error
+}
+
+type UpdateChatThread200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateChatThread200JSONResponse struct {
+	Body    ChatThread
+	Headers UpdateChatThread200ResponseHeaders
+}
+
+func (response UpdateChatThread200JSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateChatThread400ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateChatThread401ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateChatThread403ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateChatThread404ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateChatThread412ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThread428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateChatThread428ApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateChatThreaddefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateChatThreaddefaultApplicationProblemPlusJSONResponse) VisitUpdateChatThreadResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessageRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+	Body       *PostChatMessageJSONRequestBody
+}
+
+type PostChatMessageResponseObject interface {
+	VisitPostChatMessageResponse(w http.ResponseWriter) error
+}
+
+type PostChatMessage201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type PostChatMessage201JSONResponse struct {
+	Body    ChatMessage
+	Headers PostChatMessage201ResponseHeaders
+}
+
+func (response PostChatMessage201JSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostChatMessage400ApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostChatMessage401ApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostChatMessage403ApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostChatMessage404ApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response PostChatMessage409ApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostChatMessagedefaultApplicationProblemPlusJSONResponse) VisitPostChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessageRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+	MessageID  MessageID  `json:"message"`
+	Params     DeleteChatMessageParams
+}
+
+type DeleteChatMessageResponseObject interface {
+	VisitDeleteChatMessageResponse(w http.ResponseWriter) error
+}
+
+type DeleteChatMessage204Response struct {
+}
+
+func (response DeleteChatMessage204Response) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteChatMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteChatMessage401ApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteChatMessage403ApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteChatMessage404ApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteChatMessage412ApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteChatMessage428ApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteChatMessagedefaultApplicationProblemPlusJSONResponse) VisitDeleteChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatMessageRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+	MessageID  MessageID  `json:"message"`
+}
+
+type GetChatMessageResponseObject interface {
+	VisitGetChatMessageResponse(w http.ResponseWriter) error
+}
+
+type GetChatMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetChatMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers GetChatMessage200ResponseHeaders
+}
+
+func (response GetChatMessage200JSONResponse) VisitGetChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatMessage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetChatMessage401ApplicationProblemPlusJSONResponse) VisitGetChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetChatMessage404ApplicationProblemPlusJSONResponse) VisitGetChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetChatMessagedefaultApplicationProblemPlusJSONResponse) VisitGetChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessageRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	ThreadID   ThreadID   `json:"thread"`
+	MessageID  MessageID  `json:"message"`
+	Params     EditChatMessageParams
+	Body       *EditChatMessageApplicationMergePatchPlusJSONRequestBody
+}
+
+type EditChatMessageResponseObject interface {
+	VisitEditChatMessageResponse(w http.ResponseWriter) error
+}
+
+type EditChatMessage200ResponseHeaders struct {
+	ETag string
+}
+
+type EditChatMessage200JSONResponse struct {
+	Body    ChatMessage
+	Headers EditChatMessage200ResponseHeaders
+}
+
+func (response EditChatMessage200JSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response EditChatMessage400ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage401ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage401ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage403ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage403ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage404ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage404ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage409ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage409ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage412ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage412ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessage428ApplicationProblemPlusJSONResponse Problem
+
+func (response EditChatMessage428ApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type EditChatMessagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response EditChatMessagedefaultApplicationProblemPlusJSONResponse) VisitEditChatMessageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatUpdatesRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     ListChatUpdatesParams
+}
+
+type ListChatUpdatesResponseObject interface {
+	VisitListChatUpdatesResponse(w http.ResponseWriter) error
+}
+
+type ListChatUpdates200JSONResponse struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+}
+
+func (response ListChatUpdates200JSONResponse) VisitListChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatUpdates400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListChatUpdates400ApplicationProblemPlusJSONResponse) VisitListChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatUpdates401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListChatUpdates401ApplicationProblemPlusJSONResponse) VisitListChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatUpdates404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListChatUpdates404ApplicationProblemPlusJSONResponse) VisitListChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListChatUpdatesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListChatUpdatesdefaultApplicationProblemPlusJSONResponse) VisitListChatUpdatesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MergeBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
@@ -9097,6 +10943,33 @@ type StrictServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
+	// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat)
+	ListChatThreads(ctx context.Context, request ListChatThreadsRequestObject) (ListChatThreadsResponseObject, error)
+	// StartChatThread Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads)
+	StartChatThread(ctx context.Context, request StartChatThreadRequestObject) (StartChatThreadResponseObject, error)
+	// GetChatThread One of the branch's chat threads, with its messages in the order they were posted; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
+	GetChatThread(ctx context.Context, request GetChatThreadRequestObject) (GetChatThreadResponseObject, error)
+	// UpdateChatThread Resolves one of the branch's chat threads, or opens it again; takes messages.post for a thread the viewer started and messages.moderate for another's. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
+	UpdateChatThread(ctx context.Context, request UpdateChatThreadRequestObject) (UpdateChatThreadResponseObject, error)
+	// PostChatMessage Posts a message to one of the branch's chat threads for the viewer; takes messages.post. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages)
+	PostChatMessage(ctx context.Context, request PostChatMessageRequestObject) (PostChatMessageResponseObject, error)
+	// DeleteChatMessage Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes messages.post for the viewer's own and messages.moderate for another's. The deletion names the message's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	DeleteChatMessage(ctx context.Context, request DeleteChatMessageRequestObject) (DeleteChatMessageResponseObject, error)
+	// GetChatMessage One of the messages of one of the branch's chat threads; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	GetChatMessage(ctx context.Context, request GetChatMessageRequestObject) (GetChatMessageResponseObject, error)
+	// EditChatMessage Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
+	EditChatMessage(ctx context.Context, request EditChatMessageRequestObject) (EditChatMessageResponseObject, error)
+	// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates)
+	ListChatUpdates(ctx context.Context, request ListChatUpdatesRequestObject) (ListChatUpdatesResponseObject, error)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
@@ -10429,6 +12302,300 @@ func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org O
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBranchResponseObject); ok {
 		if err := validResponse.VisitGetBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListChatThreads operation middleware
+func (sh *strictHandler) ListChatThreads(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatThreadsParams) {
+	var request ListChatThreadsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListChatThreads(ctx, request.(ListChatThreadsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListChatThreads")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListChatThreadsResponseObject); ok {
+		if err := validResponse.VisitListChatThreadsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartChatThread operation middleware
+func (sh *strictHandler) StartChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request StartChatThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	var body StartChatThreadJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartChatThread(ctx, request.(StartChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartChatThreadResponseObject); ok {
+		if err := validResponse.VisitStartChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetChatThread operation middleware
+func (sh *strictHandler) GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID) {
+	var request GetChatThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetChatThread(ctx, request.(GetChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetChatThreadResponseObject); ok {
+		if err := validResponse.VisitGetChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateChatThread operation middleware
+func (sh *strictHandler) UpdateChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, params UpdateChatThreadParams) {
+	var request UpdateChatThreadRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+	request.Params = params
+
+	var body UpdateChatThreadApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateChatThread(ctx, request.(UpdateChatThreadRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateChatThread")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateChatThreadResponseObject); ok {
+		if err := validResponse.VisitUpdateChatThreadResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PostChatMessage operation middleware
+func (sh *strictHandler) PostChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID) {
+	var request PostChatMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+
+	var body PostChatMessageJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostChatMessage(ctx, request.(PostChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostChatMessageResponseObject); ok {
+		if err := validResponse.VisitPostChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteChatMessage operation middleware
+func (sh *strictHandler) DeleteChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params DeleteChatMessageParams) {
+	var request DeleteChatMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteChatMessage(ctx, request.(DeleteChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteChatMessageResponseObject); ok {
+		if err := validResponse.VisitDeleteChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetChatMessage operation middleware
+func (sh *strictHandler) GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID) {
+	var request GetChatMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+	request.MessageID = messageID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetChatMessage(ctx, request.(GetChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetChatMessageResponseObject); ok {
+		if err := validResponse.VisitGetChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// EditChatMessage operation middleware
+func (sh *strictHandler) EditChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params EditChatMessageParams) {
+	var request EditChatMessageRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.ThreadID = threadID
+	request.MessageID = messageID
+	request.Params = params
+
+	var body EditChatMessageApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.EditChatMessage(ctx, request.(EditChatMessageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "EditChatMessage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(EditChatMessageResponseObject); ok {
+		if err := validResponse.VisitEditChatMessageResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListChatUpdates operation middleware
+func (sh *strictHandler) ListChatUpdates(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params ListChatUpdatesParams) {
+	var request ListChatUpdatesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListChatUpdates(ctx, request.(ListChatUpdatesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListChatUpdates")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListChatUpdatesResponseObject); ok {
+		if err := validResponse.VisitListChatUpdatesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -1,0 +1,139 @@
+# The chats on branches: every branch carries a chat of threads of Markdown messages, a thread perhaps anchored to
+# lines of a file at a commit, which its viewers follow live
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Branch chats").
+
+extend type Repository {
+  "A page of the chat of one of the repository's live branches, by name without refs/heads/: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless the branch is there; takes repo.read. first is 1 to 100."
+  chat(branch: String!, first: Int! = 30, after: String): ChatPage
+}
+
+"A page of a branch's chat."
+type ChatPage {
+  "Its threads, newest first."
+  threads: [ChatThread!]!
+  "Where the next page starts, as chat's after; null after the last page."
+  nextCursor: String
+  "Where the chat's updates stood when the page was read: chatUpdates after it sends every change the page may lack."
+  after: String!
+}
+
+"One of a branch's chat threads."
+type ChatThread {
+  id: ID!
+  "Where it points: lines of a file at a commit; null for none."
+  anchor: ChatAnchor
+  "Whether the branch has moved on from the commit its anchor names; false without an anchor."
+  outdated: Boolean!
+  "Who started it; null once they are gone."
+  startedBy: CommitPrincipal
+  createdAt: Time!
+  "When it was resolved; null while it is open."
+  resolvedAt: Time
+  "Who resolved it; null while it is open, and once they are gone."
+  resolvedBy: CommitPrincipal
+  "Counts its changes from 1: resolveChatThread names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+  "Its messages in the order they were posted; null in an update."
+  messages: [ChatMessage!]
+}
+
+"Lines startLine to endLine of the file at path of a commit, where a thread points; it stays there when the branch moves on."
+type ChatAnchor {
+  "The commit's full name, in lowercase hexadecimal."
+  sha: String!
+  "The file's path from the repository's root, as names separated by /."
+  path: String!
+  "The first line, from 1."
+  startLine: Int!
+  "The last line, at or after startLine."
+  endLine: Int!
+}
+
+"One of a thread's messages, in Markdown."
+type ChatMessage {
+  id: ID!
+  threadId: ID!
+  "Its Markdown; empty once it is deleted."
+  body: String!
+  "Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown."
+  html: String!
+  "Who posted it; null once they are gone."
+  author: CommitPrincipal
+  createdAt: Time!
+  "When its author last edited it; null until they do."
+  editedAt: Time
+  "When it was deleted; null while it is there."
+  deletedAt: Time
+  "Who deleted it; null while it is there, and once they are gone."
+  deletedBy: CommitPrincipal
+  "Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"What changed in a chat."
+enum ChatUpdateKind {
+  THREAD_STARTED
+  MESSAGE_POSTED
+  MESSAGE_EDITED
+  MESSAGE_DELETED
+  THREAD_RESOLVED
+  THREAD_REOPENED
+}
+
+"A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is."
+type ChatUpdate {
+  "Where it stands among the chat's updates: chatUpdates after it sends those that follow."
+  cursor: String!
+  kind: ChatUpdateKind!
+  "The thread it changed, or the thread of the message it changed, without its messages."
+  thread: ChatThread!
+  "The message it posted, edited or deleted, or a started thread's first; null when it resolved a thread or opened one again."
+  message: ChatMessage
+}
+
+"Lines of a file at a commit the repository holds, where a thread points."
+input ChatAnchorInput {
+  "The commit's full name, in lowercase hexadecimal."
+  sha: String!
+  "The file's path from the repository's root, as names separated by /."
+  path: String!
+  "The first line, from 1."
+  startLine: Int!
+  "The last line, at or after startLine."
+  endLine: Int!
+}
+
+"A thread to start, with its first message."
+input ChatThreadInput {
+  "The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out."
+  id: ID
+  anchor: ChatAnchorInput
+  "Its first message's Markdown, at most 20,000 characters."
+  body: String!
+}
+
+"A message to post."
+input ChatMessageInput {
+  "The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out."
+  id: ID
+  "Its Markdown, at most 20,000 characters."
+  body: String!
+}
+
+extend type Mutation {
+  "Starts a thread on the chat of one of the repository's live branches for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread is refused (CONFLICT, chat.id_taken)."
+  startChatThread(repositoryId: ID!, branch: String!, input: ChatThreadInput!): ChatThread!
+  "Posts a message to one of the threads of a branch's chat for the viewer; takes messages.post. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message is refused (CONFLICT, chat.id_taken)."
+  postChatMessage(repositoryId: ID!, branch: String!, thread: ID!, input: ChatMessageInput!): ChatMessage!
+  "Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. A deleted message is refused (CONFLICT, message.deleted); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  editChatMessage(repositoryId: ID!, branch: String!, thread: ID!, message: ID!, body: String!, expectedVersion: Int): ChatMessage!
+  "Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it, and answers true; takes messages.post for the viewer's own and messages.moderate for another's. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  deleteChatMessage(repositoryId: ID!, branch: String!, thread: ID!, message: ID!, expectedVersion: Int): Boolean!
+  "Resolves one of the threads of a branch's chat, or opens it again when resolved is false, and answers it; takes messages.post for a thread the viewer started and messages.moderate for another's. A thread already so is answered as it is; with expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  resolveChatThread(repositoryId: ID!, branch: String!, thread: ID!, resolved: Boolean!, expectedVersion: Int): ChatThread!
+}
+
+type Subscription {
+  "The changes to the chat of one of the repository's live branches after cursor after, as a chat page's after or an update's cursor names it, in order, as they come; takes repo.read, checked at every read, and ends once the viewer no longer reads the repository. Over WebSocket (graphql-transport-ws)."
+  chatUpdates(repositoryId: ID!, branch: String!, after: String!): ChatUpdate!
+}

@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/adminapi"
 	"cobranch.dev/internal/adapters/gitinternal"
@@ -17,6 +19,7 @@ import (
 	"cobranch.dev/internal/adapters/server"
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
@@ -34,17 +37,21 @@ type api struct {
 	// pages picks the public URL of the pages that call the API, from the workloads': CORS lets them call it, and only
 	// they may change something with the session cookie.
 	pages func(config.URLs) config.URL
-	// handler serves the API for a server built as version, over the domain's services.
-	handler func(version string, s services) http.Handler
+	// handler serves the API for a server built as version, over the domain's services, to pages from the origin
+	// pages.
+	handler func(version, pages string, s services) http.Handler
+	// follows is whether the API follows chats live, which takes a connection of its own listening for their changes.
+	follows bool
 }
 
 // services are the domain's services an API serves: sign-in's for the viewer's sessions, the organizations', the
-// repositories', their code's and the installation's administration.
+// repositories', their code's, their branches' chats and the installation's administration.
 type services struct {
 	sessions       *auth.Service
 	organizations  *orgs.Service
 	repositories   *repos.Service
 	code           *code.Service
+	chats          *chats.Service
 	administration *admin.Service
 }
 
@@ -53,16 +60,16 @@ func backOffice(u config.URLs) config.URL { return u.BackOffice }
 
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
-	restServer = api{workload: "rest-server", pattern: "/", pages: console, handler: func(version string, s services) http.Handler {
-		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code)
+	restServer = api{workload: "rest-server", pattern: "/", pages: console, follows: true, handler: func(version, _ string, s services) http.Handler {
+		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.chats)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
-	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, handler: func(version string, s services) http.Handler {
-		return graphql.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code)
+	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, handler: func(version, pages string, s services) http.Handler {
+		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.chats)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
-	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version string, s services) http.Handler {
+	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version, _ string, s services) http.Handler {
 		return adminapi.NewHandler(version, s.administration)
 	}}
 )
@@ -104,9 +111,10 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
+	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), markdown.New(cfg.Console.URL, cfg.REST.URL), authorizer),
-		administration: administration}
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
+		chats: chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
@@ -114,13 +122,22 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	}
 	pages := a.pages(cfg.URLs).Origin()
 	handler := server.AllowOrigin([]string{pages}, server.Handler(a.pattern,
-		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, domain)),
+		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, pages, domain)),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 	slog.InfoContext(ctx, "Starting the server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("serving: %w", err)
 	}
 	return nil
+}
+
+// hub is the hub of the chats' followers when a follows them, listening on a connection outside pool until ctx ends;
+// nil otherwise, which no one follows through.
+func hub(ctx context.Context, a api, pool *pgxpool.Pool) chats.Notifier {
+	if !a.follows {
+		return nil
+	}
+	return postgres.ListenChats(ctx, pool)
 }
 
 // objects reads repositories' trees and files from the Git server's internal port, or nil, which answers that no Git

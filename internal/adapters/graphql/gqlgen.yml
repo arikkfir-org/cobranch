@@ -48,3 +48,4 @@ models:
       tags: { resolver: true }
       tree: { resolver: true }
       blob: { resolver: true }
+      chat: { resolver: true }

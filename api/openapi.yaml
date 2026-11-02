@@ -1300,6 +1300,356 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat:
+    get:
+      operationId: listChatThreads
+      summary: >-
+        A page of the branch's chat, its threads newest first, each with its messages in the order they were posted;
+        takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it
+        answers every change the page may lack.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many threads the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's threads, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threads, after]
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatThread"
+                  after:
+                    type: string
+                    description: Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads:
+    post:
+      operationId: startChatThread
+      summary: >-
+        Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file
+        at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked
+        answers it as it is, and an ID of another's thread answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadInput"
+      responses:
+        "201":
+          description: The thread, with its message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}:
+    get:
+      operationId: getChatThread
+      summary: One of the branch's chat threads, with its messages in the order they were posted; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+      responses:
+        "200":
+          description: The thread.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateChatThread
+      summary: >-
+        Resolves one of the branch's chat threads, or opens it again; takes messages.post for a thread the viewer started
+        and messages.moderate for another's. The change names the thread's ETag in If-Match; without it, the answer is
+        428. A thread already so is answered as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadPatch"
+      responses:
+        "200":
+          description: The thread as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages:
+    post:
+      operationId: postChatMessage
+      summary: >-
+        Posts a message to one of the branch's chat threads for the viewer; takes messages.post. Posting the viewer's
+        message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "201":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message}:
+    get:
+      operationId: getChatMessage
+      summary: One of the messages of one of the branch's chat threads; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+      responses:
+        "200":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: editChatMessage
+      summary: >-
+        Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. The
+        edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatMessagePatch"
+      responses:
+        "200":
+          description: The message as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteChatMessage
+      summary: >-
+        Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes
+        messages.post for the viewer's own and messages.moderate for another's. The deletion names the message's ETag in
+        If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates:
+    get:
+      operationId: listChatUpdates
+      summary: >-
+        The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now;
+        takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows
+        the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID,
+        holds the chat as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - name: after
+          in: query
+          required: true
+          description: Where the updates start, as listChatThreads' after or a previous answer's names it. Opaque.
+          schema:
+            type: string
+        - name: wait
+          in: query
+          description: How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+            default: 0
+      responses:
+        "200":
+          description: The updates, at most 100, in order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updates, after]
+                properties:
+                  updates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatUpdate"
+                  after:
+                    type: string
+                    description: Where the next read starts, after the last update; the request's after when there is none. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/commits:
     get:
       operationId: listCommits
@@ -1715,6 +2065,30 @@ components:
       x-go-name: Name
       schema:
         type: string
+    thread:
+      name: thread
+      in: path
+      required: true
+      description: One of the chat's threads, by ID.
+      x-go-name: ThreadID
+      schema:
+        type: string
+        format: uuid
+    message:
+      name: message
+      in: path
+      required: true
+      description: One of the thread's messages, by ID.
+      x-go-name: MessageID
+      schema:
+        type: string
+        format: uuid
+    ifMatchChat:
+      name: If-Match
+      in: header
+      description: The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
     ifMatchAnnotation:
       name: If-Match
       in: header
@@ -1817,6 +2191,11 @@ components:
   headers:
     ETag:
       description: A strong entity tag of the answer.
+      required: true
+      schema:
+        type: string
+    Location:
+      description: Where what the request made is, relative to the API's base.
       required: true
       schema:
         type: string
@@ -2254,6 +2633,150 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded it.
+    ChatAnchor:
+      type: object
+      description: Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+      required: [sha, path, startLine, endLine]
+      properties:
+        sha:
+          type: string
+          description: The commit's full name, in lowercase hexadecimal.
+        path:
+          type: string
+          description: The file's path from the repository's root, as names separated by /.
+        startLine:
+          type: integer
+          minimum: 1
+        endLine:
+          type: integer
+          minimum: 1
+          description: The last line, at or after startLine.
+    ChatThread:
+      type: object
+      description: One of a branch's chat threads.
+      required: [id, outdated, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        anchor:
+          $ref: "#/components/schemas/ChatAnchor"
+        outdated:
+          type: boolean
+          description: Whether the branch has moved on from the commit its anchor names; false without an anchor.
+        startedBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
+          description: When it was resolved; absent while it is open.
+        resolvedBy:
+          $ref: "#/components/schemas/Principal"
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+        messages:
+          type: array
+          description: Its messages in the order they were posted; absent from an update.
+          items:
+            $ref: "#/components/schemas/ChatMessage"
+    ChatMessage:
+      type: object
+      description: One of a thread's messages, in Markdown.
+      required: [id, threadId, body, html, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        threadId:
+          type: string
+          format: uuid
+        body:
+          type: string
+          description: Its Markdown; empty once it is deleted.
+        html:
+          type: string
+          description: Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
+        author:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        editedAt:
+          type: string
+          format: date-time
+          description: When its author last edited it; absent until they do.
+        deletedAt:
+          type: string
+          format: date-time
+          description: When it was deleted; absent while it is there.
+        deletedBy:
+          $ref: "#/components/schemas/Principal"
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    ChatThreadInput:
+      type: object
+      description: A thread to start, with its first message.
+      required: [body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
+        anchor:
+          $ref: "#/components/schemas/ChatAnchor"
+        body:
+          type: string
+          description: Its first message's Markdown, at most 20,000 characters.
+    ChatThreadPatch:
+      type: object
+      description: How a thread changes.
+      required: [resolved]
+      properties:
+        resolved:
+          type: boolean
+          description: Whether it is resolved, or open.
+    ChatMessageInput:
+      type: object
+      description: A message to post.
+      required: [body]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out.
+        body:
+          type: string
+          description: Its Markdown, at most 20,000 characters.
+    ChatMessagePatch:
+      type: object
+      description: How a message changes.
+      required: [body]
+      properties:
+        body:
+          type: string
+          description: Its Markdown, at most 20,000 characters.
+    ChatUpdate:
+      type: object
+      description: A change to a chat, with the thread and the message it changed as they are now.
+      required: [cursor, kind, thread]
+      properties:
+        cursor:
+          type: string
+          description: Where it stands among the chat's updates. Opaque.
+        kind:
+          type: string
+          enum: [thread.started, message.posted, message.edited, message.deleted, thread.resolved, thread.reopened]
+        thread:
+          $ref: "#/components/schemas/ChatThread"
+        message:
+          $ref: "#/components/schemas/ChatMessage"
     Annotation:
       type: object
       description: A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.

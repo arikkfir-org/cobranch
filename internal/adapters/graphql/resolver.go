@@ -34,4 +34,6 @@ type Resolver struct {
 	Repos Repositories
 	// Code is the service of the repositories' code.
 	Code Code
+	// Chats is the service of the branches' chats.
+	Chats Chats
 }
