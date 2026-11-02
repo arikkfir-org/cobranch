@@ -50,7 +50,10 @@ controller's defaults stand in for what is unset. */}}
   "RENDER_TIMEOUT" $render.timeout
   "RENDER_RESOURCES" (toJson $render.resources)
   "HEALTH_INTERVAL" $delivery.healthInterval
-  "RENDERS_KEEP" ($delivery.renders | default dict).keep }}
+  "RENDERS_KEEP" ($delivery.renders | default dict).keep
+  "RESYNC" $delivery.resync
+  "TEARDOWN_TIMEOUT" $delivery.teardownTimeout
+  "CLUSTERS_ALLOWED_CIDRS" (join "," (dig "clusters" "allowedCIDRs" list $delivery)) }}
 {{- if $inCluster }}
 {{- $_ := merge $deliveryEnv (dict
   "POD_SECURITY" $deliveryInCluster.podSecurity

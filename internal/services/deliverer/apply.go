@@ -13,9 +13,9 @@ import (
 	"cobranch.dev/internal/services/code"
 )
 
-// apply takes w's apply and delivers it, answering whether it took it: it doesn't when w neither rendered nor had its
-// apply left by a controller. Then it keeps w's render pod's logs and removes the pod, which Sweep does later when
-// that fails.
+// apply takes w's apply and delivers it, answering whether it took it: it doesn't when w neither rendered, nor is a
+// queued resync, nor had its apply left by a controller. Then, for a commit's, it keeps w's render pod's logs and
+// removes the pod, which Sweep does later when that fails.
 func (s *Service) apply(ctx context.Context, w Working) (bool, error) {
 	a, ok, err := s.store.TakeApply(ctx, w.ID, s.now().Add(s.settings.Lease))
 	if err != nil {
@@ -24,7 +24,10 @@ func (s *Service) apply(ctx context.Context, w Working) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	o := s.deliver(ctx, a)
+	o, err := s.outcome(ctx, a)
+	if err != nil {
+		return true, err
+	}
 	if err := ctx.Err(); err != nil {
 		// The controller stops: whoever takes the apply once its lease lapses applies it again.
 		return true, fmt.Errorf("applying delivery %s: %w", w.ID, err)
@@ -32,32 +35,52 @@ func (s *Service) apply(ctx context.Context, w Working) (bool, error) {
 	if err := s.store.Record(ctx, o); err != nil {
 		return true, fmt.Errorf("recording delivery %s's apply: %w", w.ID, err)
 	}
+	if a.Kind == code.Resync {
+		return true, nil
+	}
 	if _, err := s.keepLogs(ctx, w); err != nil {
 		return true, err
 	}
 	return true, wrapIf(s.pods.RemoveRender(ctx, w.OrgID, w.ID), "removing delivery "+w.ID.String()+"'s render pod")
 }
 
+// outcome opens a's cluster and delivers a there, or fails it, saying why it can't: a resync that finds no render, or
+// a cluster the controller can't reach.
+func (s *Service) outcome(ctx context.Context, a Apply) (Outcome, error) {
+	if !a.Rendered {
+		return failure(a, a.Inventory, "no delivery of a commit to this environment succeeded, so there is no render to apply again"), nil
+	}
+	target, why, err := s.open(ctx, a.environment())
+	switch {
+	case err != nil:
+		// Whoever takes the apply once its lease lapses tries again.
+		return Outcome{}, err
+	case why != "":
+		return failure(a, a.Inventory, why), nil
+	}
+	return s.deliver(ctx, target, a), nil
+}
+
 // deliver applies a's render to its environment's namespace, which it prepares first, prunes what the render stopped
 // holding, and reads the health of what it applied. An apply that fails partway adds what it applied to the
 // environment's inventory and prunes nothing, and a prune that fails keeps what it didn't delete there, so nothing
 // applied is ever forgotten.
-func (s *Service) deliver(ctx context.Context, a Apply) Outcome {
-	env := Environment{ID: a.EnvironmentID, OrgID: a.OrgID, RepoID: a.RepoID, Namespace: a.Namespace}
-	if err := s.target.Prepare(ctx, env); err != nil {
+func (s *Service) deliver(ctx context.Context, target Target, a Apply) Outcome {
+	env := a.environment()
+	if err := target.Prepare(ctx, env); err != nil {
 		return failure(a, a.Inventory, "preparing namespace "+a.Namespace+" failed: "+unrefused(err))
 	}
-	applied, err := s.target.Apply(ctx, env, a.Manifests)
+	applied, err := target.Apply(ctx, env, a.Manifests)
 	switch {
 	case errors.Is(err, ErrRefused):
 		return failure(a, merged(a.Inventory, applied), "the cluster refused the render: "+unrefused(err))
 	case err != nil:
 		return failure(a, merged(a.Inventory, applied), "applying failed: "+err.Error())
 	}
-	if err := s.target.Prune(ctx, env, a.Inventory, applied); err != nil {
+	if err := target.Prune(ctx, env, a.Inventory, applied); err != nil {
 		return failure(a, merged(applied, a.Inventory), "applied, but deleting what the render no longer holds failed: "+err.Error())
 	}
-	read, health, err := s.target.Health(ctx, applied)
+	read, health, err := target.Health(ctx, applied)
 	if err != nil {
 		read, health = applied, code.Unknown
 	}
@@ -118,11 +141,9 @@ func report(health code.Health, objects []Object) code.AnnotationInput {
 }
 
 // readHealth reads again the health of each environment that is Progressing and wasn't read within HealthEvery, and
-// records it, its revision's annotation following it. It goes on past an environment it fails to read.
+// records it, its revision's annotation following it. It goes on past an environment it fails to read, and leaves one
+// whose cluster it can't open as it stands.
 func (s *Service) readHealth(ctx context.Context) error {
-	if s.target == nil {
-		return nil
-	}
 	envs, err := s.store.Progressing(ctx)
 	if err != nil {
 		return fmt.Errorf("listing the environments that are progressing: %w", err)
@@ -142,21 +163,34 @@ func (s *Service) readHealth(ctx context.Context) error {
 
 // readEnvironment reads one environment's health and records it.
 func (s *Service) readEnvironment(ctx context.Context, env Environment) error {
+	target, why, err := s.open(ctx, env)
+	switch {
+	case err != nil:
+		return err
+	case why != "":
+		s.markRead(env.ID)
+		return nil
+	}
 	objects, err := s.store.Objects(ctx, env.ID)
 	if err != nil {
 		return fmt.Errorf("listing environment %s's objects: %w", env.ID, err)
 	}
-	read, health, err := s.target.Health(ctx, objects)
+	read, health, err := target.Health(ctx, objects)
 	if err != nil {
 		return fmt.Errorf("reading environment %s's health: %w", env.ID, err)
 	}
 	if err := s.store.SetHealth(ctx, env.ID, read, health, report(health, read)); err != nil {
 		return fmt.Errorf("recording environment %s's health: %w", env.ID, err)
 	}
+	s.markRead(env.ID)
+	return nil
+}
+
+// markRead records that the environment's health was just read, or looked at.
+func (s *Service) markRead(id uuid.UUID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.read[env.ID] = s.now()
-	return nil
+	s.read[id] = s.now()
 }
 
 // due reports whether the environment's health wasn't read within HealthEvery.

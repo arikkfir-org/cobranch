@@ -1,11 +1,11 @@
--- ClaimDelivery claims the queued delivery of a commit to this installation's cluster that has waited longest, that no
--- controller holds and whose environment isn't applying another, until lease_until, with its environment, its target
--- and the slugs of its repository and organization.
+-- ClaimDelivery claims the queued delivery that has waited longest, that no controller holds and whose environment
+-- isn't applying or deleting another, until lease_until, with its environment, its target and the slugs of its
+-- repository and organization. A teardown's commit is empty.
 -- name: ClaimDelivery :one
 WITH claimed AS (
-    SELECT d.id FROM deliveries d JOIN environments e ON e.id = d.environment_id
-    WHERE d.state = 'queued' AND d.kind = 'deliver' AND coalesce(d.lease_until, d.queued_at) <= now() AND e.cluster IS NULL
-      AND NOT EXISTS (SELECT 1 FROM deliveries a WHERE a.environment_id = d.environment_id AND a.state = 'applying')
+    SELECT d.id FROM deliveries d
+    WHERE d.state = 'queued' AND coalesce(d.lease_until, d.queued_at) <= now()
+      AND NOT EXISTS (SELECT 1 FROM deliveries a WHERE a.environment_id = d.environment_id AND a.state IN ('applying', 'deleting'))
     ORDER BY coalesce(d.lease_until, d.queued_at)
     LIMIT 1
     FOR UPDATE OF d SKIP LOCKED
@@ -13,8 +13,8 @@ WITH claimed AS (
 UPDATE deliveries d SET lease_until = @lease_until::timestamptz
 FROM claimed, environments e, delivery_targets t, repositories repo, organizations o
 WHERE d.id = claimed.id AND e.id = d.environment_id AND t.principal_id = e.target_id AND repo.id = d.repo_id AND o.id = d.org_id
-RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.target_id, e.branch, e.namespace,
-    t.name AS target, repo.slug AS repo_slug, o.slug AS org_slug;
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.target_id, e.branch,
+    e.cluster, e.namespace, t.name AS target, repo.slug AS repo_slug, o.slug AS org_slug;
 
 -- DeferDelivery puts a queued delivery off until a time, with why: it waits for room. It answers its commit and its
 -- target; no row when it is no longer queued.
@@ -22,7 +22,7 @@ RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS 
 UPDATE deliveries d SET lease_until = @until::timestamptz, reason = @reason
 FROM environments e, delivery_targets t
 WHERE d.id = @id AND d.state = 'queued' AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.sha::text AS sha, e.target_id, t.name AS target;
+RETURNING d.org_id, d.repo_id, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target;
 
 -- MarkDeliveryRendering marks a queued delivery rendering, as its render pod starts, and answers its commit and its
 -- target; no row when it is no longer queued.
@@ -30,7 +30,13 @@ RETURNING d.org_id, d.repo_id, d.sha::text AS sha, e.target_id, t.name AS target
 UPDATE deliveries d SET state = 'rendering', reason = '', started_at = now(), lease_until = NULL
 FROM environments e, delivery_targets t
 WHERE d.id = @id AND d.state = 'queued' AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.sha::text AS sha, e.target_id, t.name AS target;
+RETURNING d.org_id, d.repo_id, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target;
+
+-- MarkDeliveryDeleting marks a queued teardown deleting, for the controller to follow until what its environment holds
+-- is gone; false when it is no longer queued.
+-- name: MarkDeliveryDeleting :execrows
+UPDATE deliveries SET state = 'deleting', reason = '', started_at = now(), lease_until = NULL
+WHERE id = @id AND state = 'queued' AND kind = 'teardown';
 
 -- InsertDeliveryToken records a delivery's token, replacing the one a controller that failed partway made.
 -- name: InsertDeliveryToken :exec
@@ -67,7 +73,7 @@ SELECT d.id, @manifests::bytea FROM deliveries d WHERE d.id = @delivery_id AND d
 ON CONFLICT (delivery_id) DO NOTHING;
 
 -- DeleteOldRenders deletes the renders of each environment's deliveries past its newest @keep, but those of deliveries
--- that haven't ended and the environment's last to succeed, which a resync applies again.
+-- that haven't ended and the environment's last delivery of a commit to succeed, whose render a resync applies again.
 -- name: DeleteOldRenders :execrows
 DELETE FROM delivery_renders r
 USING (
@@ -76,38 +82,62 @@ USING (
 ) old
 WHERE r.delivery_id = old.id AND old.newest > @keep::int AND old.state IN ('succeeded', 'failed', 'cancelled')
   AND old.id IS DISTINCT FROM (SELECT s.id FROM deliveries s WHERE s.environment_id = old.environment_id
-      AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1);
+      AND s.kind = 'deliver' AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1);
 
--- WorkingDeliveries lists the deliveries the controller follows: those that render, and those whose apply a
--- controller left, its lease lapsed, with whether each has its render.
+-- WorkingDeliveries lists the deliveries the controller follows: those that render, those whose apply a controller
+-- left, and the teardowns that delete, each once no controller holds it, with whether each has its render.
 -- name: WorkingDeliveries :many
-SELECT d.id, d.org_id, d.repo_id, d.number, d.state, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
+SELECT d.id, d.org_id, d.repo_id, d.number, d.kind, d.state, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
     EXISTS (SELECT 1 FROM delivery_renders r WHERE r.delivery_id = d.id) AS rendered
 FROM deliveries d
-WHERE d.state = 'rendering' OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now())
+WHERE d.state = 'rendering' OR (d.state IN ('applying', 'deleting') AND coalesce(d.lease_until, d.queued_at) <= now())
 ORDER BY d.started_at;
 
--- TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, or one whose
--- apply another controller left. It answers what the apply needs; no row when it neither rendered nor was left.
+-- TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, a queued resync,
+-- which renders nothing, or one whose apply another controller left. It answers what the apply needs; no row when it
+-- is none of those.
 -- name: TakeDeliveryApply :one
-UPDATE deliveries d SET state = 'applying', lease_until = @lease_until::timestamptz
+UPDATE deliveries d SET state = 'applying', reason = '', started_at = coalesce(d.started_at, now()),
+    lease_until = @lease_until::timestamptz
 FROM environments e, delivery_targets t
 WHERE d.id = @id AND e.id = d.environment_id AND t.principal_id = e.target_id
   AND ((d.state = 'rendering' AND EXISTS (SELECT 1 FROM delivery_renders r WHERE r.delivery_id = d.id))
+    OR (d.state = 'queued' AND d.kind = 'resync')
     OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now()))
-RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.namespace, e.revision,
-    e.health AS environment_health, e.target_id, t.name AS target;
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.cluster,
+    e.namespace, e.revision, e.health AS environment_health, e.target_id, t.name AS target;
 
 -- name: DeliveryRender :one
 SELECT manifests FROM delivery_renders WHERE delivery_id = $1;
+
+-- LastRender is the render of an environment's last delivery of a commit to succeed: what a resync applies again.
+-- name: LastRender :one
+SELECT r.manifests FROM deliveries d JOIN delivery_renders r ON r.delivery_id = d.id
+WHERE d.environment_id = @environment_id AND d.kind = 'deliver' AND d.state = 'succeeded'
+ORDER BY d.number DESC LIMIT 1;
+
+-- TakeTeardown holds a teardown that deletes for a controller until lease_until, once no controller holds it, and
+-- answers its environment and when it started; no row when it no longer deletes or a controller holds it.
+-- name: TakeTeardown :one
+UPDATE deliveries d SET lease_until = @lease_until::timestamptz
+FROM environments e, delivery_targets t
+WHERE d.id = @id AND d.state = 'deleting' AND coalesce(d.lease_until, d.queued_at) <= now() AND e.id = d.environment_id
+  AND t.principal_id = e.target_id
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
+    e.cluster, e.namespace, e.target_id, t.name AS target;
+
+-- LeaseTeardown holds a teardown that deletes until a time: when the controller looks at it again.
+-- name: LeaseTeardown :exec
+UPDATE deliveries SET lease_until = @until::timestamptz WHERE id = @id AND state = 'deleting';
 
 -- FinishDelivery ends a delivery that hasn't ended, as it ended, and answers its environment, its commit and its
 -- target; no row when it had ended already.
 -- name: FinishDelivery :one
 UPDATE deliveries d SET state = @state::text, reason = @reason, ended_at = now(), lease_until = NULL
 FROM environments e, delivery_targets t
-WHERE d.id = @id AND d.state IN ('queued', 'rendering', 'applying') AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.target_id, t.name AS target;
+WHERE d.id = @id AND d.state IN ('queued', 'rendering', 'applying', 'deleting') AND e.id = d.environment_id
+  AND t.principal_id = e.target_id
+RETURNING d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target;
 
 -- DeliveriesStanding finds where each of some deliveries stands.
 -- name: DeliveriesStanding :many
@@ -132,13 +162,28 @@ UPDATE environment_objects o SET health = h.health, message = h.message
 FROM (SELECT unnest(@positions::int[]) AS position, unnest(@healths::text[]) AS health, unnest(@messages::text[]) AS message) h
 WHERE o.environment_id = @environment_id AND o.position = h.position;
 
--- SetEnvironmentDelivered records a delivery of a commit that succeeded: the environment's revision, its health, and
--- Synced unless a newer delivery waits.
+-- SetEnvironmentDelivered records a delivery of a commit, or a resync, that succeeded: the environment's revision, its
+-- health, and Synced when that revision is its branch's head and no newer delivery waits. A resync of a revision older
+-- than the head, whose delivery failed, leaves it Out of sync.
 -- name: SetEnvironmentDelivered :exec
 UPDATE environments e SET revision = @revision::text, synced_at = now(), health = @health::text,
-    sync = CASE WHEN EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> @delivery_id
-        AND d.state IN ('waiting', 'queued', 'rendering', 'applying')) THEN 'out_of_sync' ELSE 'synced' END
+    sync = CASE WHEN EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL
+            AND b.head = @revision::text)
+        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> @delivery_id
+            AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'synced' ELSE 'out_of_sync' END
 WHERE e.id = @id;
+
+-- EndEnvironment ends an environment whose teardown deleted what it held: it is no longer live, and its history stays.
+-- An environment a newer delivery waits for, as its branch came back meanwhile, lives on, holding nothing; no row then.
+-- name: EndEnvironment :execrows
+UPDATE environments e SET deleted_at = now(), sync = 'out_of_sync', health = 'missing'
+WHERE e.id = @id AND e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
+    AND d.id <> @teardown_id AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'));
+
+-- EmptyEnvironment records that an environment holds nothing, its teardown done while its branch came back: no revision
+-- until its next delivery.
+-- name: EmptyEnvironment :exec
+UPDATE environments SET revision = NULL, synced_at = NULL, sync = 'out_of_sync', health = 'unknown' WHERE id = @id;
 
 -- SetEnvironmentHealth records an environment's health when it changed, and answers its revision and its target; no
 -- row when it hadn't changed.
@@ -148,9 +193,25 @@ FROM delivery_targets t
 WHERE e.id = @id AND e.health <> @health::text AND t.principal_id = e.target_id
 RETURNING e.org_id, e.repo_id, e.revision, e.target_id, t.name AS target;
 
--- ProgressingEnvironments lists the live environments in this installation's cluster whose health is Progressing, with
--- their namespaces.
+-- ProgressingEnvironments lists the live environments whose health is Progressing, with their clusters, namespaces and
+-- targets.
 -- name: ProgressingEnvironments :many
-SELECT id, org_id, repo_id, namespace FROM environments
-WHERE deleted_at IS NULL AND cluster IS NULL AND health = 'progressing' AND revision IS NOT NULL
-ORDER BY id;
+SELECT e.id, e.org_id, e.repo_id, e.cluster, e.namespace, e.target_id, t.name AS target
+FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
+WHERE e.deleted_at IS NULL AND e.health = 'progressing' AND e.revision IS NOT NULL
+ORDER BY e.id;
+
+-- DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at: none of their
+-- deliveries is working or waits, the last ended @every ago or longer, and they hold a revision to resync and aren't
+-- paused, or their branch is gone, which tears them down.
+-- name: DueEnvironments :many
+SELECT e.id, e.repo_id FROM environments e
+WHERE e.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
+      AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
+  AND coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
+      <= now() - make_interval(secs => @every::double precision)
+  AND ((e.revision IS NOT NULL AND NOT e.paused)
+    OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
+ORDER BY e.id
+LIMIT @lim;

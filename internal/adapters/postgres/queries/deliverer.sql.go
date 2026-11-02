@@ -14,9 +14,9 @@ import (
 
 const claimDelivery = `-- name: ClaimDelivery :one
 WITH claimed AS (
-    SELECT d.id FROM deliveries d JOIN environments e ON e.id = d.environment_id
-    WHERE d.state = 'queued' AND d.kind = 'deliver' AND coalesce(d.lease_until, d.queued_at) <= now() AND e.cluster IS NULL
-      AND NOT EXISTS (SELECT 1 FROM deliveries a WHERE a.environment_id = d.environment_id AND a.state = 'applying')
+    SELECT d.id FROM deliveries d
+    WHERE d.state = 'queued' AND coalesce(d.lease_until, d.queued_at) <= now()
+      AND NOT EXISTS (SELECT 1 FROM deliveries a WHERE a.environment_id = d.environment_id AND a.state IN ('applying', 'deleting'))
     ORDER BY coalesce(d.lease_until, d.queued_at)
     LIMIT 1
     FOR UPDATE OF d SKIP LOCKED
@@ -24,8 +24,8 @@ WITH claimed AS (
 UPDATE deliveries d SET lease_until = $1::timestamptz
 FROM claimed, environments e, delivery_targets t, repositories repo, organizations o
 WHERE d.id = claimed.id AND e.id = d.environment_id AND t.principal_id = e.target_id AND repo.id = d.repo_id AND o.id = d.org_id
-RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.target_id, e.branch, e.namespace,
-    t.name AS target, repo.slug AS repo_slug, o.slug AS org_slug
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.target_id, e.branch,
+    e.cluster, e.namespace, t.name AS target, repo.slug AS repo_slug, o.slug AS org_slug
 `
 
 type ClaimDeliveryRow struct {
@@ -34,18 +34,20 @@ type ClaimDeliveryRow struct {
 	RepoID        uuid.UUID
 	Number        int64
 	EnvironmentID uuid.UUID
+	Kind          string
 	Sha           string
 	TargetID      uuid.UUID
 	Branch        string
+	Cluster       *uuid.UUID
 	Namespace     string
 	Target        string
 	RepoSlug      string
 	OrgSlug       string
 }
 
-// ClaimDelivery claims the queued delivery of a commit to this installation's cluster that has waited longest, that no
-// controller holds and whose environment isn't applying another, until lease_until, with its environment, its target
-// and the slugs of its repository and organization.
+// ClaimDelivery claims the queued delivery that has waited longest, that no controller holds and whose environment
+// isn't applying or deleting another, until lease_until, with its environment, its target and the slugs of its
+// repository and organization. A teardown's commit is empty.
 func (q *Queries) ClaimDelivery(ctx context.Context, leaseUntil time.Time) (ClaimDeliveryRow, error) {
 	row := q.db.QueryRow(ctx, claimDelivery, leaseUntil)
 	var i ClaimDeliveryRow
@@ -55,9 +57,11 @@ func (q *Queries) ClaimDelivery(ctx context.Context, leaseUntil time.Time) (Clai
 		&i.RepoID,
 		&i.Number,
 		&i.EnvironmentID,
+		&i.Kind,
 		&i.Sha,
 		&i.TargetID,
 		&i.Branch,
+		&i.Cluster,
 		&i.Namespace,
 		&i.Target,
 		&i.RepoSlug,
@@ -70,7 +74,7 @@ const deferDelivery = `-- name: DeferDelivery :one
 UPDATE deliveries d SET lease_until = $1::timestamptz, reason = $2
 FROM environments e, delivery_targets t
 WHERE d.id = $3 AND d.state = 'queued' AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.sha::text AS sha, e.target_id, t.name AS target
+RETURNING d.org_id, d.repo_id, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target
 `
 
 type DeferDeliveryRow struct {
@@ -137,11 +141,11 @@ USING (
 ) old
 WHERE r.delivery_id = old.id AND old.newest > $1::int AND old.state IN ('succeeded', 'failed', 'cancelled')
   AND old.id IS DISTINCT FROM (SELECT s.id FROM deliveries s WHERE s.environment_id = old.environment_id
-      AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1)
+      AND s.kind = 'deliver' AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1)
 `
 
 // DeleteOldRenders deletes the renders of each environment's deliveries past its newest @keep, but those of deliveries
-// that haven't ended and the environment's last to succeed, which a resync applies again.
+// that haven't ended and the environment's last delivery of a commit to succeed, whose render a resync applies again.
 func (q *Queries) DeleteOldRenders(ctx context.Context, keep int32) (int64, error) {
 	result, err := q.db.Exec(ctx, deleteOldRenders, keep)
 	if err != nil {
@@ -235,6 +239,74 @@ func (q *Queries) DeliveryTokenByHash(ctx context.Context, tokenHash []byte) (De
 	return i, err
 }
 
+const dueEnvironments = `-- name: DueEnvironments :many
+SELECT e.id, e.repo_id FROM environments e
+WHERE e.deleted_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
+      AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
+  AND coalesce((SELECT max(d.ended_at) FROM deliveries d WHERE d.environment_id = e.id), e.created_at)
+      <= now() - make_interval(secs => $1::double precision)
+  AND ((e.revision IS NOT NULL AND NOT e.paused)
+    OR NOT EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL))
+ORDER BY e.id
+LIMIT $2
+`
+
+type DueEnvironmentsRow struct {
+	ID     uuid.UUID
+	RepoID uuid.UUID
+}
+
+// DueEnvironments lists, at most lim, the live environments the controller's schedule is due to look at: none of their
+// deliveries is working or waits, the last ended @every ago or longer, and they hold a revision to resync and aren't
+// paused, or their branch is gone, which tears them down.
+func (q *Queries) DueEnvironments(ctx context.Context, every float64, lim int32) ([]DueEnvironmentsRow, error) {
+	rows, err := q.db.Query(ctx, dueEnvironments, every, lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []DueEnvironmentsRow
+	for rows.Next() {
+		var i DueEnvironmentsRow
+		if err := rows.Scan(&i.ID, &i.RepoID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const emptyEnvironment = `-- name: EmptyEnvironment :exec
+UPDATE environments SET revision = NULL, synced_at = NULL, sync = 'out_of_sync', health = 'unknown' WHERE id = $1
+`
+
+// EmptyEnvironment records that an environment holds nothing, its teardown done while its branch came back: no revision
+// until its next delivery.
+func (q *Queries) EmptyEnvironment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, emptyEnvironment, id)
+	return err
+}
+
+const endEnvironment = `-- name: EndEnvironment :execrows
+UPDATE environments e SET deleted_at = now(), sync = 'out_of_sync', health = 'missing'
+WHERE e.id = $1 AND e.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id
+    AND d.id <> $2 AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))
+`
+
+// EndEnvironment ends an environment whose teardown deleted what it held: it is no longer live, and its history stays.
+// An environment a newer delivery waits for, as its branch came back meanwhile, lives on, holding nothing; no row then.
+func (q *Queries) EndEnvironment(ctx context.Context, iD uuid.UUID, teardownID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, endEnvironment, iD, teardownID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const environmentObjects = `-- name: EnvironmentObjects :many
 SELECT environment_id, position, api_group, version, kind, namespace, name, uid, delivery_id, health, message FROM environment_objects WHERE environment_id = $1 ORDER BY position
 `
@@ -274,8 +346,9 @@ func (q *Queries) EnvironmentObjects(ctx context.Context, environmentID uuid.UUI
 const finishDelivery = `-- name: FinishDelivery :one
 UPDATE deliveries d SET state = $1::text, reason = $2, ended_at = now(), lease_until = NULL
 FROM environments e, delivery_targets t
-WHERE d.id = $3 AND d.state IN ('queued', 'rendering', 'applying') AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.target_id, t.name AS target
+WHERE d.id = $3 AND d.state IN ('queued', 'rendering', 'applying', 'deleting') AND e.id = d.environment_id
+  AND t.principal_id = e.target_id
+RETURNING d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target
 `
 
 type FinishDeliveryRow struct {
@@ -283,6 +356,7 @@ type FinishDeliveryRow struct {
 	RepoID        uuid.UUID
 	Number        int64
 	EnvironmentID uuid.UUID
+	Kind          string
 	Sha           string
 	TargetID      uuid.UUID
 	Target        string
@@ -298,6 +372,7 @@ func (q *Queries) FinishDelivery(ctx context.Context, state string, reason strin
 		&i.RepoID,
 		&i.Number,
 		&i.EnvironmentID,
+		&i.Kind,
 		&i.Sha,
 		&i.TargetID,
 		&i.Target,
@@ -384,11 +459,50 @@ func (q *Queries) InsertEnvironmentObjects(ctx context.Context, arg InsertEnviro
 	return err
 }
 
+const lastRender = `-- name: LastRender :one
+SELECT r.manifests FROM deliveries d JOIN delivery_renders r ON r.delivery_id = d.id
+WHERE d.environment_id = $1 AND d.kind = 'deliver' AND d.state = 'succeeded'
+ORDER BY d.number DESC LIMIT 1
+`
+
+// LastRender is the render of an environment's last delivery of a commit to succeed: what a resync applies again.
+func (q *Queries) LastRender(ctx context.Context, environmentID uuid.UUID) ([]byte, error) {
+	row := q.db.QueryRow(ctx, lastRender, environmentID)
+	var manifests []byte
+	err := row.Scan(&manifests)
+	return manifests, err
+}
+
+const leaseTeardown = `-- name: LeaseTeardown :exec
+UPDATE deliveries SET lease_until = $1::timestamptz WHERE id = $2 AND state = 'deleting'
+`
+
+// LeaseTeardown holds a teardown that deletes until a time: when the controller looks at it again.
+func (q *Queries) LeaseTeardown(ctx context.Context, until time.Time, iD uuid.UUID) error {
+	_, err := q.db.Exec(ctx, leaseTeardown, until, iD)
+	return err
+}
+
+const markDeliveryDeleting = `-- name: MarkDeliveryDeleting :execrows
+UPDATE deliveries SET state = 'deleting', reason = '', started_at = now(), lease_until = NULL
+WHERE id = $1 AND state = 'queued' AND kind = 'teardown'
+`
+
+// MarkDeliveryDeleting marks a queued teardown deleting, for the controller to follow until what its environment holds
+// is gone; false when it is no longer queued.
+func (q *Queries) MarkDeliveryDeleting(ctx context.Context, id uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, markDeliveryDeleting, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const markDeliveryRendering = `-- name: MarkDeliveryRendering :one
 UPDATE deliveries d SET state = 'rendering', reason = '', started_at = now(), lease_until = NULL
 FROM environments e, delivery_targets t
 WHERE d.id = $1 AND d.state = 'queued' AND e.id = d.environment_id AND t.principal_id = e.target_id
-RETURNING d.org_id, d.repo_id, d.sha::text AS sha, e.target_id, t.name AS target
+RETURNING d.org_id, d.repo_id, coalesce(d.sha, '')::text AS sha, e.target_id, t.name AS target
 `
 
 type MarkDeliveryRenderingRow struct {
@@ -415,20 +529,24 @@ func (q *Queries) MarkDeliveryRendering(ctx context.Context, id uuid.UUID) (Mark
 }
 
 const progressingEnvironments = `-- name: ProgressingEnvironments :many
-SELECT id, org_id, repo_id, namespace FROM environments
-WHERE deleted_at IS NULL AND cluster IS NULL AND health = 'progressing' AND revision IS NOT NULL
-ORDER BY id
+SELECT e.id, e.org_id, e.repo_id, e.cluster, e.namespace, e.target_id, t.name AS target
+FROM environments e JOIN delivery_targets t ON t.principal_id = e.target_id
+WHERE e.deleted_at IS NULL AND e.health = 'progressing' AND e.revision IS NOT NULL
+ORDER BY e.id
 `
 
 type ProgressingEnvironmentsRow struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
 	RepoID    uuid.UUID
+	Cluster   *uuid.UUID
 	Namespace string
+	TargetID  uuid.UUID
+	Target    string
 }
 
-// ProgressingEnvironments lists the live environments in this installation's cluster whose health is Progressing, with
-// their namespaces.
+// ProgressingEnvironments lists the live environments whose health is Progressing, with their clusters, namespaces and
+// targets.
 func (q *Queries) ProgressingEnvironments(ctx context.Context) ([]ProgressingEnvironmentsRow, error) {
 	rows, err := q.db.Query(ctx, progressingEnvironments)
 	if err != nil {
@@ -442,7 +560,10 @@ func (q *Queries) ProgressingEnvironments(ctx context.Context) ([]ProgressingEnv
 			&i.ID,
 			&i.OrgID,
 			&i.RepoID,
+			&i.Cluster,
 			&i.Namespace,
+			&i.TargetID,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -456,8 +577,10 @@ func (q *Queries) ProgressingEnvironments(ctx context.Context) ([]ProgressingEnv
 
 const setEnvironmentDelivered = `-- name: SetEnvironmentDelivered :exec
 UPDATE environments e SET revision = $1::text, synced_at = now(), health = $2::text,
-    sync = CASE WHEN EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> $3
-        AND d.state IN ('waiting', 'queued', 'rendering', 'applying')) THEN 'out_of_sync' ELSE 'synced' END
+    sync = CASE WHEN EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL
+            AND b.head = $1::text)
+        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> $3
+            AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'synced' ELSE 'out_of_sync' END
 WHERE e.id = $4
 `
 
@@ -468,8 +591,9 @@ type SetEnvironmentDeliveredParams struct {
 	ID         uuid.UUID
 }
 
-// SetEnvironmentDelivered records a delivery of a commit that succeeded: the environment's revision, its health, and
-// Synced unless a newer delivery waits.
+// SetEnvironmentDelivered records a delivery of a commit, or a resync, that succeeded: the environment's revision, its
+// health, and Synced when that revision is its branch's head and no newer delivery waits. A resync of a revision older
+// than the head, whose delivery failed, leaves it Out of sync.
 func (q *Queries) SetEnvironmentDelivered(ctx context.Context, arg SetEnvironmentDeliveredParams) error {
 	_, err := q.db.Exec(ctx, setEnvironmentDelivered,
 		arg.Revision,
@@ -535,13 +659,15 @@ func (q *Queries) SetObjectHealths(ctx context.Context, arg SetObjectHealthsPara
 }
 
 const takeDeliveryApply = `-- name: TakeDeliveryApply :one
-UPDATE deliveries d SET state = 'applying', lease_until = $1::timestamptz
+UPDATE deliveries d SET state = 'applying', reason = '', started_at = coalesce(d.started_at, now()),
+    lease_until = $1::timestamptz
 FROM environments e, delivery_targets t
 WHERE d.id = $2 AND e.id = d.environment_id AND t.principal_id = e.target_id
   AND ((d.state = 'rendering' AND EXISTS (SELECT 1 FROM delivery_renders r WHERE r.delivery_id = d.id))
+    OR (d.state = 'queued' AND d.kind = 'resync')
     OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now()))
-RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.sha::text AS sha, e.namespace, e.revision,
-    e.health AS environment_health, e.target_id, t.name AS target
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, d.kind, coalesce(d.sha, '')::text AS sha, e.cluster,
+    e.namespace, e.revision, e.health AS environment_health, e.target_id, t.name AS target
 `
 
 type TakeDeliveryApplyRow struct {
@@ -550,7 +676,9 @@ type TakeDeliveryApplyRow struct {
 	RepoID            uuid.UUID
 	Number            int64
 	EnvironmentID     uuid.UUID
+	Kind              string
 	Sha               string
+	Cluster           *uuid.UUID
 	Namespace         string
 	Revision          *string
 	EnvironmentHealth string
@@ -558,8 +686,9 @@ type TakeDeliveryApplyRow struct {
 	Target            string
 }
 
-// TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, or one whose
-// apply another controller left. It answers what the apply needs; no row when it neither rendered nor was left.
+// TakeDeliveryApply marks a delivery applying for a controller until lease_until: one that rendered, a queued resync,
+// which renders nothing, or one whose apply another controller left. It answers what the apply needs; no row when it
+// is none of those.
 func (q *Queries) TakeDeliveryApply(ctx context.Context, leaseUntil time.Time, iD uuid.UUID) (TakeDeliveryApplyRow, error) {
 	row := q.db.QueryRow(ctx, takeDeliveryApply, leaseUntil, iD)
 	var i TakeDeliveryApplyRow
@@ -569,10 +698,54 @@ func (q *Queries) TakeDeliveryApply(ctx context.Context, leaseUntil time.Time, i
 		&i.RepoID,
 		&i.Number,
 		&i.EnvironmentID,
+		&i.Kind,
 		&i.Sha,
+		&i.Cluster,
 		&i.Namespace,
 		&i.Revision,
 		&i.EnvironmentHealth,
+		&i.TargetID,
+		&i.Target,
+	)
+	return i, err
+}
+
+const takeTeardown = `-- name: TakeTeardown :one
+UPDATE deliveries d SET lease_until = $1::timestamptz
+FROM environments e, delivery_targets t
+WHERE d.id = $2 AND d.state = 'deleting' AND coalesce(d.lease_until, d.queued_at) <= now() AND e.id = d.environment_id
+  AND t.principal_id = e.target_id
+RETURNING d.id, d.org_id, d.repo_id, d.number, d.environment_id, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
+    e.cluster, e.namespace, e.target_id, t.name AS target
+`
+
+type TakeTeardownRow struct {
+	ID            uuid.UUID
+	OrgID         uuid.UUID
+	RepoID        uuid.UUID
+	Number        int64
+	EnvironmentID uuid.UUID
+	StartedAt     time.Time
+	Cluster       *uuid.UUID
+	Namespace     string
+	TargetID      uuid.UUID
+	Target        string
+}
+
+// TakeTeardown holds a teardown that deletes for a controller until lease_until, once no controller holds it, and
+// answers its environment and when it started; no row when it no longer deletes or a controller holds it.
+func (q *Queries) TakeTeardown(ctx context.Context, leaseUntil time.Time, iD uuid.UUID) (TakeTeardownRow, error) {
+	row := q.db.QueryRow(ctx, takeTeardown, leaseUntil, iD)
+	var i TakeTeardownRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrgID,
+		&i.RepoID,
+		&i.Number,
+		&i.EnvironmentID,
+		&i.StartedAt,
+		&i.Cluster,
+		&i.Namespace,
 		&i.TargetID,
 		&i.Target,
 	)
@@ -589,10 +762,10 @@ func (q *Queries) TouchDeliveryToken(ctx context.Context, usedAt time.Time, deli
 }
 
 const workingDeliveries = `-- name: WorkingDeliveries :many
-SELECT d.id, d.org_id, d.repo_id, d.number, d.state, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
+SELECT d.id, d.org_id, d.repo_id, d.number, d.kind, d.state, coalesce(d.started_at, d.queued_at)::timestamptz AS started_at,
     EXISTS (SELECT 1 FROM delivery_renders r WHERE r.delivery_id = d.id) AS rendered
 FROM deliveries d
-WHERE d.state = 'rendering' OR (d.state = 'applying' AND coalesce(d.lease_until, d.queued_at) <= now())
+WHERE d.state = 'rendering' OR (d.state IN ('applying', 'deleting') AND coalesce(d.lease_until, d.queued_at) <= now())
 ORDER BY d.started_at
 `
 
@@ -601,13 +774,14 @@ type WorkingDeliveriesRow struct {
 	OrgID     uuid.UUID
 	RepoID    uuid.UUID
 	Number    int64
+	Kind      string
 	State     string
 	StartedAt time.Time
 	Rendered  bool
 }
 
-// WorkingDeliveries lists the deliveries the controller follows: those that render, and those whose apply a
-// controller left, its lease lapsed, with whether each has its render.
+// WorkingDeliveries lists the deliveries the controller follows: those that render, those whose apply a controller
+// left, and the teardowns that delete, each once no controller holds it, with whether each has its render.
 func (q *Queries) WorkingDeliveries(ctx context.Context) ([]WorkingDeliveriesRow, error) {
 	rows, err := q.db.Query(ctx, workingDeliveries)
 	if err != nil {
@@ -622,6 +796,7 @@ func (q *Queries) WorkingDeliveries(ctx context.Context) ([]WorkingDeliveriesRow
 			&i.OrgID,
 			&i.RepoID,
 			&i.Number,
+			&i.Kind,
 			&i.State,
 			&i.StartedAt,
 			&i.Rendered,

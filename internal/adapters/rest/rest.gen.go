@@ -238,6 +238,7 @@ const (
 	DeliveryTriggerPush      DeliveryTrigger = "push"
 	DeliveryTriggerRedeliver DeliveryTrigger = "redeliver"
 	DeliveryTriggerResume    DeliveryTrigger = "resume"
+	DeliveryTriggerSchedule  DeliveryTrigger = "schedule"
 )
 
 // Valid indicates whether the value is a known member of the DeliveryTrigger enum.
@@ -249,6 +250,8 @@ func (e DeliveryTrigger) Valid() bool {
 		return true
 	case DeliveryTriggerResume:
 		return true
+	case DeliveryTriggerSchedule:
+		return true
 	default:
 		return false
 	}
@@ -258,6 +261,7 @@ func (e DeliveryTrigger) Valid() bool {
 const (
 	DeliveryStateApplying  DeliveryState = "applying"
 	DeliveryStateCancelled DeliveryState = "cancelled"
+	DeliveryStateDeleting  DeliveryState = "deleting"
 	DeliveryStateFailed    DeliveryState = "failed"
 	DeliveryStateQueued    DeliveryState = "queued"
 	DeliveryStateRendering DeliveryState = "rendering"
@@ -271,6 +275,8 @@ func (e DeliveryState) Valid() bool {
 	case DeliveryStateApplying:
 		return true
 	case DeliveryStateCancelled:
+		return true
+	case DeliveryStateDeleting:
 		return true
 	case DeliveryStateFailed:
 		return true
@@ -1475,13 +1481,13 @@ type Delivery struct {
 	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	StartedBy *Principal `json:"startedBy,omitempty"`
 
-	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
 	State DeliveryState `json:"state"`
 
 	// Target Its environment's target's name.
 	Target string `json:"target"`
 
-	// Trigger What queued it.
+	// Trigger What queued it. schedule is the controller's own, which resyncs each environment every while and tears down one whose branch is gone.
 	Trigger DeliveryTrigger `json:"trigger"`
 
 	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
@@ -1491,10 +1497,10 @@ type Delivery struct {
 // DeliveryKind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
 type DeliveryKind string
 
-// DeliveryTrigger What queued it.
+// DeliveryTrigger What queued it. schedule is the controller's own, which resyncs each environment every while and tears down one whose branch is gone.
 type DeliveryTrigger string
 
-// DeliveryState Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+// DeliveryState Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
 type DeliveryState string
 
 // Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.

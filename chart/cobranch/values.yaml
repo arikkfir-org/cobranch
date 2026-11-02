@@ -432,6 +432,18 @@ delivery:
         memory: 1Gi
   # How often an environment that is Progressing has its health read again.
   healthInterval: 15s
+  # How often the controller looks again at each environment no delivery works on: it applies the environment's last
+  # render again, a resync, which puts back what someone changed or deleted in its namespace, and tears it down once its
+  # branch is gone, or main's targets no longer give it one. A paused environment isn't resynced.
+  resync: 10m
+  # How long a teardown waits for what it deleted to go, finalizers and the namespace Cobranch made included, before it
+  # fails naming what remains; the next resync tears the environment down again.
+  teardownTimeout: 10m
+  clusters:
+    # Ranges of jobs.egress.except where other clusters' API servers may be all the same, such as a private cluster's
+    # control plane: the controller checks each address it connects to, so a target's kubeconfig reaches only what a job
+    # pod could, and these.
+    allowedCIDRs: []
   renders:
     # How many renders each environment keeps, for its deliveries' pages; the controller deletes older ones, but those
     # of deliveries still working and the environment's last to succeed.

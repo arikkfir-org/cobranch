@@ -125,8 +125,8 @@ func (s *CodeStore) Redeliver(ctx context.Context, actor uuid.UUID, repoID, envi
 	return s.Delivery(ctx, repoID, number)
 }
 
-// PauseEnvironment pauses a live environment for actor, cancelling its deliveries that haven't started applying, in
-// one transaction that acts for actor and appends event environment.paused (code.Store).
+// PauseEnvironment pauses a live environment for actor, cancelling its deliveries that haven't started applying but its
+// teardown, in one transaction that acts for actor and appends event environment.paused (code.Store).
 func (s *CodeStore) PauseEnvironment(ctx context.Context, actor uuid.UUID, repoID, environmentID uuid.UUID) (code.Environment, error) {
 	err := transact(ctx, s.pool, s.q, "pausing the environment", actor, func(ctx context.Context, q *queries.Queries) error {
 		row, err := environmentForUpdate(ctx, q, repoID, environmentID)
@@ -144,7 +144,8 @@ func (s *CodeStore) PauseEnvironment(ctx context.Context, actor uuid.UUID, repoI
 		if err != nil {
 			return fmt.Errorf("naming who pauses: %w", err)
 		}
-		if err := cancelDeliveries(ctx, q, env, row.Target, "paused by "+name, ""); err != nil {
+		// A teardown still runs: pausing holds back what the branch delivers, and the branch is gone.
+		if err := cancelDeliveries(ctx, q, env, row.Target, "paused by "+name, "", false); err != nil {
 			return err
 		}
 		return orgEvent(ctx, q, &env.OrgID, actor, "environment.paused", env.ID, map[string]any{"repo": repoID})
@@ -230,7 +231,7 @@ func deliverHead(ctx context.Context, q *queries.Queries, row queries.Environmen
 	if head.broken != "" {
 		state, reason = code.DeliveryFailed, head.broken
 	}
-	number, err := enqueue(ctx, q, queuedDelivery{env: env, target: row.Target, sha: head.head, trigger: trigger,
+	number, err := enqueue(ctx, q, queuedDelivery{env: env, target: row.Target, kind: code.DeliverCommit, sha: head.head, trigger: trigger,
 		startedBy: &actor, state: state, reason: reason})
 	if err != nil {
 		return 0, err

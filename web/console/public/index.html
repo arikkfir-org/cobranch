@@ -909,6 +909,7 @@
       queued: { word: "Queued", icon: "clock", tone: "neutral" },
       rendering: { word: "Rendering", icon: "loader-circle", tone: "info" },
       applying: { word: "Applying", icon: "loader-circle", tone: "info" },
+      deleting: { word: "Deleting", icon: "loader-circle", tone: "info" },
       succeeded: { word: "Succeeded", icon: "circle-check", tone: "success" },
       failed: { word: "Failed", icon: "circle-x", tone: "danger" },
       cancelled: { word: "Cancelled", icon: "ban", tone: "neutral" },
@@ -2394,7 +2395,8 @@
       };
       const row = (d) => h("tr", {},
         h("td", { class: "state" }, badgeOf(deliveryStates, d.state)),
-        h("td", {}, "#" + d.number + " ", d.sha ? h("a", { href: at.commit(d.sha), "data-nav": "" }, h("code", {}, shortSha(d.sha))) : "Teardown",
+        h("td", {}, "#" + d.number + " ", d.kind === "teardown" ? "Teardown"
+          : [d.kind === "resync" ? "Resync of " : null, h("a", { href: at.commit(d.sha), "data-nav": "" }, h("code", {}, shortSha(d.sha)))],
           d.reason ? h("p", {}, capitalized(d.reason)) : null, h("p", { class: "muted" }, queuedBy(d), " · ", whenExactly(d.queuedAt))),
         h("td", { class: "actions" }, can("delivery.run") && d.state === "waiting" ? h("button", { class: "button small primary", type: "button",
           title: "Start #" + d.number + ", delivering " + shortSha(d.sha) + " to " + e.target.displayName, onclick: (ev) => start(d, ev.currentTarget) }, "Start") : null));
@@ -2421,6 +2423,7 @@
       const by = d.startedBy ? d.startedBy.displayName : "someone since gone";
       if (d.trigger === "redeliver") return "Redelivered by " + by;
       if (d.trigger === "resume") return "Resumed by " + by;
+      if (d.trigger === "schedule") return "The controller's schedule";
       return "A push" + (d.startedBy ? ", started by " + by : "");
     };
 

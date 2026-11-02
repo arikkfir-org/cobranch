@@ -8,7 +8,6 @@ package incluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -23,21 +22,10 @@ import (
 	"k8s.io/client-go/rest"
 
 	"cobranch.dev/internal/adapters/cluster"
-	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/deliverer"
 )
 
 var tracer = otel.Tracer("cobranch.dev/internal/adapters/incluster")
-
-// The labels the controller writes on an environment's namespace.
-const (
-	// labelInstallation marks it as one installation's, as the job namespaces are.
-	labelInstallation = "cobranch.dev/installation"
-	// labelOrganization names the organization whose environment it holds.
-	labelOrganization = "cobranch.dev/organization"
-	// labelManagedBy says Cobranch made it.
-	labelManagedBy = "app.kubernetes.io/managed-by"
-)
 
 // fieldManager is the controller's name in what it applies to fence a namespace; what a render holds it applies as
 // cluster.FieldManager.
@@ -74,12 +62,12 @@ type Config struct {
 	Quota corev1.ResourceList
 }
 
-// Target is deliverer.Target in the cluster the controller runs in.
+// Target is deliverer.Target in the cluster the controller runs in: what it applies, prunes, reads and tears down, the
+// embedded cluster.Target does through the delivery account's configuration.
 type Target struct {
-	// client is the controller's own, which makes and fences the namespaces; account the delivery account's, which
-	// applies; cluster applies, prunes and reads health through account's configuration.
+	*cluster.Target
+	// client is the controller's own, which makes, fences and deletes the namespaces; account the delivery account's.
 	client, account kubernetes.Interface
-	cluster         *cluster.Cluster
 	cfg             Config
 	now             func() time.Time
 }
@@ -102,64 +90,20 @@ func New(kube *rest.Config, cfg Config) (*Target, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reaching the cluster as the delivery account: %w", err)
 	}
-	return &Target{client: client, account: account, cluster: c, cfg: cfg, now: time.Now}, nil
+	return &Target{Target: &cluster.Target{Cluster: c, Own: true, Guard: guarded}, client: client, account: account, cfg: cfg,
+		now: time.Now}, nil
 }
 
-// Capabilities are the cluster's Kubernetes version and the API versions it serves, as the delivery account
-// discovers them (deliverer.Target).
-func (t *Target) Capabilities(ctx context.Context) (string, []string, error) {
-	version, apis, err := t.cluster.Capabilities(ctx)
-	if err != nil {
-		return "", nil, fmt.Errorf("discovering the cluster: %w", err)
-	}
-	return version, apis, nil
-}
-
-// Apply applies manifests to env's namespace as the delivery account, refusing all of it when it holds an object the
-// namespace can't take (deliverer.Target).
-func (t *Target) Apply(ctx context.Context, env deliverer.Environment, manifests []byte) (_ []deliverer.Object, err error) {
-	ctx, span := tracer.Start(ctx, "incluster.Target.Apply", envAttrs(env))
+// Release deletes env's namespace, which the controller made, and answers whether it is gone (deliverer.Target).
+func (t *Target) Release(ctx context.Context, env deliverer.Environment) (_ bool, err error) {
+	ctx, span := tracer.Start(ctx, "incluster.Target.Release", envAttrs(env))
 	defer span.End()
 	defer func() { record(span, err) }()
-	rendered, err := cluster.Decode(manifests)
+	gone, err := cluster.Release(ctx, t.client.CoreV1().Namespaces(), env.Namespace, env.ID.String())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %w", deliverer.ErrRefused, err)
+		return false, fmt.Errorf("releasing namespace %s: %w", env.Namespace, err)
 	}
-	if err := guarded(rendered); err != nil {
-		return nil, err
-	}
-	refs, err := t.cluster.Apply(ctx, environment(env), rendered)
-	objects := objectsOf(refs)
-	if errors.Is(err, cluster.ErrRefused) {
-		return objects, fmt.Errorf("%w: %s", deliverer.ErrRefused, refusal(err))
-	}
-	if err != nil {
-		return objects, fmt.Errorf("applying to namespace %s: %w", env.Namespace, err)
-	}
-	return objects, nil
-}
-
-// Prune deletes what previous holds and current doesn't, as the delivery account (deliverer.Target).
-func (t *Target) Prune(ctx context.Context, env deliverer.Environment, previous, current []deliverer.Object) error {
-	if err := t.cluster.Prune(ctx, environment(env), refsOf(previous), refsOf(current)); err != nil {
-		return fmt.Errorf("pruning namespace %s: %w", env.Namespace, err)
-	}
-	return nil
-}
-
-// Health reads the objects' healths as the delivery account, in order, and the worst of them (deliverer.Target).
-func (t *Target) Health(ctx context.Context, objects []deliverer.Object) ([]deliverer.Object, code.Health, error) {
-	read, worst, err := t.cluster.Health(ctx, refsOf(objects))
-	if err != nil {
-		return nil, "", fmt.Errorf("reading health: %w", err)
-	}
-	out := make([]deliverer.Object, 0, len(read))
-	for _, h := range read {
-		o := objectOf(h.Ref)
-		o.Health, o.Message = healthOf(h.Health), h.Message
-		out = append(out, o)
-	}
-	return out, healthOf(worst), nil
+	return gone, nil
 }
 
 // record marks span failed with err, if any.
