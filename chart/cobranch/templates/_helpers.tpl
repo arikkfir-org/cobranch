@@ -313,7 +313,7 @@ they leave unset are the Back-office's. */}}
 {{- end -}}
 
 {{/* The limits the values set, which the API servers and the Git server hold creations and pushes to; those they
-leave unset are the built-in defaults. */}}
+leave unset are the Back-office's (the built-in defaults until an administrator changes them). */}}
 {{- define "cobranch.limitsEnv" -}}
 {{- with .Values.limits }}
 {{- if not (kindIs "invalid" .organizationsPerUser) }}

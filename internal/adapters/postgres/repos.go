@@ -168,6 +168,32 @@ func (s *RepoStore) Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID)
 	return out, nil
 }
 
+// Usage counts the organization's repositories and sums the bytes of their active packs, and lists those of ids that
+// are its repositories, by slug, each with the bytes of its own.
+func (s *RepoStore) Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []repos.RepositoryUsage, error) {
+	used, err := s.q.OrganizationUsage(ctx, orgID)
+	if err != nil {
+		return limits.Usage{}, nil, fmt.Errorf("counting the organization's usage: %w", err)
+	}
+	among, err := s.Among(ctx, orgID, ids)
+	if err != nil {
+		return limits.Usage{}, nil, err
+	}
+	rows, err := s.q.RepositoriesGitData(ctx, orgID, ids)
+	if err != nil {
+		return limits.Usage{}, nil, fmt.Errorf("summing the repositories' Git data: %w", err)
+	}
+	sizes := make(map[uuid.UUID]int64, len(rows))
+	for _, r := range rows {
+		sizes[r.RepoID] = r.GitData
+	}
+	byRepository := make([]repos.RepositoryUsage, 0, len(among))
+	for _, r := range among {
+		byRepository = append(byRepository, repos.RepositoryUsage{Repository: r, GitData: sizes[r.ID]})
+	}
+	return limits.Usage{Repositories: used.Repositories, GitData: used.GitData}, byRepository, nil
+}
+
 // Update writes the repository's settings and claims its slug, keeping the old one as a redirect.
 func (s *RepoStore) Update(ctx context.Context, actor uuid.UUID, repo repos.Repository) error {
 	return s.transact(ctx, "updating the repository", actor, func(ctx context.Context, q *queries.Queries) error {

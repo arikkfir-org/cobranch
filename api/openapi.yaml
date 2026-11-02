@@ -253,6 +253,31 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/usage:
+    get:
+      operationId: getMyUsage
+      summary: What the user takes of what the limits cap, each against the limit that applies; the user's own, so it takes no permission.
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The user's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewerUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/invitations:
     get:
       operationId: listMyInvitations
@@ -477,6 +502,34 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/usage:
+    get:
+      operationId: getOrganizationUsage
+      summary: What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The organization's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -2652,6 +2705,59 @@ components:
           description: The permissions the viewer holds on the repository.
           items:
             type: string
+    Usage:
+      type: object
+      description: What a user or an organization takes of what one limit caps, against the limit that applies.
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int64
+          description: How many it holds, or the bytes it stores.
+        limit:
+          type: integer
+          format: int64
+          description: The most it may hold or store; 0 caps nothing.
+    ViewerUsage:
+      type: object
+      description: What the user takes of what the limits cap.
+      required: [organizations]
+      properties:
+        organizations:
+          $ref: "#/components/schemas/Usage"
+          description: The organizations the user created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+    OrganizationUsage:
+      type: object
+      description: What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+      required: [repositories, gitData, byRepository]
+      properties:
+        repositories:
+          $ref: "#/components/schemas/Usage"
+          description: Its repositories, every one of them.
+        gitData:
+          $ref: "#/components/schemas/Usage"
+          description: The bytes of its repositories' active packs, as the object store keeps them.
+        byRepository:
+          type: array
+          description: The repositories the viewer reads, by slug, each with its Git data.
+          items:
+            $ref: "#/components/schemas/RepositoryUsage"
+    RepositoryUsage:
+      type: object
+      description: One repository's share of its organization's Git data.
+      required: [id, slug, name, gitData]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        gitData:
+          type: integer
+          format: int64
+          description: The bytes of its active packs.
     RepositoryInput:
       type: object
       description: What makes a repository.
