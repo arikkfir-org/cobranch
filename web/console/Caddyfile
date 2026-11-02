@@ -33,7 +33,7 @@
 	# The Console's modules and stylesheets, under a path no organization takes. A load asks for them under the release
 	# config.json named, /assets/@<release>/, and a try's number after it when it loads again (~2): a server serves only
 	# its own release's, so while a rollout runs two releases, a load never takes one release's modules into another's,
-	# and one that reaches the other release's servers fails and loads again under paths no browser cached
+	# and one that reaches the other release's servers fails and loads again under paths the browser never asked for
 	# (index.html). The directories it reads list their files, as JSON when asked, which is how the Console finds its
 	# pages and styles: by their files' names (assets/lib/assets.js); no other directory is listed. Browsers check every
 	# file again before they use it (no-cache).

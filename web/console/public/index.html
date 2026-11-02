@@ -19,15 +19,18 @@
     const config = await loaded.catch(() => ({}));
     const root = config.consoleUrl ? new URL(config.consoleUrl).pathname.replace(/\/?$/, "/") : "/";
     // A rollout runs two releases at once for a moment, and a load that reaches the other release's servers for a
-    // module fails (Caddyfile): the Console loads again, three times at most and later each time, every try under paths
-    // of its own, so a browser that cached what the other release answered doesn't take it again.
-    let tries = 3, retried = false;
+    // module fails (Caddyfile): the Console loads again, three times at most and later each time. Each try asks under
+    // paths this browser never asked for (~<try>), which later loads keep, so what the other release answered, even
+    // where a browser cached it, is never asked for again.
+    let tried = 0, tries = 3, retried = false;
     try {
+      tried = Number(localStorage.getItem("cobranch.console.tried")) || 0;
       tries = Number(sessionStorage.getItem("cobranch.console.tries")) || 0;
     } catch {}
     const again = () => {
-      if (tries >= 3) return false;
       try {
+        localStorage.setItem("cobranch.console.tried", String(tried + 1));
+        if (tries >= 3) return false;
         sessionStorage.setItem("cobranch.console.tries", String(tries + 1));
       } catch {
         return false;
@@ -38,7 +41,7 @@
       return true;
     };
     try {
-      await (await import(root + "assets/@" + (config.release || "") + (tries ? "~" + tries : "") + "/console.js")).start(loaded, root, again);
+      await (await import(root + "assets/@" + (config.release || "") + (tried ? "~" + tried : "") + "/console.js")).start(loaded, root, again);
     } catch {
       if (!again()) app.textContent = "The Console couldn't load. Try again in a moment.";
     }

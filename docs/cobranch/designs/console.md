@@ -57,9 +57,11 @@ in.
   chart sets to the image's tag), and the shell imports `assets/@<release>/console.js`; every module and stylesheet
   resolves from there, so one load takes them all under that path. A server serves only its own release's: while a
   rollout runs two releases behind one Service, a request that reaches the other release's server answers 404 instead of
-  a file that doesn't fit the rest. The shell then loads the Console again, after 1 s, 3 s and 9 s, each time under a
-  try's path (`@<release>~1/`) that no browser cached, and after the third says the Console couldn't load. A rollout
-  surges one server at a time, so a load rarely meets both releases, and one that does starts over whole.
+  a file that doesn't fit the rest. The shell then loads the Console again, after 1 s, 3 s and 9 s, and after the third
+  says the Console couldn't load. A failed try moves the browser to a path it never asked for (`@<release>~1/`, then
+  `~2/`), which its later loads keep, so a path that failed, and whatever a browser cached for it, is never asked for
+  again. A rollout surges one server at a time, so a load rarely meets both releases, and one that does starts over
+  whole.
 - **Every page's module loads at the start,** not when first opened. The frames need every page's `nav` and `allowed` to
   draw the nav and the tabs, and a session then runs one release's modules throughout: a release can't land between two
   pages of one visit. The cost is about fifty small requests on a first load, over one connection, which later loads
@@ -146,7 +148,7 @@ insert between the same two lines.
 | A module, a stylesheet or a listing fails to load | The Console says it couldn't load its pages and to try again, instead of drawing half a page |
 | A release while a tab is open | The tab keeps the release it loaded until it reloads; the next load gets every new file at once |
 | A rollout, two releases behind one Service | A load asks for its files under the release `config.json` named; a server of the other release answers 404, and the shell loads again, at most three times over 13 s, then says to try again. It never runs two releases' modules together. The shell of one release may start the `console.js` of another, so `start`'s arguments stay as they are or both accept the old ones |
-| The first rollout of this design | The servers before it answer `/assets/@<release>/…` with the old single page, which fails as a module, and the shell loads again; those answers carry no `Cache-Control`, which is why each try asks under a path of its own |
+| The first rollout of this design | The servers before it answer `/assets/@<release>/…` with the old single page, which fails as a module, and the shell loads again; those answers carry no `Cache-Control`, so a browser may keep one for a while, which is why a browser never asks again for a path that failed |
 | An image retagged in place | Two builds under one tag share a release's path; the chart's tags are versions or commits, never reused |
 | Directory listings | Public, and harmless: only the four directories the Console reads list their files (`lib/`, `pages/`, `pages/org/`, `pages/repo/` under `/assets/`), files anyone may fetch anyway; every other directory answers 404 |
 | A Content Security Policy | None today, and none added. Modules and stylesheets are files of the Console's own origin, so a policy of `script-src 'self'` would need only the shell's bootstrap allowed by its hash |
