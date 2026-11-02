@@ -339,48 +339,51 @@ type patch struct {
 	new     int
 	// skip drops the current file's hunks, once it passed a limit.
 	skip bool
-	// done stops the reading, once the files listed are read or the diff passed MaxDiffLines.
+	// done stops the reading, once the files listed are read, the diff passed MaxDiffLines or the reading skipped
+	// maxSkippedBytes.
 	done bool
+	// skipped is how many bytes of the patch the reading went through without keeping them.
+	skipped int
 }
 
-// read reads the patch line by line until its end, or until done.
+// maxSkippedBytes bounds how much of the patch the reading goes through past the hunks it leaves out, looking for the
+// next file's: past it, the reading stops and the files after are left out, as past code.MaxDiffLines, so one file
+// too large to show doesn't have the Git server read all of it.
+const maxSkippedBytes = 4 << 20
+
+// patchHeader starts each patch.
+var patchHeader = []byte("diff --git ")
+
+// read reads the patch line by line until its end, or until done. It reads a file's lines it leaves out without
+// keeping them, a line too long to keep a buffer at a time, and stops once it skipped more than maxSkippedBytes.
 func (p *patch) read(r *bufio.Reader) error {
 	p.current = -1
+	inLong := false // the line read continues one too long to keep
 	for !p.done {
 		line, err := r.ReadSlice('\n')
-		if errors.Is(err, bufio.ErrBufferFull) {
+		long := errors.Is(err, bufio.ErrBufferFull)
+		switch {
+		case long || inLong:
 			p.drop()
-			if err = discardLine(r); err != nil && !errors.Is(err, io.EOF) {
-				return err
-			}
-			continue
-		}
-		if len(line) > 0 {
+			p.skipped += len(line)
+		case p.skip && !bytes.HasPrefix(line, patchHeader):
+			p.skipped += len(line)
+		case len(line) > 0:
 			p.line(strings.TrimSuffix(string(line), "\n"))
 		}
-		if errors.Is(err, io.EOF) {
+		inLong = long
+		if p.skipped > maxSkippedBytes {
+			p.done = true
+		}
+		switch {
+		case errors.Is(err, io.EOF):
 			p.endFile()
 			return nil
-		}
-		if err != nil {
-			return err
+		case err != nil && !long:
+			return fmt.Errorf("reading git diff's patch: %w", err)
 		}
 	}
 	return nil
-}
-
-// discardLine reads what is left of a line too long to keep.
-func discardLine(r *bufio.Reader) error {
-	for {
-		_, err := r.ReadSlice('\n')
-		switch {
-		case errors.Is(err, bufio.ErrBufferFull):
-		case err != nil:
-			return fmt.Errorf("discarding a long line: %w", err)
-		default:
-			return nil
-		}
-	}
 }
 
 // line reads one line of the patch: a patch's first line, a hunk's header or one of its lines, or a header line, which
