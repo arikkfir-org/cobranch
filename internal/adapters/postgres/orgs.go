@@ -66,7 +66,15 @@ func wrapOrg(what string, err error) error {
 // organization is the domain's view of an organizations row.
 func organization(o queries.Organization) orgs.Organization {
 	return orgs.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, MembershipRoleID: o.MembershipRoleID,
-		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, CreatedAt: o.CreatedAt}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt}
+}
+
+// issueKey is the organization's issue key, or its slug's default when it names none.
+func issueKey(org orgs.Organization) string {
+	if org.IssueKey == "" {
+		return orgs.DefaultIssueKey(org.Slug)
+	}
+	return org.IssueKey
 }
 
 // Permissions lists what principalID's roles hold at the scope, through every grant it has there: at a repository,
@@ -111,7 +119,7 @@ func (s *OrgStore) CreateFor(ctx context.Context, actor, owner uuid.UUID, org or
 	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
 		if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
 			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
-			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, CreatedAt: org.CreatedAt,
+			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, IssueKey: issueKey(org), CreatedAt: org.CreatedAt,
 		}); err != nil {
 			return fmt.Errorf("inserting the organization: %w", err)
 		}
@@ -198,11 +206,11 @@ func (s *OrgStore) Update(ctx context.Context, actor uuid.UUID, org orgs.Organiz
 		}
 		if _, err := q.UpdateOrganization(ctx, queries.UpdateOrganizationParams{
 			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
-			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers,
+			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, IssueKey: issueKey(org),
 		}); err != nil {
 			return fmt.Errorf("updating the organization: %w", err)
 		}
-		return orgEvent(ctx, q, &org.ID, actor, "org.updated", org.ID, map[string]any{"slug": org.Slug, "name": org.Name})
+		return orgEvent(ctx, q, &org.ID, actor, "org.updated", org.ID, map[string]any{"slug": org.Slug, "name": org.Name, "issueKey": issueKey(org)})
 	})
 }
 

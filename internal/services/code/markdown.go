@@ -11,7 +11,9 @@ import (
 
 // Document is a Markdown file a Renderer renders, with where it is, so that its relative links and images resolve:
 // the repository's slug and its organization's, the ref it was asked at (links keep it, so a reader stays on a branch),
-// the commit that ref resolved to (images name it, so they never change) and its path.
+// the commit that ref resolved to (images name it, so they never change) and its path. A document of the
+// organization's, such as an issue's description, names no repository: its path is its Console page's under the
+// organization's, its relative links resolve beside that page, and it has no relative images.
 type Document struct {
 	Org    string
 	Repo   string
