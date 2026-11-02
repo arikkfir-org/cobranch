@@ -8,7 +8,7 @@ import (
 )
 
 // every names every variable the loaders read, to unset before each test.
-var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
+var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "BLOB_MOVE_FROM", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
 	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "GIT_SSH_ADDR", "GIT_SSH_HOST_KEY", "HOOK_URL", "HOOK_TOKEN"}
@@ -281,6 +281,8 @@ func TestLoadMaintenance(t *testing.T) {
 			want: Maintenance{GitDataDir: "/var/lib/cobranch/git", CompactAt: 8}},
 		{name: "the packs in a bucket", env: map[string]string{"COBRANCH_BLOB_URL": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "4", "COBRANCH_GIT_DATA_DIR": "/data"},
 			want: Maintenance{BlobURL: "gs://objects", GitDataDir: "/data", CompactAt: 4}},
+		{name: "the packs moving into the database", env: map[string]string{"COBRANCH_BLOB_MOVE_FROM": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "8"},
+			want: Maintenance{BlobMoveFrom: "gs://objects", GitDataDir: "/var/lib/cobranch/git", CompactAt: 8}},
 		{name: "a threshold that compacts nothing", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "1"}, wantErr: true},
 		{name: "a threshold that isn't a number", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "eight"}, wantErr: true},
 	}
@@ -336,6 +338,9 @@ func TestLoadGitServer(t *testing.T) {
 		{name: "SSH without a host key", env: with(map[string]string{"COBRANCH_GIT_SSH_ADDR": ":2222"}), wantErr: true},
 		{name: "a bucket", env: with(map[string]string{"COBRANCH_BLOB_URL": "gs://objects"}),
 			want: GitServer{HTTPAddr: ":8080", BlobURL: "gs://objects",
+				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "packs moving from a bucket", env: with(map[string]string{"COBRANCH_BLOB_MOVE_FROM": "gs://objects"}),
+			want: GitServer{HTTPAddr: ":8080", BlobMoveFrom: "gs://objects",
 				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
 	}
 	for _, tt := range tests {

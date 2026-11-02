@@ -154,6 +154,8 @@ the other way round.
 - **The operator finishes the move** once a run logs that none are left: they remove `blob.moveFrom`, roll out, and
   delete the old store when they like. Nothing deletes it for them.
 - **Going back** is the same move the other way round, until the old store is deleted.
+- **Both stores last and differ.** A `file://` directory on an emptyDir is each pod's own, which maintenance never sees,
+  so the chart refuses a move into or out of one; and a store can't move to itself, however its two URLs write it.
 
 ## Configuration
 
