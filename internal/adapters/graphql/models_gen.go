@@ -12,6 +12,15 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
+// The AI reviewer's task for a branch's head, an agent task of kind review. Its review, once it submits one, is among the head's.
+type AIReview struct {
+	// The task's number among its organization's tasks.
+	Task  int           `json:"task"`
+	State AIReviewState `json:"state"`
+	// Why it waits, failed or was cancelled; null otherwise.
+	Reason *string `json:"reason,omitempty"`
+}
+
 // One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// Its principal's ID.
@@ -1381,6 +1390,74 @@ type User struct {
 type ViewerUsage struct {
 	// The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
 	Organizations *Usage `json:"organizations"`
+}
+
+// Where the AI reviewer's task for a branch's head stands.
+type AIReviewState string
+
+const (
+	// Waits for a member to ask for it: the head was pushed from outside the organization.
+	AIReviewStateWaiting AIReviewState = "WAITING"
+	AIReviewStateQueued  AIReviewState = "QUEUED"
+	AIReviewStateRunning AIReviewState = "RUNNING"
+	// Ended with its review submitted.
+	AIReviewStateSucceeded AIReviewState = "SUCCEEDED"
+	// Ended without a review, for its reason.
+	AIReviewStateFailed AIReviewState = "FAILED"
+	// Superseded by a newer push, the branch's deletion or a request for another review.
+	AIReviewStateCancelled AIReviewState = "CANCELLED"
+)
+
+var AllAIReviewState = []AIReviewState{
+	AIReviewStateWaiting,
+	AIReviewStateQueued,
+	AIReviewStateRunning,
+	AIReviewStateSucceeded,
+	AIReviewStateFailed,
+	AIReviewStateCancelled,
+}
+
+func (e AIReviewState) IsValid() bool {
+	switch e {
+	case AIReviewStateWaiting, AIReviewStateQueued, AIReviewStateRunning, AIReviewStateSucceeded, AIReviewStateFailed, AIReviewStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e AIReviewState) String() string {
+	return string(e)
+}
+
+func (e *AIReviewState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AIReviewState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AIReviewState", str)
+	}
+	return nil
+}
+
+func (e AIReviewState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AIReviewState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AIReviewState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // Where an annotation stands, in any order its principal sets them.

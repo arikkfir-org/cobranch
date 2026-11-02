@@ -20,6 +20,36 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AIReviewState.
+const (
+	AIReviewStateCancelled AIReviewState = "cancelled"
+	AIReviewStateFailed    AIReviewState = "failed"
+	AIReviewStateQueued    AIReviewState = "queued"
+	AIReviewStateRunning   AIReviewState = "running"
+	AIReviewStateSucceeded AIReviewState = "succeeded"
+	AIReviewStateWaiting   AIReviewState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the AIReviewState enum.
+func (e AIReviewState) Valid() bool {
+	switch e {
+	case AIReviewStateCancelled:
+		return true
+	case AIReviewStateFailed:
+		return true
+	case AIReviewStateQueued:
+		return true
+	case AIReviewStateRunning:
+		return true
+	case AIReviewStateSucceeded:
+		return true
+	case AIReviewStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AnnotationStatus.
 const (
 	AnnotationStatusFailed     AnnotationStatus = "failed"
@@ -890,6 +920,21 @@ func (e ListBuiltInRolesParamsScope) Valid() bool {
 	}
 }
 
+// AIReview The AI reviewer's latest task for a branch's head, an agent task of kind review; left out of a branch it has none for, and of main, whose pushes it never reviews. Its review, once it submits one, is among the head's.
+type AIReview struct {
+	// Reason Why it waits, failed or was cancelled; left out otherwise.
+	Reason *string `json:"reason,omitempty"`
+
+	// State waiting, for a member to ask for it, when the head was pushed from outside the organization; queued; running; succeeded, with its review submitted; failed, without one, for its reason; cancelled, superseded by a newer push, the branch's deletion or a request for another review.
+	State AIReviewState `json:"state"`
+
+	// Task The task's number among its organization's tasks.
+	Task int64 `json:"task"`
+}
+
+// AIReviewState waiting, for a member to ask for it, when the head was pushed from outside the organization; queued; running; succeeded, with its review submitted; failed, without one, for its reason; cancelled, superseded by a newer push, the branch's deletion or a request for another review.
+type AIReviewState string
+
 // Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
@@ -1067,6 +1112,9 @@ type ApiKeySecret struct {
 type Branch struct {
 	// Ahead How many commits it has that its base lacks; left out until a push works it out.
 	Ahead *int `json:"ahead,omitempty"`
+
+	// AiReview The AI reviewer's latest task for a branch's head, an agent task of kind review; left out of a branch it has none for, and of main, whose pushes it never reviews. Its review, once it submits one, is among the head's.
+	AiReview *AIReview `json:"aiReview,omitempty"`
 
 	// Base The branch it merges into, main.
 	Base *string `json:"base,omitempty"`
@@ -3675,6 +3723,9 @@ type ServerInterface interface {
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
+	RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
@@ -7930,6 +7981,50 @@ func (siw *ServerInterfaceWrapper) MergeBranch(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// RequestReview operation middleware
+func (siw *ServerInterfaceWrapper) RequestReview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RequestReview(w, r, org, repo, branchName)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCommits operation middleware
 func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Request) {
 
@@ -10980,6 +11075,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff", wrapper.GetBranchDiff)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/review", wrapper.RequestReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deleted-branches/{branch}", wrapper.GetDeletedBranch)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/issue", wrapper.UnlinkBranch)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/issue", wrapper.LinkBranch)
@@ -20176,6 +20272,113 @@ func (response MergeBranchdefaultApplicationProblemPlusJSONResponse) VisitMergeB
 	return err
 }
 
+type RequestReviewRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+}
+
+type RequestReviewResponseObject interface {
+	VisitRequestReviewResponse(w http.ResponseWriter) error
+}
+
+type RequestReview202ResponseHeaders struct {
+	Location string
+}
+
+type RequestReview202JSONResponse struct {
+	Body    AIReview
+	Headers RequestReview202ResponseHeaders
+}
+
+func (response RequestReview202JSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestReview401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RequestReview401ApplicationProblemPlusJSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestReview403ApplicationProblemPlusJSONResponse Problem
+
+func (response RequestReview403ApplicationProblemPlusJSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestReview404ApplicationProblemPlusJSONResponse Problem
+
+func (response RequestReview404ApplicationProblemPlusJSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestReview409ApplicationProblemPlusJSONResponse Problem
+
+func (response RequestReview409ApplicationProblemPlusJSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RequestReviewdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RequestReviewdefaultApplicationProblemPlusJSONResponse) VisitRequestReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListCommitsRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -25986,6 +26189,9 @@ type StrictServerInterface interface {
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
+	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
+	RequestReview(ctx context.Context, request RequestReviewRequestObject) (RequestReviewResponseObject, error)
 	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
@@ -28945,6 +29151,34 @@ func (sh *strictHandler) MergeBranch(w http.ResponseWriter, r *http.Request, org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(MergeBranchResponseObject); ok {
 		if err := validResponse.VisitMergeBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RequestReview operation middleware
+func (sh *strictHandler) RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request RequestReviewRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RequestReview(ctx, request.(RequestReviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RequestReview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RequestReviewResponseObject); ok {
+		if err := validResponse.VisitRequestReviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

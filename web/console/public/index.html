@@ -1352,10 +1352,10 @@
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
-    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, the issue it works on,
-    // the jobs a member starts on it by hand, its commits, the reviews, annotations and runs of its head, and its
-    // environments. main's page names what merges into it need instead, and its environments, and a branch that isn't
-    // live any more, its deletion.
+    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, the AI review of its
+    // head, the issue it works on, the jobs a member starts on it by hand, its commits, the reviews, annotations and
+    // runs of its head, and its environments. main's page names what merges into it need instead, and its
+    // environments, and a branch that isn't live any more, its deletion.
     async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
       let b;
       try {
@@ -1373,7 +1373,7 @@
       if (b.settingsError) sections.push(settingsError(b));
       if (b.manualJobs && b.manualJobs.length && can("jobs.run")) sections.push(manualJobs(path, at, b, can, fail));
       // A Merged branch has nothing left to check or to merge.
-      if (b.status !== "merged") sections.push(branchChecks(b));
+      if (b.status !== "merged") sections.push(branchChecks(b), aiReviewPanel(org, path, b, can, fail));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
       if (b.commit) sections.push(commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)), commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
       sections.push(await environmentsPanel(path, at, b.name));
@@ -2083,6 +2083,30 @@
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
         commitReviews(path, c, can, fail, commitDrafting(path, c, can)), commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha),
         await diffPanel(path + "/commits/" + c.sha + "/diff", at, "Changes")];
+    }
+
+    // aiReviewPanel says how the AI reviewer stands on a branch's head: its latest task there, with why it waits,
+    // failed or was cancelled, and, for a viewer holding repo.push, a button that asks for another review, which
+    // supersedes the open one and starts even for a head pushed from outside the organization.
+    function aiReviewPanel(org, path, b, can, fail) {
+      const r = b.aiReview;
+      const panel = h("section", { class: "panel" }, h("h3", {}, "AI review"));
+      if (!r) {
+        panel.append(h("p", {}, "The AI reviewer has no task for ", h("code", {}, shortSha(b.head)), ". It reviews a branch's pushes once an admin gives it a model, as ",
+          h("code", {}, "main"), "'s ", h("code", {}, "/cobranch-review.yaml"), " says; its review shows among the head's."));
+      } else {
+        panel.append(h("p", { class: "row" }, runBadge(r.state), h("a", { href: base + org.slug + "/tasks/" + r.task, "data-nav": "" }, "Task #" + r.task),
+          r.reason ? h("span", { class: "muted" }, r.reason) : null));
+      }
+      if (can("repo.push")) {
+        const button = h("button", { class: "button small", type: "button" }, r && r.state === "waiting" ? "Start review" : r ? "Review again" : "Ask for a review");
+        button.onclick = () => {
+          button.disabled = true;
+          api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/review").then(render).catch((err) => { button.disabled = false; fail(err); });
+        };
+        panel.append(h("div", { class: "row" }, button));
+      }
+      return panel;
     }
 
     // commitReviews lists a commit's reviews: each reviewer's latest, the one that counts, in the order they first
