@@ -1,0 +1,12 @@
+# Restores main's Go caches into /go-cache, which the task's steps name as GOCACHE, GOMODCACHE and GOLANGCI_LINT_CACHE
+# (scripts/go-cache-restore.sh). Tasks build, lint, test and warm share it; Octomaton inlines it into each step that
+# references it by name.
+apiVersion: tekton.dev/v1beta1
+kind: StepAction
+metadata:
+  name: go-cache-restore
+spec:
+  image: docker.io/curlimages/curl:8.22.0
+  securityContext:
+    runAsUser: 0
+  command: [sh, .tekton/scripts/go-cache-restore.sh]

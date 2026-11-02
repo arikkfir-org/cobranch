@@ -1,9 +1,9 @@
 # Cobranch's build of main: build images cobranch, cobranch-console and cobranch-back-office of a commit and push them
-# to Artifact Registry, tagged with the commit's short SHA (publish.task.yaml). The pod pushes as ServiceAccount
-# ci-cobranch-release, through
-# Workload Identity: the one ServiceAccount allowed to push to main's and the versions' repository, which only main and
-# v* tags may use (octomaton.dev/branches, octomaton.dev/tags); pipeline preview pushes elsewhere (preview.yaml). A
-# plain Tekton PipelineRun; Octomaton sets the params.
+# to Artifact Registry, tagged with the commit's short SHA (publish.task.yaml), and, beside it, save the Go caches that
+# every run restores (warm.task.yaml). The pods run as ServiceAccount ci-cobranch-release, through
+# Workload Identity: the one ServiceAccount allowed to push to main's and the versions' repository and to save main's
+# Go caches, which only main and v* tags may use (octomaton.dev/branches, octomaton.dev/tags); pipeline preview pushes
+# elsewhere (preview.yaml). A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
@@ -20,6 +20,14 @@ spec:
           memory: 128Mi
         limits:
           memory: 256Mi
+    # As ci.yaml's build, lint and test, whose compiles it repeats.
+    - pipelineTaskName: warm
+      computeResources:
+        requests:
+          cpu: "2"
+          memory: 2Gi
+        limits:
+          memory: 3Gi
   workspaces:
     - name: source
       emptyDir: {}
@@ -47,3 +55,14 @@ spec:
             workspace: source
         taskRef:
           name: publish # .tekton/publish.task.yaml
+      - name: warm
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: warm # .tekton/warm.task.yaml
