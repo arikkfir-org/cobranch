@@ -76,6 +76,31 @@ CREATE TRIGGER bump_version BEFORE UPDATE ON agents FOR EACH ROW EXECUTE FUNCTIO
 CREATE TRIGGER audit AFTER INSERT OR UPDATE OR DELETE ON agent_tasks FOR EACH ROW EXECUTE FUNCTION audit();
 CREATE TRIGGER bump_version BEFORE UPDATE ON agent_tasks FOR EACH ROW EXECUTE FUNCTION bump_version();
 
+-- The Console's Agents and Tasks pages take the slugs agents and tasks under an organization, so a repository that had
+-- one before moves to <slug>-repository, or the first of <slug>-repository-2, -3 and on that its organization has
+-- free. Its old slug stays among its slugs, so its API and Git URLs still lead to it.
+-- +goose StatementBegin
+DO $$
+DECLARE
+    r record;
+    candidate text;
+    n int;
+BEGIN
+    FOR r IN SELECT id, org_id, slug FROM repositories WHERE slug IN ('agents', 'tasks') LOOP
+        candidate := r.slug || '-repository';
+        n := 1;
+        WHILE EXISTS (SELECT 1 FROM repositories WHERE org_id = r.org_id AND slug = candidate) LOOP
+            n := n + 1;
+            candidate := r.slug || '-repository-' || n;
+        END LOOP;
+        UPDATE repositories SET slug = candidate WHERE id = r.id;
+        INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES (r.org_id, candidate, r.id)
+        ON CONFLICT (org_id, slug) DO UPDATE SET repo_id = EXCLUDED.repo_id, created_at = now();
+    END LOOP;
+END
+$$;
+-- +goose StatementEnd
+
 -- +goose Down
 -- Rolling back deletes the agents, with their tasks and grants; the audit log keeps what they did.
 DROP TABLE agent_tasks;
