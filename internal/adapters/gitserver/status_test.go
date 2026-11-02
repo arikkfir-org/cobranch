@@ -275,6 +275,7 @@ func raceRepo(t *testing.T, tt raceCase) (*stack, string) {
 }
 
 func TestReviewsHoldBranches(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	mustGit(t, dir, "checkout", "-q", "-b", "main")

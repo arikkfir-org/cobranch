@@ -12,6 +12,7 @@ import (
 )
 
 func TestCodeStoreSubmitReview(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	changes, err := f.c.SubmitReview(ctx, f.max, f.website.ID, f.shaD, code.ReviewInput{State: code.ReviewChangesRequested, Body: "Rename the handler"})
