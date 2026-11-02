@@ -6,7 +6,7 @@
 
 **Status**: Proposed 2026-11-02 · [ENG-214](https://linear.app/arikkfir/issue/ENG-214) · Builds the [product’s
 jobs](product.md#jobs) on [branch status](branch-status.md) · Adds the controller workload · Built by
-[ENG-214](https://linear.app/arikkfir/issue/ENG-214), in four pull requests
+[ENG-214](https://linear.app/arikkfir/issue/ENG-214), in six pull requests
 
 A repository declares jobs in `/cobranch.yaml`; pushes, tags, annotations, reviews, events, schedules and members
 trigger them; each run executes as its job’s own principal, in a pod in its organization’s job namespace or as a signed
@@ -140,6 +140,12 @@ in the controller’s.
 - **Chains, never loops.** A run triggered by an annotation that another run set names that run as its cause. A job
   never runs twice in one chain, so `deploy` may follow `ci/build`, but a cycle stops where it would repeat. A job's own
   name in its `annotation.names` is refused.
+- **What an annotation trigger sees.** An annotation created, or whose status changes, through the APIs, and a run's own
+  annotation as the run starts and ends. The Pending a job's annotation turns to as its run is queued, and the Failed of
+  a cancellation or a supersession, trigger nothing, so stopping a run never starts another.
+- **Schedules.** Every minute the controller reads `main`'s file in each repository that schedules jobs and queues each
+  job's latest slot of the last ten minutes, once, whichever replica gets there first; a slot missed for longer is
+  skipped. It forgets the slots it queued after a day.
 - **Events carry data.** `POST /v1/orgs/{org}/repos/{repo}/events` takes `{name, branch?, data}`, `data` any JSON up to
   64 KiB, which the run reads as `/cobranch/event.json` and a webhook receives in its body. An outside system posts them
   with an API key holding `jobs.run`.
@@ -222,6 +228,9 @@ next attempt.
   still ends.
 - **Re-run, cancel, start.** `jobs.run` re-runs a finished run as the next attempt of the same definition at the same
   commit, cancels a waiting, queued or running one, and starts a waiting one. Each is an event naming who did it.
+- **A re-run** keeps its run's trigger and cause, counts its attempt from the first run, names who re-ran it, and
+  supersedes nothing: re-running an older commit's run leaves the newer ones alone. Its job is checked against `main`'s
+  ceiling again, and a run of the job at that commit that hasn't ended refuses it.
 - **Each run has a number** in its repository, `#42`, for the Console and the reasons.
 
 ## The outside-push gate
@@ -252,24 +261,26 @@ container.
 ### Job namespaces
 
 **Agreed** ([architecture](architecture.md#job-isolation)): each organization's runs execute in a namespace of their
-own, with no ingress and egress only to the internet and the cluster's DNS.
+own, with no ingress and egress only to the internet, the cluster's DNS and the installation's own servers.
 
-**An organization’s runs execute in a namespace of its own, reaching only the internet and DNS**
+**An organization’s runs execute in a namespace of its own, reaching only the internet, DNS and Cobranch’s servers**
 
-![An organization’s runs execute in a namespace of its own, reaching only the internet and DNS](jobs/namespace.svg)
+![An organization’s runs execute in a namespace of its own, reaching only the internet, DNS and Cobranch’s servers](jobs/namespace.svg)
 
-The prefix, `<release>-jobs-` by default, keeps two installations in one cluster apart; the organization’s ID never
-changes.
+The prefix, `<namespace>-jobs-` by default, keeps two installations in one cluster apart; the organization’s ID never
+changes. Runs reach the REST, GraphQL and Git servers’ pods on their port, and nothing else inside the cluster.
 
-- **Its name** is the chart's `jobs.namespacePrefix`, `<release>-jobs-` by default, then the organization's ID:
-  `cobranch-jobs-0193a8…`. The prefix keeps two installations in one cluster apart, and the ID never changes, unlike a
-  slug.
-- **The controller creates it** with the organization's first run, labelled with the installation and the organization,
-  enforcing the chart's Pod Security level (`restricted` by default), and in it: the two NetworkPolicies (deny all
-  ingress; allow egress to DNS and to every address outside `jobs.egress.except`, which lists the private, link-local
-  and shared ranges, cloud metadata servers included), a LimitRange from `jobs.resources`, an optional ResourceQuota
-  from `jobs.quota`, and two RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other
-  lets the REST and GraphQL servers read their logs.
+- **Its name** is the chart's `jobs.namespacePrefix`, the release's namespace and `-jobs-` by default, then the
+  organization's ID: `cobranch-jobs-0193a8…`. The prefix keeps two installations in one cluster apart, and the ID never
+  changes, unlike a slug.
+- **The controller creates it** with the organization's first run, labelled with the installation
+  (`cobranch.dev/installation`, the release's namespace and name) and the organization, enforcing the chart's Pod
+  Security level (`restricted` by default), and in it: the two NetworkPolicies (deny all ingress; allow egress to DNS on
+  port 53, at the peers `jobs.egress.dns` names or any address, to the installation's REST, GraphQL and Git servers, and
+  to every address outside `jobs.egress.except`, which lists the private, link-local and shared ranges, cloud metadata
+  servers included), a LimitRange whose defaults are `jobs.resources`, an optional ResourceQuota from `jobs.quota`, and
+  RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other, with the logs API, lets
+  the REST and GraphQL servers read their logs.
 - **It goes with the organization.** Deleting an organization deletes its namespace.
 
 ### Pods and scripts
@@ -278,26 +289,33 @@ changes.
 
 ![The controller starts a run’s pod, follows it and keeps its logs](jobs/pod-run.svg)
 
-A timeout deletes the pod and fails the run; a pod that vanished fails it too. While the pod lives, the REST and GraphQL
-servers stream its logs from Kubernetes.
+The controller polls every 5 seconds. A timeout deletes the pod and fails the run; a pod that vanished fails it too.
+With the logs API, the REST and GraphQL servers stream a live pod’s logs from Kubernetes.
 
 - **`pod`** is a Kubernetes pod spec. The controller refuses what would leave the namespace's bounds: a ServiceAccount
   or its token, host namespaces, host paths, node names, node selectors, affinities, tolerations, priority classes,
   volumes other than `emptyDir` and ephemeral ones, and variables read from the namespace's Secrets or ConfigMaps, which
   hold the other runs'. It sets what every run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout,
   the operator's `jobs.nodeSelector`, `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
-- **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, running
-  the script with `bash -eo pipefail`. The script travels in the run's Secret, never in the pod's command line.
+- **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, which is
+  Cobranch's own image, carrying Bash and Git, running the script with `bash -eo pipefail`. The script travels in the
+  run's Secret, never in the pod's command line.
 - **The checkout.** An init container of Cobranch's own image fetches the run's commit into `/workspace`, which every
   container mounts, over Git's HTTPS URL with the run's token; `checkout: false` skips it.
 - **What every container gets:** `/workspace`, `/cobranch/event.json`, and `COBRANCH_URL`, `COBRANCH_GIT_URL`,
   `COBRANCH_TOKEN`, `COBRANCH_ORG`, `COBRANCH_REPO`, `COBRANCH_SHA`, `COBRANCH_REF`, `COBRANCH_JOB`, `COBRANCH_RUN` and
-  `COBRANCH_EVENT`, plus each secret the job names, as the environment variable it names. The token and the secrets come
-  from the run's Secret, which the pod owns.
-- **Logs.** While the pod lives, the REST and GraphQL servers stream its logs from Kubernetes; when it ends, the
-  controller archives each container's log to the object store, under `logs/<repo-id>/<run-id>/`, up to
-  `jobs.logs.maxBytes` each, and maintenance deletes them after `jobs.logs.retention`. Both paths mask the run's secret
-  values.
+  `COBRANCH_EVENT`, plus each secret the job names, as the environment variable it names. `COBRANCH_URL` and
+  `COBRANCH_GIT_URL` are the installation's Services in the cluster unless `jobs.urls` names others. The token and the
+  secrets come from the run's Secret, which the controller writes once the pod exists, owned by it, so deleting the pod
+  deletes it.
+- **Logs.** When the pod ends, the controller archives each container's log to the object store, under
+  `logs/<repo-id>/<run-id>/<container>`, up to `jobs.logs.maxBytes` each, masking the run's secret values. With the logs
+  API, the REST and GraphQL servers stream a live pod's logs from Kubernetes, masked too, and maintenance deletes
+  archived ones after `jobs.logs.retention`.
+- **Following runs.** Every `JOBS_POLL_INTERVAL` (5 s) the controller claims queued runs and reads its pods' states;
+  every `JOBS_SWEEP_INTERVAL` (5 min) it deletes what ended without it: pods of runs cancelled or superseded, namespaces
+  of deleted organizations, and expired run tokens. A pod left by an earlier attempt at a run is deleted, and the run
+  tried again once its lease ends.
 - **Room.** A pod the quota refuses keeps its run Queued, retried as runs end, with the reason on the run.
 
 ### Webhooks
@@ -356,18 +374,21 @@ The chart adds one workload and the Kubernetes access it needs.
 
 ![The controller binds itself only where it made a job namespace, and an admission policy holds it there](jobs/rbac.svg)
 
-`jobs.pods: false` renders none of it: webhooks still run, pods and scripts don’t.
+Cluster-scoped names start with the release’s namespace too, such as `<namespace>-<release>-jobs-runner`; `jobs-logs`
+comes with the logs API. `jobs.pods: false` renders none of it: webhooks still run, pods and scripts don’t.
 
 | Object | What it allows |
 | --- | --- |
 | Deployment `<release>-controller` | 2 replicas, a disruption budget of one, rolling out by surging; the only workload with Kubernetes write access |
-| ClusterRole and binding `<release>-controller` | Create and delete namespaces; create RoleBindings, and `bind` only the two ClusterRoles below |
-| ClusterRole `<release>-jobs-runner` | Pods, their logs, Secrets, NetworkPolicies, LimitRanges and ResourceQuotas, bound to the controller in each job namespace |
-| ClusterRole `<release>-jobs-logs` | Read pods and their logs, bound to the REST and GraphQL servers in each job namespace |
-| ValidatingAdmissionPolicy `<release>-jobs` | Holds the controller to namespaces carrying its prefix and installation label, and its RoleBindings to its two roles and its own ServiceAccounts |
+| ClusterRole and binding `<namespace>-<release>-controller` | Create and delete namespaces; create RoleBindings, and `bind` only the ClusterRoles below |
+| ClusterRole `<namespace>-<release>-jobs-runner` | Pods, their logs, Secrets, NetworkPolicies, LimitRanges and ResourceQuotas, bound to the controller in each job namespace |
+| ClusterRole `<namespace>-<release>-jobs-logs` | Read pods and their logs, bound to the REST and GraphQL servers in each job namespace; with the logs API |
+| ValidatingAdmissionPolicy `<namespace>-<release>-jobs` | Holds the controller to namespaces carrying its prefix and installation label, and its RoleBindings to its roles and its own ServiceAccount |
 
 - **No cluster-wide reach beyond namespaces.** The controller reads and writes pods and Secrets only where it bound
   itself, and the admission policy keeps it from binding itself anywhere else. It needs Kubernetes 1.30 or later.
+  Cluster-scoped objects carry the release's namespace in their names, so two installations of one release name never
+  share them; `jobs.admissionPolicy: false` leaves the holding to the cluster's own policies.
 - **`jobs.pods: false`** renders none of the RBAC and no policy, for an operator who can't grant it: webhook jobs still
   run, and pod and script runs fail with `this installation runs no pods`.
 
@@ -375,17 +396,20 @@ The chart adds one workload and the Kubernetes access it needs.
 | --- | --- | --- |
 | `controller.replicas`, `resources`, placement | 2 | The controller workload |
 | `jobs.pods` | `true` | Whether runs execute pods at all |
-| `jobs.namespacePrefix` | `<release>-jobs-` | Job namespaces' names |
+| `jobs.namespacePrefix` | `<namespace>-jobs-` | Job namespaces' names |
+| `jobs.namespaceLabels` | None | More labels on job namespaces, for the cluster's own policies |
 | `jobs.podSecurity` | `restricted` | The Pod Security level job namespaces enforce |
 | `jobs.egress.except` | Private, link-local and shared ranges | Where jobs and webhooks may not connect |
-| `jobs.egress.dns` | The cluster's DNS pods | What the DNS policy admits |
-| `jobs.resources` | Requests 250m, 512Mi; memory limit 2Gi | The LimitRange's defaults and maximums |
+| `jobs.egress.dns` | Any address, on port 53 | What the DNS policy admits |
+| `jobs.resources` | Requests 250m, 512Mi; memory limit 2Gi | The LimitRange's defaults |
 | `jobs.quota` | None | A ResourceQuota per job namespace |
 | `jobs.nodeSelector`, `tolerations`, `affinity` | None | Where job pods run |
-| `jobs.script.image` | A pinned Bash image | `script`'s default image |
+| `jobs.script.image` | Cobranch's own image | `script`'s default image |
+| `jobs.urls.rest`, `git` | The Services in the cluster | Where runs reach the REST API and the Git server |
 | `jobs.timeout.default`, `max` | 1h, 24h | Runs' timeouts |
 | `jobs.logs.maxBytes`, `retention` | 10 MiB, 30 days | Archived logs |
 | `jobs.webhooks.allowedCIDRs` | None | Private ranges a webhook may reach |
+| `jobs.admissionPolicy` | `true` | Whether the chart ships its admission policy |
 
 ## The Console and APIs
 
@@ -426,22 +450,28 @@ so they don’t. Every new row carries `org_id`.
 
 ## Rollout
 
-**Four pull requests, each keeping main working**
+**Six pull requests, each keeping main working**
 
-![Four pull requests, each keeping main working](jobs/rollout.svg)
+![Six pull requests, each keeping main working](jobs/rollout.svg)
 
-Upgrading to the third needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
+Upgrading to the fourth needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-214](https://linear.app/arikkfir/issue/ENG-214); the
-  fourth closes it. Runs queued by the first wait for the controller the third brings; nothing requires a job's
+  sixth closes it. Runs queued by the first wait for the controller the fourth brings; nothing requires a job's
   annotation until a repository says so in its own `/cobranch.yaml`.
 - **The first** records each tip's `/cobranch.yaml`, makes job principals and queues runs from pushes and tags, with the
   gate, the ceiling and supersession, and lists, starts and cancels runs through the APIs and the Console. Re-runs and
-  manual starts come with the fourth, beside the other triggers.
+  manual starts come with the fifth, beside the other triggers.
 - **The second** keeps secrets in organization and repository settings, adds Secret reader, and manages and grants them
   through the APIs and the Console, so jobs can be granted theirs before the controller runs them.
-- **The third needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy.
-  An operator who can't grant them sets `jobs.pods: false`.
+- **The third declares the chart's `controller` and `jobs` values,** which place nothing, so an operator sets the values
+  their cluster needs before the controller arrives: the values schema refuses keys the chart doesn't know.
+- **The fourth needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy,
+  and the controller runs pods and scripts, with the checkout, secrets and archived logs. An operator who can't grant
+  them sets `jobs.pods: false`.
+- **The fifth brings the remaining triggers:** annotations, reviews, posted events, manual starts and schedules, and
+  re-runs, through the APIs and the Console.
+- **The sixth** delivers webhooks and adds the logs API, with its `jobs-logs` role, and the archived logs' retention.
 - **A repository adopts jobs** by pushing a `jobs` key into `main`, and requires them by naming their annotations under
   `branches`.
 
@@ -471,9 +501,16 @@ Upgrading to the third needs Kubernetes 1.30 for the admission policy, or `jobs.
 | Runs are their own queue, claimed under a lease; the architecture's general `tasks` table waits for its first general subscriber | Less to build now; the same claiming pattern | Changed |
 | A newer run of a job on a ref supersedes its runs at other commits; at the same commit one that hasn't ended stands, a Waiting one giving way to a run that needn't wait | The only concurrency rule a first slice needs; superseding at the same commit would let an outsider's push of a member's commit cancel the member's run | Changed |
 | A job never runs twice in one chain of annotation triggers | Chains such as build then deploy, without loops | Proposed |
+| Annotations trigger runs when the APIs set them or a run starts or ends; queueing, cancelling and superseding don't | Stopping a run must not start another; Cobranch's own Pending is bookkeeping, not news | Changed |
+| A re-run supersedes nothing and keeps its run's trigger and cause | A member re-running an older run means that run, not the newest; its chain stays one chain | Changed |
+| A schedule slot runs at most ten minutes late, once across replicas, else is skipped | A controller that was down doesn't fire a backlog of slots; two replicas don't fire one twice | Changed |
 | One principal per job name; permissions from its declaration within `main`'s ceiling, Automation by default; `secrets.read` its one grant, through the new Secret reader role | The principals design | Agreed |
 | Run tokens `cbr_…`, valid for the run, at most 24 hours, scoped to its repository | The principals design's lifetimes | Agreed |
-| Job namespaces are `<prefix><organization ID>`, the prefix a chart value, `<release>-jobs-` by default | Two installations in one cluster must not share namespaces; IDs never change | Changed |
+| Job namespaces are `<prefix><organization ID>`, the prefix a chart value, `<namespace>-jobs-` by default; cluster-scoped objects are named `<namespace>-<release>-…` | Two installations in one cluster must not share namespaces or roles, even under one release name; IDs never change | Changed |
+| The controller polls, every 5 seconds for runs and pods and every 5 minutes for what ended without it, rather than watching | One query and one list per pass; any replica may follow any run; a missed event can't strand a run | Changed |
+| Scripts run in Cobranch's own image by default, which carries Bash and Git | One image the installation already pulls, pinned to its version | Changed |
+| Runs reach the installation's REST and Git servers in the cluster, through an egress rule for those pods alone | Inside a cluster, its public URL may not resolve or may route through a gateway runs can't reach | Changed |
+| The LimitRange sets containers' defaults only; the quota bounds an organization | A maximum would refuse a job that declares more; the quota already caps the whole | Changed |
 | The controller binds itself per job namespace, held there by an admission policy the chart ships; `jobs.pods: false` turns pods off | The narrowest RBAC Kubernetes can express for namespaces made at run time | Proposed |
 | Job namespaces enforce Pod Security `restricted` by default | Least privilege by default; the operator may lower it | Proposed |
 | A script is a pod of one container; the checkout is an init container; secrets come as environment variables | One way to run code; scripts need the code | Proposed |
