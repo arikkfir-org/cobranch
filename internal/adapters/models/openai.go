@@ -51,14 +51,19 @@ type openAITool struct {
 }
 
 type openAIResponse struct {
+	Model   string `json:"model"`
 	Choices []struct {
 		Message      openAIMessage `json:"message"`
 		FinishReason string        `json:"finish_reason"`
 	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+	} `json:"usage"`
 }
 
-// Next asks the model for its next turn (harness.Model).
-func (o openAI) Next(ctx context.Context, r harness.Request) (harness.Turn, error) {
+// chat asks the model for its next turn (adapter).
+func (o openAI) chat(ctx context.Context, r harness.Request) (harness.Turn, answered, error) {
 	req := openAIRequest{Model: o.settings.Model, Messages: []openAIMessage{{Role: "system", Content: &r.System}}}
 	for _, m := range r.Messages {
 		req.Messages = append(req.Messages, openAIMessagesOf(m)...)
@@ -68,12 +73,16 @@ func (o openAI) Next(ctx context.Context, r harness.Request) (harness.Turn, erro
 	}
 	var resp openAIResponse
 	if err := o.post(ctx, o.url+"/chat/completions", map[string]string{"Authorization": "Bearer " + o.settings.Key}, req, &resp); err != nil {
-		return harness.Turn{}, err
+		return harness.Turn{}, answered{}, err
 	}
+	meta := answered{model: resp.Model, input: resp.Usage.PromptTokens, output: resp.Usage.CompletionTokens}
 	if len(resp.Choices) == 0 {
-		return harness.Turn{}, fmt.Errorf("%s answered no choice", o.provider)
+		return harness.Turn{}, meta, fmt.Errorf("%s answered no choice", o.provider)
 	}
 	choice := resp.Choices[0]
+	if choice.FinishReason == "content_filter" {
+		meta.blocked = choice.FinishReason
+	}
 	t := harness.Turn{Stop: choice.FinishReason}
 	if choice.Message.Content != nil {
 		t.Text = *choice.Message.Content
@@ -85,7 +94,7 @@ func (o openAI) Next(ctx context.Context, r harness.Request) (harness.Turn, erro
 		}
 		t.Calls = append(t.Calls, harness.Call{ID: c.ID, Name: c.Function.Name, Arguments: args})
 	}
-	return t, nil
+	return t, meta, nil
 }
 
 // openAIMessagesOf is m as the Chat Completions API takes it: a user's results each a tool's message, before its text;

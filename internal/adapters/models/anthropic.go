@@ -55,12 +55,17 @@ type anthropicTool struct {
 }
 
 type anthropicResponse struct {
+	Model      string           `json:"model"`
 	Content    []anthropicBlock `json:"content"`
 	StopReason string           `json:"stop_reason"`
+	Usage      struct {
+		InputTokens  int `json:"input_tokens"`
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
 }
 
-// Next asks the model for its next turn (harness.Model).
-func (a anthropic) Next(ctx context.Context, r harness.Request) (harness.Turn, error) {
+// chat asks the model for its next turn (adapter).
+func (a anthropic) chat(ctx context.Context, r harness.Request) (harness.Turn, answered, error) {
 	req := anthropicRequest{Model: a.settings.Model, MaxTokens: a.settings.MaxTokens, System: r.System}
 	for _, m := range r.Messages {
 		req.Messages = append(req.Messages, anthropicMessageOf(m))
@@ -71,7 +76,11 @@ func (a anthropic) Next(ctx context.Context, r harness.Request) (harness.Turn, e
 	var resp anthropicResponse
 	headers := map[string]string{"x-api-key": a.settings.Key, "anthropic-version": anthropicVersion}
 	if err := a.post(ctx, a.url+"/v1/messages", headers, req, &resp); err != nil {
-		return harness.Turn{}, err
+		return harness.Turn{}, answered{}, err
+	}
+	meta := answered{model: resp.Model, input: resp.Usage.InputTokens, output: resp.Usage.OutputTokens}
+	if resp.StopReason == "refusal" {
+		meta.blocked = resp.StopReason
 	}
 	t := harness.Turn{Stop: resp.StopReason}
 	var text []string
@@ -84,7 +93,7 @@ func (a anthropic) Next(ctx context.Context, r harness.Request) (harness.Turn, e
 		}
 	}
 	t.Text = strings.Join(text, "\n\n")
-	return t, nil
+	return t, meta, nil
 }
 
 // anthropicMessageOf is m as the Messages API takes it: a user's results before its text, and an assistant's text

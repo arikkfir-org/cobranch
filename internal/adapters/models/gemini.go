@@ -1,10 +1,12 @@
 package models
 
 import (
+	"cmp"
 	"context"
 	"crypto/rand"
 	"encoding/json"
 	"net/url"
+	"slices"
 	"strings"
 
 	"cobranch.dev/internal/services/harness"
@@ -63,17 +65,25 @@ type geminiGeneration struct {
 }
 
 type geminiResponse struct {
-	Candidates []struct {
+	ModelVersion string `json:"modelVersion"`
+	Candidates   []struct {
 		Content      geminiContent `json:"content"`
 		FinishReason string        `json:"finishReason"`
 	} `json:"candidates"`
 	PromptFeedback struct {
 		BlockReason string `json:"blockReason"`
 	} `json:"promptFeedback"`
+	UsageMetadata struct {
+		PromptTokenCount     int `json:"promptTokenCount"`
+		CandidatesTokenCount int `json:"candidatesTokenCount"`
+	} `json:"usageMetadata"`
 }
 
-// Next asks the model for its next turn (harness.Model).
-func (g gemini) Next(ctx context.Context, r harness.Request) (harness.Turn, error) {
+// geminiBlocks are the reasons a candidate finishes that Gemini's filters stopped it: asked again, they stop it again.
+var geminiBlocks = []string{"SAFETY", "RECITATION", "LANGUAGE", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "IMAGE_SAFETY"}
+
+// chat asks the model for its next turn (adapter).
+func (g gemini) chat(ctx context.Context, r harness.Request) (harness.Turn, answered, error) {
 	req := geminiRequest{GenerationConfig: geminiGeneration{MaxOutputTokens: g.settings.MaxTokens}}
 	if r.System != "" {
 		req.SystemInstruction = &geminiContent{Parts: []geminiPart{{Text: r.System}}}
@@ -91,12 +101,17 @@ func (g gemini) Next(ctx context.Context, r harness.Request) (harness.Turn, erro
 	var resp geminiResponse
 	endpoint := g.url + "/v1beta/models/" + url.PathEscape(g.settings.Model) + ":generateContent"
 	if err := g.post(ctx, endpoint, map[string]string{"x-goog-api-key": g.settings.Key}, req, &resp); err != nil {
-		return harness.Turn{}, err
+		return harness.Turn{}, answered{}, err
 	}
+	meta := answered{model: resp.ModelVersion, input: resp.UsageMetadata.PromptTokenCount, output: resp.UsageMetadata.CandidatesTokenCount}
 	if len(resp.Candidates) == 0 {
-		return harness.Turn{Stop: "blocked: " + resp.PromptFeedback.BlockReason}, nil
+		meta.blocked = "the prompt was blocked: " + cmp.Or(resp.PromptFeedback.BlockReason, "no reason given")
+		return harness.Turn{Stop: "blocked"}, meta, nil
 	}
-	return geminiTurn(resp.Candidates[0].Content, resp.Candidates[0].FinishReason), nil
+	if stop := resp.Candidates[0].FinishReason; slices.Contains(geminiBlocks, stop) {
+		meta.blocked = stop
+	}
+	return geminiTurn(resp.Candidates[0].Content, resp.Candidates[0].FinishReason), meta, nil
 }
 
 // geminiTurn is the turn a candidate's content holds. A call without an ID gets one, for its result to name.
