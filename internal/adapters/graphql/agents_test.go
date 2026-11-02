@@ -26,7 +26,7 @@ func (f *orgFixture) addAgents() {
 	f.agentStore.Branches[uuid.New()] = agentstest.Branch{Repo: f.website.ID, Name: "feature/login"}
 	f.agents = agents.NewService(f.agentStore, auth.NewAuthorizer(f.store)).WithProviders("anthropic", "openai")
 	f.providerKey, f.deployKey = f.agentStore.AddSecret(f.acme.ID, uuid.Nil, "anthropic-key"), f.agentStore.AddSecret(f.acme.ID, f.website.ID, "deploy-key")
-	f.scout = f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, Name: "Scout", CreatedBy: &agents.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}})
+	f.scout = f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, Name: "Scout", Instructions: "Be brief.", CreatedBy: &agents.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}})
 	f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, Name: "Reviewer", BuiltIn: true})
 	for _, a := range []struct {
 		by *auth.Authenticated

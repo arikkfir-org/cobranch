@@ -1,7 +1,8 @@
--- TaskByID finds a task by its ID, with the names Task gives it and its organization's slug.
+-- TaskByID finds a task by its ID, with the names Task gives it, its organization's slug and its agent's standing
+-- instructions.
 -- name: TaskByID :one
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
-    rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug
+    rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug, ag.instructions AS agent_instructions
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id

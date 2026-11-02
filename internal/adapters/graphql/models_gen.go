@@ -809,10 +809,12 @@ type ModelProvider struct {
 type Mutation struct {
 }
 
-// The task a task token works, and the slug of its organization.
+// The task a task token works, the slug of its organization, and its agent's standing instructions, which the task starts from.
 type MyTask struct {
 	Organization string `json:"organization"`
 	Task         *Task  `json:"task"`
+	// The standing instructions, in Markdown, of the task's agent; empty for none.
+	AgentInstructions string `json:"agentInstructions"`
 }
 
 // What makes a secret.

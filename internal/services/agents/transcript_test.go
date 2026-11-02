@@ -185,12 +185,16 @@ func TestWork(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	f.store.OrgSlugs[f.org] = "acme"
-	task := f.assign(t, f.mel, f.agent(t, f.olive, "Scout"), "Tidy up", uuid.Nil)
-	got, slug, err := f.service.Work(working(context.Background(), task), agentViewer(task))
-	if err != nil || got.ID != task.ID || slug != "acme" {
-		t.Errorf("Work() = %+v, %q, %v", got, slug, err)
+	scout, err := f.service.CreateAgent(context.Background(), f.olive, f.org, agents.Input{Name: "Scout", Instructions: "Be brief."})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, _, err := f.service.Work(context.Background(), f.mel); !is(err, auth.ErrForbidden) {
+	task := f.assign(t, f.mel, scout, "Tidy up", uuid.Nil)
+	got, err := f.service.Work(working(context.Background(), task), agentViewer(task))
+	if err != nil || got.Task.ID != task.ID || got.OrgSlug != "acme" || got.AgentInstructions != "Be brief." {
+		t.Errorf("Work() = %+v, %v", got, err)
+	}
+	if _, err := f.service.Work(context.Background(), f.mel); !is(err, auth.ErrForbidden) {
 		t.Errorf("Work(a person) = %v, want %v", err, auth.ErrForbidden)
 	}
 }

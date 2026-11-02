@@ -1,8 +1,10 @@
 package config
 
 import (
+	"maps"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,7 +19,8 @@ var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "BLOB_MOVE_FROM", 
 	"JOBS_SCRIPT_IMAGE", "JOBS_CHECKOUT_IMAGE", "JOBS_REST_URL", "JOBS_GIT_URL", "JOBS_LOGS_MAX_BYTES", "JOBS_NAMESPACE_PREFIX",
 	"JOBS_INSTALLATION", "JOBS_POD_SECURITY", "JOBS_NAMESPACE_LABELS", "JOBS_HOME", "JOBS_SERVICE_ACCOUNT", "JOBS_RELEASE",
 	"JOBS_RUNNER_ROLE", "JOBS_OWNER_ROLE", "JOBS_EGRESS_EXCEPT", "JOBS_EGRESS_DNS", "JOBS_RESOURCES", "JOBS_QUOTA", "JOBS_NODE_SELECTOR", "JOBS_TOLERATIONS", "JOBS_AFFINITY",
-	"GIT_URL", "TOKEN", "SHA", "WORKSPACE"}
+	"GIT_URL", "TOKEN", "SHA", "WORKSPACE", "TOKEN_FILE", "MODEL_PROVIDER", "MODEL", "MODEL_KEY_FILE", "MODEL_URL",
+	"MODEL_MAX_TOKENS", "MAX_TURNS", "SHELL_TIMEOUT"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -480,3 +483,49 @@ func TestQuotaDecode(t *testing.T) {
 
 // ptr points at v.
 func ptr[T any](v T) *T { return &v }
+
+func TestLoadAgent(t *testing.T) {
+	needed := map[string]string{"COBRANCH_REST_URL": "http://rest.cobranch.svc:8080/", "COBRANCH_TOKEN_FILE": "/var/run/cobranch/token",
+		"COBRANCH_MODEL_PROVIDER": "anthropic", "COBRANCH_MODEL": "test-model", "COBRANCH_MODEL_KEY_FILE": "/var/run/cobranch/model-key"}
+	with := func(extra map[string]string) map[string]string {
+		env := maps.Clone(needed)
+		maps.Copy(env, extra)
+		return env
+	}
+	tests := []struct {
+		name    string
+		env     map[string]string
+		check   func(Agent) bool
+		wantErr string
+	}{
+		{name: "defaults", env: needed, check: func(c Agent) bool {
+			return c.REST.String() == "http://rest.cobranch.svc:8080" && c.TokenFile == "/var/run/cobranch/token" && c.ModelProvider == "anthropic" &&
+				c.Model == "test-model" && c.ModelKeyFile == "/var/run/cobranch/model-key" && c.ModelURL.URL == nil && c.ModelMaxTokens == 8192 &&
+				c.Workspace == "/workspace" && c.MaxTurns == 200 && c.ShellTimeout == 10*time.Minute
+		}},
+		{name: "a proxy and limits", env: with(map[string]string{"COBRANCH_MODEL_URL": "https://models.example.com/anthropic", "COBRANCH_MODEL_MAX_TOKENS": "32000",
+			"COBRANCH_MAX_TURNS": "50", "COBRANCH_SHELL_TIMEOUT": "2m", "COBRANCH_WORKSPACE": "/work"}), check: func(c Agent) bool {
+			return c.ModelURL.String() == "https://models.example.com/anthropic" && c.ModelMaxTokens == 32000 && c.MaxTurns == 50 &&
+				c.ShellTimeout == 2*time.Minute && c.Workspace == "/work"
+		}},
+		{name: "nothing", env: map[string]string{},
+			wantErr: "the agent takes COBRANCH_MODEL, COBRANCH_MODEL_KEY_FILE, COBRANCH_MODEL_PROVIDER, COBRANCH_REST_URL, COBRANCH_TOKEN_FILE"},
+		{name: "no turns", env: with(map[string]string{"COBRANCH_MAX_TURNS": "0"}), wantErr: "COBRANCH_MODEL_MAX_TOKENS, COBRANCH_MAX_TURNS and COBRANCH_SHELL_TIMEOUT are more than 0"},
+		{name: "a URL that isn't one", env: with(map[string]string{"COBRANCH_REST_URL": "rest:8080"}), wantErr: "reading the agent's configuration"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadAgent()
+			if tt.wantErr != "" {
+				if err == nil || !strings.HasPrefix(err.Error(), tt.wantErr) {
+					t.Errorf("LoadAgent() = %v, want %q", err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil || !tt.check(got) {
+				t.Errorf("LoadAgent() = %+v, %v", got, err)
+			}
+		})
+	}
+}

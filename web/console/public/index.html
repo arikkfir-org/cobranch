@@ -318,6 +318,8 @@
     ol.transcript > li.state { border-left-color: var(--color-accent); }
     ol.transcript .text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
     ol.transcript pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/18px var(--font-mono); color: var(--color-fg-muted); }
+    ol.transcript ul.calls { margin: 0; padding-left: 18px; display: grid; gap: 2px; overflow-wrap: anywhere; }
+    ol.transcript > li.failed { border-left-color: var(--color-status-danger-border); }
     p.instructions { white-space: pre-wrap; overflow-wrap: anywhere; }
     .thread form textarea, .chat > form textarea { min-height: 64px; resize: vertical; }
     .diff-summary { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; margin: 0; }
@@ -3099,17 +3101,30 @@
     }
     // The transcript's entry kinds, as the task's page names them.
     const entryKinds = { input: "Input", turn: "Model", result: "Tool result", state: "State" };
-    // transcriptEntry draws an entry of a task's transcript: its text, a state it moved the task to, and the rest of
-    // what the harness recorded, folded away.
+    // transcriptEntry draws an entry of a task's transcript: its text, the tools a turn calls, whether a tool failed or
+    // its output was cut, a state it moved the task to, and the rest of what the harness recorded, folded away.
     function transcriptEntry(e) {
       const { text, ...others } = e.body;
       const { state, summary, reason, ...rest } = others;
       const extra = e.kind === "state" ? rest : others;
-      return h("li", { class: e.kind, id: "entry-" + e.seq },
-        h("p", { class: "muted" }, "#" + e.seq, " · ", entryKinds[e.kind] || e.kind, " · ", whenExactly(e.createdAt)),
+      const calls = e.kind === "turn" && Array.isArray(e.body.calls) ? e.body.calls : [];
+      const failed = e.kind === "result" && e.body.error === true;
+      const kind = (failed ? "Tool failed" : entryKinds[e.kind] || e.kind) + (e.body.by === "harness" ? ", from the harness" : "");
+      return h("li", { class: e.kind + (failed ? " failed" : ""), id: "entry-" + e.seq },
+        h("p", { class: "muted" }, "#" + e.seq, " · ", kind, typeof e.body.name === "string" ? [" · ", h("code", {}, e.body.name)] : null, " · ", whenExactly(e.createdAt)),
         e.kind === "state" && taskStates[state] ? h("p", {}, taskBadge(state), summary ? [" ", summary] : null, reason ? [" ", capitalized(reason)] : null) : null,
-        typeof text === "string" ? h("p", { class: "text" }, text) : null,
+        typeof text === "string" && text ? h("p", { class: "text" }, text) : null,
+        calls.length ? h("ul", { class: "calls" }, calls.map(callLine)) : null,
+        e.body.cut === true ? h("p", { class: "muted" }, "Cut to its first 64 KiB, of " + Number(e.body.size).toLocaleString() + " bytes.") : null,
         Object.keys(extra).length ? h("details", {}, h("summary", { class: "muted" }, "Details"), h("pre", {}, JSON.stringify(extra, null, 2))) : null);
+    }
+
+    // callLine draws a tool's call that a turn makes: the tool's name and its first argument that is text, shortened.
+    function callLine(c) {
+      const args = c && c.arguments && typeof c.arguments === "object" ? c.arguments : {};
+      const first = Object.values(args).find((v) => typeof v === "string");
+      const shown = first && first.length > 160 ? first.slice(0, 160) + "…" : first;
+      return h("li", {}, h("code", {}, String((c && c.name) || "?")), shown ? [" ", h("span", { class: "muted" }, shown)] : null);
     }
 
     // showTask renders one of the organization's tasks and its transcript, following both until the task ends. The

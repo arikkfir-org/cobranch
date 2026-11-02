@@ -47,8 +47,8 @@ type Store interface {
 	Tasks(ctx context.Context, orgID uuid.UUID, f TaskFilter, readable []uuid.UUID, hidden []string, limit int) ([]Task, error)
 	// Task finds one of the organization's tasks by its number.
 	Task(ctx context.Context, orgID uuid.UUID, number int64) (Task, error)
-	// TaskByID finds a task by its ID, with its organization's slug.
-	TaskByID(ctx context.Context, id uuid.UUID) (Task, string, error)
+	// TaskByID finds a task by its ID, with its organization's slug and its agent's standing instructions.
+	TaskByID(ctx context.Context, id uuid.UUID) (Work, error)
 	// Assign numbers the task in its organization and records it for actor, Queued, and answers it.
 	Assign(ctx context.Context, actor uuid.UUID, t Task) (Task, error)
 	// Cancel cancels one of the organization's active tasks for actor, at version or at any version for AnyVersion,

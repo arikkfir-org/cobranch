@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -354,6 +355,52 @@ func LoadHook() (Hook, error) {
 	var c Hook
 	if err := envconfig.Process(Prefix, &c); err != nil {
 		return Hook{}, fmt.Errorf("reading git-hook's configuration from the COBRANCH_ variables: %w", err)
+	}
+	return c, nil
+}
+
+// Agent configures agent, the harness that works one task in the task's pod, which the controller starts with these
+// variables.
+type Agent struct {
+	// REST is the REST server's URL as the pod reaches it; the API is under its /v1/.
+	REST URL `envconfig:"REST_URL"`
+	// TokenFile holds the task's token, which the controller renews in place.
+	TokenFile string `envconfig:"TOKEN_FILE"`
+	// ModelProvider and Model name the agent's model, and ModelKeyFile holds its provider's API key.
+	ModelProvider string `envconfig:"MODEL_PROVIDER"`
+	Model         string `envconfig:"MODEL"`
+	ModelKeyFile  string `envconfig:"MODEL_KEY_FILE"`
+	// ModelURL is where the provider's API is when not at its own address, such as a proxy; empty for its own.
+	ModelURL URL `envconfig:"MODEL_URL"`
+	// ModelMaxTokens is the most tokens a turn may take, for the providers that ask for it.
+	ModelMaxTokens int `envconfig:"MODEL_MAX_TOKENS" default:"8192"`
+	// Workspace is the directory the task works in.
+	Workspace string `envconfig:"WORKSPACE" default:"/workspace"`
+	// MaxTurns is the most turns of its model a task takes before it fails.
+	MaxTurns int `envconfig:"MAX_TURNS" default:"200"`
+	// ShellTimeout is the longest a shell command of the model's runs.
+	ShellTimeout time.Duration `envconfig:"SHELL_TIMEOUT" default:"10m"`
+}
+
+// LoadAgent reads the agent's configuration from the environment.
+func LoadAgent() (Agent, error) {
+	var c Agent
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return Agent{}, fmt.Errorf("reading the agent's configuration from the COBRANCH_ variables: %w", err)
+	}
+	var missing []string
+	for name, value := range map[string]bool{"REST_URL": c.REST.URL != nil, "TOKEN_FILE": c.TokenFile != "", "MODEL_PROVIDER": c.ModelProvider != "",
+		"MODEL": c.Model != "", "MODEL_KEY_FILE": c.ModelKeyFile != ""} {
+		if !value {
+			missing = append(missing, Prefix+"_"+name)
+		}
+	}
+	if len(missing) > 0 {
+		slices.Sort(missing)
+		return Agent{}, fmt.Errorf("the agent takes %s", strings.Join(missing, ", "))
+	}
+	if c.ModelMaxTokens < 1 || c.MaxTurns < 1 || c.ShellTimeout <= 0 {
+		return Agent{}, errors.New("COBRANCH_MODEL_MAX_TOKENS, COBRANCH_MAX_TURNS and COBRANCH_SHELL_TIMEOUT are more than 0")
 	}
 	return c, nil
 }

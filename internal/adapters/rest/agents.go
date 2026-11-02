@@ -25,7 +25,7 @@ type Agents interface {
 	Task(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64) (agents.Task, error)
 	Assign(ctx context.Context, v agents.Viewer, orgID, agentID uuid.UUID, in agents.TaskInput) (agents.Task, error)
 	CancelTask(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number, version int64) (agents.Task, error)
-	Work(ctx context.Context, v agents.Viewer) (agents.Task, string, error)
+	Work(ctx context.Context, v agents.Viewer) (agents.Work, error)
 	Transcript(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, after, limit int) ([]agents.Entry, error)
 	Append(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, e agents.Entry) (agents.Entry, bool, error)
 }

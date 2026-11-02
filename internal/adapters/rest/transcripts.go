@@ -33,12 +33,12 @@ func transcriptPath(org string, number int64, seq int) string {
 // to that task; any other request finds it as agentOrg does.
 func (a api) transcriptOrg(ctx context.Context, slug string) (agents.Viewer, uuid.UUID, string, error) {
 	if who, ok := auth.Viewer(ctx); ok && who.Credential.Kind == auth.CredentialTaskToken {
-		t, own, err := a.agents.Work(ctx, who.User)
+		w, err := a.agents.Work(ctx, who.User)
 		if err != nil {
 			return agents.Viewer{}, uuid.Nil, "", fail(err, "task")
 		}
-		if own == slug {
-			return who.User, t.OrgID, own, nil
+		if w.OrgSlug == slug {
+			return who.User, w.Task.OrgID, w.OrgSlug, nil
 		}
 	}
 	return a.agentOrg(ctx, slug)
@@ -50,11 +50,11 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 	if err != nil {
 		return nil, err
 	}
-	t, slug, err := a.agents.Work(ctx, v)
+	w, err := a.agents.Work(ctx, v)
 	if err != nil {
 		return nil, fail(err, "task")
 	}
-	return GetMyTask200JSONResponse{Organization: slug, Task: task(t)}, nil
+	return GetMyTask200JSONResponse{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions}, nil
 }
 
 // ListTranscript lists a page of the entries of one of the organization's tasks, in order.

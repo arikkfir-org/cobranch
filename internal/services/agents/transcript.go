@@ -127,21 +127,29 @@ func working(ctx context.Context, v Viewer) (uuid.UUID, bool) {
 	return a.Credential.Task.ID, true
 }
 
-// Work answers the task the request's task token works, with its organization's slug, for the harness to start from;
-// auth.ErrForbidden for any other credential.
-func (s *Service) Work(ctx context.Context, v Viewer) (Task, string, error) {
+// Work is a task as its harness starts from it: the task, its organization's slug, which the harness's calls name, and
+// its agent's standing instructions.
+type Work struct {
+	Task              Task
+	OrgSlug           string
+	AgentInstructions string
+}
+
+// Work answers the task the request's task token works, for the harness to start from; auth.ErrForbidden for any
+// other credential.
+func (s *Service) Work(ctx context.Context, v Viewer) (Work, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Work")
 	defer span.End()
 	id, ok := working(ctx, v)
 	if !ok {
-		return Task{}, "", failed(span, "finding the task", fmt.Errorf("%w: only a task token works a task", auth.ErrForbidden))
+		return Work{}, failed(span, "finding the task", fmt.Errorf("%w: only a task token works a task", auth.ErrForbidden))
 	}
-	t, slug, err := s.store.TaskByID(ctx, id)
+	w, err := s.store.TaskByID(ctx, id)
 	if err != nil {
-		return Task{}, "", failed(span, "finding the task", err)
+		return Work{}, failed(span, "finding the task", err)
 	}
-	span.SetAttributes(attribute.String("cobranch.org.id", t.OrgID.String()), attribute.Int64("cobranch.task.number", t.Number))
-	return t, slug, nil
+	span.SetAttributes(attribute.String("cobranch.org.id", w.Task.OrgID.String()), attribute.Int64("cobranch.task.number", w.Task.Number))
+	return w, nil
 }
 
 // readable finds one of the organization's tasks whose transcript v reads: the task's own token reads it; others take

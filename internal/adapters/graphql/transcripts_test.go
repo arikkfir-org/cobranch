@@ -41,8 +41,8 @@ func appended(n int, document func(*orgFixture) string) func(*orgFixture) string
 func TestTranscriptQueries(t *testing.T) {
 	transcript := ofAcme(`task(number: 1) { organizationId transcript(after: 1, first: 1) { seq kind body } }`)
 	runOrgCases(t, []orgCase{
-		{name: "my task", viewer: working(2), document: fixed(`{ myTask { organization task { number title } } }`),
-			want: []string{`"myTask":{"organization":"acme","task":{"number":2,"title":"Fix the login"}}`}},
+		{name: "my task", viewer: working(2), document: fixed(`{ myTask { organization task { number title } agentInstructions } }`),
+			want: []string{`"myTask":{"organization":"acme","task":{"number":2,"title":"Fix the login"},"agentInstructions":"Be brief."}`}},
 		{name: "my task as a person", viewer: maxim, document: fixed(`{ myTask { organization } }`), wantCode: "FORBIDDEN"},
 		{name: "a page of the transcript as its assigner", viewer: maxim, document: appended(3, transcript),
 			want: []string{`"transcript":[{"seq":2,"kind":"TURN","body":{"n":12345678901234567890,"text":"Hm"}}]`}},

@@ -1,0 +1,264 @@
+package workspace
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"path"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"unicode/utf8"
+)
+
+// Limits of the file tools.
+const (
+	maxListed   = 1000
+	maxDepth    = 5
+	defaultRead = 2000
+	// maxLine is the most of a line read_file shows; the rest is cut.
+	maxLine = 2000
+	// maxEdited is the largest file edit_file reads whole.
+	maxEdited = 8 << 20
+	// sniffed is how much of a file's start is looked at to tell text from binary.
+	sniffed = 8 << 10
+)
+
+var listSpec = spec("list_files", "Lists the files and directories under a directory of the workspace, directories ending in /, "+
+	"to a depth (2 unless given, 5 at most); .git's insides are left out.",
+	`"path":{"type":"string","description":"The directory, relative to the workspace; the workspace itself unless given"},`+
+		`"depth":{"type":"integer","description":"How many levels to list, 1 to 5"}`)
+
+type listArgs struct {
+	Path  string `json:"path"`
+	Depth int    `json:"depth"`
+}
+
+// list lists the entries under a directory, to a depth.
+func (w *Workspace) list(_ context.Context, a listArgs) (string, error) {
+	dir, err := w.rel(a.Path)
+	if err != nil {
+		return "", err
+	}
+	depth := a.Depth
+	if depth <= 0 {
+		depth = 2
+	}
+	depth = min(depth, maxDepth)
+	var lines []string
+	more := 0
+	err = fs.WalkDir(w.root.FS(), dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == dir {
+			return err
+		}
+		name := strings.TrimPrefix(p, dir+"/")
+		if dir == "." {
+			name = p
+		}
+		if d.IsDir() {
+			name += "/"
+		}
+		if len(lines) < maxListed {
+			lines = append(lines, name)
+		} else {
+			more++
+		}
+		if d.IsDir() && (d.Name() == ".git" || strings.Count(name, "/") >= depth) {
+			return fs.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		return "", fmt.Errorf("listing %s: %w", dir, err)
+	}
+	if more > 0 {
+		lines = append(lines, "["+strconv.Itoa(more)+" more left out: list a directory beneath]")
+	}
+	if len(lines) == 0 {
+		return "(empty)", nil
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+var readSpec = spec("read_file", "Reads a text file of the workspace, its lines numbered for reference: the numbers and the tab after them "+
+	"are not part of the file. 2000 lines unless given, each cut at 2000 bytes; read on from a line with offset.",
+	`"path":{"type":"string","description":"The file, relative to the workspace"},`+
+		`"offset":{"type":"integer","description":"The first line to read, from 1"},`+
+		`"limit":{"type":"integer","description":"How many lines to read"}`, "path")
+
+type readArgs struct {
+	Path   string `json:"path"`
+	Offset int    `json:"offset"`
+	Limit  int    `json:"limit"`
+}
+
+// read reads lines of a text file, numbered. It reads the file as it goes, keeping only the lines it shows, each cut at
+// maxLine bytes, so a file of any size costs no more than that; the rest of it is only counted.
+func (w *Workspace) read(_ context.Context, a readArgs) (string, error) {
+	file, err := w.rel(a.Path)
+	if err != nil {
+		return "", err
+	}
+	f, err := w.root.Open(file)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	defer func() { _ = f.Close() }() // only read
+	r := bufio.NewReaderSize(f, sniffed)
+	head, err := r.Peek(sniffed)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	if binary(head) {
+		return "", fmt.Errorf("%s is binary, not text", file)
+	}
+	first, limit := max(a.Offset, 1), a.Limit
+	if limit <= 0 {
+		limit = defaultRead
+	}
+	var b strings.Builder
+	n := 0
+	for ; ; n++ {
+		keep := 0
+		if n+1 >= first && n+1 < first+limit {
+			keep = maxLine + utf8.UTFMax
+		}
+		line, ok, err := nextLine(r, keep)
+		if err != nil {
+			return "", fmt.Errorf("reading %s: %w", file, err)
+		}
+		if !ok {
+			break
+		}
+		if keep > 0 {
+			b.WriteString(fmt.Sprintf("%6d\t%s", n+1, cut(line, maxLine)) + "\n")
+		}
+	}
+	switch last := first - 1 + limit; {
+	case n == 0:
+		return "(empty file)", nil
+	case first > n:
+		return "", fmt.Errorf("%s has %d lines", file, n)
+	case last < n:
+		b.WriteString("[" + strconv.Itoa(n-last) + " more lines: read on from line " + strconv.Itoa(last+1) + "]\n")
+	}
+	return b.String(), nil
+}
+
+// nextLine reads r's next line, and answers its first keep bytes without its newline; ok is false past r's last line.
+func nextLine(r *bufio.Reader, keep int) (string, bool, error) {
+	var kept []byte
+	read := false
+	for {
+		chunk, err := r.ReadSlice('\n')
+		read = read || len(chunk) > 0
+		kept = append(kept, chunk[:min(len(chunk), keep-len(kept))]...)
+		switch {
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			return strings.TrimSuffix(string(kept), "\n"), read, nil
+		case err != nil:
+			return "", false, fmt.Errorf("reading a line: %w", err)
+		}
+		return strings.TrimSuffix(string(kept), "\n"), true, nil
+	}
+}
+
+// text reads a text file of the workspace whole, and answers its path relative to it; a file over maxEdited it refuses.
+func (w *Workspace) text(p string) ([]byte, string, error) {
+	file, err := w.rel(p)
+	if err != nil {
+		return nil, "", err
+	}
+	info, err := w.root.Stat(file)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	if info.Size() > maxEdited {
+		return nil, "", fmt.Errorf("%s holds %d bytes, over the %d MiB edit_file takes: change it with shell", file, info.Size(), maxEdited>>20)
+	}
+	data, err := w.root.ReadFile(file)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	if binary(data) {
+		return nil, "", fmt.Errorf("%s is binary, not text", file)
+	}
+	return data, file, nil
+}
+
+// binary reports whether data, a file's, looks binary: a NUL byte near its start.
+func binary(data []byte) bool {
+	return bytes.IndexByte(data[:min(len(data), sniffed)], 0) >= 0
+}
+
+var writeSpec = spec("write_file", "Writes a file of the workspace whole, creating it and its directories as needed, or replacing what it held.",
+	`"path":{"type":"string","description":"The file, relative to the workspace"},`+
+		`"content":{"type":"string","description":"What the file holds"}`, "path", "content")
+
+type writeArgs struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// write writes a file whole.
+func (w *Workspace) write(_ context.Context, a writeArgs) (string, error) {
+	file, err := w.rel(a.Path)
+	if err != nil {
+		return "", err
+	}
+	if dir := path.Dir(filepath.ToSlash(file)); dir != "." {
+		if err := w.root.MkdirAll(dir, 0o755); err != nil {
+			return "", fmt.Errorf("making %s: %w", dir, err)
+		}
+	}
+	if err := w.root.WriteFile(file, []byte(a.Content), 0o644); err != nil {
+		return "", fmt.Errorf("writing %s: %w", file, err)
+	}
+	return "Wrote " + strconv.Itoa(len(a.Content)) + " bytes to " + file + ".", nil
+}
+
+var editSpec = spec("edit_file", "Replaces text in a file of the workspace: old must occur exactly once, unless all is set, which "+
+	"replaces every occurrence. Give old with enough of the lines around it to be unique, without read_file's line numbers.",
+	`"path":{"type":"string","description":"The file, relative to the workspace"},`+
+		`"old":{"type":"string","description":"The text to replace, exactly as the file holds it"},`+
+		`"new":{"type":"string","description":"The text to put in its place"},`+
+		`"all":{"type":"boolean","description":"Replace every occurrence of old"}`, "path", "old", "new")
+
+type editArgs struct {
+	Path string `json:"path"`
+	Old  string `json:"old"`
+	New  string `json:"new"`
+	All  bool   `json:"all"`
+}
+
+// edit replaces text in a file, keeping its mode.
+func (w *Workspace) edit(_ context.Context, a editArgs) (string, error) {
+	if a.Old == "" {
+		return "", errors.New("old is empty: give the text to replace, or write the file whole")
+	}
+	data, file, err := w.text(a.Path)
+	if err != nil {
+		return "", err
+	}
+	n := strings.Count(string(data), a.Old)
+	switch {
+	case n == 0:
+		return "", fmt.Errorf("%s doesn't hold old", file)
+	case n > 1 && !a.All:
+		return "", fmt.Errorf("%s holds old %d times: give more of the lines around it, or set all", file, n)
+	}
+	info, err := w.root.Stat(file)
+	if err != nil {
+		return "", fmt.Errorf("reading %s's mode: %w", file, err)
+	}
+	if err := w.root.WriteFile(file, []byte(strings.ReplaceAll(string(data), a.Old, a.New)), info.Mode().Perm()); err != nil {
+		return "", fmt.Errorf("writing %s: %w", file, err)
+	}
+	return "Replaced " + strconv.Itoa(n) + " of old in " + file + ".", nil
+}

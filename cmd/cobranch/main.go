@@ -15,7 +15,7 @@ import (
 	"cobranch.dev/internal/system/buildinfo"
 )
 
-const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | admin-server | git-server | push-worker | git-hook | controller | checkout | maintenance | render"
+const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | admin-server | git-server | push-worker | git-hook | controller | checkout | maintenance | agent | render"
 
 // telemetryFlushTimeout bounds how long a workload waits, as it exits, for its last spans to be exported.
 const telemetryFlushTimeout = 5 * time.Second
@@ -57,6 +57,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		err = runController(ctx, stdout)
 	case "checkout":
 		err = runCheckout(ctx, stderr)
+	case "agent":
+		err = runAgent(ctx, stdout)
 	case "git-hook":
 		// Git runs the hook with the client's push on stdin, and shows its stderr to the client.
 		return runGitHook(ctx, os.Stdin, stderr)

@@ -269,15 +269,16 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 	return s.tasks[i], nil
 }
 
-// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs.
-func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Task, string, error) {
+// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs and its agent's instructions.
+func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Work, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	i := slices.IndexFunc(s.tasks, func(t agents.Task) bool { return t.ID == id })
 	if i < 0 {
-		return agents.Task{}, "", orgs.ErrNotFound
+		return agents.Work{}, orgs.ErrNotFound
 	}
-	return s.tasks[i], s.OrgSlugs[s.tasks[i].OrgID], nil
+	t := s.tasks[i]
+	return agents.Work{Task: t, OrgSlug: s.OrgSlugs[t.OrgID], AgentInstructions: s.agents[t.Agent.ID].Instructions}, nil
 }
 
 // Entries lists at most limit of a task's entries numbered above after.
