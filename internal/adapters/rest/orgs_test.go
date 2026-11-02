@@ -13,6 +13,8 @@ import (
 
 	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
+	"cobranch.dev/internal/services/chats/chatstest"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/git"
@@ -50,6 +52,9 @@ type orgFixture struct {
 	push             code.Push
 	issueStore       *issuestest.Store
 	issues           *issues.Service
+	chatStore        *chatstest.Store
+	notifier         *chatstest.Notifier
+	chats            *chats.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -104,11 +109,9 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	})
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.addChats()
 	f.commitObjects()
-	f.issueStore = issuestest.NewStore(store)
-	f.issueStore.Repos[f.website.ID] = f.website
-	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
-	f.issues.SetClock(func() time.Time { return now })
+	f.addIssues()
 	return f
 }
 
@@ -131,6 +134,29 @@ func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 }
 
+// addIssues gives the fixture the issues' service, over a store that knows website.
+func (f *orgFixture) addIssues() {
+	f.issueStore = issuestest.NewStore(f.store)
+	f.issueStore.Repos[f.website.ID] = f.website
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
+	f.issues.SetClock(func() time.Time { return now })
+}
+
+// addChats gives the fixture the chats' service, over a store that knows the people, website's commits and the chat of
+// its feature/login branch, at c.
+func (f *orgFixture) addChats() {
+	f.chatStore, f.notifier = chatstest.NewStore(), &chatstest.Notifier{}
+	f.chatStore.Now = now
+	for _, v := range []auth.Authenticated{f.olivia, f.max, f.nia} {
+		f.chatStore.Names[v.User.ID] = v.User.DisplayName
+	}
+	for _, letter := range []string{"a", "b", "c", "d"} {
+		f.chatStore.AddCommit(f.website.ID, shaOf(letter))
+	}
+	f.chatStore.SetBranch(chats.Subject{OrgID: f.acme.ID, RepoID: f.website.ID, Branch: "feature/login", Head: shaOf("c"), Org: "acme", Repo: "website"})
+	f.chats = chats.NewService(f.chatStore, f.notifier, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
+}
+
 // shaOf is the object name of 40 letter's.
 func shaOf(letter string) string { return strings.Repeat(letter, 40) }
 
@@ -149,7 +175,7 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
 	return rec
 }
 

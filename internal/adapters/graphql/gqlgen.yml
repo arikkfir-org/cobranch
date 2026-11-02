@@ -73,5 +73,6 @@ models:
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }
+      chat: { resolver: true }
       branchDiff: { resolver: true }
       commitDiff: { resolver: true }
