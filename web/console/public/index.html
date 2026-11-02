@@ -223,6 +223,7 @@
     .tone-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); }
     .tone-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); }
     .tone-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); }
+    .tone-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); }
     .tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); }
     .badge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px 1px 6px; border-radius: 999px; border: 1px solid var(--tone-border);
       background: var(--tone-bg); color: var(--tone-fg); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; }
@@ -232,6 +233,16 @@
     .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
     .annotations td { vertical-align: top; }
     .annotations td.state { width: 1%; white-space: nowrap; }
+    .reviews { list-style: none; margin: 0; padding: 0; display: grid; }
+    .reviews li { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--color-border-default); min-width: 0; }
+    .reviews li:first-child { border-top: 0; }
+    .reviews li.earlier { opacity: 0.7; }
+    .reviews .who { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    form.review .states { display: flex; gap: 6px 16px; flex-wrap: wrap; border: 0; margin: 0; padding: 0; }
+    form.review .states label { display: flex; gap: 6px; align-items: center; font-weight: 400; }
+    form.review .states input { width: auto; }
+    form.review textarea { min-height: 96px; resize: vertical; }
+    form.review .row { justify-content: flex-start; }
     .branches td.counts { white-space: nowrap; }
     .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .title h2 code { font-size: 18px; overflow-wrap: anywhere; }
@@ -666,6 +677,9 @@
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
       "trash-2": '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+      "badge-check": '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/>',
+      "circle-alert": '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>',
+      "message-square": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
     };
     // The branch statuses as the design system draws them, the same way.
     const branchStatuses = {
@@ -674,6 +688,12 @@
       empty: { word: "Empty", icon: "circle-dashed", tone: "neutral" },
       merged: { word: "Merged", icon: "git-merge", tone: "inverse" },
       ready: { word: "Ready", icon: "circle-check", tone: "success" },
+    };
+    // The review states as the design system draws them, the same way.
+    const reviewStates = {
+      approved: { word: "Approved", icon: "badge-check", tone: "success" },
+      changes_requested: { word: "Changes requested", icon: "circle-alert", tone: "warning" },
+      neutral: { word: "Neutral", icon: "message-square", tone: "neutral" },
     };
     // icon draws one of iconPaths' icons, labelled for screen readers when label says what it means alone.
     function icon(name, label) {
@@ -689,6 +709,11 @@
     // branchBadge is a branch's status as a badge, as annotationBadge draws an annotation's.
     function branchBadge(status) {
       const s = branchStatuses[status];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // reviewBadge is a review's state as a badge, the same way.
+    function reviewBadge(state) {
+      const s = reviewStates[state];
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
@@ -1085,22 +1110,28 @@
       const main = branches.find((b) => b.name === "main");
       const others = branches.filter((b) => b.name !== "main" && b.requirements);
       const needs = (r) => [...r.annotations.map((n) => h("li", {}, "Annotation ", h("code", {}, n), " Successful on its head")),
-        r.linearHistory ? h("li", {}, "No merge commit among its commits to merge") : null];
-      const named = (b) => h("li", {}, h("code", {}, b.name), ": ", [...b.requirements.annotations.map((n) => h("code", {}, n)), b.requirements.linearHistory ? "linear history" : null]
-        .filter(Boolean).flatMap((x, i) => i ? [", ", x] : [x]), b.requirements.annotations.length || b.requirements.linearHistory ? null : "named, with no requirements");
+        r.linearHistory ? h("li", {}, "No merge commit among its commits to merge") : null,
+        r.reviews && r.reviews.approvals ? h("li", {}, plural(r.reviews.approvals, "approval"), " of its head, by people other than its author and its pusher") : null,
+        r.reviews ? h("li", {}, "No reviewer whose latest review of its head requests changes") : null];
+      const named = (b) => {
+        const r = b.requirements;
+        const parts = [...r.annotations.map((n) => h("code", {}, n)), r.linearHistory ? "linear history" : null,
+          r.reviews ? (r.reviews.approvals ? plural(r.reviews.approvals, "approval") : "reviews") : null].filter(Boolean);
+        return h("li", {}, h("code", {}, b.name), ": ", parts.length ? parts.flatMap((x, i) => i ? [", ", x] : [x]) : "named, with no requirements");
+      };
       const file = () => h("code", {}, "/cobranch.yaml");
       return h("section", { class: "panel" }, h("h3", {}, "Merge requirements"),
         h("p", {}, "A branch merges into ", h("code", {}, "main"), " once it is up to date with it", main && main.requirements ? ", and needs:" : "."),
         main && main.requirements ? [h("ul", {}, needs(main.requirements)),
           h("p", {}, "A push into ", h("code", {}, "main"), " brings only Ready branches' commits; a principal holding ", h("code", {}, "repo.bypass"), " pushes past.")] : null,
-        main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations or linear history."),
+        main && main.requirements ? null : h("p", {}, "Name ", h("code", {}, "main"), " under ", h("code", {}, "branches"), " in ", file(), ", pushed to ", h("code", {}, "main"), ", to require annotations, linear history or approvals."),
         others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
     // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, and the
-    // annotations on its head. main's page names what merges into it need instead, and a branch that isn't live any
-    // more, its deletion.
+    // reviews and annotations of its head. main's page names what merges into it need instead, and a branch that isn't
+    // live any more, its deletion.
     async function repositoryBranch(path, at, name, can, fail) {
       let b;
       try {
@@ -1116,7 +1147,7 @@
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
-      if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail));
+      if (b.commit) sections.push(commitReviews(path, b.commit, can, fail), commitAnnotations(path, b.commit, can, fail));
       return sections;
     }
 
@@ -1133,14 +1164,15 @@
       if (reason) panel.append(h("div", { class: "why tone-" + s.tone }, icon(s.icon), h("p", {}, h("strong", {}, s.word + ": "), reason)));
       const items = b.checks.map((c) => checkItem(b, c));
       if (!b.checks.some((c) => c.kind === "linear_history")) items.push(checkLine("circle", "neutral", "Linear history", "Not required"));
+      if (!b.requirements || !b.requirements.reviews) items.push(checkLine("circle", "neutral", "Approvals", "Not required"));
       panel.append(h("ul", { class: "checks" }, items));
       return panel;
     }
     // checkLine is a line of a branch's merge requirements: an icon in its tone, what is required, and how it stands.
     const checkLine = (iconName, tone, label, detail) => h("li", {}, h("span", { class: "tone-" + tone }, icon(iconName)), h("span", {}, label), h("span", { class: "detail" }, detail));
     const plural = (n, word) => n + " " + word + (n === 1 ? "" : "s");
-    // checkItem is one of b's checks as a line: a required annotation as it stands on b's head, linear history, and
-    // being up to date with b's base.
+    // checkItem is one of b's checks as a line: a required annotation as it stands on b's head, linear history, the
+    // approvals of b's head and each reviewer requesting changes of it, and being up to date with b's base.
     function checkItem(b, c) {
       const on = " on " + shortSha(b.head);
       const met = c.met ? ["circle-check", "success"] : ["circle-x", "danger"];
@@ -1151,6 +1183,8 @@
         return checkLine(s.icon, s.tone, label, s.word + on);
       }
       if (c.kind === "linear_history") return checkLine(...met, "Linear history", c.met ? "No merge commits" : c.count ? plural(c.count, "merge commit") : "Not worked out yet");
+      if (c.kind === "approvals") return checkLine(...met, "Approvals", c.count + " of " + c.required + on);
+      if (c.kind === "changes_requested") return checkLine("circle-alert", "warning", [c.name, " requested changes"], "On " + shortSha(b.head));
       return checkLine(...met, ["Up to date with ", h("code", {}, b.base)], plural(c.count, "commit") + " behind");
     }
     // whyNot says, in a line, what holds b back when it is Blocked or Processing: the first requirement it fails, or
@@ -1165,6 +1199,8 @@
       if (!c) return null;
       if (c.kind === "annotation") return [h("code", {}, c.name), c.status ? " failed on its head." : " isn't on its head yet."];
       if (c.kind === "linear_history") return [h("code", {}, b.base), " requires linear history, and ", c.count ? plural(c.count, "merge commit") : "a merge commit", " is among its commits."];
+      if (c.kind === "approvals") return [h("code", {}, b.base), " requires ", plural(c.required, "approval"), " of its head, and it has ", c.count ? c.count : "none", "."];
+      if (c.kind === "changes_requested") return [c.name, " requested changes on its head."];
       return ["It is ", plural(c.count, "commit"), " behind ", h("code", {}, b.base), ": bring it up to date."];
     }
 
@@ -1298,7 +1334,51 @@
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
         h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
-        commitAnnotations(path, c, can, fail)];
+        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail)];
+    }
+
+    // commitReviews lists a commit's reviews: each reviewer's latest, the one that counts, in the order they first
+    // reviewed it, with their earlier ones folded beneath; and, for a viewer holding reviews.submit, a form to submit one.
+    function commitReviews(path, c, can, fail) {
+      const latest = [];
+      for (const r of c.reviews) {
+        const i = r.reviewer ? latest.findIndex((l) => l.reviewer && l.reviewer.id === r.reviewer.id) : -1;
+        if (i >= 0) latest[i] = r;
+        else latest.push(r);
+      }
+      const earlier = c.reviews.filter((r) => !latest.includes(r)).reverse();
+      const item = (r, cls) => h("li", { class: cls || null },
+        h("div", { class: "who" }, reviewBadge(r.state), h("strong", {}, r.reviewer ? r.reviewer.displayName : "A principal since gone"),
+          r.person ? null : h("span", { class: "chip", title: "Only people's approvals count towards required approvals" }, "not a person"),
+          h("span", { class: "muted" }, whenExactly(r.submittedAt))),
+        r.body ? h("pre", { class: "message" }, r.body) : null);
+      const panel = h("section", { class: "panel" }, h("h3", {}, "Reviews"));
+      if (!c.reviews.length) panel.append(h("p", {}, "No reviews yet."));
+      else panel.append(h("ul", { class: "reviews" }, latest.map((r) => item(r))));
+      if (earlier.length) panel.append(h("details", {}, h("summary", { class: "muted" }, plural(earlier.length, "earlier review")),
+        h("ul", { class: "reviews" }, earlier.map((r) => item(r, "earlier")))));
+      if (can("reviews.submit")) panel.append(reviewForm(path, c, fail));
+      return panel;
+    }
+
+    // reviewForm submits the viewer's review of commit c: Approve, Request changes or Comment, with what they write. A
+    // review is never changed: submitting another replaces the viewer's verdict on c.
+    function reviewForm(path, c, fail) {
+      const states = [["approved", "Approve"], ["changes_requested", "Request changes"], ["neutral", "Comment"]];
+      const body = h("textarea", { name: "body", maxlength: "65536", placeholder: "What you found, in Markdown" });
+      const button = h("button", { class: "button primary", type: "submit" }, "Submit review");
+      const submit = (e) => {
+        e.preventDefault();
+        const state = new FormData(e.target).get("state");
+        button.disabled = true;
+        api("POST", path + "/commits/" + c.sha + "/reviews", { state, body: body.value })
+          .then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      return h("form", { class: "review", onsubmit: submit },
+        h("label", {}, "Your review of " + shortSha(c.sha), body),
+        h("fieldset", { class: "states" }, h("legend", { class: "muted" }, "Verdict"),
+          states.map(([value, label], i) => h("label", {}, h("input", { type: "radio", name: "state", value, checked: i === 2, required: true }), label))),
+        h("div", { class: "row" }, button));
     }
 
     // commitAnnotations lists a commit's annotations, by name, with their status, summary, link, principal and run.

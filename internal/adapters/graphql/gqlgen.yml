@@ -46,6 +46,7 @@ models:
       deletedBranch: { resolver: true }
       history: { resolver: true }
       commit: { resolver: true }
+      review: { resolver: true }
       tags: { resolver: true }
       tree: { resolver: true }
       blob: { resolver: true }

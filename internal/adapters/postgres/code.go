@@ -16,8 +16,8 @@ import (
 )
 
 // CodeStore reads what pushes recorded of repositories' code (db/migrations/00012_git.sql) and keeps the annotations
-// principals set on its commits (db/migrations/00015_annotations.sql): code.Store on PostgreSQL, through the queries
-// sqlc generates from db/queries.
+// principals set on its commits (db/migrations/00015_annotations.sql) and the reviews they submit of them
+// (db/migrations/00023_reviews.sql): code.Store on PostgreSQL, through the queries sqlc generates from db/queries.
 type CodeStore struct {
 	pool *pgxpool.Pool
 	q    *queries.Queries
@@ -115,6 +115,9 @@ func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
 	b := code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 	if r.LinearHistory != nil {
 		b.Requirements = &git.Requirements{Branch: r.Name, Annotations: r.RequiredAnnotations, LinearHistory: *r.LinearHistory}
+		if r.RequiredApprovals != nil {
+			b.Requirements.Reviews = &git.ReviewRequirements{Approvals: int(*r.RequiredApprovals)}
+		}
 	}
 	if r.MergedHead != nil && r.MergedAt != nil {
 		b.Merge = &code.Merge{Head: *r.MergedHead, At: *r.MergedAt}
@@ -169,7 +172,8 @@ func (s *CodeStore) Slugs(ctx context.Context, repoID uuid.UUID) (org, repo stri
 	return row.Org, row.Repo, nil
 }
 
-// CommitsAt finds those of the repository's commits that shas name, with their annotations, by name (code.Store).
+// CommitsAt finds those of the repository's commits that shas name, with their annotations, by name, and their reviews
+// (code.Store).
 func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
 	if len(shas) == 0 {
 		return nil, nil
@@ -182,17 +186,21 @@ func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []stri
 	if err != nil {
 		return nil, err
 	}
+	reviews, err := reviewsAt(ctx, s.q, repoID, shas)
+	if err != nil {
+		return nil, err
+	}
 	out := make(map[string]code.Commit, len(rows))
 	for _, r := range rows {
 		c := commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName)
-		c.Annotations = annotations[c.SHA]
+		c.Annotations, c.Reviews = annotations[c.SHA], reviews[c.SHA]
 		out[r.Commit.Sha] = c
 	}
 	return out, nil
 }
 
 // FirstParents lists at most limit of the repository's commits from sha along first parents, nearest first, with
-// their annotations (code.Store).
+// their annotations and reviews (code.Store).
 func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]code.Commit, error) {
 	rows, err := s.q.FirstParents(ctx, repoID, sha, int32(min(limit, code.MaxPageSize+1)))
 	if err != nil {
@@ -206,10 +214,14 @@ func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha stri
 	if err != nil {
 		return nil, err
 	}
+	reviews, err := reviewsAt(ctx, s.q, repoID, shas)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]code.Commit, 0, len(rows))
 	for _, r := range rows {
 		c := commitOf(r.Commit, r.AuthorDisplayName, r.CommitterDisplayName)
-		c.Annotations = annotations[c.SHA]
+		c.Annotations, c.Reviews = annotations[c.SHA], reviews[c.SHA]
 		out = append(out, c)
 	}
 	return out, nil

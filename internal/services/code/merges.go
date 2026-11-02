@@ -89,6 +89,10 @@ func blockedBy(b Incoming) string {
 			return "its merge commits aren't counted yet"
 		case c.Kind == CheckLinearHistory:
 			return plural(c.Count, "merge commit") + " among its commits"
+		case c.Kind == CheckApprovals:
+			return fmt.Sprintf("%s of %d on %s", plural(c.Count, "approval"), c.Required, short)
+		case c.Kind == CheckChangesRequested:
+			return c.Name + " requested changes on " + short
 		case c.Kind == CheckUpToDate:
 			return "it is " + plural(c.Count, "commit") + " behind " + b.Base
 		}
