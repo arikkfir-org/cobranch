@@ -22,8 +22,10 @@ type ChatThread {
   id: ID!
   "Where it points: lines of a file at a commit; null for none."
   anchor: ChatAnchor
-  "Whether the branch has moved on from the commit its anchor names; false without an anchor."
+  "Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit the review reviewed, whose diff it may anchor at its base; false without an anchor."
   outdated: Boolean!
+  "The review the thread is a comment of, which opened it; null for a thread started in the chat, and once its review is gone."
+  reviewId: ID
   "Who started it; null once they are gone."
   startedBy: CommitPrincipal
   createdAt: Time!

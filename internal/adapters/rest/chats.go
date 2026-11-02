@@ -41,7 +41,7 @@ const maxWait = 15 * time.Second
 
 func chatThread(t chats.Thread) ChatThread {
 	out := ChatThread{Id: t.ID, Outdated: t.Outdated, StartedBy: principal(t.StartedBy), CreatedAt: t.CreatedAt.UTC(),
-		ResolvedBy: principal(t.ResolvedBy), Version: t.Version}
+		ResolvedBy: principal(t.ResolvedBy), Version: t.Version, ReviewId: t.ReviewID}
 	if a := t.Anchor; a != nil {
 		out.Anchor = &ChatAnchor{Sha: a.SHA, Path: a.Path, StartLine: a.StartLine, EndLine: a.EndLine}
 	}

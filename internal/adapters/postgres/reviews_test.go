@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
 )
@@ -110,5 +111,59 @@ func TestCodeStoreReviewsPages(t *testing.T) {
 				t.Errorf("Reviews(d) = %v, %v; want %v", found, err, tt.want)
 			}
 		})
+	}
+}
+
+func TestCodeStoreReviewComments(t *testing.T) {
+	t.Parallel()
+	f := newChatFixture(t)
+	ctx := context.Background()
+	in := code.ReviewInput{State: code.ReviewChangesRequested, Branch: "feature", Comments: []code.ReviewComment{
+		{Anchor: code.Anchor{SHA: shaC, Path: "src/main.go", StartLine: 3, EndLine: 5}, Body: "Rename *this*"},
+		{Anchor: code.Anchor{SHA: shaA, Path: "README.md", StartLine: 1, EndLine: 1}, Body: "Typo"},
+	}}
+	review, err := f.c.SubmitReview(ctx, f.max, f.website.ID, shaC, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	threads, _, err := f.s.Threads(ctx, f.feature, uuid.Nil, 10)
+	if err != nil || len(threads) != 2 {
+		t.Fatalf("Threads() = %+v, %v; want the review's two comments", threads, err)
+	}
+	for i, th := range threads { // newest first
+		c := in.Comments[len(in.Comments)-1-i]
+		if th.ReviewID == nil || *th.ReviewID != review.ID || th.ReviewedSHA != shaC || th.Anchor == nil || *th.Anchor != c.Anchor || th.StartedBy == nil || th.StartedBy.ID != f.max ||
+			len(th.Messages) != 1 || th.Messages[0].Body != c.Body || th.Messages[0].Author == nil || th.Messages[0].Author.ID != f.max {
+			t.Errorf("thread %d = %+v, want comment %+v of review %s", i, th, c, review.ID)
+		}
+	}
+	if updates, err := f.s.Updates(ctx, f.feature, 0, 10); err != nil || len(updates) != 2 || updates[0].Kind != chats.ThreadStarted ||
+		updates[0].Thread.ID != threads[1].ID || updates[0].Message == nil {
+		t.Errorf("Updates() = %+v, %v; want the two threads started, in order", updates, err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'chat_threads' AND principal_id = $1", f.max); n != 2 {
+		t.Errorf("Max's chat_threads audit rows = %d, want 2", n)
+	}
+
+	// A review that is gone leaves its comments in the chat, with their answers.
+	if _, err := f.pool.Exec(ctx, "DELETE FROM reviews WHERE id = $1", review.ID); err != nil {
+		t.Fatal(err)
+	}
+	if kept, err := f.s.Thread(ctx, f.feature, threads[0].ID); err != nil || kept.ReviewID != nil || kept.ReviewedSHA != "" || len(kept.Messages) != 1 {
+		t.Errorf("Thread() of a review that is gone = %+v, %v; want it kept, of no review", kept, err)
+	}
+
+	// A branch deleted since the service found it refuses the comments, and the review with them.
+	if _, err := f.pool.Exec(ctx, "UPDATE branches SET deleted_at = now() WHERE id = $1", f.feature.BranchID); err != nil {
+		t.Fatal(err)
+	}
+	for _, branch := range []string{"feature", "nowhere"} {
+		in.Branch = branch
+		if _, err := f.c.SubmitReview(ctx, f.max, f.website.ID, shaC, in); !errors.Is(err, chats.ErrBranchDeleted) {
+			t.Errorf("SubmitReview() with comments on %s = %v, want %v", branch, err, chats.ErrBranchDeleted)
+		}
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM reviews WHERE repo_id = $1", f.website.ID); n != 0 {
+		t.Errorf("reviews = %d, want none of the refused", n)
 	}
 }

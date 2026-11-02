@@ -181,8 +181,10 @@ type ChatThread struct {
 	ID string `json:"id"`
 	// Where it points: lines of a file at a commit; null for none.
 	Anchor *ChatAnchor `json:"anchor,omitempty"`
-	// Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	// Whether the branch has moved on from the commit its anchor names, or for a review's comment from the commit the review reviewed, whose diff it may anchor at its base; false without an anchor.
 	Outdated bool `json:"outdated"`
+	// The review the thread is a comment of, which opened it; null for a thread started in the chat, and once its review is gone.
+	ReviewID *string `json:"reviewId,omitempty"`
 	// Who started it; null once they are gone.
 	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
 	CreatedAt time.Time        `json:"createdAt"`
@@ -842,11 +844,22 @@ type Review struct {
 	SubmittedAt time.Time `json:"submittedAt"`
 }
 
+// A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff, or its base's.
+type ReviewCommentInput struct {
+	Anchor *ChatAnchorInput `json:"anchor"`
+	// The comment's Markdown, at most 20,000 characters, not blank.
+	Body string `json:"body"`
+}
+
 // The review a principal submits.
 type ReviewInput struct {
 	State ReviewState `json:"state"`
-	// What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
+	// What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may leave blank.
 	Body string `json:"body"`
+	// The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments needs none.
+	Branch *string `json:"branch,omitempty"`
+	// The review's comments on lines of files, at most 100, each a thread of the branch's chat that the review's transaction opens, anchored there, its first message the comment.
+	Comments []*ReviewCommentInput `json:"comments"`
 }
 
 // The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.

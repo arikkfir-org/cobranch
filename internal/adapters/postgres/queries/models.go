@@ -69,6 +69,7 @@ type ChatThread struct {
 	ResolvedAt *time.Time
 	ResolvedBy *uuid.UUID
 	Version    int64
+	ReviewID   *uuid.UUID
 	IssueID    *uuid.UUID
 }
 
