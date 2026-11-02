@@ -76,11 +76,13 @@ type Namespaces struct {
 	PodSecurity     string                  `envconfig:"JOBS_POD_SECURITY" default:"restricted"`
 	NamespaceLabels JSON[map[string]string] `envconfig:"JOBS_NAMESPACE_LABELS"`
 	// Home is the installation's namespace, ServiceAccount the controller's there, Release the chart's release, whose
-	// servers runs may reach, and RunnerRole the ClusterRole the controller binds itself to in each namespace.
+	// servers runs may reach, RunnerRole the ClusterRole the controller binds itself to in each namespace, and
+	// OwnerRole its own ClusterRole, which owns them.
 	Home           string `envconfig:"JOBS_HOME" required:"true"`
 	ServiceAccount string `envconfig:"JOBS_SERVICE_ACCOUNT" required:"true"`
 	Release        string `envconfig:"JOBS_RELEASE" required:"true"`
 	RunnerRole     string `envconfig:"JOBS_RUNNER_ROLE" required:"true"`
+	OwnerRole      string `envconfig:"JOBS_OWNER_ROLE" required:"true"`
 	// EgressExcept are the address ranges runs may not reach; EgressDNS the NetworkPolicy peers they may ask DNS, on
 	// port 53, any address without them.
 	EgressExcept []string                               `envconfig:"JOBS_EGRESS_EXCEPT"`

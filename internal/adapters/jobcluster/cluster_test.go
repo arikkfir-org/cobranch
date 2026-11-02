@@ -13,11 +13,13 @@ import (
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
 
@@ -34,7 +36,7 @@ var (
 func config() Config {
 	return Config{Prefix: "cobranch-jobs-", Installation: "cobranch-cobranch", PodSecurity: "restricted",
 		Labels: map[string]string{"example.com/team": "ci"}, Home: "cobranch", Controller: "cobranch-controller", Release: "cobranch",
-		RunnerRole: "cobranch-cobranch-jobs-runner", EgressExcept: []string{"10.0.0.0/8", "169.254.169.254/32", "fc00::/7"},
+		RunnerRole: "cobranch-cobranch-jobs-runner", OwnerRole: "cobranch-cobranch-controller", EgressExcept: []string{"10.0.0.0/8", "169.254.169.254/32", "fc00::/7"},
 		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
 			Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")}},
 		Quota: corev1.ResourceList{corev1.ResourcePods: resource.MustParse("10")},
@@ -42,6 +44,15 @@ func config() Config {
 			PodSelector: &metav1.LabelSelector{MatchLabels: map[string]string{"k8s-app": "kube-dns"}}}},
 		NodeSelector: map[string]string{"pool": "ci"}, Tolerations: []corev1.Toleration{{Key: "pool", Operator: corev1.TolerationOpEqual, Value: "ci"}},
 		CheckoutImage: "cobranch:v1"}
+}
+
+// ownerUID is the UID of the installation's controller ClusterRole, which owns the job namespaces.
+const ownerUID = types.UID("6a1e7c52-0000-4000-8000-000000000001")
+
+// installed is a cluster where the installation's controller ClusterRole exists, with objects.
+func installed(objects ...runtime.Object) *fake.Clientset {
+	role := &rbacv1.ClusterRole{ObjectMeta: metav1.ObjectMeta{Name: "cobranch-cobranch-controller", UID: ownerUID}}
+	return fake.NewClientset(append([]runtime.Object{role}, objects...)...)
 }
 
 // writes counts the client's actions that change something.
@@ -57,7 +68,7 @@ func writes(client *fake.Clientset) int {
 
 func TestPrepare(t *testing.T) {
 	ctx := context.Background()
-	client := fake.NewClientset()
+	client := installed()
 	c := New(client, config())
 	if err := c.Prepare(ctx, org); err != nil {
 		t.Fatalf("Prepare() = %v", err)
@@ -70,6 +81,10 @@ func TestPrepare(t *testing.T) {
 		labelOrganization: org.String(), "pod-security.kubernetes.io/enforce": "restricted", "pod-security.kubernetes.io/enforce-version": "latest"}
 	if !maps.Equal(got.Labels, want) {
 		t.Errorf("namespace labels = %v, want %v", got.Labels, want)
+	}
+	owner := metav1.OwnerReference{APIVersion: "rbac.authorization.k8s.io/v1", Kind: "ClusterRole", Name: "cobranch-cobranch-controller", UID: ownerUID}
+	if !slices.EqualFunc(got.OwnerReferences, []metav1.OwnerReference{owner}, ownerEqual) {
+		t.Errorf("namespace owners = %+v, want %+v", got.OwnerReferences, owner)
 	}
 	checkPrepared(t, client)
 	before := writes(client)
@@ -85,6 +100,24 @@ func TestPrepare(t *testing.T) {
 	}
 	if _, err := client.CoreV1().ResourceQuotas(ns).Get(ctx, resourceQuota, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
 		t.Errorf("the quota after the installation dropped it: error = %v, want not found", err)
+	}
+}
+
+// ownerEqual compares owner references, which the controller sets without blockOwnerDeletion or controller.
+func ownerEqual(a, b metav1.OwnerReference) bool {
+	return a.APIVersion == b.APIVersion && a.Kind == b.Kind && a.Name == b.Name && a.UID == b.UID &&
+		a.BlockOwnerDeletion == nil && a.Controller == nil
+}
+
+func TestPrepareWithoutItsOwner(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	err := New(client, config()).Prepare(ctx, org)
+	if err == nil || !strings.Contains(err.Error(), "ClusterRole cobranch-cobranch-controller") {
+		t.Errorf("Prepare() = %v, want the owner named", err)
+	}
+	if n := writes(client); n != 0 {
+		t.Errorf("Prepare() without its owner wrote %d times, want none: a namespace nothing owns would outlive the installation", n)
 	}
 }
 
@@ -130,7 +163,7 @@ func checkPrepared(t *testing.T, client *fake.Clientset) {
 }
 
 func TestPrepareWaitsForItsBinding(t *testing.T) {
-	client := fake.NewClientset()
+	client := installed()
 	refusals := 2
 	client.PrependReactor("patch", "networkpolicies", func(k8stesting.Action) (bool, runtime.Object, error) {
 		if refusals == 0 {
@@ -147,7 +180,7 @@ func TestPrepareWaitsForItsBinding(t *testing.T) {
 func TestPrepareRefusesABadRange(t *testing.T) {
 	cfg := config()
 	cfg.EgressExcept = []string{"10.0.0.0/33"}
-	err := New(fake.NewClientset(), cfg).Prepare(context.Background(), org)
+	err := New(installed(), cfg).Prepare(context.Background(), org)
 	if err == nil || !strings.Contains(err.Error(), `jobs' egress excepts "10.0.0.0/33"`) {
 		t.Errorf("Prepare() = %v, want the range named", err)
 	}

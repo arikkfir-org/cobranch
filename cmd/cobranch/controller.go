@@ -87,7 +87,7 @@ func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) 
 	j := cfg.Jobs
 	cluster := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
 		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
 		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage})
 	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
 		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}

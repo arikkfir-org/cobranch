@@ -63,6 +63,9 @@ type Config struct {
 	// RunnerRole is the ClusterRole each namespace's RoleBinding grants the controller: pods, their logs, Secrets and
 	// the namespace's guards.
 	RunnerRole string
+	// OwnerRole is the controller's own ClusterRole, which every job namespace names as its owner, so that deleting
+	// the installation deletes them.
+	OwnerRole string
 	// EgressExcept are the address ranges the runs may not reach: private, link-local and shared ones, cloud metadata
 	// servers among them.
 	EgressExcept []string

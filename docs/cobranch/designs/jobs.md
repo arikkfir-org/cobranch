@@ -268,7 +268,8 @@ own, with no ingress and egress only to the internet, the cluster's DNS and the 
 ![An organization’s runs execute in a namespace of its own, reaching only the internet, DNS and Cobranch’s servers](jobs/namespace.svg)
 
 The prefix, `<namespace>-jobs-` by default, keeps two installations in one cluster apart; the organization’s ID never
-changes. Runs reach the REST, GraphQL and Git servers’ pods on their port, and nothing else inside the cluster.
+changes. Runs reach the REST, GraphQL and Git servers’ pods on their port, and nothing else inside the cluster. The
+namespace names the installation’s controller ClusterRole as its owner, so uninstalling deletes it.
 
 - **Its name** is the chart's `jobs.namespacePrefix`, the release's namespace and `-jobs-` by default, then the
   organization's ID: `cobranch-jobs-0193a8…`. The prefix keeps two installations in one cluster apart, and the ID never
@@ -281,7 +282,9 @@ changes. Runs reach the REST, GraphQL and Git servers’ pods on their port, and
   servers included), a LimitRange whose defaults are `jobs.resources`, an optional ResourceQuota from `jobs.quota`, and
   RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other lets the REST and GraphQL
   servers read their pods, logs and Secrets.
-- **It goes with the organization.** Deleting an organization deletes its namespace.
+- **It goes with the organization,** whose deletion deletes it, **and with the installation:** it names the
+  installation's controller ClusterRole as its owner, so uninstalling the chart, which deletes that role, has
+  Kubernetes's garbage collector delete the namespace and every run in it, with no controller left to clean up.
 
 ### Pods and scripts
 
@@ -376,13 +379,13 @@ The chart adds one workload and the Kubernetes access it needs.
 ![The controller binds itself only where it made a job namespace, and an admission policy holds it there](jobs/rbac.svg)
 
 Cluster-scoped names start with the release’s namespace, so two installations of one release name never share them; the
-servers mount a token for `jobs-logs`. `jobs.pods: false` renders none of it: the controller still delivers webhooks;
-pods and scripts don’t run.
+job namespaces name the controller’s role as their owner, so uninstalling deletes them; the servers mount a token for
+`jobs-logs`. `jobs.pods: false` renders none of it: the controller still delivers webhooks; pods and scripts don’t run.
 
 | Object | What it allows |
 | --- | --- |
 | Deployment `<release>-controller` | 2 replicas, a disruption budget of one, rolling out by surging; the only workload with Kubernetes write access |
-| ClusterRole and binding `<namespace>-<release>-controller` | Create and delete namespaces; create RoleBindings, and `bind` only the ClusterRoles below |
+| ClusterRole and binding `<namespace>-<release>-controller` | Create and delete namespaces, which name this role as their owner; create RoleBindings, and `bind` only the ClusterRoles below; read itself |
 | ClusterRole `<namespace>-<release>-jobs-runner` | Pods, their logs, Secrets, NetworkPolicies, LimitRanges and ResourceQuotas, bound to the controller in each job namespace |
 | ClusterRole `<namespace>-<release>-jobs-logs` | Read pods, their logs and Secrets, the last for the values the logs mask, bound to the servers' ServiceAccount in each job namespace, whose token the REST and GraphQL servers mount |
 | ValidatingAdmissionPolicy `<namespace>-<release>-jobs` | Holds the controller to namespaces carrying its prefix and installation label, and its RoleBindings to the runner role for itself and the logs role for the servers |
@@ -492,6 +495,9 @@ Upgrading to the fourth needs Kubernetes 1.30 for the admission policy, or `jobs
   `jobs.nodeSelector` names.
 - **Pod Security `restricted` refuses images that need root;** an operator who wants them lowers `jobs.podSecurity` to
   `baseline`.
+- **Recreating the controller's ClusterRole deletes the job namespaces,** since they name the role they were made under:
+  runs then in progress fail when their pods vanish, and each organization's next run makes its namespace again. Only an
+  uninstall deletes the role.
 
 ## Decisions
 
@@ -518,6 +524,7 @@ Upgrading to the fourth needs Kubernetes 1.30 for the admission policy, or `jobs
 | The LimitRange sets containers' defaults only; the quota bounds an organization | A maximum would refuse a job that declares more; the quota already caps the whole | Changed |
 | The controller binds itself per job namespace, held there by an admission policy the chart ships; `jobs.pods: false` turns pods off | The narrowest RBAC Kubernetes can express for namespaces made at run time | Proposed |
 | Job namespaces enforce Pod Security `restricted` by default | Least privilege by default; the operator may lower it | Proposed |
+| Job namespaces name the installation's controller ClusterRole as their owner | Uninstalling deletes them and their runs through Kubernetes's garbage collector; a cleanup the controller ran would never run once it is uninstalled | Changed |
 | A script is a pod of one container; the checkout is an init container; secrets come as environment variables | One way to run code; scripts need the code | Proposed |
 | Webhooks are signed with a secret the job may read, delivered by the controller, refused inside the cluster, and report back through the API | The architecture's signed, retried webhooks; no SSRF into Cobranch | Proposed |
 | The servers mask a live log with the values the run's Secret lists, which their logs role reads, rather than the secrets its job may read now | The values the pod holds, its token's among them, even after a secret changes or a grant goes; the servers hold the secrets key already | Changed |

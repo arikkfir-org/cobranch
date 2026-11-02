@@ -23,6 +23,7 @@
   "SERVICE_ACCOUNT" $controller
   "RELEASE" .Release.Name
   "RUNNER_ROLE" (printf "%s-jobs-runner" $cluster)
+  "OWNER_ROLE" (printf "%s-controller" $cluster)
   "EGRESS_EXCEPT" (join "," $jobs.egress.except)
   "EGRESS_DNS" (toJson $jobs.egress.dns)
   "RESOURCES" (toJson $jobs.resources)
@@ -49,6 +50,7 @@ metadata:
   {{- end }}
 ---
 # Cluster-wide, the controller makes and deletes its job namespaces and binds itself there to the runner role alone.
+# It reads this role, which each job namespace names as its owner, so that uninstalling deletes them.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -66,6 +68,10 @@ rules:
     resources: [clusterroles]
     verbs: [get, bind]
     resourceNames: [{{ $cluster }}-jobs-runner]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [get]
+    resourceNames: [{{ $cluster }}-controller]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

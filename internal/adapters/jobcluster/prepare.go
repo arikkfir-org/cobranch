@@ -52,7 +52,11 @@ func (c *Cluster) Prepare(ctx context.Context, orgID uuid.UUID) (err error) {
 	}
 	ns, apply := c.namespace(orgID), metav1.ApplyOptions{FieldManager: fieldManager, Force: true}
 	core, rbac, networking := c.client.CoreV1(), c.client.RbacV1(), c.client.NetworkingV1()
-	if _, err := core.Namespaces().Apply(ctx, c.namespaceOf(orgID), apply); err != nil {
+	owner, err := c.owner(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err := core.Namespaces().Apply(ctx, c.namespaceOf(orgID).WithOwnerReferences(owner), apply); err != nil {
 		return fmt.Errorf("applying namespace %s: %w", ns, err)
 	}
 	if _, err := rbac.RoleBindings(ns).Apply(ctx, c.binding(ns), apply); err != nil {
@@ -95,6 +99,19 @@ func (c *Cluster) namespaceOf(orgID uuid.UUID) *corev1ac.NamespaceApplyConfigura
 		"pod-security.kubernetes.io/enforce": c.cfg.PodSecurity, "pod-security.kubernetes.io/enforce-version": "latest",
 	})
 	return corev1ac.Namespace(c.namespace(orgID)).WithLabels(labels)
+}
+
+// owner is the reference every job namespace carries to the installation's OwnerRole, read afresh so that it names
+// the role that exists now: uninstalling the installation deletes that role, and the garbage collector then deletes
+// the namespaces and the runs in them, with no controller left to clean up. Without blockOwnerDeletion, setting it
+// needs no access to the role beyond reading it.
+func (c *Cluster) owner(ctx context.Context) (*metav1ac.OwnerReferenceApplyConfiguration, error) {
+	role, err := c.client.RbacV1().ClusterRoles().Get(ctx, c.cfg.OwnerRole, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("reading ClusterRole %s, which owns the job namespaces: %w", c.cfg.OwnerRole, err)
+	}
+	return metav1ac.OwnerReference().WithAPIVersion("rbac.authorization.k8s.io/v1").WithKind("ClusterRole").
+		WithName(role.Name).WithUID(role.UID), nil
 }
 
 // binding grants the controller the runner role in namespace ns.

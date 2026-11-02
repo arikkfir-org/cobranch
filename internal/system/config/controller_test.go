@@ -11,7 +11,8 @@ import (
 func controllerEnv(changes map[string]string) map[string]string {
 	env := map[string]string{"COBRANCH_JOBS_SCRIPT_IMAGE": "cobranch:v1", "COBRANCH_JOBS_CHECKOUT_IMAGE": "cobranch:v1",
 		"COBRANCH_JOBS_NAMESPACE_PREFIX": "cobranch-jobs-", "COBRANCH_JOBS_INSTALLATION": "cobranch-cobranch", "COBRANCH_JOBS_HOME": "cobranch",
-		"COBRANCH_JOBS_SERVICE_ACCOUNT": "cobranch-controller", "COBRANCH_JOBS_RELEASE": "cobranch", "COBRANCH_JOBS_RUNNER_ROLE": "cobranch-cobranch-jobs-runner"}
+		"COBRANCH_JOBS_SERVICE_ACCOUNT": "cobranch-controller", "COBRANCH_JOBS_RELEASE": "cobranch", "COBRANCH_JOBS_RUNNER_ROLE": "cobranch-cobranch-jobs-runner",
+		"COBRANCH_JOBS_OWNER_ROLE": "cobranch-cobranch-controller"}
 	maps.Copy(env, changes)
 	maps.DeleteFunc(env, func(_, v string) bool { return v == "" })
 	return env
@@ -27,7 +28,7 @@ func TestLoadController(t *testing.T) {
 		{name: "defaults", env: controllerEnv(nil), check: func(c Controller) bool {
 			return c.PollInterval == 5*time.Second && c.SweepInterval == 5*time.Minute && c.Pods && c.Lease == 2*time.Minute &&
 				c.Timeout == time.Hour && c.MaxTimeout == 24*time.Hour && c.LogsMaxBytes == 10<<20 && c.PodSecurity == "restricted" &&
-				c.Quota.Value == nil && c.Affinity.Value == nil
+				c.Quota.Value == nil && c.Affinity.Value == nil && c.OwnerRole == "cobranch-cobranch-controller"
 		}},
 		{name: "the chart's maps and lists", env: controllerEnv(map[string]string{
 			"COBRANCH_JOBS_NAMESPACE_LABELS": `{"example.com/team":"ci"}`, "COBRANCH_JOBS_EGRESS_EXCEPT": "10.0.0.0/8,fc00::/7",
@@ -41,6 +42,7 @@ func TestLoadController(t *testing.T) {
 					len(c.Tolerations.Value) == 1 && c.Affinity.Value.NodeAffinity != nil
 			}},
 		{name: "no checkout image", env: controllerEnv(map[string]string{"COBRANCH_JOBS_CHECKOUT_IMAGE": ""}), wantErr: "JOBS_CHECKOUT_IMAGE"},
+		{name: "no owner role", env: controllerEnv(map[string]string{"COBRANCH_JOBS_OWNER_ROLE": ""}), wantErr: "JOBS_OWNER_ROLE"},
 		{name: "resources that aren't JSON", env: controllerEnv(map[string]string{"COBRANCH_JOBS_RESOURCES": "cpu=1"}), wantErr: "JOBS_RESOURCES"},
 		{name: "a default beyond the most", env: controllerEnv(map[string]string{"COBRANCH_JOBS_TIMEOUT": "25h"}), wantErr: "within the most"},
 		{name: "no poll", env: controllerEnv(map[string]string{"COBRANCH_JOBS_POLL_INTERVAL": "0s"}), wantErr: "must be positive"},
