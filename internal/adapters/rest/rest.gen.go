@@ -706,11 +706,11 @@ type Push struct {
 	// Pusher Who is behind a commit's author or committer, a push, an annotation, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a merge or a deletion once its principal is gone.
 	Pusher *Principal `json:"pusher,omitempty"`
 
-	// Transport How the push came; api for a merge asked of Cobranch.
+	// Transport How the push came; api for a merge or a branch deletion asked of Cobranch.
 	Transport PushTransport `json:"transport"`
 }
 
-// PushTransport How the push came; api for a merge asked of Cobranch.
+// PushTransport How the push came; api for a merge or a branch deletion asked of Cobranch.
 type PushTransport string
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -1021,7 +1021,7 @@ type GetBlobParams struct {
 
 // DeleteBranchParams defines parameters for DeleteBranch.
 type DeleteBranchParams struct {
-	// IfMatch The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is.
+	// IfMatch The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
 	IfMatch *IfMatchBranch `json:"If-Match,omitempty"`
 }
 

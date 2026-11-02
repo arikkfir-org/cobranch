@@ -104,6 +104,46 @@ func TestDeleteBranchRefused(t *testing.T) {
 	}
 }
 
+func TestDeleteBranchMovedMeanwhile(t *testing.T) {
+	tests := []struct {
+		name    string
+		head    string
+		moves   int
+		want    []code.DeleteRequest
+		wantErr error
+	}{
+		{name: "wherever it is, at the head it moved to", moves: 1, want: []code.DeleteRequest{{Branch: "feature/x", Head: sha(8)}}},
+		{name: "wherever it is, after it moved twice", moves: 2, want: []code.DeleteRequest{{Branch: "feature/x", Head: sha(9)}}},
+		{name: "wherever it is, while it keeps moving", moves: 3, wantErr: code.ErrBranchMoved},
+		{name: "at the head the requester saw, once it moved", head: sha(6), moves: 1, wantErr: code.ErrBranchMoved},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newMergeFixture()
+			moved, next := 0, 7
+			f.objects.OnDelete = func(code.DeleteRequest) error {
+				if moved == tt.moves {
+					return nil
+				}
+				moved++
+				next++
+				f.store.UpdateBranch(f.repo, "feature/x", func(b *code.Branch) { b.Head = sha(next) })
+				return code.ErrBranchMoved
+			}
+			err := f.service.DeleteBranch(t.Context(), f.dana, f.repo, "feature/x", tt.head)
+			if !sameError(err, tt.wantErr) {
+				t.Fatalf("got error %v, want %v", err, tt.wantErr)
+			}
+			for i := range tt.want {
+				tt.want[i].By = f.dana.ID
+			}
+			if !reflect.DeepEqual(f.objects.Deletions, tt.want) {
+				t.Errorf("the Git server recorded %+v, want %+v", f.objects.Deletions, tt.want)
+			}
+		})
+	}
+}
+
 func TestDeletedBranch(t *testing.T) {
 	at := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
 	tests := []struct {

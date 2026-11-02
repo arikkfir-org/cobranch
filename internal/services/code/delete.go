@@ -60,7 +60,9 @@ const (
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Deleting a branch"). It
 // takes repo.push, and repo.bypass for a branch the default branch's /cobranch.yaml names. The default branch is never
 // deleted. A head the branch has moved from, or a branch that moved while the Git server recorded it, is
-// ErrBranchMoved; a deletion Cobranch won't make is a *DeleteError.
+// ErrBranchMoved; for "", a branch that moved meanwhile is read again and deleted at its new head, up to
+// deleteAttempts times, and is ErrBranchMoved only once it kept moving. A deletion Cobranch won't make is a
+// *DeleteError.
 func (s *Service) DeleteBranch(ctx context.Context, v Viewer, repoID uuid.UUID, name, head string) error {
 	ctx, span := tracer.Start(ctx, "code.Service.DeleteBranch")
 	defer span.End()
@@ -77,21 +79,38 @@ func (s *Service) DeleteBranch(ctx context.Context, v Viewer, repoID uuid.UUID, 
 			return err
 		}
 	}
-	b, err := s.store.Branch(ctx, repoID, name)
-	if err != nil {
-		return failed(span, "deleting the branch", err)
+	bypass := slices.Contains(held, repos.PermBypass)
+	err = s.deleteAt(ctx, v.ID, repoID, name, head, bypass)
+	for attempt := 1; head == "" && attempt < deleteAttempts && errors.Is(err, ErrBranchMoved); attempt++ {
+		err = s.deleteAt(ctx, v.ID, repoID, name, head, bypass)
 	}
-	req, err := deleteRequest(b, head, slices.Contains(held, repos.PermBypass))
-	if err != nil {
-		return err
-	}
-	req.By = v.ID
-	err = s.objects.DeleteBranch(ctx, repoID, req)
 	var refused *DeleteError
 	if errors.As(err, &refused) || errors.Is(err, ErrBranchMoved) {
 		return fmt.Errorf("deleting %s: %w", name, err)
 	}
 	return failed(span, "deleting the branch", err)
+}
+
+// deleteAttempts is how many times DeleteBranch asks the Git server to delete a branch wherever it is, each time at the
+// head it reads then, before it answers that the branch kept moving.
+const deleteAttempts = 3
+
+// deleteAt asks the Git server to delete the branch of name for by, as the store has it now, at head, or at the head
+// the store has for "".
+func (s *Service) deleteAt(ctx context.Context, by, repoID uuid.UUID, name, head string, bypass bool) error {
+	b, err := s.store.Branch(ctx, repoID, name)
+	if err != nil {
+		return fmt.Errorf("reading the branch: %w", err)
+	}
+	req, err := deleteRequest(b, head, bypass)
+	if err != nil {
+		return err
+	}
+	req.By = by
+	if err := s.objects.DeleteBranch(ctx, repoID, req); err != nil {
+		return fmt.Errorf("at %s: %w", req.Head, err)
+	}
+	return nil
 }
 
 // deleteRequest is the deletion the Git server records of b, as it stands, at head: refused when b is the default

@@ -1781,7 +1781,7 @@ components:
     ifMatchBranch:
       name: If-Match
       in: header
-      description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is.
+      description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
       schema:
         type: string
     ifNoneMatchAnnotation:
@@ -2334,7 +2334,7 @@ components:
           $ref: "#/components/schemas/Principal"
         transport:
           type: string
-          description: How the push came; api for a merge asked of Cobranch.
+          description: How the push came; api for a merge or a branch deletion asked of Cobranch.
           enum: [https, ssh, api]
         at:
           type: string

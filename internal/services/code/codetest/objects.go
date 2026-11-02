@@ -17,7 +17,8 @@ import (
 // branches and tags that name commits, and the walk of history from each commit, newest first. A path ending in
 // Symlink holds a symlink, and one in Submodule a submodule. Every repository holds the same objects. Fail, when set,
 // fails every read, merge and deletion. Merges lists the merges asked for; each answers its head as the commit its base
-// is at. Deletions lists the branch deletions asked for.
+// is at. Deletions lists the branch deletions asked for; OnDelete, when set, answers each first, and one it fails isn't
+// listed.
 type Objects struct {
 	Files     map[string]map[string]string
 	Refs      map[string]string
@@ -25,6 +26,7 @@ type Objects struct {
 	Fail      error
 	Merges    []code.MergeRequest
 	Deletions []code.DeleteRequest
+	OnDelete  func(req code.DeleteRequest) error
 }
 
 // The suffixes of the paths Objects holds a symlink or a submodule at.
@@ -197,6 +199,11 @@ func (o *Objects) Merge(_ context.Context, _ uuid.UUID, req code.MergeRequest) (
 func (o *Objects) DeleteBranch(_ context.Context, _ uuid.UUID, req code.DeleteRequest) error {
 	if o.Fail != nil {
 		return o.Fail
+	}
+	if o.OnDelete != nil {
+		if err := o.OnDelete(req); err != nil {
+			return err
+		}
 	}
 	o.Deletions = append(o.Deletions, req)
 	return nil

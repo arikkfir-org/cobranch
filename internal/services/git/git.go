@@ -78,7 +78,7 @@ type Transport string
 const (
 	TransportHTTPS Transport = "https"
 	TransportSSH   Transport = "ssh"
-	// TransportAPI is a merge a principal asked Cobranch for, which the Git server built.
+	// TransportAPI is a merge or a branch deletion a principal asked Cobranch for, which the Git server made.
 	TransportAPI Transport = "api"
 )
 

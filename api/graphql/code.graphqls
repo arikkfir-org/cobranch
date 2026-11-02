@@ -109,7 +109,7 @@ extend type Mutation {
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
   "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
-  "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved). main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
+  "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved); without it, the branch is deleted wherever it is, at its new head when it moves meanwhile, and refused so only once it kept moving. main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
   deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
 }
 
@@ -320,7 +320,7 @@ type Push {
   id: ID!
   "Who pushed; null once they are gone."
   pusher: CommitPrincipal
-  "https or ssh, or api for a merge asked of Cobranch."
+  "https or ssh, or api for a merge or a deletion asked of Cobranch."
   transport: String!
   "When Cobranch recorded it."
   at: Time!

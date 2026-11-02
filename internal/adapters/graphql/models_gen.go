@@ -356,7 +356,7 @@ type Push struct {
 	ID string `json:"id"`
 	// Who pushed; null once they are gone.
 	Pusher *CommitPrincipal `json:"pusher,omitempty"`
-	// https or ssh, or api for a merge asked of Cobranch.
+	// https or ssh, or api for a merge or a deletion asked of Cobranch.
 	Transport string `json:"transport"`
 	// When Cobranch recorded it.
 	At time.Time `json:"at"`

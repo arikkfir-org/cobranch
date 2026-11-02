@@ -271,8 +271,10 @@ page read it fails the compare-and-swap, and the request answers 412; nothing ch
   `branches` needs `repo.bypass` too, as [a push](#by-a-push) does. `main` is never deleted through Cobranch's APIs.
   Deleting someone else's branch takes nothing more: Git never asked more, and the record names who did it.
 - **Only at the head the requester saw.** REST's `DELETE` names that head in `If-Match`, quoted, and answers 412 once
-  the branch moved from it, 428 without the header; `If-Match: *` deletes it wherever it is. GraphQL's `expectedHead`
-  does the same, refusing with CONFLICT `branch.moved`, and is optional there, as `expectedVersion` is.
+  the branch moved from it, 428 without the header; `If-Match: *` deletes it wherever it is: when it moves while the Git
+  server records the deletion, the API reads it again and deletes it at its new head, up to three times, and answers 412
+  only once it kept moving. GraphQL's `expectedHead` does the same, refusing with CONFLICT `branch.moved`, and is
+  optional there, as `expectedVersion` is.
 - **The Git server records it,** on an internal call beside the merge's (`POST …/delete`), for the requester alone: a
   push of one ref update, from the head to nothing, transport `api`, through the same transaction and checks as a
   client's push, which compares the head and the requirements again. It reads no snapshot: a deletion brings no objects
@@ -355,7 +357,8 @@ Branch names carry `/`; the Console takes the rest of the path after `branches/`
 
 A name or a branch with a `/` travels escaped in a path, as `ci%2Fbuild`. A branch carries its base, status, checks,
 ahead and behind counts, and its merge: who, when and which head; `main` carries its merge requirements instead. A
-deleted branch carries the same, with when it was deleted and by whom.
+deleted branch carries its head and that commit, when it was created, its merge, and when it was deleted and by whom;
+its base, status, checks and counts went with it.
 
 ## Data model
 
