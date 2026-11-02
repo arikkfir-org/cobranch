@@ -265,6 +265,35 @@
     .markdown-file { display: grid; gap: 12px; }
     .tabs { display: flex; gap: 4px; }
     .tabs button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+    .source pre.ln span { display: block; }
+    .source.pickable pre.ln span { cursor: pointer; }
+    .source pre.ln span.picked { color: var(--color-accent); font-weight: 600; background: var(--color-status-info-bg); }
+    form.lines { grid-template-columns: auto auto 1fr; align-items: end; }
+    form.lines input[type="number"] { width: 90px; }
+    form.lines textarea, form.lines .row { grid-column: 1 / -1; }
+    .threads { display: grid; gap: 12px; }
+    .thread { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); scroll-margin-top: 16px; }
+    .thread.resolved { background: var(--color-bg-sunken); }
+    .thread > .row { justify-content: flex-start; }
+    .thread > .row .spacer + * { margin-left: auto; }
+    .message { display: grid; gap: 4px; min-width: 0; }
+    .message + .message { padding-top: 10px; border-top: 1px solid var(--color-border-default); }
+    .message .meta { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; color: var(--color-fg-muted); font-size: 12px; }
+    .message .meta strong { color: var(--color-fg-default); font-size: 13px; font-weight: 600; }
+    .message .meta .actions { margin-left: auto; display: flex; gap: 4px; }
+    .message .body { overflow-wrap: anywhere; line-height: 1.6; }
+    .message .body p, .message .text { color: inherit; }
+    .message .body > :first-child { margin-top: 0; }
+    .message .body > :last-child { margin-bottom: 0; }
+    .message .body p, .message .body ul, .message .body ol, .message .body blockquote, .message .body pre, .message .body table { margin: 0 0 8px; }
+    .message .body blockquote { padding-left: 12px; border-left: 3px solid var(--color-border-default); color: var(--color-fg-muted); }
+    .message .body pre { padding: 8px 12px; overflow-x: auto; border-radius: 6px; background: var(--color-bg-sunken); font: 13px/20px var(--font-mono); }
+    .message .body code { font-family: var(--font-mono); font-size: 13px; }
+    .message .body img { max-width: 100%; }
+    .message .body table { border-collapse: collapse; display: block; overflow-x: auto; }
+    .message .body th, .message .body td { padding: 4px 8px; border: 1px solid var(--color-border-default); }
+    .message .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .thread form textarea, .chat > form textarea { min-height: 64px; resize: vertical; }
   </style>
 </head>
 <body class="centered">
@@ -292,10 +321,15 @@
     let orgs = [];
     let roles = []; // the roles the organization shown grants
     let permissions = []; // what a role at an organization may hold
+    let chatPoll = null; // stops the chat the page follows, once the Console draws another
+    // follows makes stop the one way to stop the chat the page follows, stopping the one before: null when it follows
+    // none.
+    const follows = (stop) => { if (chatPoll) chatPoll.abort(); chatPoll = stop; };
 
-    // api calls the REST API with the session cookie, and rejects with the problem it answered.
-    async function api(method, path, body, headers = {}) {
-      const options = { method, credentials: "include", headers: { Accept: "application/json", ...headers } };
+    // api calls the REST API with the session cookie, and rejects with the problem it answered; signal, when given,
+    // abandons the call.
+    async function api(method, path, body, headers = {}, signal = undefined) {
+      const options = { method, credentials: "include", headers: { Accept: "application/json", ...headers }, signal };
       if (body !== undefined) {
         options.headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(body);
@@ -370,6 +404,7 @@
     }
 
     function render() {
+      follows(null);
       const parts = route();
       if (!me) return showSignIn();
       if (parts.length === 0) {
@@ -557,7 +592,7 @@
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
-      else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
+      else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can);
       if (!sub) sections.push(h("section", { class: "panel" }, h("h3", {}, "What you may do here"), h("div", { class: "perms" }, repo.viewerPermissions.map((p) => h("code", {}, p)))));
       main.replaceChildren(heading, error, ...sections);
     }
@@ -664,14 +699,16 @@
     // image, or its size, with links to its bytes. Its URL's parts after tree/ or blob/ are a ref, then a path: the
     // longest branch or tag name they start with, or else their first part, a commit's full name. A repository nothing
     // was pushed to shows how to push its first commit.
-    async function repositoryFiles(org, repo, path, at, isFile, rest, push) {
+    async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
+      const push = can("repo.push");
       const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
       if (!branches.length) return [repositoryCode(org, repo, push), h("section", { class: "panel" }, h("h3", {}, "Files"),
         h("p", {}, "Nothing has been pushed yet: push ", h("code", {}, "main"), " to see its files."))];
       const [ref, file] = splitRef(rest, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
       const toolbar = h("div", { class: "row" }, refPicker(branches, tags, ref, (r) => go((isFile ? at.blob(r, file) : at.tree(r, file)).slice(base.length - 1))),
         breadcrumb(repo, at, ref, file), h("span", { class: "spacer" }), clone(org, repo, push));
-      const shown = isFile ? await repositoryFile(path, at, ref, file) : await repositoryTree(path, at, ref, file, branches);
+      const onBranch = branches.some((b) => b.name === ref) ? ref : null;
+      const shown = isFile ? await repositoryFile(path, at, ref, file, onBranch, can) : await repositoryTree(path, at, ref, file, branches);
       return [toolbar, ...shown];
     }
 
@@ -833,7 +870,8 @@
 
     // repositoryFile shows the file at path of ref: a Markdown file rendered, its text with line numbers, its image, or
     // its size, with links to its bytes at the commit ref is at. A symlink shows its target; a directory's path goes to its directory's page.
-    async function repositoryFile(path, at, ref, file) {
+    // On a branch, a text file's lines start threads of the branch's chat, and the chat's threads on the file are listed.
+    async function repositoryFile(path, at, ref, file, branch, can) {
       let f;
       try {
         f = await api("GET", path + "/blob?" + new URLSearchParams({ ref, path: file }));
@@ -845,33 +883,42 @@
         h("a", { class: "button small", href: at.raw(f.commit, f.path, true) }, "Download"));
       const facts = [size(f.size), f.mode === "100755" ? "executable" : null, f.kind === "symlink" ? "symlink" : null].filter(Boolean).join(" · ");
       const head = h("div", { class: "row" }, h("div", {}, h("h2", {}, f.name), h("p", {}, facts)), links);
-      let body;
+      let body, lines = null;
       if (f.kind === "symlink") {
         const target = f.path.split("/").slice(0, -1).concat(f.text.split("/")).reduce((p, n) => (n === ".." ? p.slice(0, -1) : n === "." || !n ? p : [...p, n]), []).join("/");
         body = h("p", {}, "A symlink to ", h("a", { href: at.blob(ref, target), "data-nav": "" }, h("code", {}, f.text)), ".");
       } else if (imageFile(f.name)) body = h("div", { class: "image" }, h("img", { src: at.raw(f.commit, f.path), alt: f.name }));
       else if (f.binary) body = h("p", {}, "A binary file of " + size(f.size) + ": download it to open it.");
-      else if (f.html !== undefined) body = markdownFile(f);
-      else body = source(f.text);
-      return [h("section", { class: "panel" }, head, f.truncated ? h("p", { class: "notice" }, "This shows the file's first 1 MiB. The rest is in its raw bytes.") : null, body)];
+      else {
+        lines = fileLines(path, at, branch, f, can);
+        body = f.html !== undefined ? markdownFile(f, lines) : source(f.text, lines);
+      }
+      const panel = h("section", { class: "panel" }, head, f.truncated ? h("p", { class: "notice" }, "This shows the file's first 1 MiB. The rest is in its raw bytes.") : null, body);
+      return [panel, lines ? await lines.panel() : null].filter(Boolean);
     }
 
-    // markdownFile shows a Markdown file rendered, with a switch to its source.
-    function markdownFile(f) {
-      const preview = rendered(f.html), code = source(f.text);
-      code.hidden = true;
+    // markdownFile shows a Markdown file rendered, with a switch to its source, which it shows first when the page's
+    // anchor names lines.
+    function markdownFile(f, lines) {
+      const preview = rendered(f.html), code = source(f.text, lines);
+      const atLines = lines && lines.picked() !== null;
+      (atLines ? preview : code).hidden = true;
       const tab = (label, shown) => h("button", { class: "button small", type: "button", "aria-pressed": String(shown), onclick: (e) => {
         preview.hidden = label !== "Preview";
         code.hidden = label === "Preview";
         e.target.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b === e.target)));
       } }, label);
-      return h("div", { class: "markdown-file" }, h("div", { class: "tabs", role: "group", "aria-label": "View" }, tab("Preview", true), tab("Source", false)), preview, code);
+      return h("div", { class: "markdown-file" }, h("div", { class: "tabs", role: "group", "aria-label": "View" }, tab("Preview", !atLines), tab("Source", atLines)), preview, code);
     }
 
-    // source is a text with its lines numbered.
-    function source(text) {
-      const lines = text.replace(/\n$/, "").split("\n");
-      return h("div", { class: "source" }, h("pre", { class: "ln", "aria-hidden": "true" }, lines.map((_, i) => i + 1).join("\n")), h("pre", { class: "text" }, lines.join("\n")));
+    // source is a text with its lines numbered: with lines, a click on a line's number picks that line and a shift-click
+    // the lines from the one picked before, which lines marks and takes.
+    function source(text, lines) {
+      const all = text.replace(/\n$/, "").split("\n");
+      const numbers = all.map((_, i) => h("span", { "data-line": i + 1 }, String(i + 1)));
+      const gutter = h("pre", { class: "ln", "aria-hidden": "true" }, numbers);
+      if (lines) lines.attach(numbers, gutter);
+      return h("div", { class: "source" + (lines ? " pickable" : "") }, gutter, h("pre", { class: "text" }, all.join("\n")));
     }
 
     // cloneURL is one way to clone a repository: its name and URL, with a button that copies the URL.
@@ -1041,12 +1088,14 @@
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"));
-      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
+      if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b]),
+        await branchChat(path, at, b, can)];
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
       if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail));
+      sections.push(await branchChat(path, at, b, can));
       return sections;
     }
 
@@ -1112,6 +1161,287 @@
       panel.append(h("table", { class: "commits" }, h("tbody", {}, page.data.commits.map(commitRow(at)))));
       if (b.ahead > limit) panel.append(h("div", {}, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "All its history")));
       return panel;
+    }
+
+    // lineLabel names lines of a file a thread is on: its path, then its line or its first and last.
+    const lineLabel = (a) => a.path + ":" + a.startLine + (a.endLine > a.startLine ? "–" + a.endLine : "");
+    // linesAnchor is the anchor of a file's page that marks lines: #L3, or #L3-L5.
+    const linesAnchor = (start, end) => "#L" + start + (end > start ? "-L" + end : "");
+
+    // fileLines marks and picks lines of a text file, as source draws them: those the page's anchor names (#L3 or
+    // #L3-L5) when it opens, then those its viewer picks, which the anchor follows so that the page's URL points at
+    // them. On a branch, panel is the section that starts a thread of the branch's chat on the lines picked, at the
+    // commit the page shows, and lists the chat's threads on the file; elsewhere there is none.
+    function fileLines(path, at, branch, f, can) {
+      const named = /^#L(\d+)(?:-L(\d+))?$/.exec(location.hash);
+      let range = named ? [Math.min(+named[1], +(named[2] || named[1])), Math.max(+named[1], +(named[2] || named[1]))] : null;
+      let numbers = [], from = range ? range[0] : 0;
+      const start = h("input", { type: "number", name: "startLine", min: 1, required: true, value: range ? range[0] : "" });
+      const end = h("input", { type: "number", name: "endLine", min: 1, required: true, value: range ? range[1] : "" });
+      const mark = () => numbers.forEach((n, i) => n.classList.toggle("picked", !!range && i + 1 >= range[0] && i + 1 <= range[1]));
+      const pick = (a, b) => {
+        range = [Math.min(a, b), Math.max(a, b)];
+        [start.value, end.value] = range;
+        mark();
+        history.replaceState(null, "", linesAnchor(...range));
+      };
+      // The marked lines come into view once the page is drawn: after the calls that draw it, which take no turn.
+      const reveal = () => setTimeout(() => { if (range && numbers[range[0] - 1]) numbers[range[0] - 1].scrollIntoView({ block: "center" }); }, 0);
+      return {
+        picked: () => range,
+        attach(spans, gutter) {
+          numbers = spans;
+          mark();
+          gutter.addEventListener("click", (e) => {
+            const n = +((e.target.dataset && e.target.dataset.line) || 0);
+            if (!n) return;
+            if (!e.shiftKey || !from) from = n;
+            pick(from, n);
+          });
+        },
+        async panel() {
+          reveal();
+          if (!branch) return null;
+          const chat = path + "/branches/" + encodeURIComponent(branch) + "/chat";
+          const error = h("p", { class: "alert", hidden: true });
+          const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+          let threads = [];
+          try {
+            threads = (await api("GET", chat + "?limit=100")).threads.filter((t) => t.anchor && t.anchor.path === f.path);
+          } catch (err) {
+            fail(err);
+          }
+          const firstWords = (t) => { const first = t.messages && t.messages[0]; return first && first.body ? first.body.split("\n")[0].slice(0, 80) : ""; };
+          const row = (t) => h("li", {}, h("a", { href: at.branchPage(branch) + "#thread-" + t.id, "data-nav": "" }, h("code", {}, lineLabel(t.anchor))), " ",
+            t.anchor.sha !== f.commit ? h("span", { class: "chip" }, "at " + shortSha(t.anchor.sha)) : null, t.resolvedAt ? h("span", { class: "chip" }, "resolved") : null,
+            " ", h("span", { class: "muted" }, firstWords(t)));
+          let form = null;
+          if (can("messages.post")) {
+            const body = h("textarea", { name: "body", required: true, maxlength: 20000, placeholder: "What about these lines? In Markdown." });
+            const button = h("button", { class: "button primary", type: "submit" }, "Start thread");
+            const startThread = (e) => {
+              e.preventDefault();
+              button.disabled = true;
+              api("POST", chat + "/threads", { body: body.value, anchor: { sha: f.commit, path: f.path, startLine: +start.value, endLine: +end.value } })
+                .then((t) => go(at.branchPage(branch).slice(base.length - 1) + "#thread-" + t.id))
+                .catch((err) => { button.disabled = false; fail(err); });
+            };
+            form = h("form", { class: "lines", onsubmit: startThread }, h("label", {}, "From line", start), h("label", {}, "to line", end), body,
+              h("div", { class: "row" }, h("span", { class: "muted" }, "Pick lines by their numbers: click one, then shift-click another."), button));
+          }
+          return h("section", { class: "panel" }, h("h3", {}, "Threads on this file"), error,
+            threads.length ? h("ul", { class: "file-threads" }, threads.map(row)) : h("p", {}, "None yet on ", h("code", {}, branch), "'s chat."), form);
+        },
+      };
+    }
+
+    // The elements a chat message's HTML keeps, of those the API's sanitizer lets through: messageBody copies these
+    // alone, with the few attributes Markdown writes, into the page's own elements, so a message draws as written and
+    // runs nothing.
+    const messageTags = new Set(["P", "BR", "HR", "EM", "STRONG", "DEL", "S", "CODE", "PRE", "BLOCKQUOTE", "UL", "OL", "LI", "H1", "H2", "H3", "H4", "H5",
+      "H6", "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "DETAILS", "SUMMARY", "INPUT", "SUP", "SUB", "SPAN", "DIV"]);
+
+    // messageBody is a chat message's rendered HTML as the page's elements: links to the Console's pages stay in the
+    // Console, other links open in a new tab, and only web addresses are followed or shown.
+    function messageBody(html) {
+      const copy = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.data);
+        if (node.nodeType !== Node.ELEMENT_NODE) return null;
+        const children = [...node.childNodes].map(copy);
+        if (!messageTags.has(node.tagName)) return children;
+        const el = document.createElement(node.tagName);
+        const web = (name) => { try { const u = new URL(node.getAttribute(name) || "", location.href); return /^https?:$/.test(u.protocol) ? u : null; } catch { return null; } };
+        const tag = node.tagName, u = tag === "A" ? web("href") : tag === "IMG" ? web("src") : null;
+        if (tag === "A" && u && u.origin === location.origin && u.pathname.startsWith(base)) {
+          el.setAttribute("data-nav", "");
+          el.setAttribute("href", u.pathname + u.search + u.hash);
+        } else if (tag === "A" && u) Object.assign(el, { href: u.href, target: "_blank", rel: "noopener noreferrer" });
+        else if (tag === "IMG") Object.assign(el, { src: u ? u.href : "", alt: node.getAttribute("alt") || "", loading: "lazy" });
+        else if (tag === "INPUT" && node.getAttribute("type") !== "checkbox") return null;
+        else if (tag === "INPUT") Object.assign(el, { type: "checkbox", checked: node.hasAttribute("checked"), disabled: true });
+        else if (tag === "CODE" && /^language-[\w+#.-]+$/.test(node.className)) el.className = node.className;
+        else if ((tag === "TD" || tag === "TH") && /^(left|right|center)$/.test(node.getAttribute("align") || "")) el.style.textAlign = node.getAttribute("align");
+        el.append(...children.flat(Infinity).filter(Boolean));
+        return el;
+      };
+      return [...new DOMParser().parseFromString(html, "text/html").body.childNodes].map(copy).flat(Infinity).filter(Boolean);
+    }
+
+    // branchChat is a branch's chat, which it follows live: its threads, newest first, each perhaps on lines of a file at
+    // a commit, with their messages in Markdown, to which a viewer with messages.post replies. It reads the chat's
+    // updates as they come, each read waiting up to 15 seconds for one, until the Console draws another page.
+    async function branchChat(path, at, b, can) {
+      const chat = path + "/branches/" + encodeURIComponent(b.name) + "/chat";
+      const post = can("messages.post"), moderate = can("messages.moderate");
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const live = h("span", { class: "muted" });
+      const list = h("div", { class: "threads" });
+      const empty = h("p", {}, "No threads yet.", post ? " Start one here, or on lines of a file from its page on this branch." : "");
+      const more = h("button", { class: "button small", type: "button", hidden: true }, "Older threads");
+      const shown = new Map(); // each thread's view, by its ID: the thread as last read, its element, and its messages'
+      let page;
+      try {
+        page = await apiPage(chat);
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return h("section", { class: "panel" }, h("h3", {}, "Chat"), h("p", {}, "This branch has no chat any more."));
+      }
+
+      // message draws one of a thread's messages, or draws it again as it is now, unless its author is editing it.
+      const message = (v, m) => {
+        const old = v.messages.get(m.id);
+        if (old && old.m.version > m.version) return;
+        if (old && old.editing) return void (old.pending = m);
+        const el = messageView(v, m);
+        if (old) old.el.replaceWith(el);
+        else v.list.append(el);
+        v.messages.set(m.id, { m, el });
+      };
+      const messageView = (v, m) => {
+        const mine = m.author && m.author.id === me.id;
+        const target = chat + "/threads/" + v.t.id + "/messages/" + m.id;
+        const content = m.deletedAt ? h("p", { class: "muted" }, "Deleted" + (m.deletedBy ? " by " + m.deletedBy.displayName : "") + ", " + whenExactly(m.deletedAt) + ".")
+          : m.html ? h("div", { class: "body" }, messageBody(m.html)) : h("p", { class: "text" }, m.body);
+        const edit = () => {
+          const entry = v.messages.get(m.id);
+          entry.editing = true;
+          const text = h("textarea", { required: true, maxlength: 20000, "aria-label": "Message" });
+          text.value = m.body;
+          const save = h("button", { class: "button small primary", type: "submit" }, "Save");
+          const done = (latest) => {
+            entry.editing = false;
+            entry.pending = null;
+            if (latest) message(v, latest);
+            else form.replaceWith(content);
+          };
+          const form = h("form", { onsubmit: (e) => {
+            e.preventDefault();
+            save.disabled = true;
+            api("PATCH", target, { body: text.value }, { "If-Match": `"${m.version}"` }).then(done).catch((err) => { save.disabled = false; fail(err); });
+          } }, text, h("div", { class: "row" }, h("span", { class: "spacer" }),
+            h("button", { class: "button small", type: "button", onclick: () => done(entry.pending) }, "Cancel"), save));
+          content.replaceWith(form);
+          text.focus();
+        };
+        const remove = (e) => {
+          if (!confirm(mine ? "Delete your message?" : "Delete " + (m.author ? m.author.displayName + "'s" : "this") + " message?")) return;
+          e.target.disabled = true;
+          api("DELETE", target, undefined, { "If-Match": `"${m.version}"` }).then(() => api("GET", target)).then((gone) => message(v, gone))
+            .catch((err) => { e.target.disabled = false; fail(err); });
+        };
+        const actions = m.deletedAt ? [] : [mine && post ? h("button", { class: "button small", type: "button", onclick: edit }, "Edit") : null,
+          (mine && post) || moderate ? h("button", { class: "button small danger", type: "button", onclick: remove }, "Delete") : null].filter(Boolean);
+        return h("div", { class: "message", id: "message-" + m.id },
+          h("div", { class: "meta" }, h("strong", {}, m.author ? m.author.displayName : "Someone since gone"), h("time", { datetime: m.createdAt }, whenExactly(m.createdAt)),
+            m.editedAt ? h("span", { title: "Edited " + whenExactly(m.editedAt) }, "edited") : null, actions.length ? h("span", { class: "actions" }, actions) : null),
+          content);
+      };
+      // header is a thread's line: the lines it is on, whether the branch has moved on from them, and whether it is
+      // resolved, with a switch for its starter or a moderator.
+      const header = (t) => {
+        const a = t.anchor;
+        const may = moderate || (post && t.startedBy && t.startedBy.id === me.id);
+        const toggle = (e) => {
+          e.target.disabled = true;
+          api("PATCH", chat + "/threads/" + t.id, { resolved: !t.resolvedAt }, { "If-Match": `"${t.version}"` }).then((changed) => place(changed))
+            .catch((err) => { e.target.disabled = false; fail(err); });
+        };
+        return h("div", { class: "row" },
+          a ? [h("a", { href: at.blob(a.sha, a.path) + linesAnchor(a.startLine, a.endLine), "data-nav": "" }, h("code", {}, lineLabel(a))),
+            h("span", { class: "muted" }, "at " + shortSha(a.sha))] : h("span", { class: "muted" }, "On the branch"),
+          t.outdated ? h("span", { class: "chip", title: "The branch has moved on from the commit these lines are at." }, "outdated") : null,
+          t.resolvedAt ? h("span", { class: "chip" }, "Resolved" + (t.resolvedBy ? " by " + t.resolvedBy.displayName : "")) : null,
+          h("span", { class: "spacer" }), may ? h("button", { class: "button small", type: "button", onclick: toggle }, t.resolvedAt ? "Reopen" : "Resolve") : null);
+      };
+      const reply = (v) => {
+        const text = h("textarea", { name: "body", required: true, maxlength: 20000, placeholder: "Reply in Markdown", "aria-label": "Reply" });
+        const send = h("button", { class: "button small primary", type: "submit" }, "Reply");
+        return h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          send.disabled = true;
+          api("POST", chat + "/threads/" + v.t.id + "/messages", { body: text.value }).then((m) => { text.value = ""; message(v, m); })
+            .catch(fail).finally(() => { send.disabled = false; });
+        } }, text, h("div", { class: "row" }, h("span", { class: "spacer" }), send));
+      };
+      // place draws a thread, or draws it again as it is now, with the messages it comes with: a new one first, and one
+      // of an older page last.
+      const place = (t, older) => {
+        let v = shown.get(t.id);
+        if (!v) {
+          v = { t, list: h("div", { class: "messages" }), messages: new Map() };
+          v.head = header(t);
+          v.el = h("article", { class: "thread", id: "thread-" + t.id }, v.head, v.list, post ? reply(v) : null);
+          shown.set(t.id, v);
+          if (older) list.append(v.el);
+          else list.prepend(v.el);
+        } else if (t.version >= v.t.version) {
+          v.t = t;
+          const head = header(t);
+          v.head.replaceWith(head);
+          v.head = head;
+        }
+        v.el.classList.toggle("resolved", !!v.t.resolvedAt);
+        (t.messages || []).forEach((m) => message(v, m));
+        empty.hidden = shown.size > 0;
+      };
+      // An update to a thread of a page not read yet shows when that page is.
+      const apply = (u) => {
+        if (!shown.has(u.thread.id) && u.kind !== "thread.started") return;
+        place(u.thread);
+        if (u.message) message(shown.get(u.thread.id), u.message);
+      };
+      const show = (p) => {
+        p.data.threads.forEach((t) => place(t, true));
+        more.hidden = !p.next;
+        more.onclick = () => { more.disabled = true; apiPage(p.next).then(show).catch(fail).finally(() => { more.disabled = false; }); };
+      };
+      show(page);
+      empty.hidden = shown.size > 0;
+
+      let start = null;
+      if (post) {
+        const text = h("textarea", { name: "body", required: true, maxlength: 20000, placeholder: "Start a thread on this branch, in Markdown", "aria-label": "New thread" });
+        const button = h("button", { class: "button small primary", type: "submit" }, "Start thread");
+        start = h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          button.disabled = true;
+          api("POST", chat + "/threads", { body: text.value }).then((t) => { text.value = ""; place(t); }).catch(fail).finally(() => { button.disabled = false; });
+        } }, text, h("div", { class: "row" }, h("span", { class: "spacer" }), button));
+      }
+      const panel = h("section", { class: "panel chat" }, h("div", { class: "row" }, h("h3", {}, "Chat"), live), error, start, empty, list, more);
+      const stop = new AbortController();
+      follows(stop);
+      followChat(chat, page.data.after, apply, panel, live, stop.signal);
+      // A link to a thread brings it into view once the page is drawn: after the calls that draw it, which take no turn.
+      setTimeout(() => {
+        const el = location.hash.startsWith("#thread-") && document.getElementById(location.hash.slice(1));
+        if (el) el.scrollIntoView({ block: "start" });
+      }, 0);
+      return panel;
+    }
+
+    // followChat applies a chat's updates after cursor after as they come, until signal stops it, the chat's panel
+    // leaves the page, or the chat is gone; it says on live whether it follows, and tries again, waiting longer each
+    // time, when a read fails.
+    async function followChat(chat, after, apply, panel, live, signal) {
+      let delay = 1000;
+      while (!signal.aborted) {
+        try {
+          const d = await api("GET", chat + "/updates?" + new URLSearchParams({ after, wait: 15 }), undefined, {}, signal);
+          if (!panel.isConnected) return;
+          d.updates.forEach(apply);
+          after = d.after;
+          delay = 1000;
+          live.textContent = "Live";
+        } catch (err) {
+          if (signal.aborted || !panel.isConnected) return;
+          if (err.status === 404) return void (live.textContent = "This chat is gone.");
+          live.textContent = "Reconnecting…";
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          delay = Math.min(delay * 2, 60000);
+        }
+      }
     }
 
     // mergeControl offers to merge b into its base, at the head the page shows, for a viewer who may: Merge once it is
