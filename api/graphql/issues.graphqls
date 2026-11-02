@@ -9,6 +9,8 @@ extend type Organization {
   issues(filter: IssueFilter, first: Int! = 50, after: String): IssuePage!
   "One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read."
   issue(number: Int!): Issue
+  "The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read."
+  labels: [Label!]!
 }
 
 "Which of an organization's issues a list shows."
@@ -19,6 +21,8 @@ input IssueFilter {
   assigneeId: ID
   "Those about one repository, by ID, or about none, for none."
   repositoryId: ID
+  "Those that carry every one of these labels, by ID, at most 20."
+  labelIds: [ID!]
   "Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42."
   text: String
 }
@@ -75,6 +79,8 @@ type Issue {
   assignee: IssuePrincipal
   "The repository it is about; null for none, and for a viewer who doesn't read it."
   repository: IssueRepository
+  "The organization's labels it carries, by name."
+  labels: [IssueLabel!]!
   "Who created it; null once they are gone."
   createdBy: IssuePrincipal
   createdAt: Time!
@@ -131,6 +137,53 @@ type IssueEventBranch {
   linkedBy: LinkedBy!
 }
 
+"A label as an issue shows it."
+type IssueLabel {
+  id: ID!
+  name: String!
+  color: LabelColor!
+}
+
+"A label's colour, which the Console draws in its tones of both themes."
+enum LabelColor {
+  GRAY
+  BLUE
+  GREEN
+  YELLOW
+  RED
+}
+
+"One of an organization's labels, which its issues carry."
+type Label {
+  id: ID!
+  "1 to 50 characters on one line, unlike the organization's other labels' whatever their case."
+  name: String!
+  color: LabelColor!
+  "What it is for, at most 200 characters on one line."
+  description: String!
+  "How many issues carry it."
+  issues: Int!
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"What creates a label."
+input LabelInput {
+  name: String!
+  "GRAY when left out."
+  color: LabelColor
+  description: String
+}
+
+"What changes a label: a field left out keeps its value."
+input LabelPatch {
+  name: String
+  color: LabelColor
+  description: String
+}
+
 "Who an issue is assigned to, who created it, or who changed it."
 type IssuePrincipal {
   id: ID!
@@ -158,9 +211,9 @@ type IssueEvent {
   branch: IssueEventBranch
 }
 
-"A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads."
+"A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads."
 type IssueChange {
-  "title, description, state, priority, assignee or repository."
+  "title, description, state, priority, assignee, repository or labels."
   field: String!
   from: String
   to: String
@@ -180,6 +233,8 @@ input IssueInput {
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads."
   repositoryId: ID
+  "The organization's labels it carries, at most 20."
+  labelIds: [ID!]
 }
 
 "What changes an issue: a field left out keeps its value, and null clears an assignee or a repository."
@@ -192,6 +247,8 @@ input IssuePatch {
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads, or null for none."
   repositoryId: ID
+  "The organization's labels it carries from now on, at most 20, in place of those it did; empty for none."
+  labelIds: [ID!]
 }
 
 extend input OrganizationSettings {
@@ -208,6 +265,12 @@ extend type Mutation {
   deleteIssue(organizationId: ID!, number: Int!, expectedVersion: Int): Boolean!
   "Links one of the organization's repository's live branches to one of its issues by hand, in place of any issue it works on, for the viewer, and answers the link; takes issues.write, and repo.read. An issue in BACKLOG or TODO moves to IN_PROGRESS. main works on no issue (BAD_USER_INPUT, branch.default), as for an issue the organization doesn't have (issue.invalid)."
   linkBranch(organizationId: ID!, repositoryId: ID!, branch: String!, number: Int!): BranchIssue!
+  "Creates a label in the organization, named unlike its others whatever their case (CONFLICT, label.taken); takes issues.manage."
+  createLabel(organizationId: ID!, input: LabelInput!): Label!
+  "Changes the fields input names of one of the organization's labels, which its issues then show, and answers it as it now is; takes issues.manage. With expectedVersion, a label at another version is refused (CONFLICT, precondition.failed)."
+  updateLabel(organizationId: ID!, id: ID!, input: LabelPatch!, expectedVersion: Int): Label!
+  "Deletes one of the organization's labels, which takes it off every issue, and answers true; takes issues.manage. With expectedVersion, a label at another version is refused (CONFLICT, precondition.failed)."
+  deleteLabel(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
   "Unlinks one of the organization's repository's live branches from its issue by hand, for the viewer, so its name never links it again, and answers true; takes issues.write, and repo.read."
   unlinkBranch(organizationId: ID!, repositoryId: ID!, branch: String!): Boolean!
 }

@@ -106,6 +106,8 @@ type Issue struct {
 	Assignee *Principal
 	// Repository is the repository it is about; nil for none, or for a viewer who doesn't read it.
 	Repository *Repository
+	// Labels are the organization's labels it carries, by name.
+	Labels []IssueLabel
 	// CreatedBy is who created it; nil once they are gone.
 	CreatedBy *Principal
 	CreatedAt time.Time
@@ -129,6 +131,8 @@ type Input struct {
 	Priority     Priority
 	AssigneeID   uuid.UUID
 	RepositoryID uuid.UUID
+	// LabelIDs are the organization's labels it carries.
+	LabelIDs []uuid.UUID
 }
 
 // Patch is what changes an issue: each field that isn't nil. uuid.Nil unassigns it, or makes it about no repository.
@@ -139,6 +143,8 @@ type Patch struct {
 	Priority     *Priority
 	AssigneeID   *uuid.UUID
 	RepositoryID *uuid.UUID
+	// LabelIDs are the labels it carries from now on, in place of those it did; empty for none.
+	LabelIDs *[]uuid.UUID
 	// Version is the version of the issue the change was made from, which refuses one made meanwhile with
 	// ErrChanged; 0 changes whichever is there.
 	Version int64
@@ -152,6 +158,8 @@ type Filter struct {
 	AssigneeID *uuid.UUID
 	// RepositoryID shows those about one repository; nil, any.
 	RepositoryID *uuid.UUID
+	// LabelIDs shows those that carry every one of these labels; empty, any.
+	LabelIDs []uuid.UUID
 	// Text shows those whose title or description holds it, in any case, or whose identifier it is.
 	Text string
 	// Cursor is where the page starts: a page's Next; "" for the first.
@@ -178,6 +186,7 @@ type Query struct {
 	States       []State
 	AssigneeID   *uuid.UUID
 	RepositoryID *uuid.UUID
+	LabelIDs     []uuid.UUID
 	Text         string
 	Number       int
 	Below        int
@@ -185,7 +194,8 @@ type Query struct {
 }
 
 // Change is a field an issue's change changed, with its value before and after as people read it: a state's and a
-// priority's names, an assignee's display name, a repository's slug; "" for none. FromID and ToID are the assignee or
+// priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated; ""
+// for none. FromID and ToID are the assignee or
 // repository they name.
 type Change struct {
 	Field  string

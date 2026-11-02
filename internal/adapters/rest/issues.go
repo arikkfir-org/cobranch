@@ -15,8 +15,9 @@ import (
 	"cobranch.dev/internal/services/issues"
 )
 
-// Issues is what the API needs of the issues' service.
+// Issues is what the API needs of the issues' service, its organizations' labels included.
 type Issues interface {
+	Labels
 	List(ctx context.Context, v issues.Viewer, orgID uuid.UUID, f issues.Filter) (issues.Page, error)
 	Create(ctx context.Context, v issues.Viewer, orgID uuid.UUID, in issues.Input) (issues.Issue, error)
 	Get(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (issues.Issue, error)
@@ -46,6 +47,7 @@ func issueOf(i issues.Issue) Issue {
 	if r := i.Repository; r != nil {
 		out.Repository = &IssueRepository{Id: r.ID, Slug: r.Slug, Name: r.Name}
 	}
+	out.Labels = mapAll(i.Labels, issueLabel)
 	if i.ClosedAt != nil {
 		at := i.ClosedAt.UTC()
 		out.ClosedAt = &at
@@ -133,6 +135,9 @@ func issueFilter(p ListIssuesParams) (issues.Filter, error) {
 	if f.RepositoryID, err = idOrNone("repository", p.Repository); err != nil {
 		return f, err
 	}
+	if p.Label != nil {
+		f.LabelIDs = *p.Label
+	}
 	if p.Text != nil {
 		f.Text = *p.Text
 	}
@@ -169,6 +174,11 @@ func nextIssues(p ListIssuesParams, cursor string) url.Values {
 	if p.State != nil {
 		for _, s := range *p.State {
 			next.Add("state", string(s))
+		}
+	}
+	if p.Label != nil {
+		for _, id := range *p.Label {
+			next.Add("label", id.String())
 		}
 	}
 	for name, value := range map[string]*string{"assignee": p.Assignee, "repository": p.Repository, "q": p.Text} {
@@ -210,6 +220,9 @@ func (a api) CreateIssue(ctx context.Context, req CreateIssueRequestObject) (Cre
 	}
 	if b.RepositoryId != nil {
 		in.RepositoryID = *b.RepositoryId
+	}
+	if b.LabelIds != nil {
+		in.LabelIDs = *b.LabelIds
 	}
 	created, err := a.issues.Create(ctx, v, org.ID, in)
 	if err != nil {
@@ -280,7 +293,7 @@ func issuePatch(b IssuePatch) (issues.Patch, error) {
 		}
 		p.Priority = &priority
 	}
-	p.AssigneeID, p.RepositoryID = idOrClear(b.AssigneeId), idOrClear(b.RepositoryId)
+	p.AssigneeID, p.RepositoryID, p.LabelIDs = idOrClear(b.AssigneeId), idOrClear(b.RepositoryId), b.LabelIds
 	return p, nil
 }
 

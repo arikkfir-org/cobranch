@@ -1,7 +1,9 @@
 -- IssueByID finds an issue by its ID, as IssueByNumber answers it.
 -- name: IssueByID :one
 SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name
+       r.slug AS repo_slug, r.name AS repo_name,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id

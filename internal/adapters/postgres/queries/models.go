@@ -181,6 +181,17 @@ type JoinRequest struct {
 	DecidedBy *uuid.UUID
 }
 
+type Label struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Color       string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type Membership struct {
 	OrgID    uuid.UUID
 	UserID   uuid.UUID

@@ -29,14 +29,14 @@ spec:
           memory: 64Mi
         limits:
           memory: 128Mi
-    # As ci.yaml's build, lint and test, whose compiles it repeats.
+    # As ci.yaml's build, lint and test, whose compiles it repeats; its limit holds lint's cold run.
     - pipelineTaskName: warm
       computeResources:
         requests:
           cpu: "2"
           memory: 2Gi
         limits:
-          memory: 3Gi
+          memory: 4Gi
   workspaces:
     - name: source
       emptyDir: {}
