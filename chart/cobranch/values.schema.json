@@ -138,6 +138,11 @@
           "pattern": "^$|^postgres://$|^(s3|gs|azblob|file)://.+",
           "description": "Where the object store keeps Git's packs: empty (or postgres://) for the database's large objects, the default; s3://, gs:// or azblob:// for a cloud's bucket; file:// for a directory on blob.volume."
         },
+        "moveFrom": {
+          "type": "string",
+          "pattern": "^$|^postgres://$|^(s3|gs|azblob|file)://.+",
+          "description": "The store packs move from, as url names one, while they move into url's; empty when nothing moves."
+        },
         "envFromSecret": {
           "type": "string"
         },
