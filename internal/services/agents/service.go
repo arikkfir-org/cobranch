@@ -40,7 +40,7 @@ type Store interface {
 	DeleteAgent(ctx context.Context, actor, orgID, id uuid.UUID, version int64) error
 	// Branch finds one of the repository's live branches, by ID or else by name, and answers both.
 	Branch(ctx context.Context, repoID, id uuid.UUID, name string) (uuid.UUID, string, error)
-	// ThreadBranch answers the branch a chat thread belongs to.
+	// ThreadBranch answers the branch a chat thread belongs to; uuid.Nil for one of an issue's chat, which belongs to none.
 	ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid.UUID, error)
 	// Tasks lists a page of at most limit of the organization's tasks, newest first, that match the filter and either
 	// name no repository or one of readable.

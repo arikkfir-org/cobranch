@@ -494,9 +494,9 @@ SELECT branch_id FROM chat_threads WHERE id = $1
 `
 
 // ThreadBranch answers the branch a chat thread belongs to.
-func (q *Queries) ThreadBranch(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+func (q *Queries) ThreadBranch(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
 	row := q.db.QueryRow(ctx, threadBranch, id)
-	var branch_id uuid.UUID
+	var branch_id *uuid.UUID
 	err := row.Scan(&branch_id)
 	return branch_id, err
 }

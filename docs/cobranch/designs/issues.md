@@ -54,7 +54,7 @@ A branch works on one issue at most; an issue has any number of branches, in any
   High, Medium or Low), one assignee, any of the organization's [labels](#labels), and optionally the repository it is
   about.
 - **One assignee, any principal of the organization** who acts: a member, or one of its agents once they exist.
-  Assigning an agent hands it the issue as its task ([below](#agents-and-comments)).
+  Assigning an agent hands it the issue as its task ([below](#agents)).
 - **Its repository is a hint,** not an owner: the agent its task goes to works there, and the Console filters by it.
   Only viewers who read that repository see which one it is.
 - **A version, its ETag.** Each change bumps an issue's version. Its ETag is the version and the organization's key,
@@ -66,8 +66,7 @@ A branch works on one issue at most; an issue has any number of branches, in any
   subject: `issue.created`, `issue.changed` with each field's old and new value (a label's by name),
   `issue.branch_linked` and `issue.branch_unlinked`, each naming its actor, so the issue page shows who moved it and
   when. A deleted issue's events go with it, and the organization's own event `issue.deleted` keeps its number and
-  title. Comments join them once branch chats exist ([below](#agents-and-comments)); the table carries trigger
-  `audit()`.
+  title. Its [comments](#comments) show beside them, a chat of its own; the table carries trigger `audit()`.
 - **Deleting is for mistakes.** `issues.manage` deletes an issue, its links and its activity with it; work that won't be
   done is Canceled, which keeps its history.
 
@@ -183,17 +182,48 @@ A hand link or unlink is a row the push worker never touches, so the person’s 
 - **The Console's branch page** shows the branch's issue with its state, and a menu to link another issue by its
   identifier or to unlink.
 
-## Agents and comments
+## Comments
+
+An issue's comments are a chat, as a branch's are ([agents](agents.md#branch-chats)): threads of Markdown messages that
+people start, answer, edit, resolve and follow live, whose subject is the issue instead of a branch. One message model
+serves both, so what a branch chat does, a comment does too.
+
+**A comment is a message in the issue’s chat, which its followers read live**
+
+![A comment is a message in the issue’s chat, which its followers read live](issues/comments.svg)
+
+The same chat as a branch’s, with the issue as its subject and the issues’ permissions; GraphQL’s `issueChatUpdates` and
+REST’s `…/chat/updates?wait=15` follow it alike.
+
+- **Threads, not a flat list.** A comment starts a thread, and its answers stay under it, so a question and its answer
+  read together and resolve together. An issue's threads point at no file: the issue may be about no repository, or
+  several. The service and the schema both refuse an anchor on one.
+- **The issues' permissions rule it,** at the organization, not the repository's: `issues.read` reads the comments,
+  `issues.write` comments, answers, edits and deletes the viewer's own, and resolves and reopens their own threads, and
+  `issues.manage` deletes anyone's and resolves anyone's. A viewer who can't see the organization finds no issue; a
+  Guest, who can, is refused, as for the issue itself.
+- **Live, as a branch chat is.** Each change appends its event, `chat.thread.started` to `chat.thread.reopened`, naming
+  the issue as its subject, under a lock on the issue's chat, so followers read them in order; GraphQL's
+  `issueChatUpdates` and REST's `…/chat/updates?wait=15` follow them. Each read checks the viewer's permissions again,
+  and reads the issue again: a deleted issue ends its followers.
+- **Messages render as the description does,** in the Markdown the Console renders a repository's in, with no repository
+  of their own to link into.
+- **They go with the issue.** Deleting an issue deletes its chat, its messages and their events with it; the audit log
+  keeps what they said. A comment made while the issue is deleted either lands first, and goes with it, or finds no
+  issue.
+- **The issue page shows them** under its activity, newest thread first, with a box to comment for `issues.write`.
+
+## Agents
 
 The seams with agents ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)), agreed with its thread on 2026-11-02:
-tasks and branch chats are its own, and issues use both rather than a second model.
+tasks and chats are its own, and issues use both rather than a second model.
 
 **Assigning an issue to an agent creates the agent’s task; its branch links back by name**
 
 ![Assigning an issue to an agent creates the agent’s task; its branch links back by name](issues/agent.svg)
 
-Reassigning the issue cancels the agent’s open task. Mentioning the agent in the issue’s comments, a chat about the
-issue, hands it work as in a branch chat.
+Reassigning the issue cancels the agent’s open task. Mentioning the agent in the issue’s comments, its chat, hands it
+work as in a branch chat, once agents follow mentions.
 
 - **Assigning an agent creates its task,** in the same transaction as the assignment, through the agents service: the
   viewer is the task's assigner, so the agent does no more than they can; its title is the issue's identifier and title,
@@ -203,9 +233,8 @@ issue, hands it work as in a branch chat.
   service; Done or Canceled leaves a running task to finish its turn and record it.
 - **The agent works like anyone.** It pushes a branch named after the issue, which links by name and moves the issue to
   In progress, and the branch's merge moves it to Done.
-- **Comments are a chat.** An issue's comments are a chat thread whose subject is the issue instead of a branch: the
-  branch chat's tables take an `issue_id` beside `branch_id`, exactly one of them set, so messages, mentions and live
-  updates work as in a branch chat, and mentioning an agent hands it work as there.
+- **Comments reach it as a chat does.** The issue's [comments](#comments) are a chat, so mentioning an agent there hands
+  it work as a branch chat's mention does, once agents follow mentions.
 
 ## APIs
 
@@ -223,6 +252,10 @@ change, merge patches, and lists paged by an opaque cursor with `Link: rel="next
 | Its branches | `GET /issues/{number}/branches` | `Issue.branches` | `issues.read`, and `repo.read` per branch |
 | A branch's issue | the branch's `issue` | `Branch.issue` | `issues.read` |
 | Link or unlink by hand | `PUT` or `DELETE /repos/{repo}/branches/{branch}/issue` | `linkBranch`, `unlinkBranch` | `issues.write`, `repo.read` |
+| Its comments, newest thread first, with their messages | `GET /issues/{number}/chat` | `Issue.chat` | `issues.read` |
+| Comment: start a thread, or answer one | `POST /issues/{number}/chat/threads`, `POST …/threads/{thread}/messages` | `startIssueChatThread`, `postIssueChatMessage` | `issues.write` |
+| Edit or delete a message, resolve or reopen a thread | `PATCH` or `DELETE …/messages/{message}`, `PATCH …/threads/{thread}`, `If-Match` | `editIssueChatMessage`, `deleteIssueChatMessage`, `resolveIssueChatThread` | `issues.write` for the viewer's own, `issues.manage` for anyone's |
+| Follow them live | `GET /issues/{number}/chat/updates?after=&wait=` | `issueChatUpdates` | `issues.read` |
 | The key | the organization's `issueKey` | `Organization.issueKey`, `updateOrganization` | `org.manage` to change |
 | List labels, by name, with their issues' count | `GET /labels` | `Organization.labels` | `issues.read` |
 | Create a label | `POST /labels`, 201 with `Location`, 409 for a name taken | `createLabel` | `issues.manage` |
@@ -245,9 +278,10 @@ the page instead of overwriting it.
   among them), repository, label and text; a switch shows closed ones. Each row is the design system's Issue row:
   identifier, title, priority, labels, assignee's avatar, the linked branches' count.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
-  description, its branches with their status as branch rows, and its activity, oldest first; the side column edits
-  state, priority, assignee, labels and repository, each change saved at once with the version it was made from, and
-  shows who created it. "Assign to an agent" lists the organization's agents once they exist.
+  description, its branches with their status as branch rows, its activity, oldest first, and its [comments](#comments),
+  live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
+  version it was made from, and shows who created it. "Assign to an agent" lists the organization's agents once they
+  exist.
 - **Labels** at `/<org>/issues/labels` lists the organization's labels with what each is for and how many issues carry
   it, linked to the list filtered by it; for `issues.manage`, each row edits or deletes its label, and a form adds one.
 - **New issue** at `/<org>/issues/new` asks for a title, then the rest, as the side column does. `issues` joins the
@@ -260,8 +294,9 @@ the page instead of overwriting it.
 
 ![This slice’s tables: issues and their numbers, branch links, labels, and the key on organizations](issues/er.svg)
 
-`issues`, `branch_issues`, `labels` and `issue_labels` carry trigger `audit()`, and `issues` and `labels` trigger
-`bump_version()`. Every new row carries `org_id`, but `issue_labels`, which joins two that do.
+`issues`, `branch_issues`, `labels` and `issue_labels` carry trigger `audit()`, as the chats’ tables do already, and
+`issues` and `labels` trigger `bump_version()`. Every new row carries `org_id`, but `issue_labels`, which joins two that
+do.
 
 - **Numbers come from a counter per organization,** `issue_numbers`, incremented in the issue's transaction, so two
   issues created at once never share a number and a deleted one never frees its own.
@@ -269,6 +304,8 @@ the page instead of overwriting it.
   issue is a branch unlinked by hand, which the push worker leaves alone.
 - **`labels` is unique by name in any case,** an index on the organization and the lowercased name; `issue_labels` joins
   an issue to a label, and deleting either deletes the row.
+- **`chat_threads` takes `issue_id`** beside `branch_id`, exactly one of them set, and `repo_id` only with a branch; an
+  issue's thread has no anchor. Its messages, their trigger `audit()` and the events stay as the branch chats have them.
 - **Every new row carries `org_id`,** but `issue_labels`, which joins two rows that do; `issues`, `branch_issues`,
   `labels` and `issue_labels` carry trigger `audit()`, and `issues` and `labels` trigger `bump_version()`. The counter
   carries neither: it is bookkeeping.
@@ -286,6 +323,7 @@ the page instead of overwriting it.
 | A branch has at most one issue; the first identifier in its name wins; a hand link or unlink is never undone by the name | "A branch shows its issue", in the product design's words; the person decides over the pattern | Proposed |
 | Names link when the push worker processes the branch's push, and when the issue they name is created | Keeps pushes as fast as before; a branch pushed before its issue still links | Proposed |
 | Comments are a chat whose subject is the issue; tasks are agents' tasks naming the issue | One message model and one task model, agreed with [ENG-215](https://linear.app/arikkfir/issue/ENG-215) | Agreed |
+| An issue's comments take the issues' permissions, with no anchor; a Guest is refused | Who reads an issue reads what is said about it; an issue may span repositories, so no file is its | Proposed |
 | Labels are the organization's, in five colours of the design system's tones; `issues.manage` manages them and `issues.write` sets them, at most 20 an issue | One vocabulary across repositories, as issues are the organization's; the tones read in both themes; a shared vocabulary is an Owner's to shape and everyone's to use | Proposed |
 | A label's rename or new colour changes each issue that carries it | An issue's ETag then changes, so a client that cached it reads the new name; a description shows on no issue, so its change touches none | Proposed |
 | Sub-issues, relations, estimates, cycles and projects, custom states, notifications and search come later | Keeps this slice to issues, their branches, labels and agents | Proposed |
@@ -296,8 +334,9 @@ the page instead of overwriting it.
 
 ![Four pull requests, each with its tests and its Console pages](issues/rollout.svg)
 
-Pull requests 1 to 3 need nothing but `main`; the fourth waits for
-[ENG-215](https://linear.app/arikkfir/issue/ENG-215)’s tasks and chats to merge.
+Pull requests 1 to 3 need nothing but `main`. The fourth comes in two: comments on the branch chats `main` has, and
+agents once [ENG-215](https://linear.app/arikkfir/issue/ENG-215)’s tasks merge; the last says Closes
+[ENG-217](https://linear.app/arikkfir/issue/ENG-217).
 
 Nothing changes for an operator: no workload, no chart value. An organization's existing members get the new permissions
 through the built-in roles; custom roles get them only when someone adds them. Demo data seeds Acme's issues in every

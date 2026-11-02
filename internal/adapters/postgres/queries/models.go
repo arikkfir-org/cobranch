@@ -93,8 +93,8 @@ type ChatMessage struct {
 type ChatThread struct {
 	ID         uuid.UUID
 	OrgID      uuid.UUID
-	RepoID     uuid.UUID
-	BranchID   uuid.UUID
+	RepoID     *uuid.UUID
+	BranchID   *uuid.UUID
 	Sha        *string
 	Path       *string
 	StartLine  *int32
@@ -104,6 +104,7 @@ type ChatThread struct {
 	ResolvedAt *time.Time
 	ResolvedBy *uuid.UUID
 	Version    int64
+	IssueID    *uuid.UUID
 }
 
 type Commit struct {

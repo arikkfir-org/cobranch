@@ -1659,6 +1659,367 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat:
+    get:
+      operationId: listIssueChatThreads
+      summary: >-
+        A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they
+        were posted; takes issues.read. Its after is where the chat's updates stood when the page was read:
+        listIssueChatUpdates after it answers every change the page may lack.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many threads the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's threads, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threads, after]
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatThread"
+                  after:
+                    type: string
+                    description: Where the chat's updates stood when the page was read, as listIssueChatUpdates takes it. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat/threads:
+    post:
+      operationId: startIssueChatThread
+      summary: >-
+        Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's
+        threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked
+        answers it as it is, and an ID of another's thread answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadInput"
+      responses:
+        "201":
+          description: The thread, with its message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat/threads/{thread}:
+    get:
+      operationId: getIssueChatThread
+      summary: One of the issue's chat threads, with its messages in the order they were posted; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The thread.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "304":
+          description: The thread is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateIssueChatThread
+      summary: >-
+        Resolves one of the issue's chat threads, or opens it again; takes issues.write for a thread the viewer started
+        and issues.manage for another's. The change names the thread's ETag in If-Match; without it, the answer is
+        428. A thread already so is answered as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatThreadPatch"
+      responses:
+        "200":
+          description: The thread as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatThread"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat/threads/{thread}/messages:
+    post:
+      operationId: postIssueChatMessage
+      summary: >-
+        Posts a message to one of the issue's chat threads for the viewer; takes issues.write. Posting the viewer's
+        message to the thread again by the ID it picked answers it as it is, and an ID of another message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatMessageInput"
+      responses:
+        "201":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat/threads/{thread}/messages/{message}:
+    get:
+      operationId: getIssueChatMessage
+      summary: One of the messages of one of the issue's chat threads; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The message.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "304":
+          description: The message is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: editIssueChatMessage
+      summary: >-
+        Changes the body of one of the viewer's messages; takes issues.write, and only a message's author edits it. The
+        edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ChatMessagePatch"
+      responses:
+        "200":
+          description: The message as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatMessage"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteIssueChatMessage
+      summary: >-
+        Deletes a message, which empties it and keeps its place in its thread, marked with who deleted it; takes
+        issues.write for the viewer's own and issues.manage for another's. The deletion names the message's ETag in
+        If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifMatchChat"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/chat/updates:
+    get:
+      operationId: listIssueChatUpdates
+      summary: >-
+        The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now;
+        takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows
+        the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID,
+        holds the chat as it is.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - name: after
+          in: query
+          required: true
+          description: Where the updates start, as listIssueChatThreads' after or a previous answer's names it. Opaque.
+          schema:
+            type: string
+        - name: wait
+          in: query
+          description: How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 15
+            default: 0
+      responses:
+        "200":
+          description: The updates, at most 100, in order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updates, after]
+                properties:
+                  updates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ChatUpdate"
+                  after:
+                    type: string
+                    description: Where the next read starts, after the last update; the request's after when there is none. Opaque.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/labels:
     get:
       operationId: listLabels

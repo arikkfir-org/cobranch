@@ -35,6 +35,53 @@ func (q *Queries) InsertSeedAPIKey(ctx context.Context, arg InsertSeedAPIKeyPara
 	return err
 }
 
+const insertSeedChatMessage = `-- name: InsertSeedChatMessage :exec
+INSERT INTO chat_messages (id, thread_id, org_id, author_id, body) VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertSeedChatMessageParams struct {
+	ID       uuid.UUID
+	ThreadID uuid.UUID
+	OrgID    uuid.UUID
+	AuthorID uuid.NullUUID
+	Body     string
+}
+
+func (q *Queries) InsertSeedChatMessage(ctx context.Context, arg InsertSeedChatMessageParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedChatMessage,
+		arg.ID,
+		arg.ThreadID,
+		arg.OrgID,
+		arg.AuthorID,
+		arg.Body,
+	)
+	return err
+}
+
+const insertSeedChatThread = `-- name: InsertSeedChatThread :exec
+INSERT INTO chat_threads (id, org_id, issue_id, created_by, resolved_at, resolved_by)
+VALUES ($1, $2, $3, $4, CASE WHEN $5::uuid IS NOT NULL THEN now() END, $5)
+`
+
+type InsertSeedChatThreadParams struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	IssueID    uuid.NullUUID
+	CreatedBy  uuid.NullUUID
+	ResolvedBy uuid.NullUUID
+}
+
+func (q *Queries) InsertSeedChatThread(ctx context.Context, arg InsertSeedChatThreadParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedChatThread,
+		arg.ID,
+		arg.OrgID,
+		arg.IssueID,
+		arg.CreatedBy,
+		arg.ResolvedBy,
+	)
+	return err
+}
+
 const insertSeedCredential = `-- name: InsertSeedCredential :exec
 INSERT INTO credentials (id, kind, token_hash, principal_id, hint, created_at, created_by, expires_at, revoked_at)
 VALUES ($1, 'api_key', $2, $3, $4, now(), $5, $6, $7)
