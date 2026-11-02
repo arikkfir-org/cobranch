@@ -161,6 +161,24 @@ func (q *Queries) OrganizationLimits(ctx context.Context, orgID uuid.UUID) (Orga
 	return i, err
 }
 
+const organizationUsage = `-- name: OrganizationUsage :one
+SELECT (SELECT count(*) FROM repositories r WHERE r.org_id = $1::uuid)::bigint AS repositories,
+       (SELECT coalesce(sum(p.size), 0) FROM packs p WHERE p.org_id = $1::uuid AND p.state = 'active')::bigint AS git_data
+`
+
+type OrganizationUsageRow struct {
+	Repositories int64
+	GitData      int64
+}
+
+// OrganizationUsage counts the organization's repositories and sums the bytes of their active packs.
+func (q *Queries) OrganizationUsage(ctx context.Context, orgID uuid.UUID) (OrganizationUsageRow, error) {
+	row := q.db.QueryRow(ctx, organizationUsage, orgID)
+	var i OrganizationUsageRow
+	err := row.Scan(&i.Repositories, &i.GitData)
+	return i, err
+}
+
 const ownLimits = `-- name: OwnLimits :one
 SELECT org_id, repositories, git_data, version, updated_at, updated_by FROM organization_limits WHERE org_id = $1
 `
@@ -190,4 +208,37 @@ func (q *Queries) PackActive(ctx context.Context, repoID uuid.UUID, name string)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const repositoriesGitData = `-- name: RepositoriesGitData :many
+SELECT repo_id, sum(size)::bigint AS git_data FROM packs
+WHERE org_id = $1 AND repo_id = ANY ($2::uuid[]) AND state = 'active'
+GROUP BY repo_id
+`
+
+type RepositoriesGitDataRow struct {
+	RepoID  uuid.UUID
+	GitData int64
+}
+
+// RepositoriesGitData sums the bytes of the active packs of each of ids that is the organization's repository; one
+// without any has no row.
+func (q *Queries) RepositoriesGitData(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]RepositoriesGitDataRow, error) {
+	rows, err := q.db.Query(ctx, repositoriesGitData, orgID, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RepositoriesGitDataRow
+	for rows.Next() {
+		var i RepositoriesGitDataRow
+		if err := rows.Scan(&i.RepoID, &i.GitData); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

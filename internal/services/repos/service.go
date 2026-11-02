@@ -31,6 +31,9 @@ type Store interface {
 	Among(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) ([]Repository, error)
 	// Update writes the repository's settings, claiming its slug when it changed, or ErrSlugTaken.
 	Update(ctx context.Context, actor uuid.UUID, repo Repository) error
+	// Usage counts the organization's repositories and sums its Git data, and lists those of ids that are its
+	// repositories, by slug, each with its Git data.
+	Usage(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (limits.Usage, []RepositoryUsage, error)
 	// Access lists the principals holding grants on the repository with their roles there, by display name.
 	Access(ctx context.Context, repoID uuid.UUID) ([]Access, error)
 	// Roles lists the roles the organization's repositories grant: the built-in repository roles, then its own.
@@ -191,6 +194,34 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Reposi
 		return nil, fmt.Errorf("listing the repositories: %w", err)
 	}
 	return repos, nil
+}
+
+// Usage returns what the organization takes of what its limits cap, each against the limit that applies, with the Git
+// data of each of its repositories v reads; it takes org.read. The totals count every repository, those v doesn't read
+// too, since the limits weigh them all; only the repositories v reads are named.
+func (s *Service) Usage(ctx context.Context, v Viewer, orgID uuid.UUID) (Usage, error) {
+	if _, err := s.orgHolds(ctx, v, orgID); err != nil {
+		return Usage{}, err
+	}
+	ids, err := s.authz.Repositories(ctx, v.ID, orgID, PermRead)
+	if err != nil {
+		return Usage{}, fmt.Errorf("listing what the viewer reads: %w", err)
+	}
+	used, byRepository, err := s.store.Usage(ctx, orgID, ids)
+	if err != nil {
+		return Usage{}, fmt.Errorf("counting the organization's usage: %w", err)
+	}
+	var l limits.Limits
+	if s.limits != nil {
+		if l, err = s.limits.Organization(ctx, orgID); err != nil {
+			return Usage{}, fmt.Errorf("reading the organization's limits: %w", err)
+		}
+	}
+	return Usage{
+		Repositories: limits.Quota{Used: used.Repositories, Limit: l.RepositoriesPerOrganization},
+		GitData:      limits.Quota{Used: used.GitData, Limit: l.GitDataPerOrganization},
+		ByRepository: byRepository,
+	}, nil
 }
 
 // Get finds the organization's repository slug names, by its current slug or an old one, with what v holds there,

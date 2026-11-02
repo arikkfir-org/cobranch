@@ -338,7 +338,14 @@ type ComplexityRoot struct {
 		Repository          func(childComplexity int, slug string) int
 		Roles               func(childComplexity int) int
 		Slug                func(childComplexity int) int
+		Usage               func(childComplexity int) int
 		ViewerPermissions   func(childComplexity int) int
+	}
+
+	OrganizationUsage struct {
+		ByRepository func(childComplexity int) int
+		GitData      func(childComplexity int) int
+		Repositories func(childComplexity int) int
 	}
 
 	Person struct {
@@ -410,6 +417,11 @@ type ComplexityRoot struct {
 		Roles       func(childComplexity int) int
 	}
 
+	RepositoryUsage struct {
+		GitData    func(childComplexity int) int
+		Repository func(childComplexity int) int
+	}
+
 	Review struct {
 		Body        func(childComplexity int) int
 		ID          func(childComplexity int) int
@@ -474,6 +486,11 @@ type ComplexityRoot struct {
 		Size func(childComplexity int) int
 	}
 
+	Usage struct {
+		Limit func(childComplexity int) int
+		Used  func(childComplexity int) int
+	}
+
 	User struct {
 		DisplayName    func(childComplexity int) int
 		Emails         func(childComplexity int) int
@@ -485,6 +502,11 @@ type ComplexityRoot struct {
 		PersonalTokens func(childComplexity int) int
 		SSHKeys        func(childComplexity int) int
 		Sessions       func(childComplexity int) int
+		Usage          func(childComplexity int) int
+	}
+
+	ViewerUsage struct {
+		Organizations func(childComplexity int) int
 	}
 }
 
@@ -552,6 +574,7 @@ type OrganizationResolver interface {
 	Issue(ctx context.Context, obj *Organization, number int) (*Issue, error)
 	Repositories(ctx context.Context, obj *Organization) ([]*Repository, error)
 	Repository(ctx context.Context, obj *Organization, slug string) (*Repository, error)
+	Usage(ctx context.Context, obj *Organization) (*OrganizationUsage, error)
 }
 type QueryResolver interface {
 	Version(ctx context.Context) (string, error)
@@ -582,6 +605,7 @@ type UserResolver interface {
 	Organizations(ctx context.Context, obj *User) ([]*Organization, error)
 	Invitations(ctx context.Context, obj *User) ([]*Invitation, error)
 	JoinRequests(ctx context.Context, obj *User) ([]*JoinRequest, error)
+	Usage(ctx context.Context, obj *User) (*ViewerUsage, error)
 }
 
 // endregion ************************** generated!.gotpl **************************
@@ -2112,12 +2136,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Slug(childComplexity), true
+	case "Organization.usage":
+		if e.ComplexityRoot.Organization.Usage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Organization.Usage(childComplexity), true
 	case "Organization.viewerPermissions":
 		if e.ComplexityRoot.Organization.ViewerPermissions == nil {
 			break
 		}
 
 		return e.ComplexityRoot.Organization.ViewerPermissions(childComplexity), true
+
+	case "OrganizationUsage.byRepository":
+		if e.ComplexityRoot.OrganizationUsage.ByRepository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationUsage.ByRepository(childComplexity), true
+	case "OrganizationUsage.gitData":
+		if e.ComplexityRoot.OrganizationUsage.GitData == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationUsage.GitData(childComplexity), true
+	case "OrganizationUsage.repositories":
+		if e.ComplexityRoot.OrganizationUsage.Repositories == nil {
+			break
+		}
+
+		return e.ComplexityRoot.OrganizationUsage.Repositories(childComplexity), true
 
 	case "Person.at":
 		if e.ComplexityRoot.Person.At == nil {
@@ -2464,6 +2513,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.RepositoryAccess.Roles(childComplexity), true
 
+	case "RepositoryUsage.gitData":
+		if e.ComplexityRoot.RepositoryUsage.GitData == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryUsage.GitData(childComplexity), true
+	case "RepositoryUsage.repository":
+		if e.ComplexityRoot.RepositoryUsage.Repository == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RepositoryUsage.Repository(childComplexity), true
+
 	case "Review.body":
 		if e.ComplexityRoot.Review.Body == nil {
 			break
@@ -2712,6 +2774,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.TreeEntry.Size(childComplexity), true
 
+	case "Usage.limit":
+		if e.ComplexityRoot.Usage.Limit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Usage.Limit(childComplexity), true
+	case "Usage.used":
+		if e.ComplexityRoot.Usage.Used == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Usage.Used(childComplexity), true
+
 	case "User.displayName":
 		if e.ComplexityRoot.User.DisplayName == nil {
 			break
@@ -2772,6 +2847,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.User.Sessions(childComplexity), true
+	case "User.usage":
+		if e.ComplexityRoot.User.Usage == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.Usage(childComplexity), true
+
+	case "ViewerUsage.organizations":
+		if e.ComplexityRoot.ViewerUsage.Organizations == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewerUsage.Organizations(childComplexity), true
 
 	}
 	return 0, false
@@ -3851,6 +3939,53 @@ type JoinRequest {
   expiresAt: Time!
 }
 `, BuiltIn: false},
+	{Name: "../../../api/graphql/usage.graphqls", Input: `# Usage: what users and organizations take of what the installation's limits cap
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console").
+
+"An integer that may pass GraphQL's 32-bit Int, such as a number of bytes: a JSON number."
+scalar Int64
+
+"What a user or an organization takes of what one limit caps, against the limit that applies."
+type Usage {
+  "How many it holds, or the bytes it stores."
+  used: Int64!
+  "The most it may hold or store; 0 caps nothing."
+  limit: Int64!
+}
+
+"What the viewer takes of what the limits cap."
+type ViewerUsage {
+  "The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody."
+  organizations: Usage!
+}
+
+"What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads."
+type OrganizationUsage {
+  "Its repositories, every one of them."
+  repositories: Usage!
+  "The bytes of its repositories' active packs, as the object store keeps them."
+  gitData: Usage!
+  "The repositories the viewer reads, by slug, each with its Git data."
+  byRepository: [RepositoryUsage!]!
+}
+
+"One repository's share of its organization's Git data."
+type RepositoryUsage {
+  repository: Repository!
+  "The bytes of its active packs."
+  gitData: Int64!
+}
+
+extend type User {
+  "What the viewer takes of what the limits cap; the viewer's own, so it takes no permission."
+  usage: ViewerUsage!
+}
+
+extend type Organization {
+  "What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too."
+  usage: OrganizationUsage!
+}
+`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
 
@@ -4370,8 +4505,22 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_repositories(ctx, field)
 	case "repository":
 		return ec.fieldContext_Organization_repository(ctx, field)
+	case "usage":
+		return ec.fieldContext_Organization_usage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Organization", field.Name)
+}
+
+func (ec *executionContext) childFields_OrganizationUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repositories":
+		return ec.fieldContext_OrganizationUsage_repositories(ctx, field)
+	case "gitData":
+		return ec.fieldContext_OrganizationUsage_gitData(ctx, field)
+	case "byRepository":
+		return ec.fieldContext_OrganizationUsage_byRepository(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type OrganizationUsage", field.Name)
 }
 
 func (ec *executionContext) childFields_Person(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4494,6 +4643,16 @@ func (ec *executionContext) childFields_RepositoryAccess(ctx context.Context, fi
 		return ec.fieldContext_RepositoryAccess_roles(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RepositoryAccess", field.Name)
+}
+
+func (ec *executionContext) childFields_RepositoryUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "repository":
+		return ec.fieldContext_RepositoryUsage_repository(ctx, field)
+	case "gitData":
+		return ec.fieldContext_RepositoryUsage_gitData(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RepositoryUsage", field.Name)
 }
 
 func (ec *executionContext) childFields_Review(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -4624,6 +4783,16 @@ func (ec *executionContext) childFields_TreeEntry(ctx context.Context, field gra
 	return nil, fmt.Errorf("no field named %q was found under type TreeEntry", field.Name)
 }
 
+func (ec *executionContext) childFields_Usage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "used":
+		return ec.fieldContext_Usage_used(ctx, field)
+	case "limit":
+		return ec.fieldContext_Usage_limit(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Usage", field.Name)
+}
+
 func (ec *executionContext) childFields_User(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -4646,8 +4815,18 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_invitations(ctx, field)
 	case "joinRequests":
 		return ec.fieldContext_User_joinRequests(ctx, field)
+	case "usage":
+		return ec.fieldContext_User_usage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+}
+
+func (ec *executionContext) childFields_ViewerUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "organizations":
+		return ec.fieldContext_ViewerUsage_organizations(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ViewerUsage", field.Name)
 }
 
 func (ec *executionContext) childFields___Directive(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -12201,6 +12380,134 @@ func (ec *executionContext) fieldContext_Organization_repository(ctx context.Con
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_usage(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_usage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Organization().Usage(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *OrganizationUsage) graphql.Marshaler {
+			return ec.marshalNOrganizationUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_usage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_OrganizationUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationUsage_repositories(ctx context.Context, field graphql.CollectedField, obj *OrganizationUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationUsage_repositories(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repositories, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Usage) graphql.Marshaler {
+			return ec.marshalNUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationUsage_repositories(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Usage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationUsage_gitData(ctx context.Context, field graphql.CollectedField, obj *OrganizationUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationUsage_gitData(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GitData, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Usage) graphql.Marshaler {
+			return ec.marshalNUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationUsage_gitData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Usage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _OrganizationUsage_byRepository(ctx context.Context, field graphql.CollectedField, obj *OrganizationUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_OrganizationUsage_byRepository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ByRepository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RepositoryUsage) graphql.Marshaler {
+			return ec.marshalNRepositoryUsage2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryUsageᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_OrganizationUsage_byRepository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "OrganizationUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RepositoryUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Person_name(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -13672,6 +13979,61 @@ func (ec *executionContext) fieldContext_RepositoryAccess_roles(_ context.Contex
 	return fc, nil
 }
 
+func (ec *executionContext) _RepositoryUsage_repository(ctx context.Context, field graphql.CollectedField, obj *RepositoryUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryUsage_repository(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Repository, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Repository) graphql.Marshaler {
+			return ec.marshalNRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepository(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryUsage_repository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "RepositoryUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Repository(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RepositoryUsage_gitData(ctx context.Context, field graphql.CollectedField, obj *RepositoryUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RepositoryUsage_gitData(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.GitData, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RepositoryUsage_gitData(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RepositoryUsage", field, false, false, "Int64")
+}
+
 func (ec *executionContext) _Review_id(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14619,6 +14981,52 @@ func (ec *executionContext) fieldContext_TreeEntry_size(_ context.Context, field
 	return graphql.NewScalarFieldContext("TreeEntry", field, false, false, "Int")
 }
 
+func (ec *executionContext) _Usage_used(ctx context.Context, field graphql.CollectedField, obj *Usage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Usage_used(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Used, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Usage_used(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Usage", field, false, false, "Int64")
+}
+
+func (ec *executionContext) _Usage_limit(ctx context.Context, field graphql.CollectedField, obj *Usage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Usage_limit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Limit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Usage_limit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Usage", field, false, false, "Int64")
+}
+
 func (ec *executionContext) _User_id(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14907,6 +15315,70 @@ func (ec *executionContext) fieldContext_User_joinRequests(_ context.Context, fi
 		IsResolver: true,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_JoinRequest(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _User_usage(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_usage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().Usage(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ViewerUsage) graphql.Marshaler {
+			return ec.marshalNViewerUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewerUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_usage(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ViewerUsage(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _ViewerUsage_organizations(ctx context.Context, field graphql.CollectedField, obj *ViewerUsage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewerUsage_organizations(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Organizations, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Usage) graphql.Marshaler {
+			return ec.marshalNUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUsage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ViewerUsage_organizations(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ViewerUsage",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Usage(ctx, field)
 		},
 	}
 	return fc, nil
@@ -18740,6 +19212,55 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_repository(ctx, field, obj)
 				})
+		case "usage":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_usage(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var organizationUsageImplementors = []string{"OrganizationUsage"}
+
+func (ec *executionContext) _OrganizationUsage(ctx context.Context, sel ast.SelectionSet, obj *OrganizationUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, organizationUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("OrganizationUsage")
+		case "repositories":
+			out.Values[i] = ec._OrganizationUsage_repositories(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "gitData":
+			out.Values[i] = ec._OrganizationUsage_gitData(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "byRepository":
+			out.Values[i] = ec._OrganizationUsage_byRepository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -19232,6 +19753,44 @@ func (ec *executionContext) _RepositoryAccess(ctx context.Context, sel ast.Selec
 	return out
 }
 
+var repositoryUsageImplementors = []string{"RepositoryUsage"}
+
+func (ec *executionContext) _RepositoryUsage(ctx context.Context, sel ast.SelectionSet, obj *RepositoryUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, repositoryUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RepositoryUsage")
+		case "repository":
+			out.Values[i] = ec._RepositoryUsage_repository(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "gitData":
+			out.Values[i] = ec._RepositoryUsage_gitData(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var reviewImplementors = []string{"Review"}
 
 func (ec *executionContext) _Review(ctx context.Context, sel ast.SelectionSet, obj *Review) graphql.Marshaler {
@@ -19656,6 +20215,44 @@ func (ec *executionContext) _TreeEntry(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var usageImplementors = []string{"Usage"}
+
+func (ec *executionContext) _Usage(ctx context.Context, sel ast.SelectionSet, obj *Usage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, usageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Usage")
+		case "used":
+			out.Values[i] = ec._Usage_used(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "limit":
+			out.Values[i] = ec._Usage_limit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var userImplementors = []string{"User"}
 
 func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj *User) graphql.Marshaler {
@@ -19724,6 +20321,45 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_joinRequests(ctx, field, obj)
 				})
+		case "usage":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._User_usage(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var viewerUsageImplementors = []string{"ViewerUsage"}
+
+func (ec *executionContext) _ViewerUsage(ctx context.Context, sel ast.SelectionSet, obj *ViewerUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, viewerUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ViewerUsage")
+		case "organizations":
+			out.Values[i] = ec._ViewerUsage_organizations(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -20416,6 +21052,20 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) unmarshalNInt642int64(ctx context.Context, v any) (int64, error) {
+	res, err := graphql.UnmarshalInt64(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNInt642int64(ctx context.Context, sel ast.SelectionSet, v int64) graphql.Marshaler {
+	_ = sel
+	res := graphql.MarshalInt64(v)
+	if res == graphql.Null {
+		graphql.AddInvalidNullFromMarshaler(ctx, "Int64!")
+	}
+	return res
+}
+
 func (ec *executionContext) marshalNInvitation2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐInvitationᚄ(ctx context.Context, sel ast.SelectionSet, v []*Invitation) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -20677,6 +21327,14 @@ func (ec *executionContext) unmarshalNOrganizationSettings2cobranchᚗdevᚋinte
 	return res, graphql.ErrorOnPath(ctx, err)
 }
 
+func (ec *executionContext) marshalNOrganizationUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐOrganizationUsage(ctx context.Context, sel ast.SelectionSet, v *OrganizationUsage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "OrganizationUsage!")
+		return graphql.Null
+	}
+	return ec._OrganizationUsage(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNPerson2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPerson(ctx context.Context, sel ast.SelectionSet, v *Person) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "Person!")
@@ -20773,6 +21431,30 @@ func (ec *executionContext) marshalNRepositoryAccess2ᚖcobranchᚗdevᚋinterna
 func (ec *executionContext) unmarshalNRepositoryInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryInput(ctx context.Context, v any) (RepositoryInput, error) {
 	res, err := ec.unmarshalInputRepositoryInput(ctx, v)
 	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRepositoryUsage2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryUsageᚄ(ctx context.Context, sel ast.SelectionSet, v []*RepositoryUsage) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRepositoryUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryUsage(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRepositoryUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryUsage(ctx context.Context, sel ast.SelectionSet, v *RepositoryUsage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "RepositoryUsage!")
+		return graphql.Null
+	}
+	return ec._RepositoryUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNRepositoryVisibility2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRepositoryVisibility(ctx context.Context, v any) (RepositoryVisibility, error) {
@@ -21019,6 +21701,22 @@ func (ec *executionContext) marshalNTreeEntry2ᚖcobranchᚗdevᚋinternalᚋada
 		return graphql.Null
 	}
 	return ec._TreeEntry(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUsage(ctx context.Context, sel ast.SelectionSet, v *Usage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Usage!")
+		return graphql.Null
+	}
+	return ec._Usage(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNViewerUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewerUsage(ctx context.Context, sel ast.SelectionSet, v *ViewerUsage) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ViewerUsage!")
+		return graphql.Null
+	}
+	return ec._ViewerUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {

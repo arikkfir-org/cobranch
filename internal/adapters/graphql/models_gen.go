@@ -430,6 +430,8 @@ type Organization struct {
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
 	Repository *Repository `json:"repository,omitempty"`
+	// What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	Usage *OrganizationUsage `json:"usage"`
 }
 
 type OrganizationSettings struct {
@@ -441,6 +443,16 @@ type OrganizationSettings struct {
 	Providers []string `json:"providers,omitempty"`
 	// 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before.
 	IssueKey *string `json:"issueKey,omitempty"`
+}
+
+// What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+type OrganizationUsage struct {
+	// Its repositories, every one of them.
+	Repositories *Usage `json:"repositories"`
+	// The bytes of its repositories' active packs, as the object store keeps them.
+	GitData *Usage `json:"gitData"`
+	// The repositories the viewer reads, by slug, each with its Git data.
+	ByRepository []*RepositoryUsage `json:"byRepository"`
 }
 
 // A commit's author or committer as the commit writes them.
@@ -556,6 +568,13 @@ type RepositoryInput struct {
 	// The slug when null or empty.
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// One repository's share of its organization's Git data.
+type RepositoryUsage struct {
+	Repository *Repository `json:"repository"`
+	// The bytes of its active packs.
+	GitData int64 `json:"gitData"`
 }
 
 // A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
@@ -681,6 +700,14 @@ type TreeEntry struct {
 	Size *int `json:"size,omitempty"`
 }
 
+// What a user or an organization takes of what one limit caps, against the limit that applies.
+type Usage struct {
+	// How many it holds, or the bytes it stores.
+	Used int64 `json:"used"`
+	// The most it may hold or store; 0 caps nothing.
+	Limit int64 `json:"limit"`
+}
+
 // A person: a principal of kind user.
 type User struct {
 	ID          string `json:"id"`
@@ -701,6 +728,14 @@ type User struct {
 	Invitations []*Invitation `json:"invitations"`
 	// The viewer's pending requests to join organizations.
 	JoinRequests []*JoinRequest `json:"joinRequests"`
+	// What the viewer takes of what the limits cap; the viewer's own, so it takes no permission.
+	Usage *ViewerUsage `json:"usage"`
+}
+
+// What the viewer takes of what the limits cap.
+type ViewerUsage struct {
+	// The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+	Organizations *Usage `json:"organizations"`
 }
 
 // Where an annotation stands, in any order its principal sets them.

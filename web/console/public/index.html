@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
-       members, roles and settings under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches
+       members, roles and settings (with its usage against its limits) under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches
        with their status, history and commits with their annotations, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
        HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
@@ -188,6 +188,7 @@
     th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--color-border-default); vertical-align: middle; }
     th { color: var(--color-fg-muted); font-weight: 500; font-size: 12px; }
     td.actions { text-align: right; white-space: nowrap; }
+    th.number, td.number { text-align: right; white-space: nowrap; }
     .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); font-size: 12px; margin-right: 4px; }
     .perms { display: flex; flex-wrap: wrap; gap: 4px; }
     .perms code { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); }
@@ -200,6 +201,11 @@
     .picks label code { font-size: 12px; }
     .picks input { width: auto; }
     .muted { color: var(--color-fg-muted); font-size: 12px; }
+    .gauge { display: grid; gap: 4px; }
+    .meter { height: 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); overflow: hidden; }
+    .meter span { display: block; height: 100%; background: var(--color-accent); }
+    .meter[data-tone="warning"] span { background: var(--color-status-warning-fg); }
+    .meter[data-tone="danger"] span { background: var(--color-status-danger-fg); }
     section.panel.notice code { word-break: break-all; }
     .commits td { vertical-align: top; }
     .commits td.sha { text-align: right; white-space: nowrap; }
@@ -533,14 +539,7 @@
           h("div", {}, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/accept").then(reloadTo).catch(fail) }, "Accept"), " ",
             h("button", { class: "button small", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/decline").then(() => showWelcome()).catch(fail) }, "Decline"))))));
       }
-      if (me.permissions.includes("orgs.create")) {
-        const slug = h("input", { name: "slug", required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39 });
-        const name = h("input", { name: "name", required: true, placeholder: "Acme" });
-        sections.push(h("section", { class: "panel" }, h("h3", {}, "Create an organization"),
-          h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs", { slug: slug.value, name: name.value }).then(reloadTo).catch(fail); } },
-            h("label", {}, "Name", name), h("label", {}, "Slug", h("span", {}, "Its URL: 2 to 39 lowercase letters, digits and hyphens."), slug),
-            h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
-      }
+      if (me.permissions.includes("orgs.create")) sections.push(await createOrganization(fail));
       const joinSlug = h("input", { name: "slug", required: true, placeholder: "acme" });
       const note = h("input", { name: "note", placeholder: "A word for its managers (optional)", maxlength: 500 });
       sections.push(h("section", { class: "panel" }, h("h3", {}, "Ask to join"),
@@ -549,6 +548,23 @@
         requests.length ? h("p", {}, "Waiting: ", requests.map((r, i) => [i ? ", " : "", h("strong", {}, r.orgName)]), ".") : null));
       document.body.className = "centered";
       app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Cobranch"), ...sections));
+    }
+
+    // createOrganization is the form that creates an organization, with how many the viewer created against the most a
+    // user may create; once they reach it, the reason takes the button's place.
+    async function createOrganization(fail) {
+      const created = (await api("GET", "/me/usage")).organizations;
+      const count = (n) => n + (n === 1 ? " organization" : " organizations");
+      const reached = created.limit > 0 && created.used >= created.limit;
+      const slug = h("input", { name: "slug", required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39, disabled: reached });
+      const name = h("input", { name: "name", required: true, placeholder: "Acme", disabled: reached });
+      const submit = reached
+        ? h("p", { class: "muted" }, "You created " + count(created.used) + ", and a user may create at most " + created.limit + " here. An administrator can create more for you.")
+        : h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create"));
+      return h("section", { class: "panel" }, h("div", { class: "row" }, h("h3", {}, "Create an organization"),
+        created.limit > 0 && !reached ? h("span", { class: "muted" }, "You created " + created.used + " of " + count(created.limit)) : null),
+        h("form", { onsubmit: (e) => { e.preventDefault(); if (!reached) api("POST", "/orgs", { slug: slug.value, name: name.value }).then(reloadTo).catch(fail); } },
+          h("label", {}, "Name", name), h("label", {}, "Slug", h("span", {}, "Its URL: 2 to 39 lowercase letters, digits and hyphens."), slug), submit));
     }
 
     // reloadTo reloads the viewer's organizations and opens org.
@@ -580,8 +596,7 @@
       try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
       roles = (await api("GET", "/orgs/" + org.slug + "/roles")).roles;
       const can = (p) => org.viewerPermissions.includes(p);
-      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"]];
-      if (can("org.manage")) pages.push(["settings", "Settings"]);
+      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"], ["settings", "Settings"]];
       const current = orgPages.includes(page) ? page : "";
       const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, label);
       const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
@@ -594,7 +609,7 @@
       if (page === "members") return showMembers(org, main, can);
       if (page === "roles") return showRoles(org, main, can);
       if (page === "api-keys") return showApiKeys(org, main, can);
-      if (page === "settings" && can("org.manage")) return showSettings(org, main);
+      if (page === "settings") return showSettings(org, main, can);
       if (page === "new" && can("repos.create")) return showNewRepository(org, main);
       if (page === "issues" && can("issues.read")) return showIssues(org, main, can, sub);
       if (orgPages.includes(page)) return go("/" + org.slug);
@@ -2051,7 +2066,47 @@
       main.replaceChildren(...sections);
     }
 
-    async function showSettings(org, main) {
+    // showSettings is an organization's usage against its limits, for anyone who reads it, and, with org.manage, the
+    // form that changes its settings.
+    async function showSettings(org, main, can) {
+      const usage = await api("GET", "/orgs/" + org.slug + "/usage");
+      const sections = [h("h1", {}, "Settings"), usagePanel(org, usage)];
+      if (can("org.manage")) sections.push(...settingsForm(org));
+      main.replaceChildren(...sections);
+    }
+
+    // bytes is a size in binary units, as limits are written: 1 GiB, 2.5 MiB.
+    const bytes = (n) => size(n).replace(".0 ", " ");
+
+    // gauge is one limit's usage: what is used against the limit, on a meter that warns at 90% and turns to danger at
+    // the limit; a limit of 0 caps nothing, and shows no meter.
+    function gauge(label, usage, format) {
+      const head = h("div", { class: "row" }, h("strong", {}, label),
+        h("span", {}, usage.limit ? format(usage.used) + " of " + format(usage.limit) : format(usage.used) + " · no limit"));
+      if (!usage.limit) return h("div", { class: "gauge" }, head);
+      const share = usage.used / usage.limit;
+      const tone = share >= 1 ? "danger" : share >= 0.9 ? "warning" : "";
+      const meter = h("div", { class: "meter", role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": String(usage.limit),
+        "aria-valuenow": String(usage.used), "data-tone": tone }, h("span", { style: "width: " + Math.min(100, share * 100).toFixed(1) + "%" }));
+      const note = tone === "danger" ? "At its limit: what would add more is refused. An administrator can raise it."
+        : tone === "warning" ? "Near its limit." : null;
+      return h("div", { class: "gauge" }, head, meter, note ? h("span", { class: "muted" }, note) : null);
+    }
+
+    // usagePanel is what the organization takes of what its limits cap, with each repository the viewer reads and its
+    // Git data, largest first.
+    function usagePanel(org, usage) {
+      const list = [...usage.byRepository].sort((a, b) => b.gitData - a.gitData || a.slug.localeCompare(b.slug));
+      const unread = usage.repositories.used - list.length;
+      const row = (r) => h("tr", {}, h("td", {}, h("a", { href: base + org.slug + "/" + r.slug, "data-nav": "" }, r.name)), h("td", { class: "number" }, bytes(r.gitData)));
+      return h("section", { class: "panel" }, h("h3", {}, "Usage"),
+        gauge("Repositories", usage.repositories, String), gauge("Git data", usage.gitData, bytes),
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", { class: "number" }, "Git data"))), h("tbody", {}, list.map(row))) : null,
+        unread > 0 ? h("p", { class: "muted" }, (unread === 1 ? "1 repository you can't read counts" : unread + " repositories you can't read count") + " toward these too.") : null);
+    }
+
+    // settingsForm changes the organization's name, slug, membership role, join requests and identity providers.
+    function settingsForm(org) {
       const error = h("p", { class: "alert", hidden: true });
       const saved = h("p", { class: "notice", hidden: true }, "Saved.");
       const name = h("input", { name: "name", required: true, value: org.name });
@@ -2084,7 +2139,7 @@
           "A change renames every issue; links to the old identifiers still open them."), issueKey),
         h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
-      main.replaceChildren(h("h1", {}, "Settings"), error, saved, h("section", { class: "panel" }, form));
+      return [error, saved, h("section", { class: "panel" }, form)];
     }
   </script>
 </body>

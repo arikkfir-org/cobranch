@@ -45,3 +45,15 @@ UPDATE organization_limits
 SET repositories = sqlc.narg(repositories), git_data = sqlc.narg(git_data), updated_at = @updated_at, updated_by = @updated_by
 WHERE org_id = @org_id AND version = @version
 RETURNING *;
+
+-- OrganizationUsage counts the organization's repositories and sums the bytes of their active packs.
+-- name: OrganizationUsage :one
+SELECT (SELECT count(*) FROM repositories r WHERE r.org_id = @org_id::uuid)::bigint AS repositories,
+       (SELECT coalesce(sum(p.size), 0) FROM packs p WHERE p.org_id = @org_id::uuid AND p.state = 'active')::bigint AS git_data;
+
+-- RepositoriesGitData sums the bytes of the active packs of each of ids that is the organization's repository; one
+-- without any has no row.
+-- name: RepositoriesGitData :many
+SELECT repo_id, sum(size)::bigint AS git_data FROM packs
+WHERE org_id = @org_id AND repo_id = ANY (@ids::uuid[]) AND state = 'active'
+GROUP BY repo_id;

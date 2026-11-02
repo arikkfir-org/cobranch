@@ -1029,6 +1029,18 @@ type OrganizationSettings struct {
 	Slug      *string   `json:"slug,omitempty"`
 }
 
+// OrganizationUsage What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+type OrganizationUsage struct {
+	// ByRepository The repositories the viewer reads, by slug, each with its Git data.
+	ByRepository []RepositoryUsage `json:"byRepository"`
+
+	// GitData The bytes of its repositories' active packs, as the object store keeps them.
+	GitData Usage `json:"gitData"`
+
+	// Repositories Its repositories, every one of them.
+	Repositories Usage `json:"repositories"`
+}
+
 // PageView One view of a Console page, from the wait's start to the page drawn.
 type PageView struct {
 	// DurationMs How long the page took to show, in milliseconds.
@@ -1210,6 +1222,15 @@ type RepositorySettings struct {
 	Slug        *string `json:"slug,omitempty"`
 }
 
+// RepositoryUsage One repository's share of its organization's Git data.
+type RepositoryUsage struct {
+	// GitData The bytes of its active packs.
+	GitData int64              `json:"gitData"`
+	Id      openapi_types.UUID `json:"id"`
+	Name    string             `json:"name"`
+	Slug    string             `json:"slug"`
+}
+
 // Review A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
 type Review struct {
 	Body string             `json:"body"`
@@ -1370,6 +1391,15 @@ type TreeEntry struct {
 // TreeEntryKind A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
 type TreeEntryKind string
 
+// Usage What a user or an organization takes of what one limit caps, against the limit that applies.
+type Usage struct {
+	// Limit The most it may hold or store; 0 caps nothing.
+	Limit int64 `json:"limit"`
+
+	// Used How many it holds, or the bytes it stores.
+	Used int64 `json:"used"`
+}
+
 // User A person, a principal of kind user.
 type User struct {
 	DisplayName string `json:"displayName"`
@@ -1388,6 +1418,12 @@ type Version struct {
 	//
 	// Examples: v0.1.0, 1e76e84
 	Version string `json:"version"`
+}
+
+// ViewerUsage What the user takes of what the limits cap.
+type ViewerUsage struct {
+	// Organizations The organizations the user created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+	Organizations Usage `json:"organizations"`
 }
 
 // Name defines model for annotation.
@@ -1446,6 +1482,12 @@ type SHA = string
 
 // UserID defines model for user.
 type UserID = openapi_types.UUID
+
+// GetMyUsageParams defines parameters for GetMyUsage.
+type GetMyUsageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
 
 // CreateOrganizationJSONBody defines parameters for CreateOrganization.
 type CreateOrganizationJSONBody struct {
@@ -1608,6 +1650,12 @@ type GetTreeParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetOrganizationUsageParams defines parameters for GetOrganizationUsage.
+type GetOrganizationUsageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // ListPermissionsParams defines parameters for ListPermissions.
 type ListPermissionsParams struct {
 	Scope ListPermissionsParamsScope `form:"scope" json:"scope"`
@@ -1734,6 +1782,9 @@ type ServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
+	// GetMyUsage What the user takes of what the limits cap, each against the limit that applies; the user's own, so it takes no permission.
+	// (GET /me/usage)
+	GetMyUsage(w http.ResponseWriter, r *http.Request, params GetMyUsageParams)
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(w http.ResponseWriter, r *http.Request)
@@ -1908,6 +1959,9 @@ type ServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(w http.ResponseWriter, r *http.Request, org Org, roleID RoleID)
+	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	// (GET /orgs/{org}/usage)
+	GetOrganizationUsage(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationUsageParams)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
 	// (POST /page-views)
 	ReportPageViews(w http.ResponseWriter, r *http.Request)
@@ -2180,6 +2234,47 @@ func (siw *ServerInterfaceWrapper) RevokeMyToken(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeMyToken(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetMyUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetMyUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetMyUsageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMyUsage(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4730,6 +4825,56 @@ func (siw *ServerInterfaceWrapper) UpdateRole(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetOrganizationUsage operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationUsage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationUsageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationUsage(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReportPageViews operation middleware
 func (siw *ServerInterfaceWrapper) ReportPageViews(w http.ResponseWriter, r *http.Request) {
 
@@ -4956,6 +5101,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/ssh-keys", wrapper.AddMySSHKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/ssh-keys/{id}", wrapper.DeleteMySSHKey)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/organizations", wrapper.ListMyOrganizations)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/usage", wrapper.GetMyUsage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/invitations", wrapper.ListMyInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/accept", wrapper.AcceptInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/me/invitations/{id}/decline", wrapper.DeclineInvitation)
@@ -4965,6 +5111,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrganization)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrganization)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/usage", wrapper.GetOrganizationUsage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/leave", wrapper.LeaveOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListMembers)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/members/{user}", wrapper.RemoveMember)
@@ -5920,6 +6067,83 @@ type RevokeMyTokendefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response RevokeMyTokendefaultApplicationProblemPlusJSONResponse) VisitRevokeMyTokenResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyUsageRequestObject struct {
+	Params GetMyUsageParams
+}
+
+type GetMyUsageResponseObject interface {
+	VisitGetMyUsageResponse(w http.ResponseWriter) error
+}
+
+type GetMyUsage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyUsage200JSONResponse struct {
+	Body    ViewerUsage
+	Headers GetMyUsage200ResponseHeaders
+}
+
+func (response GetMyUsage200JSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyUsage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetMyUsage304Response struct {
+	Headers GetMyUsage304ResponseHeaders
+}
+
+func (response GetMyUsage304Response) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetMyUsage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetMyUsage401ApplicationProblemPlusJSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetMyUsagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetMyUsagedefaultApplicationProblemPlusJSONResponse) VisitGetMyUsageResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -11566,6 +11790,98 @@ func (response UpdateRoledefaultApplicationProblemPlusJSONResponse) VisitUpdateR
 	return err
 }
 
+type GetOrganizationUsageRequestObject struct {
+	Org    Org `json:"org"`
+	Params GetOrganizationUsageParams
+}
+
+type GetOrganizationUsageResponseObject interface {
+	VisitGetOrganizationUsageResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationUsage200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationUsage200JSONResponse struct {
+	Body    OrganizationUsage
+	Headers GetOrganizationUsage200ResponseHeaders
+}
+
+func (response GetOrganizationUsage200JSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationUsage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationUsage304Response struct {
+	Headers GetOrganizationUsage304ResponseHeaders
+}
+
+func (response GetOrganizationUsage304Response) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationUsage401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationUsage401ApplicationProblemPlusJSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationUsage404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationUsage404ApplicationProblemPlusJSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationUsagedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationUsagedefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationUsageResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportPageViewsRequestObject struct {
 	Body *ReportPageViewsJSONRequestBody
 }
@@ -11825,6 +12141,9 @@ type StrictServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(ctx context.Context, request RevokeMyTokenRequestObject) (RevokeMyTokenResponseObject, error)
+	// GetMyUsage What the user takes of what the limits cap, each against the limit that applies; the user's own, so it takes no permission.
+	// (GET /me/usage)
+	GetMyUsage(ctx context.Context, request GetMyUsageRequestObject) (GetMyUsageResponseObject, error)
 	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(ctx context.Context, request CreateOrganizationRequestObject) (CreateOrganizationResponseObject, error)
@@ -11999,6 +12318,9 @@ type StrictServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(ctx context.Context, request UpdateRoleRequestObject) (UpdateRoleResponseObject, error)
+	// GetOrganizationUsage What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+	// (GET /orgs/{org}/usage)
+	GetOrganizationUsage(ctx context.Context, request GetOrganizationUsageRequestObject) (GetOrganizationUsageResponseObject, error)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
 	// (POST /page-views)
 	ReportPageViews(ctx context.Context, request ReportPageViewsRequestObject) (ReportPageViewsResponseObject, error)
@@ -12407,6 +12729,32 @@ func (sh *strictHandler) RevokeMyToken(w http.ResponseWriter, r *http.Request, i
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RevokeMyTokenResponseObject); ok {
 		if err := validResponse.VisitRevokeMyTokenResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetMyUsage operation middleware
+func (sh *strictHandler) GetMyUsage(w http.ResponseWriter, r *http.Request, params GetMyUsageParams) {
+	var request GetMyUsageRequestObject
+
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetMyUsage(ctx, request.(GetMyUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetMyUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetMyUsageResponseObject); ok {
+		if err := validResponse.VisitGetMyUsageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -14127,6 +14475,33 @@ func (sh *strictHandler) UpdateRole(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationUsage operation middleware
+func (sh *strictHandler) GetOrganizationUsage(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationUsageParams) {
+	var request GetOrganizationUsageRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationUsage(ctx, request.(GetOrganizationUsageRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationUsage")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationUsageResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationUsageResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

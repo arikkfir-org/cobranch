@@ -1,0 +1,46 @@
+# Usage: what users and organizations take of what the installation's limits cap
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md, "The Console").
+
+"An integer that may pass GraphQL's 32-bit Int, such as a number of bytes: a JSON number."
+scalar Int64
+
+"What a user or an organization takes of what one limit caps, against the limit that applies."
+type Usage {
+  "How many it holds, or the bytes it stores."
+  used: Int64!
+  "The most it may hold or store; 0 caps nothing."
+  limit: Int64!
+}
+
+"What the viewer takes of what the limits cap."
+type ViewerUsage {
+  "The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody."
+  organizations: Usage!
+}
+
+"What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads."
+type OrganizationUsage {
+  "Its repositories, every one of them."
+  repositories: Usage!
+  "The bytes of its repositories' active packs, as the object store keeps them."
+  gitData: Usage!
+  "The repositories the viewer reads, by slug, each with its Git data."
+  byRepository: [RepositoryUsage!]!
+}
+
+"One repository's share of its organization's Git data."
+type RepositoryUsage {
+  repository: Repository!
+  "The bytes of its active packs."
+  gitData: Int64!
+}
+
+extend type User {
+  "What the viewer takes of what the limits cap; the viewer's own, so it takes no permission."
+  usage: ViewerUsage!
+}
+
+extend type Organization {
+  "What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too."
+  usage: OrganizationUsage!
+}
