@@ -5921,7 +5921,7 @@ type Repository {
 "A principal's grants on a repository."
 type RepositoryAccess {
   principalId: ID!
-  "user, api_key or job."
+  "user, api_key, job or agent."
   kind: String!
   displayName: String!
   "The roles it holds on the repository, each with the permissions it gives there."
@@ -6303,7 +6303,7 @@ type Secret {
 "A principal holding a grant, by name."
 type Grantee {
   principalId: ID!
-  "user, api_key or job."
+  "user, api_key, job or agent."
   kind: String!
   displayName: String!
 }

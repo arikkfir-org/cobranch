@@ -2831,7 +2831,7 @@
         grants ? Promise.all(repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/jobs").then((d) => d.jobs.map((j) => ({ ...j, repo: r }))))).then((all) => all.flat()) : [],
       ]);
       const ifMatch = (s) => ({ "If-Match": '"' + s.version + '"' });
-      const kinds = { api_key: "API key", job: "job" };
+      const kinds = { api_key: "API key", job: "job", agent: "agent" };
       const receiver = (s, a) => h("span", { class: "chip" }, a.displayName, kinds[a.kind] ? " (" + kinds[a.kind] + ")" : null, grants
         ? h("button", { type: "button", title: "Revoke " + a.displayName, onclick: () => api("DELETE", item(s) + "/access/" + a.principalId).then(render).catch(fail) }, "×") : null);
       const row = (s, i) => {

@@ -403,7 +403,7 @@ type FileDiff struct {
 // A principal holding a grant, by name.
 type Grantee struct {
 	PrincipalID string `json:"principalId"`
-	// user, api_key or job.
+	// user, api_key, job or agent.
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
 }
@@ -891,7 +891,7 @@ type Repository struct {
 // A principal's grants on a repository.
 type RepositoryAccess struct {
 	PrincipalID string `json:"principalId"`
-	// user, api_key or job.
+	// user, api_key, job or agent.
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
 	// The roles it holds on the repository, each with the permissions it gives there.

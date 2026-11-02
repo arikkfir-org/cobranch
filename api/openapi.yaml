@@ -4558,7 +4558,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [user, api_key, job]
+          enum: [user, api_key, job, agent]
         displayName:
           type: string
         roles:
@@ -5890,7 +5890,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [user, api_key, job]
+          enum: [user, api_key, job, agent]
         displayName:
           type: string
     ApiKeyInput:

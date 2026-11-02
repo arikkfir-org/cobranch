@@ -196,6 +196,7 @@ func (e FileDiffStatus) Valid() bool {
 
 // Defines values for GranteeKind.
 const (
+	GranteeKindAgent  GranteeKind = "agent"
 	GranteeKindApiKey GranteeKind = "api_key"
 	GranteeKindJob    GranteeKind = "job"
 	GranteeKindUser   GranteeKind = "user"
@@ -204,6 +205,8 @@ const (
 // Valid indicates whether the value is a known member of the GranteeKind enum.
 func (e GranteeKind) Valid() bool {
 	switch e {
+	case GranteeKindAgent:
+		return true
 	case GranteeKindApiKey:
 		return true
 	case GranteeKindJob:
@@ -535,6 +538,7 @@ func (e RepositoryVisibility) Valid() bool {
 
 // Defines values for RepositoryAccessKind.
 const (
+	RepositoryAccessKindAgent  RepositoryAccessKind = "agent"
 	RepositoryAccessKindApiKey RepositoryAccessKind = "api_key"
 	RepositoryAccessKindJob    RepositoryAccessKind = "job"
 	RepositoryAccessKindUser   RepositoryAccessKind = "user"
@@ -543,6 +547,8 @@ const (
 // Valid indicates whether the value is a known member of the RepositoryAccessKind enum.
 func (e RepositoryAccessKind) Valid() bool {
 	switch e {
+	case RepositoryAccessKindAgent:
+		return true
 	case RepositoryAccessKindApiKey:
 		return true
 	case RepositoryAccessKindJob:

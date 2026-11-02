@@ -12,11 +12,14 @@ import (
 	"cobranch.dev/internal/services/secrets/secretstest"
 )
 
-// buildJob is the principal of build, a job of website's.
-var buildJob = uuid.MustParse("00000000-0000-7000-8000-00000000b001")
+// buildJob is the principal of build, a job of website's, and scoutAgent of Scout, an agent of Acme's.
+var (
+	buildJob   = uuid.MustParse("00000000-0000-7000-8000-00000000b001")
+	scoutAgent = uuid.MustParse("00000000-0000-7000-8000-00000000a001")
+)
 
-// withSecrets adds Acme's secret npm and website's deploy, sealed as authtest.Sealer seals them, and buildJob, to the
-// fixture.
+// withSecrets adds Acme's secret npm and website's deploy, sealed as authtest.Sealer seals them, buildJob and
+// scoutAgent, to the fixture.
 func (f *orgFixture) withSecrets() (npm, deploy secrets.Secret) {
 	npm = secrets.Secret{ID: uuid.New(), OrgID: f.acme.ID, Name: "npm", Version: 1, CreatedBy: f.olivia.User.ID, UpdatedBy: f.olivia.User.ID, CreatedAt: now, UpdatedAt: now}
 	deploy = secrets.Secret{ID: uuid.New(), OrgID: f.acme.ID, RepoID: f.website.ID, Name: "deploy", Version: 2, CreatedAt: now, UpdatedAt: now}
@@ -24,6 +27,7 @@ func (f *orgFixture) withSecrets() (npm, deploy secrets.Secret) {
 		f.secretStore.Add(s, []byte("sealed:"+secrets.About(s.ID)+":"+value))
 	}
 	f.secretStore.Others[buildJob] = secretstest.Other{OrgID: f.acme.ID, RepoID: f.website.ID, Principal: secrets.Principal{ID: buildJob, Kind: auth.KindJob, DisplayName: "build"}}
+	f.secretStore.Others[scoutAgent] = secretstest.Other{OrgID: f.acme.ID, Principal: secrets.Principal{ID: scoutAgent, Kind: auth.KindAgent, DisplayName: "Scout"}}
 	return npm, deploy
 }
 
@@ -154,6 +158,14 @@ func TestSecretAccessAPI(t *testing.T) {
 				rec := f.call(&f.olivia, "GET", "/v1/orgs/acme/secrets/"+f.secretNamed("npm").ID.String()+"/access", "")
 				got := decode[struct{ Access []Grantee }](t, rec.Body.Bytes())
 				if rec.Code != 200 || len(got.Access) != 1 || got.Access[0].Kind != GranteeKindJob || got.Access[0].DisplayName != "build" {
+					t.Errorf("access = %d %s", rec.Code, rec.Body)
+				}
+			}},
+		{name: "grant one to an agent", viewer: olivia, method: "POST", path: npmPath("/access"), body: `{"principalId":"` + scoutAgent.String() + `"}`, wantStatus: 204,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				rec := f.call(&f.olivia, "GET", "/v1/orgs/acme/secrets/"+f.secretNamed("npm").ID.String()+"/access", "")
+				got := decode[struct{ Access []Grantee }](t, rec.Body.Bytes())
+				if rec.Code != 200 || len(got.Access) != 1 || got.Access[0].Kind != GranteeKindAgent || got.Access[0].DisplayName != "Scout" {
 					t.Errorf("access = %d %s", rec.Code, rec.Body)
 				}
 			}},
