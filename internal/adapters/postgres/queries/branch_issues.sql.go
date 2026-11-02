@@ -185,7 +185,7 @@ SELECT l.issue_id::uuid AS issue_id, i.org_id, b.name
 FROM branches b
     JOIN branch_issues l ON l.branch_id = b.id
     JOIN issues i ON i.id = l.issue_id
-WHERE b.repo_id = $1 AND b.name = ANY ($2::text[]) AND b.deleted_at IS NULL
+WHERE b.repo_id = $1 AND (b.id = ANY ($2::uuid[]) OR (b.name = ANY ($3::text[]) AND b.deleted_at IS NULL))
 ORDER BY b.name
 `
 
@@ -195,10 +195,11 @@ type MergedIssuesRow struct {
 	Name    string
 }
 
-// MergedIssues lists the issues linked to the live branches of a repository a push merged, by name, with those
-// branches' names: the merges the push worker recorded.
-func (q *Queries) MergedIssues(ctx context.Context, repoID uuid.UUID, names []string) ([]MergedIssuesRow, error) {
-	rows, err := q.db.Query(ctx, mergedIssues, repoID, names)
+// MergedIssues lists the issues linked to the branches of a repository a push merged, with those branches' names:
+// the merges the push worker recorded. It finds a branch by the ID the push kept, deleted since or not, and one the
+// push kept no ID of by its name, while it is live.
+func (q *Queries) MergedIssues(ctx context.Context, repoID uuid.UUID, ids []uuid.UUID, names []string) ([]MergedIssuesRow, error) {
+	rows, err := q.db.Query(ctx, mergedIssues, repoID, ids, names)
 	if err != nil {
 		return nil, err
 	}

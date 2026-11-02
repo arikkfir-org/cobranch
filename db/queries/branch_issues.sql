@@ -72,14 +72,15 @@ WHERE b.org_id = @org_id AND b.deleted_at IS NULL AND strpos(lower(b.name), lowe
   AND NOT EXISTS (SELECT 1 FROM branch_issues l WHERE l.branch_id = b.id)
 ORDER BY b.created_at, b.id;
 
--- MergedIssues lists the issues linked to the live branches of a repository a push merged, by name, with those
--- branches' names: the merges the push worker recorded.
+-- MergedIssues lists the issues linked to the branches of a repository a push merged, with those branches' names:
+-- the merges the push worker recorded. It finds a branch by the ID the push kept, deleted since or not, and one the
+-- push kept no ID of by its name, while it is live.
 -- name: MergedIssues :many
 SELECT l.issue_id::uuid AS issue_id, i.org_id, b.name
 FROM branches b
     JOIN branch_issues l ON l.branch_id = b.id
     JOIN issues i ON i.id = l.issue_id
-WHERE b.repo_id = @repo_id AND b.name = ANY (@names::text[]) AND b.deleted_at IS NULL
+WHERE b.repo_id = @repo_id AND (b.id = ANY (@ids::uuid[]) OR (b.name = ANY (@names::text[]) AND b.deleted_at IS NULL))
 ORDER BY b.name;
 
 -- MoveIssue moves an issue to a state from one of the states it may leave, as its branches do, and stamps when it

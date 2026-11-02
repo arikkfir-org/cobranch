@@ -201,7 +201,8 @@ func linkPushed(ctx context.Context, q *queries.Queries, claimed queries.ClaimPu
 }
 
 // finishMerged moves, in the push worker's transaction, the open issues linked to the branches the claimed push
-// merged to Done, for the pusher, once each, after recordMerges recorded the merges. A push whose pusher is gone
+// merged to Done, for the pusher, once each, after recordMerges recorded the merges: a branch by the ID the push kept,
+// so a merge finishes its issue though the branch is deleted before the worker gets to it. A push whose pusher is gone
 // moves none, since an event names its actor.
 func finishMerged(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	var heads []headJSON
@@ -211,11 +212,16 @@ func finishMerged(ctx context.Context, q *queries.Queries, claimed queries.Claim
 	if len(heads) == 0 || claimed.PusherID == nil {
 		return nil
 	}
-	names := make([]string, 0, len(heads))
+	var ids []uuid.UUID
+	var names []string
 	for _, h := range heads {
-		names = append(names, h.Branch)
+		if h.ID != nil {
+			ids = append(ids, *h.ID)
+		} else {
+			names = append(names, h.Branch)
+		}
 	}
-	rows, err := q.MergedIssues(ctx, claimed.RepoID, names)
+	rows, err := q.MergedIssues(ctx, claimed.RepoID, ids, names)
 	if err != nil {
 		return fmt.Errorf("finding the issues the push's merges finish: %w", err)
 	}

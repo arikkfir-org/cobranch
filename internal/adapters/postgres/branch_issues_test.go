@@ -41,6 +41,13 @@ func (f *linkFixture) createIssue(t *testing.T, title string, state issues.State
 // push records Max's push into website of updates, bringing heads into main, and processes it.
 func (f *linkFixture) push(t *testing.T, updates []git.RefUpdate, merged ...git.Head) {
 	t.Helper()
+	f.record(t, updates, merged...)
+	f.process(t)
+}
+
+// record records Max's push into website of updates, bringing heads into main, for the push worker to process.
+func (f *linkFixture) record(t *testing.T, updates []git.RefUpdate, merged ...git.Head) {
+	t.Helper()
 	p := pushOf(f.website.ID, f.max, "", updates)
 	if len(merged) > 0 {
 		p.Brought = []git.Brought{{Branch: git.DefaultBranch, Heads: merged}}
@@ -48,7 +55,6 @@ func (f *linkFixture) push(t *testing.T, updates []git.RefUpdate, merged ...git.
 	if err := f.g.Record(context.Background(), p); err != nil {
 		t.Fatal(err)
 	}
-	f.process(t)
 }
 
 func (f *linkFixture) issue(t *testing.T, id uuid.UUID) issues.Issue {
@@ -203,5 +209,38 @@ func TestBranchLinksMerge(t *testing.T) {
 	}
 	if got := f.issue(t, f.second.ID); got.State != issues.StateCanceled {
 		t.Fatalf("a canceled issue's merge moved it to %s", got.State)
+	}
+}
+
+// A merge finishes the issue its branch was linked to though the branch is deleted before the push worker gets to the
+// merge: by the push that merges it, or by the next.
+func TestBranchLinksMergeOfDeletedBranch(t *testing.T) {
+	t.Parallel()
+	deletion := git.RefUpdate{Name: "refs/heads/acme-1-login", Old: shaB, New: git.ZeroSHA}
+	for _, tc := range []struct {
+		name   string
+		pushes [][]git.RefUpdate
+	}{
+		{name: "by the merging push", pushes: [][]git.RefUpdate{{{Name: "refs/heads/main", Old: shaA, New: shaB}, deletion}}},
+		{name: "by the next push", pushes: [][]git.RefUpdate{{{Name: "refs/heads/main", Old: shaA, New: shaB}}, {deletion}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newLinkFixture(t)
+			f.push(t, []git.RefUpdate{created("main", shaA), created("acme-1-login", shaB)})
+			f.record(t, tc.pushes[0], git.Head{Branch: "acme-1-login", SHA: shaB})
+			for _, updates := range tc.pushes[1:] {
+				f.record(t, updates)
+			}
+			if n := f.process(t); n != len(tc.pushes) {
+				t.Fatalf("processed %d pushes, want %d", n, len(tc.pushes))
+			}
+			if got := f.issue(t, f.first.ID); got.State != issues.StateDone || got.ClosedAt == nil {
+				t.Fatalf("ACME-1 after its deleted branch's merge = %s, closed %v", got.State, got.ClosedAt)
+			}
+			if got := f.linked(t, f.first.ID); !slices.Equal(got, []string{"website/acme-1-login by name, deleted"}) {
+				t.Fatalf("ACME-1's branches = %v", got)
+			}
+		})
 	}
 }
