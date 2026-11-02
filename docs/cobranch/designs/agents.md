@@ -120,7 +120,8 @@ admin changes its model, its secrets, or deletes it.
   permissions the creator holds there, as every grant must; creating it needs no `org.grants.manage`. Later grants are
   ordinary grants.
 - **Its creator and `org.principals.manage`** change its name, description and instructions. **Only
-  `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it.
+  `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it, holding every permission
+  of the roles the agent holds where they apply, as revoking them would take; its creator alone can't delete it.
 - **It has an email of its own,** `<agent ID>@agents.<Console host>`, verified, written when it is created: the harness
   commits with it, so the push worker maps the agent's commits to the agent.
 - **Built-in agents,** such as the [AI reviewer](product.md#agents-and-ai-review) of
@@ -321,7 +322,7 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 
 | REST, under `/v1/orgs/{org}` | GraphQL | Takes |
 | --- | --- | --- |
-| `GET`, `POST /agents`; `GET`, `PATCH`, `DELETE /agents/{agent}` | `agents`, `createAgent`, `updateAgent`, `deleteAgent` | `org.read`; `agents.create`; its creator or `org.principals.manage` |
+| `GET`, `POST /agents`; `GET`, `PATCH`, `DELETE /agents/{agent}` | `agents`, `createAgent`, `updateAgent`, `deleteAgent` | `org.read`; `agents.create`; its creator or `org.principals.manage` changes it; `org.principals.manage`, with every permission of its roles, deletes it |
 | `PUT /agents/{agent}/model`, `PUT /agents/{agent}/secrets` | `setAgentModel`, `setAgentSecrets` | `org.principals.manage` |
 | `GET`, `PUT`, `DELETE /model-providers/{provider}` | `modelProviders`, `setModelProvider`, `removeModelProvider` | `org.read`; `org.manage` |
 | `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`; `agents.assign`; its assigner or `org.principals.manage` |
