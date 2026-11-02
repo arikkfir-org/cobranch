@@ -86,7 +86,8 @@ func (c *API) Reviews(ctx context.Context, org, repo, sha string) ([]code.Review
 	}
 }
 
-// SubmitReview submits the token's review of the commit (reviewer.API).
+// SubmitReview submits the token's review of the commit (reviewer.API), sent once: a review submitted twice would be two
+// reviews, so a failure is the reviewer's to check, by reading the commit's reviews, before it submits again.
 func (c *API) SubmitReview(ctx context.Context, org, repo, sha string, in code.ReviewInput) (code.Review, error) {
 	body := ReviewInput{State: ReviewState(in.State), Body: &in.Body}
 	if in.Branch != "" {
@@ -100,7 +101,7 @@ func (c *API) SubmitReview(ctx context.Context, org, repo, sha string, in code.R
 		}
 		body.Comments = &comments
 	}
-	resp, err := c.api.SubmitReviewWithResponse(ctx, org, repo, sha, body)
+	resp, err := c.api.SubmitReviewWithResponse(once(ctx), org, repo, sha, body)
 	if err != nil {
 		return code.Review{}, fmt.Errorf("submitting a review of %s: %w", sha, err)
 	}

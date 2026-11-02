@@ -299,6 +299,14 @@ func kindCases() []harnessCase {
 			check: failedWith("No floor.")},
 		{name: "a task past its kind's timeout", kind: &kind{kit: harness.Kit{Timeout: time.Minute}}, startedAgo: 2 * time.Minute,
 			turns: []harness.Turn{done}, want: kinds("state"), check: failedWith("Timed out after 1m0s.")},
+		{name: "a task its kind ended, resumed past its timeout",
+			kind:       &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Reviewed it."}, Timeout: time.Minute}},
+			startedAgo: 2 * time.Minute, want: kinds("input", "state"), check: func(t *testing.T, c *cobranch, m *model, e *echo) {
+				if body := c.last(t); body["state"] != "succeeded" || c.work.Task.State != agents.TaskSucceeded {
+					t.Errorf("the task ended with %v, want succeeded as its kind said", body)
+				}
+				asked(0)(t, c, m, e)
+			}},
 		{name: "a task within its kind's timeout", kind: &kind{kit: harness.Kit{Timeout: time.Hour}}, startedAgo: time.Minute,
 			turns: []harness.Turn{done}, want: kinds("input", "turn", "state")},
 		{name: "a kind that can't prepare the task", kind: &kind{err: errors.New("no diff")}, wantErr: true, check: asked(0)},

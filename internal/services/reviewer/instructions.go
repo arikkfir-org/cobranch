@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 
 	"cobranch.dev/internal/services/code"
@@ -62,11 +63,14 @@ type includer struct {
 }
 
 // included reads the files of main that patterns name: a path names its file, a pattern the files it matches.
-// Binary files, symlinks, and a path main lacks are left out.
+// Binary files, symlinks, and a path main lacks are left out, as is one that names no file within the repository.
 func (rv *review) included(ctx context.Context, patterns []string) ([]code.File, error) {
 	in := &includer{rv: rv, left: MaxIncluded, seen: map[string]bool{}}
-	for _, p := range patterns {
-		p = strings.TrimPrefix(p, "/")
+	for _, written := range patterns {
+		p, ok := cleaned(written)
+		if !ok {
+			continue
+		}
 		var err error
 		if strings.ContainsAny(p, "*?") {
 			err = in.walk(ctx, dirOf(p), p)
@@ -80,18 +84,18 @@ func (rv *review) included(ctx context.Context, patterns []string) ([]code.File,
 	return in.files, nil
 }
 
-// file reads the file at path, unless it read it already or has nothing left to read.
-func (in *includer) file(ctx context.Context, path string) error {
-	if in.seen[path] || in.left <= 0 {
+// file reads the file at name, unless it read it already or has nothing left to read.
+func (in *includer) file(ctx context.Context, name string) error {
+	if in.seen[name] || in.left <= 0 {
 		return nil
 	}
-	in.seen[path] = true
-	f, err := in.rv.api.File(ctx, in.rv.org, in.rv.task.RepoSlug, git.DefaultBranch, path)
+	in.seen[name] = true
+	f, err := in.rv.api.File(ctx, in.rv.org, in.rv.task.RepoSlug, git.DefaultBranch, name)
 	if errors.Is(err, ErrNotFound) || err == nil && (f.Binary || f.Kind != code.KindBlob) {
 		return nil
 	}
 	if err != nil {
-		return fmt.Errorf("reading %s's %s: %w", git.DefaultBranch, path, err)
+		return fmt.Errorf("reading %s's %s: %w", git.DefaultBranch, name, err)
 	}
 	if len(f.Text) > in.left {
 		f.Text = strings.ToValidUTF8(f.Text[:in.left], "") + fmt.Sprintf("\n\n[Cut: the files included hold more than %d bytes.]", MaxIncluded)
@@ -127,6 +131,14 @@ func (in *includer) walk(ctx context.Context, dir, pattern string) error {
 		}
 	}
 	return nil
+}
+
+// cleaned is pattern as the API names a path, from the root without ., .. or empty names: /cobranch-review.yaml takes
+// ./CONTRIBUTING.md, docs/ and docs//a.md, which the API refuses. False for a pattern that names only the root, or
+// holds a NUL.
+func cleaned(pattern string) (string, bool) {
+	p := strings.TrimPrefix(path.Clean("/"+pattern), "/")
+	return p, p != "" && !strings.ContainsRune(p, 0)
 }
 
 // dirOf is the directory a pattern's matches are under: the names before its first one with a wildcard.

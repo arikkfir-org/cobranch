@@ -46,6 +46,9 @@ func (a *api) BranchDiff(_ context.Context, org, repo, branch string) (code.Diff
 }
 
 func (a *api) File(_ context.Context, _, _, ref, p string) (code.File, error) {
+	if err := code.ValidatePath(p); err != nil {
+		return code.File{}, fmt.Errorf("reading %s: %w", p, err)
+	}
 	text, ok := a.files[p]
 	if !ok || ref != "main" {
 		return code.File{}, fmt.Errorf("%s at %s: %w", p, ref, reviewer.ErrNotFound)
@@ -59,6 +62,9 @@ func (a *api) File(_ context.Context, _, _, ref, p string) (code.File, error) {
 
 // Tree lists the directories and files under dir that files holds.
 func (a *api) Tree(_ context.Context, _, _, _, dir string) (code.Tree, error) {
+	if err := code.ValidatePath(dir); err != nil {
+		return code.Tree{}, fmt.Errorf("listing %s: %w", dir, err)
+	}
 	a.listed = append(a.listed, dir)
 	t := code.Tree{Path: dir}
 	seen := map[string]bool{}
@@ -250,6 +256,22 @@ func TestInstructions(t *testing.T) {
 	}
 	if want := []string{"docs", "rules", "rules/x", "rules/x/y", ""}; !slices.Equal(a.listed, want) {
 		t.Errorf("listed %v, want %v", a.listed, want)
+	}
+}
+
+func TestIncludedPaths(t *testing.T) {
+	a := &api{diff: change("a.go"), files: map[string]string{
+		"cobranch-review.yaml": "include: [./CONTRIBUTING.md, docs/, \"docs//*.md\", \"./rules/../rules/*.md\", .., ../up.md]\n",
+		"CONTRIBUTING.md":      "Contribute.", "docs/a.md": "Doc A.", "rules/r.md": "Rule R.", "up.md": "Up.",
+	}}
+	kit, err := reviewer.New(a).Prepare(context.Background(), work())
+	if err != nil {
+		t.Fatalf("Prepare() = %v, want the paths the API refuses as written read as it names them", err)
+	}
+	for _, want := range []string{"Contribute.", "Doc A.", "Rule R.", "Up."} {
+		if strings.Count(kit.Instructions, want) != 1 {
+			t.Errorf("the instructions say %q %d times, want once:\n%s", want, strings.Count(kit.Instructions, want), kit.Instructions)
+		}
 	}
 }
 

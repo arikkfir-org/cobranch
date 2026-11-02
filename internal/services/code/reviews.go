@@ -231,13 +231,16 @@ func (s *Service) SubmitReview(ctx context.Context, v Viewer, repoID uuid.UUID, 
 	if err := s.checkComments(ctx, repoID, in); err != nil {
 		return Review{}, failed(span, "submitting the review", err)
 	}
+	// Rendered first, so a failure to render leaves nothing submitted, as every failure does.
+	rendered, err := s.renderReview(ctx, repoID, Review{SHA: sha, Body: in.Body})
+	if err != nil {
+		return Review{}, failed(span, "submitting the review", err)
+	}
 	r, err := s.store.SubmitReview(ctx, v.ID, repoID, sha, in)
 	if err != nil {
 		return Review{}, failed(span, "submitting the review", err)
 	}
-	if r, err = s.renderReview(ctx, repoID, r); err != nil {
-		return Review{}, failed(span, "submitting the review", err)
-	}
+	r.HTML = rendered.HTML
 	return r, nil
 }
 
@@ -275,7 +278,7 @@ func (s *Service) renderReviews(ctx context.Context, repoID uuid.UUID, groups ..
 				continue
 			}
 			if reviews[i].HTML, err = s.markdown.Render(ctx, []byte(r.Body), Document{Org: org, Repo: repo, Ref: r.SHA, Commit: r.SHA}); err != nil {
-				return fmt.Errorf("rendering review %s: %w", r.ID, err)
+				return fmt.Errorf("rendering a review of %s: %w", r.SHA, err)
 			}
 		}
 	}

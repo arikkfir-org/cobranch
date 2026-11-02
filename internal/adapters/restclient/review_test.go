@@ -25,6 +25,8 @@ var reviewedSHA = strings.Repeat("a", 40)
 type codeAPI struct {
 	mu        sync.Mutex
 	submitted []ReviewInput
+	// limited submissions are refused as too many before they are recorded; lost ones are recorded, then answered 502.
+	limited, lost int
 }
 
 func (a *codeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -68,12 +70,22 @@ func (a *codeAPI) reviews(w http.ResponseWriter, cursor string) {
 
 // submit records a review, and answers it; a blank neutral one is refused.
 func (a *codeAPI) submit(w http.ResponseWriter, r *http.Request) {
+	if a.limited > 0 {
+		a.limited--
+		problem(w, http.StatusTooManyRequests, "rate.limited", "Too many requests.")
+		return
+	}
 	var in ReviewInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.State == "neutral" && (in.Body == nil || *in.Body == "") {
 		problem(w, http.StatusBadRequest, "body.required", "A review that comments says what.")
 		return
 	}
 	a.submitted = append(a.submitted, in)
+	if a.lost > 0 {
+		a.lost--
+		problem(w, http.StatusBadGateway, "gateway.failed", "The answer was lost.")
+		return
+	}
 	answer(w, http.StatusCreated, Review{Id: uuid.New(), Sha: reviewedSHA, State: in.State, Body: *in.Body, Reviewer: &Principal{Id: agentID},
 		SubmittedAt: time.Unix(2, 0).UTC()})
 }
@@ -140,6 +152,31 @@ func TestReviewerSubmits(t *testing.T) {
 	if _, err := c.SubmitReview(ctx, "acme", "website", reviewedSHA, code.ReviewInput{State: code.ReviewNeutral}); err == nil ||
 		!strings.Contains(err.Error(), "400, body.required: A review that comments says what.") {
 		t.Errorf("SubmitReview(a blank neutral review) = %v", err)
+	}
+}
+
+func TestReviewerSubmitsOnce(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		limited, lost int
+		wantErr       string
+	}{
+		{name: "an answer lost after the review was recorded", lost: 1, wantErr: "502"},
+		{name: "too many requests, before it was", limited: 2},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			a := &codeAPI{limited: tt.limited, lost: tt.lost}
+			_, err := codeClient(t, a).SubmitReview(context.Background(), "acme", "website", reviewedSHA, code.ReviewInput{State: code.ReviewApproved, Body: "Fine."})
+			if tt.wantErr == "" && err != nil || tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Errorf("SubmitReview() = %v, want an error with %q", err, tt.wantErr)
+			}
+			if len(a.submitted) != 1 {
+				t.Errorf("the API recorded %d reviews, want 1", len(a.submitted))
+			}
+		})
 	}
 }
 

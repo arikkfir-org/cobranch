@@ -309,6 +309,14 @@ func TestLatest(t *testing.T) {
 	}
 }
 
+// submittedNothing fails t unless the commit sha(3) has only dev's review, the first the case submits.
+func submittedNothing(t *testing.T, f *annotators) {
+	t.Helper()
+	if page, err := f.service.Reviews(t.Context(), f.rae, f.repo, sha(3), code.ReviewQuery{}); err != nil || len(page.Reviews) != 1 {
+		t.Errorf("after a review that failed to render, the commit has %+v, %v; want the first review alone", page.Reviews, err)
+	}
+}
+
 func TestReviewsMarkdown(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -345,6 +353,7 @@ func TestReviewsMarkdown(t *testing.T) {
 				t.Fatalf("SubmitReview() error = %v, want an error: %v", err, tt.wantErr)
 			}
 			if tt.wantErr {
+				submittedNothing(t, f)
 				return
 			}
 			got, err := tt.read(f, submitted)
