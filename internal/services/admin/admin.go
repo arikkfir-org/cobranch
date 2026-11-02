@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -32,6 +33,11 @@ type Organization struct {
 	CreatedAt time.Time
 	// Members counts its members.
 	Members int
+	// Usage is what it takes of what its limits cap, and Own its own limits, which the store reads.
+	Usage limits.Usage
+	Own   limits.Overrides
+	// Limits are the limits that apply to it: its own, else the installation's.
+	Limits limits.Limits
 }
 
 // User is a user as an administrator sees them.

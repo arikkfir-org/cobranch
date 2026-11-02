@@ -1,10 +1,15 @@
 -- The Back-office's lists: every organization and every user, newest first by ID (a UUIDv7), a page after a cursor's
 -- ID, matching a pattern (ILIKE, its wildcards escaped by the caller).
 
--- AdminOrganizations lists the organizations whose slug or name matches the pattern, with their member counts.
+-- AdminOrganizations lists the organizations whose slug or name matches the pattern, with their member counts, what
+-- they take of what their limits cap, and their own limits.
 -- name: AdminOrganizations :many
-SELECT sqlc.embed(o), (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members
+SELECT sqlc.embed(o), (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members,
+    (SELECT count(*) FROM repositories r WHERE r.org_id = o.id) AS repositories,
+    (SELECT coalesce(sum(p.size), 0) FROM packs p WHERE p.org_id = o.id AND p.state = 'active')::bigint AS git_data,
+    l.repositories AS own_repositories, l.git_data AS own_git_data
 FROM organizations o
+LEFT JOIN organization_limits l ON l.org_id = o.id
 WHERE (sqlc.narg(after)::uuid IS NULL OR o.id < sqlc.narg(after)::uuid)
     AND (o.slug ILIKE @pattern OR o.name ILIKE @pattern)
 ORDER BY o.id DESC

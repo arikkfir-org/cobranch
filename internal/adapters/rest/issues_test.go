@@ -183,3 +183,70 @@ func TestIssueKeyAPI(t *testing.T) {
 			wantStatus: 400, wantCode: "issue_key.invalid"},
 	})
 }
+
+// withLinks is withIssues with website's live branches main, feature and fix, and feature linked to ACME-1 by Olivia.
+func withLinks(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return withIssues(func(f *orgFixture) *auth.Authenticated {
+		for _, name := range []string{"main", "feature", "fix"} {
+			f.issueStore.AddBranch(f.website.ID, name)
+		}
+		if _, err := f.issues.Link(context.Background(), f.olivia.User, f.acme.ID, f.website.ID, "feature", 1); err != nil {
+			panic(err)
+		}
+		return viewer(f)
+	})
+}
+
+func TestBranchLinksAPI(t *testing.T) {
+	const fix = "/v1/orgs/acme/repos/website/branches/fix/issue"
+	runOrgCases(t, []orgCase{
+		{name: "a member links a branch", viewer: withLinks(maxim), method: http.MethodPut, path: fixed(fix), body: `{"number":3}`, wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if got := decode[BranchIssue](t, body); got != (BranchIssue{Number: 3, Identifier: "ACME-3", Title: "Write docs", State: "in_progress",
+					Priority: "none", LinkedBy: "hand"}) {
+					t.Errorf("link = %s", body)
+				}
+			}},
+		{name: "main works on no issue", viewer: withLinks(maxim), method: http.MethodPut, path: fixed("/v1/orgs/acme/repos/website/branches/main/issue"),
+			body: `{"number":3}`, wantStatus: 400, wantCode: "branch.default"},
+		{name: "an issue that isn't", viewer: withLinks(maxim), method: http.MethodPut, path: fixed(fix), body: `{"number":9}`, wantStatus: 400,
+			wantCode: "issue.invalid"},
+		{name: "a branch that doesn't live", viewer: withLinks(maxim), method: http.MethodPut, path: fixed("/v1/orgs/acme/repos/website/branches/gone/issue"),
+			body: `{"number":3}`, wantStatus: 404, wantCode: "branch.not_found"},
+		{name: "a repository the viewer doesn't read", viewer: maxim, method: http.MethodPut, path: fixed(fix), body: `{"number":3}`, wantStatus: 404,
+			wantCode: "repository.not_found"},
+		{name: "a member unlinks a branch", viewer: withLinks(maxim), method: http.MethodDelete, path: fixed("/v1/orgs/acme/repos/website/branches/feature/issue"),
+			wantStatus: 204, check: func(t *testing.T, f *orgFixture, _ []byte) {
+				if link, err := f.issues.OfBranch(context.Background(), f.olivia.User, f.acme.ID, f.website.ID, "feature"); err != nil || link != nil {
+					t.Errorf("feature's issue after the unlink = %+v, %v", link, err)
+				}
+			}},
+		{name: "an issue's branches", viewer: withLinks(maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues/1/branches"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				got := decode[struct{ Branches []IssueBranch }](t, body).Branches
+				if len(got) != 1 || got[0].Name != "feature" || got[0].Repository.Slug != "website" || got[0].LinkedBy != "hand" || got[0].Deleted {
+					t.Errorf("branches = %s", body)
+				}
+			}},
+		{name: "a branch shows its issue", viewer: withLinks(olivia), method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/branches/feature"),
+			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if b := decode[Branch](t, body); b.Issue == nil || b.Issue.Identifier != "ACME-1" || b.Issue.LinkedBy != "hand" {
+					t.Errorf("feature = %s, want ACME-1", body)
+				}
+			}},
+		{name: "a token without issues.read sees no issue", viewer: withLinks(oliviaToken("repo.read")), method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/repos/website/branches/feature"), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if strings.Contains(string(body), `"issue"`) {
+					t.Errorf("feature = %s, want no issue", body)
+				}
+			}},
+		{name: "the link in the activity", viewer: withLinks(maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues/1/activity"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				events := decode[struct{ Events []IssueEvent }](t, body).Events
+				if len(events) != 3 || events[1].Kind != "issue.branch_linked" || events[1].Branch == nil || events[1].Branch.Name == nil ||
+					*events[1].Branch.Name != "feature" || *events[1].Branch.Repository != "website" || events[2].Changes[0].Field != "state" {
+					t.Errorf("events = %s", body)
+				}
+			}},
+	})
+}

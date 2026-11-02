@@ -48,23 +48,29 @@ or a Git server of its own runs in parallel with the others: one at a time, the 
 Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiled on a cold cache: its steps kept
 about two cores busy and peaked near 2.1Gi (`generated`), 1.5Gi (`lint`) or 2.6Gi (`test`), hence the tasks' sizes.
 
-Every task starts from `main`'s Go caches, so a run downloads and compiles only what its commit changed. `restore`
-streams archive `main/go.tar.gz` of bucket `arikkfir-cobranch-ci-cache` into the task's caches (modules, builds and
-golangci-lint's), and dates their entries two hours back; without the archive, the task starts cold. Pipeline `main`
-saves it: beside `publish`, task `warm` restores it, compiles what `ci` compiles as `ci` compiles it (the generators,
-the static binaries, `go vet`, the tests with the race detector, linked but never run, and golangci-lint), and saves it
-again, trimmed to the entries Go marked as used, which it does by their modification time, and to the modules `go.sum`
-names, unpacked, without their zips or test data. A warm-up step that fails costs later runs time, never `main` its
-images. `ci` and `preview` only read the archive, as ServiceAccounts that can't write it: no pull request changes what
-`main` and the other pull requests reuse.
+Every task starts from `main`'s Go caches, so a run downloads and compiles only what its commit changed. They are six
+archives of bucket `arikkfir-cobranch-ci-cache`, `main/go/<cache>.tar.gz`: `mod`, the modules; Go's build caches of the
+generators (`generate`), the static binaries (`build`), the tests with the race detector (`race`) and golangci-lint with
+`go vet` (`lint`); and golangci-lint's own (`golangci`). No kind of compile reuses another's entries, so each keeps a
+cache of its own, and `restore` streams only those its task's steps use, side by side, each unpacking on a core of its
+own: `build` restores `mod`, `generate` and `build`, `test` `mod` and `race`, and `lint` `mod`, `lint` and `golangci`,
+about 2.7GB each, where one archive of them all held 7.6GB. It dates their entries two hours back; without its archive,
+a cache starts cold. `go vet` runs in golangci-lint's image, whose Go compiled the packages golangci-lint loaded, so it
+reuses those compiles. Pipeline `main` saves the archives: beside `publish`, task `warm` restores them all, compiles
+what `ci` compiles as `ci` compiles it, each step in its task's cache (the generators, the static binaries, the tests
+with the race detector, linked but never run, golangci-lint and `go vet`), and saves each again, trimmed to the entries
+Go marked as used, which it does by their modification time, and to the modules `go.sum` names, unpacked, without their
+zips or test data. A warm-up step that fails costs later runs time, never `main` its images. `ci` and `preview` only
+read the archives, as ServiceAccounts that can't write them: no pull request changes what `main` and the other pull
+requests reuse.
 
-The image builds reuse the same archive. The Dockerfile's build stage keeps Go's module and build caches in cache
-mounts, which a developer's Docker daemon keeps between builds. Before task `chart` and task `publish` build the images,
-`.tekton/go-cache.Dockerfile` seeds those mounts in their fresh daemon: a build that runs `restore`'s script with the
-pod's access token as a build secret, and extracts the archive straight into them. Alpine's Go reuses the entries
-Debian's Go compiled, since both build the static binary with `-trimpath`, which keeps the checkout's path out of them:
-on a seeded daemon, image `cobranch`'s Go build compiles only what the commit changed, where it took about four minutes
-cold.
+The image builds reuse archives `mod` and `build`. The Dockerfile's build stage keeps Go's module and build caches in
+cache mounts, which a developer's Docker daemon keeps between builds. Before task `chart` and task `publish` build the
+images, `.tekton/go-cache.Dockerfile` seeds those mounts in their fresh daemon: a build that runs `restore`'s script
+with the pod's access token as a build secret, and extracts the two archives straight into them. Alpine's Go reuses the
+entries Debian's Go compiled, since both build the static binary with `-trimpath`, which keeps the checkout's path out
+of them: on a seeded daemon, image `cobranch`'s Go build compiles only what the commit changed, where it took about four
+minutes cold.
 
 **Pipeline ci runs four tasks side by side, each in a pod of its own**
 
@@ -198,8 +204,9 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | One version, `1.2.3`, for the chart, its app version and the image tags; `v1.2.3` for the Git tag | A chart's version is SemVer without the `v`, and the chart's images default to its app version, so the images carry the same string | Octomaton's `v1.2.3` image tags, a second spelling beside the chart's |
 | `tag` runs `main`'s scripts on the tagged commit's chart | A tag can name any commit; only `main`'s files are reviewed | Running the tagged commit's checkout |
 | `main`'s chart of every commit, published after its images, at `0.0.0-main.<n>.g<short SHA>` | An installation that followed `main`'s head in Git rolled out each merge before its images were there, and a commit whose build a newer push overtook never got them, holding the rollout until its migrate Job's deadline. The version grows with `main`'s history, so the newest chart is the newest commit whose images are there; as a prerelease of `0.0.0` it sorts below every version, and Helm installs it only when asked | A Git ref that the pipeline moves, which takes write access to the repository; a chart tag that moves, which a build that finished late could move back; the commit's time as the version, which two merge queue groups can share |
-| `main`'s Go caches in a bucket, which `main` alone writes | Every task downloaded its modules and compiled everything, image `cobranch`'s build in task `chart` longest of all; with many pull requests at once, those runs filled the CI pool. Only `main`'s warm-up writes the archive, so no pull request can change what the others reuse, and a commit compiles only what it changed since `main` | Each pull request's caches too, as Octomaton keeps, worth it if a pull request's own pushes come to dominate; no cache, which left the check at seven and a half minutes |
-| The image builds' caches seeded by a download inside a build | The archive streams straight into the daemon's cache mounts, with the token as a build secret, and the Dockerfile stays as a developer builds it; alpine's Go reuses what Debian's compiled, so one archive serves every task | Sending the extracted caches as a build context, which took four minutes for 6GB; building the binary outside Docker and copying it in, which would leave the Dockerfile untested |
+| `main`'s Go caches in a bucket, which `main` alone writes | Every task downloaded its modules and compiled everything, image `cobranch`'s build in task `chart` longest of all; with many pull requests at once, those runs filled the CI pool. Only `main`'s warm-up writes the archives, so no pull request can change what the others reuse, and a commit compiles only what it changed since `main` | Each pull request's caches too, as Octomaton keeps, worth it if a pull request's own pushes come to dominate; no cache, which left the check at seven and a half minutes |
+| The image builds' caches seeded by a download inside a build | The archive streams straight into the daemon's cache mounts, with the token as a build secret, and the Dockerfile stays as a developer builds it; alpine's Go reuses what Debian's compiled, so archive `build` serves task `build` and both image builds | Sending the extracted caches as a build context, which took four minutes for 6GB; building the binary outside Docker and copying it in, which would leave the Dockerfile untested |
+| An archive per kind of compile, each task restoring its own | One archive of every cache took each task 70 to 150 seconds to unpack, 7.6GB through one core, longer than its compiles; each kind of compile reuses only its own entries, so a task needs about a third of them, and unpacks them side by side | One archive, sharded for parallel unpacking, which still writes all 7.6GB to every task's node; uncompressed archives, which trade unpacking for downloading the same 7.6GB |
 
 ## Security and failure modes
 
@@ -209,8 +216,8 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 - Only `ci-cobranch-release`, which runs from `main` and `v*` tags alone, writes `main`'s Go caches, which every run and
   every image build trusts; `ci-cobranch-ci` and `ci-cobranch-preview` can only read them. The caches hold nothing
   secret, and the image builds get the access token as a build secret, which no layer keeps.
-- A missing, unreadable or corrupt archive leaves the run cold, never failed; a save that fails keeps the last one, and
-  without a push to `main` it expires after 14 days.
+- A missing, unreadable or corrupt archive leaves its cache cold, never the run failed; a save that fails keeps the last
+  one, and without a push to `main` it expires after 14 days.
 - Pipeline `preview` runs any branch's pull request as `ci-cobranch-preview`, which may write only repository
   `cobranch-previews`: what it pushes runs only in that pull request's preview, never in an installation that follows
   `main` or a version, and never in Fin's previews.

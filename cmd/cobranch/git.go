@@ -165,8 +165,13 @@ func gitservice(pool *pgxpool.Pool) *git.Service {
 
 // limitsService works out the limits over pool's database, under those the values set.
 func limitsService(pool *pgxpool.Pool, values config.Limits) *limits.Service {
-	return limits.NewService(postgres.NewLimitStore(pool), limits.Settings{OrganizationsPerUser: values.OrganizationsPerUser,
-		RepositoriesPerOrganization: values.RepositoriesPerOrganization, GitDataPerOrganization: values.GitDataPerOrganization.Bytes})
+	return limits.NewService(postgres.NewLimitStore(pool), limitValues(values))
+}
+
+// limitValues are the limits the values set, as the services take them.
+func limitValues(values config.Limits) limits.Settings {
+	return limits.Settings{OrganizationsPerUser: values.OrganizationsPerUser, RepositoriesPerOrganization: values.RepositoriesPerOrganization,
+		GitDataPerOrganization: values.GitDataPerOrganization.Bytes}
 }
 
 // serve listens on addr and serves handler until ctx ends, then waits up to timeout for requests in flight.

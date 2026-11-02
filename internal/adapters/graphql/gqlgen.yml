@@ -41,6 +41,12 @@ models:
   Issue:
     fields:
       activity: { resolver: true }
+      branches: { resolver: true }
+  # code.go's, which knows the repository its issue resolves from.
+  Branch:
+    model: cobranch.dev/internal/adapters/graphql.Branch
+    fields:
+      issue: { resolver: true }
   # A null clears an issue's assignee or repository; a field left out keeps it.
   IssuePatch:
     fields:
