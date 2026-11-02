@@ -6,7 +6,7 @@
 
 **Status**: Proposed 2026-11-02 · [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Builds the [product’s
 agents](product.md#agents-and-ai-review) on [jobs](jobs.md)’ runtime · Adds the agent image · Built by
-[ENG-215](https://linear.app/arikkfir/issue/ENG-215), in five pull requests
+[ENG-215](https://linear.app/arikkfir/issue/ENG-215), in eight pull requests
 
 Every branch carries a real-time, threaded chat whose threads can point at lines of a file. Users create agents, which
 their organization owns and an admin puts on a model from the providers the organization holds keys for; a user assigns
@@ -255,20 +255,22 @@ adapters stay the same.
 - **`finish` ends the task,** as Succeeded with a summary or Failed with a reason, which Cobranch validates as a state
   entry; one it refuses comes back to the model as the call's failure. It runs after the turn's other calls.
 - **What fails a task, and what restarts its pod.** A provider's refusal, such as an unknown model or a key it doesn't
-  take, fails the task with the provider's message; its overload, rate limit or own failure is retried, waiting as long
-  as it asks, and only then exits for the controller to start the pod again. A refused token ends the harness cleanly:
-  the task ended, or was cancelled.
+  take, or a turn it stopped for its content, such as a blocked prompt, fails the task with the provider's message or
+  reason; its overload, rate limit or own failure is retried, waiting as long as it asks, and only then exits for the
+  controller to start the pod again. A refused token ends the harness cleanly: the task ended, or was cancelled.
 - **One adapter per provider:** Anthropic's Messages API; OpenAI's Chat Completions, which xAI and DeepSeek also speak
   at their own addresses; Google's Gemini API, whose thought signatures go back with the calls they came with. Each is
   optional code behind the interface, and none is called unless an organization added that provider. An operator may
   point a provider at another address that speaks its protocol, such as a proxy (`COBRANCH_MODEL_URL`). Requests to a
-  provider carry no trace context.
+  provider carry no trace context; each is a `chat` span of OpenTelemetry's GenAI conventions, with the model, the
+  tokens it took and gave, and how the turn ended.
 - **The tools,** chosen by the task's kind, so [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s review tasks add
   theirs: files in `/workspace` (`list_files`, `read_file`, `search`, `write_file`, `edit_file`), which keep to it,
-  links included; `shell`, a command there in a process group its timeout kills whole, whose long output keeps its start
-  and its end; Git through the shell with a credential helper that reads the token file; the task's chat thread (read,
-  post, ask and wait for an answer); and `finish`. The file tools and the shell are built; Git, the thread and the
-  checkout come with agents posting and pushing.
+  links included, and to what a pod's memory holds: `read_file` reads only the lines it shows, each cut at 2,000 bytes,
+  `edit_file` takes files up to 8 MiB, and `search` skips those over 1 MiB; `shell`, a command there in a process group
+  its timeout kills whole, whose long output keeps its start and its end; Git through the shell with a credential helper
+  that reads the token file; the task's chat thread (read, post, ask and wait for an answer); and `finish`. The file
+  tools and the shell are built; Git, the thread and the checkout come with agents posting and pushing.
 - **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` at the task's
   branch, or `main`, before its first turn, and commits as the agent.
 
@@ -375,9 +377,9 @@ through `task_id`. A message’s `task_id` names the task an agent posted it fro
 
 ## Rollout
 
-**Five pull requests, each keeping main working**
+**Five steps in eight pull requests, each keeping main working**
 
-![Five pull requests, each keeping main working](agents/rollout.svg)
+![Five steps in eight pull requests, each keeping main working](agents/rollout.svg)
 
 Chats ship first, and agents and tasks right after: they need nothing from jobs, and
 [ENG-216](https://linear.app/arikkfir/issue/ENG-216)’s reviewer and
@@ -385,7 +387,7 @@ Chats ship first, and agents and tasks right after: they need nothing from jobs,
 land.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-215](https://linear.app/arikkfir/issue/ENG-215); the
-  fifth closes it. Chats, agents and tasks need nothing else; providers, models and agents' secrets need
+  last closes it. Chats, agents and tasks need nothing else; providers, models and agents' secrets need
   [jobs](jobs.md#secrets)' secrets; pods, and the task token they hold, need its controller and namespaces.
 - **An operator upgrades** with nothing to do for chats, agents and tasks; agent pods need jobs' RBAC, which the
   operator already granted for job pods, and the image `cobranch-agent`, which the chart names.
