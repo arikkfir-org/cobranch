@@ -37,8 +37,8 @@ need its controller.
 Choices beyond the agreed designs are under [Decisions](#decisions), and the owner's answers to three questions under
 [Open questions](#open-questions). Branch chats, live, agents with their tasks, model providers with agents' models and
 secrets, the task token with the transcript it appends, the harness with its provider adapters and workspace tools, the
-controller's agent pods, and agents posting in chats and pushing branches are built; asking in a thread and waiting for
-the answer follows.
+controller's agent pods, agents posting in chats and pushing branches, and asking in a thread and waiting for the answer
+are built.
 
 ## Branch chats
 
@@ -198,7 +198,7 @@ Running meanwhile.
 | --- | --- |
 | Queued | Assigned; waiting for the controller, or for room in the namespace's quota |
 | Running | Its pod started; the harness works |
-| Waiting | The agent asked a question in its thread and waits for an answer; its pod stops after `agents.idle` and the next message in the thread queues it again |
+| Waiting | The agent asked a question in its thread and waits for an answer; its pod stops after `agents.idle`, and the next message someone else posts in the thread starts its next pod |
 | Succeeded | The agent finished, with its summary |
 | Failed | The agent gave up, the model refused or failed past its retries, the task ran past its timeout, its pod failed three times, or it could not start: no model, a secret it may not read, an installation that runs no pods |
 | Cancelled | Its assigner or an admin cancelled it, or its assigner left the organization |
@@ -247,6 +247,11 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   with the next, `task-<id>-2` and so on, with a fresh token, and the harness resumes from the transcript; the fourth
   pod's death fails the task, naming how it died. A task past `agents.timeout` fails, and its pod goes. The sweep, every
   five minutes, removes the pods of tasks that ended, which their harness left once Cobranch refused their token.
+- **A waiting task's pod stops.** A task that has waited `agents.idle` for an answer, 30 minutes unless the operator
+  says otherwise, loses its pod, and `agent_task_pods.stopped_at` records it. Once someone else posts in the task's
+  thread, the controller starts its next pod with a fresh token, and its harness runs the `ask` call again and finds the
+  answer; the quota may keep it waiting for room, as it does a run. A stop isn't a death: it counts towards none of the
+  task's four pods.
 
 **An agent pod: the harness in the operator’s image, and the key in a proxy beside it**
 
@@ -288,7 +293,7 @@ adapters stay the same.
   `edit_file` takes files up to 8 MiB, and `search` skips those over 1 MiB; `shell`, a command there in a process group
   its timeout kills whole, whose long output keeps its start and its end; Git through the shell with a credential helper
   that reads the token file, for the Git server's URL alone; the task's chat thread (`read_thread`, `post_message`, and
-  asking and waiting for an answer); and `finish`. Asking and waiting come last.
+  `ask`, which asks there and waits for the answer); and `finish`.
 - **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` before its
   first turn, on the branch its work goes to: the task's, or else one of its own, `acme-42-task-7` for an issue's task
   and `tasks/7` for any other, made from `main` unless an earlier pod of the task pushed it. The model commits as the
@@ -300,6 +305,11 @@ adapters stay the same.
   chat, or its issue's for an issue's task, which becomes its thread, so a pod that starts again posts there.
   `post_message` names its message, or the thread it starts, by its call's key; `read_thread` shows the newest messages
   that fit in a result, the agent's own marked.
+- **Asking.** `ask` posts its question as `post_message` does, named by its call's key, moves the task to Waiting, and
+  follows the chat's updates (`GET …/chat/updates?wait=15`) until someone else posts in the thread; then it moves the
+  task back to Running and answers what they posted after the question. The call has no result until then, so a pod that
+  starts again runs it again: the question is there already, and by then so is the answer, which is what started the
+  pod.
 
 ### The transcript
 
@@ -460,6 +470,8 @@ land.
 | A task's permissions are the agent's intersected with the assigner's, checked at every call | The assigner cap; revocation applies at once | Agreed |
 | A task receives the agent's secrets whoever assigned it | The principals design | Agreed |
 | One pod per task, kept while the task lives, stopped when it waits past `agents.idle` | Tasks never share a workspace across assigners; resuming already exists | Agreed |
+| A stopped task stays Waiting, and the next message someone else posts in its thread starts its next pod, which isn't counted as a death | The task never left its question; a reply wakes it at once, and stops don't use up its four pods | Proposed |
+| Asking is one tool call that waits, its question named by its key, rather than a turn that ends and an input that comes later | The transcript stays one conversation; a pod that starts again runs the call again and finds the answer | Proposed |
 | Agent tasks are the controller's queue beside runs, in the same namespaces, through the same secrets call | One runtime for jobs and agents | Proposed |
 | The provider's key stays in a model proxy beside the harness, in Cobranch's image; the harness runs in the operator's image, from the `cobranch` binary copied in | The tools never read the key; operators choose their agents' tools without building on Cobranch's image | Proposed |
 | A task has at most four pods, numbered, and the controller replaces only its newest | A pod that keeps dying stops costing; numbers tell a leftover from the one that runs | Proposed |
@@ -482,8 +494,9 @@ The owner left these to this design's recommendations (2026-11-02), so each is d
 
 1. **One pod per task, not per agent?** Decided: per task. The product design said a long-running pod per agent; a pod
    per task keeps each assigner's workspace and cap apart, and a task's pod still lives as long as the task.
-2. **Stop a waiting task's pod after half an hour?** Decided: yes, and queue it again on the next message in its thread,
-   resuming from the transcript. The alternative keeps idle pods holding memory for as long as nobody answers.
+2. **Stop a waiting task's pod after half an hour?** Decided: yes, and start its next pod on the next message someone
+   else posts in its thread, resuming from the transcript. The alternative keeps idle pods holding memory for as long as
+   nobody answers.
 3. **May an agent's creator pick its model?** Decided: no, as agreed: only `org.principals.manage`, since the model
    decides where the organization's code goes and what it pays. A creator who holds it picks one while creating the
    agent.
