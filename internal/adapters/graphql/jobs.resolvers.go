@@ -38,6 +38,57 @@ func (r *mutationResolver) StartRun(ctx context.Context, repositoryID string, nu
 	return run(started)
 }
 
+// RerunRun is the resolver for the rerunRun field.
+func (r *mutationResolver) RerunRun(ctx context.Context, repositoryID string, number int) (*Run, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	rerun, err := r.Code.RerunRun(ctx, v, repoID, int64(number))
+	if err != nil {
+		return nil, fail(ctx, err, "run", "re-running the run")
+	}
+	return run(rerun)
+}
+
+// RunJob is the resolver for the runJob field.
+func (r *mutationResolver) RunJob(ctx context.Context, repositoryID string, branch string, job string) (*Run, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	started, err := r.Code.RunJob(ctx, v, repoID, branch, job)
+	if err != nil {
+		return nil, fail(ctx, err, "job", "running the job")
+	}
+	return run(started)
+}
+
+// PostEvent is the resolver for the postEvent field.
+func (r *mutationResolver) PostEvent(ctx context.Context, repositoryID string, name string, branch *string, data any) ([]*Run, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	in, err := eventInput(name, branch, data)
+	if err != nil {
+		return nil, err
+	}
+	runs, err := r.Code.PostEvent(ctx, v, repoID, in)
+	if err != nil {
+		return nil, fail(ctx, err, "repository", "posting the event")
+	}
+	out := make([]*Run, 0, len(runs))
+	for _, queued := range runs {
+		shown, err := run(queued)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, shown)
+	}
+	return out, nil
+}
+
 // Runs is the resolver for the runs field.
 func (r *repositoryResolver) Runs(ctx context.Context, obj *Repository, sha *string, first int, after *string) (*RunPage, error) {
 	v, repoID, err := repoOf(ctx, obj)

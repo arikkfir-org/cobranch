@@ -28,13 +28,45 @@ func run(r code.Run) (*Run, error) {
 		cause := int(r.CauseRun)
 		out.CauseRun = &cause
 	}
+	out.Attempt = int(max(r.Attempt, 1))
+	if r.RerunOf != 0 {
+		first := int(r.RerunOf)
+		out.RerunOf = &first
+	}
 	return out, nil
 }
 
 // trigger is e as the API shows it.
 func trigger(e jobs.Event) *RunTrigger {
-	return &RunTrigger{Kind: string(e.Kind), Sha: e.SHA, Ref: e.Ref, Name: e.Name, State: e.State, Actor: idOf(e.ActorID),
+	out := &RunTrigger{Kind: string(e.Kind), Sha: e.SHA, Ref: e.Ref, Name: e.Name, State: e.State, Actor: idOf(e.ActorID),
 		Push: idOf(e.PushID)}
+	if len(e.Data) > 0 {
+		var data any
+		if json.Unmarshal(e.Data, &data) == nil {
+			out.Data = data
+		}
+	}
+	if !e.Slot.IsZero() {
+		slot := e.Slot.UTC()
+		out.Slot = &slot
+	}
+	return out
+}
+
+// eventInput is the event postEvent posts: its data as JSON.
+func eventInput(name string, branch *string, data any) (code.EventInput, error) {
+	in := code.EventInput{Name: name}
+	if branch != nil {
+		in.Branch = *branch
+	}
+	if data != nil {
+		encoded, err := json.Marshal(data)
+		if err != nil {
+			return in, fmt.Errorf("encoding the event's data: %w", err)
+		}
+		in.Data = encoded
+	}
+	return in, nil
 }
 
 // job is j as the API shows it: its triggers, pod spec and secrets as JSON objects.

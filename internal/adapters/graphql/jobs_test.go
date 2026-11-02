@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,5 +84,48 @@ func TestRunMutations(t *testing.T) {
 		{name: "a Reader may not start", viewer: withRuns(maxHolding(auth.RoleReader)), document: change("startRun", "2"), wantCode: forbidden},
 		{name: "one that isn't there", viewer: withRuns(maxHolding(auth.RoleDeveloper)), document: change("startRun", "9"), wantCode: notFound, wantReason: "run.not_found"},
 		{name: "a Member who doesn't read it finds nothing", viewer: withRuns(maxim), document: change("cancelRun", "3"), wantCode: notFound, wantReason: "run.not_found"},
+	})
+}
+
+// withJobs gives website a main at c whose /cobranch.yaml declares release, which members start by hand or by event
+// release/requested, and ci/build, on pushes, before next's setup, with withRuns' runs.
+func withJobs(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return withRuns(func(f *orgFixture) *auth.Authenticated {
+		f.codeStore.BranchList[f.website.ID] = append(f.codeStore.BranchList[f.website.ID], code.Branch{Name: "main", Head: shaOf("c")})
+		f.codeStore.Defined[f.website.ID] = map[string][]jobs.Job{"main": {
+			{Name: "release", Script: "make release", On: jobs.Triggers{Manual: &jobs.ManualTrigger{}, Event: &jobs.EventTrigger{Names: []string{"release/requested"}}}},
+			{Name: "ci/build", Script: "make test", On: jobs.Triggers{Push: &jobs.PushTrigger{}}},
+		}}
+		return next(f)
+	})
+}
+
+func TestRunTriggerMutations(t *testing.T) {
+	on := func(document string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			return strings.ReplaceAll(document, "REPO", f.website.ID.String())
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "a Developer re-runs an ended run", viewer: withRuns(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { rerunRun(repositoryId: "REPO", number: 1) { number attempt rerunOf state startedBy { displayName } } }`),
+			want:     []string{`"rerunRun":{"number":4,"attempt":2,"rerunOf":1,"state":"QUEUED","startedBy":{"displayName":"Max"}}`}},
+		{name: "re-running one that hasn't ended", viewer: withRuns(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { rerunRun(repositoryId: "REPO", number: 3) { number } }`), wantCode: conflict, wantReason: "run.active"},
+		{name: "a Reader may not re-run", viewer: withRuns(maxHolding(auth.RoleReader)),
+			document: on(`mutation { rerunRun(repositoryId: "REPO", number: 1) { number } }`), wantCode: forbidden},
+		{name: "a Developer starts a manual job", viewer: withJobs(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { runJob(repositoryId: "REPO", branch: "main", job: "release") { number attempt trigger { kind name } } }`),
+			want:     []string{`"runJob":{"number":4,"attempt":1,"trigger":{"kind":"manual","name":"release"}}`}},
+		{name: "a job without a manual trigger", viewer: withJobs(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { runJob(repositoryId: "REPO", branch: "main", job: "ci/build") { number } }`), wantCode: conflict, wantReason: "job.not_manual"},
+		{name: "a Developer posts an event", viewer: withJobs(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { postEvent(repositoryId: "REPO", name: "release/requested", data: {env: "production"}) { number trigger { kind name data } } }`),
+			want:     []string{`"postEvent":[{"number":4,"trigger":{"kind":"event","name":"release/requested","data":{"env":"production"}}}]`}},
+		{name: "an event on a branch that isn't there", viewer: withJobs(maxHolding(auth.RoleDeveloper)),
+			document: on(`mutation { postEvent(repositoryId: "REPO", name: "release/requested", branch: "gone") { number } }`),
+			wantCode: badUserInput, wantReason: "branch.unknown"},
+		{name: "a Reader may not post", viewer: withJobs(maxHolding(auth.RoleReader)),
+			document: on(`mutation { postEvent(repositoryId: "REPO", name: "release/requested") { number } }`), wantCode: forbidden},
 	})
 }
