@@ -280,9 +280,9 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 
 ## Roles
 
-**Nine built-in roles; each repository role includes the one before**
+**Ten built-in roles; each repository role includes the one before**
 
-![Nine built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
+![Ten built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
 
 Whoever creates a repository becomes its Maintainer, with every repository permission; nobody else but the
 organization’s Owners can reach it until someone grants more. Built-in roles are fixed; an organization defines custom
@@ -372,7 +372,7 @@ and their consents add tables in their own slice.
 | Organizations provision their members from their identity provider (SCIM) | Review, 2026-10-27: yes, in phase 2 | Planned |
 | How phase 2's pinned job security meets the job ceiling | Belongs to phase 2's jobs design | Deferred |
 
-The nine built-in roles and the 25 permissions are agreed too; the review added the two secret permissions.
+The ten built-in roles and the 25 permissions are agreed too; the review added the two secret permissions.
 
 ## Open questions
 

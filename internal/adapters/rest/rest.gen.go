@@ -2755,7 +2755,7 @@ type ServerInterface interface {
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
 	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
 	GrantRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID)
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
@@ -18449,7 +18449,7 @@ type StrictServerInterface interface {
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(ctx context.Context, request ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error)
-	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
 	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
 	GrantRepositoryRole(ctx context.Context, request GrantRepositoryRoleRequestObject) (GrantRepositoryRoleResponseObject, error)
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.

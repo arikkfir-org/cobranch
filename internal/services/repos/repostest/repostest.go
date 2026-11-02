@@ -25,15 +25,23 @@ type Store struct {
 	Slugs map[[2]string]uuid.UUID
 	// GitData is the bytes of each repository's active packs.
 	GitData map[uuid.UUID]int64
-	Events  []string
-	Fail    error
+	// Jobs are the job principals, by ID, each with its organization.
+	Jobs   map[uuid.UUID]Job
+	Events []string
+	Fail   error
+}
+
+// Job is a job principal of an organization.
+type Job struct {
+	OrgID uuid.UUID
+	Name  string
 }
 
 var _ repos.Store = (*Store)(nil)
 
 // NewStore returns an empty Store over orgs.
 func NewStore(o *orgstest.Store) *Store {
-	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Slugs: map[[2]string]uuid.UUID{}, GitData: map[uuid.UUID]int64{}}
+	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Slugs: map[[2]string]uuid.UUID{}, GitData: map[uuid.UUID]int64{}, Jobs: map[uuid.UUID]Job{}}
 }
 
 func slugKey(orgID uuid.UUID, slug string) [2]string {
@@ -193,13 +201,16 @@ func (s *Store) Roles(_ context.Context, orgID uuid.UUID) ([]orgs.Role, error) {
 	return out, nil
 }
 
-// Principal finds one of the organization's members or API keys.
+// Principal finds one of the organization's members, API keys or jobs.
 func (s *Store) Principal(_ context.Context, orgID, principalID uuid.UUID) (repos.Principal, error) {
 	if slices.Contains(s.Orgs.Memberships[orgID], principalID) {
 		return repos.Principal{ID: principalID, Kind: auth.KindUser, DisplayName: s.Orgs.Names[principalID]}, nil
 	}
 	if k, ok := s.Orgs.Keys[principalID]; ok && k.OrgID == orgID {
 		return repos.Principal{ID: principalID, Kind: auth.KindAPIKey, DisplayName: k.Name}, nil
+	}
+	if j, ok := s.Jobs[principalID]; ok && j.OrgID == orgID {
+		return repos.Principal{ID: principalID, Kind: auth.KindJob, DisplayName: j.Name}, nil
 	}
 	return repos.Principal{}, repos.ErrNotFound
 }

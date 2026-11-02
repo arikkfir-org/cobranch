@@ -34,6 +34,21 @@ func (q *Queries) DeleteSecretGrant(ctx context.Context, principalID uuid.UUID, 
 	return result.RowsAffected(), nil
 }
 
+const deleteSecretGrantsAt = `-- name: DeleteSecretGrantsAt :execrows
+DELETE FROM grants g USING secrets s
+WHERE g.principal_id = $1 AND g.scope = 'secret' AND g.scope_id = s.id AND s.org_id = $2::uuid
+`
+
+// DeleteSecretGrantsAt takes every role the principal holds on the organization's secrets, its repositories' included:
+// they go with the membership.
+func (q *Queries) DeleteSecretGrantsAt(ctx context.Context, principalID uuid.UUID, orgID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSecretGrantsAt, principalID, orgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertSecret = `-- name: InsertSecret :one
 INSERT INTO secrets (id, org_id, repo_id, name, value, created_by, updated_by)
 SELECT $1, $2, $3::uuid, $4, $5, $6::uuid, $6::uuid

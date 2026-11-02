@@ -1880,7 +1880,7 @@ paths:
   /orgs/{org}/repos/{repo}/access/{principal}/roles:
     post:
       operationId: grantRepositoryRole
-      summary: Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+      summary: Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"

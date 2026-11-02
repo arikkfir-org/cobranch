@@ -177,6 +177,33 @@ func TestSecretStoreGrants(t *testing.T) {
 	}
 }
 
+func TestSecretGrantsGoWithTheMembership(t *testing.T) {
+	t.Parallel()
+	f := newSecretFixture(t)
+	ctx := context.Background()
+	npm, deploy := f.create(t, uuid.Nil, "npm", "x"), f.create(t, f.website.ID, "deploy", "x")
+	for _, s := range []secrets.Secret{npm, deploy} {
+		for _, p := range []uuid.UUID{f.max, f.build} {
+			if err := f.store.Grant(ctx, f.olivia, s, p); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := f.s.Leave(ctx, f.olivia, f.acme.ID, f.max, now); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM grants WHERE scope = 'secret' AND principal_id = $1", f.max); n != 0 {
+		t.Errorf("%d grants on secrets remain to the member removed", n)
+	}
+	read := []string{"secrets.read"}
+	f.assertHolds(t, "after Max left", []holding{
+		{"the member removed on the organization's", f.max, npm.ID, nil},
+		{"the member removed on the repository's", f.max, deploy.ID, nil},
+		{"the job on the organization's", f.build, npm.ID, read},
+		{"the job on the repository's", f.build, deploy.ID, read},
+	})
+}
+
 func TestSecretStoreJobs(t *testing.T) {
 	t.Parallel()
 	f := newSecretFixture(t)

@@ -51,6 +51,12 @@ SELECT id, value FROM secrets WHERE id = ANY (@ids::uuid[]);
 SELECT DISTINCT p.id, p.kind, p.display_name FROM grants g JOIN principals p ON p.id = g.principal_id
 WHERE g.scope = 'secret' AND g.scope_id = @secret_id::uuid ORDER BY p.display_name, p.id;
 
+-- DeleteSecretGrantsAt takes every role the principal holds on the organization's secrets, its repositories' included:
+-- they go with the membership.
+-- name: DeleteSecretGrantsAt :execrows
+DELETE FROM grants g USING secrets s
+WHERE g.principal_id = @principal_id AND g.scope = 'secret' AND g.scope_id = s.id AND s.org_id = @org_id::uuid;
+
 -- name: DeleteSecretGrant :execrows
 DELETE FROM grants WHERE principal_id = @principal_id AND role_id = @role_id AND scope = 'secret' AND scope_id = @secret_id::uuid;
 

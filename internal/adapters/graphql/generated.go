@@ -5220,7 +5220,7 @@ extend type Mutation {
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
   "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
-  "Gives one of the organization's members, API keys or jobs a role on the repository; takes org.grants.manage and every permission the role gives there."
+  "Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there."
   grantRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
   "Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there."
   revokeRepositoryRole(repositoryId: ID!, principalId: ID!, roleId: ID!): Boolean!
