@@ -81,6 +81,8 @@ var conflicts = map[error]string{
 	chats.ErrIDTaken:       "chat.id_taken",
 	chats.ErrDeleted:       "message.deleted",
 	chats.ErrBranchDeleted: "branch.deleted",
+	code.ErrRunEnded:       "run.ended",
+	code.ErrRunNotWaiting:  "run.not_waiting",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.

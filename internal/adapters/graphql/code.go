@@ -27,6 +27,10 @@ type Code interface {
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 }
@@ -239,18 +243,19 @@ func codeRepo(ctx context.Context, repositoryID string) (code.Viewer, uuid.UUID,
 // Branch is one of a repository's live branches as the schema shows it, with the organization and repository it is
 // of, from which its issue resolves.
 type Branch struct {
-	Name         string             `json:"name"`
-	Head         string             `json:"head"`
-	Commit       *Commit            `json:"commit,omitempty"`
-	CreatedAt    time.Time          `json:"createdAt"`
-	UpdatedAt    time.Time          `json:"updatedAt"`
-	Base         *string            `json:"base,omitempty"`
-	Status       *BranchStatus      `json:"status,omitempty"`
-	Checks       []*BranchCheck     `json:"checks"`
-	Ahead        *int               `json:"ahead,omitempty"`
-	Behind       *int               `json:"behind,omitempty"`
-	Requirements *MergeRequirements `json:"requirements,omitempty"`
-	Merge        *BranchMerge       `json:"merge,omitempty"`
+	Name          string             `json:"name"`
+	Head          string             `json:"head"`
+	Commit        *Commit            `json:"commit,omitempty"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	UpdatedAt     time.Time          `json:"updatedAt"`
+	Base          *string            `json:"base,omitempty"`
+	Status        *BranchStatus      `json:"status,omitempty"`
+	Checks        []*BranchCheck     `json:"checks"`
+	Ahead         *int               `json:"ahead,omitempty"`
+	Behind        *int               `json:"behind,omitempty"`
+	Requirements  *MergeRequirements `json:"requirements,omitempty"`
+	Merge         *BranchMerge       `json:"merge,omitempty"`
+	SettingsError *string            `json:"settingsError,omitempty"`
 
 	orgID, repoID uuid.UUID
 }
@@ -291,6 +296,9 @@ func branch(b code.Branch) *Branch {
 	}
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: commitPrincipal(m.By), At: m.At.UTC()}
+	}
+	if b.SettingsError != "" {
+		out.SettingsError = &b.SettingsError
 	}
 	return out
 }
