@@ -37,13 +37,16 @@ type checkJSON struct {
 }
 
 // recordFacts stores what the push's objects say of the repository's branches once it applies, in the push's
-// transaction: when it moves the default branch, the merge requirements of its /cobranch.yaml replace the
-// repository's, and every branch with a base waits for the push; otherwise those it moved, and those whose facts
-// changed, do.
+// transaction: when it moves the default branch, the merge requirements of its /cobranch.yaml and the AI review
+// settings of its /cobranch-review.yaml replace the repository's, and every branch with a base waits for the push;
+// otherwise those it moved, and those whose facts changed, do.
 func recordFacts(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
 	movesDefault := push.MovesDefault()
 	if movesDefault {
 		if err := replaceRequirements(ctx, q, orgID, push); err != nil {
+			return err
+		}
+		if err := setReviewSettings(ctx, q, orgID, push); err != nil {
 			return err
 		}
 	}
@@ -94,6 +97,21 @@ func replaceRequirements(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 		}
 	})
 	return failed
+}
+
+// setReviewSettings replaces the repository's AI review settings with the push's, which it carries when it moves the
+// default branch.
+func setReviewSettings(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+	r := push.ReviewSettings
+	if r == nil {
+		return nil
+	}
+	if err := q.SetReviewSettings(ctx, queries.SetReviewSettingsParams{RepoID: push.RepoID, OrgID: orgID, Enabled: r.Enabled,
+		Branches: nonNil(r.Branches), Ignore: nonNil(r.Ignore), Instructions: r.Instructions, Include: nonNil(r.Include),
+		MaxDiffLines: int32(r.MaxDiffLines)}); err != nil { //nolint:gosec // code.ParseReviewSettings holds it to code.MaxDiffLines
+		return fmt.Errorf("storing the AI review settings: %w", err)
+	}
+	return nil
 }
 
 // restatusWaiting works out the status of every live branch that waits for the push, in the push worker's

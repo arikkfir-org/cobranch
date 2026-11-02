@@ -1347,7 +1347,10 @@ type Issue struct {
 	Repository *IssueRepository `json:"repository,omitempty"`
 
 	// State Where an issue stands; done and canceled close it.
-	State     IssueState `json:"state"`
+	State IssueState `json:"state"`
+
+	// Task The task an issue's agent assignee works on it in, the newest its assignment gave the agent, by its number among the organization's tasks; absent when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+	Task      *IssueTask `json:"task,omitempty"`
 	Title     string     `json:"title"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 
@@ -1417,7 +1420,7 @@ type IssueEventBranch struct {
 
 // IssueInput What creates an issue.
 type IssueInput struct {
-	// AssigneeId One of the organization's members.
+	// AssigneeId One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads.
 	AssigneeId *openapi_types.UUID `json:"assigneeId,omitempty"`
 
 	// Description Markdown, at most 65536 characters.
@@ -1449,7 +1452,7 @@ type IssueLabel struct {
 
 // IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
 type IssuePatch struct {
-	// AssigneeId One of the organization's members, or null for nobody.
+	// AssigneeId One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads; or null for nobody. Moving the issue from an agent cancels the agent's task, unless it has ended.
 	AssigneeId  nullable.Nullable[openapi_types.UUID] `json:"assigneeId,omitempty"`
 	Description *string                               `json:"description,omitempty"`
 
@@ -1479,6 +1482,14 @@ type IssueRepository struct {
 
 // IssueState Where an issue stands; done and canceled close it.
 type IssueState string
+
+// IssueTask The task an issue's agent assignee works on it in, the newest its assignment gave the agent, by its number among the organization's tasks; absent when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+type IssueTask struct {
+	Number int64 `json:"number"`
+
+	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+	State TaskState `json:"state"`
+}
 
 // Job A job as /cobranch.yaml declared it.
 type Job struct {
@@ -3265,13 +3276,13 @@ type ServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
 	// (POST /orgs/{org}/tasks)
 	AssignTask(w http.ResponseWriter, r *http.Request, org Org)
-	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.
 	// (GET /orgs/{org}/tasks/{number})
 	GetTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params GetTaskParams)
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
@@ -22139,13 +22150,13 @@ type StrictServerInterface interface {
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
 	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
 	RevokeSecret(ctx context.Context, request RevokeSecretRequestObject) (RevokeSecretResponseObject, error)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
 	// (POST /orgs/{org}/tasks)
 	AssignTask(ctx context.Context, request AssignTaskRequestObject) (AssignTaskResponseObject, error)
-	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.
 	// (GET /orgs/{org}/tasks/{number})
 	GetTask(ctx context.Context, request GetTaskRequestObject) (GetTaskResponseObject, error)
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.

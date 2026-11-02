@@ -172,6 +172,9 @@ nothing.
   leaves the organization stops every task they assigned, which the controller then cancels.
 - **Assigning** takes `agents.assign` in the organization, and `repo.read` on the repository a task names. Cancelling
   takes being its assigner, or `org.principals.manage`.
+- **Reading** a task takes `org.read`, and `repo.read` on the repository it names. A slice whose tasks carry what one of
+  its permissions guards guards their kind with it, so a task shows no more than the slice does: an issue's task, with
+  its title and description, takes `issues.read` ([issues](issues.md#agents)).
 - **Cobranch's own tasks,** such as [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s reviews, name their agent as
   their assigner: the agent's own grants are their cap. A task whose assigner is gone names none, and may do nothing, so
   no task ever runs uncapped.
@@ -325,7 +328,7 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 | `GET`, `POST /agents`; `GET`, `PATCH`, `DELETE /agents/{agent}` | `agents`, `createAgent`, `updateAgent`, `deleteAgent` | `org.read`; `agents.create`; its creator or `org.principals.manage` changes it; `org.principals.manage`, with every permission of its roles, deletes it |
 | `PUT /agents/{agent}/model`, `PUT /agents/{agent}/secrets` | `setAgentModel`, `setAgentSecrets` | `org.principals.manage` |
 | `GET`, `PUT`, `DELETE /model-providers/{provider}` | `modelProviders`, `setModelProvider`, `removeModelProvider` | `org.read`; `org.manage` |
-| `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`; `agents.assign`; its assigner or `org.principals.manage` |
+| `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`, and its kind's guard; `agents.assign`; its assigner or `org.principals.manage` |
 | `GET`, `POST /tasks/{n}/transcript` | `Task.transcript`, `taskUpdates` (subscription) | Who reads the task; the task's own token appends |
 
 Changes take `If-Match` with the version they read, as every change does; a stale one is refused (412, or

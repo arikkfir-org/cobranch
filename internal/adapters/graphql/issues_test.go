@@ -66,6 +66,9 @@ func TestIssues(t *testing.T) {
 		{name: "a patch that clears", viewer: withIssues(maxim),
 			document: onAcme(`mutation { updateIssue(organizationId: "$org", number: 1, input: {state: IN_PROGRESS, assigneeId: null}, expectedVersion: 1) { state assignee { displayName } repository { slug } priority version } }`),
 			want:     []string{`"state":"IN_PROGRESS","assignee":null,"repository":{"slug":"website"},"priority":"HIGH","version":2`}},
+		{name: "a patch that hands it to an agent", viewer: withIssues(maxim), document: func(f *orgFixture) string {
+			return onAcme(`mutation { updateIssue(organizationId: "$org", number: 1, input: {assigneeId: "` + f.scout.ID.String() + `"}) { assignee { displayName } task { number state } } }`)(f)
+		}, want: []string{`"assignee":{"displayName":"Scout"},"task":{"number":4,"state":"QUEUED"}`}},
 		{name: "a patch from an old version", viewer: withIssues(maxim),
 			document: onAcme(`mutation { updateIssue(organizationId: "$org", number: 1, input: {title: "x"}, expectedVersion: 2) { version } }`),
 			wantCode: conflict, wantReason: "precondition.failed"},

@@ -146,11 +146,15 @@ func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 }
 
-// addIssues gives the fixture the issues' service, over a store that knows website.
+// addIssues gives the fixture the issues' service, over a store that knows website, which hands issues to the agents'
+// service: Scout may be assigned them.
 func (f *orgFixture) addIssues() {
 	f.issueStore = issuestest.NewStore(f.store)
 	f.issueStore.Repos[f.website.ID] = f.website
-	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
+	f.issueStore.Agents[f.scout.ID] = f.acme.ID
+	f.issueStore.TaskOf = issuestest.TasksOf(f.agentStore.KeptTasks)
+	f.store.AddUser(f.scout.ID, f.scout.Name)
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(f.store)).WithAgents(f.agents, f.agentStore)
 	f.issues.SetClock(func() time.Time { return now })
 }
 

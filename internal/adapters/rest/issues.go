@@ -41,6 +41,9 @@ func issueOf(i issues.Issue) Issue {
 	if i.Assignee != nil {
 		out.Assignee = &Principal{Id: i.Assignee.ID, DisplayName: i.Assignee.DisplayName}
 	}
+	if t := i.Task; t != nil {
+		out.Task = &IssueTask{Number: t.Number, State: TaskState(t.State)}
+	}
 	if i.CreatedBy != nil {
 		out.CreatedBy = &Principal{Id: i.CreatedBy.ID, DisplayName: i.CreatedBy.DisplayName}
 	}
@@ -55,10 +58,15 @@ func issueOf(i issues.Issue) Issue {
 	return out
 }
 
-// issueTag is an issue's ETag: its version, then its organization's issue key, quoted. The key is in it because a
-// changed key renames the issue without changing its version, and a client holding the old name must read the new.
+// issueTag is an issue's ETag: its version, then its organization's issue key, then the number and state of the task
+// it shows, quoted. The key is in it because a changed key renames the issue without changing its version, and a
+// client holding the old name must read the new; the task, because it moves on without changing the issue.
 func issueTag(i issues.Issue) string {
-	return `"` + strconv.FormatInt(i.Version, 10) + "-" + i.Key + `"`
+	tag := strconv.FormatInt(i.Version, 10) + "-" + i.Key
+	if i.Task != nil {
+		tag += "-" + strconv.FormatInt(i.Task.Number, 10) + "-" + string(i.Task.State)
+	}
+	return `"` + tag + `"`
 }
 
 // issueMatch is the version of an issue that If-Match names, by the version its ETag starts with: 428 without one,
