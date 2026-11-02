@@ -111,6 +111,20 @@ type Push struct {
 	// Merging is the branch a merge asked of Cobranch (TransportAPI) merges, at the head it merges: it must be Ready
 	// there, whatever its base requires, unless the pusher holds repo.bypass. nil for a client's push.
 	Merging *Head
+	// Settings are the SettingsFile at each branch tip the push moves a branch to, which the jobs of that tip read.
+	Settings []TipSettings
+	// Peeled names the commit each tag the push creates or moves names, by ref, through any annotated tags; a tag that
+	// names no commit is absent.
+	Peeled map[string]string
+}
+
+// TipSettings is the SettingsFile at a branch's tip: its object's name and what it says, as JSON, or why it doesn't
+// parse. A tip without the file has no Blob.
+type TipSettings struct {
+	Branch   string
+	Blob     string
+	Settings []byte
+	Error    string
 }
 
 // Merges are the branches whose heads the push brings into the default branch when it moves it on from a commit: the

@@ -263,7 +263,8 @@ func (s *Server) mergePush(ctx context.Context, dir string, repoID uuid.UUID, re
 	}
 	return git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: repoID, PusherID: req.By.ID, Transport: git.TransportAPI, Updates: updates,
 		Pack: pack, Commits: commits, ReceivedAt: time.Now(), Requirements: branches.requirements, Facts: branches.facts,
-		Tips: branches.tips, Brought: branches.brought, Bypass: req.Bypass, Merging: &git.Head{Branch: req.Branch, SHA: req.Head}}, nil
+		Tips: branches.tips, Brought: branches.brought, Bypass: req.Bypass, Merging: &git.Head{Branch: req.Branch, SHA: req.Head},
+		Settings: branches.settings, Peeled: branches.peeled}, nil
 }
 
 // mergePack packs the objects merge commit brings that its parents lack, and uploads the pack.

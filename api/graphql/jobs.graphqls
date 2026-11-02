@@ -1,0 +1,112 @@
+# A repository's runs of the jobs its /cobranch.yaml declares, each at a commit for the event that queued it, and what
+# a member does to them (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's
+# life").
+
+"A JSON object, such as a Kubernetes pod spec."
+scalar Map
+
+extend type Repository {
+  "A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100."
+  runs(sha: String, first: Int! = 30, after: String): RunPage!
+  "One of the repository's runs by number: null unless it is there; takes repo.read."
+  run(number: Int!): Run
+}
+
+extend type Mutation {
+  "Cancels one of the repository's runs that hasn't ended, for the viewer, and answers it as it now is: its job's annotation on its commit fails, naming them; takes jobs.run. A run that has ended is refused (CONFLICT, run.ended)."
+  cancelRun(repositoryId: ID!, number: Int!): Run!
+  "Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer, and answers it as it now is; takes jobs.run. A run that doesn't wait is refused (CONFLICT, run.not_waiting)."
+  startRun(repositoryId: ID!, number: Int!): Run!
+}
+
+"A page of a repository's runs, newest first."
+type RunPage {
+  runs: [Run!]!
+  "Where the next page starts, as runs' after; null after the last page."
+  nextCursor: String
+}
+
+"One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then."
+type Run {
+  id: ID!
+  "Counts the repository's runs from 1."
+  number: Int!
+  "The job's principal, named as the job."
+  job: CommitPrincipal!
+  sha: String!
+  "The branch or tag it runs on, in full."
+  ref: String!
+  "The event that queued it."
+  trigger: RunTrigger!
+  "The number of the run whose annotation triggered it; null for any other."
+  causeRun: Int
+  "The job as it was declared when the run was queued."
+  definition: Job!
+  state: RunState!
+  "Why it waits, failed or was cancelled; empty otherwise."
+  reason: String!
+  "Who started it from WAITING; null for a run that never waited."
+  startedBy: CommitPrincipal
+  queuedAt: Time!
+  startedAt: Time
+  endedAt: Time
+  "Counts its changes from 1."
+  version: Int!
+}
+
+"Where a run stands."
+enum RunState {
+  "It waits for a member to start it: its tip was pushed from outside the organization."
+  WAITING
+  "It waits for the controller."
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  "It ended badly, or never started."
+  FAILED
+  "It was cancelled, or superseded by a newer run."
+  CANCELLED
+}
+
+"The event that queued a run."
+type RunTrigger {
+  "push, tag, annotation, review, event, schedule or manual."
+  kind: String!
+  "The commit the run executes at."
+  sha: String!
+  "The branch or tag it happened on, in full."
+  ref: String!
+  "The annotation's name, or the posted event's; empty for any other."
+  name: String!
+  "The annotation's status, or the review's state; empty for any other."
+  state: String!
+  "Who caused it: the pusher, the annotation's or the review's principal, the poster or the starter; null for a schedule."
+  actor: ID
+  "The push that caused it, for a push or a tag."
+  push: ID
+}
+
+"A job as /cobranch.yaml declared it."
+type Job {
+  name: String!
+  "pod, script or webhook."
+  kind: String!
+  "What triggers it, as /cobranch.yaml's on declares it."
+  on: Map!
+  "A Kubernetes pod spec, for a pod."
+  pod: Map
+  "A Bash script, for a script."
+  script: String
+  "The image a script runs in; null for the installation's."
+  image: String
+  "Where a webhook posts its runs."
+  webhookUrl: String
+  "The environment variables a run receives secrets in, each with the secret's ID."
+  secrets: Map
+  "What a run's token may do, within the repository's job ceiling."
+  permissions: [String!]!
+  "How long a run may take, such as 30m0s; null for the installation's default."
+  timeout: String
+  "Whether a run's pod fetches its commit into /workspace first."
+  checkout: Boolean!
+}

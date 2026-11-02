@@ -2,6 +2,7 @@ package gitserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -25,23 +26,32 @@ type pushFacts struct {
 	facts        []git.Facts
 	tips         map[string]string
 	brought      []git.Brought
+	settings     []git.TipSettings
+	peeled       map[string]string
 }
 
 // branchFacts works out what the push's transaction stores of the repository's branches once the push applies: the
 // merge requirements of /cobranch.yaml at the default branch's new tip when the push moves that branch, and, when it
 // moves any branch, every other live branch's facts against the default branch, with the tips they were counted from
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Graph facts"), and what
-// each move brings into its branch. A /cobranch.yaml that doesn't parse refuses the push: refusal says why.
+// each move brings into its branch; the /cobranch.yaml at each branch tip it moves; and the commit each tag it moves
+// names. A /cobranch.yaml that doesn't parse at the default branch's new tip refuses the push: refusal says why.
 func (s *Server) branchFacts(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (out pushFacts, refusal string, err error) {
+	if out.peeled, err = s.peelTags(ctx, dir, env, updates); err != nil {
+		return pushFacts{}, "", err
+	}
 	moves := slices.ContainsFunc(updates, func(u git.RefUpdate) bool { _, ok := git.Branch(u.Name); return ok })
 	if !moves {
-		return pushFacts{}, "", nil
+		return out, "", nil
 	}
 	tips, err := s.branchTips(ctx, dir, updates)
 	if err != nil {
 		return pushFacts{}, "", err
 	}
 	out.tips = tips
+	if out.settings, err = s.tipSettings(ctx, dir, env, updates); err != nil {
+		return pushFacts{}, "", err
+	}
 	head, hasDefault := tips[git.DefaultBranch]
 	if hasDefault {
 		out.requirements, refusal, err = s.settings(ctx, dir, env, head, git.Push{Updates: updates}.MovesDefault())
@@ -84,7 +94,7 @@ func (s *Server) protected(ctx context.Context, dir string, env []string, tips m
 	if !ok {
 		return nil, nil
 	}
-	reqs, err := s.requirementsAt(ctx, dir, env, before)
+	_, settings, err := s.settingsAt(ctx, dir, env, before)
 	var bad *code.SettingsError
 	switch {
 	case errors.As(err, &bad):
@@ -93,8 +103,8 @@ func (s *Server) protected(ctx context.Context, dir string, env []string, tips m
 	case err != nil:
 		return nil, err
 	}
-	out := make(map[string]bool, len(reqs))
-	for _, r := range reqs {
+	out := make(map[string]bool, len(settings.Branches))
+	for _, r := range settings.Branches {
 		out[r.Branch] = true
 	}
 	return out, nil
@@ -104,7 +114,7 @@ func (s *Server) protected(ctx context.Context, dir string, env []string, tips m
 // refuses a push that moves the default branch, saying why; any other push keeps the requirements as they were, which
 // named none, since Cobranch never read that file.
 func (s *Server) settings(ctx context.Context, dir string, env []string, head string, movesDefault bool) ([]git.Requirements, string, error) {
-	reqs, err := s.requirementsAt(ctx, dir, env, head)
+	_, settings, err := s.settingsAt(ctx, dir, env, head)
 	var bad *code.SettingsError
 	switch {
 	case errors.As(err, &bad) && movesDefault:
@@ -114,7 +124,57 @@ func (s *Server) settings(ctx context.Context, dir string, env []string, head st
 	case err != nil:
 		return nil, "", err
 	}
-	return reqs, "", nil
+	return settings.Branches, "", nil
+}
+
+// tipSettings reads the /cobranch.yaml at each branch tip updates move a branch to: its blob and what it says, or why
+// it doesn't parse, which the push's transaction records for the jobs of those tips.
+func (s *Server) tipSettings(ctx context.Context, dir string, env []string, updates []git.RefUpdate) ([]git.TipSettings, error) {
+	var out []git.TipSettings
+	for _, u := range updates {
+		name, ok := git.Branch(u.Name)
+		if !ok || u.New == git.ZeroSHA {
+			continue
+		}
+		blob, settings, err := s.settingsAt(ctx, dir, env, u.New)
+		tip := git.TipSettings{Branch: name, Blob: blob}
+		var bad *code.SettingsError
+		switch {
+		case errors.As(err, &bad):
+			tip.Error = bad.Error()
+		case err != nil:
+			return nil, err
+		case blob != "":
+			if tip.Settings, err = json.Marshal(settings); err != nil {
+				return nil, fmt.Errorf("encoding the settings at %s: %w", u.New, err)
+			}
+		}
+		out = append(out, tip)
+	}
+	return out, nil
+}
+
+// peelTags names the commit each tag updates create or move names, by ref, through any annotated tags; a tag that
+// names no commit is left out.
+func (s *Server) peelTags(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (map[string]string, error) {
+	var out map[string]string
+	for _, u := range updates {
+		if !strings.HasPrefix(u.Name, "refs/tags/") || u.New == git.ZeroSHA {
+			continue
+		}
+		checked, err := s.output(ctx, env, u.New+"^{commit}\n", "--git-dir="+dir, "cat-file", "--batch-check")
+		if err != nil {
+			return nil, err
+		}
+		fields := strings.Fields(checked)
+		if len(fields) == 3 && fields[1] == "commit" {
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[u.Name] = fields[0]
+		}
+	}
+	return out, nil
 }
 
 // brought works out what each of updates that moves a branch to a commit brings into it, over refs, the branches as
@@ -299,39 +359,44 @@ func (s *Server) branchTips(ctx context.Context, dir string, updates []git.RefUp
 	return tips, nil
 }
 
-// requirementsAt reads the merge requirements of /cobranch.yaml at commit: none without the file, and a
-// *code.SettingsError when it doesn't parse.
-func (s *Server) requirementsAt(ctx context.Context, dir string, env []string, commit string) ([]git.Requirements, error) {
+// settingsAt reads /cobranch.yaml at commit: its blob and what it says, the defaults and no blob without the file, and
+// a *code.SettingsError when it doesn't parse, with its object's name.
+func (s *Server) settingsAt(ctx context.Context, dir string, env []string, commit string) (string, code.Settings, error) {
 	path := commit + ":" + git.SettingsFile
 	checked, err := s.output(ctx, env, path+"\n", "--git-dir="+dir, "cat-file", "--batch-check")
 	if err != nil {
-		return nil, err
+		return "", code.Settings{}, err
 	}
 	fields := strings.Fields(checked)
 	switch {
 	case len(fields) == 2 && fields[1] == "missing":
-		return nil, nil
+		settings, err := code.ParseSettings(nil)
+		if err != nil {
+			return "", code.Settings{}, fmt.Errorf("reading the defaults of a commit without %s: %w", git.SettingsFile, err)
+		}
+		return "", settings, nil
 	case len(fields) != 3:
-		return nil, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
+		return "", code.Settings{}, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
 	case fields[1] != "blob":
-		return nil, &code.SettingsError{Message: "it must be a file"}
+		return fields[0], code.Settings{}, &code.SettingsError{Message: "it must be a file"}
 	}
+	blob := fields[0]
 	size, err := strconv.Atoi(fields[2])
 	if err != nil {
-		return nil, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
+		return "", code.Settings{}, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
 	}
 	if size > maxSettings {
-		return nil, &code.SettingsError{Message: "it must be at most 1 MiB"}
+		return blob, code.Settings{}, &code.SettingsError{Message: "it must be at most 1 MiB"}
 	}
-	content, err := s.output(ctx, env, "", "--git-dir="+dir, "cat-file", "blob", fields[0])
+	content, err := s.output(ctx, env, "", "--git-dir="+dir, "cat-file", "blob", blob)
 	if err != nil {
-		return nil, err
+		return "", code.Settings{}, err
 	}
-	reqs, err := code.ParseSettings([]byte(content))
+	settings, err := code.ParseSettings([]byte(content))
 	if err != nil {
-		return nil, fmt.Errorf("reading %s: %w", path, err)
+		return blob, code.Settings{}, fmt.Errorf("reading %s: %w", path, err)
 	}
-	return reqs, nil
+	return blob, settings, nil
 }
 
 // aheadBehind counts every live branch but the default against its tip, head, in one walk, as git for-each-ref's

@@ -93,6 +93,8 @@ var conflicts = map[error]string{
 	orgs.ErrGranted:       "grant.exists",
 	orgs.ErrTwoSecrets:    "api_key.two_secrets",
 	repos.ErrSlugTaken:    "slug.taken",
+	code.ErrRunEnded:      "run.ended",
+	code.ErrRunNotWaiting: "run.not_waiting",
 	repos.ErrGranted:      "grant.exists",
 }
 

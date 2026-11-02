@@ -75,6 +75,8 @@ var conflicts = map[error]string{
 	orgs.ErrTwoSecrets:    "api_key.two_secrets",
 	repos.ErrSlugTaken:    "slug.taken",
 	repos.ErrGranted:      "grant.exists",
+	code.ErrRunEnded:      "run.ended",
+	code.ErrRunNotWaiting: "run.not_waiting",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.

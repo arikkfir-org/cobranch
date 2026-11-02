@@ -90,7 +90,9 @@ func newOrgFixture() *orgFixture {
 		// Merged once at a, since moved on.
 		b.Merge = &code.Merge{Head: shaOf("a"), By: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, At: time.Date(2026, 11, 1, 9, 0, 0, 0, time.UTC)}
 	})
-	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
+	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) {
+		b.Base, b.Status, b.SettingsError = "main", code.StatusProcessing, "/cobranch.yaml line 3: jobs is a map of jobs by name"
+	})
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",

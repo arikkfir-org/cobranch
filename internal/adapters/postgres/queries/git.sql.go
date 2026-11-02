@@ -13,7 +13,7 @@ import (
 )
 
 const claimPush = `-- name: ClaimPush :one
-SELECT id, repo_id, pusher_id, received_at, committed_at, attempts, traceparent, merged FROM pushes
+SELECT id, org_id, repo_id, pusher_id, received_at, committed_at, attempts, traceparent, merged, ref_updates, peeled FROM pushes
 WHERE processed_at IS NULL AND retry_at <= now()
 ORDER BY retry_at, committed_at
 LIMIT 1
@@ -22,6 +22,7 @@ FOR UPDATE SKIP LOCKED
 
 type ClaimPushRow struct {
 	ID          uuid.UUID
+	OrgID       uuid.UUID
 	RepoID      uuid.UUID
 	PusherID    *uuid.UUID
 	ReceivedAt  time.Time
@@ -29,6 +30,8 @@ type ClaimPushRow struct {
 	Attempts    int32
 	Traceparent string
 	Merged      []byte
+	RefUpdates  []byte
+	Peeled      []byte
 }
 
 // ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
@@ -38,6 +41,7 @@ func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
 	var i ClaimPushRow
 	err := row.Scan(
 		&i.ID,
+		&i.OrgID,
 		&i.RepoID,
 		&i.PusherID,
 		&i.ReceivedAt,
@@ -45,6 +49,8 @@ func (q *Queries) ClaimPush(ctx context.Context) (ClaimPushRow, error) {
 		&i.Attempts,
 		&i.Traceparent,
 		&i.Merged,
+		&i.RefUpdates,
+		&i.Peeled,
 	)
 	return i, err
 }
@@ -194,8 +200,8 @@ func (q *Queries) InsertPack(ctx context.Context, arg InsertPackParams) error {
 }
 
 const insertPush = `-- name: InsertPush :exec
-INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent, merged)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent, merged, peeled)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 `
 
 type InsertPushParams struct {
@@ -209,6 +215,7 @@ type InsertPushParams struct {
 	ReceivedAt  time.Time
 	Traceparent string
 	Merged      []byte
+	Peeled      []byte
 }
 
 func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
@@ -223,6 +230,7 @@ func (q *Queries) InsertPush(ctx context.Context, arg InsertPushParams) error {
 		arg.ReceivedAt,
 		arg.Traceparent,
 		arg.Merged,
+		arg.Peeled,
 	)
 	return err
 }
@@ -364,6 +372,18 @@ func (q *Queries) PushRecorded(ctx context.Context, id uuid.UUID) (bool, error) 
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const refSHA = `-- name: RefSHA :one
+SELECT sha FROM refs WHERE repo_id = $1 AND name = $2
+`
+
+// RefSHA reads the object a ref of a repository names now.
+func (q *Queries) RefSHA(ctx context.Context, repoID uuid.UUID, name string) (string, error) {
+	row := q.db.QueryRow(ctx, refSHA, repoID, name)
+	var sha string
+	err := row.Scan(&sha)
+	return sha, err
 }
 
 const refsOf = `-- name: RefsOf :many

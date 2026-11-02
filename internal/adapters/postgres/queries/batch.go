@@ -157,6 +157,64 @@ func (b *InsertMergeRequirementsBatchResults) Close() error {
 	return b.br.Close()
 }
 
+const insertSettingsFile = `-- name: InsertSettingsFile :batchexec
+INSERT INTO settings_files (repo_id, blob, org_id, settings, error)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (repo_id, blob) DO NOTHING
+`
+
+type InsertSettingsFileBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertSettingsFileParams struct {
+	RepoID   uuid.UUID
+	Blob     string
+	OrgID    uuid.UUID
+	Settings []byte
+	Error    string
+}
+
+// InsertSettingsFile records a /cobranch.yaml a push brought to a branch tip, unless a push recorded the same one.
+func (q *Queries) InsertSettingsFile(ctx context.Context, arg []InsertSettingsFileParams) *InsertSettingsFileBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.RepoID,
+			a.Blob,
+			a.OrgID,
+			a.Settings,
+			a.Error,
+		}
+		batch.Queue(insertSettingsFile, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertSettingsFileBatchResults{br, len(arg), false}
+}
+
+func (b *InsertSettingsFileBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertSettingsFileBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const recordMerge = `-- name: RecordMerge :batchexec
 UPDATE branches SET merged_head = $1::text, merged_by = $2, merged_at = $3::timestamptz
 WHERE repo_id = $4 AND name = $5 AND deleted_at IS NULL
@@ -278,6 +336,58 @@ func (b *SetBranchFactsBatchResults) Exec(f func(int, error)) {
 }
 
 func (b *SetBranchFactsBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
+const setBranchSettings = `-- name: SetBranchSettings :batchexec
+UPDATE branches SET settings_blob = $1::text WHERE repo_id = $2 AND name = $3 AND deleted_at IS NULL
+`
+
+type SetBranchSettingsBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type SetBranchSettingsParams struct {
+	Blob   *string
+	RepoID uuid.UUID
+	Name   string
+}
+
+// SetBranchSettings names the /cobranch.yaml at a live branch's head: none with a null blob.
+func (q *Queries) SetBranchSettings(ctx context.Context, arg []SetBranchSettingsParams) *SetBranchSettingsBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.Blob,
+			a.RepoID,
+			a.Name,
+		}
+		batch.Queue(setBranchSettings, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &SetBranchSettingsBatchResults{br, len(arg), false}
+}
+
+func (b *SetBranchSettingsBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *SetBranchSettingsBatchResults) Close() error {
 	b.closed = true
 	return b.br.Close()
 }

@@ -21,22 +21,22 @@ import (
 
 // Defines values for AnnotationStatus.
 const (
-	Failed     AnnotationStatus = "failed"
-	InProgress AnnotationStatus = "in_progress"
-	Pending    AnnotationStatus = "pending"
-	Successful AnnotationStatus = "successful"
+	AnnotationStatusFailed     AnnotationStatus = "failed"
+	AnnotationStatusInProgress AnnotationStatus = "in_progress"
+	AnnotationStatusPending    AnnotationStatus = "pending"
+	AnnotationStatusSuccessful AnnotationStatus = "successful"
 )
 
 // Valid indicates whether the value is a known member of the AnnotationStatus enum.
 func (e AnnotationStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case AnnotationStatusFailed:
 		return true
-	case InProgress:
+	case AnnotationStatusInProgress:
 		return true
-	case Pending:
+	case AnnotationStatusPending:
 		return true
-	case Successful:
+	case AnnotationStatusSuccessful:
 		return true
 	default:
 		return false
@@ -103,6 +103,27 @@ func (e FileKind) Valid() bool {
 	case FileKindBlob:
 		return true
 	case FileKindSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for JobKind.
+const (
+	Pod     JobKind = "pod"
+	Script  JobKind = "script"
+	Webhook JobKind = "webhook"
+)
+
+// Valid indicates whether the value is a known member of the JobKind enum.
+func (e JobKind) Valid() bool {
+	switch e {
+	case Pod:
+		return true
+	case Script:
+		return true
+	case Webhook:
 		return true
 	default:
 		return false
@@ -277,6 +298,69 @@ func (e RepositoryAccessKind) Valid() bool {
 	case RepositoryAccessKindApiKey:
 		return true
 	case RepositoryAccessKindUser:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunState.
+const (
+	RunStateCancelled RunState = "cancelled"
+	RunStateFailed    RunState = "failed"
+	RunStateQueued    RunState = "queued"
+	RunStateRunning   RunState = "running"
+	RunStateSucceeded RunState = "succeeded"
+	RunStateWaiting   RunState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the RunState enum.
+func (e RunState) Valid() bool {
+	switch e {
+	case RunStateCancelled:
+		return true
+	case RunStateFailed:
+		return true
+	case RunStateQueued:
+		return true
+	case RunStateRunning:
+		return true
+	case RunStateSucceeded:
+		return true
+	case RunStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RunTriggerKind.
+const (
+	RunTriggerKindAnnotation RunTriggerKind = "annotation"
+	RunTriggerKindEvent      RunTriggerKind = "event"
+	RunTriggerKindManual     RunTriggerKind = "manual"
+	RunTriggerKindPush       RunTriggerKind = "push"
+	RunTriggerKindReview     RunTriggerKind = "review"
+	RunTriggerKindSchedule   RunTriggerKind = "schedule"
+	RunTriggerKindTag        RunTriggerKind = "tag"
+)
+
+// Valid indicates whether the value is a known member of the RunTriggerKind enum.
+func (e RunTriggerKind) Valid() bool {
+	switch e {
+	case RunTriggerKindAnnotation:
+		return true
+	case RunTriggerKindEvent:
+		return true
+	case RunTriggerKindManual:
+		return true
+	case RunTriggerKindPush:
+		return true
+	case RunTriggerKindReview:
+		return true
+	case RunTriggerKindSchedule:
+		return true
+	case RunTriggerKindTag:
 		return true
 	default:
 		return false
@@ -474,6 +558,9 @@ type Branch struct {
 	// Requirements What a merge into a branch needs, as main's /cobranch.yaml names it under branches; left out of a branch it doesn't name.
 	Requirements *MergeRequirements `json:"requirements,omitempty"`
 
+	// SettingsError Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Left out when it parses, or there is none.
+	SettingsError *string `json:"settingsError,omitempty"`
+
 	// Status Where a branch stands as a request to merge into its base, the first that holds: processing while the push worker hasn't worked out its last push, or a required annotation on its head is pending or in progress; blocked when it has commits to merge and a requirement holds them back; empty when it has none; merged when a merge took its head into its base; ready otherwise.
 	Status *BranchStatus `json:"status,omitempty"`
 
@@ -593,6 +680,70 @@ type Invitation struct {
 
 	// RoleName The role's name; empty once a custom role it offered is gone.
 	RoleName string `json:"roleName"`
+}
+
+// Job A job as /cobranch.yaml declared it.
+type Job struct {
+	Checkout bool `json:"checkout"`
+
+	// Image The image a script runs in; the installation's when empty.
+	Image *string `json:"image,omitempty"`
+	Kind  JobKind `json:"kind"`
+	Name  string  `json:"name"`
+
+	// On What triggers a job; an absent trigger never does.
+	On JobTriggers `json:"on"`
+
+	// Permissions What a run's token may do, within the repository's job ceiling.
+	Permissions []string `json:"permissions"`
+
+	// Pod A Kubernetes pod spec, for a pod.
+	Pod *map[string]interface{} `json:"pod,omitempty"`
+
+	// Script A Bash script, for a script.
+	Script *string `json:"script,omitempty"`
+
+	// Secrets The environment variables a run receives secrets in, each with the secret's ID.
+	Secrets *map[string]openapi_types.UUID `json:"secrets,omitempty"`
+
+	// Timeout How long a run may take, such as 30m0s; the installation's default when absent.
+	Timeout *string     `json:"timeout,omitempty"`
+	Webhook *JobWebhook `json:"webhook,omitempty"`
+}
+
+// JobKind defines model for Job.Kind.
+type JobKind string
+
+// JobTriggers What triggers a job; an absent trigger never does.
+type JobTriggers struct {
+	Annotation *struct {
+		Branches *[]string `json:"branches,omitempty"`
+		Names    []string  `json:"names"`
+		Statuses []string  `json:"statuses"`
+	} `json:"annotation,omitempty"`
+	Event *struct {
+		Names []string `json:"names"`
+	} `json:"event,omitempty"`
+	Manual *map[string]interface{} `json:"manual,omitempty"`
+
+	// Push The branches or tags a push or tag trigger fires for, by name or pattern; every one when none is listed.
+	Push   *RefPatterns `json:"push,omitempty"`
+	Review *struct {
+		Branches *[]string `json:"branches,omitempty"`
+		States   []string  `json:"states"`
+	} `json:"review,omitempty"`
+	Schedule *[]struct {
+		Cron string `json:"cron"`
+	} `json:"schedule,omitempty"`
+
+	// Tag The branches or tags a push or tag trigger fires for, by name or pattern; every one when none is listed.
+	Tag *RefPatterns `json:"tag,omitempty"`
+}
+
+// JobWebhook defines model for JobWebhook.
+type JobWebhook struct {
+	SigningSecret openapi_types.UUID `json:"signingSecret"`
+	Url           string             `json:"url"`
 }
 
 // JoinRequest A user's request to join an organization, waiting for a member manager.
@@ -800,6 +951,12 @@ type Push struct {
 // PushTransport How the push came; api for a merge asked of Cobranch.
 type PushTransport string
 
+// RefPatterns The branches or tags a push or tag trigger fires for, by name or pattern; every one when none is listed.
+type RefPatterns struct {
+	Branches *[]string `json:"branches,omitempty"`
+	Tags     *[]string `json:"tags,omitempty"`
+}
+
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
 type Repository struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -888,6 +1045,68 @@ type RoleInput struct {
 	// Permissions From the permissions listed at scope organization; at least one.
 	Permissions []string `json:"permissions"`
 }
+
+// Run One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.
+type Run struct {
+	// CauseRun The number of the run whose annotation triggered it; absent for any other.
+	CauseRun *int64 `json:"causeRun,omitempty"`
+
+	// Definition A job as /cobranch.yaml declared it.
+	Definition Job                `json:"definition"`
+	EndedAt    *time.Time         `json:"endedAt,omitempty"`
+	Id         openapi_types.UUID `json:"id"`
+
+	// Job Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	Job Principal `json:"job"`
+
+	// Number Counts the repository's runs from 1.
+	Number   int64     `json:"number"`
+	QueuedAt time.Time `json:"queuedAt"`
+
+	// Reason Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+
+	// Ref The branch or tag it runs on, in full.
+	Ref       string     `json:"ref"`
+	Sha       string     `json:"sha"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// StartedBy Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	StartedBy *Principal `json:"startedBy,omitempty"`
+
+	// State Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
+	State RunState `json:"state"`
+
+	// Trigger The event that queued a run.
+	Trigger RunTrigger `json:"trigger"`
+
+	// Version Counts its changes from 1. Its ETag is this number in quotes.
+	Version int64 `json:"version"`
+}
+
+// RunState Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
+type RunState string
+
+// RunTrigger The event that queued a run.
+type RunTrigger struct {
+	// Actor Who caused it.
+	Actor *openapi_types.UUID `json:"actor,omitempty"`
+	Kind  RunTriggerKind      `json:"kind"`
+
+	// Name The annotation's name, or the posted event's.
+	Name *string `json:"name,omitempty"`
+
+	// Push The push that caused it, for a push or a tag.
+	Push *openapi_types.UUID `json:"push,omitempty"`
+	Ref  string              `json:"ref"`
+	Sha  string              `json:"sha"`
+
+	// State The annotation's status, or the review's state.
+	State *string `json:"state,omitempty"`
+}
+
+// RunTriggerKind defines model for RunTrigger.Kind.
+type RunTriggerKind string
 
 // SSHKey An SSH key, as its user sees it.
 type SSHKey struct {
@@ -1044,6 +1263,9 @@ type Repo = string
 // RoleID defines model for role.
 type RoleID = openapi_types.UUID
 
+// RunNumber defines model for runNumber.
+type RunNumber = int64
+
 // SecretID defines model for secret.
 type SecretID = openapi_types.UUID
 
@@ -1153,6 +1375,24 @@ type GetRawParams struct {
 	// Download Whether to answer the bytes as an attachment, whatever they are.
 	Download *bool `form:"download,omitempty" json:"download,omitempty"`
 
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListRunsParams defines parameters for ListRuns.
+type ListRunsParams struct {
+	// SHA Only the runs at this commit, by its full name.
+	SHA *string `form:"sha,omitempty" json:"sha,omitempty"`
+
+	// Cursor Where the page starts, as the previous page's Link names it; the newest run when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many runs the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetRunParams defines parameters for GetRun.
+type GetRunParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -1397,6 +1637,18 @@ type ServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// ListRuns A page of the repository's runs of its jobs, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/runs)
+	ListRuns(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRunsParams)
+	// GetRun One of the repository's runs by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number})
+	GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, params GetRunParams)
+	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
+	CancelRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
+	StartRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -3283,6 +3535,239 @@ func (siw *ServerInterfaceWrapper) ListRepositoryRoles(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ListRuns operation middleware
+func (siw *ServerInterfaceWrapper) ListRuns(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListRunsParams
+
+	// ------------- Optional query parameter "sha" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "sha", r.URL.Query(), &params.SHA, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "sha"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRuns(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRun operation middleware
+func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRunParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRun(w, r, org, repo, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelRun operation middleware
+func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelRun(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartRun operation middleware
+func (siw *ServerInterfaceWrapper) StartRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartRun(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTags operation middleware
 func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
 
@@ -3797,6 +4282,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.DeleteAnnotation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.SetAnnotation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs", wrapper.ListRuns)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}", wrapper.GetRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/cancel", wrapper.CancelRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/start", wrapper.StartRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -8344,6 +8833,413 @@ func (response ListRepositoryRolesdefaultApplicationProblemPlusJSONResponse) Vis
 	return err
 }
 
+type ListRunsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListRunsParams
+}
+
+type ListRunsResponseObject interface {
+	VisitListRunsResponse(w http.ResponseWriter) error
+}
+
+type ListRuns200ResponseHeaders struct {
+	Link *string
+}
+
+type ListRuns200JSONResponse struct {
+	Body struct {
+		Runs []Run `json:"runs"`
+	}
+	Headers ListRuns200ResponseHeaders
+}
+
+func (response ListRuns200JSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRuns400ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns401ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRuns404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRuns404ApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRunsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRunsdefaultApplicationProblemPlusJSONResponse) VisitListRunsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+	Params GetRunParams
+}
+
+type GetRunResponseObject interface {
+	VisitGetRunResponse(w http.ResponseWriter) error
+}
+
+type GetRun200ResponseHeaders struct {
+	ETag string
+}
+
+type GetRun200JSONResponse struct {
+	Body    Run
+	Headers GetRun200ResponseHeaders
+}
+
+func (response GetRun200JSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun304ResponseHeaders struct {
+	ETag string
+}
+
+type GetRun304Response struct {
+	Headers GetRun304ResponseHeaders
+}
+
+func (response GetRun304Response) VisitGetRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetRun401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRun401ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRun404ApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRundefaultApplicationProblemPlusJSONResponse) VisitGetRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRunRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+}
+
+type CancelRunResponseObject interface {
+	VisitCancelRunResponse(w http.ResponseWriter) error
+}
+
+type CancelRun200ResponseHeaders struct {
+	ETag string
+}
+
+type CancelRun200JSONResponse struct {
+	Body    Run
+	Headers CancelRun200ResponseHeaders
+}
+
+func (response CancelRun200JSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CancelRun401ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun403ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun404ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelRun409ApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelRundefaultApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRunRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+}
+
+type StartRunResponseObject interface {
+	VisitStartRunResponse(w http.ResponseWriter) error
+}
+
+type StartRun202ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartRun202JSONResponse struct {
+	Body    Run
+	Headers StartRun202ResponseHeaders
+}
+
+func (response StartRun202JSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRun401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartRun401ApplicationProblemPlusJSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRun403ApplicationProblemPlusJSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRun404ApplicationProblemPlusJSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartRun409ApplicationProblemPlusJSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartRundefaultApplicationProblemPlusJSONResponse) VisitStartRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTagsRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -9298,6 +10194,18 @@ type StrictServerInterface interface {
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
+	// ListRuns A page of the repository's runs of its jobs, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/runs)
+	ListRuns(ctx context.Context, request ListRunsRequestObject) (ListRunsResponseObject, error)
+	// GetRun One of the repository's runs by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number})
+	GetRun(ctx context.Context, request GetRunRequestObject) (GetRunResponseObject, error)
+	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
+	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
+	StartRun(ctx context.Context, request StartRunRequestObject) (StartRunResponseObject, error)
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
@@ -10853,6 +11761,119 @@ func (sh *strictHandler) ListRepositoryRoles(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryRolesResponseObject); ok {
 		if err := validResponse.VisitListRepositoryRolesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRuns operation middleware
+func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRunsParams) {
+	var request ListRunsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRuns(ctx, request.(ListRunsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRuns")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRunsResponseObject); ok {
+		if err := validResponse.VisitListRunsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRun operation middleware
+func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, params GetRunParams) {
+	var request GetRunRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRun(ctx, request.(GetRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunResponseObject); ok {
+		if err := validResponse.VisitGetRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelRun operation middleware
+func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+	var request CancelRunRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelRun(ctx, request.(CancelRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
+		if err := validResponse.VisitCancelRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartRun operation middleware
+func (sh *strictHandler) StartRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+	var request StartRunRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartRun(ctx, request.(StartRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartRunResponseObject); ok {
+		if err := validResponse.VisitStartRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

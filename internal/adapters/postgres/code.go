@@ -83,7 +83,7 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 // branchFrom is the domain's view of a branch's row: every branch but the default merges into it, and shows
 // Processing until a push works out its status.
 func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {
-	b := code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	b := code.Branch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, SettingsError: r.SettingsError}
 	if r.LinearHistory != nil {
 		b.Requirements = &git.Requirements{Branch: r.Name, Annotations: r.RequiredAnnotations, LinearHistory: *r.LinearHistory}
 	}

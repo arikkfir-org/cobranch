@@ -128,6 +128,27 @@ type Invitation struct {
 	DecidedBy *uuid.UUID
 }
 
+type JobRun struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	RepoID     uuid.UUID
+	Number     int64
+	JobID      uuid.UUID
+	Sha        string
+	Ref        string
+	Trigger    []byte
+	CauseRunID *uuid.UUID
+	Definition []byte
+	State      string
+	Reason     string
+	StartedBy  *uuid.UUID
+	LeaseUntil *time.Time
+	QueuedAt   time.Time
+	StartedAt  *time.Time
+	EndedAt    *time.Time
+	Version    int64
+}
+
 type JoinRequest struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
