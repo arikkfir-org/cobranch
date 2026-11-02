@@ -61,7 +61,7 @@ Every metric carries the workload's resource, as traces do: `service.name` the w
 
 | Attribute | Values |
 | --- | --- |
-| `cobranch.console.page` | `sign-in`, `welcome`, `settings`, `organization`, `organization.members`, `organization.roles`, `organization.api-keys`, `organization.settings`, `organization.new-repository`, `organization.issues`, `repository.code`, `repository.file`, `repository.commits`, `repository.commit`, `repository.branches`, `repository.branch`, `repository.changes`, `repository.access`, `repository.settings` |
+| `cobranch.console.page` | `sign-in`, `welcome`, `settings`, `organization`, `organization.members`, `organization.roles`, `organization.api-keys`, `organization.settings`, `organization.new-repository`, `organization.issues`, `organization.agents`, `organization.tasks`, `organization.secrets`, `repository.code`, `repository.file`, `repository.commits`, `repository.commit`, `repository.branches`, `repository.branch`, `repository.changes`, `repository.runs`, `repository.environments`, `repository.secrets`, `repository.access`, `repository.settings` |
 | `cobranch.console.navigation` | `load`, the browser loading the Console, from its navigation's start; `route`, a move inside it, from the click or Back |
 | `http.route` | The route's pattern, such as `/v1/orgs/{org}/repos/{repo}/tree`; `/` for a path no route serves |
 | `graphql.operation.type` | `query` or `mutation`; a subscription's stream isn't timed |
@@ -90,8 +90,10 @@ counts as the page it lands on, from the first wait’s start.
   seconds and when the tab is hidden or closed, as `POST /v1/page-views`, with `keepalive` so the last batch survives
   the page's end, and without the session's cookie. The REST server answers `204` and records each view.
 - **Anyone may report, within bounds.** The sign-in page is measured before anyone signs in, so the route takes no
-  credential. It records only pages from the fixed list, at most 20 views a request and 10 minutes a view, and refuses
-  anything else with `400`; the worst a false report does is skew a number, never add an attribute value.
+  credential. It takes 1 to 20 views a request, refusing any other report with `400`, and records only views of pages
+  and navigations from the fixed lists, of at most 10 minutes and 1000 reads. It skips any other view rather than refuse
+  the report, so a Console that names a page the server doesn’t know yet, as a newer release does while the servers
+  roll, loses only that page’s views. The worst a false report does is skew a number, never add an attribute value.
 
 ## A throwaway repository
 

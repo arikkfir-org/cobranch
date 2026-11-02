@@ -623,12 +623,15 @@ func (e PageViewNavigation) Valid() bool {
 // Defines values for PageViewPage.
 const (
 	PageViewPageOrganization              PageViewPage = "organization"
+	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
 	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
 	PageViewPageOrganizationIssues        PageViewPage = "organization.issues"
 	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
 	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
 	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
+	PageViewPageOrganizationSecrets       PageViewPage = "organization.secrets"
 	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
+	PageViewPageOrganizationTasks         PageViewPage = "organization.tasks"
 	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
 	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
@@ -636,7 +639,10 @@ const (
 	PageViewPageRepositoryCode            PageViewPage = "repository.code"
 	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
 	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
+	PageViewPageRepositoryEnvironments    PageViewPage = "repository.environments"
 	PageViewPageRepositoryFile            PageViewPage = "repository.file"
+	PageViewPageRepositoryRuns            PageViewPage = "repository.runs"
+	PageViewPageRepositorySecrets         PageViewPage = "repository.secrets"
 	PageViewPageRepositorySettings        PageViewPage = "repository.settings"
 	PageViewPageSettings                  PageViewPage = "settings"
 	PageViewPageSignIn                    PageViewPage = "sign-in"
@@ -648,6 +654,8 @@ func (e PageViewPage) Valid() bool {
 	switch e {
 	case PageViewPageOrganization:
 		return true
+	case PageViewPageOrganizationAgents:
+		return true
 	case PageViewPageOrganizationApiKeys:
 		return true
 	case PageViewPageOrganizationIssues:
@@ -658,7 +666,11 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageOrganizationRoles:
 		return true
+	case PageViewPageOrganizationSecrets:
+		return true
 	case PageViewPageOrganizationSettings:
+		return true
+	case PageViewPageOrganizationTasks:
 		return true
 	case PageViewPageRepositoryAccess:
 		return true
@@ -674,7 +686,13 @@ func (e PageViewPage) Valid() bool {
 		return true
 	case PageViewPageRepositoryCommits:
 		return true
+	case PageViewPageRepositoryEnvironments:
+		return true
 	case PageViewPageRepositoryFile:
+		return true
+	case PageViewPageRepositoryRuns:
+		return true
+	case PageViewPageRepositorySecrets:
 		return true
 	case PageViewPageRepositorySettings:
 		return true

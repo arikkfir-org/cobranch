@@ -2,7 +2,6 @@ package rest
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"go.opentelemetry.io/otel"
@@ -67,19 +66,18 @@ func newPageMetrics(mp metric.MeterProvider) pageMetrics {
 	return pageMetrics{duration: duration, reads: reads}
 }
 
-// ReportPageViews records each of the Console's page views, once every one of them is valid: a page and a navigation
-// the API names, at most 20 views, none longer than ten minutes. It takes no credential, since the sign-in page reports
-// too, and records nothing of who viewed what.
+// ReportPageViews records each of the Console's page views that is valid: a page and a navigation the API names, no
+// longer than ten minutes, of at most 1000 reads. It skips the others rather than refuse the report, so a Console that
+// names a page this server doesn't know yet, as a newer release does while the servers roll, loses only that page's
+// views. It takes no credential, since the sign-in page reports too, and records nothing of who viewed what.
 func (a api) ReportPageViews(ctx context.Context, req ReportPageViewsRequestObject) (ReportPageViewsResponseObject, error) {
 	if req.Body == nil || len(req.Body.Views) == 0 || len(req.Body.Views) > 20 {
 		return nil, refuse(http.StatusBadRequest, "request.invalid", "A report holds 1 to 20 page views.")
 	}
-	for i, v := range req.Body.Views {
-		if !v.Page.Valid() || !v.Navigation.Valid() || v.DurationMs < 0 || v.DurationMs > 600000 || v.GitReads < 0 || v.GitReads > 1000 {
-			return nil, refuse(http.StatusBadRequest, "request.invalid", fmt.Sprintf("Page view %d names a page or a navigation the API doesn't, or a time or a count out of range.", i))
-		}
-	}
 	for _, v := range req.Body.Views {
+		if !v.Page.Valid() || !v.Navigation.Valid() || v.DurationMs < 0 || v.DurationMs > 600000 || v.GitReads < 0 || v.GitReads > 1000 {
+			continue
+		}
 		attrs := metric.WithAttributes(attrPage.String(string(v.Page)), attrNavigation.String(string(v.Navigation)))
 		a.pages.duration.Record(ctx, float64(v.DurationMs)/1000, attrs)
 		a.pages.reads.Record(ctx, int64(v.GitReads), attrs)
