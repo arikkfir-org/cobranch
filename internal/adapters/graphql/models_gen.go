@@ -744,6 +744,12 @@ type ModelProvider struct {
 type Mutation struct {
 }
 
+// The task a task token works, and the slug of its organization.
+type MyTask struct {
+	Organization string `json:"organization"`
+	Task         *Task  `json:"task"`
+}
+
 // What makes a secret.
 type NewSecret struct {
 	// At most 100 characters, unique where the secret lives.
@@ -1154,6 +1160,8 @@ type Tag struct {
 // A task of one of the organization's agents, which the organization numbers.
 type Task struct {
 	ID string `json:"id"`
+	// The organization whose agent it is.
+	OrganizationID string `json:"organizationId"`
 	// Counts the organization's tasks from 1.
 	Number int              `json:"number"`
 	Agent  *CommitPrincipal `json:"agent"`
@@ -1185,6 +1193,8 @@ type Task struct {
 	EndedAt *time.Time `json:"endedAt,omitempty"`
 	// Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
+	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
+	Transcript []*TranscriptEntry `json:"transcript"`
 }
 
 // A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
@@ -1206,6 +1216,22 @@ type TaskPage struct {
 	Tasks []*Task `json:"tasks"`
 	// Where the next page starts, as tasks' after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// A step of a task's transcript, numbered from 1 in its task; entries never change.
+type TranscriptEntry struct {
+	Seq  int                 `json:"seq"`
+	Kind TranscriptEntryKind `json:"kind"`
+	// What the harness recorded, as it wrote it. A state entry's holds state, and summary or reason.
+	Body      map[string]any `json:"body"`
+	CreatedAt time.Time      `json:"createdAt"`
+}
+
+// The next entry of a task's transcript. Its body is a JSON object of at most 256 KiB; a state entry's holds state (running, waiting, succeeded or failed), with a summary of 1 to 20000 characters for succeeded and a reason of 1 to 1000 for failed.
+type TranscriptEntryInput struct {
+	Seq  int                 `json:"seq"`
+	Kind TranscriptEntryKind `json:"kind"`
+	Body map[string]any      `json:"body"`
 }
 
 // A directory at a commit.
@@ -2381,6 +2407,66 @@ func (e *TaskState) UnmarshalJSON(b []byte) error {
 }
 
 func (e TaskState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state.
+type TranscriptEntryKind string
+
+const (
+	TranscriptEntryKindInput  TranscriptEntryKind = "INPUT"
+	TranscriptEntryKindTurn   TranscriptEntryKind = "TURN"
+	TranscriptEntryKindResult TranscriptEntryKind = "RESULT"
+	TranscriptEntryKindState  TranscriptEntryKind = "STATE"
+)
+
+var AllTranscriptEntryKind = []TranscriptEntryKind{
+	TranscriptEntryKindInput,
+	TranscriptEntryKindTurn,
+	TranscriptEntryKindResult,
+	TranscriptEntryKindState,
+}
+
+func (e TranscriptEntryKind) IsValid() bool {
+	switch e {
+	case TranscriptEntryKindInput, TranscriptEntryKindTurn, TranscriptEntryKindResult, TranscriptEntryKindState:
+		return true
+	}
+	return false
+}
+
+func (e TranscriptEntryKind) String() string {
+	return string(e)
+}
+
+func (e *TranscriptEntryKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TranscriptEntryKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TranscriptEntryKind", str)
+	}
+	return nil
+}
+
+func (e TranscriptEntryKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TranscriptEntryKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TranscriptEntryKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

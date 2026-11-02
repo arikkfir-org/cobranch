@@ -131,7 +131,7 @@ func (q *Queries) MoveTask(ctx context.Context, arg MoveTaskParams) (int64, erro
 }
 
 const taskByID = `-- name: TaskByID :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
@@ -173,6 +173,7 @@ func (q *Queries) TaskByID(ctx context.Context, id uuid.UUID) (TaskByIDRow, erro
 		&i.AgentTask.StartedAt,
 		&i.AgentTask.EndedAt,
 		&i.AgentTask.Version,
+		&i.AgentTask.IssueID,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,

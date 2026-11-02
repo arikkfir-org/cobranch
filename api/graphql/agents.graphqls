@@ -96,6 +96,8 @@ type TaskPage {
 "A task of one of the organization's agents, which the organization numbers."
 type Task {
   id: ID!
+  "The organization whose agent it is."
+  organizationId: ID!
   "Counts the organization's tasks from 1."
   number: Int!
   agent: CommitPrincipal!
@@ -127,6 +129,43 @@ type Task {
   endedAt: Time
   "Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile."
   version: Int!
+  "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
+  transcript(after: Int, first: Int): [TranscriptEntry!]!
+}
+
+"The task a task token works, and the slug of its organization."
+type MyTask {
+  organization: String!
+  task: Task!
+}
+
+"What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
+enum TranscriptEntryKind {
+  INPUT
+  TURN
+  RESULT
+  STATE
+}
+
+"A step of a task's transcript, numbered from 1 in its task; entries never change."
+type TranscriptEntry {
+  seq: Int!
+  kind: TranscriptEntryKind!
+  "What the harness recorded, as it wrote it. A state entry's holds state, and summary or reason."
+  body: Map!
+  createdAt: Time!
+}
+
+"The next entry of a task's transcript. Its body is a JSON object of at most 256 KiB; a state entry's holds state (running, waiting, succeeded or failed), with a summary of 1 to 20000 characters for succeeded and a reason of 1 to 1000 for failed."
+input TranscriptEntryInput {
+  seq: Int!
+  kind: TranscriptEntryKind!
+  body: Map!
+}
+
+extend type Query {
+  "The task the request's task token works, with its organization's slug, for the agent's harness to start from; any other credential is refused (FORBIDDEN)."
+  myTask: MyTask!
 }
 
 "A role a new agent starts with, at the organization or, with a repository, on that repository."
@@ -193,4 +232,6 @@ extend type Mutation {
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   cancelTask(organizationId: ID!, number: Int!, expectedVersion: Int): Task!
+  "Appends the next entry to the transcript of one of the organization's tasks; only the task's own token appends (FORBIDDEN otherwise), while the task hasn't ended (CONFLICT, task.ended). An entry already numbered seq answers unchanged, so a harness that repeats an append records it once; a number past the next is refused (BAD_USER_INPUT, transcript.seq_invalid). A state entry moves the task too: a running task to waiting and back, one that runs or waits to succeeded or failed; another move is refused (CONFLICT, task.transition_invalid)."
+  appendTranscriptEntry(organizationId: ID!, number: Int!, input: TranscriptEntryInput!): TranscriptEntry!
 }
