@@ -1511,6 +1511,143 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs:
+    get:
+      operationId: listRuns
+      summary: A page of the repository's runs of its jobs, newest first; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: sha
+          in: query
+          description: Only the runs at this commit, by its full name.
+          x-go-name: SHA
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest run when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many runs the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's runs, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [runs]
+                properties:
+                  runs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Run"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}:
+    get:
+      operationId: getRun
+      summary: One of the repository's runs by its number; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "200":
+          description: The run.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/cancel:
+    post:
+      operationId: cancelRun
+      summary: Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "200":
+          description: The run, cancelled.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/start:
+    post:
+      operationId: startRun
+      summary: Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "202":
+          description: The run, queued; Location names it, where it reports how it goes.
+          headers:
+            Location:
+              description: The run's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags
@@ -1691,6 +1828,15 @@ paths:
           $ref: "#/components/responses/Problem"
 components:
   parameters:
+    runNumber:
+      name: number
+      in: path
+      required: true
+      description: The run's number in its repository.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     sha:
       name: sha
       in: path
@@ -2291,6 +2437,198 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    Run:
+      type: object
+      description: One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.
+      required: [id, number, job, sha, ref, trigger, definition, state, reason, queuedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int64
+          description: Counts the repository's runs from 1.
+        job:
+          $ref: "#/components/schemas/Principal"
+        sha:
+          type: string
+        ref:
+          type: string
+          description: The branch or tag it runs on, in full.
+        trigger:
+          $ref: "#/components/schemas/RunTrigger"
+        causeRun:
+          type: integer
+          format: int64
+          description: The number of the run whose annotation triggered it; absent for any other.
+        definition:
+          $ref: "#/components/schemas/Job"
+        state:
+          $ref: "#/components/schemas/RunState"
+        reason:
+          type: string
+          description: Why it waits, failed or was cancelled; empty otherwise.
+        startedBy:
+          $ref: "#/components/schemas/Principal"
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number in quotes.
+    RunState:
+      type: string
+      description: Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
+      enum: [waiting, queued, running, succeeded, failed, cancelled]
+    RunTrigger:
+      type: object
+      description: The event that queued a run.
+      required: [kind, sha, ref]
+      properties:
+        kind:
+          type: string
+          enum: [push, tag, annotation, review, event, schedule, manual]
+        sha:
+          type: string
+        ref:
+          type: string
+        name:
+          type: string
+          description: The annotation's name, or the posted event's.
+        state:
+          type: string
+          description: The annotation's status, or the review's state.
+        actor:
+          type: string
+          format: uuid
+          description: Who caused it.
+        push:
+          type: string
+          format: uuid
+          description: The push that caused it, for a push or a tag.
+    Job:
+      type: object
+      description: A job as /cobranch.yaml declared it.
+      required: [name, kind, "on", permissions, checkout]
+      properties:
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [pod, script, webhook]
+        "on":
+          $ref: "#/components/schemas/JobTriggers"
+        pod:
+          type: object
+          description: A Kubernetes pod spec, for a pod.
+          additionalProperties: true
+        script:
+          type: string
+          description: A Bash script, for a script.
+        image:
+          type: string
+          description: The image a script runs in; the installation's when empty.
+        webhook:
+          $ref: "#/components/schemas/JobWebhook"
+        secrets:
+          type: object
+          description: The environment variables a run receives secrets in, each with the secret's ID.
+          additionalProperties:
+            type: string
+            format: uuid
+        permissions:
+          type: array
+          description: What a run's token may do, within the repository's job ceiling.
+          items:
+            type: string
+        timeout:
+          type: string
+          description: How long a run may take, such as 30m0s; the installation's default when absent.
+        checkout:
+          type: boolean
+    JobWebhook:
+      type: object
+      required: [url, signingSecret]
+      properties:
+        url:
+          type: string
+        signingSecret:
+          type: string
+          format: uuid
+    JobTriggers:
+      type: object
+      description: What triggers a job; an absent trigger never does.
+      properties:
+        push:
+          $ref: "#/components/schemas/RefPatterns"
+        tag:
+          $ref: "#/components/schemas/RefPatterns"
+        annotation:
+          type: object
+          required: [names, statuses]
+          properties:
+            names:
+              type: array
+              items:
+                type: string
+            statuses:
+              type: array
+              items:
+                type: string
+            branches:
+              type: array
+              items:
+                type: string
+        review:
+          type: object
+          required: [states]
+          properties:
+            states:
+              type: array
+              items:
+                type: string
+            branches:
+              type: array
+              items:
+                type: string
+        event:
+          type: object
+          required: [names]
+          properties:
+            names:
+              type: array
+              items:
+                type: string
+        schedule:
+          type: array
+          items:
+            type: object
+            required: [cron]
+            properties:
+              cron:
+                type: string
+        manual:
+          type: object
+    RefPatterns:
+      type: object
+      description: The branches or tags a push or tag trigger fires for, by name or pattern; every one when none is listed.
+      properties:
+        branches:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
     AnnotationStatus:
       type: string
       description: Where an annotation stands, in any order its principal sets them.

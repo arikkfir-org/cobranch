@@ -15,7 +15,7 @@ import (
 )
 
 // Store is a code.Store in memory: each repository's commits by name, branches, tags, pushes and slugs, the
-// organization's then its own, and the annotations on its commits. Fail, when set, fails every listing and every
+// organization's then its own, the annotations on its commits, and its runs, oldest first. Fail, when set, fails every listing and every
 // change. Names names the principals who set annotations, by ID; Now is the time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
@@ -25,6 +25,7 @@ type Store struct {
 	SlugList   map[uuid.UUID][2]string
 	Notes      map[uuid.UUID]map[string][]code.Annotation
 	Names      map[uuid.UUID]string
+	RunList    map[uuid.UUID][]code.Run
 	Now        time.Time
 	Fail       error
 }
@@ -33,7 +34,7 @@ type Store struct {
 func NewStore() *Store {
 	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
-		Names: map[uuid.UUID]string{}}
+		Names: map[uuid.UUID]string{}, RunList: map[uuid.UUID][]code.Run{}}
 }
 
 // Add records commits in the repository, as push brought them.

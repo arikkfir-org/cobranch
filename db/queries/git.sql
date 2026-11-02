@@ -26,8 +26,8 @@ ON CONFLICT (repo_id, name) DO UPDATE SET upload = EXCLUDED.upload, state = 'act
 WHERE packs.state <> 'active';
 
 -- name: InsertPush :exec
-INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent, merged)
-VALUES (@id, @org_id, @repo_id, @pusher_id, @transport, @ref_updates, @pack, @received_at, @traceparent, @merged);
+INSERT INTO pushes (id, org_id, repo_id, pusher_id, transport, ref_updates, pack, received_at, traceparent, merged, peeled)
+VALUES (@id, @org_id, @repo_id, @pusher_id, @transport, @ref_updates, @pack, @received_at, @traceparent, @merged, @peeled);
 
 -- InsertCommit records a commit a push brought, unless another push brought it first; the push worker fills in its
 -- author's and committer's principals.
@@ -72,7 +72,7 @@ LISTEN cobranch_pushes;
 -- ClaimPush locks the push that has waited longest for the push worker and may be tried now, skipping those another
 -- push worker holds.
 -- name: ClaimPush :one
-SELECT id, repo_id, pusher_id, received_at, committed_at, attempts, traceparent, merged FROM pushes
+SELECT id, org_id, repo_id, pusher_id, received_at, committed_at, attempts, traceparent, merged, ref_updates, peeled FROM pushes
 WHERE processed_at IS NULL AND retry_at <= now()
 ORDER BY retry_at, committed_at
 LIMIT 1

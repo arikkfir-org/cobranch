@@ -48,3 +48,5 @@ models:
       tags: { resolver: true }
       tree: { resolver: true }
       blob: { resolver: true }
+      runs: { resolver: true }
+      run: { resolver: true }

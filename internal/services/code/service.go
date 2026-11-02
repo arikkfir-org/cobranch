@@ -52,6 +52,7 @@ type Store interface {
 	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
 	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
 	Slugs(ctx context.Context, repoID uuid.UUID) (org, repo string, err error)
+	RunStore
 }
 
 // Service serves a repository's code to the viewers who read it: every operation checks repo.read through the
@@ -164,7 +165,7 @@ func failed(span trace.Span, what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, repos.ErrNotFound), errors.As(err, &verr), errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrAnnotationTaken),
-		errors.Is(err, ErrAnnotationChanged), answer(err):
+		errors.Is(err, ErrAnnotationChanged), errors.Is(err, ErrRunEnded), errors.Is(err, ErrRunNotWaiting), answer(err):
 		return err
 	}
 	span.RecordError(err)

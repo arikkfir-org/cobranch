@@ -204,6 +204,31 @@ type Invitation struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
+// A job as /cobranch.yaml declared it.
+type Job struct {
+	Name string `json:"name"`
+	// pod, script or webhook.
+	Kind string `json:"kind"`
+	// What triggers it, as /cobranch.yaml's on declares it.
+	On map[string]any `json:"on"`
+	// A Kubernetes pod spec, for a pod.
+	Pod map[string]any `json:"pod,omitempty"`
+	// A Bash script, for a script.
+	Script *string `json:"script,omitempty"`
+	// The image a script runs in; null for the installation's.
+	Image *string `json:"image,omitempty"`
+	// Where a webhook posts its runs.
+	WebhookURL *string `json:"webhookUrl,omitempty"`
+	// The environment variables a run receives secrets in, each with the secret's ID.
+	Secrets map[string]any `json:"secrets,omitempty"`
+	// What a run's token may do, within the repository's job ceiling.
+	Permissions []string `json:"permissions"`
+	// How long a run may take, such as 30m0s; null for the installation's default.
+	Timeout *string `json:"timeout,omitempty"`
+	// Whether a run's pod fetches its commit into /workspace first.
+	Checkout bool `json:"checkout"`
+}
+
 // A user's request to join an organization, waiting for one of its member managers.
 type JoinRequest struct {
 	ID               string    `json:"id"`
@@ -383,6 +408,10 @@ type Repository struct {
 	Tree *Tree `json:"tree,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
+	// A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100.
+	Runs *RunPage `json:"runs"`
+	// One of the repository's runs by number: null unless it is there; takes repo.read.
+	Run *Run `json:"run,omitempty"`
 }
 
 // A principal's grants on a repository.
@@ -421,6 +450,59 @@ type RoleInput struct {
 	Description *string `json:"description,omitempty"`
 	// From the permissions listed at scope ORGANIZATION; at least one.
 	Permissions []string `json:"permissions"`
+}
+
+// One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then.
+type Run struct {
+	ID string `json:"id"`
+	// Counts the repository's runs from 1.
+	Number int `json:"number"`
+	// The job's principal, named as the job.
+	Job *CommitPrincipal `json:"job"`
+	Sha string           `json:"sha"`
+	// The branch or tag it runs on, in full.
+	Ref string `json:"ref"`
+	// The event that queued it.
+	Trigger *RunTrigger `json:"trigger"`
+	// The number of the run whose annotation triggered it; null for any other.
+	CauseRun *int `json:"causeRun,omitempty"`
+	// The job as it was declared when the run was queued.
+	Definition *Job     `json:"definition"`
+	State      RunState `json:"state"`
+	// Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+	// Who started it from WAITING; null for a run that never waited.
+	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
+	QueuedAt  time.Time        `json:"queuedAt"`
+	StartedAt *time.Time       `json:"startedAt,omitempty"`
+	EndedAt   *time.Time       `json:"endedAt,omitempty"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+}
+
+// A page of a repository's runs, newest first.
+type RunPage struct {
+	Runs []*Run `json:"runs"`
+	// Where the next page starts, as runs' after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// The event that queued a run.
+type RunTrigger struct {
+	// push, tag, annotation, review, event, schedule or manual.
+	Kind string `json:"kind"`
+	// The commit the run executes at.
+	Sha string `json:"sha"`
+	// The branch or tag it happened on, in full.
+	Ref string `json:"ref"`
+	// The annotation's name, or the posted event's; empty for any other.
+	Name string `json:"name"`
+	// The annotation's status, or the review's state; empty for any other.
+	State string `json:"state"`
+	// Who caused it: the pusher, the annotation's or the review's principal, the poster or the starter; null for a schedule.
+	Actor *string `json:"actor,omitempty"`
+	// The push that caused it, for a push or a tag.
+	Push *string `json:"push,omitempty"`
 }
 
 // An SSH key, as its user sees it.
@@ -993,6 +1075,74 @@ func (e *RoleScope) UnmarshalJSON(b []byte) error {
 }
 
 func (e RoleScope) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a run stands.
+type RunState string
+
+const (
+	// It waits for a member to start it: its tip was pushed from outside the organization.
+	RunStateWaiting RunState = "WAITING"
+	// It waits for the controller.
+	RunStateQueued    RunState = "QUEUED"
+	RunStateRunning   RunState = "RUNNING"
+	RunStateSucceeded RunState = "SUCCEEDED"
+	// It ended badly, or never started.
+	RunStateFailed RunState = "FAILED"
+	// It was cancelled, or superseded by a newer run.
+	RunStateCancelled RunState = "CANCELLED"
+)
+
+var AllRunState = []RunState{
+	RunStateWaiting,
+	RunStateQueued,
+	RunStateRunning,
+	RunStateSucceeded,
+	RunStateFailed,
+	RunStateCancelled,
+}
+
+func (e RunState) IsValid() bool {
+	switch e {
+	case RunStateWaiting, RunStateQueued, RunStateRunning, RunStateSucceeded, RunStateFailed, RunStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e RunState) String() string {
+	return string(e)
+}
+
+func (e *RunState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RunState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RunState", str)
+	}
+	return nil
+}
+
+func (e RunState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RunState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RunState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

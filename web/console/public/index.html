@@ -230,7 +230,7 @@
     .badge .icon svg { width: 14px; height: 14px; }
     .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
     .annotations td { vertical-align: top; }
-    .annotations td.state { width: 1%; white-space: nowrap; }
+    .annotations td.state, .runs td.state { width: 1%; white-space: nowrap; }
     .branches td.counts { white-space: nowrap; }
     .title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .title h2 code { font-size: 18px; overflow-wrap: anywhere; }
@@ -524,7 +524,7 @@
     }
 
     // A repository's pages: its code (how to clone it, and a branch's history), its branches and each one's page, a
-    // commit, who holds grants on it, and, with repo.manage, its settings.
+    // commit, its jobs' runs and each one's page, who holds grants on it, and, with repo.manage, its settings.
     async function showRepository(org, main, orgCan, slug, sub, rest) {
       let repo;
       try {
@@ -536,11 +536,11 @@
       }
       if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub, ...rest].filter(Boolean).map(encodeURIComponent).join("/"), true);
       const can = (p) => repo.viewerPermissions.includes(p);
-      const tabs = [["", "Code"], ["branches", "Branches"], ["access", "Access"]];
+      const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["access", "Access"]];
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
       // A directory, a file, a branch's history and a commit are the Code tab's.
       const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2)) return go("/" + org.slug + "/" + repo.slug, true);
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "runs" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -555,6 +555,8 @@
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else if (sub === "branches" && rest.length) sections = await repositoryBranch(path, at, rest.join("/"), can, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
+      else if (sub === "runs" && rest.length) sections = await repositoryRun(path, at, rest[0], can, fail);
+      else if (sub === "runs") sections = [await runsPanel(path, at, can, fail, "")];
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
       else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
@@ -563,8 +565,8 @@
     }
 
     // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-    // parents, to a branch's page, to a commit, to a directory or a file at a ref, and to a file's bytes, which the REST
-    // API serves.
+    // parents, to a branch's page, to a commit, to a run, to a directory or a file at a ref, and to a file's bytes, which
+    // the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
@@ -572,6 +574,7 @@
         history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
         branchPage: (name) => root + "/branches/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
+        run: (number) => root + "/runs/" + number,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
         blob: (ref, path) => root + "/blob/" + parts(ref, path),
         raw: (commit, path, download) => config.restUrl + "/v1/orgs/" + org.slug + "/repos/" + repo.slug + "/raw?" +
@@ -597,6 +600,8 @@
       "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+      "circle-pause": '<circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/>',
+      "ban": '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
     };
     // The branch statuses as the design system draws them, the same way.
     const branchStatuses = {
@@ -620,6 +625,20 @@
     // branchBadge is a branch's status as a badge, as annotationBadge draws an annotation's.
     function branchBadge(status) {
       const s = branchStatuses[status];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // The run states, drawn as the annotation statuses are.
+    const runStates = {
+      waiting: { word: "Waiting", icon: "circle-pause", tone: "neutral" },
+      queued: { word: "Queued", icon: "clock", tone: "neutral" },
+      running: { word: "Running", icon: "loader-circle", tone: "info" },
+      succeeded: { word: "Succeeded", icon: "circle-check", tone: "success" },
+      failed: { word: "Failed", icon: "circle-x", tone: "danger" },
+      cancelled: { word: "Cancelled", icon: "ban", tone: "neutral" },
+    };
+    // runBadge is a run's state as a badge, as annotationBadge draws an annotation's status.
+    function runBadge(state) {
+      const s = runStates[state];
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
@@ -1029,8 +1048,8 @@
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button for a
-    // viewer who may, why it is Blocked, requirement by requirement, its commits, and the annotations on its head. main's
-    // page names what merges into it need instead.
+    // viewer who may, why it is Blocked, requirement by requirement, its commits, and the annotations and runs on its
+    // head. main's page names what merges into it need instead.
     async function repositoryBranch(path, at, name, can, fail) {
       let b;
       try {
@@ -1046,7 +1065,7 @@
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
-      if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail));
+      if (b.commit) sections.push(commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
       return sections;
     }
 
@@ -1155,7 +1174,7 @@
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,
     // the push that first brought it, with its pusher, and the annotations principals set on it, each deletable by a
     // viewer who may: its principal with annotations.write, anyone with annotations.delete_any. It links its files and
-    // the history that leads to it.
+    // the history that leads to it, and lists the runs at it.
     async function repositoryCommit(path, at, sha, can, fail) {
       let c;
       try {
@@ -1179,7 +1198,7 @@
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
         h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
-        commitAnnotations(path, c, can, fail)];
+        commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha)];
     }
 
     // commitAnnotations lists a commit's annotations, by name, with their status, summary, link, principal and run.
@@ -1197,6 +1216,90 @@
       return h("section", { class: "panel" }, h("h3", {}, "Annotations"),
         c.annotations.length ? h("table", { class: "annotations" }, h("tbody", {}, c.annotations.map(row)))
           : h("p", {}, "No annotations yet. Principals holding ", h("code", {}, "annotations.write"), " set them through the API, such as a CI system's verdict on this commit."));
+    }
+
+    // runsPanel lists the repository's runs, newest first, at commit sha unless it is empty, a page at a time: each
+    // with its state and why, its job, its ref and commit, what queued it and when, and Start or Cancel for a viewer
+    // holding jobs.run.
+    async function runsPanel(path, at, can, fail, sha) {
+      const rows = h("tbody");
+      let next = null;
+      const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older runs");
+      const row = runRow(path, at, can, fail);
+      async function load(from) {
+        older.disabled = true;
+        try {
+          const page = await apiPage(from);
+          rows.append(...page.data.runs.map(row));
+          next = page.next;
+          older.hidden = !next;
+        } catch (err) {
+          fail(err);
+        } finally {
+          older.disabled = false;
+        }
+      }
+      await load(path + "/runs" + (sha ? "?" + new URLSearchParams({ sha }) : ""));
+      const none = h("p", {}, sha ? "No runs at this commit. " : "No runs yet. ", "The jobs that ", h("code", {}, "/cobranch.yaml"),
+        " declares run when what they name under ", h("code", {}, "on"), " happens, such as a push.");
+      return h("section", { class: "panel" }, h("h3", {}, "Runs"), rows.children.length ? h("table", { class: "runs" }, rows) : none, h("div", {}, older));
+    }
+
+    // runRow makes a row of a run: its state and why, its job, ref and commit, what queued it and when, and its actions.
+    const runRow = (path, at, can, fail) => (r) => h("tr", {},
+      h("td", { class: "state" }, runBadge(r.state)),
+      h("td", {}, h("a", { href: at.run(r.number), "data-nav": "" }, h("code", {}, r.job.displayName), " #" + r.number), r.reason ? h("p", {}, capitalized(r.reason)) : null,
+        h("p", { class: "muted" }, refName(r.ref), " · ", h("a", { href: at.commit(r.sha), "data-nav": "" }, h("code", {}, shortSha(r.sha))), " · ", triggered(r), " · ", whenExactly(r.queuedAt))),
+      h("td", { class: "actions" }, runActions(path, r, can, fail)));
+
+    // runActions are Start for a waiting run and Cancel for one that hasn't ended, for a viewer holding jobs.run.
+    function runActions(path, r, can, fail) {
+      if (!can("jobs.run")) return null;
+      const act = (verb, button) => {
+        button.disabled = true;
+        api("POST", path + "/runs/" + r.number + "/" + verb).then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      const start = r.state === "waiting" ? h("button", { class: "button small primary", type: "button", title: "Start " + r.job.displayName + " #" + r.number,
+        onclick: (e) => act("start", e.currentTarget) }, "Start") : null;
+      const cancel = ["waiting", "queued", "running"].includes(r.state) ? h("button", { class: "button small danger", type: "button", title: "Cancel " + r.job.displayName + " #" + r.number,
+        onclick: (e) => confirm("Cancel " + r.job.displayName + " #" + r.number + "?") && act("cancel", e.currentTarget) }, "Cancel") : null;
+      return [start, start && cancel ? " " : null, cancel];
+    }
+
+    const capitalized = (text) => text.charAt(0).toUpperCase() + text.slice(1);
+    // refName is a ref by the name its kind gives it: a branch's or a tag's.
+    const refName = (ref) => ref.startsWith("refs/heads/") ? ["branch ", h("code", {}, ref.slice(11))] : ref.startsWith("refs/tags/") ? ["tag ", h("code", {}, ref.slice(10))] : h("code", {}, ref);
+    // triggered says what queued a run.
+    const triggered = (r) => ({ push: "a push", tag: "a tag's push", annotation: "annotation " + r.trigger.name, review: "a review", event: "event " + r.trigger.name,
+      schedule: "its schedule", manual: "a member" })[r.trigger.kind] || r.trigger.kind;
+
+    // repositoryRun is a run's page: its state and why, its job, ref and commit, what queued it, who started it, when it
+    // was queued, started and ended, its actions, and its job's definition as the run keeps it.
+    async function repositoryRun(path, at, number, can, fail) {
+      let r;
+      try {
+        r = await api("GET", path + "/runs/" + encodeURIComponent(number));
+      } catch (err) {
+        if (err.status !== 404 && err.status !== 400) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Run"), h("p", {}, "This repository has no run #" + number + "."))];
+      }
+      const d = r.definition;
+      const facts = h("dl", { class: "facts" },
+        h("dt", {}, "State"), h("dd", {}, runBadge(r.state), r.reason ? [" ", capitalized(r.reason)] : null),
+        h("dt", {}, "On"), h("dd", {}, refName(r.ref), " at ", h("a", { href: at.commit(r.sha), "data-nav": "" }, h("code", {}, r.sha))),
+        h("dt", {}, "Queued"), h("dd", {}, "By " + triggered(r) + ", " + whenExactly(r.queuedAt)),
+        r.startedBy ? [h("dt", {}, "Started by"), h("dd", {}, r.startedBy.displayName)] : null,
+        r.startedAt ? [h("dt", {}, "Started"), h("dd", {}, whenExactly(r.startedAt))] : null,
+        r.endedAt ? [h("dt", {}, "Ended"), h("dd", {}, whenExactly(r.endedAt))] : null);
+      const work = d.kind === "script" ? [h("p", {}, "A script, in ", d.image ? h("code", {}, d.image) : "the installation's image", d.checkout ? ", in a checkout of the commit:" : ":"), h("pre", { class: "message" }, d.script)]
+        : d.kind === "pod" ? [h("p", {}, "A pod", d.checkout ? ", in a checkout of the commit:" : ":"), h("pre", { class: "message" }, JSON.stringify(d.pod, null, 2))]
+        : [h("p", {}, "A webhook, posted to ", h("code", {}, d.webhook.url), ".")];
+      const definition = h("dl", { class: "facts" },
+        h("dt", {}, "Permissions"), h("dd", {}, d.permissions.map((p, i) => [i ? " " : null, h("code", {}, p)])),
+        h("dt", {}, "Timeout"), h("dd", {}, d.timeout || "The installation's"),
+        d.secrets ? [h("dt", {}, "Secrets"), h("dd", {}, Object.keys(d.secrets).map((env, i) => [i ? " " : null, h("code", {}, env)]))] : null);
+      return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, h("code", {}, r.job.displayName), " #" + r.number), h("div", {}, runActions(path, r, can, fail))), facts),
+        h("section", { class: "panel" }, h("h3", {}, "Job"), h("p", {}, "As ", h("code", {}, "/cobranch.yaml"), " declared it when the run was queued."), ...work, definition)];
     }
 
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants

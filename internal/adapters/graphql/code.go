@@ -22,6 +22,10 @@ type Code interface {
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 }
 
 // unavailable is the code of the error a field answers when the installation lacks what it needs: a Git server.

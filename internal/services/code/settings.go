@@ -13,6 +13,7 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/jobs"
 )
 
 // SettingsError is a SettingsFile that doesn't parse, naming the line at fault, as a push into the default branch that
@@ -29,32 +30,55 @@ func (e *SettingsError) Error() string {
 	return fmt.Sprintf("/%s: line %d: %s", git.SettingsFile, e.Line, e.Message)
 }
 
-// ParseSettings reads the merge requirements of a SettingsFile, one per branch its branches key names, in the order it
-// names them, or a *SettingsError. Only branches counts in this slice: other keys belong to what reads them, and are
-// left alone. Under branches, every key is checked, so a misspelt requirement refuses the file rather than requiring
-// nothing.
-func ParseSettings(content []byte) ([]git.Requirements, error) {
+// Settings are what a SettingsFile says: of the repository, read from the default branch's only; the branches' merge
+// requirements, read from the default branch's only; and the jobs, read from the file at the tip an event happened
+// on. The JSON a store keeps of them leaves the merge requirements out, which it keeps on their own.
+type Settings struct {
+	Repository jobs.RepositorySettings `json:"repository"`
+	Branches   []git.Requirements      `json:"-"`
+	// Jobs are by name.
+	Jobs []jobs.Job `json:"jobs"`
+}
+
+// ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its top-level keys are
+// repository, branches and jobs, and every key under them is checked, so a misspelt requirement or trigger refuses
+// the file rather than requiring or running nothing. An empty file says nothing: the repository's defaults, no
+// requirements and no jobs.
+func ParseSettings(content []byte) (Settings, error) {
+	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}}
 	var doc yaml.Node
 	dec := yaml.NewDecoder(bytes.NewReader(content))
 	if err := dec.Decode(&doc); errors.Is(err, io.EOF) {
-		return nil, nil
+		return out, nil
 	} else if err != nil {
-		return nil, yamlError(err)
+		return Settings{}, yamlError(err)
 	}
-	if len(doc.Content) == 0 {
-		return nil, nil
+	if len(doc.Content) == 0 || isNull(doc.Content[0]) {
+		return out, nil
 	}
 	root := doc.Content[0]
-	if isNull(root) {
-		return nil, nil
-	}
 	if root.Kind != yaml.MappingNode {
-		return nil, &SettingsError{Line: root.Line, Message: "the settings must be a mapping"}
+		return Settings{}, &SettingsError{Line: root.Line, Message: "the settings must be a mapping"}
 	}
-	if err := uniqueKeys(root, "the settings"); err != nil {
-		return nil, err
+	if err := onlyKeys(root, "the settings", "repository", "branches", "jobs"); err != nil {
+		return Settings{}, err
 	}
-	branches := valueOf(root, "branches")
+	var err error
+	if out.Repository, err = repositorySettings(valueOf(root, "repository")); err != nil {
+		return Settings{}, err
+	}
+	if out.Branches, err = branchesRequirements(valueOf(root, "branches")); err != nil {
+		return Settings{}, err
+	}
+	if out.Jobs, err = parseJobs(valueOf(root, "jobs")); err != nil {
+		return Settings{}, err
+	}
+	return out, nil
+}
+
+// branchesRequirements reads the merge requirements under branches, one per branch it names, in the order it names
+// them.
+func branchesRequirements(branches *yaml.Node) ([]git.Requirements, error) {
 	if branches == nil || isNull(branches) {
 		return nil, nil
 	}

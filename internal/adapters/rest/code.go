@@ -33,6 +33,10 @@ type Code interface {
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 }
 
 func principal(p *code.Principal) *Principal {
