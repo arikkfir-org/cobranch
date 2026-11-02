@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/adapters/markdown"
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/agents/agentstest"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/chats/chatstest"
@@ -55,6 +57,9 @@ type orgFixture struct {
 	chatStore        *chatstest.Store
 	notifier         *chatstest.Notifier
 	chats            *chats.Service
+	agentStore       *agentstest.Store
+	agents           *agents.Service
+	scout            agents.Agent
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -110,6 +115,7 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.addChats()
+	f.addAgents(t)
 	f.commitObjects()
 	f.addIssues()
 	return f
@@ -176,7 +182,7 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents)).ServeHTTP(rec, req)
 	return rec
 }
 
@@ -187,13 +193,17 @@ type orgCase struct {
 	path   func(f *orgFixture) string
 	body   string
 	// bodyOf is the body when it names the fixture's IDs, in place of body.
-	bodyOf     func(f *orgFixture) string
-	header     http.Header
+	bodyOf func(f *orgFixture) string
+	header http.Header
+	// headerFor, when set, gives the header from the fixture instead.
+	headerFor  func(f *orgFixture) http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
 	// wantHeader holds fields the answer must carry, with their values.
 	wantHeader http.Header
+	// wantTag is what the answer's ETag starts with, for one that digests how its body reads after its version.
+	wantTag string
 }
 
 // bodyFor is the case's body for the fixture f.
@@ -213,22 +223,35 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.callWith(viewer, tt.method, tt.path(f), tt.bodyFor(f), tt.header)
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+			body := tt.bodyFor(f)
+			header := tt.header
+			if tt.headerFor != nil {
+				header = tt.headerFor(f)
 			}
-			for k := range tt.wantHeader {
-				if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
-					t.Errorf("%s = %q, want %q", k, got, want)
-				}
-			}
-			if tt.wantCode != "" {
-				checkBody(t, rec, "", tt.wantCode)
-			}
-			if tt.check != nil {
-				tt.check(t, f, rec.Body.Bytes())
-			}
+			tt.verify(t, f, f.callWith(viewer, tt.method, tt.path(f), body, header))
 		})
+	}
+}
+
+// verify checks the answer rec against what the case wants.
+func (tt orgCase) verify(t *testing.T, f *orgFixture, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != tt.wantStatus {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+	}
+	for k := range tt.wantHeader {
+		if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	if got := rec.Header().Get("Etag"); tt.wantTag != "" && !strings.HasPrefix(got, tt.wantTag) {
+		t.Errorf("Etag = %q, want it to start %q", got, tt.wantTag)
+	}
+	if tt.wantCode != "" {
+		checkBody(t, rec, "", tt.wantCode)
+	}
+	if tt.check != nil {
+		tt.check(t, f, rec.Body.Bytes())
 	}
 }
 

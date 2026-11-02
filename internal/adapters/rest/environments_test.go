@@ -89,15 +89,20 @@ func TestListEnvironmentsAPI(t *testing.T) {
 func TestEnvironmentAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "one by ID", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(productionPath), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"1.2.1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantTag: `"1-`, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); e.Id != productionID || e.Latest == nil || e.Latest.Number != 2 {
 					t.Errorf("environment = %s", body)
 				}
 			}},
 		{name: "one the caller holds", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(productionPath),
-			header: http.Header{"If-None-Match": {`"1.2.1"`}}, wantStatus: 304, wantHeader: http.Header{"Etag": {`"1.2.1"`}}},
-		{name: "one whose newest delivery changed since", viewer: withEnvironments(started(maxReading)), method: http.MethodGet, path: fixed(previewPath),
-			header: http.Header{"If-None-Match": {`"1.3.1"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"1.3.2"`}}},
+			headerFor: held(maxReading, fixed(productionPath)), wantStatus: 304, wantTag: `"1-`},
+		{name: "one whose newest delivery changed since", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(previewPath),
+			headerFor: heldThenStarted(maxReading, fixed(previewPath)), wantStatus: 200, wantTag: `"1-`,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if e := decode[Environment](t, body); e.Latest == nil || e.Latest.State != "queued" {
+					t.Errorf("environment = %s, want its newest delivery queued", body)
+				}
+			}},
 		{name: "one that isn't there", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(environmentsPath + "/" + uuid.NewString()),
 			wantStatus: 404, wantCode: "environment.not_found"},
 		{name: "an ID that isn't one", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(environmentsPath + "/production"), wantStatus: 400},
@@ -135,7 +140,7 @@ func TestEnvironmentAPI(t *testing.T) {
 func TestEnvironmentActionsAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "a Developer redelivers", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(productionPath + "/redeliver"), wantStatus: 202,
-			wantHeader: http.Header{"Location": {"/v1/orgs/acme/repos/website/deliveries/4"}, "Etag": {`"1"`}}, check: func(t *testing.T, f *orgFixture, body []byte) {
+			wantHeader: http.Header{"Location": {"/v1/orgs/acme/repos/website/deliveries/4"}}, wantTag: `"1-`, check: func(t *testing.T, f *orgFixture, body []byte) {
 				d := decode[Delivery](t, body)
 				if d.Number != 4 || d.State != "queued" || d.Trigger != "redeliver" || d.Sha == nil || *d.Sha != shaOf("c") ||
 					d.StartedBy == nil || d.StartedBy.Id != f.max.User.ID || d.StartedBy.DisplayName != "Max" {
@@ -147,7 +152,7 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 			}},
 		{name: "a Reader may not redeliver", viewer: withEnvironments(maxReading), method: http.MethodPost, path: fixed(productionPath + "/redeliver"), wantStatus: 403},
 		{name: "a Developer pauses one", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(productionPath + "/pause"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"2.2.2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantTag: `"2-`, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); !e.Paused || e.Latest == nil || e.Latest.State != "cancelled" || e.Latest.Reason != "paused by Max" {
 					t.Errorf("environment = %s", body)
 				}
@@ -157,7 +162,7 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 		{name: "pausing a paused one", viewer: withEnvironments(paused(maxDeveloping)), method: http.MethodPost, path: fixed(productionPath + "/pause"),
 			wantStatus: 409, wantCode: "environment.paused"},
 		{name: "a Developer resumes one", viewer: withEnvironments(paused(maxDeveloping)), method: http.MethodPost, path: fixed(productionPath + "/resume"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"2.4.1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantTag: `"2-`, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); e.Paused || e.Latest == nil || e.Latest.Number != 4 || e.Latest.Trigger != "resume" {
 					t.Errorf("environment = %s", body)
 				}
@@ -169,14 +174,15 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 	})
 }
 
-// started starts website's delivery #3, its preview's newest, which changes the delivery and not the environment,
-// before the viewer's setup.
-func started(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
-	return func(f *orgFixture) *auth.Authenticated {
+// heldThenStarted is held's header, read before website's delivery #3 starts: #3 is its preview's newest, so starting
+// it changes how the preview reads and not the preview's version.
+func heldThenStarted(viewer func(*orgFixture) *auth.Authenticated, path func(*orgFixture) string) func(*orgFixture) http.Header {
+	return func(f *orgFixture) http.Header {
+		header := held(viewer, path)(f)
 		if _, err := f.codeStore.StartDelivery(context.Background(), uuid.New(), f.website.ID, 3); err != nil {
 			panic(err)
 		}
-		return viewer(f)
+		return header
 	}
 }
 
@@ -193,16 +199,16 @@ const deliveriesPath = "/v1/orgs/acme/repos/website/deliveries"
 func TestDeliveryAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "one by number", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(deliveriesPath + "/3"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantTag: `"1-`, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if d := decode[Delivery](t, body); d.Number != 3 || d.State != "waiting" || d.Environment != previewID || d.Branch != "feature/login" {
 					t.Errorf("delivery = %s", body)
 				}
 			}},
 		{name: "one the caller holds", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(deliveriesPath + "/3"),
-			header: http.Header{"If-None-Match": {`"1"`}}, wantStatus: 304, wantHeader: http.Header{"Etag": {`"1"`}}},
+			headerFor: held(maxReading, fixed(deliveriesPath+"/3")), wantStatus: 304, wantTag: `"1-`},
 		{name: "one that isn't there", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(deliveriesPath + "/9"), wantStatus: 404, wantCode: "delivery.not_found"},
 		{name: "a Developer starts a waiting one", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(deliveriesPath + "/3/start"), wantStatus: 202,
-			wantHeader: http.Header{"Location": {deliveriesPath + "/3"}, "Etag": {`"2"`}}, check: func(t *testing.T, f *orgFixture, body []byte) {
+			wantHeader: http.Header{"Location": {deliveriesPath + "/3"}}, wantTag: `"2-`, check: func(t *testing.T, f *orgFixture, body []byte) {
 				if d := decode[Delivery](t, body); d.State != "queued" || d.Reason != "" || d.StartedBy == nil || d.StartedBy.Id != f.max.User.ID {
 					t.Errorf("delivery = %s", body)
 				}

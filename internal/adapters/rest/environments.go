@@ -36,19 +36,20 @@ func delivery(d code.Delivery) Delivery {
 	return out
 }
 
-// versionTag is the ETag of a version: the number, quoted.
-func versionTag(version int64) string {
-	return `"` + strconv.FormatInt(version, 10) + `"`
+// taggedEnvironment is e as the API shows it, with its ETag, which digests how it reads: its newest delivery, its
+// target's name and its revision change without its version.
+func taggedEnvironment(e code.Environment) (Environment, string, error) {
+	body := environment(e)
+	tag, err := versionTag(e.Version, body)
+	return body, tag, err
 }
 
-// environmentTag is the ETag of an environment as it is answered: its version, and its newest delivery's number and
-// version, which change without the environment's row changing.
-func environmentTag(e code.Environment) string {
-	if e.Latest == nil {
-		return versionTag(e.Version)
-	}
-	return `"` + strconv.FormatInt(e.Version, 10) + "." + strconv.FormatInt(e.Latest.Number, 10) + "." +
-		strconv.FormatInt(e.Latest.Version, 10) + `"`
+// taggedDelivery is d as the API shows it, with its ETag, which digests how it reads: the names of its target and of
+// who started it change without its version.
+func taggedDelivery(d code.Delivery) (Delivery, string, error) {
+	body := delivery(d)
+	tag, err := versionTag(d.Version, body)
+	return body, tag, err
 }
 
 // deliveryLocation is the URL of the repository's delivery numbered number.
@@ -81,7 +82,7 @@ func (a api) ListEnvironments(ctx context.Context, req ListEnvironmentsRequestOb
 	return out, nil
 }
 
-// GetEnvironment answers one of the repository's environments, or 304 while the caller holds its version.
+// GetEnvironment answers one of the repository's environments, or 304 while the caller holds how it reads.
 func (a api) GetEnvironment(ctx context.Context, req GetEnvironmentRequestObject) (GetEnvironmentResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -95,11 +96,14 @@ func (a api) GetEnvironment(ctx context.Context, req GetEnvironmentRequestObject
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	tag := environmentTag(e)
+	body, tag, err := taggedEnvironment(e)
+	if err != nil {
+		return nil, err
+	}
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetEnvironment304Response{Headers: GetEnvironment304ResponseHeaders{ETag: tag}}, nil
 	}
-	return GetEnvironment200JSONResponse{Body: environment(e), Headers: GetEnvironment200ResponseHeaders{ETag: tag}}, nil
+	return GetEnvironment200JSONResponse{Body: body, Headers: GetEnvironment200ResponseHeaders{ETag: tag}}, nil
 }
 
 // ListDeliveries lists a page of one of the repository's environments' deliveries, and links the next.
@@ -156,8 +160,12 @@ func (a api) Redeliver(ctx context.Context, req RedeliverRequestObject) (Redeliv
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	headers := Redeliver202ResponseHeaders{ETag: versionTag(d.Version), Location: deliveryLocation(req.Org, req.Repo, d.Number)}
-	return Redeliver202JSONResponse{Body: delivery(d), Headers: headers}, nil
+	body, tag, err := taggedDelivery(d)
+	if err != nil {
+		return nil, err
+	}
+	headers := Redeliver202ResponseHeaders{ETag: tag, Location: deliveryLocation(req.Org, req.Repo, d.Number)}
+	return Redeliver202JSONResponse{Body: body, Headers: headers}, nil
 }
 
 // PauseEnvironment pauses one of the repository's environments for the viewer.
@@ -174,7 +182,11 @@ func (a api) PauseEnvironment(ctx context.Context, req PauseEnvironmentRequestOb
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	return PauseEnvironment200JSONResponse{Body: environment(e), Headers: PauseEnvironment200ResponseHeaders{ETag: environmentTag(e)}}, nil
+	body, tag, err := taggedEnvironment(e)
+	if err != nil {
+		return nil, err
+	}
+	return PauseEnvironment200JSONResponse{Body: body, Headers: PauseEnvironment200ResponseHeaders{ETag: tag}}, nil
 }
 
 // ResumeEnvironment resumes one of the repository's paused environments for the viewer.
@@ -191,10 +203,14 @@ func (a api) ResumeEnvironment(ctx context.Context, req ResumeEnvironmentRequest
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	return ResumeEnvironment200JSONResponse{Body: environment(e), Headers: ResumeEnvironment200ResponseHeaders{ETag: environmentTag(e)}}, nil
+	body, tag, err := taggedEnvironment(e)
+	if err != nil {
+		return nil, err
+	}
+	return ResumeEnvironment200JSONResponse{Body: body, Headers: ResumeEnvironment200ResponseHeaders{ETag: tag}}, nil
 }
 
-// GetDelivery answers one of the repository's deliveries, or 304 while the caller holds its version.
+// GetDelivery answers one of the repository's deliveries, or 304 while the caller holds how it reads.
 func (a api) GetDelivery(ctx context.Context, req GetDeliveryRequestObject) (GetDeliveryResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -208,11 +224,14 @@ func (a api) GetDelivery(ctx context.Context, req GetDeliveryRequestObject) (Get
 	if err != nil {
 		return nil, fail(err, "delivery")
 	}
-	tag := versionTag(d.Version)
+	body, tag, err := taggedDelivery(d)
+	if err != nil {
+		return nil, err
+	}
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetDelivery304Response{Headers: GetDelivery304ResponseHeaders{ETag: tag}}, nil
 	}
-	return GetDelivery200JSONResponse{Body: delivery(d), Headers: GetDelivery200ResponseHeaders{ETag: tag}}, nil
+	return GetDelivery200JSONResponse{Body: body, Headers: GetDelivery200ResponseHeaders{ETag: tag}}, nil
 }
 
 // StartDelivery queues one of the repository's waiting deliveries for the viewer, and names it in Location.
@@ -229,6 +248,10 @@ func (a api) StartDelivery(ctx context.Context, req StartDeliveryRequestObject) 
 	if err != nil {
 		return nil, fail(err, "delivery")
 	}
-	headers := StartDelivery202ResponseHeaders{ETag: versionTag(d.Version), Location: deliveryLocation(req.Org, req.Repo, d.Number)}
-	return StartDelivery202JSONResponse{Body: delivery(d), Headers: headers}, nil
+	body, tag, err := taggedDelivery(d)
+	if err != nil {
+		return nil, err
+	}
+	headers := StartDelivery202ResponseHeaders{ETag: tag, Location: deliveryLocation(req.Org, req.Repo, d.Number)}
+	return StartDelivery202JSONResponse{Body: body, Headers: headers}, nil
 }

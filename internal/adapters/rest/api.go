@@ -31,6 +31,8 @@ type api struct {
 	issues Issues
 	// chats is the service of the branches' chats.
 	chats Chats
+	// agents is the service of the organizations' agents and their tasks.
+	agents Agents
 	// pages records the Console's page views.
 	pages pageMetrics
 }
@@ -42,15 +44,15 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 
 // NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's,
 // organizations and repositories for theirs, code for the repositories' branches, commits and files, issues for the
-// organizations' issues, and chats for the branches' chats. Every other
+// organizations' issues, chats for the branches' chats, and agents for the organizations' agents and tasks. Every other
 // path answers 404, and a request the API can't read 400, both as problem details. A GET's answer is the viewer's, and
 // revalidated each time (Cache-Control: private, no-cache). Each request's duration is recorded by its route.
-func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, issues Issues, chats Chats, opts ...Option) http.Handler {
+func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, issues Issues, chats Chats, agents Agents, opts ...Option) http.Handler {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
-	a := api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code, issues: issues, chats: chats, pages: newPageMetrics(o.meter)}
+	a := api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code, issues: issues, chats: chats, agents: agents, pages: newPageMetrics(o.meter)}
 	strict := NewStrictHandlerWithOptions(a, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,

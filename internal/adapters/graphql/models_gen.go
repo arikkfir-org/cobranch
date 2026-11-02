@@ -12,6 +12,60 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
+// One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
+type Agent struct {
+	// Its principal's ID.
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	// The standing instructions, in Markdown, that every task of it starts from.
+	Instructions string `json:"instructions"`
+	// Whether Cobranch made it for the organization; it is never deleted.
+	BuiltIn bool `json:"builtIn"`
+	// Who created it; null for a built-in agent, and once its creator is gone.
+	CreatedBy *CommitPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+	// The roles it holds, those at the organization first.
+	Grants []*AgentGrant `json:"grants"`
+}
+
+// A role an agent holds, at its organization or, with a repository, on that repository.
+type AgentGrant struct {
+	RoleID   string `json:"roleId"`
+	RoleName string `json:"roleName"`
+	// The repository it holds the role on; null at the organization.
+	RepositoryID   *string `json:"repositoryId,omitempty"`
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+}
+
+// A role a new agent starts with, at the organization or, with a repository, on that repository.
+type AgentGrantInput struct {
+	RoleID       string  `json:"roleId"`
+	RepositoryID *string `json:"repositoryId,omitempty"`
+}
+
+// A new agent.
+type AgentInput struct {
+	// 1 to 100 characters, unique in the organization in any case.
+	Name string `json:"name"`
+	// At most 1000 characters.
+	Description *string `json:"description,omitempty"`
+	// At most 20000 characters of Markdown.
+	Instructions *string `json:"instructions,omitempty"`
+	// At most 20, each one the creator holds every permission of where it applies.
+	Grants []*AgentGrantInput `json:"grants,omitempty"`
+}
+
+// What changes about an agent; a field left out keeps its value.
+type AgentPatch struct {
+	Name         *string `json:"name,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	Instructions *string `json:"instructions,omitempty"`
+}
+
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
 type Annotation struct {
 	ID string `json:"id"`
@@ -726,6 +780,14 @@ type Organization struct {
 	Roles []*Role `json:"roles"`
 	// The API keys, with their roles and secrets, by name; takes org.read.
 	APIKeys []*APIKey `json:"apiKeys"`
+	// The organization's agents by name, each with its grants; takes org.read.
+	Agents []*Agent `json:"agents"`
+	// One of the organization's agents by ID: null unless it is there; takes org.read.
+	Agent *Agent `json:"agent,omitempty"`
+	// A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100.
+	Tasks *TaskPage `json:"tasks"`
+	// One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read.
+	Task *Task `json:"task,omitempty"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
 	IssueKey string `json:"issueKey"`
 	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
@@ -1061,6 +1123,63 @@ type Tag struct {
 	Name string `json:"name"`
 	// The object it names.
 	Target string `json:"target"`
+}
+
+// A task of one of the organization's agents, which the organization numbers.
+type Task struct {
+	ID string `json:"id"`
+	// Counts the organization's tasks from 1.
+	Number int              `json:"number"`
+	Agent  *CommitPrincipal `json:"agent"`
+	// What it is for: assigned for a task a principal assigned.
+	Kind string `json:"kind"`
+	// Its assigner, whose permissions cap it; null once they are gone, when it may do nothing.
+	AssignedBy *CommitPrincipal `json:"assignedBy,omitempty"`
+	Title      string           `json:"title"`
+	// Its instructions, in Markdown.
+	Instructions string `json:"instructions"`
+	// The repository it works in; null for none.
+	RepositoryID   *string `json:"repositoryId,omitempty"`
+	RepositorySlug *string `json:"repositorySlug,omitempty"`
+	// The branch of that repository it works on; null for none.
+	BranchID *string `json:"branchId,omitempty"`
+	Branch   *string `json:"branch,omitempty"`
+	// The thread of that branch's chat it talks in; null for none.
+	ThreadID *string   `json:"threadId,omitempty"`
+	State    TaskState `json:"state"`
+	// Why it failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+	// What the agent said it did, once it ended.
+	Summary     string           `json:"summary"`
+	CancelledBy *CommitPrincipal `json:"cancelledBy,omitempty"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	// When it started; null until it does.
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+	// When it ended; null until it does.
+	EndedAt *time.Time `json:"endedAt,omitempty"`
+	// Counts its changes from 1: cancelTask names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
+type TaskInput struct {
+	AgentID string `json:"agentId"`
+	// 1 to 200 characters.
+	Title string `json:"title"`
+	// At most 20000 characters of Markdown.
+	Instructions *string `json:"instructions,omitempty"`
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	BranchID     *string `json:"branchId,omitempty"`
+	// The branch's name, without refs/heads/, when branchId doesn't name it.
+	Branch   *string `json:"branch,omitempty"`
+	ThreadID *string `json:"threadId,omitempty"`
+}
+
+// A page of an organization's tasks, newest first.
+type TaskPage struct {
+	Tasks []*Task `json:"tasks"`
+	// Where the next page starts, as tasks' after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // A directory at a commit.
@@ -2482,6 +2601,70 @@ func (e *RunState) UnmarshalJSON(b []byte) error {
 }
 
 func (e RunState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+type TaskState string
+
+const (
+	TaskStateQueued    TaskState = "QUEUED"
+	TaskStateRunning   TaskState = "RUNNING"
+	TaskStateWaiting   TaskState = "WAITING"
+	TaskStateSucceeded TaskState = "SUCCEEDED"
+	TaskStateFailed    TaskState = "FAILED"
+	TaskStateCancelled TaskState = "CANCELLED"
+)
+
+var AllTaskState = []TaskState{
+	TaskStateQueued,
+	TaskStateRunning,
+	TaskStateWaiting,
+	TaskStateSucceeded,
+	TaskStateFailed,
+	TaskStateCancelled,
+}
+
+func (e TaskState) IsValid() bool {
+	switch e {
+	case TaskStateQueued, TaskStateRunning, TaskStateWaiting, TaskStateSucceeded, TaskStateFailed, TaskStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e TaskState) String() string {
+	return string(e)
+}
+
+func (e *TaskState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = TaskState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid TaskState", str)
+	}
+	return nil
+}
+
+func (e TaskState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *TaskState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e TaskState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

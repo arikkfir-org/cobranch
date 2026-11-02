@@ -138,3 +138,17 @@ func TestChatStoreDeletedIssue(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentStoreThreadBranchOfAnIssue(t *testing.T) {
+	t.Parallel()
+	f := newIssueChatFixture(t)
+	ctx := context.Background()
+	thread, _, err := f.s.StartThread(ctx, f.max, f.chat, v7(), v7(), nil, "Seen in Safari 18 too")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A task's thread is one of its branch's chat: an issue's belongs to no branch.
+	if id, err := NewAgentStore(f.pool).ThreadBranch(ctx, thread.ID); err != nil || id != uuid.Nil {
+		t.Errorf("ThreadBranch(an issue's thread) = %s, %v; want none", id, err)
+	}
+}
