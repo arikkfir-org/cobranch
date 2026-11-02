@@ -34,4 +34,6 @@ type Resolver struct {
 	Repos Repositories
 	// Code is the service of the repositories' code.
 	Code Code
+	// IssueService is the organizations' issues' service: Issues would clash with Organization's field's resolver.
+	IssueService Issues
 }

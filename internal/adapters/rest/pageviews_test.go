@@ -46,7 +46,7 @@ func TestReportPageViews(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := sdkmetric.NewManualReader()
-			h := NewHandler("v1.2.3", nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
+			h := NewHandler("v1.2.3", nil, nil, nil, nil, nil, WithMeterProvider(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))))
 			req := httptest.NewRequest("POST", "/v1/page-views", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
 			rec := httptest.NewRecorder()

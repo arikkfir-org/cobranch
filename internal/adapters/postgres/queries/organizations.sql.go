@@ -111,8 +111,8 @@ func (q *Queries) InsertMembership(ctx context.Context, orgID uuid.UUID, userID 
 }
 
 const insertOrganization = `-- name: InsertOrganization :exec
-INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, issue_key, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertOrganizationParams struct {
@@ -122,6 +122,7 @@ type InsertOrganizationParams struct {
 	MembershipRoleID    uuid.UUID
 	AcceptsJoinRequests bool
 	Providers           []string
+	IssueKey            string
 	CreatedAt           time.Time
 }
 
@@ -133,6 +134,7 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		arg.MembershipRoleID,
 		arg.AcceptsJoinRequests,
 		arg.Providers,
+		arg.IssueKey,
 		arg.CreatedAt,
 	)
 	return err
@@ -218,7 +220,7 @@ func (q *Queries) Membership(ctx context.Context, orgID uuid.UUID, userID uuid.U
 }
 
 const organizationByID = `-- name: OrganizationByID :one
-SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at FROM organizations WHERE id = $1
+SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, issue_key FROM organizations WHERE id = $1
 `
 
 func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error) {
@@ -232,12 +234,13 @@ func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organizat
 		&i.AcceptsJoinRequests,
 		&i.Providers,
 		&i.CreatedAt,
+		&i.IssueKey,
 	)
 	return i, err
 }
 
 const organizationBySlug = `-- name: OrganizationBySlug :one
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1
 `
 
 type OrganizationBySlugRow struct {
@@ -256,6 +259,7 @@ func (q *Queries) OrganizationBySlug(ctx context.Context, slug string) (Organiza
 		&i.Organization.AcceptsJoinRequests,
 		&i.Organization.Providers,
 		&i.Organization.CreatedAt,
+		&i.Organization.IssueKey,
 	)
 	return i, err
 }
@@ -301,7 +305,7 @@ func (q *Queries) OrganizationGrants(ctx context.Context, orgID uuid.UUID) ([]Or
 }
 
 const organizationsOf = `-- name: OrganizationsOf :many
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at FROM organizations o JOIN memberships m ON m.org_id = o.id WHERE m.user_id = $1 ORDER BY o.name, o.slug
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.issue_key FROM organizations o JOIN memberships m ON m.org_id = o.id WHERE m.user_id = $1 ORDER BY o.name, o.slug
 `
 
 type OrganizationsOfRow struct {
@@ -326,6 +330,7 @@ func (q *Queries) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Orga
 			&i.Organization.AcceptsJoinRequests,
 			&i.Organization.Providers,
 			&i.Organization.CreatedAt,
+			&i.Organization.IssueKey,
 		); err != nil {
 			return nil, err
 		}
@@ -385,8 +390,8 @@ func (q *Queries) Role(ctx context.Context, id uuid.UUID) (Role, error) {
 
 const updateOrganization = `-- name: UpdateOrganization :execrows
 UPDATE organizations SET slug = $1, name = $2, membership_role_id = $3,
-    accepts_join_requests = $4, providers = $5
-WHERE id = $6
+    accepts_join_requests = $4, providers = $5, issue_key = $6
+WHERE id = $7
 `
 
 type UpdateOrganizationParams struct {
@@ -395,6 +400,7 @@ type UpdateOrganizationParams struct {
 	MembershipRoleID    uuid.UUID
 	AcceptsJoinRequests bool
 	Providers           []string
+	IssueKey            string
 	ID                  uuid.UUID
 }
 
@@ -405,6 +411,7 @@ func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganization
 		arg.MembershipRoleID,
 		arg.AcceptsJoinRequests,
 		arg.Providers,
+		arg.IssueKey,
 		arg.ID,
 	)
 	if err != nil {

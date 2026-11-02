@@ -15,28 +15,29 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/oapi-codegen/nullable"
 	"github.com/oapi-codegen/runtime"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AnnotationStatus.
 const (
-	Failed     AnnotationStatus = "failed"
-	InProgress AnnotationStatus = "in_progress"
-	Pending    AnnotationStatus = "pending"
-	Successful AnnotationStatus = "successful"
+	AnnotationStatusFailed     AnnotationStatus = "failed"
+	AnnotationStatusInProgress AnnotationStatus = "in_progress"
+	AnnotationStatusPending    AnnotationStatus = "pending"
+	AnnotationStatusSuccessful AnnotationStatus = "successful"
 )
 
 // Valid indicates whether the value is a known member of the AnnotationStatus enum.
 func (e AnnotationStatus) Valid() bool {
 	switch e {
-	case Failed:
+	case AnnotationStatusFailed:
 		return true
-	case InProgress:
+	case AnnotationStatusInProgress:
 		return true
-	case Pending:
+	case AnnotationStatusPending:
 		return true
-	case Successful:
+	case AnnotationStatusSuccessful:
 		return true
 	default:
 		return false
@@ -103,6 +104,93 @@ func (e FileKind) Valid() bool {
 	case FileKindBlob:
 		return true
 	case FileKindSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssueChangeField.
+const (
+	IssueChangeFieldAssignee    IssueChangeField = "assignee"
+	IssueChangeFieldDescription IssueChangeField = "description"
+	IssueChangeFieldPriority    IssueChangeField = "priority"
+	IssueChangeFieldRepository  IssueChangeField = "repository"
+	IssueChangeFieldState       IssueChangeField = "state"
+	IssueChangeFieldTitle       IssueChangeField = "title"
+)
+
+// Valid indicates whether the value is a known member of the IssueChangeField enum.
+func (e IssueChangeField) Valid() bool {
+	switch e {
+	case IssueChangeFieldAssignee:
+		return true
+	case IssueChangeFieldDescription:
+		return true
+	case IssueChangeFieldPriority:
+		return true
+	case IssueChangeFieldRepository:
+		return true
+	case IssueChangeFieldState:
+		return true
+	case IssueChangeFieldTitle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssuePriority.
+const (
+	High   IssuePriority = "high"
+	Low    IssuePriority = "low"
+	Medium IssuePriority = "medium"
+	None   IssuePriority = "none"
+	Urgent IssuePriority = "urgent"
+)
+
+// Valid indicates whether the value is a known member of the IssuePriority enum.
+func (e IssuePriority) Valid() bool {
+	switch e {
+	case High:
+		return true
+	case Low:
+		return true
+	case Medium:
+		return true
+	case None:
+		return true
+	case Urgent:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for IssueState.
+const (
+	IssueStateBacklog    IssueState = "backlog"
+	IssueStateCanceled   IssueState = "canceled"
+	IssueStateDone       IssueState = "done"
+	IssueStateInProgress IssueState = "in_progress"
+	IssueStateInReview   IssueState = "in_review"
+	IssueStateTodo       IssueState = "todo"
+)
+
+// Valid indicates whether the value is a known member of the IssueState enum.
+func (e IssueState) Valid() bool {
+	switch e {
+	case IssueStateBacklog:
+		return true
+	case IssueStateCanceled:
+		return true
+	case IssueStateDone:
+		return true
+	case IssueStateInProgress:
+		return true
+	case IssueStateInReview:
+		return true
+	case IssueStateTodo:
 		return true
 	default:
 		return false
@@ -366,7 +454,7 @@ type Annotation struct {
 	Link string `json:"link"`
 	Name string `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// StartedAt When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
@@ -505,7 +593,7 @@ type BranchMerge struct {
 	// At When Cobranch recorded the push.
 	At time.Time `json:"at"`
 
-	// By Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// By Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	By *Principal `json:"by,omitempty"`
 
 	// Head The head it brought into the base.
@@ -595,6 +683,119 @@ type Invitation struct {
 	RoleName string `json:"roleName"`
 }
 
+// Issue A piece of the organization's work, named by its organization's issue key and its number.
+type Issue struct {
+	// Assignee Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Assignee *Principal `json:"assignee,omitempty"`
+
+	// ClosedAt When it was last done or canceled; absent while it is open.
+	ClosedAt  *time.Time `json:"closedAt,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Description Markdown.
+	Description string `json:"description"`
+
+	// DescriptionHtml The description rendered, as the Console shows it; getIssue, createIssue and updateIssue answer it, a list doesn't, nor an empty description.
+	DescriptionHtml *string            `json:"descriptionHtml,omitempty"`
+	Id              openapi_types.UUID `json:"id"`
+
+	// Identifier Its organization's issue key and its number, such as ACME-42; a changed key renames it.
+	Identifier string `json:"identifier"`
+	Number     int    `json:"number"`
+
+	// Priority How urgent an issue is.
+	Priority IssuePriority `json:"priority"`
+
+	// Repository The repository an issue is about; absent for none, and for a viewer who doesn't read it.
+	Repository *IssueRepository `json:"repository,omitempty"`
+
+	// State Where an issue stands; done and canceled close it.
+	State     IssueState `json:"state"`
+	Title     string     `json:"title"`
+	UpdatedAt time.Time  `json:"updatedAt"`
+
+	// Version Counts its changes from 1; its ETag.
+	Version int64 `json:"version"`
+}
+
+// IssueChange A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+type IssueChange struct {
+	Field IssueChangeField `json:"field"`
+	From  *string          `json:"from,omitempty"`
+	To    *string          `json:"to,omitempty"`
+}
+
+// IssueChangeField defines model for IssueChange.Field.
+type IssueChangeField string
+
+// IssueEvent Something that happened to an issue.
+type IssueEvent struct {
+	// Actor Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Actor *Principal `json:"actor,omitempty"`
+	At    time.Time  `json:"at"`
+
+	// Changes The fields an issue.changed changed.
+	Changes []IssueChange      `json:"changes"`
+	Id      openapi_types.UUID `json:"id"`
+
+	// Kind issue.created or issue.changed; more kinds come with branches.
+	Kind string `json:"kind"`
+}
+
+// IssueInput What creates an issue.
+type IssueInput struct {
+	// AssigneeId One of the organization's members.
+	AssigneeId *openapi_types.UUID `json:"assigneeId,omitempty"`
+
+	// Description Markdown, at most 65536 characters.
+	Description *string `json:"description,omitempty"`
+
+	// Priority How urgent an issue is.
+	Priority *IssuePriority `json:"priority,omitempty"`
+
+	// RepositoryId One of the organization's repositories, which the viewer reads.
+	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
+
+	// State Where an issue stands; done and canceled close it.
+	State *IssueState `json:"state,omitempty"`
+
+	// Title 1 to 200 characters on one line.
+	Title string `json:"title"`
+}
+
+// IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
+type IssuePatch struct {
+	// AssigneeId One of the organization's members, or null for nobody.
+	AssigneeId  nullable.Nullable[openapi_types.UUID] `json:"assigneeId,omitempty"`
+	Description *string                               `json:"description,omitempty"`
+
+	// Priority How urgent an issue is.
+	Priority *IssuePriority `json:"priority,omitempty"`
+
+	// RepositoryId One of the organization's repositories, which the viewer reads, or null for none.
+	RepositoryId nullable.Nullable[openapi_types.UUID] `json:"repositoryId,omitempty"`
+
+	// State Where an issue stands; done and canceled close it.
+	State *IssueState `json:"state,omitempty"`
+	Title *string     `json:"title,omitempty"`
+}
+
+// IssuePriority How urgent an issue is.
+type IssuePriority string
+
+// IssueRepository The repository an issue is about; absent for none, and for a viewer who doesn't read it.
+type IssueRepository struct {
+	Id   openapi_types.UUID `json:"id"`
+	Name string             `json:"name"`
+	Slug string             `json:"slug"`
+}
+
+// IssueState Where an issue stands; done and canceled close it.
+type IssueState string
+
 // JoinRequest A user's request to join an organization, waiting for a member manager.
 type JoinRequest struct {
 	CreatedAt time.Time          `json:"createdAt"`
@@ -655,6 +856,9 @@ type Organization struct {
 	CreatedAt           time.Time          `json:"createdAt"`
 	Id                  openapi_types.UUID `json:"id"`
 
+	// IssueKey The key its issues' identifiers start with, such as ACME in ACME-42.
+	IssueKey string `json:"issueKey"`
+
 	// MembershipRoleId The role everyone who joins gets.
 	MembershipRoleId openapi_types.UUID `json:"membershipRoleId"`
 	Name             string             `json:"name"`
@@ -671,9 +875,12 @@ type Organization struct {
 
 // OrganizationSettings What a manager changes; a field left out keeps its value.
 type OrganizationSettings struct {
-	AcceptsJoinRequests *bool               `json:"acceptsJoinRequests,omitempty"`
-	MembershipRoleId    *openapi_types.UUID `json:"membershipRoleId,omitempty"`
-	Name                *string             `json:"name,omitempty"`
+	AcceptsJoinRequests *bool `json:"acceptsJoinRequests,omitempty"`
+
+	// IssueKey 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier.
+	IssueKey         *string             `json:"issueKey,omitempty"`
+	MembershipRoleId *openapi_types.UUID `json:"membershipRoleId,omitempty"`
+	Name             *string             `json:"name,omitempty"`
 
 	// Providers The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
 	Providers *[]string `json:"providers,omitempty"`
@@ -712,7 +919,7 @@ type Person struct {
 	Email string    `json:"email"`
 	Name  string    `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Zone The zone the commit wrote its time in, such as +0200.
@@ -757,7 +964,7 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
-// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+// Principal Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
@@ -790,7 +997,7 @@ type Push struct {
 	At time.Time          `json:"at"`
 	Id openapi_types.UUID `json:"id"`
 
-	// Pusher Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Pusher Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Pusher *Principal `json:"pusher,omitempty"`
 
 	// Transport How the push came; api for a merge asked of Cobranch.
@@ -1017,6 +1224,9 @@ type Id = openapi_types.UUID
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
 
+// IfMatchIssue defines model for ifMatchIssue.
+type IfMatchIssue = string
+
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
 
@@ -1025,6 +1235,9 @@ type IfNoneMatchAnnotation = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
+
+// Number defines model for number.
+type Number = int
 
 // Org defines model for org.
 type Org = string
@@ -1067,6 +1280,45 @@ type InviteJSONBody struct {
 
 	// RoleId The role the invitee gets; the organization's membership role when left out.
 	RoleId *openapi_types.UUID `json:"roleId,omitempty"`
+}
+
+// ListIssuesParams defines parameters for ListIssues.
+type ListIssuesParams struct {
+	// State The states to show, one parameter each; none, the open ones (backlog, todo, in_progress, in_review).
+	State *[]IssueState `form:"state,omitempty" json:"state,omitempty"`
+
+	// Assignee Those assigned to one principal, by ID, or to nobody, for none.
+	Assignee *string `form:"assignee,omitempty" json:"assignee,omitempty"`
+
+	// Repository Those about one repository, by ID, or about none, for none.
+	Repository *string `form:"repository,omitempty" json:"repository,omitempty"`
+
+	// Text Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
+	Text *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Cursor Where the page starts, from the previous page's Link; absent for the first.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many issues the page holds, 1 to 100.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteIssueParams defines parameters for DeleteIssue.
+type DeleteIssueParams struct {
+	// IfMatch The ETag of the issue the change was made from, or its version alone, quoted; a change made meanwhile is refused with 412, while a changed issue key, which renames the issue, is not.
+	IfMatch *IfMatchIssue `json:"If-Match,omitempty"`
+}
+
+// GetIssueParams defines parameters for GetIssue.
+type GetIssueParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateIssueParams defines parameters for UpdateIssue.
+type UpdateIssueParams struct {
+	// IfMatch The ETag of the issue the change was made from, or its version alone, quoted; a change made meanwhile is refused with 412, while a changed issue key, which renames the issue, is not.
+	IfMatch *IfMatchIssue `json:"If-Match,omitempty"`
 }
 
 // RequestToJoinJSONBody defines parameters for RequestToJoin.
@@ -1206,6 +1458,12 @@ type RotateAPIKeyJSONRequestBody = SecretInput
 // InviteJSONRequestBody defines body for Invite for application/json ContentType.
 type InviteJSONRequestBody InviteJSONBody
 
+// CreateIssueJSONRequestBody defines body for CreateIssue for application/json ContentType.
+type CreateIssueJSONRequestBody = IssueInput
+
+// UpdateIssueApplicationMergePatchPlusJSONRequestBody defines body for UpdateIssue for application/merge-patch+json ContentType.
+type UpdateIssueApplicationMergePatchPlusJSONRequestBody = IssuePatch
+
 // RequestToJoinJSONRequestBody defines body for RequestToJoin for application/json ContentType.
 type RequestToJoinJSONRequestBody RequestToJoinJSONBody
 
@@ -1289,7 +1547,7 @@ type ServerInterface interface {
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
 	// (GET /orgs/{org})
 	GetOrganization(w http.ResponseWriter, r *http.Request, org Org)
-	// UpdateOrganization Changes an organization's name, slug or settings; takes org.manage.
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
@@ -1316,6 +1574,24 @@ type ServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// (GET /orgs/{org}/issues)
+	ListIssues(w http.ResponseWriter, r *http.Request, org Org, params ListIssuesParams)
+	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
+	// (POST /orgs/{org}/issues)
+	CreateIssue(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteIssue Deletes one of the organization's issues, with its activity, for a mistake; work that won't be done is canceled instead. Takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/issues/{number})
+	DeleteIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params DeleteIssueParams)
+	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+	// (GET /orgs/{org}/issues/{number})
+	GetIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params GetIssueParams)
+	// UpdateIssue Changes the fields the merge patch (RFC 7396) names of one of the organization's issues, null unassigning it or making it about no repository; takes issues.write, and repo.read on a repository it makes it about. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/issues/{number})
+	UpdateIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params UpdateIssueParams)
+	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	// (GET /orgs/{org}/issues/{number}/activity)
+	ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(w http.ResponseWriter, r *http.Request, org Org)
@@ -2006,6 +2282,351 @@ func (siw *ServerInterfaceWrapper) CancelInvitation(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelInvitation(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIssues operation middleware
+func (siw *ServerInterfaceWrapper) ListIssues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListIssuesParams
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "assignee" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "assignee", r.URL.Query(), &params.Assignee, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "assignee"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "assignee", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "repository" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repository", r.URL.Query(), &params.Repository, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repository"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repository", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "q", r.URL.Query(), &params.Text, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIssues(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateIssue operation middleware
+func (siw *ServerInterfaceWrapper) CreateIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateIssue(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteIssue operation middleware
+func (siw *ServerInterfaceWrapper) DeleteIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteIssueParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchIssue
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteIssue(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetIssue operation middleware
+func (siw *ServerInterfaceWrapper) GetIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetIssueParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetIssue(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateIssue operation middleware
+func (siw *ServerInterfaceWrapper) UpdateIssue(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateIssueParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchIssue
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateIssue(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListIssueActivity operation middleware
+func (siw *ServerInterfaceWrapper) ListIssueActivity(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number Number
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIssueActivity(w, r, org, number)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3781,6 +4402,12 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests", wrapper.RequestToJoin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/approve", wrapper.ApproveJoinRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/decline", wrapper.DeclineJoinRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.ListIssues)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.CreateIssue)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.DeleteIssue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.GetIssue)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.UpdateIssue)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues/{number}/activity", wrapper.ListIssueActivity)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.ListRepositories)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos", wrapper.CreateRepository)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}", wrapper.GetRepository)
@@ -5707,6 +6334,660 @@ type CancelInvitationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CancelInvitationdefaultApplicationProblemPlusJSONResponse) VisitCancelInvitationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssuesRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListIssuesParams
+}
+
+type ListIssuesResponseObject interface {
+	VisitListIssuesResponse(w http.ResponseWriter) error
+}
+
+type ListIssues200ResponseHeaders struct {
+	Link *string
+}
+
+type ListIssues200JSONResponse struct {
+	Body struct {
+		Issues []Issue `json:"issues"`
+	}
+	Headers ListIssues200ResponseHeaders
+}
+
+func (response ListIssues200JSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssues400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListIssues400ApplicationProblemPlusJSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssues401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssues401ApplicationProblemPlusJSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssues403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssues403ApplicationProblemPlusJSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssues404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssues404ApplicationProblemPlusJSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssuesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListIssuesdefaultApplicationProblemPlusJSONResponse) VisitListIssuesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssueRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateIssueJSONRequestBody
+}
+
+type CreateIssueResponseObject interface {
+	VisitCreateIssueResponse(w http.ResponseWriter) error
+}
+
+type CreateIssue201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateIssue201JSONResponse struct {
+	Body    Issue
+	Headers CreateIssue201ResponseHeaders
+}
+
+func (response CreateIssue201JSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssue400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateIssue400ApplicationProblemPlusJSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssue401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateIssue401ApplicationProblemPlusJSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssue403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateIssue403ApplicationProblemPlusJSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssue404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateIssue404ApplicationProblemPlusJSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateIssuedefaultApplicationProblemPlusJSONResponse) VisitCreateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssueRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Params DeleteIssueParams
+}
+
+type DeleteIssueResponseObject interface {
+	VisitDeleteIssueResponse(w http.ResponseWriter) error
+}
+
+type DeleteIssue204Response struct {
+}
+
+func (response DeleteIssue204Response) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteIssue401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteIssue401ApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssue403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssue403ApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssue404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssue404ApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssue412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssue412ApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssue428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteIssue428ApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteIssuedefaultApplicationProblemPlusJSONResponse) VisitDeleteIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssueRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Params GetIssueParams
+}
+
+type GetIssueResponseObject interface {
+	VisitGetIssueResponse(w http.ResponseWriter) error
+}
+
+type GetIssue200ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssue200JSONResponse struct {
+	Body    Issue
+	Headers GetIssue200ResponseHeaders
+}
+
+func (response GetIssue200JSONResponse) VisitGetIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssue304ResponseHeaders struct {
+	ETag string
+}
+
+type GetIssue304Response struct {
+	Headers GetIssue304ResponseHeaders
+}
+
+func (response GetIssue304Response) VisitGetIssueResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetIssue401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetIssue401ApplicationProblemPlusJSONResponse) VisitGetIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssue403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssue403ApplicationProblemPlusJSONResponse) VisitGetIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssue404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetIssue404ApplicationProblemPlusJSONResponse) VisitGetIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetIssuedefaultApplicationProblemPlusJSONResponse) VisitGetIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssueRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+	Params UpdateIssueParams
+	Body   *UpdateIssueApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateIssueResponseObject interface {
+	VisitUpdateIssueResponse(w http.ResponseWriter) error
+}
+
+type UpdateIssue200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateIssue200JSONResponse struct {
+	Body    Issue
+	Headers UpdateIssue200ResponseHeaders
+}
+
+func (response UpdateIssue200JSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateIssue400ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssue401ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssue403ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssue404ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssue412ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssue428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateIssue428ApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateIssuedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateIssuedefaultApplicationProblemPlusJSONResponse) VisitUpdateIssueResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueActivityRequestObject struct {
+	Org    Org    `json:"org"`
+	Number Number `json:"number"`
+}
+
+type ListIssueActivityResponseObject interface {
+	VisitListIssueActivityResponse(w http.ResponseWriter) error
+}
+
+type ListIssueActivity200JSONResponse struct {
+	Events []IssueEvent `json:"events"`
+}
+
+func (response ListIssueActivity200JSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueActivity401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListIssueActivity401ApplicationProblemPlusJSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueActivity403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueActivity403ApplicationProblemPlusJSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueActivity404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListIssueActivity404ApplicationProblemPlusJSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListIssueActivitydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListIssueActivitydefaultApplicationProblemPlusJSONResponse) VisitListIssueActivityResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9190,7 +10471,7 @@ type StrictServerInterface interface {
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
 	// (GET /orgs/{org})
 	GetOrganization(ctx context.Context, request GetOrganizationRequestObject) (GetOrganizationResponseObject, error)
-	// UpdateOrganization Changes an organization's name, slug or settings; takes org.manage.
+	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
@@ -9217,6 +10498,24 @@ type StrictServerInterface interface {
 	// CancelInvitation Cancels an invitation that waits; takes org.members.manage.
 	// (DELETE /orgs/{org}/invitations/{id})
 	CancelInvitation(ctx context.Context, request CancelInvitationRequestObject) (CancelInvitationResponseObject, error)
+	// ListIssues A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+	// (GET /orgs/{org}/issues)
+	ListIssues(ctx context.Context, request ListIssuesRequestObject) (ListIssuesResponseObject, error)
+	// CreateIssue Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
+	// (POST /orgs/{org}/issues)
+	CreateIssue(ctx context.Context, request CreateIssueRequestObject) (CreateIssueResponseObject, error)
+	// DeleteIssue Deletes one of the organization's issues, with its activity, for a mistake; work that won't be done is canceled instead. Takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/issues/{number})
+	DeleteIssue(ctx context.Context, request DeleteIssueRequestObject) (DeleteIssueResponseObject, error)
+	// GetIssue One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+	// (GET /orgs/{org}/issues/{number})
+	GetIssue(ctx context.Context, request GetIssueRequestObject) (GetIssueResponseObject, error)
+	// UpdateIssue Changes the fields the merge patch (RFC 7396) names of one of the organization's issues, null unassigning it or making it about no repository; takes issues.write, and repo.read on a repository it makes it about. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/issues/{number})
+	UpdateIssue(ctx context.Context, request UpdateIssueRequestObject) (UpdateIssueResponseObject, error)
+	// ListIssueActivity What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	// (GET /orgs/{org}/issues/{number}/activity)
+	ListIssueActivity(ctx context.Context, request ListIssueActivityRequestObject) (ListIssueActivityResponseObject, error)
 	// ListJoinRequests The requests to join the organization that wait, oldest first; takes org.members.manage.
 	// (GET /orgs/{org}/join-requests)
 	ListJoinRequests(ctx context.Context, request ListJoinRequestsRequestObject) (ListJoinRequestsResponseObject, error)
@@ -10051,6 +11350,184 @@ func (sh *strictHandler) CancelInvitation(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelInvitationResponseObject); ok {
 		if err := validResponse.VisitCancelInvitationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListIssues operation middleware
+func (sh *strictHandler) ListIssues(w http.ResponseWriter, r *http.Request, org Org, params ListIssuesParams) {
+	var request ListIssuesRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIssues(ctx, request.(ListIssuesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIssues")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIssuesResponseObject); ok {
+		if err := validResponse.VisitListIssuesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateIssue operation middleware
+func (sh *strictHandler) CreateIssue(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateIssueRequestObject
+
+	request.Org = org
+
+	var body CreateIssueJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateIssue(ctx, request.(CreateIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateIssueResponseObject); ok {
+		if err := validResponse.VisitCreateIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteIssue operation middleware
+func (sh *strictHandler) DeleteIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params DeleteIssueParams) {
+	var request DeleteIssueRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteIssue(ctx, request.(DeleteIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteIssueResponseObject); ok {
+		if err := validResponse.VisitDeleteIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetIssue operation middleware
+func (sh *strictHandler) GetIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params GetIssueParams) {
+	var request GetIssueRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetIssue(ctx, request.(GetIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetIssueResponseObject); ok {
+		if err := validResponse.VisitGetIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateIssue operation middleware
+func (sh *strictHandler) UpdateIssue(w http.ResponseWriter, r *http.Request, org Org, number Number, params UpdateIssueParams) {
+	var request UpdateIssueRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	var body UpdateIssueApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateIssue(ctx, request.(UpdateIssueRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateIssue")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateIssueResponseObject); ok {
+		if err := validResponse.VisitUpdateIssueResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListIssueActivity operation middleware
+func (sh *strictHandler) ListIssueActivity(w http.ResponseWriter, r *http.Request, org Org, number Number) {
+	var request ListIssueActivityRequestObject
+
+	request.Org = org
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListIssueActivity(ctx, request.(ListIssueActivityRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListIssueActivity")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListIssueActivityResponseObject); ok {
+		if err := validResponse.VisitListIssueActivityResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

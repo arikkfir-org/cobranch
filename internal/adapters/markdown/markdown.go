@@ -181,7 +181,7 @@ func (r *Renderer) image(img *html.Node, doc code.Document) {
 		r.outside(img, u)
 	default:
 		p, ok := resolve(doc.Path, u.Path)
-		if !ok || p == "" {
+		if !ok || p == "" || doc.Repo == "" { // an organization's document has no files to show
 			img.Parent.RemoveChild(img)
 			return
 		}
@@ -225,6 +225,9 @@ func (r *Renderer) link(href string, doc code.Document) string {
 		}
 		return "#" + anchor(u.Fragment)
 	}
+	if doc.Repo == "" {
+		return r.organizationLink(u, doc)
+	}
 	p, ok := resolve(doc.Path, u.Path)
 	if !ok {
 		return ""
@@ -239,6 +242,28 @@ func (r *Renderer) link(href string, doc code.Document) string {
 	}
 	if u.Fragment != "" {
 		out += "#" + anchor(u.Fragment)
+	}
+	return out
+}
+
+// organizationLink is where u, a path link of doc, a document of an organization's rather than of a repository's, such
+// as an issue's description, points: the Console's page at that path, from the Console's root when it starts with a
+// slash, or else from the organization's pages beside doc, as a browser resolves a link on doc's own page; "" when it
+// climbs above them.
+func (r *Renderer) organizationLink(u *url.URL, doc code.Document) string {
+	out := r.console + u.EscapedPath()
+	if !strings.HasPrefix(u.Path, "/") {
+		p, ok := resolve(doc.Path, u.Path)
+		if !ok {
+			return ""
+		}
+		out = r.console + "/" + url.PathEscape(doc.Org) + "/" + escape(p)
+	}
+	if u.RawQuery != "" {
+		out += "?" + u.RawQuery
+	}
+	if u.Fragment != "" {
+		out += "#" + url.PathEscape(u.Fragment)
 	}
 	return out
 }

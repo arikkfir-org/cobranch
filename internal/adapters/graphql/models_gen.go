@@ -8,6 +8,8 @@ import (
 	"io"
 	"strconv"
 	"time"
+
+	"github.com/99designs/gqlgen/graphql"
 )
 
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -204,6 +206,118 @@ type Invitation struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
+// A piece of an organization's work, named by its organization's issue key and its number.
+type Issue struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// Its number in its organization, from 1, never given to another.
+	Number int `json:"number"`
+	// Its organization's issue key and its number, such as ACME-42; a changed key renames it.
+	Identifier string `json:"identifier"`
+	Title      string `json:"title"`
+	// Markdown.
+	Description string `json:"description"`
+	// The description rendered, as the Console shows it, its relative links pointing at the organization's pages beside the issue's: issue, createIssue and updateIssue answer it, a list doesn't, nor an empty description.
+	DescriptionHTML *string       `json:"descriptionHtml,omitempty"`
+	State           IssueState    `json:"state"`
+	Priority        IssuePriority `json:"priority"`
+	// Who works on it; null for nobody, or once they are gone.
+	Assignee *IssuePrincipal `json:"assignee,omitempty"`
+	// The repository it is about; null for none, and for a viewer who doesn't read it.
+	Repository *IssueRepository `json:"repository,omitempty"`
+	// Who created it; null once they are gone.
+	CreatedBy *IssuePrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time       `json:"createdAt"`
+	UpdatedAt time.Time       `json:"updatedAt"`
+	// When it was last done or canceled; null while it is open.
+	ClosedAt *time.Time `json:"closedAt,omitempty"`
+	// Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+	// What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+	Activity []*IssueEvent `json:"activity"`
+}
+
+// A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads.
+type IssueChange struct {
+	// title, description, state, priority, assignee or repository.
+	Field string  `json:"field"`
+	From  *string `json:"from,omitempty"`
+	To    *string `json:"to,omitempty"`
+}
+
+// Something that happened to an issue.
+type IssueEvent struct {
+	ID string `json:"id"`
+	// issue.created or issue.changed; more kinds come with branches.
+	Kind string `json:"kind"`
+	// Who did it; null once they are gone.
+	Actor *IssuePrincipal `json:"actor,omitempty"`
+	At    time.Time       `json:"at"`
+	// The fields an issue.changed changed.
+	Changes []*IssueChange `json:"changes"`
+}
+
+// Which of an organization's issues a list shows.
+type IssueFilter struct {
+	// The states it shows; left out or empty, the open ones (BACKLOG, TODO, IN_PROGRESS, IN_REVIEW).
+	States []IssueState `json:"states,omitempty"`
+	// Those assigned to one principal, by ID, or to nobody, for none.
+	AssigneeID *string `json:"assigneeId,omitempty"`
+	// Those about one repository, by ID, or about none, for none.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
+	Text *string `json:"text,omitempty"`
+}
+
+// What creates an issue.
+type IssueInput struct {
+	// 1 to 200 characters on one line.
+	Title string `json:"title"`
+	// Markdown, at most 65536 characters.
+	Description *string `json:"description,omitempty"`
+	// BACKLOG when left out.
+	State *IssueState `json:"state,omitempty"`
+	// NONE when left out.
+	Priority *IssuePriority `json:"priority,omitempty"`
+	// One of the organization's members.
+	AssigneeID *string `json:"assigneeId,omitempty"`
+	// One of the organization's repositories, which the viewer reads.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+}
+
+// A page of an organization's issues.
+type IssuePage struct {
+	// The page's issues, newest first, without their rendered descriptions.
+	Issues []*Issue `json:"issues"`
+	// Where the next page starts, for after; null after the last.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// What changes an issue: a field left out keeps its value, and null clears an assignee or a repository.
+type IssuePatch struct {
+	Title       *string        `json:"title,omitempty"`
+	Description *string        `json:"description,omitempty"`
+	State       *IssueState    `json:"state,omitempty"`
+	Priority    *IssuePriority `json:"priority,omitempty"`
+	// One of the organization's members, or null for nobody.
+	AssigneeID graphql.Omittable[*string] `json:"assigneeId,omitempty"`
+	// One of the organization's repositories, which the viewer reads, or null for none.
+	RepositoryID graphql.Omittable[*string] `json:"repositoryId,omitempty"`
+}
+
+// Who an issue is assigned to, who created it, or who changed it.
+type IssuePrincipal struct {
+	ID          string `json:"id"`
+	DisplayName string `json:"displayName"`
+}
+
+// The repository an issue is about.
+type IssueRepository struct {
+	ID   string `json:"id"`
+	Slug string `json:"slug"`
+	Name string `json:"name"`
+}
+
 // A user's request to join an organization, waiting for one of its member managers.
 type JoinRequest struct {
 	ID               string    `json:"id"`
@@ -278,6 +392,12 @@ type Organization struct {
 	Roles []*Role `json:"roles"`
 	// The API keys, with their roles and secrets, by name; takes org.read.
 	APIKeys []*APIKey `json:"apiKeys"`
+	// The key its issues' identifiers start with, such as ACME in ACME-42.
+	IssueKey string `json:"issueKey"`
+	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
+	Issues *IssuePage `json:"issues"`
+	// One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read.
+	Issue *Issue `json:"issue,omitempty"`
 	// The repositories the viewer reads, by slug; takes org.read.
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
@@ -291,6 +411,8 @@ type OrganizationSettings struct {
 	AcceptsJoinRequests bool   `json:"acceptsJoinRequests"`
 	// Null or empty lets members sign in with any of the installation's providers.
 	Providers []string `json:"providers,omitempty"`
+	// 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before.
+	IssueKey *string `json:"issueKey,omitempty"`
 }
 
 // A commit's author or committer as the commit writes them.
@@ -823,6 +945,138 @@ func (e *HistoryParents) UnmarshalJSON(b []byte) error {
 }
 
 func (e HistoryParents) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// How urgent an issue is.
+type IssuePriority string
+
+const (
+	IssuePriorityNone   IssuePriority = "NONE"
+	IssuePriorityUrgent IssuePriority = "URGENT"
+	IssuePriorityHigh   IssuePriority = "HIGH"
+	IssuePriorityMedium IssuePriority = "MEDIUM"
+	IssuePriorityLow    IssuePriority = "LOW"
+)
+
+var AllIssuePriority = []IssuePriority{
+	IssuePriorityNone,
+	IssuePriorityUrgent,
+	IssuePriorityHigh,
+	IssuePriorityMedium,
+	IssuePriorityLow,
+}
+
+func (e IssuePriority) IsValid() bool {
+	switch e {
+	case IssuePriorityNone, IssuePriorityUrgent, IssuePriorityHigh, IssuePriorityMedium, IssuePriorityLow:
+		return true
+	}
+	return false
+}
+
+func (e IssuePriority) String() string {
+	return string(e)
+}
+
+func (e *IssuePriority) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = IssuePriority(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid IssuePriority", str)
+	}
+	return nil
+}
+
+func (e IssuePriority) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *IssuePriority) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e IssuePriority) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where an issue stands: DONE and CANCELED close it.
+type IssueState string
+
+const (
+	// Known, not planned.
+	IssueStateBacklog IssueState = "BACKLOG"
+	// Planned, not started.
+	IssueStateTodo IssueState = "TODO"
+	// Someone works on it.
+	IssueStateInProgress IssueState = "IN_PROGRESS"
+	// Its work waits for review.
+	IssueStateInReview IssueState = "IN_REVIEW"
+	// Its work is merged.
+	IssueStateDone IssueState = "DONE"
+	// It won't be done.
+	IssueStateCanceled IssueState = "CANCELED"
+)
+
+var AllIssueState = []IssueState{
+	IssueStateBacklog,
+	IssueStateTodo,
+	IssueStateInProgress,
+	IssueStateInReview,
+	IssueStateDone,
+	IssueStateCanceled,
+}
+
+func (e IssueState) IsValid() bool {
+	switch e {
+	case IssueStateBacklog, IssueStateTodo, IssueStateInProgress, IssueStateInReview, IssueStateDone, IssueStateCanceled:
+		return true
+	}
+	return false
+}
+
+func (e IssueState) String() string {
+	return string(e)
+}
+
+func (e *IssueState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = IssueState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid IssueState", str)
+	}
+	return nil
+}
+
+func (e IssueState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *IssueState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e IssueState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

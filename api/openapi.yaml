@@ -452,7 +452,7 @@ paths:
           $ref: "#/components/responses/Problem"
     patch:
       operationId: updateOrganization
-      summary: Changes an organization's name, slug or settings; takes org.manage.
+      summary: Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
       parameters:
         - $ref: "#/components/parameters/org"
       requestBody:
@@ -1009,6 +1009,229 @@ paths:
       responses:
         "204":
           description: Declined.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues:
+    get:
+      operationId: listIssues
+      summary: A page of the organization's issues, newest first, open ones unless states are named; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: state
+          in: query
+          description: The states to show, one parameter each; none, the open ones (backlog, todo, in_progress, in_review).
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/IssueState"
+        - name: assignee
+          in: query
+          description: Those assigned to one principal, by ID, or to nobody, for none.
+          schema:
+            type: string
+        - name: repository
+          in: query
+          description: Those about one repository, by ID, or about none, for none.
+          schema:
+            type: string
+        - name: q
+          in: query
+          description: Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
+          x-go-name: Text
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: Where the page starts, from the previous page's Link; absent for the first.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many issues the page holds, 1 to 100.
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: The page's issues, newest first, without their rendered descriptions.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [issues]
+                properties:
+                  issues:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createIssue
+      summary: Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueInput"
+      responses:
+        "201":
+          description: The issue.
+          headers:
+            Location:
+              description: The issue's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}:
+    get:
+      operationId: getIssue
+      summary: One of the organization's issues, by number, with its description rendered as the Console shows it; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The issue.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "304":
+          description: The issue is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateIssue
+      summary: Changes the fields the merge patch (RFC 7396) names of one of the organization's issues, null unassigning it or making it about no repository; takes issues.write, and repo.read on a repository it makes it about. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/ifMatchIssue"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/IssuePatch"
+      responses:
+        "200":
+          description: The issue as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Issue"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteIssue
+      summary: Deletes one of the organization's issues, with its activity, for a mistake; work that won't be done is canceled instead. Takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+        - $ref: "#/components/parameters/ifMatchIssue"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/activity:
+    get:
+      operationId: listIssueActivity
+      summary: What happened to one of the organization's issues, oldest first; takes issues.read. A move between repositories names only those the viewer reads.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+      responses:
+        "200":
+          description: The issue's events.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events]
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IssueEvent"
         "401":
           $ref: "#/components/responses/Problem"
         "403":
@@ -1711,6 +1934,19 @@ paths:
           $ref: "#/components/responses/Problem"
 components:
   parameters:
+    number:
+      name: number
+      in: path
+      required: true
+      description: The issue's number in its organization, such as 42 for ACME-42.
+      schema:
+        type: integer
+    ifMatchIssue:
+      name: If-Match
+      in: header
+      description: The ETag of the issue the change was made from, or its version alone, quoted; a change made meanwhile is refused with 412, while a changed issue key, which renames the issue, is not.
+      schema:
+        type: string
     sha:
       name: sha
       in: path
@@ -1955,7 +2191,7 @@ components:
     Organization:
       type: object
       description: An organization, with what the viewer may do there.
-      required: [id, slug, name, membershipRoleId, acceptsJoinRequests, createdAt, viewerPermissions]
+      required: [id, slug, name, membershipRoleId, acceptsJoinRequests, issueKey, createdAt, viewerPermissions]
       properties:
         id:
           type: string
@@ -1976,6 +2212,9 @@ components:
           description: The identity providers its members may sign in with; absent, all of the installation's.
           items:
             type: string
+        issueKey:
+          type: string
+          description: The key its issues' identifiers start with, such as ACME in ACME-42.
         createdAt:
           type: string
           format: date-time
@@ -2002,6 +2241,9 @@ components:
           description: The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
           items:
             type: string
+        issueKey:
+          type: string
+          description: 1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier.
     Role:
       type: object
       description: A role granted at the organization, built in or its own.
@@ -2282,9 +2524,150 @@ components:
           description: The zone the commit wrote its time in, such as +0200.
         principal:
           $ref: "#/components/schemas/Principal"
+    IssueState:
+      type: string
+      description: Where an issue stands; done and canceled close it.
+      enum: [backlog, todo, in_progress, in_review, done, canceled]
+    IssuePriority:
+      type: string
+      description: How urgent an issue is.
+      enum: [none, urgent, high, medium, low]
+    Issue:
+      type: object
+      description: A piece of the organization's work, named by its organization's issue key and its number.
+      required: [id, number, identifier, title, description, state, priority, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+        identifier:
+          type: string
+          description: Its organization's issue key and its number, such as ACME-42; a changed key renames it.
+        title:
+          type: string
+        description:
+          type: string
+          description: Markdown.
+        descriptionHtml:
+          type: string
+          description: The description rendered, as the Console shows it; getIssue, createIssue and updateIssue answer it, a list doesn't, nor an empty description.
+        state:
+          $ref: "#/components/schemas/IssueState"
+        priority:
+          $ref: "#/components/schemas/IssuePriority"
+        assignee:
+          $ref: "#/components/schemas/Principal"
+        repository:
+          $ref: "#/components/schemas/IssueRepository"
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+          description: When it was last done or canceled; absent while it is open.
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1; its ETag.
+    IssueRepository:
+      type: object
+      description: The repository an issue is about; absent for none, and for a viewer who doesn't read it.
+      required: [id, slug, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+    IssueInput:
+      type: object
+      description: What creates an issue.
+      required: [title]
+      properties:
+        title:
+          type: string
+          description: 1 to 200 characters on one line.
+        description:
+          type: string
+          description: Markdown, at most 65536 characters.
+        state:
+          $ref: "#/components/schemas/IssueState"
+        priority:
+          $ref: "#/components/schemas/IssuePriority"
+        assigneeId:
+          type: string
+          format: uuid
+          description: One of the organization's members.
+        repositoryId:
+          type: string
+          format: uuid
+          description: One of the organization's repositories, which the viewer reads.
+    IssuePatch:
+      type: object
+      description: What changes an issue, as a merge patch; a field left out keeps its value.
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        state:
+          $ref: "#/components/schemas/IssueState"
+        priority:
+          $ref: "#/components/schemas/IssuePriority"
+        assigneeId:
+          type: [string, "null"]
+          format: uuid
+          description: One of the organization's members, or null for nobody.
+        repositoryId:
+          type: [string, "null"]
+          format: uuid
+          description: One of the organization's repositories, which the viewer reads, or null for none.
+    IssueEvent:
+      type: object
+      description: Something that happened to an issue.
+      required: [id, kind, at, changes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          description: issue.created or issue.changed; more kinds come with branches.
+        actor:
+          $ref: "#/components/schemas/Principal"
+        at:
+          type: string
+          format: date-time
+        changes:
+          type: array
+          description: The fields an issue.changed changed.
+          items:
+            $ref: "#/components/schemas/IssueChange"
+    IssueChange:
+      type: object
+      description: A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+      required: [field]
+      properties:
+        field:
+          type: string
+          enum: [title, description, state, priority, assignee, repository]
+        from:
+          type: string
+        to:
+          type: string
     Principal:
       type: object
-      description: Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+      description: Who is behind a commit's author or committer, a push, an annotation or a merge, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
       required: [id, displayName]
       properties:
         id:
