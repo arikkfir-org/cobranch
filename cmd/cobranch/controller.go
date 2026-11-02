@@ -98,6 +98,19 @@ func jobsCluster(j config.Jobs) (runner.Cluster, error) {
 	if !j.Pods {
 		return runner.NoPods{}, nil
 	}
+	client, err := inCluster()
+	if err != nil {
+		return nil, err
+	}
+	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
+		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value,
+		Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value,
+		Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
+}
+
+// inCluster is a client of the cluster the workload runs in, as its pod's ServiceAccount.
+func inCluster() (kubernetes.Interface, error) {
 	kube, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
@@ -106,10 +119,7 @@ func jobsCluster(j config.Jobs) (runner.Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("making the cluster's client: %w", err)
 	}
-	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
-		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
-		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
+	return client, nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

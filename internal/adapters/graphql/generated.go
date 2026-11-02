@@ -35,6 +35,7 @@ type ResolverRoot interface {
 	Organization() OrganizationResolver
 	Query() QueryResolver
 	Repository() RepositoryResolver
+	Run() RunResolver
 	Secret() SecretResolver
 	Subscription() SubscriptionResolver
 	Task() TaskResolver
@@ -732,6 +733,7 @@ type ComplexityRoot struct {
 		EndedAt    func(childComplexity int) int
 		ID         func(childComplexity int) int
 		Job        func(childComplexity int) int
+		Logs       func(childComplexity int) int
 		Number     func(childComplexity int) int
 		QueuedAt   func(childComplexity int) int
 		Reason     func(childComplexity int) int
@@ -743,6 +745,12 @@ type ComplexityRoot struct {
 		State      func(childComplexity int) int
 		Trigger    func(childComplexity int) int
 		Version    func(childComplexity int) int
+	}
+
+	RunLog struct {
+		Container func(childComplexity int) int
+		Live      func(childComplexity int) int
+		Text      func(childComplexity int) int
 	}
 
 	RunPage struct {
@@ -1030,6 +1038,9 @@ type RepositoryResolver interface {
 	Run(ctx context.Context, obj *Repository, number int) (*Run, error)
 	Secrets(ctx context.Context, obj *Repository) ([]*Secret, error)
 	JobPrincipals(ctx context.Context, obj *Repository) ([]*Grantee, error)
+}
+type RunResolver interface {
+	Logs(ctx context.Context, obj *Run) ([]*RunLog, error)
 }
 type SecretResolver interface {
 	Access(ctx context.Context, obj *Secret) ([]*Grantee, error)
@@ -4620,6 +4631,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.Job(childComplexity), true
+	case "Run.logs":
+		if e.ComplexityRoot.Run.Logs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.Logs(childComplexity), true
 	case "Run.number":
 		if e.ComplexityRoot.Run.Number == nil {
 			break
@@ -4686,6 +4703,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.Version(childComplexity), true
+
+	case "RunLog.container":
+		if e.ComplexityRoot.RunLog.Container == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunLog.Container(childComplexity), true
+	case "RunLog.live":
+		if e.ComplexityRoot.RunLog.Live == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunLog.Live(childComplexity), true
+	case "RunLog.text":
+		if e.ComplexityRoot.RunLog.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunLog.Text(childComplexity), true
 
 	case "RunPage.nextCursor":
 		if e.ComplexityRoot.RunPage.NextCursor == nil {
@@ -6782,6 +6818,21 @@ type Run {
   endedAt: Time
   "Counts its changes from 1."
   version: Int!
+  """
+  Its logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept
+  them once it ended, from its pod while it runs, when they are live and grow. None for a run that never started a pod,
+  such as a webhook's.
+  """
+  logs: [RunLog!]!
+}
+
+"One of a run's containers' logs, with the values the run masks hidden."
+type RunLog {
+  container: String!
+  "The log, its bytes that aren't UTF-8 replaced."
+  text: String!
+  "Whether it was read from the running pod, and grows until the run ends."
+  live: Boolean!
 }
 
 "Where a run stands."
@@ -8574,8 +8625,22 @@ func (ec *executionContext) childFields_Run(ctx context.Context, field graphql.C
 		return ec.fieldContext_Run_endedAt(ctx, field)
 	case "version":
 		return ec.fieldContext_Run_version(ctx, field)
+	case "logs":
+		return ec.fieldContext_Run_logs(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Run", field.Name)
+}
+
+func (ec *executionContext) childFields_RunLog(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "container":
+		return ec.fieldContext_RunLog_container(ctx, field)
+	case "text":
+		return ec.fieldContext_RunLog_text(ctx, field)
+	case "live":
+		return ec.fieldContext_RunLog_live(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RunLog", field.Name)
 }
 
 func (ec *executionContext) childFields_RunPage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -26510,6 +26575,107 @@ func (ec *executionContext) fieldContext_Run_version(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Run", field, false, false, "Int")
 }
 
+func (ec *executionContext) _Run_logs(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_logs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Run().Logs(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RunLog) graphql.Marshaler {
+			return ec.marshalNRunLog2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunLogᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Run_logs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Run",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RunLog(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _RunLog_container(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunLog_container(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Container, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunLog_container(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunLog", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunLog_text(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunLog_text(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunLog_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunLog", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunLog_live(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunLog_live(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Live, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunLog_live(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunLog", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _RunPage_runs(ctx context.Context, field graphql.CollectedField, obj *RunPage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36001,85 +36167,134 @@ func (ec *executionContext) _Run(ctx context.Context, sel ast.SelectionSet, obj 
 		case "id":
 			out.Values[i] = ec._Run_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "number":
 			out.Values[i] = ec._Run_number(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "job":
 			out.Values[i] = ec._Run_job(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "sha":
 			out.Values[i] = ec._Run_sha(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "ref":
 			out.Values[i] = ec._Run_ref(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "trigger":
 			out.Values[i] = ec._Run_trigger(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "causeRun":
 			out.Values[i] = ec._Run_causeRun(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "attempt":
 			out.Values[i] = ec._Run_attempt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "rerunOf":
 			out.Values[i] = ec._Run_rerunOf(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "definition":
 			out.Values[i] = ec._Run_definition(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "state":
 			out.Values[i] = ec._Run_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "reason":
 			out.Values[i] = ec._Run_reason(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "startedBy":
 			out.Values[i] = ec._Run_startedBy(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "queuedAt":
 			out.Values[i] = ec._Run_queuedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "startedAt":
 			out.Values[i] = ec._Run_startedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "endedAt":
 			out.Values[i] = ec._Run_endedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._Run_version(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "logs":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Run_logs(ctx, field, obj)
+				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var runLogImplementors = []string{"RunLog"}
+
+func (ec *executionContext) _RunLog(ctx context.Context, sel ast.SelectionSet, obj *RunLog) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, runLogImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RunLog")
+		case "container":
+			out.Values[i] = ec._RunLog_container(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._RunLog_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "live":
+			out.Values[i] = ec._RunLog_live(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -38723,6 +38938,30 @@ func (ec *executionContext) marshalNRun2ᚖcobranchᚗdevᚋinternalᚋadapters�
 		return graphql.Null
 	}
 	return ec._Run(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNRunLog2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunLogᚄ(ctx context.Context, sel ast.SelectionSet, v []*RunLog) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRunLog2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunLog(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRunLog2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunLog(ctx context.Context, sel ast.SelectionSet, v *RunLog) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "RunLog!")
+		return graphql.Null
+	}
+	return ec._RunLog(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNRunPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunPage(ctx context.Context, sel ast.SelectionSet, v *RunPage) graphql.Marshaler {

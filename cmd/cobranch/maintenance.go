@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	gocloudblob "gocloud.dev/blob"
@@ -23,8 +24,9 @@ import (
 
 // runMaintenance deletes what expired, sign-in flows, sessions, invitations and join requests, and, given a number of
 // packs to compact at, deletes the packs nobody lists any more and compacts the repositories that have too many, and,
-// while objects move between stores, copies the old store over, once, and exits. The chart runs it as an hourly
-// CronJob. A failure of one part leaves the others to run, and fails the run.
+// while objects move between stores, copies the old store over, and, given a retention, deletes the runs' logs kept
+// past it, once, and exits. The chart runs it as an hourly CronJob. A failure of one part leaves the others to run,
+// and fails the run.
 func runMaintenance(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "maintenance", buildinfo.Version())
 	if err != nil {
@@ -41,10 +43,10 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 	}
 	defer pool.Close()
 	expired := deleteExpired(ctx, pool)
-	if cfg.CompactAt == 0 && cfg.BlobMoveFrom == "" {
+	if cfg.CompactAt == 0 && cfg.BlobMoveFrom == "" && cfg.LogsRetention == 0 {
 		return expired
 	}
-	return errors.Join(expired, maintainPacks(ctx, cfg, pool))
+	return errors.Join(expired, maintainStore(ctx, cfg, pool))
 }
 
 // deleteExpired deletes the sign-in flows, sessions, task tokens, invitations and join requests that expired.
@@ -67,9 +69,10 @@ func deleteExpired(ctx context.Context, pool *pgxpool.Pool) error {
 	return nil
 }
 
-// maintainPacks deletes the packs nobody lists any more and compacts the repositories with cfg.CompactAt active packs or
-// more, given cfg.CompactAt, then copies the store objects move from over, each past the others' failures.
-func maintainPacks(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Pool) error {
+// maintainStore deletes the packs nobody lists any more and compacts the repositories with cfg.CompactAt active packs or
+// more, given cfg.CompactAt, then copies the store objects move from over, and deletes the runs' logs kept past
+// cfg.LogsRetention, given one, each past the others' failures.
+func maintainStore(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Pool) error {
 	stores, err := blob.OpenStores(ctx, cfg.BlobURL, cfg.BlobMoveFrom, pool)
 	if err != nil {
 		return fmt.Errorf("opening the object store: %w", err)
@@ -79,7 +82,20 @@ func maintainPacks(ctx context.Context, cfg config.Maintenance, pool *pgxpool.Po
 	if cfg.CompactAt != 0 {
 		compactErr = compactPacks(ctx, cfg, pool, stores.Bucket)
 	}
-	return errors.Join(compactErr, moveObjects(ctx, cfg, stores))
+	return errors.Join(compactErr, moveObjects(ctx, cfg, stores), expireLogs(ctx, cfg, stores.Bucket))
+}
+
+// expireLogs deletes the runs' logs the store kept longer than cfg.LogsRetention, given one.
+func expireLogs(ctx context.Context, cfg config.Maintenance, bucket *gocloudblob.Bucket) error {
+	if cfg.LogsRetention == 0 {
+		return nil
+	}
+	deleted, err := blob.Logs{Bucket: bucket}.Expire(ctx, time.Now().Add(-cfg.LogsRetention))
+	slog.InfoContext(ctx, "Deleted the runs' logs kept past their retention", "logs", deleted, "retention", cfg.LogsRetention.String())
+	if err != nil {
+		return fmt.Errorf("deleting runs' logs: %w", err)
+	}
+	return nil
 }
 
 // compactPacks deletes the packs nobody lists any more, then compacts the repositories with cfg.CompactAt active packs

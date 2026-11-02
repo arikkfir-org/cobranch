@@ -14,7 +14,7 @@ import (
 
 // AddRun records a run in the repository, numbered after its last.
 func (s *Store) AddRun(repoID uuid.UUID, r code.Run) code.Run {
-	r.Number = int64(len(s.RunList[repoID]) + 1)
+	r.Number, r.RepoID = int64(len(s.RunList[repoID])+1), repoID
 	if r.ID == uuid.Nil {
 		r.ID = uuid.New()
 	}

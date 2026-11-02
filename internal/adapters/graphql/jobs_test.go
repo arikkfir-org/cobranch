@@ -1,6 +1,7 @@
 package graphql
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -127,5 +128,37 @@ func TestRunTriggerMutations(t *testing.T) {
 			wantCode: badUserInput, wantReason: "branch.unknown"},
 		{name: "a Reader may not post", viewer: withJobs(maxHolding(auth.RoleReader)),
 			document: on(`mutation { postEvent(repositoryId: "REPO", name: "release/requested") { number } }`), wantCode: forbidden},
+	})
+}
+
+// logArchive is code.ArchivedLogs over a map of runs' logs, by run ID.
+type logArchive map[uuid.UUID]map[string][]byte
+
+func (a logArchive) Read(_ context.Context, _, runID uuid.UUID) (map[string][]byte, error) {
+	return a[runID], nil
+}
+
+// withLogs keeps logs of #1, which withRuns adds, as it ended: its checkout's, and its script's, which isn't UTF-8.
+func withLogs(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return withRuns(func(f *orgFixture) *auth.Authenticated {
+		first := &f.codeStore.RunList[f.website.ID][0]
+		started := first.QueuedAt
+		first.StartedAt = &started
+		f.code.WithRunLogs(logArchive{first.ID: {"main": []byte("built \xff"), "cobranch-checkout": []byte("checked out")}}, nil, 0)
+		return next(f)
+	})
+}
+
+func TestRunLogs(t *testing.T) {
+	repo := func(fields string) func(*orgFixture) string {
+		return fixed(`{ organization(slug: "acme") { repository(slug: "website") { ` + fields + ` } } }`)
+	}
+	runOrgCases(t, []orgCase{
+		{name: "a Reader reads an ended run's, the checkout's first", viewer: withLogs(maxHolding(auth.RoleReader)),
+			document: repo(`run(number: 1) { logs { container text live } }`),
+			want:     []string{`"logs":[{"container":"cobranch-checkout","text":"checked out","live":false},{"container":"main","text":"built �","live":false}]`}},
+		{name: "none of a run that hasn't started", viewer: withLogs(maxHolding(auth.RoleReader)),
+			document: repo(`runs { runs { number logs { container } } }`),
+			want:     []string{`{"number":3,"logs":[]},{"number":2,"logs":[]},{"number":1,"logs":[{"container":"cobranch-checkout"},{"container":"main"}]}`}},
 	})
 }

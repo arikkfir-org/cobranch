@@ -370,8 +370,12 @@ jobs:
     default: 1h
     max: 24h
   logs:
-    # The most of each container's log the controller keeps as a run ends.
+    # The most of each container's log the controller keeps as a run ends, and the REST and GraphQL servers read from a
+    # running pod.
     maxBytes: 10Mi
+    # How long the object store keeps a run's logs, as a duration such as 720h, 30 days: maintenance deletes them after.
+    # Empty or 0s keeps them.
+    retention: 720h
   # Where runs reach this installation's REST API and Git server. Empty: their Services, in the cluster, over HTTP.
   urls:
     rest: ""

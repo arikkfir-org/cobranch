@@ -4494,6 +4494,65 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/logs:
+    get:
+      operationId: getRunLogs
+      summary: >-
+        One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks
+        hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow;
+        takes repo.read. A run that never started a pod, such as a webhook's, has none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "200":
+          description: The run's logs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunLogs"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/logs/{container}:
+    get:
+      operationId: getRunLog
+      summary: >-
+        One of a run's containers' logs as text, with the values the run masks hidden, as getRunLogs reads them; takes
+        repo.read. A container that hasn't logged answers 404.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+        - name: container
+          in: path
+          required: true
+          description: The container's name, such as main for a script's, or cobranch-checkout for the checkout's.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The log.
+          headers:
+            X-Content-Type-Options:
+              description: nosniff, so no browser takes the log for another type.
+              required: true
+              schema:
+                type: string
+          content:
+            "text/plain; charset=utf-8":
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs:
     post:
       operationId: runJob
@@ -6112,6 +6171,27 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    RunLogs:
+      type: object
+      required: [logs]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunLog"
+    RunLog:
+      type: object
+      description: One of a run's containers' logs, with the values the run masks hidden.
+      required: [container, text, live]
+      properties:
+        container:
+          type: string
+        text:
+          type: string
+          description: The log, its bytes that aren't UTF-8 replaced.
+        live:
+          type: boolean
+          description: Whether it was read from the running pod, and grows until the run ends.
     Run:
       type: object
       description: One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.

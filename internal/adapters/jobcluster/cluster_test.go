@@ -36,7 +36,7 @@ var (
 func config() Config {
 	return Config{Prefix: "cobranch-jobs-", Installation: "cobranch-cobranch", PodSecurity: "restricted",
 		Labels: map[string]string{"example.com/team": "ci"}, Home: "cobranch", Controller: "cobranch-controller", Release: "cobranch",
-		RunnerRole: "cobranch-cobranch-jobs-runner", OwnerRole: "cobranch-cobranch-controller", EgressExcept: []string{"10.0.0.0/8", "169.254.169.254/32", "fc00::/7"},
+		RunnerRole: "cobranch-cobranch-jobs-runner", OwnerRole: "cobranch-cobranch-controller", LogsRole: "cobranch-cobranch-jobs-logs", LogsReader: "cobranch-server", EgressExcept: []string{"10.0.0.0/8", "169.254.169.254/32", "fc00::/7"},
 		Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")},
 			Limits: corev1.ResourceList{corev1.ResourceMemory: resource.MustParse("1Gi")}},
 		Quota: corev1.ResourceList{corev1.ResourcePods: resource.MustParse("10")},
@@ -131,6 +131,11 @@ func checkPrepared(t *testing.T, client *fake.Clientset) {
 		binding.Subjects[0].Namespace != "cobranch" || binding.Subjects[0].Name != "cobranch-controller" {
 		t.Errorf("RoleBinding = %+v, %v", binding, err)
 	}
+	logs, err := client.RbacV1().RoleBindings(ns).Get(ctx, "cobranch-cobranch-jobs-logs", metav1.GetOptions{})
+	if err != nil || logs.RoleRef.Name != "cobranch-cobranch-jobs-logs" || len(logs.Subjects) != 1 ||
+		logs.Subjects[0].Namespace != "cobranch" || logs.Subjects[0].Name != "cobranch-server" {
+		t.Errorf("the servers' RoleBinding = %+v, %v", logs, err)
+	}
 	deny, err := client.NetworkingV1().NetworkPolicies(ns).Get(ctx, policyDenyIngress, metav1.GetOptions{})
 	if err != nil || !slices.Equal(deny.Spec.PolicyTypes, []networkingv1.PolicyType{"Ingress"}) || len(deny.Spec.Ingress) != 0 {
 		t.Errorf("deny-ingress = %+v, %v", deny, err)
@@ -159,6 +164,20 @@ func checkPrepared(t *testing.T, client *fake.Clientset) {
 	quota, err := client.CoreV1().ResourceQuotas(ns).Get(ctx, resourceQuota, metav1.GetOptions{})
 	if err != nil || quota.Spec.Hard.Pods().String() != "10" {
 		t.Errorf("ResourceQuota = %+v, %v", quota, err)
+	}
+}
+
+func TestPrepareBindsNoServersWithoutALogsRole(t *testing.T) {
+	ctx := context.Background()
+	client := installed()
+	cfg := config()
+	cfg.LogsRole, cfg.LogsReader = "", ""
+	if err := New(client, cfg).Prepare(ctx, org); err != nil {
+		t.Fatal(err)
+	}
+	bindings, err := client.RbacV1().RoleBindings(ns).List(ctx, metav1.ListOptions{})
+	if err != nil || len(bindings.Items) != 1 || bindings.Items[0].Name != "cobranch-cobranch-jobs-runner" {
+		t.Errorf("RoleBindings = %+v, %v, want the controller's alone", bindings, err)
 	}
 }
 

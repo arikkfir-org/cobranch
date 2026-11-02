@@ -378,7 +378,7 @@ func runForUpdate(ctx context.Context, q *queries.Queries, repoID uuid.UUID, num
 // runOf is the domain's view of a job_runs row, with its job's name and who started it, if anyone; the number of the
 // run that caused it is read when there is one.
 func runOf(ctx context.Context, q *queries.Queries, r queries.JobRun, job string, startedBy *string) (code.Run, error) {
-	out := code.Run{ID: r.ID, Number: r.Number, Job: code.Principal{ID: r.JobID, DisplayName: job}, SHA: r.Sha, Ref: r.Ref,
+	out := code.Run{ID: r.ID, RepoID: r.RepoID, OrgID: r.OrgID, Number: r.Number, Job: code.Principal{ID: r.JobID, DisplayName: job}, SHA: r.Sha, Ref: r.Ref,
 		State: jobs.State(r.State), Reason: r.Reason, StartedBy: principalOf(r.StartedBy, startedBy), QueuedAt: r.QueuedAt,
 		StartedAt: r.StartedAt, EndedAt: r.EndedAt, Version: r.Version}
 	if err := json.Unmarshal(r.Trigger, &out.Trigger); err != nil {

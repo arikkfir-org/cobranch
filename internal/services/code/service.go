@@ -75,6 +75,7 @@ type Service struct {
 	objects  Objects
 	markdown Renderer
 	authz    *auth.Authorizer
+	logs     runLogs
 }
 
 // NewService returns a Service over store, objects for what only the Git server reads and markdown for rendering
