@@ -1,8 +1,9 @@
 #!/bin/sh
 # Builds images cobranch, cobranch-console and cobranch-back-office of the checkout, tagged with REVISION's short SHA
-# (also the version the binary reports), and pushes them to REGISTRY. The Docker daemon pushes with an access token
-# of the pod's Workload Identity, from the GKE metadata server.
+# (also the version the binary reports), on main's Go caches, and pushes them to REGISTRY. The Docker daemon pushes with
+# an access token of the pod's Workload Identity, from the GKE metadata server.
 set -eu
+sh .tekton/scripts/go-cache-seed.sh
 version=$(printf '%s' "$REVISION" | cut -c1-7)
 cobranch="$REGISTRY/cobranch:$version"
 console="$REGISTRY/cobranch-console:$version"

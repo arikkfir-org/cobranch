@@ -1,12 +1,15 @@
 # Cobranch's CI, four tasks side by side, each in a pod of its own: build checks the generated code and builds the Go
 # module (build.task.yaml), lint lints and vets it (lint.task.yaml), test tests it with the race detector
 # (test.task.yaml), and chart builds the images and installs, tests and upgrades the chart on a throwaway kind cluster
-# (chart.task.yaml). A plain Tekton PipelineRun; Octomaton sets the params.
+# (chart.task.yaml). Each restores the Go caches that main saves (warm.task.yaml), as ServiceAccount ci-cobranch-ci,
+# which any branch may use and which may only read them. A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   generateName: cobranch-ci-
 spec:
+  taskRunTemplate:
+    serviceAccountName: ci-cobranch-ci
   # Reserved once for all of a task's steps (step-level requests would add up as if the steps ran at once), measured
   # on the runs of 2026-11-01 at GOMAXPROCS=4 on a cold cache, with Go Cloud's drivers (the AWS, Azure and Google Cloud
   # SDKs): the compiles, lint and tests each keep about two cores busy and burst to four, and peak near 2.1Gi
