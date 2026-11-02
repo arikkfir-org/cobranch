@@ -50,10 +50,14 @@ func (g *grants) revoke(principal uuid.UUID) {
 	g.o.Grants = slices.DeleteFunc(g.o.Grants, func(x orgstest.Grant) bool { return x.Principal == principal })
 }
 
-// renderer renders Markdown as the body inside <p>, naming the branch and commit it rendered at.
+// renderer renders Markdown as the body inside <p>, naming the branch and commit it rendered at, or the page beside
+// which its links lead.
 type renderer struct{}
 
 func (renderer) Render(_ context.Context, src []byte, doc code.Document) (string, error) {
+	if doc.Path != "" {
+		return "<p>" + string(src) + "</p><!-- " + doc.Org + "/" + doc.Path + " -->", nil
+	}
 	return "<p>" + string(src) + "</p><!-- " + doc.Org + "/" + doc.Repo + "@" + doc.Ref + ":" + doc.Commit + " -->", nil
 }
 

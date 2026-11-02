@@ -1513,18 +1513,39 @@
     }
 
     // branchChat is a branch's chat, which it follows live: its threads, newest first, each perhaps on lines of a file at
-    // a commit, with their messages in Markdown, to which a viewer with messages.post replies. It reads the chat's
-    // updates as they come, each read waiting up to 15 seconds for one, until the Console draws another page. A deleted
-    // branch's chat (b.deletedAt) stays as it was: it shows to be read, and nothing follows it.
-    async function branchChat(path, at, b, can) {
-      const chat = path + "/branches/" + encodeURIComponent(b.name) + "/chat";
+    // a commit, with their messages in Markdown, to which a viewer with messages.post replies. A deleted branch's chat
+    // (b.deletedAt) stays as it was: it shows to be read, and nothing follows it.
+    function branchChat(path, at, b, can) {
       const gone = !!b.deletedAt;
-      const post = !gone && can("messages.post"), moderate = !gone && can("messages.moderate");
+      return chatPanel(path + "/branches/" + encodeURIComponent(b.name) + "/chat", {
+        title: "Chat", at, gone, post: !gone && can("messages.post"), moderate: !gone && can("messages.moderate"),
+        none: gone ? "It had no threads." : "No threads yet.", hint: " Start one here, or on lines of a file from its page on this branch.",
+        missing: "This branch has no chat any more.", unanchored: "On the branch", placeholder: "Start a thread on this branch, in Markdown",
+        start: "Start thread", frozen: "As it was when the branch was deleted",
+      });
+    }
+
+    // issueChat is an issue's comments, its chat, which it follows live: threads of messages in Markdown, newest first,
+    // which a viewer with issues.write starts and replies to, and one with issues.manage moderates.
+    function issueChat(path, can) {
+      return chatPanel(path + "/chat", {
+        title: "Comments", post: can("issues.write"), moderate: can("issues.manage"), none: "No comments yet.", hint: "",
+        missing: "This issue has no comments any more.", placeholder: "Comment in Markdown", start: "Comment",
+      });
+    }
+
+    // chatPanel is the chat at path, a branch's or an issue's, as o words it, which it follows live: its threads, newest
+    // first, with their messages in Markdown, to which a viewer who may post (o.post) replies, and which one who
+    // moderates (o.moderate) resolves and deletes. It reads the chat's updates as they come, each read waiting up to 15
+    // seconds for one, until the Console draws another page; a chat that stays as it was (o.gone) shows to be read, and
+    // nothing follows it.
+    async function chatPanel(chat, o) {
+      const { gone, post, moderate } = o;
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const live = h("span", { class: "muted" });
       const list = h("div", { class: "threads" });
-      const empty = h("p", {}, gone ? "It had no threads." : "No threads yet.", post ? " Start one here, or on lines of a file from its page on this branch." : "");
+      const empty = h("p", {}, o.none, post ? o.hint : "");
       const more = h("button", { class: "button small", type: "button", hidden: true }, "Older threads");
       const shown = new Map(); // each thread's view, by its ID: the thread as last read, its element, and its messages'
       let page;
@@ -1532,7 +1553,7 @@
         page = await apiPage(chat);
       } catch (err) {
         if (err.status !== 404) throw err;
-        return h("section", { class: "panel" }, h("h3", {}, "Chat"), h("p", {}, "This branch has no chat any more."));
+        return h("section", { class: "panel" }, h("h3", {}, o.title), h("p", {}, o.missing));
       }
 
       // message draws one of a thread's messages, or draws it again as it is now, unless its author is editing it.
@@ -1585,7 +1606,7 @@
           content);
       };
       // header is a thread's line: the lines it is on, whether the branch has moved on from them, and whether it is
-      // resolved, with a switch for its starter or a moderator.
+      // resolved, with a switch for its starter or a moderator. An issue's threads are on no lines.
       const header = (t) => {
         const a = t.anchor;
         const may = moderate || (post && t.startedBy && t.startedBy.id === me.id);
@@ -1595,8 +1616,8 @@
             .catch((err) => { e.target.disabled = false; fail(err); });
         };
         return h("div", { class: "row" },
-          a ? [h("a", { href: at.blob(a.sha, a.path) + linesAnchor(a.startLine, a.endLine), "data-nav": "" }, h("code", {}, lineLabel(a))),
-            h("span", { class: "muted" }, "at " + shortSha(a.sha))] : h("span", { class: "muted" }, "On the branch"),
+          a ? [h("a", { href: o.at.blob(a.sha, a.path) + linesAnchor(a.startLine, a.endLine), "data-nav": "" }, h("code", {}, lineLabel(a))),
+            h("span", { class: "muted" }, "at " + shortSha(a.sha))] : o.unanchored ? h("span", { class: "muted" }, o.unanchored) : null,
           t.reviewId ? h("span", { class: "chip", title: "A comment of a review, which opened this thread." }, "review comment") : null,
           t.outdated ? h("span", { class: "chip", title: "The branch has moved on from the commit these lines are at." }, "outdated") : null,
           t.resolvedAt ? h("span", { class: "chip" }, "Resolved" + (t.resolvedBy ? " by " + t.resolvedBy.displayName : "")) : null,
@@ -1649,16 +1670,16 @@
 
       let start = null;
       if (post) {
-        const text = h("textarea", { name: "body", required: true, maxlength: 20000, placeholder: "Start a thread on this branch, in Markdown", "aria-label": "New thread" });
-        const button = h("button", { class: "button small primary", type: "submit" }, "Start thread");
+        const text = h("textarea", { name: "body", required: true, maxlength: 20000, placeholder: o.placeholder, "aria-label": "New thread" });
+        const button = h("button", { class: "button small primary", type: "submit" }, o.start);
         start = h("form", { onsubmit: (e) => {
           e.preventDefault();
           button.disabled = true;
           api("POST", chat + "/threads", { body: text.value }).then((t) => { text.value = ""; place(t); }).catch(fail).finally(() => { button.disabled = false; });
         } }, text, h("div", { class: "row" }, h("span", { class: "spacer" }), button));
       }
-      const panel = h("section", { class: "panel chat" }, h("div", { class: "row" }, h("h3", {}, "Chat"), live), error, start, empty, list, more);
-      if (gone) live.textContent = "As it was when the branch was deleted";
+      const panel = h("section", { class: "panel chat" }, h("div", { class: "row" }, h("h3", {}, o.title), live), error, start, empty, list, more);
+      if (gone) live.textContent = o.frozen;
       else {
         const stop = new AbortController();
         follows(stop);
@@ -2408,7 +2429,8 @@
     }
 
     // showIssue is an issue's page: its identifier and state, its title and rendered description, which the viewer may
-    // edit, and its activity, oldest first; beside them, the side column changes its state, priority, assignee and
+    // edit, its activity, oldest first, and its comments, live; beside them, the side column changes its state,
+    // priority, assignee and
     // repository, each at once and from the version the page shows, and offers a branch name. It opens the issue by
     // the number its identifier ends in, so a link made before the organization changed its key still opens it.
     async function showIssue(org, main, can, identifier, notice) {
@@ -2425,8 +2447,8 @@
       }
       if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
       const write = can("issues.write");
-      const [events, branches, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
-        api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null]);
+      const [events, branches, choices, comments] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
+        api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null, issueChat(path, can)]);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
@@ -2457,7 +2479,8 @@
         : h("p", {}, "No branch works on it yet: push one whose name holds ", h("code", {}, issue.identifier.toLowerCase()), ", or link one from its page."));
       const activity = h("section", { class: "panel" }, h("h3", {}, "Activity"), h("ul", { class: "activity" }, events.flatMap(issueEventLines)));
       const notes = h("p", { class: "alert", hidden: !notice }, notice || "");
-      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity, comments),
+        issueSide(org, issue, can, choices, save, tag, fail)));
     }
 
     // issueBranchLine is a branch linked to an issue as a branch row: its repository and name, linked to its page while

@@ -104,7 +104,7 @@ func openComments(ctx context.Context, q *queries.Queries, actor, repoID, review
 		return fmt.Errorf("finding branch %s: %w", in.Branch, err)
 	}
 	subj := chatSubjectOf(row)
-	if err := holdChat(ctx, q, subj.BranchID); err != nil {
+	if err := holdChat(ctx, q, subj); err != nil {
 		return err
 	}
 	for _, c := range in.Comments {

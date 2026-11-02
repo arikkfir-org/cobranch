@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -15,9 +16,9 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// ChatStore keeps the branches' chats (db/migrations/00022_chats.sql): chats.Store on PostgreSQL, through the queries
-// sqlc generates from db/queries. Each change runs in a transaction that acts for its principal, holds the chat's lock,
-// appends the chat's event and notifies the servers that listen.
+// ChatStore keeps the branches' chats (db/migrations/00022_chats.sql) and the issues' (00039_issue_chats.sql):
+// chats.Store on PostgreSQL, through the queries sqlc generates from db/queries. Each change runs in a transaction
+// that acts for its principal, holds the chat's lock, appends the chat's event and notifies the servers that listen.
 type ChatStore struct {
 	pool *pgxpool.Pool
 	q    *queries.Queries
@@ -55,6 +56,22 @@ func chatSubjectOf(row queries.ChatSubjectRow) chats.Subject {
 		Repo: row.RepoSlug}
 }
 
+// Issue finds one of the organization's issues by number as a chat's subject, or repos.ErrNotFound (chats.Store).
+func (s *ChatStore) Issue(ctx context.Context, orgID uuid.UUID, number int) (chats.Subject, error) {
+	if number < 1 || number > maxInt32 {
+		return chats.Subject{}, repos.ErrNotFound
+	}
+	row, err := s.q.IssueChatSubject(ctx, orgID, int32(number))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return chats.Subject{}, repos.ErrNotFound
+	}
+	if err != nil {
+		return chats.Subject{}, fmt.Errorf("finding issue %d: %w", number, err)
+	}
+	return chats.Subject{OrgID: row.OrgID, IssueID: row.ID, Number: int(row.Number), Issue: row.IssueKey + "-" + strconv.Itoa(int(row.Number)),
+		Org: row.OrgSlug}, nil
+}
+
 // Head finds the object a branch is at now, deleted or not, or repos.ErrNotFound (chats.Store).
 func (s *ChatStore) Head(ctx context.Context, branchID uuid.UUID) (string, error) {
 	head, err := s.q.BranchHead(ctx, branchID)
@@ -79,11 +96,12 @@ func (s *ChatStore) HasCommit(ctx context.Context, repoID uuid.UUID, sha string)
 // Threads lists at most limit of the subject's threads, newest first, from the one before before names, each with its
 // messages, and the cursor of the chat's updates, read first (chats.Store).
 func (s *ChatStore) Threads(ctx context.Context, subj chats.Subject, before uuid.UUID, limit int) ([]chats.Thread, int64, error) {
-	after, err := s.q.ChatCursor(ctx, &subj.BranchID)
+	subjectID := subj.ID()
+	after, err := s.q.ChatCursor(ctx, &subjectID)
 	if err != nil {
 		return nil, 0, fmt.Errorf("reading the chat's cursor: %w", err)
 	}
-	p := queries.ChatThreadsParams{RepoID: subj.RepoID, BranchID: subj.BranchID, Lim: int32(limit)} //nolint:gosec // a page is at most chats.MaxPage + 1
+	p := queries.ChatThreadsParams{OrgID: subj.OrgID, SubjectID: subjectID, Lim: int32(limit)} //nolint:gosec // a page is at most chats.MaxPage + 1
 	if before != uuid.Nil {
 		p.Before = &before
 	}
@@ -125,7 +143,7 @@ func chatThread(ctx context.Context, q *queries.Queries, subj chats.Subject, id 
 
 // chatThreads finds those of the subject's threads that ids name, without their messages, by ID.
 func chatThreads(ctx context.Context, q *queries.Queries, subj chats.Subject, ids []uuid.UUID) (map[uuid.UUID]chats.Thread, error) {
-	rows, err := q.ChatThreadsByID(ctx, subj.RepoID, subj.BranchID, ids)
+	rows, err := q.ChatThreadsByID(ctx, subj.OrgID, subj.ID(), ids)
 	if err != nil {
 		return nil, fmt.Errorf("finding the threads: %w", err)
 	}
@@ -200,12 +218,12 @@ func chatMessages(ctx context.Context, q *queries.Queries, subj chats.Subject, i
 }
 
 // changeChat runs fn in a transaction that acts for actor and holds the subject's chat, whose branch must still live:
-// chats.ErrBranchDeleted otherwise. Unless fn changed nothing, it
-// then appends the chat's event of the kind fn answers, about the thread and the message, if any, and notifies the
-// servers that listen.
+// chats.ErrBranchDeleted otherwise; an issue's is held from deletion meanwhile, and repos.ErrNotFound once it is gone.
+// Unless fn changed nothing, it then appends the chat's event of the kind fn answers, about the thread and the message,
+// if any, and notifies the servers that listen.
 func (s *ChatStore) changeChat(ctx context.Context, actor uuid.UUID, subj chats.Subject, what string, fn func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error)) error {
 	return transact(ctx, s.pool, s.q, what, actor, func(ctx context.Context, q *queries.Queries) error {
-		if err := holdChat(ctx, q, subj.BranchID); err != nil {
+		if err := holdChat(ctx, q, subj); err != nil {
 			return err
 		}
 		kind, e, err := fn(ctx, q)
@@ -216,17 +234,33 @@ func (s *ChatStore) changeChat(ctx context.Context, actor uuid.UUID, subj chats.
 	})
 }
 
-// holdChat holds a branch's chat for the rest of q's transaction, whose events then commit in the order of their seq;
-// the branch must still live: chats.ErrBranchDeleted otherwise, and repos.ErrNotFound when there is none.
-func holdChat(ctx context.Context, q *queries.Queries, branchID uuid.UUID) error {
-	if err := q.LockChat(ctx, branchID.String()); err != nil {
+// holdChat holds the subject's chat for the rest of q's transaction, whose events then commit in the order of their
+// seq, and checks that it takes changes (live).
+func holdChat(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
+	if err := q.LockChat(ctx, subj.ID().String()); err != nil {
 		return fmt.Errorf("locking the chat: %w", err)
 	}
-	if deleted, err := q.BranchDeleted(ctx, branchID); errors.Is(err, pgx.ErrNoRows) {
+	return live(ctx, q, subj)
+}
+
+// live checks that the subject's chat takes changes: that its issue is there, which it then holds from deletion until
+// the transaction ends, or that its branch was not deleted, chats.ErrBranchDeleted otherwise.
+func live(ctx context.Context, q *queries.Queries, subj chats.Subject) error {
+	if subj.OfIssue() {
+		if _, err := q.HoldIssue(ctx, subj.IssueID); errors.Is(err, pgx.ErrNoRows) {
+			return repos.ErrNotFound
+		} else if err != nil {
+			return fmt.Errorf("holding the chat's issue: %w", err)
+		}
+		return nil
+	}
+	deleted, err := q.BranchDeleted(ctx, subj.BranchID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
 		return repos.ErrNotFound
-	} else if err != nil {
+	case err != nil:
 		return fmt.Errorf("finding the chat's branch: %w", err)
-	} else if deleted {
+	case deleted:
 		return chats.ErrBranchDeleted
 	}
 	return nil
@@ -236,13 +270,16 @@ func holdChat(ctx context.Context, q *queries.Queries, branchID uuid.UUID) error
 // the message, if any, and notifies the servers that listen once the transaction commits.
 func chatChanged(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, kind chats.UpdateKind, e chatEvent) error {
 	details := map[string]any{"repo": subj.RepoID, "thread": e.Thread}
+	if subj.OfIssue() {
+		details = map[string]any{"issue": subj.IssueID, "thread": e.Thread}
+	}
 	if e.Message != nil {
 		details["message"] = *e.Message
 	}
-	if err := orgEvent(ctx, q, &subj.OrgID, actor, "chat."+string(kind), subj.BranchID, details); err != nil {
+	if err := orgEvent(ctx, q, &subj.OrgID, actor, "chat."+string(kind), subj.ID(), details); err != nil {
 		return err
 	}
-	if err := q.NotifyChat(ctx, subj.BranchID.String()); err != nil {
+	if err := q.NotifyChat(ctx, subj.ID().String()); err != nil {
 		return fmt.Errorf("notifying the chat's followers: %w", err)
 	}
 	return nil
@@ -283,7 +320,10 @@ func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats
 // insertThread inserts the subject's thread id for actor, anchored when anchor is set and a comment of the review
 // reviewID names when it is set, with its first message, and reports whether it did: not when a thread of id is there.
 func insertThread(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
-	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: subj.RepoID, BranchID: subj.BranchID, CreatedBy: &actor, ReviewID: reviewID}
+	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &actor, ReviewID: reviewID}
+	if subj.OfIssue() {
+		p.RepoID, p.BranchID, p.IssueID = nil, nil, &subj.IssueID
+	}
 	if anchor != nil {
 		start, end := int32(anchor.StartLine), int32(anchor.EndLine) //nolint:gosec // lines a file holds fit
 		p.Sha, p.Path, p.StartLine, p.EndLine = &anchor.SHA, &anchor.Path, &start, &end
@@ -407,7 +447,8 @@ func (s *ChatStore) Resolve(ctx context.Context, actor uuid.UUID, subj chats.Sub
 // Updates lists at most limit of the subject's chat updates after cursor after, in order, each with its thread and
 // message as they are now (chats.Store).
 func (s *ChatStore) Updates(ctx context.Context, subj chats.Subject, after int64, limit int) ([]chats.Update, error) {
-	events, err := s.q.ChatEvents(ctx, &subj.BranchID, after, int32(limit)) //nolint:gosec // a read is at most chats.MaxUpdates
+	subjectID := subj.ID()
+	events, err := s.q.ChatEvents(ctx, &subjectID, after, int32(limit)) //nolint:gosec // a read is at most chats.MaxUpdates
 	if err != nil {
 		return nil, fmt.Errorf("listing the chat's events: %w", err)
 	}

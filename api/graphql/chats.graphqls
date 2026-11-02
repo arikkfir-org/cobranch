@@ -139,3 +139,28 @@ type Subscription {
   "The changes to the chat of one of the repository's branches after cursor after, the live one or else the one of that name deleted last, which has none, as a chat page's after or an update's cursor names it, in order, as they come; takes repo.read, checked at every read, and ends once the viewer no longer reads the repository. Over WebSocket (graphql-transport-ws)."
   chatUpdates(repositoryId: ID!, branch: String!, after: String!): ChatUpdate!
 }
+
+# An issue's comments are a chat of its own, whose threads point at no file
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md, "Comments").
+extend type Issue {
+  "A page of its chat, its comments: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes issues.read. first is 1 to 100."
+  chat(first: Int! = 30, after: String): ChatPage!
+}
+
+extend type Mutation {
+  "Starts a thread on the chat of one of the organization's issues, its comments, for the viewer, with its first message; takes issues.write. An issue's threads point at no file (BAD_USER_INPUT, anchor.not_allowed). Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread is refused (CONFLICT, chat.id_taken)."
+  startIssueChatThread(organizationId: ID!, number: Int!, input: ChatThreadInput!): ChatThread!
+  "Posts a message to one of the threads of an issue's chat for the viewer; takes issues.write. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message is refused (CONFLICT, chat.id_taken)."
+  postIssueChatMessage(organizationId: ID!, number: Int!, thread: ID!, input: ChatMessageInput!): ChatMessage!
+  "Changes the body of one of the viewer's messages on an issue; takes issues.write, and only a message's author edits it. A deleted message is refused (CONFLICT, message.deleted); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  editIssueChatMessage(organizationId: ID!, number: Int!, thread: ID!, message: ID!, body: String!, expectedVersion: Int): ChatMessage!
+  "Deletes a message on an issue, which empties it and keeps its place in its thread, marked with who deleted it, and answers true; takes issues.write for the viewer's own and issues.manage for another's. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  deleteIssueChatMessage(organizationId: ID!, number: Int!, thread: ID!, message: ID!, expectedVersion: Int): Boolean!
+  "Resolves one of the threads of an issue's chat, or opens it again when resolved is false, and answers it; takes issues.write for a thread the viewer started and issues.manage for another's. A thread already so is answered as it is; with expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  resolveIssueChatThread(organizationId: ID!, number: Int!, thread: ID!, resolved: Boolean!, expectedVersion: Int): ChatThread!
+}
+
+extend type Subscription {
+  "The changes to the chat of one of the organization's issues after cursor after, as a chat page's after or an update's cursor names it, in order, as they come; takes issues.read, checked at every read, and ends once the viewer no longer reads the organization's issues or the issue is deleted. Over WebSocket (graphql-transport-ws)."
+  issueChatUpdates(organizationId: ID!, number: Int!, after: String!): ChatUpdate!
+}

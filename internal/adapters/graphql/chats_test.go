@@ -18,8 +18,8 @@ import (
 	"cobranch.dev/internal/services/chats"
 )
 
-// chatStep is one document of a conversation on feature/login's chat, against one fixture: it may name {repo},
-// {thread} and {message}, the website's ID and the last thread started and message posted.
+// chatStep is one document of a conversation on feature/login's chat, or an issue's, against one fixture: it may name
+// {repo}, {org}, {thread} and {message}, the website's ID, Acme's, and the last thread started and message posted.
 type chatStep struct {
 	name                 string
 	viewer               func(f *orgFixture) *auth.Authenticated
@@ -36,8 +36,8 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 	}
 }
 
-// startedID finds the ID a startChatThread or postChatMessage answered with.
-var startedID = regexp.MustCompile(`"(startChatThread|postChatMessage)":\{"id":"([0-9a-f-]{36})"`)
+// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' counterparts.
+var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage)":\{"id":"([0-9a-f-]{36})"`)
 
 func TestChats(t *testing.T) {
 	const target = `repositoryId: "{repo}", branch: "feature/login"`
@@ -90,10 +90,10 @@ type chatIDs struct{ thread, message string }
 func (s chatStep) run(t *testing.T, f *orgFixture, ids *chatIDs) {
 	t.Helper()
 	expand := func(text string) string {
-		return strings.NewReplacer("{repo}", f.website.ID.String(), "{thread}", ids.thread, "{message}", ids.message).Replace(text)
+		return strings.NewReplacer("{repo}", f.website.ID.String(), "{org}", f.acme.ID.String(), "{thread}", ids.thread, "{message}", ids.message).Replace(text)
 	}
 	body := f.query(s.viewer(f), expand(s.document))
-	if m := startedID.FindStringSubmatch(body); m != nil && m[1] == "startChatThread" {
+	if m := startedID.FindStringSubmatch(body); m != nil && strings.HasPrefix(m[1], "start") {
 		ids.thread = m[2]
 	} else if m != nil {
 		ids.message = m[2]

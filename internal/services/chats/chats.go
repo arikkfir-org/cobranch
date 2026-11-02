@@ -1,6 +1,8 @@
-// Package chats holds the chats on branches: every branch carries a chat of threads of Markdown messages, a thread
-// perhaps anchored to lines of a file at a commit, which its viewers follow live
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Branch chats").
+// Package chats holds the chats on branches and issues: every branch carries a chat of threads of Markdown messages, a
+// thread perhaps anchored to lines of a file at a commit, which its viewers follow live
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Branch chats"), and an
+// issue's comments are a chat of its own, whose threads point at no file
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md, "Comments").
 package chats
 
 import (
@@ -14,12 +16,21 @@ import (
 	"cobranch.dev/internal/services/orgs"
 )
 
-// The permissions chats take, on the repository.
+// The permissions a branch's chat takes, on the repository.
 const (
 	// PermPost starts threads and posts messages, and resolves, opens again, edits and deletes the viewer's own.
 	PermPost = code.PermPostMessages
 	// PermModerate resolves and opens again any thread, and deletes any message.
 	PermModerate = "messages.moderate"
+)
+
+// The permissions an issue's chat takes, at the organization: the issues' own, issues.PermRead, issues.PermWrite and
+// issues.PermManage, named here so that the issues service may use this one. Reading the issue reads its chat, writing
+// it posts there as messages.post does, and managing it moderates there.
+const (
+	permIssueRead     = "issues.read"
+	permIssuePost     = "issues.write"
+	permIssueModerate = "issues.manage"
 )
 
 // Viewer is who an operation runs for: a signed-in user, or the user or API key a credential acts as.
@@ -29,19 +40,39 @@ type Viewer = auth.User
 type Principal = code.Principal
 
 // Subject is what a chat belongs to: one of a repository's branches, by its row, so a branch deleted and pushed again
-// is another, with a chat of its own. The service answers it to a viewer who reads the repository, and every operation
-// on it checks that again.
+// is another, with a chat of its own; or one of an organization's issues, whose comments it holds. The service answers
+// it to a viewer who reads the repository or the issue, and every operation on it checks that again.
 type Subject struct {
-	OrgID    uuid.UUID
+	OrgID uuid.UUID
+	// RepoID and BranchID are the branch's; uuid.Nil for an issue's chat.
 	RepoID   uuid.UUID
 	BranchID uuid.UUID
 	// Branch is the branch's name, without refs/heads/.
 	Branch string
 	// Head is the object the branch is at.
 	Head string
-	// Org and Repo are the slugs of the repository's organization and its own, where messages' relative links lead.
+	// IssueID is the issue's; uuid.Nil for a branch's chat.
+	IssueID uuid.UUID
+	// Number is the issue's number in its organization, and Issue its identifier, such as ACME-42.
+	Number int
+	Issue  string
+	// Org and Repo are the slugs of the subject's organization and of the branch's repository, where messages'
+	// relative links lead.
 	Org  string
 	Repo string
+}
+
+// ID is the subject's own ID, its branch's or its issue's, which its chat's events name.
+func (s Subject) ID() uuid.UUID {
+	if s.IssueID != uuid.Nil {
+		return s.IssueID
+	}
+	return s.BranchID
+}
+
+// OfIssue reports whether the chat is an issue's.
+func (s Subject) OfIssue() bool {
+	return s.IssueID != uuid.Nil
 }
 
 // Anchor points a thread at lines StartLine to EndLine, from 1, of the file at Path of commit SHA. It stays there when
@@ -108,7 +139,7 @@ type Page struct {
 // UpdateKind is what changed in a chat.
 type UpdateKind string
 
-// The changes to a chat. Each is event chat.<kind>, whose subject is the chat's branch.
+// The changes to a chat. Each is event chat.<kind>, whose subject is the chat's branch or issue.
 const (
 	ThreadStarted  UpdateKind = "thread.started"
 	MessagePosted  UpdateKind = "message.posted"
@@ -136,7 +167,7 @@ type ThreadInput struct {
 	// ID is the thread's ID, a UUIDv7 its starter picks so that starting it again finds it; uuid.Nil has Cobranch pick
 	// one.
 	ID uuid.UUID
-	// Anchor points the thread at lines of a file at a commit the repository holds; nil for none.
+	// Anchor points the thread at lines of a file at a commit the repository holds; nil for none, as on an issue.
 	Anchor *Anchor
 	// Body is its first message's Markdown.
 	Body string
