@@ -79,7 +79,7 @@ The report goes with `keepalive`, so the last batch reaches the server after the
 counts as the page it lands on, from the first wait’s start.
 
 - **From the wait's start to the page drawn.** A first load counts from the browser's navigation start, so it includes
-  the Console's own files, `config.json` and the viewer's first calls; a move inside the Console counts from the click
+  the Console's page, the files it names and the viewer's first calls; a move inside the Console counts from the click
   or Back. A page that redirects, as the home page does to the viewer's organization, counts as the page it lands on,
   from the first wait's start. A page that fails to draw reports nothing.
 - **Reads come back on each answer.** Every server answers a `Server-Timing` header with one `git` entry per internal

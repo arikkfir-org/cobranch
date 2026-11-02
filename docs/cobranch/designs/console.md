@@ -23,7 +23,8 @@ How the Console's code is laid out in files, so slices that build pages in paral
 ([ENG-252](https://linear.app/arikkfir/issue/ENG-252)). Since 2026-11-02 01:40Z five approved, green pull requests fell
 out of the merge queue on conflicts in `web/console/public/index.html`, the one file that held the Console's styles,
 router and every page. This design splits that file without changing what the Console does: same routes, same pages,
-same requests, same look, same page views.
+same look, same page views. Only how a load asks for its files changes: the page names them all, so they are asked for
+at once.
 
 **A shell, shared modules, and a module per page that the Console finds by its file’s name**
 
