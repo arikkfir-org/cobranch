@@ -125,12 +125,15 @@ func (s *Server) receive(p *pending, hr hookRequest) git.Answer {
 	if refusal != "" {
 		return git.Answer{Message: refusal}
 	}
-	pack, err := s.storePack(ctx, p, objects.quarantine)
+	pack, refusal, err := s.storePack(ctx, p, objects.quarantine)
 	if err != nil {
 		slog.ErrorContext(ctx, "Storing a push's pack failed", "push", p.id, "repository", p.repo.ID, "error", err)
 		return git.Answer{Message: git.MessageNotRecorded}
 	}
-	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, PusherID: p.pusher, Transport: p.transport,
+	if refusal != "" {
+		return git.Answer{Message: refusal}
+	}
+	answer, err := s.recorder.Record(ctx, git.Push{ID: p.id, RepoID: p.repo.ID, OrgID: p.repo.OrgID, PusherID: p.pusher, Transport: p.transport,
 		Updates: updates, Pack: pack, Commits: commits, ReceivedAt: p.received, Requirements: branches.requirements, Facts: branches.facts,
 		Tips: branches.tips, Brought: branches.brought, Bypass: p.bypass})
 	if err != nil {
@@ -293,20 +296,33 @@ func (s *Server) output(ctx context.Context, env []string, stdin string, args ..
 
 // storePack uploads the push's pack from its quarantine to the bucket, as an upload of its own and the pack's index
 // first, and keeps it in the cache: nil when the push brought no objects. The pack is listed only once the push is
-// recorded, so a push that fails leaves files no row lists, which maintenance deletes.
-func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (*git.Pack, error) {
+// recorded, so a push that fails leaves files no row lists, which maintenance deletes. A pack the organization's Git
+// data limit leaves no room for isn't uploaded: storePack returns the refusal's message instead.
+func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (*git.Pack, string, error) {
 	if quarantine == "" {
-		return nil, nil
+		return nil, "", nil
 	}
 	found, err := filepath.Glob(filepath.Join(quarantine, "pack", "pack-*.pack"))
 	if err != nil || len(found) == 0 {
-		return nil, nil
+		return nil, "", nil
 	}
 	if len(found) > 1 {
-		return nil, fmt.Errorf("the push left %d packs", len(found))
+		return nil, "", fmt.Errorf("the push left %d packs", len(found))
+	}
+	info, err := os.Stat(found[0])
+	if err != nil {
+		return nil, "", fmt.Errorf("reading the pack's size: %w", err)
+	}
+	refusal, err := s.recorder.Weigh(ctx, p.repo.OrgID, info.Size())
+	if err != nil {
+		return nil, "", fmt.Errorf("weighing the pack: %w", err)
+	}
+	if refusal != "" {
+		return nil, refusal, nil
 	}
 	name := strings.TrimSuffix(filepath.Base(found[0]), ".pack")
-	return s.keepPack(ctx, p.repo.ID, name, func(file string) string { return filepath.Join(quarantine, "pack", file) })
+	pack, err := s.keepPack(ctx, p.repo.ID, name, func(file string) string { return filepath.Join(quarantine, "pack", file) })
+	return pack, "", err
 }
 
 // keepPack uploads the repository's pack name, whose files at says where are, to the bucket as an upload of its own,

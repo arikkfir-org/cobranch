@@ -87,8 +87,10 @@ const (
 // reach, and what its refs say of the branches once it applies.
 type Push struct {
 	// ID names the push: the Git server asks again with it when it lost the answer.
-	ID         uuid.UUID
-	RepoID     uuid.UUID
+	ID     uuid.UUID
+	RepoID uuid.UUID
+	// OrgID is the repository's organization, whose Git data limit holds the push's pack.
+	OrgID      uuid.UUID
 	PusherID   uuid.UUID
 	Transport  Transport
 	Updates    []RefUpdate
@@ -111,6 +113,9 @@ type Push struct {
 	// Merging is the branch a merge asked of Cobranch (TransportAPI) merges, at the head it merges: it must be Ready
 	// there, whatever its base requires, unless the pusher holds repo.bypass. nil for a client's push.
 	Merging *Head
+	// GitDataLimit is the most bytes of active packs the organization may hold once the push's pack is listed, which
+	// the store holds the push to in its transaction; 0 for none. Service.Record sets it.
+	GitDataLimit int64
 }
 
 // Merges are the branches whose heads the push brings into the default branch when it moves it on from a commit: the

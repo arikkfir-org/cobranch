@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 )
@@ -561,6 +562,71 @@ func TestValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.check(); (err != nil) != tt.wantErr {
 				t.Errorf("error = %v, want error %t", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// installationLimits are the same limits for every user, or err.
+type installationLimits struct {
+	limits.Limits
+	err error
+}
+
+func (l installationLimits) Installation(context.Context) (limits.Limits, error) {
+	return l.Limits, l.err
+}
+
+// createForNia has Nia create created organizations herself, and an administrator create byAnAdmin more for her.
+func (f *fixture) createForNia(t *testing.T, created, byAnAdmin int) {
+	t.Helper()
+	for i := range created + byAnAdmin {
+		org := orgs.Organization{ID: uuid.New(), Slug: fmt.Sprintf("before-%d", i), Name: "Before", MembershipRoleID: auth.RoleMember, CreatedAt: now}
+		var err error
+		if i < created {
+			err = f.store.Create(t.Context(), f.nia.ID, org, 0)
+		} else {
+			err = f.store.CreateFor(t.Context(), uuid.New(), f.nia.ID, org)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestCreateHeldToLimit(t *testing.T) {
+	broken := errors.New("broken")
+	tests := []struct {
+		name         string
+		limits       installationLimits
+		created      int // organizations Nia created before
+		byAnAdmin    int // organizations an administrator created for Nia before
+		wantExceeded *limits.ExceededError
+		wantErr      error
+	}{
+		{name: "under the limit", limits: installationLimits{Limits: limits.Limits{OrganizationsPerUser: 2}}, created: 1},
+		{name: "at the limit", limits: installationLimits{Limits: limits.Limits{OrganizationsPerUser: 2}}, created: 2,
+			wantExceeded: &limits.ExceededError{Kind: limits.KindOrganizations, Limit: 2, Used: 2, Adding: 1}},
+		{name: "those an administrator created count against nobody", limits: installationLimits{Limits: limits.Limits{OrganizationsPerUser: 2}},
+			created: 1, byAnAdmin: 3},
+		{name: "no limit", limits: installationLimits{}, created: 50},
+		{name: "the limits can't be read", limits: installationLimits{err: broken}, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			f.service.WithLimits(tt.limits)
+			f.createForNia(t, tt.created, tt.byAnAdmin)
+			before := len(f.store.Orgs)
+			_, err := f.service.Create(t.Context(), f.nia, "initech", "Initech")
+			var exceeded *limits.ExceededError
+			switch {
+			case tt.wantExceeded != nil:
+				if !errors.As(err, &exceeded) || *exceeded != *tt.wantExceeded || len(f.store.Orgs) != before {
+					t.Errorf("Create() = %v, %d organizations, want %v and %d", err, len(f.store.Orgs), tt.wantExceeded, before)
+				}
+			case !errors.Is(err, tt.wantErr):
+				t.Errorf("Create() = %v, want %v", err, tt.wantErr)
 			}
 		})
 	}

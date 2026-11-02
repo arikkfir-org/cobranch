@@ -38,6 +38,18 @@ func (q *Queries) CountRoleHolders(ctx context.Context, roleID uuid.UUID, orgID 
 	return count, err
 }
 
+const createdOrganizations = `-- name: CreatedOrganizations :one
+SELECT count(*) FROM organizations WHERE created_by = $1::uuid
+`
+
+// CreatedOrganizations counts the organizations the user created for themselves.
+func (q *Queries) CreatedOrganizations(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, createdOrganizations, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMembership = `-- name: DeleteMembership :execrows
 DELETE FROM memberships WHERE org_id = $1 AND user_id = $2
 `
@@ -111,8 +123,8 @@ func (q *Queries) InsertMembership(ctx context.Context, orgID uuid.UUID, userID 
 }
 
 const insertOrganization = `-- name: InsertOrganization :exec
-INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertOrganizationParams struct {
@@ -123,8 +135,11 @@ type InsertOrganizationParams struct {
 	AcceptsJoinRequests bool
 	Providers           []string
 	CreatedAt           time.Time
+	CreatedBy           *uuid.UUID
 }
 
+// InsertOrganization makes an organization; created_by is the user it counts against, NULL for one an administrator
+// made for its first Owner.
 func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganizationParams) error {
 	_, err := q.db.Exec(ctx, insertOrganization,
 		arg.ID,
@@ -134,6 +149,7 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		arg.AcceptsJoinRequests,
 		arg.Providers,
 		arg.CreatedAt,
+		arg.CreatedBy,
 	)
 	return err
 }
@@ -218,7 +234,7 @@ func (q *Queries) Membership(ctx context.Context, orgID uuid.UUID, userID uuid.U
 }
 
 const organizationByID = `-- name: OrganizationByID :one
-SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at FROM organizations WHERE id = $1
+SELECT id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, created_by FROM organizations WHERE id = $1
 `
 
 func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organization, error) {
@@ -232,12 +248,13 @@ func (q *Queries) OrganizationByID(ctx context.Context, id uuid.UUID) (Organizat
 		&i.AcceptsJoinRequests,
 		&i.Providers,
 		&i.CreatedAt,
+		&i.CreatedBy,
 	)
 	return i, err
 }
 
 const organizationBySlug = `-- name: OrganizationBySlug :one
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.created_by FROM organizations o JOIN organization_slugs s ON s.org_id = o.id WHERE s.slug = $1
 `
 
 type OrganizationBySlugRow struct {
@@ -256,6 +273,7 @@ func (q *Queries) OrganizationBySlug(ctx context.Context, slug string) (Organiza
 		&i.Organization.AcceptsJoinRequests,
 		&i.Organization.Providers,
 		&i.Organization.CreatedAt,
+		&i.Organization.CreatedBy,
 	)
 	return i, err
 }
@@ -301,7 +319,7 @@ func (q *Queries) OrganizationGrants(ctx context.Context, orgID uuid.UUID) ([]Or
 }
 
 const organizationsOf = `-- name: OrganizationsOf :many
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at FROM organizations o JOIN memberships m ON m.org_id = o.id WHERE m.user_id = $1 ORDER BY o.name, o.slug
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.created_by FROM organizations o JOIN memberships m ON m.org_id = o.id WHERE m.user_id = $1 ORDER BY o.name, o.slug
 `
 
 type OrganizationsOfRow struct {
@@ -326,6 +344,7 @@ func (q *Queries) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]Orga
 			&i.Organization.AcceptsJoinRequests,
 			&i.Organization.Providers,
 			&i.Organization.CreatedAt,
+			&i.Organization.CreatedBy,
 		); err != nil {
 			return nil, err
 		}

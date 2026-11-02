@@ -295,3 +295,22 @@ they leave unset are the Back-office's. */}}
   value: {{ .Values.organizations.selfServe | quote }}
 {{- end }}
 {{- end -}}
+
+{{/* The limits the values set, which the API servers and the Git server hold creations and pushes to; those they
+leave unset are the built-in defaults. */}}
+{{- define "cobranch.limitsEnv" -}}
+{{- with .Values.limits }}
+{{- if not (kindIs "invalid" .organizationsPerUser) }}
+- name: COBRANCH_LIMITS_ORGANIZATIONS_PER_USER
+  value: {{ .organizationsPerUser | int64 | toString | quote }}
+{{- end }}
+{{- if not (kindIs "invalid" .repositoriesPerOrganization) }}
+- name: COBRANCH_LIMITS_REPOSITORIES_PER_ORGANIZATION
+  value: {{ .repositoriesPerOrganization | int64 | toString | quote }}
+{{- end }}
+{{- if not (kindIs "invalid" .gitDataPerOrganization) }}
+- name: COBRANCH_LIMITS_GIT_DATA_PER_ORGANIZATION
+  value: {{ .gitDataPerOrganization | toString | quote }}
+{{- end }}
+{{- end }}
+{{- end -}}

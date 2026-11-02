@@ -380,7 +380,7 @@ paths:
   /orgs:
     post:
       operationId: createOrganization
-      summary: Creates an organization, with the user its first Owner; takes orgs.create.
+      summary: Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
       requestBody:
         required: true
         content:
@@ -1024,7 +1024,7 @@ paths:
           $ref: "#/components/responses/Problem"
     post:
       operationId: createRepository
-      summary: Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+      summary: Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
       parameters:
         - $ref: "#/components/parameters/org"
       requestBody:

@@ -11,13 +11,16 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 )
 
 // Store is what the database keeps for organizations. Each method is one transaction, which acts for actor where
 // one is named, so the audit log records who changed each row.
 type Store interface {
-	// Create makes the organization, its slug, its creator's membership and their Owner grant, and the events.
-	Create(ctx context.Context, actor uuid.UUID, org Organization) error
+	// Create makes the organization, its slug, its creator's membership and their Owner grant, and the events, and
+	// counts it against its creator. Under a lock of the creator's, it refuses with a *limits.ExceededError a creator
+	// who has created limit organizations already; 0 caps nothing.
+	Create(ctx context.Context, actor uuid.UUID, org Organization, limit int64) error
 	// BySlug finds an organization by any slug it has had, or ErrNotFound.
 	BySlug(ctx context.Context, slug string) (Organization, error)
 	// ByID finds an organization, or ErrNotFound.
@@ -107,11 +110,17 @@ const (
 	PermPrincipalsManage = "org.principals.manage"
 )
 
+// Limits says which limits apply: limits.Service.
+type Limits interface {
+	Installation(ctx context.Context) (limits.Limits, error)
+}
+
 // Service runs organizations: every operation checks its viewer's permissions through the authorizer first.
 type Service struct {
-	store Store
-	authz *auth.Authorizer
-	now   func() time.Time
+	store  Store
+	authz  *auth.Authorizer
+	limits Limits
+	now    func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz.
@@ -122,6 +131,12 @@ func NewService(store Store, authz *auth.Authorizer) *Service {
 // SetClock makes the service read the time from now: for tests.
 func (s *Service) SetClock(now func() time.Time) {
 	s.now = now
+}
+
+// WithLimits caps the organizations each user creates with the limits l says apply; without it, nothing caps them.
+func (s *Service) WithLimits(l Limits) *Service {
+	s.limits = l
+	return s
 }
 
 // Viewer is who an operation runs for: a signed-in user, with the emails they hold.
@@ -147,7 +162,8 @@ func (s *Service) Permissions(ctx context.Context, v Viewer) ([]string, error) {
 	return held, nil
 }
 
-// Create makes an organization with slug and name, its creator v its first Owner; it takes orgs.create.
+// Create makes an organization with slug and name, its creator v its first Owner; it takes orgs.create, and is
+// refused with a *limits.ExceededError once v has created as many organizations as a user may.
 func (s *Service) Create(ctx context.Context, v Viewer, slug, name string) (Organization, error) {
 	if err := s.authz.Can(ctx, v.ID, PermCreate, auth.ScopeInstallation, uuid.Nil); err != nil {
 		return Organization{}, fmt.Errorf("checking the viewer: %w", err)
@@ -156,7 +172,15 @@ func (s *Service) Create(ctx context.Context, v Viewer, slug, name string) (Orga
 	if err != nil {
 		return Organization{}, err
 	}
-	if err := s.store.Create(ctx, v.ID, org); err != nil {
+	var limit int64
+	if s.limits != nil {
+		l, err := s.limits.Installation(ctx)
+		if err != nil {
+			return Organization{}, fmt.Errorf("reading the limits: %w", err)
+		}
+		limit = l.OrganizationsPerUser
+	}
+	if err := s.store.Create(ctx, v.ID, org, limit); err != nil {
 		return Organization{}, fmt.Errorf("creating the organization: %w", err)
 	}
 	return org, nil

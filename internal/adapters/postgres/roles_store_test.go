@@ -25,7 +25,7 @@ func TestOrgStoreCustomRoles(t *testing.T) {
 		t.Errorf("CreateRole() with the same name: error = %v, want name taken", err)
 	}
 	globex := orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleMember, CreatedAt: now}
-	if err := f.s.Create(ctx, f.nia, globex); err != nil {
+	if err := f.s.Create(ctx, f.nia, globex, 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.s.CreateRole(ctx, f.nia, orgs.Role{ID: uuid.New(), Name: "Release manager", Permissions: []string{"org.read"}, OrgID: globex.ID}); err != nil {

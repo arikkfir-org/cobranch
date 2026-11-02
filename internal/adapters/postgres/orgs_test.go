@@ -40,7 +40,7 @@ func newOrgFixture(t *testing.T) *orgFixture {
 		*u.id = up.Principal.ID
 	}
 	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now}
-	if err := f.s.Create(ctx, f.olivia, f.acme); err != nil {
+	if err := f.s.Create(ctx, f.olivia, f.acme, 0); err != nil {
 		t.Fatal(err)
 	}
 	req := orgs.JoinRequest{ID: uuid.New(), OrgID: f.acme.ID, UserID: f.max, Note: "hi", CreatedAt: now, ExpiresAt: now.Add(time.Hour)}
@@ -78,7 +78,7 @@ func TestOrgStoreCreate(t *testing.T) {
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name IN ('organizations', 'organization_slugs', 'memberships') AND principal_id = $1", f.olivia); n != 4 {
 		t.Errorf("%d audit rows name Olivia for creating Acme and approving Max, want 4", n)
 	}
-	err = f.s.Create(ctx, f.nia, orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Another", MembershipRoleID: auth.RoleMember, CreatedAt: now})
+	err = f.s.Create(ctx, f.nia, orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Another", MembershipRoleID: auth.RoleMember, CreatedAt: now}, 0)
 	if !errors.Is(err, orgs.ErrSlugTaken) {
 		t.Errorf("Create() with a taken slug error = %v, want slug taken", err)
 	}
@@ -102,7 +102,7 @@ func TestOrgStoreUpdate(t *testing.T) {
 		}
 	}
 	other := orgs.Organization{ID: uuid.New(), Slug: "globex", Name: "Globex", MembershipRoleID: auth.RoleMember, CreatedAt: now}
-	if err := f.s.Create(ctx, f.nia, other); err != nil {
+	if err := f.s.Create(ctx, f.nia, other, 0); err != nil {
 		t.Fatal(err)
 	}
 	other.Slug = "acme"

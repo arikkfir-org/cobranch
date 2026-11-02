@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -65,6 +66,8 @@ type Store struct {
 	Installation auth.InstallationSettings
 	// Providers are the identity providers the Back-office added, by ID.
 	Providers map[string]auth.StoredProvider
+	// CreatedBy maps each organization a user created for themselves to that user, against whom it counts.
+	CreatedBy map[uuid.UUID]uuid.UUID
 	Fail      error
 }
 
@@ -84,6 +87,7 @@ func NewStore() *Store {
 		Repos: map[uuid.UUID]uuid.UUID{},
 		Keys:  map[uuid.UUID]orgs.APIKey{}, Hashes: map[uuid.UUID][]byte{},
 		Installation: auth.InstallationSettings{Version: 1}, Providers: map[string]auth.StoredProvider{},
+		CreatedBy: map[uuid.UUID]uuid.UUID{},
 	}
 }
 
@@ -155,8 +159,26 @@ func (s *Store) Repositories(ctx context.Context, principal, orgID uuid.UUID, pe
 	return out, nil
 }
 
-// Create records the organization with its creator as Owner.
-func (s *Store) Create(_ context.Context, actor uuid.UUID, org orgs.Organization) error {
+// Create records the organization with its creator as Owner, counted against them, unless they created limit already.
+func (s *Store) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization, limit int64) error {
+	created := int64(0)
+	for _, by := range s.CreatedBy {
+		if by == actor {
+			created++
+		}
+	}
+	if limits.Exceeds(limit, created, 1) {
+		return &limits.ExceededError{Kind: limits.KindOrganizations, Limit: limit, Used: created, Adding: 1}
+	}
+	if err := s.create(ctx, actor, org); err != nil {
+		return err
+	}
+	s.CreatedBy[org.ID] = actor
+	return nil
+}
+
+// create records the organization with owner its first Owner.
+func (s *Store) create(_ context.Context, owner uuid.UUID, org orgs.Organization) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
@@ -164,7 +186,7 @@ func (s *Store) Create(_ context.Context, actor uuid.UUID, org orgs.Organization
 		return orgs.ErrSlugTaken
 	}
 	s.Orgs[org.ID], s.Slugs[org.Slug] = org, org.ID
-	s.AddMember(org.ID, actor, auth.RoleOwner)
+	s.AddMember(org.ID, owner, auth.RoleOwner)
 	s.Events = append(s.Events, "org.created", "member.joined")
 	return nil
 }

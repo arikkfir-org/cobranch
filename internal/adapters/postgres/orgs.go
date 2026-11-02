@@ -12,6 +12,7 @@ import (
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -100,33 +101,54 @@ func (s *OrgStore) Repositories(ctx context.Context, principalID, orgID uuid.UUI
 	return ids, nil
 }
 
-// Create makes the organization, claims its slug, makes its creator a member and its first Owner, and records both.
-func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization) error {
-	return s.CreateFor(ctx, actor, actor, org)
+// Create makes the organization, claims its slug, makes its creator a member and its first Owner, records both, and
+// counts it against its creator: under a lock of theirs, a creator who created limit organizations already is refused
+// with a *limits.ExceededError; 0 caps nothing.
+func (s *OrgStore) Create(ctx context.Context, actor uuid.UUID, org orgs.Organization, limit int64) error {
+	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
+		if limit > 0 {
+			if err := lockLimit(ctx, q, limits.KindOrganizations, actor); err != nil {
+				return err
+			}
+			created, err := q.CreatedOrganizations(ctx, actor)
+			if err != nil {
+				return fmt.Errorf("counting the creator's organizations: %w", err)
+			}
+			if limits.Exceeds(limit, created, 1) {
+				return &limits.ExceededError{Kind: limits.KindOrganizations, Limit: limit, Used: created, Adding: 1}
+			}
+		}
+		return create(ctx, q, actor, actor, &actor, org)
+	})
 }
 
 // CreateFor makes the organization as Create does, with owner its first Owner: an administrator who creates one for a
-// user is the actor, and the user its Owner, whom the event names when it isn't the actor.
+// user is the actor, and the user its Owner, whom the event names when it isn't the actor. It counts against nobody.
 func (s *OrgStore) CreateFor(ctx context.Context, actor, owner uuid.UUID, org orgs.Organization) error {
 	return s.transact(ctx, "creating the organization", actor, func(ctx context.Context, q *queries.Queries) error {
-		if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
-			ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
-			AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, CreatedAt: org.CreatedAt,
-		}); err != nil {
-			return fmt.Errorf("inserting the organization: %w", err)
-		}
-		if err := q.InsertSlug(ctx, org.Slug, org.ID); err != nil {
-			return fmt.Errorf("claiming the slug: %w", err)
-		}
-		details := map[string]any{"slug": org.Slug, "name": org.Name}
-		if owner != actor {
-			details["owner"] = owner
-		}
-		if err := orgEvent(ctx, q, &org.ID, actor, "org.created", org.ID, details); err != nil {
-			return err
-		}
-		return join(ctx, q, org.ID, actor, owner, auth.RoleOwner, org.CreatedAt, "created")
+		return create(ctx, q, actor, owner, nil, org)
 	})
+}
+
+// create makes the organization with owner its first Owner, by actor, counted against createdBy unless it is nil.
+func create(ctx context.Context, q *queries.Queries, actor, owner uuid.UUID, createdBy *uuid.UUID, org orgs.Organization) error {
+	if err := q.InsertOrganization(ctx, queries.InsertOrganizationParams{
+		ID: org.ID, Slug: org.Slug, Name: org.Name, MembershipRoleID: org.MembershipRoleID,
+		AcceptsJoinRequests: org.AcceptsJoinRequests, Providers: org.Providers, CreatedAt: org.CreatedAt, CreatedBy: createdBy,
+	}); err != nil {
+		return fmt.Errorf("inserting the organization: %w", err)
+	}
+	if err := q.InsertSlug(ctx, org.Slug, org.ID); err != nil {
+		return fmt.Errorf("claiming the slug: %w", err)
+	}
+	details := map[string]any{"slug": org.Slug, "name": org.Name}
+	if owner != actor {
+		details["owner"] = owner
+	}
+	if err := orgEvent(ctx, q, &org.ID, actor, "org.created", org.ID, details); err != nil {
+		return err
+	}
+	return join(ctx, q, org.ID, actor, owner, auth.RoleOwner, org.CreatedAt, "created")
 }
 
 // join makes userID a member of orgID holding roleID, and records it: how says what made them one. It holds the

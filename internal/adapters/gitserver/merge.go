@@ -71,7 +71,7 @@ func (s *Server) mergeHandler() http.HandlerFunc {
 // mergeFor makes req's merge in repository repoID once viewer may ask for it: they see the repository, hold repo.merge,
 // and repo.bypass for a merge past main's requirements, and merge as themselves.
 func (s *Server) mergeFor(ctx context.Context, viewer auth.User, repoID uuid.UUID, req code.MergeRequest) (code.Merged, error) {
-	_, held, err := s.repos.ByID(ctx, viewer, repoID)
+	repo, held, err := s.repos.ByID(ctx, viewer, repoID)
 	switch {
 	case err != nil:
 		return code.Merged{}, fmt.Errorf("finding repository %s for its merge: %w", repoID, err)
@@ -82,7 +82,7 @@ func (s *Server) mergeFor(ctx context.Context, viewer auth.User, repoID uuid.UUI
 	case req.Bypass && !slices.Contains(held, repos.PermBypass):
 		return code.Merged{}, fmt.Errorf("%w: %s on the repository", auth.ErrForbidden, repos.PermBypass)
 	}
-	return s.merge(ctx, repoID, req)
+	return s.merge(ctx, repo, req)
 }
 
 // answerMerge answers a merge that failed: 403 for one the viewer may not ask for, 404 with the code of what it didn't
@@ -124,8 +124,8 @@ func validMerge(req code.MergeRequest) error {
 
 // merge builds the merge req asks for over a snapshot of the repository read now, and records it as a push of its
 // base.
-func (s *Server) merge(ctx context.Context, repoID uuid.UUID, req code.MergeRequest) (code.Merged, error) {
-	dir, remove, err := s.snapshotWorkspace(ctx, repoID)
+func (s *Server) merge(ctx context.Context, repo repos.Repository, req code.MergeRequest) (code.Merged, error) {
+	dir, remove, err := s.snapshotWorkspace(ctx, repo.ID)
 	if err != nil {
 		return code.Merged{}, err
 	}
@@ -138,7 +138,7 @@ func (s *Server) merge(ctx context.Context, repoID uuid.UUID, req code.MergeRequ
 	if err != nil {
 		return code.Merged{}, err
 	}
-	push, err := s.mergePush(ctx, dir, repoID, req, git.RefUpdate{Name: "refs/heads/" + req.Base, Old: base, New: commit})
+	push, err := s.mergePush(ctx, dir, repo, req, git.RefUpdate{Name: "refs/heads/" + req.Base, Old: base, New: commit})
 	if err != nil {
 		return code.Merged{}, err
 	}
@@ -242,7 +242,7 @@ func (s *Server) mergeTree(ctx context.Context, dir string, req code.MergeReques
 
 // mergePush is the push that records req's merge, update: its commit, what its refs say of the branches, and its
 // pack, uploaded; a merge whose base's new /cobranch.yaml doesn't parse is a *code.MergeError.
-func (s *Server) mergePush(ctx context.Context, dir string, repoID uuid.UUID, req code.MergeRequest, update git.RefUpdate) (git.Push, error) {
+func (s *Server) mergePush(ctx context.Context, dir string, repo repos.Repository, req code.MergeRequest, update git.RefUpdate) (git.Push, error) {
 	updates := []git.RefUpdate{update}
 	commits, err := s.newCommits(ctx, dir, nil, updates)
 	if err != nil {
@@ -257,11 +257,11 @@ func (s *Server) mergePush(ctx context.Context, dir string, repoID uuid.UUID, re
 	}
 	var pack *git.Pack
 	if len(commits) > 0 {
-		if pack, err = s.mergePack(ctx, dir, repoID, update.New, update.Old, req.Head); err != nil {
+		if pack, err = s.mergePack(ctx, dir, repo.ID, update.New, update.Old, req.Head); err != nil {
 			return git.Push{}, err
 		}
 	}
-	return git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: repoID, PusherID: req.By.ID, Transport: git.TransportAPI, Updates: updates,
+	return git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: repo.ID, OrgID: repo.OrgID, PusherID: req.By.ID, Transport: git.TransportAPI, Updates: updates,
 		Pack: pack, Commits: commits, ReceivedAt: time.Now(), Requirements: branches.requirements, Facts: branches.facts,
 		Tips: branches.tips, Brought: branches.brought, Bypass: req.Bypass, Merging: &git.Head{Branch: req.Branch, SHA: req.Head}}, nil
 }

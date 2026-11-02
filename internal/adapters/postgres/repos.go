@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -76,9 +77,23 @@ func (s *RepoStore) shared(ctx context.Context, orgID uuid.UUID) ([]uuid.UUID, e
 	return ids, nil
 }
 
-// Create makes the repository, claims its slug, makes its creator its Maintainer, and records it.
-func (s *RepoStore) Create(ctx context.Context, actor uuid.UUID, repo repos.Repository) error {
+// Create makes the repository, claims its slug, makes its creator its Maintainer, and records it: under a lock of its
+// organization's, an organization that holds limit repositories already is refused with a *limits.ExceededError; 0
+// caps nothing.
+func (s *RepoStore) Create(ctx context.Context, actor uuid.UUID, repo repos.Repository, limit int64) error {
 	return s.transact(ctx, "creating the repository", actor, func(ctx context.Context, q *queries.Queries) error {
+		if limit > 0 {
+			if err := lockLimit(ctx, q, limits.KindRepositories, repo.OrgID); err != nil {
+				return err
+			}
+			held, err := q.CountRepositories(ctx, repo.OrgID)
+			if err != nil {
+				return fmt.Errorf("counting the organization's repositories: %w", err)
+			}
+			if limits.Exceeds(limit, held, 1) {
+				return &limits.ExceededError{Kind: limits.KindRepositories, Limit: limit, Used: held, Adding: 1}
+			}
+		}
 		if err := q.InsertRepository(ctx, queries.InsertRepositoryParams{
 			ID: repo.ID, OrgID: repo.OrgID, Slug: repo.Slug, Name: repo.Name, Description: repo.Description,
 			ObjectFormat: repo.ObjectFormat, CreatedBy: &repo.CreatedBy, CreatedAt: repo.CreatedAt,
