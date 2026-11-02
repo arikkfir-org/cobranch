@@ -190,7 +190,8 @@ type Event struct {
 	SHA string `json:"sha"`
 	// Ref is the branch or tag the event happened on, in full: refs/heads/… or refs/tags/….
 	Ref string `json:"ref"`
-	// Name is the annotation's name, or the posted event's.
+	// Name is the annotation's name, the posted event's, or the job's for a schedule or a manual start, which trigger
+	// only the job they name.
 	Name string `json:"name,omitempty"`
 	// State is the annotation's status, or the review's state.
 	State string `json:"state,omitempty"`
@@ -200,7 +201,14 @@ type Event struct {
 	PushID uuid.UUID `json:"push,omitzero"`
 	// CauseRunID is the run that set the annotation, for an annotation another run set.
 	CauseRunID uuid.UUID `json:"causeRun,omitzero"`
+	// Data is what a posted event carries, any JSON up to MaxEventData bytes, which a run reads as event.json's data.
+	Data json.RawMessage `json:"data,omitempty"`
+	// Slot is the minute a schedule fired for.
+	Slot time.Time `json:"slot,omitzero"`
 }
+
+// MaxEventData is the most a posted event's data may take, in bytes.
+const MaxEventData = 64 << 10
 
 // State is where a run stands.
 type State string

@@ -2,6 +2,7 @@ package jobs_test
 
 import (
 	"testing"
+	"time"
 
 	"cobranch.dev/internal/services/jobs"
 )
@@ -68,10 +69,13 @@ func TestJobMatches(t *testing.T) {
 		{"changes requested", review, jobs.Event{Kind: jobs.EventReview, Ref: "refs/heads/x", State: "changes_requested"}, false},
 		{"a posted event it follows", posted, jobs.Event{Kind: jobs.EventPosted, Ref: "refs/heads/main", Name: "deploy/requested"}, true},
 		{"another posted event", posted, jobs.Event{Kind: jobs.EventPosted, Ref: "refs/heads/main", Name: "other"}, false},
-		{"a schedule", nightly, jobs.Event{Kind: jobs.EventSchedule, Ref: "refs/heads/main"}, true},
-		{"a manual start", nightly, jobs.Event{Kind: jobs.EventManual, Ref: "refs/heads/x"}, true},
-		{"a manual start of a job that takes none", push, jobs.Event{Kind: jobs.EventManual, Ref: "refs/heads/main"}, false},
-		{"a schedule of a job without one", push, jobs.Event{Kind: jobs.EventSchedule, Ref: "refs/heads/main"}, false},
+		{"a schedule", nightly, jobs.Event{Kind: jobs.EventSchedule, Ref: "refs/heads/main", Name: "nightly"}, true},
+		{"another job's schedule", nightly, jobs.Event{Kind: jobs.EventSchedule, Ref: "refs/heads/main", Name: "weekly"}, false},
+		{"a manual start", nightly, jobs.Event{Kind: jobs.EventManual, Ref: "refs/heads/x", Name: "nightly"}, true},
+		{"another job's manual start", nightly, jobs.Event{Kind: jobs.EventManual, Ref: "refs/heads/x", Name: "build"}, false},
+		{"a manual start on a tag", nightly, jobs.Event{Kind: jobs.EventManual, Ref: "refs/tags/v1", Name: "nightly"}, false},
+		{"a manual start of a job that takes none", push, jobs.Event{Kind: jobs.EventManual, Ref: "refs/heads/main", Name: "build"}, false},
+		{"a schedule of a job without one", push, jobs.Event{Kind: jobs.EventSchedule, Ref: "refs/heads/main", Name: "build"}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -95,5 +99,40 @@ func TestJobKind(t *testing.T) {
 		if got := tt.job.Kind(); got != tt.want {
 			t.Errorf("Kind() of %+v = %s, want %s", tt.job, got, tt.want)
 		}
+	}
+}
+
+func TestJobDueSlot(t *testing.T) {
+	at := func(hhmm string) time.Time {
+		t, err := time.Parse("2006-01-02 15:04:05", "2026-11-02 "+hhmm)
+		if err != nil {
+			panic(err)
+		}
+		return t
+	}
+	hourly := jobs.Job{Name: "hourly", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "0 * * * *"}}}}
+	twice := jobs.Job{Name: "twice", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "0 * * * *"}, {Cron: "5 * * * *"}}}}
+	broken := jobs.Job{Name: "broken", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "61 * * * *"}}}}
+	tests := []struct {
+		name string
+		job  jobs.Job
+		now  time.Time
+		want time.Time
+	}{
+		{"on its minute", hourly, at("04:00:00"), at("04:00:00")},
+		{"late within the window", hourly, at("04:09:59"), at("04:00:00")},
+		{"too late", hourly, at("04:10:01"), time.Time{}},
+		{"before its minute", hourly, at("03:59:59"), time.Time{}},
+		{"the later of two schedules", twice, at("04:06:00"), at("04:05:00")},
+		{"a schedule that doesn't parse", broken, at("04:00:00"), time.Time{}},
+		{"no schedule", jobs.Job{Name: "none"}, at("04:00:00"), time.Time{}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := tt.job.DueSlot(tt.now, 10*time.Minute)
+			if !got.Equal(tt.want) || ok == tt.want.IsZero() {
+				t.Errorf("DueSlot(%s) = %s, %v, want %s", tt.now, got, ok, tt.want)
+			}
+		})
 	}
 }

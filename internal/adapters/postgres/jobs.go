@@ -77,7 +77,7 @@ func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.Clai
 		case !ok:
 			continue
 		}
-		if err := queueRuns(ctx, q, e); err != nil {
+		if _, err := queueRuns(ctx, q, e); err != nil {
 			return err
 		}
 		if err := queueDeliveries(ctx, q, e); err != nil {
@@ -116,50 +116,82 @@ func pushEvent(ctx context.Context, q *queries.Queries, pushed jobs.Event, u ref
 }
 
 // queueRuns queues, in the transaction of the change that caused e, a run of each job whose triggers match it, by
-// name, each with its job's annotation set on e's commit: Pending, or Failed with the reason when it can't run. Jobs
-// come from e's branch's head for events on a branch, which must still be e's commit, and from the default branch's
-// head for tags, posted events and schedules, read under the repository's run lock, so a change queued meanwhile is
-// seen. The branches at e's commit get their status worked out again, unless they wait for the push worker, which then
-// does.
-func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) error {
+// name, each with its job's annotation set on e's commit: Pending, or Failed with the reason when it can't run, and
+// answers the numbers of the runs it queued. Jobs come from e's branch's head for events on a branch, which must still
+// be e's commit, and from the default branch's head for tags, posted events and schedules, read under the
+// repository's run lock, so a change queued meanwhile is seen. The branches at e's commit get their status worked out
+// again, unless they wait for the push worker, which then does.
+func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) ([]int64, error) {
 	orgID, err := q.CommitOrg(ctx, e.RepoID, e.SHA)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return fmt.Errorf("finding commit %s: %w", e.SHA, err)
+		return nil, fmt.Errorf("finding commit %s: %w", e.SHA, err)
 	}
 	if err := q.LockRunQueue(ctx, e.RepoID); err != nil {
-		return fmt.Errorf("locking the repository's runs: %w", err)
+		return nil, fmt.Errorf("locking the repository's runs: %w", err)
 	}
 	defined, err := definitionsFor(ctx, q, e)
 	if err != nil || len(defined) == 0 {
-		return err
+		return nil, err
 	}
-	wait := false
-	if e.Kind == jobs.EventPush {
-		if wait, err = waitsForMember(ctx, q, e.RepoID, e.ActorID); err != nil {
-			return err
-		}
+	wait, err := waits(ctx, q, e)
+	if err != nil {
+		return nil, err
 	}
 	main, err := mainSettings(ctx, q, e.RepoID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	queued := false
+	var queued []int64
 	for _, job := range defined {
 		if !job.Matches(e) {
 			continue
 		}
-		if err := queueRun(ctx, q, newRun{orgID: orgID, event: e, job: job, wait: wait, ceiling: main.Repository.Ceiling}); err != nil {
+		number, err := queueRun(ctx, q, newRun{orgID: orgID, event: e, job: job, wait: wait, ceiling: main.Repository.Ceiling})
+		if err != nil {
+			return nil, err
+		}
+		if number != 0 {
+			queued = append(queued, number)
+		}
+	}
+	if len(queued) == 0 {
+		return nil, nil
+	}
+	return queued, restatusAt(ctx, q, e.RepoID, e.SHA)
+}
+
+// queueBranchRuns queues, in the transaction of the change that caused e, the runs e triggers on each live branch
+// whose head is e's commit: an annotation that reached a status there, or a review submitted on it.
+func queueBranchRuns(ctx context.Context, q *queries.Queries, e jobs.Event) error {
+	names, err := q.LiveBranchesAt(ctx, e.RepoID, e.SHA)
+	if err != nil {
+		return fmt.Errorf("finding the branches at commit %s: %w", e.SHA, err)
+	}
+	for _, name := range names {
+		e.Ref = "refs/heads/" + name
+		if _, err := queueRuns(ctx, q, e); err != nil {
 			return err
 		}
-		queued = true
 	}
-	if !queued {
-		return nil
+	return nil
+}
+
+// annotationRuns queues the runs that annotation name reaching status on a commit triggers, set by actor; when actor
+// is a job with a run at the commit that hasn't ended, that run is the new runs' cause, so a chain never runs a job
+// twice.
+func annotationRuns(ctx context.Context, q *queries.Queries, actor, repoID uuid.UUID, sha, name string, status code.AnnotationStatus) error {
+	e := jobs.Event{Kind: jobs.EventAnnotation, RepoID: repoID, SHA: sha, Name: name, State: string(status), ActorID: actor}
+	cause, err := q.LiveRunAt(ctx, actor, sha)
+	switch {
+	case err == nil:
+		e.CauseRunID = cause
+	case !errors.Is(err, pgx.ErrNoRows):
+		return fmt.Errorf("finding the run that set annotation %s: %w", name, err)
 	}
-	return restatusAt(ctx, q, e.RepoID, e.SHA)
+	return queueBranchRuns(ctx, q, e)
 }
 
 // definitionsFor reads the jobs that may answer e: none when its branch moved on from its commit, or when the file
@@ -209,6 +241,30 @@ func settingsOf(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branc
 	return row.Head, &settings, nil
 }
 
+// waits reports whether e's runs wait for a member: those whose definitions come from a tip pushed from outside the
+// organization, a push's, an annotation's or a review's. A tip no push brought, such as a merge Cobranch made, is
+// inside.
+func waits(ctx context.Context, q *queries.Queries, e jobs.Event) (bool, error) {
+	switch e.Kind {
+	case jobs.EventPush:
+		return waitsForMember(ctx, q, e.RepoID, e.ActorID)
+	case jobs.EventAnnotation, jobs.EventReview:
+		pusher, err := q.HeadPusher(ctx, e.RepoID, e.Ref, e.SHA)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		if err != nil {
+			return false, fmt.Errorf("finding who pushed %s: %w", e.Ref, err)
+		}
+		var id uuid.UUID
+		if pusher != nil {
+			id = *pusher
+		}
+		return waitsForMember(ctx, q, e.RepoID, id)
+	}
+	return false, nil
+}
+
 // waitsForMember reports whether work that follows a push by pusherID into the repository waits for a member to
 // start it: when the default branch's /cobranch.yaml leaves repository.outsidePushes at wait, and the pusher is
 // Anonymous, a user who isn't a member of the repository's organization, or gone. Members, API keys, agents and jobs
@@ -234,44 +290,69 @@ func waitsForMember(ctx context.Context, q *queries.Queries, repoID, pusherID uu
 }
 
 // newRun is a run queueRun queues: of job, for event, at its commit in the organization; waiting for a member when
-// wait is true; within the permissions of the repository role ceiling names.
+// wait is true; within the permissions of the repository role ceiling names. A re-run also names the run its attempts
+// started from, its attempt, and who re-ran it.
 type newRun struct {
 	orgID   uuid.UUID
 	event   jobs.Event
 	job     jobs.Job
 	wait    bool
 	ceiling string
+	attempt int32
+	rerunOf *uuid.UUID
+	by      *uuid.UUID
 }
 
-// queueRun queues one run of a job, unless one of its runs that hasn't ended is at the same commit already, whose
-// file, and so whose job, is the same: one waiting for a member gives way to one that doesn't. It supersedes the job's
-// runs that haven't ended on the same ref, sets the job's annotation, and records the run Waiting, Queued, or Failed
-// when the job lists more than its ceiling or another principal holds its annotation there.
-func queueRun(ctx context.Context, q *queries.Queries, r newRun) error {
+// queueRun queues one run of a job and answers its number, unless one of its runs that hasn't ended is at the same
+// commit already, whose file, and so whose job, is the same: one waiting for a member gives way to one that doesn't.
+// Nor does it queue a run of a job that ran in the chain of runs that caused it. It supersedes the job's runs that
+// haven't ended on the same ref, and records the run (recordRun).
+func queueRun(ctx context.Context, q *queries.Queries, r newRun) (int64, error) {
 	jobID, err := jobPrincipal(ctx, q, r.orgID, r.event.RepoID, r.job.Name)
 	if err != nil {
-		return err
+		return 0, err
+	}
+	if looped, err := inChain(ctx, q, r.event.CauseRunID, jobID); err != nil || looped {
+		return 0, err
 	}
 	active, err := q.ActiveRunAt(ctx, jobID, r.event.SHA)
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 	case err != nil:
-		return fmt.Errorf("finding job %s's runs at %s: %w", r.job.Name, r.event.SHA, err)
+		return 0, fmt.Errorf("finding job %s's runs at %s: %w", r.job.Name, r.event.SHA, err)
 	case jobs.State(active.State) != jobs.StateWaiting || r.wait:
-		return nil
+		return 0, nil
 	}
 	number, err := q.NextRunNumber(ctx, r.event.RepoID)
 	if err != nil {
-		return fmt.Errorf("numbering the run: %w", err)
+		return 0, fmt.Errorf("numbering the run: %w", err)
 	}
 	if active.ID != uuid.Nil {
 		if err := q.EndRun(ctx, string(jobs.StateCancelled), fmt.Sprintf("superseded by #%d", number), active.ID); err != nil {
-			return fmt.Errorf("superseding a waiting run of job %s: %w", r.job.Name, err)
+			return 0, fmt.Errorf("superseding a waiting run of job %s: %w", r.job.Name, err)
 		}
 	}
 	if err := supersede(ctx, q, r, jobID, number); err != nil {
-		return err
+		return 0, err
 	}
+	return number, recordRun(ctx, q, r, jobID, number)
+}
+
+// inChain reports whether the job ran in the chain of runs that ends with cause: the run whose annotation triggered
+// this one, the run that triggered that, and so on back. A job never runs twice in one chain, so a cycle stops where it
+// would repeat.
+func inChain(ctx context.Context, q *queries.Queries, cause, jobID uuid.UUID) (bool, error) {
+	if cause == uuid.Nil {
+		return false, nil
+	}
+	looped, err := q.RunChainHasJob(ctx, jobID, cause)
+	return looped, wrapIf(err, "following the chain of runs")
+}
+
+// recordRun records the run of the job its principal names, numbered number, with the job's annotation set on its
+// commit: Waiting, Queued, or Failed when the job lists more than its ceiling or another principal holds its
+// annotation there.
+func recordRun(ctx context.Context, q *queries.Queries, r newRun, jobID uuid.UUID, number int64) error {
 	state, reason, err := initialState(ctx, q, r)
 	if err != nil {
 		return err

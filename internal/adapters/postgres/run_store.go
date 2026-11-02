@@ -13,6 +13,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/runner"
 )
@@ -34,8 +35,8 @@ var _ runner.Store = (*RunStore)(nil)
 
 // ranRun is a run whose state just changed: what its job's annotation needs.
 type ranRun struct {
-	OrgID, RepoID, JobID uuid.UUID
-	Sha, Job             string
+	ID, OrgID, RepoID, JobID uuid.UUID
+	Sha, Job                 string
 }
 
 // Claim claims the queued run of a pod or a script that waited longest and that no controller holds, until leaseUntil
@@ -119,17 +120,20 @@ func (s *RunStore) Finish(ctx context.Context, runID uuid.UUID, state jobs.State
 	return finished, err
 }
 
-// annotateRun sets the run's job's annotation on its commit to in, as the job, and works out the status of the
-// branches there again when restatus says the change may move it. Another principal holding the annotation changes
-// nothing: the run failed as it was queued then.
-func annotateRun(ctx context.Context, q *queries.Queries, r ranRun, in code.AnnotationInput, restatus bool) error {
-	if _, err := setJobAnnotation(ctx, q, r.OrgID, r.JobID, r.RepoID, r.Sha, r.Job, in); err != nil {
+// annotateRun sets the run's job's annotation on its commit to in, as the job, and when moved says the run started or
+// ended, works out the status of the branches there again and queues the runs the annotation triggers, the run their
+// cause. Another principal holding the annotation changes nothing: the run failed as it was queued then.
+func annotateRun(ctx context.Context, q *queries.Queries, r ranRun, in code.AnnotationInput, moved bool) error {
+	taken, err := setJobAnnotation(ctx, q, r.OrgID, r.JobID, r.RepoID, r.Sha, r.Job, in)
+	if err != nil || !moved {
 		return err
 	}
-	if !restatus {
-		return nil
+	if err := restatusAt(ctx, q, r.RepoID, r.Sha); err != nil || taken != "" {
+		return err
 	}
-	return restatusAt(ctx, q, r.RepoID, r.Sha)
+	e := jobs.Event{Kind: jobs.EventAnnotation, RepoID: r.RepoID, SHA: r.Sha, Name: r.Job, State: string(in.Status), ActorID: r.JobID,
+		CauseRunID: r.ID}
+	return queueBranchRuns(ctx, q, e)
 }
 
 // Running lists the runs of pods and scripts that run, each with the timeout its job declared (runner.Store).
@@ -173,4 +177,65 @@ func (s *RunStore) Organizations(ctx context.Context, ids []uuid.UUID) ([]uuid.U
 func (s *RunStore) DropTokens(ctx context.Context) (int64, error) {
 	n, err := s.q.DeleteDeadRunTokens(ctx)
 	return n, wrapIf(err, "deleting the tokens of ended runs")
+}
+
+// Scheduled lists the repositories whose default branch's /cobranch.yaml declares jobs with schedules, with those jobs
+// (runner.Store).
+func (s *RunStore) Scheduled(ctx context.Context) ([]runner.Scheduled, error) {
+	rows, err := s.q.ScheduledSettings(ctx, git.DefaultBranch)
+	if err != nil {
+		return nil, fmt.Errorf("listing the scheduled jobs: %w", err)
+	}
+	out := make([]runner.Scheduled, 0, len(rows))
+	for _, r := range rows {
+		var settings code.Settings
+		if err := json.Unmarshal(r.Settings, &settings); err != nil {
+			return nil, fmt.Errorf("decoding repository %s's settings: %w", r.RepoID, err)
+		}
+		scheduled := runner.Scheduled{RepoID: r.RepoID}
+		for _, j := range settings.Jobs {
+			if len(j.On.Schedule) > 0 {
+				scheduled.Jobs = append(scheduled.Jobs, j)
+			}
+		}
+		out = append(out, scheduled)
+	}
+	return out, nil
+}
+
+// QueueSlot records a slot of the schedule of the repository's job and queues the run it fires at the default
+// branch's head, in one transaction that names nobody, unless a controller recorded the slot already (runner.Store).
+func (s *RunStore) QueueSlot(ctx context.Context, repoID uuid.UUID, job string, slot time.Time) (bool, error) {
+	queued := false
+	err := transact(ctx, s.pool, s.q, "queueing a schedule's run", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		main, err := q.BranchSettings(ctx, repoID, git.DefaultBranch)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("reading the default branch: %w", err)
+		}
+		repo, err := q.RepositoryByID(ctx, repoID)
+		if err != nil {
+			return fmt.Errorf("reading the repository: %w", err)
+		}
+		_, err = q.InsertScheduleSlot(ctx, queries.InsertScheduleSlotParams{RepoID: repoID, Job: job, Slot: slot, OrgID: repo.OrgID})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("recording the slot: %w", err)
+		}
+		queued = true
+		_, err = queueRuns(ctx, q, jobs.Event{Kind: jobs.EventSchedule, RepoID: repoID, SHA: main.Head, Ref: "refs/heads/" + git.DefaultBranch,
+			Name: job, Slot: slot.UTC()})
+		return err
+	})
+	return queued, err
+}
+
+// DropSlots deletes the schedules' slots before a time (runner.Store).
+func (s *RunStore) DropSlots(ctx context.Context, before time.Time) (int64, error) {
+	n, err := s.q.DeleteScheduleSlots(ctx, before)
+	return n, wrapIf(err, "deleting the schedules' old slots")
 }

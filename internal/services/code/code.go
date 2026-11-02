@@ -83,6 +83,9 @@ type Branch struct {
 	// SettingsError is why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing
 	// until it does. "" when it parses, or there is none.
 	SettingsError string
+	// ManualJobs are the jobs the /cobranch.yaml at its head declares with a manual trigger, which a member starts on
+	// it, by name.
+	ManualJobs []string
 }
 
 // Merge is a merge of a branch into its base that a push made: the head it brought in, who pushed it, nil once they

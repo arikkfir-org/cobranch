@@ -100,7 +100,7 @@ func (s *Service) keepLogs(ctx context.Context, orgID, repoID, runID uuid.UUID) 
 
 // Sweep cleans up after what Follow doesn't see: it removes the pods of runs that ended otherwise (a member cancelled
 // them, a newer run superseded them), keeping their logs, and of runs that are gone, deletes the namespaces of
-// organizations that are gone, and the tokens of runs that ended or expired. It answers what failed, having gone on
+// organizations that are gone, the tokens of runs that ended or expired, and the schedules' old slots. It answers what failed, having gone on
 // with the rest.
 func (s *Service) Sweep(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(ctx, "runner.Service.Sweep")
@@ -110,7 +110,11 @@ func (s *Service) Sweep(ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("deleting the tokens of ended runs: %w", err)
 	}
-	span.SetAttributes(attribute.Int64("cobranch.run_tokens.dropped", dropped))
+	slots, err := s.store.DropSlots(ctx, s.now().Add(-slotsKept))
+	if err != nil {
+		return fmt.Errorf("deleting the schedules' old slots: %w", err)
+	}
+	span.SetAttributes(attribute.Int64("cobranch.run_tokens.dropped", dropped), attribute.Int64("cobranch.slots.dropped", slots))
 	orgs, err := s.cluster.Namespaces(ctx)
 	if err != nil {
 		return fmt.Errorf("listing the job namespaces: %w", err)

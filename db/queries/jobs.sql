@@ -59,10 +59,60 @@ SELECT id, state FROM job_runs WHERE job_id = @job_id AND sha = @sha AND state I
 ORDER BY number DESC LIMIT 1
 FOR UPDATE;
 
+-- LiveRunAt finds a job's newest run at a commit that is queued or running.
+-- name: LiveRunAt :one
+SELECT id FROM job_runs WHERE job_id = @job_id AND sha = @sha AND state IN ('queued', 'running')
+ORDER BY number DESC LIMIT 1;
+
 -- name: InsertRun :exec
-INSERT INTO job_runs (id, org_id, repo_id, number, job_id, sha, ref, trigger, cause_run_id, definition, state, reason, ended_at)
+INSERT INTO job_runs (id, org_id, repo_id, number, job_id, sha, ref, trigger, cause_run_id, definition, state, reason, ended_at,
+                      attempt, rerun_of, started_by)
 VALUES (@id, @org_id, @repo_id, @number, @job_id, @sha, @ref, @trigger, @cause_run_id, @definition, @state, @reason,
-        CASE WHEN @state::text IN ('succeeded', 'failed', 'cancelled') THEN now() END);
+        CASE WHEN @state::text IN ('succeeded', 'failed', 'cancelled') THEN now() END, @attempt, @rerun_of, @started_by);
+
+-- RunChainHasJob reports whether a job ran in a chain of runs: the run named, the run whose annotation triggered it,
+-- and so on back.
+-- name: RunChainHasJob :one
+WITH RECURSIVE chain (id, job_id, cause_run_id) AS (
+    SELECT s.id, s.job_id, s.cause_run_id FROM job_runs s WHERE s.id = sqlc.arg(cause_run_id)::uuid
+    UNION
+    SELECT r.id, r.job_id, r.cause_run_id FROM job_runs r JOIN chain c ON r.id = c.cause_run_id
+)
+SELECT EXISTS (SELECT 1 FROM chain WHERE chain.job_id = sqlc.arg(job)::uuid)::boolean;
+
+-- LiveBranchesAt lists the names of a repository's live branches whose head is a commit.
+-- name: LiveBranchesAt :many
+SELECT name FROM branches WHERE repo_id = @repo_id AND head = @sha AND deleted_at IS NULL ORDER BY name;
+
+-- HeadPusher finds who pushed a branch to its head: the newest push of the repository that moved the ref there. No row
+-- when none did; a null pusher when they are gone.
+-- name: HeadPusher :one
+SELECT pusher_id FROM pushes
+WHERE repo_id = @repo_id AND ref_updates @> jsonb_build_array(jsonb_build_object('name', @ref::text, 'new', @head::text))
+ORDER BY committed_at DESC
+LIMIT 1;
+
+-- NextAttempt counts on the attempts of the runs that started from a first run: the run named and its re-runs.
+-- name: NextAttempt :one
+SELECT (max(attempt) + 1)::integer FROM job_runs WHERE id = @first OR rerun_of = @first;
+
+-- ScheduledSettings lists the repositories whose default branch's /cobranch.yaml declares a job with a schedule, with
+-- that branch's head and what the file says.
+-- name: ScheduledSettings :many
+SELECT b.repo_id, b.org_id, b.head, f.settings
+FROM branches b JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+WHERE b.name = @branch AND b.deleted_at IS NULL AND jsonb_path_exists(f.settings, '$.jobs[*].on.schedule');
+
+-- InsertScheduleSlot records that a job's schedule fired for a slot, unless a controller recorded it first: no row
+-- then.
+-- name: InsertScheduleSlot :one
+INSERT INTO schedule_slots (repo_id, job, slot, org_id) VALUES (@repo_id, @job, @slot, @org_id)
+ON CONFLICT DO NOTHING
+RETURNING slot;
+
+-- DeleteScheduleSlots deletes the slots before a time, which no controller queues again.
+-- name: DeleteScheduleSlots :execrows
+DELETE FROM schedule_slots WHERE slot < @before;
 
 -- RunsOf lists a page of a repository's runs, newest first, from before a number (0 for the newest), at a commit when
 -- one is named, with their jobs' names and the names of who started them.

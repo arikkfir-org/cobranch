@@ -56,7 +56,10 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		case err != nil:
 			return err
 		case created:
-			return restatusAt(ctx, q, repoID, sha)
+			if err := restatusAt(ctx, q, repoID, sha); err != nil {
+				return err
+			}
+			return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
 		case row.Principal == nil || row.Principal.ID != actor:
 			return &code.TakenError{Name: in.Name, By: row.Principal}
 		case in.Version == code.NoAnnotation, code.Stale(in.Version, row.Version):
@@ -72,7 +75,10 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 		if err := annotationEvent(ctx, q, orgID, actor, "set", repoID, out); err != nil {
 			return err
 		}
-		return restatusAt(ctx, q, repoID, sha)
+		if err := restatusAt(ctx, q, repoID, sha); err != nil || row.Status == in.Status {
+			return err
+		}
+		return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
 	})
 	return out, err
 }

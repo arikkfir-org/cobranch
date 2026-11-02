@@ -70,10 +70,11 @@ const deferRun = `-- name: DeferRun :one
 UPDATE job_runs r SET lease_until = $1::timestamptz, reason = $2
 FROM jobs j
 WHERE r.id = $3 AND r.state = 'queued' AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
 `
 
 type DeferRunRow struct {
+	ID     uuid.UUID
 	OrgID  uuid.UUID
 	RepoID uuid.UUID
 	JobID  uuid.UUID
@@ -87,6 +88,7 @@ func (q *Queries) DeferRun(ctx context.Context, until time.Time, reason string, 
 	row := q.db.QueryRow(ctx, deferRun, until, reason, iD)
 	var i DeferRunRow
 	err := row.Scan(
+		&i.ID,
 		&i.OrgID,
 		&i.RepoID,
 		&i.JobID,
@@ -125,10 +127,11 @@ const finishRun = `-- name: FinishRun :one
 UPDATE job_runs r SET state = $1::text, reason = $2, ended_at = now(), lease_until = NULL
 FROM jobs j
 WHERE r.id = $3 AND r.state IN ('queued', 'running') AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
 `
 
 type FinishRunRow struct {
+	ID     uuid.UUID
 	OrgID  uuid.UUID
 	RepoID uuid.UUID
 	JobID  uuid.UUID
@@ -142,6 +145,7 @@ func (q *Queries) FinishRun(ctx context.Context, state string, reason string, iD
 	row := q.db.QueryRow(ctx, finishRun, state, reason, iD)
 	var i FinishRunRow
 	err := row.Scan(
+		&i.ID,
 		&i.OrgID,
 		&i.RepoID,
 		&i.JobID,
@@ -179,10 +183,11 @@ const markRunRunning = `-- name: MarkRunRunning :one
 UPDATE job_runs r SET state = 'running', reason = '', started_at = now(), lease_until = NULL
 FROM jobs j
 WHERE r.id = $1 AND r.state = 'queued' AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job
 `
 
 type MarkRunRunningRow struct {
+	ID     uuid.UUID
 	OrgID  uuid.UUID
 	RepoID uuid.UUID
 	JobID  uuid.UUID
@@ -196,6 +201,7 @@ func (q *Queries) MarkRunRunning(ctx context.Context, id uuid.UUID) (MarkRunRunn
 	row := q.db.QueryRow(ctx, markRunRunning, id)
 	var i MarkRunRunningRow
 	err := row.Scan(
+		&i.ID,
 		&i.OrgID,
 		&i.RepoID,
 		&i.JobID,

@@ -7,6 +7,7 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -51,6 +52,19 @@ func (q *Queries) BranchSettings(ctx context.Context, repoID uuid.UUID, name str
 	return i, err
 }
 
+const deleteScheduleSlots = `-- name: DeleteScheduleSlots :execrows
+DELETE FROM schedule_slots WHERE slot < $1
+`
+
+// DeleteScheduleSlots deletes the slots before a time, which no controller queues again.
+func (q *Queries) DeleteScheduleSlots(ctx context.Context, before time.Time) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteScheduleSlots, before)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const endRun = `-- name: EndRun :exec
 UPDATE job_runs SET state = $1::text, reason = $2, ended_at = now(), lease_until = NULL WHERE id = $3
 `
@@ -59,6 +73,22 @@ UPDATE job_runs SET state = $1::text, reason = $2, ended_at = now(), lease_until
 func (q *Queries) EndRun(ctx context.Context, state string, reason string, iD uuid.UUID) error {
 	_, err := q.db.Exec(ctx, endRun, state, reason, iD)
 	return err
+}
+
+const headPusher = `-- name: HeadPusher :one
+SELECT pusher_id FROM pushes
+WHERE repo_id = $1 AND ref_updates @> jsonb_build_array(jsonb_build_object('name', $2::text, 'new', $3::text))
+ORDER BY committed_at DESC
+LIMIT 1
+`
+
+// HeadPusher finds who pushed a branch to its head: the newest push of the repository that moved the ref there. No row
+// when none did; a null pusher when they are gone.
+func (q *Queries) HeadPusher(ctx context.Context, repoID uuid.UUID, ref string, head string) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, headPusher, repoID, ref, head)
+	var pusher_id *uuid.UUID
+	err := row.Scan(&pusher_id)
+	return pusher_id, err
 }
 
 const insertJob = `-- name: InsertJob :exec
@@ -87,9 +117,10 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) error {
 }
 
 const insertRun = `-- name: InsertRun :exec
-INSERT INTO job_runs (id, org_id, repo_id, number, job_id, sha, ref, trigger, cause_run_id, definition, state, reason, ended_at)
+INSERT INTO job_runs (id, org_id, repo_id, number, job_id, sha, ref, trigger, cause_run_id, definition, state, reason, ended_at,
+                      attempt, rerun_of, started_by)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-        CASE WHEN $11::text IN ('succeeded', 'failed', 'cancelled') THEN now() END)
+        CASE WHEN $11::text IN ('succeeded', 'failed', 'cancelled') THEN now() END, $13, $14, $15)
 `
 
 type InsertRunParams struct {
@@ -105,6 +136,9 @@ type InsertRunParams struct {
 	Definition []byte
 	State      string
 	Reason     string
+	Attempt    int32
+	RerunOf    *uuid.UUID
+	StartedBy  *uuid.UUID
 }
 
 func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
@@ -121,8 +155,38 @@ func (q *Queries) InsertRun(ctx context.Context, arg InsertRunParams) error {
 		arg.Definition,
 		arg.State,
 		arg.Reason,
+		arg.Attempt,
+		arg.RerunOf,
+		arg.StartedBy,
 	)
 	return err
+}
+
+const insertScheduleSlot = `-- name: InsertScheduleSlot :one
+INSERT INTO schedule_slots (repo_id, job, slot, org_id) VALUES ($1, $2, $3, $4)
+ON CONFLICT DO NOTHING
+RETURNING slot
+`
+
+type InsertScheduleSlotParams struct {
+	RepoID uuid.UUID
+	Job    string
+	Slot   time.Time
+	OrgID  uuid.UUID
+}
+
+// InsertScheduleSlot records that a job's schedule fired for a slot, unless a controller recorded it first: no row
+// then.
+func (q *Queries) InsertScheduleSlot(ctx context.Context, arg InsertScheduleSlotParams) (time.Time, error) {
+	row := q.db.QueryRow(ctx, insertScheduleSlot,
+		arg.RepoID,
+		arg.Job,
+		arg.Slot,
+		arg.OrgID,
+	)
+	var slot time.Time
+	err := row.Scan(&slot)
+	return slot, err
 }
 
 const jobPrincipal = `-- name: JobPrincipal :one
@@ -136,6 +200,44 @@ func (q *Queries) JobPrincipal(ctx context.Context, repoID uuid.UUID, name strin
 	return principal_id, err
 }
 
+const liveBranchesAt = `-- name: LiveBranchesAt :many
+SELECT name FROM branches WHERE repo_id = $1 AND head = $2 AND deleted_at IS NULL ORDER BY name
+`
+
+// LiveBranchesAt lists the names of a repository's live branches whose head is a commit.
+func (q *Queries) LiveBranchesAt(ctx context.Context, repoID uuid.UUID, sha string) ([]string, error) {
+	rows, err := q.db.Query(ctx, liveBranchesAt, repoID, sha)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const liveRunAt = `-- name: LiveRunAt :one
+SELECT id FROM job_runs WHERE job_id = $1 AND sha = $2 AND state IN ('queued', 'running')
+ORDER BY number DESC LIMIT 1
+`
+
+// LiveRunAt finds a job's newest run at a commit that is queued or running.
+func (q *Queries) LiveRunAt(ctx context.Context, jobID uuid.UUID, sha string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, liveRunAt, jobID, sha)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockRunQueue = `-- name: LockRunQueue :exec
 INSERT INTO run_numbers (repo_id, last) VALUES ($1, 0)
 ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last
@@ -146,6 +248,18 @@ ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last
 func (q *Queries) LockRunQueue(ctx context.Context, repoID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockRunQueue, repoID)
 	return err
+}
+
+const nextAttempt = `-- name: NextAttempt :one
+SELECT (max(attempt) + 1)::integer FROM job_runs WHERE id = $1 OR rerun_of = $1
+`
+
+// NextAttempt counts on the attempts of the runs that started from a first run: the run named and its re-runs.
+func (q *Queries) NextAttempt(ctx context.Context, first uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, nextAttempt, first)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const nextRunNumber = `-- name: NextRunNumber :one
@@ -204,7 +318,7 @@ func (q *Queries) RepositoryRolePermissions(ctx context.Context, name string) ([
 }
 
 const runByNumber = `-- name: RunByNumber :one
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, j.name AS job, p.display_name AS started_by_name
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
 WHERE r.repo_id = $1 AND r.number = $2
 `
@@ -237,14 +351,34 @@ func (q *Queries) RunByNumber(ctx context.Context, repoID uuid.UUID, number int6
 		&i.JobRun.StartedAt,
 		&i.JobRun.EndedAt,
 		&i.JobRun.Version,
+		&i.JobRun.Attempt,
+		&i.JobRun.RerunOf,
 		&i.Job,
 		&i.StartedByName,
 	)
 	return i, err
 }
 
+const runChainHasJob = `-- name: RunChainHasJob :one
+WITH RECURSIVE chain (id, job_id, cause_run_id) AS (
+    SELECT s.id, s.job_id, s.cause_run_id FROM job_runs s WHERE s.id = $2::uuid
+    UNION
+    SELECT r.id, r.job_id, r.cause_run_id FROM job_runs r JOIN chain c ON r.id = c.cause_run_id
+)
+SELECT EXISTS (SELECT 1 FROM chain WHERE chain.job_id = $1::uuid)::boolean
+`
+
+// RunChainHasJob reports whether a job ran in a chain of runs: the run named, the run whose annotation triggered it,
+// and so on back.
+func (q *Queries) RunChainHasJob(ctx context.Context, job uuid.UUID, causeRunID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, runChainHasJob, job, causeRunID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const runForUpdate = `-- name: RunForUpdate :one
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, j.name AS job
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id
 WHERE r.repo_id = $1 AND r.number = $2
 FOR UPDATE OF r
@@ -278,6 +412,8 @@ func (q *Queries) RunForUpdate(ctx context.Context, repoID uuid.UUID, number int
 		&i.JobRun.StartedAt,
 		&i.JobRun.EndedAt,
 		&i.JobRun.Version,
+		&i.JobRun.Attempt,
+		&i.JobRun.RerunOf,
 		&i.Job,
 	)
 	return i, err
@@ -295,7 +431,7 @@ func (q *Queries) RunNumber(ctx context.Context, id uuid.UUID) (int64, error) {
 }
 
 const runsOf = `-- name: RunsOf :many
-SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, j.name AS job, p.display_name AS started_by_name
+SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
 WHERE r.repo_id = $1 AND ($2::bigint = 0 OR r.number < $2::bigint)
   AND ($3::text = '' OR r.sha = $3::text)
@@ -351,8 +487,50 @@ func (q *Queries) RunsOf(ctx context.Context, arg RunsOfParams) ([]RunsOfRow, er
 			&i.JobRun.StartedAt,
 			&i.JobRun.EndedAt,
 			&i.JobRun.Version,
+			&i.JobRun.Attempt,
+			&i.JobRun.RerunOf,
 			&i.Job,
 			&i.StartedByName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const scheduledSettings = `-- name: ScheduledSettings :many
+SELECT b.repo_id, b.org_id, b.head, f.settings
+FROM branches b JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+WHERE b.name = $1 AND b.deleted_at IS NULL AND jsonb_path_exists(f.settings, '$.jobs[*].on.schedule')
+`
+
+type ScheduledSettingsRow struct {
+	RepoID   uuid.UUID
+	OrgID    uuid.UUID
+	Head     string
+	Settings []byte
+}
+
+// ScheduledSettings lists the repositories whose default branch's /cobranch.yaml declares a job with a schedule, with
+// that branch's head and what the file says.
+func (q *Queries) ScheduledSettings(ctx context.Context, branch string) ([]ScheduledSettingsRow, error) {
+	rows, err := q.db.Query(ctx, scheduledSettings, branch)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ScheduledSettingsRow
+	for rows.Next() {
+		var i ScheduledSettingsRow
+		if err := rows.Scan(
+			&i.RepoID,
+			&i.OrgID,
+			&i.Head,
+			&i.Settings,
 		); err != nil {
 			return nil, err
 		}
