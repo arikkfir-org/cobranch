@@ -2819,15 +2819,16 @@
 
     // secretsSections lists the secrets at path, an organization's or a repository's, who receives each, and the forms
     // that add, change, delete and grant them. The values are never shown: the API keeps them sealed for the jobs they
-    // are granted to. A viewer who manages the organization's grants grants them to its members, its API keys and the
-    // jobs of repos.
+    // are granted to. A viewer who manages the organization's grants grants them to its members, its API keys, its agents
+    // and the jobs of repos.
     async function secretsSections(org, path, grants, fail, repos) {
       const item = (s) => "/orgs/" + org.slug + "/secrets/" + s.id;
       const list = (await api("GET", path)).secrets;
-      const [access, members, keys, jobs] = await Promise.all([
+      const [access, members, keys, agents, jobs] = await Promise.all([
         Promise.all(list.map((s) => api("GET", item(s) + "/access").then((d) => d.access))),
         grants ? api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members) : [],
         grants ? api("GET", "/orgs/" + org.slug + "/api-keys").then((d) => d.apiKeys) : [],
+        grants ? api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents) : [],
         grants ? Promise.all(repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/jobs").then((d) => d.jobs.map((j) => ({ ...j, repo: r }))))).then((all) => all.flat()) : [],
       ]);
       const ifMatch = (s) => ({ "If-Match": '"' + s.version + '"' });
@@ -2868,7 +2869,8 @@
         const principal = h("select", { name: "principalId", required: true },
           jobs.length ? h("optgroup", { label: "Jobs" }, jobs.map((j) => h("option", { value: j.principalId }, j.repo.slug + " / " + j.displayName))) : null,
           h("optgroup", { label: "Members" }, members.map((m) => h("option", { value: m.userId }, m.displayName))),
-          keys.length ? h("optgroup", { label: "API keys" }, keys.map((k) => h("option", { value: k.id }, k.name))) : null);
+          keys.length ? h("optgroup", { label: "API keys" }, keys.map((k) => h("option", { value: k.id }, k.name))) : null,
+          agents.length ? h("optgroup", { label: "Agents" }, agents.map((a) => h("option", { value: a.id }, a.name))) : null);
         sections.push(h("section", { class: "panel" }, h("h3", {}, "Grant a secret"), h("p", {}, "Grants Secret reader on the secret alone. Only a secret you may read yourself."),
           h("form", { class: "inline with-role", onsubmit: (e) => {
             e.preventDefault();

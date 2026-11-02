@@ -3259,7 +3259,7 @@ type ServerInterface interface {
 	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
 	// (GET /orgs/{org}/secrets/{id}/access)
 	ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id)
-	// GrantSecret Lets one of the organization's members, API keys or jobs receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
+	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
 	// (POST /orgs/{org}/secrets/{id}/access)
 	GrantSecret(w http.ResponseWriter, r *http.Request, org Org, id Id)
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
@@ -22133,7 +22133,7 @@ type StrictServerInterface interface {
 	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
 	// (GET /orgs/{org}/secrets/{id}/access)
 	ListSecretAccess(ctx context.Context, request ListSecretAccessRequestObject) (ListSecretAccessResponseObject, error)
-	// GrantSecret Lets one of the organization's members, API keys or jobs receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
+	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
 	// (POST /orgs/{org}/secrets/{id}/access)
 	GrantSecret(ctx context.Context, request GrantSecretRequestObject) (GrantSecretResponseObject, error)
 	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
