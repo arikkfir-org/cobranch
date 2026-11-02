@@ -37,7 +37,7 @@ type Person struct {
 
 // Commit is a commit a push brought, as the push recorded it: its tree, its parents (the first of which its branch's
 // history follows), its message and signature as written, its author and committer, and the push that first brought
-// it; with the annotations principals set on it, by name.
+// it; with the annotations principals set on it, by name, and the reviews submitted of it, in the order they were.
 type Commit struct {
 	SHA         string
 	Tree        string
@@ -48,6 +48,7 @@ type Commit struct {
 	Signature   string
 	FirstPush   uuid.UUID
 	Annotations []Annotation
+	Reviews     []Review
 }
 
 // Push is a push that brought commits: who pushed, over which transport, and when Cobranch recorded it.

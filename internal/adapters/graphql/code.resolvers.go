@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
+	"github.com/google/uuid"
 )
 
 // SetAnnotation is the resolver for the setAnnotation field.
@@ -57,6 +58,19 @@ func (r *mutationResolver) MergeBranch(ctx context.Context, repositoryID string,
 		return nil, mergeFail(ctx, err)
 	}
 	return &MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}, nil
+}
+
+// SubmitReview is the resolver for the submitReview field.
+func (r *mutationResolver) SubmitReview(ctx context.Context, repositoryID string, sha string, input ReviewInput) (*Review, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	submitted, err := r.Code.SubmitReview(ctx, v, repoID, sha, code.ReviewInput{State: reviewStateOf(input.State), Body: input.Body})
+	if err != nil {
+		return nil, fail(ctx, err, "commit", "submitting the review")
+	}
+	return review(submitted), nil
 }
 
 // Branches is the resolver for the branches field.
@@ -127,6 +141,26 @@ func (r *repositoryResolver) Commit(ctx context.Context, obj *Repository, sha st
 	out := commit(c)
 	out.Push = &Push{ID: p.ID.String(), Pusher: commitPrincipal(p.Pusher), Transport: string(p.Transport), At: p.At.UTC()}
 	return out, nil
+}
+
+// Review is the resolver for the review field.
+func (r *repositoryResolver) Review(ctx context.Context, obj *Repository, id string) (*Review, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	reviewID, err := uuid.Parse(id)
+	if err != nil {
+		return nil, nil
+	}
+	found, err := r.Code.Review(ctx, v, repoID, reviewID)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fail(ctx, err, "review", "reading the review")
+	}
+	return review(found), nil
 }
 
 // Tags is the resolver for the tags field.

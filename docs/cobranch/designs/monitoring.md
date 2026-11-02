@@ -67,7 +67,7 @@ Every metric carries the workload's resource, as traces do: `service.name` the w
 | `graphql.operation.type` | `query` or `mutation`; a subscription's stream isn't timed |
 | `cobranch.graphql.field` | A root field of `Query` or `Mutation`, as the schema names it |
 | `cobranch.git.pack_cache.result` | `hit`, the cache held the pack; `miss`, it downloaded the pack or waited on another request's download of it |
-| `cobranch.git.operation` | `tree`, `blob` and `raw`, the internal call's reads, and `merge`, its merges; `info-refs`, the refs an HTTPS client asks for first; `upload-pack`, a clone's or a fetch's pack, and `receive-pack`, a push, over HTTPS or SSH |
+| `cobranch.git.operation` | `tree`, `blob`, `raw` and `log`, the internal call's reads, and `merge`, its merges; `info-refs`, the refs an HTTPS client asks for first; `upload-pack`, a clone's or a fetch's pack, and `receive-pack`, a push, over HTTPS or SSH |
 
 ## A page view
 

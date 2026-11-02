@@ -195,6 +195,17 @@ type Repository struct {
 	CreatedAt    time.Time
 }
 
+type Review struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	RepoID      uuid.UUID
+	Sha         string
+	ReviewerID  *uuid.UUID
+	State       string
+	Body        string
+	SubmittedAt time.Time
+}
+
 type Role struct {
 	ID          uuid.UUID
 	Scope       string

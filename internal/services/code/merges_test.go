@@ -68,3 +68,32 @@ func TestViolations(t *testing.T) {
 		})
 	}
 }
+
+func TestViolationsOfReviews(t *testing.T) {
+	head := "9f3c2e1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	feature := git.Head{Branch: "feature/login", SHA: head}
+	at := func(status code.BranchStatus, checks ...code.Check) map[string]code.Incoming {
+		return map[string]code.Incoming{"feature/login": {Head: head, Base: "main", Status: status, Checks: checks}}
+	}
+	tests := []struct {
+		name    string
+		brought *git.Brought
+		live    map[string]code.Incoming
+		want    []string
+	}{
+		{name: "approvals missing", brought: &git.Brought{Heads: []git.Head{feature}},
+			live: at(code.StatusBlocked, code.Check{Kind: code.CheckApprovals, Count: 1, Required: 2}),
+			want: []string{"main requires feature/login to be Ready: 1 approval of 2 on 9f3c2e1"}},
+		{name: "changes requested", brought: &git.Brought{Heads: []git.Head{feature}},
+			live: at(code.StatusBlocked, code.Check{Kind: code.CheckApprovals, Count: 2, Required: 2, Met: true},
+				code.Check{Kind: code.CheckChangesRequested, Name: "Alice"}),
+			want: []string{"main requires feature/login to be Ready: Alice requested changes on 9f3c2e1"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := code.Violations("main", false, tt.brought, tt.live); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Violations() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

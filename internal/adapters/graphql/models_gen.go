@@ -98,7 +98,7 @@ type Branch struct {
 	Base *string `json:"base,omitempty"`
 	// Where it stands as a request to merge into its base; null for main.
 	Status *BranchStatus `json:"status,omitempty"`
-	// How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main.
+	// How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main.
 	Checks []*BranchCheck `json:"checks"`
 	// How many commits it has that its base lacks; null for main, and until a push works it out.
 	Ahead *int `json:"ahead,omitempty"`
@@ -113,13 +113,15 @@ type Branch struct {
 // One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
 	Kind BranchCheckKind `json:"kind"`
-	// The required annotation's name; null unless kind is ANNOTATION.
+	// The required annotation's name, for ANNOTATION; the reviewer's display name, for CHANGES_REQUESTED; null otherwise.
 	Name *string `json:"name,omitempty"`
 	// The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION.
 	Status *AnnotationStatus `json:"status,omitempty"`
-	// For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION.
+	// For LINEAR_HISTORY, the merges among its commits to merge; for APPROVALS, the approvals that count; for UP_TO_DATE, the commits of its base it lacks; null otherwise.
 	Count *int `json:"count,omitempty"`
-	Met   bool `json:"met"`
+	// For APPROVALS, how many the base requires; null otherwise.
+	Required *int `json:"required,omitempty"`
+	Met      bool `json:"met"`
 }
 
 // A merge of a branch into its base that a push made.
@@ -145,6 +147,8 @@ type Commit struct {
 	Signature string `json:"signature"`
 	// The annotations principals set on it, by name.
 	Annotations []*Annotation `json:"annotations"`
+	// The reviews submitted of it, in the order they were; each reviewer's latest is the one that counts.
+	Reviews []*Review `json:"reviews"`
 	// The push that first brought it; Repository.commit alone answers it, and null elsewhere.
 	Push *Push `json:"push,omitempty"`
 }
@@ -353,6 +357,8 @@ type MergeRequirements struct {
 	Annotations []string `json:"annotations"`
 	// Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
+	// The reviews a merge needs of the incoming head; null when it requires none.
+	Reviews *ReviewRequirements `json:"reviews,omitempty"`
 }
 
 // A merge Cobranch recorded as a push of its base.
@@ -499,6 +505,8 @@ type Repository struct {
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`
+	// One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read.
+	Review *Review `json:"review,omitempty"`
 	// The repository's tags, by name, each with the object it names; takes repo.read.
 	Tags []*Tag `json:"tags"`
 	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
@@ -524,6 +532,33 @@ type RepositoryInput struct {
 	// The slug when null or empty.
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
+type Review struct {
+	ID string `json:"id"`
+	// The commit reviewed.
+	Sha   string      `json:"sha"`
+	State ReviewState `json:"state"`
+	Body  string      `json:"body"`
+	// Who submitted it; null once they are gone, when it counts no more.
+	Reviewer *CommitPrincipal `json:"reviewer,omitempty"`
+	// Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.
+	Person      bool      `json:"person"`
+	SubmittedAt time.Time `json:"submittedAt"`
+}
+
+// The review a principal submits.
+type ReviewInput struct {
+	State ReviewState `json:"state"`
+	// What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
+	Body string `json:"body"`
+}
+
+// The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+type ReviewRequirements struct {
+	// 0 to 10.
+	Approvals int `json:"approvals"`
 }
 
 // A role granted at an organization: built in, or the organization's own.
@@ -712,6 +747,10 @@ const (
 	BranchCheckKindAnnotation BranchCheckKind = "ANNOTATION"
 	// No merge among its commits to merge.
 	BranchCheckKindLinearHistory BranchCheckKind = "LINEAR_HISTORY"
+	// People's approvals of its head, besides its author's and its pusher's.
+	BranchCheckKindApprovals BranchCheckKind = "APPROVALS"
+	// A reviewer whose latest review of its head requests changes; never met.
+	BranchCheckKindChangesRequested BranchCheckKind = "CHANGES_REQUESTED"
 	// Its base's tip in it.
 	BranchCheckKindUpToDate BranchCheckKind = "UP_TO_DATE"
 )
@@ -719,12 +758,14 @@ const (
 var AllBranchCheckKind = []BranchCheckKind{
 	BranchCheckKindAnnotation,
 	BranchCheckKindLinearHistory,
+	BranchCheckKindApprovals,
+	BranchCheckKindChangesRequested,
 	BranchCheckKindUpToDate,
 }
 
 func (e BranchCheckKind) IsValid() bool {
 	switch e {
-	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindUpToDate:
+	case BranchCheckKindAnnotation, BranchCheckKindLinearHistory, BranchCheckKindApprovals, BranchCheckKindChangesRequested, BranchCheckKindUpToDate:
 		return true
 	}
 	return false
@@ -1193,6 +1234,67 @@ func (e *RepositoryVisibility) UnmarshalJSON(b []byte) error {
 }
 
 func (e RepositoryVisibility) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// A review's verdict on a commit.
+type ReviewState string
+
+const (
+	// Approves it: a person's approval counts towards a branch's required approvals.
+	ReviewStateApproved ReviewState = "APPROVED"
+	// Asks for changes, which holds back a branch whose base requires reviews until its reviewer submits another.
+	ReviewStateChangesRequested ReviewState = "CHANGES_REQUESTED"
+	// Comments without a verdict, and takes back its reviewer's earlier one.
+	ReviewStateNeutral ReviewState = "NEUTRAL"
+)
+
+var AllReviewState = []ReviewState{
+	ReviewStateApproved,
+	ReviewStateChangesRequested,
+	ReviewStateNeutral,
+}
+
+func (e ReviewState) IsValid() bool {
+	switch e {
+	case ReviewStateApproved, ReviewStateChangesRequested, ReviewStateNeutral:
+		return true
+	}
+	return false
+}
+
+func (e ReviewState) String() string {
+	return string(e)
+}
+
+func (e *ReviewState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ReviewState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ReviewState", str)
+	}
+	return nil
+}
+
+func (e ReviewState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ReviewState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ReviewState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

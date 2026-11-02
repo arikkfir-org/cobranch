@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
@@ -270,4 +272,67 @@ func raceRepo(t *testing.T, tt raceCase) (*stack, string) {
 	mustGit(t, dir, "checkout", "-q", tt.outer)
 	commit(t, dir, "outer.txt", "from this clone\n")
 	return s, dir
+}
+
+func TestReviewsHoldBranches(t *testing.T) {
+	t.Parallel()
+	s := newStack(t)
+	dir := clone(t, s.websiteURL(s.base, olivia))
+	mustGit(t, dir, "checkout", "-q", "-b", "main")
+	commit(t, dir, "README.md", "# Website\n")
+	commit(t, dir, "cobranch.yaml", "branches:\n  main:\n    requires:\n      reviews:\n        approvals: 1\n")
+	mustGit(t, dir, "push", "-q", "origin", "main")
+	mustGit(t, dir, "checkout", "-q", "-b", "feature")
+	head := commit(t, dir, "feature.txt", "a feature\n")
+	mustGit(t, dir, "push", "-q", "origin", "feature")
+	s.process()
+	nia := uuid.MustParse("00000000-0000-7000-8000-00000000d004")
+	upToDate := map[string]any{"kind": "up_to_date", "met": true}
+	approvals := func(n float64) map[string]any {
+		c := map[string]any{"kind": "approvals", "required": 1.0, "met": n >= 1}
+		if n > 0 {
+			c["count"] = n
+		}
+		return c
+	}
+	steps := []struct {
+		name    string
+		by      uuid.UUID
+		state   code.ReviewState
+		want    statusRow
+		refusal string
+	}{
+		{name: "no review yet", want: statusRow{Status: "blocked", Ahead: 1, Checks: []map[string]any{approvals(0), upToDate}},
+			refusal: "main requires feature to be Ready: 0 approvals of 1 on " + head[:7]},
+		{name: "its pusher approves, which doesn't count", by: olivia, state: code.ReviewApproved,
+			want: statusRow{Status: "blocked", Ahead: 1, Checks: []map[string]any{approvals(0), upToDate}}},
+		{name: "another person approves", by: gwen, state: code.ReviewApproved,
+			want: statusRow{Status: "ready", Ahead: 1, Checks: []map[string]any{approvals(1), upToDate}}},
+		{name: "a third requests changes", by: nia, state: code.ReviewChangesRequested,
+			want: statusRow{Status: "blocked", Ahead: 1, Checks: []map[string]any{approvals(1),
+				{"kind": "changes_requested", "name": "Nia Newcomer", "met": false}, upToDate}},
+			refusal: "main requires feature to be Ready: Nia Newcomer requested changes on " + head[:7]},
+		{name: "and then approves", by: nia, state: code.ReviewApproved,
+			want: statusRow{Status: "ready", Ahead: 1, Checks: []map[string]any{approvals(2), upToDate}}},
+	}
+	for _, step := range steps {
+		if step.by != uuid.Nil {
+			if _, err := postgres.NewCodeStore(s.pool).SubmitReview(context.Background(), step.by, website, head,
+				code.ReviewInput{State: step.state}); err != nil {
+				t.Fatalf("%s: %v", step.name, err)
+			}
+		}
+		if got := branchStatus(t, s, "feature"); !reflect.DeepEqual(got, step.want) {
+			t.Errorf("%s: feature = %+v, want %+v", step.name, got, step.want)
+		}
+		if step.refusal != "" {
+			out, err := gitCmd(t, dir, "push", "origin", "feature:main")
+			if err == nil || !strings.Contains(out, "remote: "+step.refusal) {
+				t.Errorf("%s: pushing feature into main = %v:\n%s\nwant it refused with %q", step.name, err, out, step.refusal)
+			}
+		}
+	}
+	if out, err := gitCmd(t, dir, "push", "origin", "feature:main"); err != nil {
+		t.Errorf("pushing feature into main once Ready: %v\n%s", err, out)
+	}
 }

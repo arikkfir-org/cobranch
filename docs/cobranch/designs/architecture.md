@@ -472,7 +472,8 @@ never names, so a rename moves nothing.
 ## Observability
 
 **Proposed** (cobranch#1 review, 2026-10-28): every workload logs to stdout and traces each request with OpenTelemetry,
-and the operator decides where both go. Cobranch calls no monitoring service of its own.
+and the operator decides where both go. Metrics, added with [ENG-235](https://linear.app/arikkfir/issue/ENG-235)
+([monitoring](monitoring.md)), go the same way. Cobranch calls no monitoring service of its own.
 
 **One trace follows a change from the click to the job it starts**
 
@@ -490,12 +491,13 @@ The probes are not traced. Webhooks carry `traceparent` too, so a receiver that 
   otherwise the trace ID, so the ID in an error report finds both the logs and the trace. Each span records it as
   `http.request.id`.
 
-**The operator decides where logs and traces go**
+**The operator decides where logs, traces and metrics go**
 
-![The operator decides where logs and traces go](architecture/telemetry.svg)
+![The operator decides where logs, traces and metrics go](architecture/telemetry.svg)
 
-With no OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT`, no span leaves the pod; trace IDs still name every request in
-the logs.
+With no OTLP endpoint set, neither in `OTEL_EXPORTER_OTLP_ENDPOINT` nor in the traces’ or metrics’ own, nothing leaves
+the pod over OTLP, and metrics leave it only when `OTEL_METRICS_EXPORTER=prometheus` serves them at `/metrics`; trace
+IDs still name every request in the logs.
 
 OpenTelemetry's own variables, unchanged, say where traces go, and the chart sets them from its values:
 `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS` for a vendor's key, `OTEL_TRACES_SAMPLER` and its argument,
@@ -508,7 +510,11 @@ and `OTEL_RESOURCE_ATTRIBUTES`. Cobranch exports over OTLP with HTTP and protobu
 | Sentry | The project's OTLP endpoint, its key in `OTEL_EXPORTER_OTLP_HEADERS` from a Secret |
 | Jaeger, Grafana Tempo, Honeycomb, Datadog | Their OTLP endpoint, directly or through a Collector |
 
-Metrics follow the same way, as OpenTelemetry metrics over OTLP, with the first workload that needs one.
+Metrics are OpenTelemetry's too ([monitoring](monitoring.md)): how long each Console page takes to show, how long each
+route and GraphQL field takes to answer, what each throwaway repository costs and how often the pack cache hits.
+`OTEL_METRICS_EXPORTER` picks how they leave: over OTLP, to `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` or the traces'
+endpoint, the default once either is set; or at `/metrics` for the operator's Prometheus scraper, on a port the chart
+names `metrics` on every server and the push worker. With no exporter and no endpoint, they stay in the pods.
 
 ## Stack and layout
 
@@ -533,7 +539,7 @@ code is generated from them.
 | Models | One interface in the agent harness, an adapter per provider | Each agent runs on its own provider and model |
 | Sign-in | `go-oidc` with `golang.org/x/oauth2` | Standard OpenID Connect |
 | Configuration | Environment variables, read with `envconfig` | As Octomaton does |
-| Telemetry | `log/slog` on stdout, JSON in a cluster; OpenTelemetry traces over OTLP, W3C Trace Context ([observability](#observability)) | No cloud's monitoring built in |
+| Telemetry | `log/slog` on stdout, JSON in a cluster; OpenTelemetry traces over OTLP, W3C Trace Context; OpenTelemetry metrics over OTLP or at `/metrics` ([observability](#observability), [monitoring](monitoring.md)) | No cloud's monitoring built in |
 | Web apps | TypeScript, React and Vite, static files that Caddy serves | No Node.js at run time |
 | Web data | GraphQL Code Generator types, through urql | Typed queries; subscriptions for live updates |
 | Web components | Headless primitives styled with the [design system's](design-system.md) CSS variables | Settled with [ENG-194](https://linear.app/arikkfir/issue/ENG-194) |
@@ -583,7 +589,7 @@ design, and settled the open questions.
 | Cron triggers come from the default branch's `/cobranch.yaml` only | A branch cannot schedule work | Agreed |
 | Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/cobranch.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
 | An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |
-| Logs on stdout, JSON in a cluster; one OpenTelemetry trace across every workload, exported over OTLP wherever the operator says; the request ID is the trace ID unless the caller sent one | Any log stack and any trace backend, with no vendor's code in Cobranch | Proposed |
+| Logs on stdout, JSON in a cluster; one OpenTelemetry trace across every workload, exported over OTLP wherever the operator says; the request ID is the trace ID unless the caller sent one; metrics over OTLP or scraped at `/metrics` | Any log stack, trace backend and metrics backend, with no vendor's code in Cobranch | Proposed |
 | The Console shows the settings in effect and every pending change | A settings change is a branch like any other | Agreed |
 | Path rules: merge requirements for changes to paths such as `/cobranch.yaml`, which can also refuse pushes there | Settings changes need stricter approval | Agreed |
 | UUIDv7 keys, shown with a type prefix | Sortable keys; `node(id:)` knows the type | Agreed |

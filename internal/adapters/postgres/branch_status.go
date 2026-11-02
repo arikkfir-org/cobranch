@@ -28,11 +28,12 @@ type statusBranch struct {
 
 // checkJSON is how a branch's row keeps a check behind its status.
 type checkJSON struct {
-	Kind   code.CheckKind        `json:"kind"`
-	Name   string                `json:"name,omitempty"`
-	Status code.AnnotationStatus `json:"status,omitempty"`
-	Count  int                   `json:"count,omitempty"`
-	Met    bool                  `json:"met"`
+	Kind     code.CheckKind        `json:"kind"`
+	Name     string                `json:"name,omitempty"`
+	Status   code.AnnotationStatus `json:"status,omitempty"`
+	Count    int                   `json:"count,omitempty"`
+	Required int                   `json:"required,omitempty"`
+	Met      bool                  `json:"met"`
 }
 
 // recordFacts stores what the push's objects say of the repository's branches once it applies, in the push's
@@ -79,8 +80,12 @@ func replaceRequirements(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 	}
 	rows := make([]queries.InsertMergeRequirementsParams, 0, len(push.Requirements))
 	for _, r := range push.Requirements {
-		rows = append(rows, queries.InsertMergeRequirementsParams{RepoID: push.RepoID, Branch: r.Branch, OrgID: orgID,
-			Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory})
+		row := queries.InsertMergeRequirementsParams{RepoID: push.RepoID, Branch: r.Branch, OrgID: orgID,
+			Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
+		if r.Reviews != nil {
+			row.Approvals = int32Of(&r.Reviews.Approvals)
+		}
+		rows = append(rows, row)
 	}
 	var failed error
 	q.InsertMergeRequirements(ctx, rows).Exec(func(i int, err error) {
@@ -140,33 +145,38 @@ func branchOf(r queries.BranchesWaitingForRow) statusBranch {
 	return b
 }
 
-// restatus works out each branch's status from its facts, its base's merge requirements and the annotations on its
-// head, and stores it with the checks behind it, ending its wait for the push worker.
+// restatus works out each branch's status from its facts, its base's merge requirements and the annotations and
+// reviews on its head, and stores it with the checks behind it, ending its wait for the push worker.
 func restatus(ctx context.Context, q *queries.Queries, repoID uuid.UUID, branches []statusBranch) error {
 	if len(branches) == 0 {
 		return nil
 	}
 	heads := make([]string, 0, len(branches))
+	requirements := map[string]git.Requirements{}
 	for _, b := range branches {
 		if !slices.Contains(heads, b.Head) {
 			heads = append(heads, b.Head)
+		}
+		if _, ok := requirements[b.Base]; !ok {
+			req, err := requirementsOf(ctx, q, repoID, b.Base)
+			if err != nil {
+				return err
+			}
+			requirements[b.Base] = req
 		}
 	}
 	annotations, err := annotationsAt(ctx, q, repoID, heads)
 	if err != nil {
 		return err
 	}
-	requirements := map[string]git.Requirements{}
+	reviews, authors, err := reviewsFor(ctx, q, repoID, heads, requirements)
+	if err != nil {
+		return err
+	}
 	for _, b := range branches {
-		req, ok := requirements[b.Base]
-		if !ok {
-			if req, err = requirementsOf(ctx, q, repoID, b.Base); err != nil {
-				return err
-			}
-			requirements[b.Base] = req
-		}
 		merged := b.MergedHead != nil && *b.MergedHead == b.Head
-		status, checks := code.Evaluate(code.Standing{Requirements: req, Facts: b.Facts, Annotations: annotations[b.Head], Merged: merged})
+		status, checks := code.Evaluate(code.Standing{Requirements: requirements[b.Base], Facts: b.Facts, Annotations: annotations[b.Head],
+			Reviews: reviews[b.Head], Authors: authors[b.Head], Merged: merged})
 		encoded, err := json.Marshal(checksJSON(checks))
 		if err != nil {
 			return fmt.Errorf("encoding the checks: %w", err)
@@ -187,7 +197,29 @@ func requirementsOf(ctx context.Context, q *queries.Queries, repoID uuid.UUID, b
 	if err != nil {
 		return git.Requirements{}, fmt.Errorf("reading the merge requirements of branch %s: %w", branch, err)
 	}
-	return git.Requirements{Branch: branch, Annotations: row.Annotations, LinearHistory: row.LinearHistory}, nil
+	req := git.Requirements{Branch: branch, Annotations: row.Annotations, LinearHistory: row.LinearHistory}
+	if row.Approvals != nil {
+		req.Reviews = &git.ReviewRequirements{Approvals: int(*row.Approvals)}
+	}
+	return req, nil
+}
+
+// reviewsFor lists the reviews on the repository's commits that heads name, and who is behind them, by commit, when
+// any of requirements requires reviews; nothing otherwise.
+func reviewsFor(ctx context.Context, q *queries.Queries, repoID uuid.UUID, heads []string,
+	requirements map[string]git.Requirements) (map[string][]code.Review, map[string][]uuid.UUID, error) {
+	for _, req := range requirements {
+		if req.Reviews == nil {
+			continue
+		}
+		reviews, err := reviewsAt(ctx, q, repoID, heads)
+		if err != nil {
+			return nil, nil, err
+		}
+		authors, err := authorsAt(ctx, q, repoID, heads)
+		return reviews, authors, err
+	}
+	return nil, nil, nil
 }
 
 // annotationsAt lists the annotations on the repository's commits that shas name, by commit.
