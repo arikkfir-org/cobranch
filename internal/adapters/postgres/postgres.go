@@ -3,17 +3,18 @@ package postgres
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"log/slog"
 	"net"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -65,9 +66,9 @@ type Schema struct {
 	provider *goose.Provider
 	// table records the migrations the database has.
 	table string
-	// version is the schema's version this build needs.
-	version int64
-	// current is true once the database's schema reached version; it never goes back.
+	// versions are this build's migrations, in order: the last is the schema's version.
+	versions []int64
+	// current is true once the database had every one of versions; it never goes back.
 	current atomic.Bool
 }
 
@@ -85,6 +86,8 @@ func NewSeeds(pool *pgxpool.Pool, seeds ...*goose.Migration) (*Schema, error) {
 }
 
 // newMigrations returns the migrations of sqlFiles and goMigrations on the database pool connects to, recorded in table.
+// It applies those the database lacks below the highest it has too, since pull requests built side by side merge in
+// any order: a database that has 3 when 2 merges gets 2, where goose would otherwise refuse to migrate.
 func newMigrations(pool *pgxpool.Pool, table string, sqlFiles fs.FS, goMigrations []*goose.Migration) (*Schema, error) {
 	locker, err := lock.NewPostgresSessionLocker()
 	if err != nil {
@@ -96,12 +99,17 @@ func newMigrations(pool *pgxpool.Pool, table string, sqlFiles fs.FS, goMigration
 		goose.WithTableName(table),
 		goose.WithGoMigrations(goMigrations...),
 		goose.WithDisableGlobalRegistry(true),
+		goose.WithAllowOutofOrder(true),
 	)
 	if err != nil {
 		return nil, errors.Join(fmt.Errorf("loading the migrations: %w", err), db.Close())
 	}
 	sources := provider.ListSources() // never empty: NewProvider refuses no migrations
-	return &Schema{pool: pool, provider: provider, table: table, version: sources[len(sources)-1].Version}, nil
+	versions := make([]int64, 0, len(sources))
+	for _, src := range sources {
+		versions = append(versions, src.Version)
+	}
+	return &Schema{pool: pool, provider: provider, table: table, versions: versions}, nil
 }
 
 // Close releases the schema's handle on the pool, which stays open.
@@ -112,9 +120,9 @@ func (s *Schema) Close() error {
 	return nil
 }
 
-// Version is the schema's version this build needs.
+// Version is the schema's version this build needs: the highest of its migrations.
 func (s *Schema) Version() int64 {
-	return s.version
+	return s.versions[len(s.versions)-1]
 }
 
 // Migrate applies every migration the database lacks, under a PostgreSQL advisory lock: of several migrating at once,
@@ -170,35 +178,50 @@ func notReady(err error) bool {
 	return errors.As(err, &connectErr) || errors.As(err, &netErr) || errors.Is(err, io.ErrUnexpectedEOF)
 }
 
-// Check reports an error until the database's schema is at least the version this build needs, for readiness: the
-// servers wait for the migrate Job rather than migrate. It reads the version without the migrations' lock, so a Job
-// that holds it doesn't hold the probes too.
+// Check reports an error until the database has every migration this build has, for readiness: the servers wait for
+// the migrate Job rather than migrate. Having a higher one is not enough, since a lower one can merge after it. It
+// reads the migrations without the migrations' lock, so a Job that holds it doesn't hold the probes too.
 func (s *Schema) Check(ctx context.Context) error {
 	if s.current.Load() {
 		return nil
 	}
-	current, err := s.currentVersion(ctx)
+	applied, err := s.applied(ctx)
 	if err != nil {
 		return err
 	}
-	if current < s.version {
-		return fmt.Errorf("the database's schema is at version %d, and this build needs %d: cobranch migrate has not run",
-			current, s.version)
+	if i := slices.IndexFunc(s.versions, func(v int64) bool { return !applied[v] }); i >= 0 {
+		return fmt.Errorf("the database's schema lacks migration %d, which this build has: cobranch migrate has not run", s.versions[i])
 	}
 	s.current.Store(true)
 	return nil
 }
 
-// currentVersion returns the highest migration the database records, or 0 before the first.
-func (s *Schema) currentVersion(ctx context.Context) (int64, error) {
-	var version sql.NullInt64
-	err := s.pool.QueryRow(ctx, "SELECT max(version_id) FROM "+s.table).Scan(&version)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == undefinedTable {
-		return 0, nil
+// applied returns the migrations the database records, none before the first.
+func (s *Schema) applied(ctx context.Context) (map[int64]bool, error) {
+	// A missing table fails Query where pgx prepares it first, as it does by default, or else reading the rows.
+	rows, err := s.pool.Query(ctx, "SELECT version_id FROM "+s.table+" WHERE is_applied")
+	if missingTable(err) {
+		return nil, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("reading the schema's version: %w", err)
+		return nil, fmt.Errorf("reading the schema's migrations: %w", err)
 	}
-	return version.Int64, nil
+	versions, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if missingTable(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading the schema's migrations: %w", err)
+	}
+	out := make(map[int64]bool, len(versions))
+	for _, v := range versions {
+		out[v] = true
+	}
+	return out, nil
+}
+
+// missingTable reports whether err is PostgreSQL's answer to a query of a table that doesn't exist.
+func missingTable(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == undefinedTable
 }

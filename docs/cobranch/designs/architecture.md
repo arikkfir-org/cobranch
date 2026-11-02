@@ -1,7 +1,7 @@
 # Cobranch technical architecture
 
 > **Snapshot.** This design lives in its [architecture page](https://claude.ai/artifact/L6NYy7k4ep31FEPAxQiPjv), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Agreed 2026-10-27 · [ENG-193](https://linear.app/arikkfir/issue/ENG-193) ·
@@ -145,16 +145,17 @@ come from the cloud’s workload identity or a Secret. The chart never rotates t
 ### Upgrades
 
 **Changed** (review, 2026-10-27): a `cobranch migrate` Job runs before the servers roll out, and pods never migrate. It
-applies SQL and Go migrations in one numbered sequence (goose runs both), and every release's migrations are compatible
-with the release before it: they keep everything its pods read, so those pods keep working while the new ones roll out,
-and rolling back one release needs no down migration. The [Helm
-chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job runs first, under Helm and Argo CD alike.
+applies SQL and Go migrations by their numbers (goose runs both), and also any it lacks below the highest it has, since
+parallel pull requests merge in any order; every release's migrations are compatible with the release before it: they
+keep everything its pods read, so those pods keep working while the new ones roll out, and rolling back one release
+needs no down migration. The [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) decides how the Job runs
+first, under Helm and Argo CD alike.
 
 **A migration Job runs before the new pods; old pods keep working**
 
 ![A migration Job runs before the new pods; old pods keep working](architecture/upgrades.svg)
 
-- **Pods wait for their schema.** A pod starts once the schema is at least its version, and stays unready until then.
+- **Pods wait for their schema.** A pod starts once the schema has every migration it has, and stays unready until then.
 - **Removals wait a release.** A release adds columns and tables first, and stops reading old ones; a later release
   drops what neither it nor the release before it reads. So a rollback goes back one release at most.
 - **Long backfills are tasks.** A data migration too long for the Job runs afterwards as a controller task, in batches
