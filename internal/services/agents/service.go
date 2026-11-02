@@ -21,8 +21,9 @@ var tracer = otel.Tracer("cobranch.dev/internal/services/agents")
 
 // Store keeps the agents and their tasks. Lookups of what isn't there answer orgs.ErrNotFound.
 type Store interface {
-	// Roles lists the roles the organization grants, the built-in ones first.
-	Roles(ctx context.Context, orgID uuid.UUID) ([]orgs.Role, error)
+	// Roles lists the roles the organization grants at a scope, the organization or its repositories, the built-in ones
+	// first.
+	Roles(ctx context.Context, orgID uuid.UUID, scope auth.Scope) ([]orgs.Role, error)
 	// Repository finds one of the organization's repositories by ID and answers its slug.
 	Repository(ctx context.Context, orgID, repoID uuid.UUID) (string, error)
 	// Agents lists the organization's agents by name, each with its grants.
@@ -161,15 +162,46 @@ func (s *Service) Agent(ctx context.Context, v Viewer, orgID, id uuid.UUID) (Age
 	return a, failed(span, "finding the agent", err)
 }
 
-// grant checks one of a new agent's first grants: a role the organization grants, which v, holding atOrg at the
-// organization, holds every permission of where it applies; on a repository, the role's repository permissions, on
-// one of the organization's repositories v reads. It answers the grant with its names.
-func (s *Service) grant(ctx context.Context, v Viewer, orgID uuid.UUID, roles []orgs.Role, atOrg []string, g Grant) (Grant, error) {
-	i := slices.IndexFunc(roles, func(r orgs.Role) bool { return r.ID == g.RoleID })
-	if i < 0 {
-		return g, invalid("grants", "role.invalid", "not a role this organization grants")
+// roles holds the roles an organization grants at each scope, read once each.
+type roles struct {
+	store Store
+	orgID uuid.UUID
+	at    map[auth.Scope][]orgs.Role
+}
+
+// find finds the role of id the organization grants where a grant on repoID applies: at the organization for
+// uuid.Nil, and otherwise on its repositories.
+func (r *roles) find(ctx context.Context, id, repoID uuid.UUID) (orgs.Role, bool, error) {
+	scope := auth.ScopeOrganization
+	if repoID != uuid.Nil {
+		scope = auth.ScopeRepository
 	}
-	role := roles[i]
+	list, ok := r.at[scope]
+	if !ok {
+		var err error
+		if list, err = r.store.Roles(ctx, r.orgID, scope); err != nil {
+			return orgs.Role{}, false, fmt.Errorf("listing the roles: %w", err)
+		}
+		r.at[scope] = list
+	}
+	i := slices.IndexFunc(list, func(role orgs.Role) bool { return role.ID == id })
+	if i < 0 {
+		return orgs.Role{}, false, nil
+	}
+	return list[i], true, nil
+}
+
+// grant checks one of a new agent's first grants: a role the organization grants where it applies, which v, holding
+// atOrg at the organization, holds every permission of; on a repository, the role's repository permissions, on one
+// of the organization's repositories v reads. It answers the grant with its names.
+func (s *Service) grant(ctx context.Context, v Viewer, orgID uuid.UUID, known *roles, atOrg []string, g Grant) (Grant, error) {
+	role, ok, err := known.find(ctx, g.RoleID, g.RepoID)
+	if err != nil {
+		return g, err
+	}
+	if !ok {
+		return g, invalid("grants", "role.invalid", "not a role this organization grants there")
+	}
 	g.RoleName = role.Name
 	if g.RepoID == uuid.Nil {
 		if !auth.Covers(atOrg, role.Permissions) {
@@ -216,14 +248,11 @@ func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in
 	if in, err = ValidateInput(in); err != nil {
 		return Agent{}, failed(span, "creating the agent", err)
 	}
-	roles, err := s.store.Roles(ctx, orgID)
-	if err != nil {
-		return Agent{}, failed(span, "listing the roles", err)
-	}
+	known := &roles{store: s.store, orgID: orgID, at: map[auth.Scope][]orgs.Role{}}
 	a := Agent{OrgID: orgID, Name: in.Name, Description: in.Description, Instructions: in.Instructions,
 		CreatedBy: &Principal{ID: v.ID, DisplayName: v.DisplayName}, Version: 1}
 	for _, g := range in.Grants {
-		g, err := s.grant(ctx, v, orgID, roles, atOrg, g)
+		g, err := s.grant(ctx, v, orgID, known, atOrg, g)
 		if err != nil {
 			return Agent{}, failed(span, "checking the agent's grants", err)
 		}
@@ -288,19 +317,16 @@ func (s *Service) DeleteAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 
 // coversGrants refuses grants v, holding atOrg at the organization, doesn't hold every permission of where they apply.
 func (s *Service) coversGrants(ctx context.Context, v Viewer, orgID uuid.UUID, atOrg []string, grants []Grant) error {
-	if len(grants) == 0 {
-		return nil
-	}
-	roles, err := s.store.Roles(ctx, orgID)
-	if err != nil {
-		return fmt.Errorf("listing the roles: %w", err)
-	}
+	known := &roles{store: s.store, orgID: orgID, at: map[auth.Scope][]orgs.Role{}}
 	for _, g := range grants {
-		i := slices.IndexFunc(roles, func(r orgs.Role) bool { return r.ID == g.RoleID })
-		if i < 0 {
+		role, ok, err := known.find(ctx, g.RoleID, g.RepoID)
+		if err != nil {
+			return err
+		}
+		if !ok {
 			continue
 		}
-		held, permissions := atOrg, roles[i].Permissions
+		held, permissions := atOrg, role.Permissions
 		if g.RepoID != uuid.Nil {
 			if held, err = s.authz.Holds(ctx, v.ID, auth.ScopeRepository, g.RepoID); err != nil {
 				return fmt.Errorf("reading the viewer's permissions on the repository: %w", err)

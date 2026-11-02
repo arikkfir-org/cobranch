@@ -51,8 +51,8 @@ var (
 	ErrChanged = errors.New("it changed since it was read")
 )
 
-// AnyVersion is a version that matches whatever the latest is, for a change without If-Match's precondition.
-const AnyVersion int64 = 0
+// AnyVersion changes whichever version is there (If-Match: *).
+const AnyVersion int64 = -1
 
 // Viewer is who an operation runs for: a signed-in user, or the user or API key a credential acts as.
 type Viewer = auth.User
