@@ -22,10 +22,10 @@ import (
 // TimingName names each internal call in the Server-Timing header of the request that made it.
 const TimingName = "git"
 
-// Client reads a repository's trees, files and history from the Git server, and has it build merges, over the internal
-// call: code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it sends the
-// token the viewer's credential carried (auth.Token), or none for Anonymous, and the Git server decides what that
-// viewer may read or merge.
+// Client reads a repository's trees, files, history and diffs from the Git server, and has it build merges, over the
+// internal call: code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it
+// sends the token the viewer's credential carried (auth.Token), or none for Anonymous, and the Git server decides what
+// that viewer may read or merge.
 type Client struct {
 	base *url.URL
 	http *http.Client
@@ -81,6 +81,19 @@ func (c *Client) Log(ctx context.Context, repoID uuid.UUID, ref string, skip, li
 		return code.Log{}, err
 	}
 	return log.Domain(), nil
+}
+
+// Diff reads the change req asks for, up to the limits of a diff (code.Objects).
+func (c *Client) Diff(ctx context.Context, repoID uuid.UUID, req code.DiffRequest) (code.Diff, error) {
+	query := url.Values{"ref": {req.Head}, "base": {req.Base}}
+	if req.MergeBase {
+		query.Set("mergeBase", "true")
+	}
+	var d Diff
+	if err := c.getJSON(ctx, repoID, "diff", query, &d); err != nil {
+		return code.Diff{}, err
+	}
+	return d.Domain(), nil
 }
 
 // Merge has the Git server build the merge req asks for and record it as a push of its base (code.Objects).

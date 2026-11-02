@@ -96,7 +96,7 @@ type Page struct {
 	Next    string
 }
 
-// The sizes of a history's pages.
+// The sizes of a page of history or of a commit's reviews.
 const (
 	// DefaultPageSize is a page's size when the caller asks for none.
 	DefaultPageSize = 30
@@ -122,7 +122,7 @@ func pageSize(asked int) (int, error) {
 	case asked == 0:
 		return DefaultPageSize, nil
 	case asked < 0 || asked > MaxPageSize:
-		return 0, &orgs.ValidationError{Field: "limit", Code: "limit.invalid", Message: "a page holds 1 to 100 commits"}
+		return 0, &orgs.ValidationError{Field: "limit", Code: "limit.invalid", Message: "a page holds 1 to 100 entries"}
 	}
 	return asked, nil
 }
