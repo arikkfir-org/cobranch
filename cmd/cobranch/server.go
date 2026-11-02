@@ -14,6 +14,7 @@ import (
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
 	"cobranch.dev/internal/adapters/markdown"
+	"cobranch.dev/internal/adapters/models"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/rest"
 	"cobranch.dev/internal/adapters/server"
@@ -128,7 +129,7 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
 		issues:  issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer),
 		chats:   chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer),
-		agents:  agents.NewService(postgres.NewAgentStore(pool), authorizer),
+		agents:  agents.NewService(postgres.NewAgentStore(pool), authorizer).WithProviders(models.Providers()...),
 		secrets: secrets.NewService(postgres.NewSecretStore(pool), authorizer, box), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)

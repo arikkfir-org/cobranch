@@ -1300,6 +1300,135 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/model-providers:
+    get:
+      operationId: listModelProviders
+      summary: >-
+        The model providers the organization added, by name, and those the installation knows; takes org.read. The
+        names of their secrets show to a viewer holding secrets.manage at the organization.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProviderList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/model-providers/{provider}:
+    get:
+      operationId: getModelProvider
+      summary: A model provider the organization added; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The provider.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "304":
+          description: The provider is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: setModelProvider
+      summary: >-
+        Adds a provider the installation knows to the organization, with the organization's own secret that holds its
+        API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage.
+        A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400
+        model_provider.secret_invalid, and a request with neither header 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifMatchModelProvider"
+        - $ref: "#/components/parameters/ifNoneMatchModelProvider"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelProviderInput"
+      responses:
+        "200":
+          description: The provider, with the secret it now names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "201":
+          description: The provider, added.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeModelProvider
+      summary: >-
+        Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409
+        model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifMatchModelProvider"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -1453,6 +1582,89 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}/model:
+    put:
+      operationId: setAgentModel
+      summary: >-
+        Puts an agent on a model of a provider the organization added, or on none with neither named; takes
+        org.principals.manage, and a person. A provider the organization hasn't added answers 400
+        agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentModel"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}/secrets:
+    put:
+      operationId: setAgentSecrets
+      summary: >-
+        Names the secrets an agent's tasks receive, each an environment variable from one of the organization's
+        secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task
+        receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without
+        it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSecrets"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         "412":
           $ref: "#/components/responses/Problem"
@@ -4227,6 +4439,25 @@ components:
       description: The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
       schema:
         type: string
+    provider:
+      name: provider
+      in: path
+      required: true
+      description: A model provider, by the name the installation knows it by.
+      schema:
+        type: string
+    ifMatchModelProvider:
+      name: If-Match
+      in: header
+      description: The ETag of the provider the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchModelProvider:
+      name: If-None-Match
+      in: header
+      description: "*, to add a provider the organization hasn't added: one it has refuses with 412."
+      schema:
+        type: string
     ifMatchTask:
       name: If-Match
       in: header
@@ -6187,7 +6418,7 @@ components:
     Agent:
       type: object
       description: One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
-      required: [id, name, description, instructions, builtIn, createdAt, updatedAt, version, grants]
+      required: [id, name, description, instructions, builtIn, secrets, createdAt, updatedAt, version, grants]
       properties:
         id:
           type: string
@@ -6203,6 +6434,18 @@ components:
         builtIn:
           type: boolean
           description: Whether Cobranch made it for the organization; it is never deleted.
+        provider:
+          type: string
+          description: The model provider it runs on, one the organization added; absent while it runs on none.
+        model:
+          type: string
+          description: The model it runs on, as its provider names it; absent while it runs on none.
+        secrets:
+          type: object
+          description: The secrets its tasks receive, by the environment variable each goes in.
+          additionalProperties:
+            type: string
+            format: uuid
         createdBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -6276,6 +6519,83 @@ components:
           type: string
         instructions:
           type: string
+    ModelProvider:
+      type: object
+      description: >-
+        A model provider an organization added, one the installation knows, with the organization's own secret that
+        holds its API key. An agent on one of its models must read that secret for its tasks to run.
+      required: [name, broken, createdAt, updatedAt, version]
+      properties:
+        name:
+          type: string
+          description: The provider's name, as the installation knows it.
+        secretId:
+          type: string
+          format: uuid
+          description: The organization's secret that holds its API key; absent once that secret is deleted.
+        secretName:
+          type: string
+          description: That secret's name, shown to a viewer holding secrets.manage at the organization.
+        broken:
+          type: boolean
+          description: Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    ModelProviderList:
+      type: object
+      required: [modelProviders, available]
+      properties:
+        modelProviders:
+          type: array
+          description: The providers the organization added, by name.
+          items:
+            $ref: "#/components/schemas/ModelProvider"
+        available:
+          type: array
+          description: The providers the installation knows, by name, which the organization may add.
+          items:
+            type: string
+    ModelProviderInput:
+      type: object
+      description: The secret a provider's API key is in.
+      required: [secretId]
+      properties:
+        secretId:
+          type: string
+          format: uuid
+          description: One of the organization's own secrets, not a repository's.
+    AgentModel:
+      type: object
+      description: The model an agent runs on, a provider the organization added and one of its models, or neither for none.
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+          description: The model's name as the provider knows it, 1 to 200 characters on one line.
+    AgentSecrets:
+      type: object
+      description: The secrets an agent's tasks receive.
+      required: [secrets]
+      properties:
+        secrets:
+          type: object
+          description: >-
+            At most 50, each the name of the environment variable it goes in, other than those the harness sets
+            itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and the secret's ID.
+          additionalProperties:
+            type: string
+            format: uuid
     TaskState:
       type: string
       description: Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
