@@ -218,21 +218,27 @@ func (s *Service) ViewerPermissions(ctx context.Context, v Viewer, orgID uuid.UU
 	return s.read(ctx, v, orgID)
 }
 
-// Update writes the organization's settings; it takes org.manage.
+// Update writes the organization's settings, its issue key among them; it takes org.manage.
 func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, settings Settings) (Organization, error) {
 	org, _, err := s.require(ctx, v, orgID, PermManage)
 	if err != nil {
 		return Organization{}, err
 	}
 	settings.Name = strings.TrimSpace(settings.Name)
-	if err := errors.Join(ValidateSlug(settings.Slug), ValidateName(settings.Name)); err != nil {
+	var key error
+	if settings.IssueKey == "" || settings.IssueKey == org.IssueKey {
+		settings.IssueKey = org.IssueKey
+	} else {
+		key = ValidateIssueKey(settings.IssueKey)
+	}
+	if err := errors.Join(ValidateSlug(settings.Slug), ValidateName(settings.Name), key); err != nil {
 		return Organization{}, err
 	}
 	if _, err := s.organizationRole(ctx, orgID, settings.MembershipRoleID); err != nil {
 		return Organization{}, err
 	}
 	org.Slug, org.Name, org.MembershipRoleID = settings.Slug, settings.Name, settings.MembershipRoleID
-	org.AcceptsJoinRequests, org.Providers = settings.AcceptsJoinRequests, settings.Providers
+	org.AcceptsJoinRequests, org.Providers, org.IssueKey = settings.AcceptsJoinRequests, settings.Providers, settings.IssueKey
 	if len(org.Providers) == 0 {
 		org.Providers = nil // all of the installation's, however a client spells it
 	}

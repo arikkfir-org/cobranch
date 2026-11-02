@@ -16,6 +16,8 @@ import (
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/issues"
+	"cobranch.dev/internal/services/issues/issuestest"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
@@ -46,6 +48,8 @@ type orgFixture struct {
 	objects          *codetest.Objects
 	code             *code.Service
 	push             code.Push
+	issueStore       *issuestest.Store
+	issues           *issues.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -63,7 +67,8 @@ func newOrgFixture(t *testing.T) *orgFixture {
 		store.AddUser(v.User.ID, v.User.DisplayName, v.User.Emails[0].Email)
 	}
 	store.Grant(f.nia.User.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
-	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now}
+	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, IssueKey: "ACME",
+		CreatedAt: now}
 	store.Orgs[f.acme.ID], store.Slugs["acme"], store.Slugs["acme-corp"] = f.acme, f.acme.ID, f.acme.ID
 	store.AddMember(f.acme.ID, f.olivia.User.ID, auth.RoleOwner)
 	store.AddMember(f.acme.ID, f.max.User.ID, auth.RoleMember)
@@ -97,6 +102,17 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.commitObjects()
+	f.issueStore = issuestest.NewStore(store)
+	f.issueStore.Repos[f.website.ID] = f.website
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.issues.SetClock(func() time.Time { return now })
+	return f
+}
+
+// commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
+// history.
+func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -111,7 +127,6 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
 	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
 	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
-	return f
 }
 
 // shaOf is the object name of 40 letter's.
@@ -132,7 +147,7 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues)).ServeHTTP(rec, req)
 	return rec
 }
 

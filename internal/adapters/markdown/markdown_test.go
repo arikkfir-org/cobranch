@@ -112,3 +112,25 @@ func TestRenderWithoutURLs(t *testing.T) {
 		}
 	}
 }
+
+func TestRenderOrganizationDocument(t *testing.T) {
+	r := markdown.New(mustURL(t, "https://console.example.com/"), mustURL(t, "https://api.example.com"))
+	issue := code.Document{Org: "acme", Path: "issues/ACME-3"}
+	for src, want := range map[string]string{
+		"[next](ACME-4)\n":              `href="https://console.example.com/acme/issues/ACME-4"`,
+		"[part](ACME-4#why)\n":          `href="https://console.example.com/acme/issues/ACME-4#user-content-why"`,
+		"[site](../website)\n":          `href="https://console.example.com/acme/website"`,
+		"[root](/globex/issues?x=1)\n":  `href="https://console.example.com/globex/issues?x=1"`,
+		"[out](../../../x)\n":           `<p>out</p>`,
+		"![logo](logo.png)\n":           `<p></p>`,
+		"![badge](https://b.example/x)": `src="https://b.example/x"`,
+	} {
+		got, err := r.Render(t.Context(), []byte(src), issue)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(got, want) {
+			t.Errorf("Render(%q) = %s\nwant it to hold %s", src, got, want)
+		}
+	}
+}

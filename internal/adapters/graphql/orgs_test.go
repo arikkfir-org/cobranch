@@ -14,6 +14,8 @@ import (
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/issues"
+	"cobranch.dev/internal/services/issues/issuestest"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
@@ -43,6 +45,8 @@ type orgFixture struct {
 	objects          *codetest.Objects
 	code             *code.Service
 	push             code.Push
+	issueStore       *issuestest.Store
+	issues           *issues.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -59,7 +63,8 @@ func newOrgFixture() *orgFixture {
 		store.AddUser(v.User.ID, v.User.DisplayName, v.User.Emails[0].Email)
 	}
 	store.Grant(f.nia.User.ID, auth.RoleInstallationUser, auth.ScopeInstallation, uuid.Nil)
-	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, CreatedAt: now}
+	f.acme = orgs.Organization{ID: uuid.New(), Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, AcceptsJoinRequests: true, IssueKey: "ACME",
+		CreatedAt: now}
 	store.Orgs[f.acme.ID], store.Slugs["acme"], store.Slugs["acme-corp"] = f.acme, f.acme.ID, f.acme.ID
 	store.AddMember(f.acme.ID, f.olivia.User.ID, auth.RoleOwner)
 	store.AddMember(f.acme.ID, f.max.User.ID, auth.RoleMember)
@@ -93,6 +98,17 @@ func newOrgFixture() *orgFixture {
 	f.codeStore.UpdateBranch(f.website.ID, "feature/login", func(b *code.Branch) { b.Base, b.Status = "main", code.StatusProcessing })
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
+	f.commitObjects()
+	f.issueStore = issuestest.NewStore(store)
+	f.issueStore.Repos[f.website.ID] = f.website
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.issues.SetClock(func() time.Time { return now })
+	return f
+}
+
+// commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
+// history.
+func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -107,7 +123,6 @@ func newOrgFixture() *orgFixture {
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
 	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
 	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
-	return f
 }
 
 // shaOf is the object name of 40 letter's.
@@ -118,7 +133,7 @@ func (f *orgFixture) query(viewer *auth.Authenticated, document string) string {
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"query":`+jsonString(document)+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues)).ServeHTTP(rec, req)
 	return rec.Body.String()
 }
 
@@ -227,7 +242,7 @@ func TestMembershipMutations(t *testing.T) {
 		}, wantCode: conflict, wantReason: "invitation.exists"},
 		{name: "accept", viewer: nia, document: func(f *orgFixture) string {
 			return `mutation { acceptInvitation(id: "` + f.invitation.ID.String() + `") { slug viewerPermissions } }`
-		}, want: []string{`"slug":"acme","viewerPermissions":["agents.assign","agents.create","org.read","repos.create"]`}},
+		}, want: []string{`"slug":"acme","viewerPermissions":["agents.assign","agents.create","issues.read","issues.write","org.read","repos.create"]`}},
 		{name: "accept another's invitation", viewer: maxim, document: func(f *orgFixture) string {
 			return `mutation { acceptInvitation(id: "` + f.invitation.ID.String() + `") { slug } }`
 		}, wantCode: notFound, wantReason: "invitation.not_found"},
