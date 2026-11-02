@@ -35,7 +35,7 @@ func isCRD(gk schema.GroupKind) bool {
 	return gk == schema.GroupKind{Group: "apiextensions.k8s.io", Kind: "CustomResourceDefinition"}
 }
 
-// crdKinds are the kinds the render's CRDs define, by group, version and kind, with their resources and scopes.
+// crdKinds are the kinds the render's CRDs serve, by group, version and kind, with their resources and scopes.
 func crdKinds(rendered []*unstructured.Unstructured) map[schema.GroupVersionKind]object {
 	out := map[schema.GroupVersionKind]object{}
 	for _, u := range rendered {
@@ -48,7 +48,7 @@ func crdKinds(rendered []*unstructured.Unstructured) map[schema.GroupVersionKind
 		for _, v := range versions {
 			version, _ := v.(map[string]any) // a version that isn't a mapping names nothing
 			name := text(version, "name")
-			if name == "" {
+			if served, _, _ := unstructured.NestedBool(version, "served"); name == "" || !served { // missing is false
 				continue
 			}
 			out[schema.GroupVersionKind{Group: group, Version: name, Kind: kind}] = object{

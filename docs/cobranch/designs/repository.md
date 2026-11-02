@@ -40,12 +40,13 @@ fails when any does: the check takes as long as its longest task, `chart`, about
 pool. Task `build` checks and builds the Go module. `generated` fails when `go generate` changes the checkout, so the
 REST and GraphQL stubs match `api/` and the queries match `db/`; `build` builds the binaries and `version` runs one.
 Task `lint` runs golangci-lint's standard linters, the house rules' (errcheck, wrapcheck, contextcheck, sloglint,
-spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt, then `go vet`. Task `test` runs the tests with
-the race detector against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach
-it. A test that sets up a database or a Git server of its own runs in parallel with the others: one at a time, the Git
-server's took four minutes. Go Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiles on
-its own cold cache: its steps keep about two cores busy and peak near 2.1Gi (`generated`) or 1.5Gi (`lint`, `test`),
-hence the tasks' sizes.
+spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt, then `go vet`. Task `test` fetches
+kube-apiserver and etcd, checked against the sums of their releases, and runs the tests with the race detector against
+the PostgreSQL sidecar, the cluster adapter's against a throwaway API server of those binaries, and with `CI` set a test
+fails rather than skip when it can't reach them. A test that sets up a database or a Git server of its own runs in
+parallel with the others: one at a time, the Git server's took four minutes. Go Cloud's drivers bring the AWS, Azure and
+Google Cloud SDKs, which each task compiles on its own cold cache: its steps keep about two cores busy and peak near
+2.1Gi (`generated`), 1.5Gi (`lint`) or 2.6Gi (`test`), hence the tasks' sizes.
 
 **Pipeline ci runs four tasks side by side, each in a pod of its own**
 

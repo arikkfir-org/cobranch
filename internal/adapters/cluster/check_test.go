@@ -109,10 +109,11 @@ func TestOrder(t *testing.T) {
 func TestCRDKinds(t *testing.T) {
 	crd := obj("apiextensions.k8s.io/v1", "CustomResourceDefinition", "", "widgets.example.com")
 	crd.Object["spec"] = map[string]any{"group": "example.com", "scope": "Namespaced", "names": map[string]any{"kind": "Widget", "plural": "widgets"},
-		"versions": []any{map[string]any{"name": "v1"}, map[string]any{"name": "v2"}, "junk"}}
+		"versions": []any{map[string]any{"name": "v1", "served": true}, map[string]any{"name": "v2", "served": true}, map[string]any{"name": "v3", "served": false},
+			map[string]any{"name": "v4"}, "junk"}}
 	cluster := obj("apiextensions.k8s.io/v1", "CustomResourceDefinition", "", "gizmos.example.com")
 	cluster.Object["spec"] = map[string]any{"group": "example.com", "scope": "Cluster", "names": map[string]any{"kind": "Gizmo", "plural": "gizmos"},
-		"versions": []any{map[string]any{"name": "v1"}}}
+		"versions": []any{map[string]any{"name": "v1", "served": true}}}
 	got := crdKinds([]*unstructured.Unstructured{crd, obj("v1", "ConfigMap", "", "a"), cluster})
 	want := map[schema.GroupVersionKind]object{
 		{Group: "example.com", Version: "v1", Kind: "Widget"}: {resource: schema.GroupVersionResource{Group: "example.com", Version: "v1", Resource: "widgets"}, namespaced: true, pending: true},

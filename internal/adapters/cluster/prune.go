@@ -14,9 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-// Prune deletes what previous holds and current doesn't, last applied first, when it still carries env's label: the
-// objects a render stopped holding. A teardown prunes with no current inventory. It never deletes a CRD, which would
-// delete every object of its kind in the cluster, nor an object that something replaced after it read it, and an
+// Prune deletes what previous holds and current doesn't, last applied first, when it still carries env's label and the
+// UID previous recorded: the objects a render stopped holding. A teardown prunes with no current inventory. It never deletes a CRD, which would
+// delete every object of its kind in the cluster, nor an object that something recreated since it applied it, and an
 // object already gone counts as deleted, so a prune is safe to repeat. It carries on past an object it fails to
 // delete, and returns every failure.
 func (c *Cluster) Prune(ctx context.Context, env Environment, previous, current []Ref) error {
@@ -42,7 +42,7 @@ func (c *Cluster) Prune(ctx context.Context, env Environment, previous, current 
 	return nil
 }
 
-// prune deletes r, if it is still there and still env's.
+// prune deletes r, if it is still there, still env's and still the object r recorded.
 func (c *Cluster) prune(ctx context.Context, env Environment, r Ref) error {
 	m, err := c.mapping(r)
 	if meta.IsNoMatchError(err) {
@@ -57,12 +57,12 @@ func (c *Cluster) prune(ctx context.Context, env Environment, r Ref) error {
 	} else if err != nil {
 		return fmt.Errorf("reading %s: %w", r, err)
 	}
-	if existing.GetLabels()[EnvironmentLabel] != env.ID {
-		return nil
+	if existing.GetLabels()[EnvironmentLabel] != env.ID || string(existing.GetUID()) != r.UID {
+		return nil // someone else's now, or recreated since it was applied
 	}
-	uid := existing.GetUID()
+	uid := types.UID(r.UID)
 	background := metav1.DeletePropagationBackground
-	err = client.Delete(ctx, r.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: (*types.UID)(&uid)},
+	err = client.Delete(ctx, r.Name, metav1.DeleteOptions{Preconditions: &metav1.Preconditions{UID: &uid},
 		PropagationPolicy: &background})
 	if apierrors.IsNotFound(err) || apierrors.IsConflict(err) { // gone, or replaced since it was read
 		return nil
