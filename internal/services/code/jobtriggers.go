@@ -66,11 +66,11 @@ func patterns(node *yaml.Node, key string) ([]string, error) {
 	if node == nil || isNull(node) {
 		return nil, nil
 	}
-	return stringList(node, key, key+" must be a list of names or patterns such as release/*", func(string) bool { return true })
+	return distinctList(node, key, key+" must be a list of names or patterns such as release/*", func(string) bool { return true })
 }
 
-// stringList reads a non-empty list of distinct non-empty strings that valid accepts, or answers message.
-func stringList(node *yaml.Node, what, message string, valid func(string) bool) ([]string, error) {
+// distinctList reads a non-empty list of distinct non-empty strings that valid accepts, or answers message.
+func distinctList(node *yaml.Node, what, message string, valid func(string) bool) ([]string, error) {
 	if node.Kind != yaml.SequenceNode || len(node.Content) == 0 {
 		return nil, &SettingsError{Line: node.Line, Message: message}
 	}
@@ -107,7 +107,7 @@ func annotationTrigger(name string, node *yaml.Node) (*jobs.AnnotationTrigger, e
 	}
 	if n := valueOf(node, "statuses"); n != nil {
 		valid := func(s string) bool { return slices.Contains(AnnotationStatuses, AnnotationStatus(s)) }
-		if t.Statuses, err = stringList(n, "statuses", "statuses must list pending, in_progress, failed or successful", valid); err != nil {
+		if t.Statuses, err = distinctList(n, "statuses", "statuses must list pending, in_progress, failed or successful", valid); err != nil {
 			return nil, err
 		}
 	}
@@ -127,7 +127,7 @@ func reviewTrigger(node *yaml.Node) (*jobs.ReviewTrigger, error) {
 	var err error
 	if n := valueOf(node, "states"); n != nil {
 		valid := func(s string) bool { return slices.Contains(reviewStates, s) }
-		if t.States, err = stringList(n, "states", "states must list approved, changes_requested or neutral", valid); err != nil {
+		if t.States, err = distinctList(n, "states", "states must list approved, changes_requested or neutral", valid); err != nil {
 			return nil, err
 		}
 	}
@@ -145,7 +145,7 @@ func eventTrigger(node *yaml.Node) (*jobs.EventTrigger, error) {
 		return nil, &SettingsError{Line: node.Line, Message: "event needs names, the events it follows"}
 	}
 	valid := func(s string) bool { return ValidateAnnotationName(s) == nil }
-	list, err := stringList(names, "names", "names must list events' names: 1 to 100 lowercase letters, digits, '-', '_', '.' and '/'", valid)
+	list, err := distinctList(names, "names", "names must list events' names: 1 to 100 lowercase letters, digits, '-', '_', '.' and '/'", valid)
 	if err != nil {
 		return nil, err
 	}
