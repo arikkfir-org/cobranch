@@ -215,7 +215,8 @@ func (s *CodeStore) StartDelivery(ctx context.Context, actor uuid.UUID, repoID u
 // deliverHead queues, for actor, a delivery of the head of the environment's branch, superseding every one of its
 // deliveries that hasn't started applying, and works out the status of the branches at the head again; it answers the
 // delivery's number. A head whose /cobranch.yaml doesn't parse fails its delivery with the file's error, as a push
-// of it does. A branch that is gone is repos.ErrNotFound.
+// of it does. A branch that is gone is repos.ErrNotFound. Its caller holds the repository's delivery queue, as
+// environmentForUpdate takes it, so the head it reads is the one the last push queued.
 func deliverHead(ctx context.Context, q *queries.Queries, row queries.EnvironmentForUpdateRow, actor uuid.UUID, trigger code.DeliveryTrigger) (int64, error) {
 	env := row.Environment
 	head, err := tipOf(ctx, q, env.RepoID, env.Branch)
@@ -224,9 +225,6 @@ func deliverHead(ctx context.Context, q *queries.Queries, row queries.Environmen
 	}
 	if head.head == "" {
 		return 0, repos.ErrNotFound
-	}
-	if err := q.LockDeliveryQueue(ctx, env.RepoID); err != nil {
-		return 0, fmt.Errorf("locking the repository's deliveries: %w", err)
 	}
 	state, reason := code.DeliveryQueued, ""
 	if head.broken != "" {
@@ -240,8 +238,14 @@ func deliverHead(ctx context.Context, q *queries.Queries, row queries.Environmen
 	return number, restatusAt(ctx, q, env.RepoID, head.head)
 }
 
-// environmentForUpdate finds a live environment and locks it, or answers repos.ErrNotFound.
+// environmentForUpdate finds a live environment and locks it, or answers repos.ErrNotFound. It first takes the
+// repository's delivery queue, as a push's queueDeliveries does before it reads the environment, so a redeliver, pause
+// or resume waits for a push that is queueing and the push for it: neither acts on what the other is changing, and
+// both lock the queue before the environment.
 func environmentForUpdate(ctx context.Context, q *queries.Queries, repoID, id uuid.UUID) (queries.EnvironmentForUpdateRow, error) {
+	if err := q.LockDeliveryQueue(ctx, repoID); err != nil {
+		return queries.EnvironmentForUpdateRow{}, fmt.Errorf("locking the repository's deliveries: %w", err)
+	}
 	row, err := q.EnvironmentForUpdate(ctx, repoID, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return row, repos.ErrNotFound

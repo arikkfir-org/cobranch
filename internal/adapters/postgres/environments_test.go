@@ -7,9 +7,12 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/repos"
@@ -253,6 +256,92 @@ func TestCodeStoreRedeliversABrokenTip(t *testing.T) {
 	}
 	if got, want := f.note(t, repo, shaB, "delivery/previews"), "failed: /cobranch.yaml: line 1: delivery must be a mapping by previews"; got != want {
 		t.Errorf("the broken tip's annotation = %q, want %q", got, want)
+	}
+}
+
+// TestCodeStoreWaitsForAQueueingPush checks that a redeliver and a pause wait for a push that holds the repository's
+// delivery queue, as a push worker's transaction does while it queues, and act on what it leaves: a pause cancels the
+// delivery the push queued, and a redeliver delivers the head the push moved its branch to.
+func TestCodeStoreWaitsForAQueueingPush(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		// push is what the push does in tx while it holds the queue.
+		push func(t *testing.T, f *jobsFixture, tx pgx.Tx, production code.Environment)
+		act  func(f *jobsFixture, production code.Environment) error
+		want []string
+	}{
+		{name: "a pause cancels the push's delivery",
+			push: func(t *testing.T, _ *jobsFixture, tx pgx.Tx, production code.Environment) {
+				q := queries.New(tx)
+				env, err := q.LiveEnvironment(context.Background(), production.Target.ID, "main")
+				if err == nil {
+					_, err = enqueue(context.Background(), q, queuedDelivery{env: env, target: "production", sha: shaA,
+						trigger: code.TriggeredByPush, state: code.DeliveryQueued})
+				}
+				if err != nil {
+					t.Error(err)
+				}
+			},
+			act: func(f *jobsFixture, production code.Environment) error {
+				_, err := f.c.PauseEnvironment(context.Background(), f.max, f.website.ID, production.ID)
+				return err
+			},
+			want: []string{"#1 production main@a cancelled: superseded by #3", "#2 previews feature/login@b waiting: waits for a member to start it",
+				"#3 production main@a cancelled: paused by Alice"}}, // the fixture names every user Alice
+		{name: "a redeliver delivers the push's head",
+			push: func(t *testing.T, f *jobsFixture, tx pgx.Tx, _ code.Environment) {
+				if _, err := tx.Exec(context.Background(), "UPDATE branches SET head = $1 WHERE repo_id = $2 AND name = 'main'", shaC, f.website.ID); err != nil {
+					t.Error(err)
+				}
+			},
+			act: func(f *jobsFixture, production code.Environment) error {
+				_, err := f.c.Redeliver(context.Background(), f.max, f.website.ID, production.ID)
+				return err
+			},
+			want: []string{"#1 production main@a cancelled: superseded by #3", "#2 previews feature/login@b waiting: waits for a member to start it",
+				"#3 production main@c queued"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			f := newJobsFixture(t)
+			production, _ := f.pushTwoDeliveries(t)
+			f.push(t, pushOf(f.website.ID, f.olivia, "pack-3", []git.RefUpdate{{Name: "refs/heads/docs", Old: git.ZeroSHA, New: shaC}},
+				commit(shaC, person("Olivia", "olivia@example.com"), shaA)))
+			f.whileQueueing(t, func(tx pgx.Tx) { tc.push(t, f, tx, production) }, func() error { return tc.act(f, production) })
+			if got := f.deliveries(t, f.website.ID); !slices.Equal(got, tc.want) {
+				t.Errorf("deliveries = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+// whileQueueing holds the website's delivery queue in a transaction, as a push worker does while it queues, starts act,
+// checks that it waits, runs push in the transaction and commits it, and waits for act.
+func (f *jobsFixture) whileQueueing(t *testing.T, push func(tx pgx.Tx), act func() error) {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // committed below; rolling back a committed transaction does nothing
+	if err := queries.New(tx).LockDeliveryQueue(ctx, f.website.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- act() }()
+	select {
+	case err := <-done:
+		t.Fatalf("acted while the push held the queue: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	push(tx)
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
