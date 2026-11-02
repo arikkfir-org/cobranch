@@ -213,7 +213,7 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	if err != nil {
 		return fmt.Errorf("encoding the ref updates: %w", err)
 	}
-	merged, err := mergedJSON(push)
+	merged, err := mergedJSON(ctx, q, push)
 	if err != nil {
 		return err
 	}
