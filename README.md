@@ -84,7 +84,7 @@ They log text here and JSON in a pod (`COBRANCH_LOG_FORMAT` picks one, `COBRANCH
 wherever OpenTelemetry's own variables point, such as `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318`, or nowhere
 ([Observability](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/architecture.md#observability)).
 
-`render` needs no database: from a checkout's `/cobranch.yaml`, it prints, as one YAML stream, what a delivery of a commit of a branch to one of the branch's targets would apply ([the design](docs/cobranch/designs/delivery.md#roots-and-rendering)):
+`render` needs no database: from a checkout's `/cobranch.yaml`, it prints, as one YAML stream, what a delivery of a commit of a branch to one of the branch's targets would apply ([the design](docs/cobranch/designs/delivery.md#roots-and-rendering)). It takes the target from the checkout's own file, or, as a delivery's pod does, with `--namespace`, the environment's namespace, which `main`'s targets grant:
 
 ```bash
 bin/cobranch render --target preview --branch feature/login --commit "$(git rev-parse HEAD)" \

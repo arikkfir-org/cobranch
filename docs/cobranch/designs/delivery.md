@@ -6,7 +6,8 @@
 
 **Status**: Proposed 2026-11-02 · [ENG-218](https://linear.app/arikkfir/issue/ENG-218) · Builds the [product’s
 delivery](product.md#delivery) on [jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y) · A task of the controller ·
-Built by [ENG-218](https://linear.app/arikkfir/issue/ENG-218), in five pull requests
+Built by [ENG-218](https://linear.app/arikkfir/issue/ENG-218), in five pull requests, the first
+[cobranch#45](https://github.com/arikkfir-org/cobranch/pull/45)
 
 Cobranch delivers what a repository declares, like Argo CD but built in: `main`’s `/cobranch.yaml` maps branch patterns
 to targets, each a cluster and a namespace; every push to a matching branch renders the branch’s GitOps roots in a
@@ -143,10 +144,11 @@ same way; a resync re-applies the last render without rendering again.
   and the internet, under its LimitRange, as a run does.
 - **The render pod** is Cobranch's own image running `cobranch render`, after the
   [checkout](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#pods) init container fetches the commit. It reads the
-  roots from the commit's `/cobranch.yaml`, renders each in order, and uploads the manifests with
-  `PUT /v1/orgs/{org}/repos/{repo}/deliveries/{id}/manifests`, using a token scoped to that one delivery, `cbd_…`, valid
-  for the render's timeout, 10 minutes by default. The REST server stores the render in the object store, under
-  `deliveries/<repo-id>/<delivery-id>`, at most 16 MiB.
+  roots from the commit's `/cobranch.yaml` and the target from the controller, its name and the environment's namespace,
+  which `main`'s grants (`--target`, `--namespace`), since the commit's own targets count for nothing; it renders each
+  root in order, and uploads the manifests with `PUT /v1/orgs/{org}/repos/{repo}/deliveries/{id}/manifests`, using a
+  token scoped to that one delivery, `cbd_…`, valid for the render's timeout, 10 minutes by default. The REST server
+  stores the render in the object store, under `deliveries/<repo-id>/<delivery-id>`, at most 16 MiB.
 - **Helm** renders the chart at `path` as `helm template` would, release `release`, namespace the environment's, its
   values from `valuesFiles` (relative to `path`, in order) then `values`. `.Capabilities` are the target cluster's: the
   controller reads its version and API groups before the render and passes them in, so charts that check for an API
@@ -161,7 +163,8 @@ same way; a resync re-applies the last render without rendering again.
   fails the render, and so does a render larger than 16 MiB.
 - **`cobranch render`** also runs on a developer's checkout:
   `cobranch render --target preview --branch feature/login --commit "$(git rev-parse HEAD)"` prints, as one YAML stream,
-  what Cobranch would apply, from the working tree; `--kube-version` and `--api-versions` stand in for the cluster's.
+  what Cobranch would apply, from the working tree, for a target the checkout declares, or for `main`'s with
+  `--namespace`; `--kube-version` and `--api-versions` stand in for the cluster's.
 
 ## Applying
 

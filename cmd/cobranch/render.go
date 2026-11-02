@@ -17,14 +17,16 @@ import (
 )
 
 // renderUsage is what `cobranch render` takes: its input, as flags, since it is a one-off command.
-const renderUsage = "usage: cobranch render --target <target> --branch <branch> --commit <sha> [--dir <checkout>] [--repository <slug>] [--organization <slug>] [--kube-version <v1.33.0>] [--api-versions <group/version,...>]"
+const renderUsage = "usage: cobranch render --target <target> --branch <branch> --commit <sha> [--namespace <namespace>] [--dir <checkout>] [--repository <slug>] [--organization <slug>] [--kube-version <v1.33.0>] [--api-versions <group/version,...>]"
 
 // errUsage is a command line `cobranch render` doesn't take.
 var errUsage = errors.New(renderUsage)
 
 // runRender prints what a delivery of a branch's commit to one of its targets would apply: the roots of the
-// checkout's /cobranch.yaml, rendered for the target that file names, as one YAML stream. It is how a developer sees
-// what Cobranch would apply before pushing. It returns run's exit code: 2 on a command line it doesn't take.
+// checkout's /cobranch.yaml, rendered for the target, as one YAML stream. A delivery's render pod names the target's
+// environment namespace, which main's file grants, since a branch's own targets count for nothing; a developer may
+// leave it to the checkout's targets instead, to see what Cobranch would apply before pushing. It returns run's exit
+// code: 2 on a command line it doesn't take.
 func runRender(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	err := renderCheckout(ctx, args, stdout)
 	switch {
@@ -40,7 +42,7 @@ func runRender(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 // renderFlags are `cobranch render`'s flags.
 type renderFlags struct {
-	dir, target, branch, commit, repository, organization, kubeVersion, apiVersions string
+	dir, target, namespace, branch, commit, repository, organization, kubeVersion, apiVersions string
 }
 
 // parseRenderFlags reads args, or errUsage.
@@ -50,6 +52,7 @@ func parseRenderFlags(args []string) (renderFlags, error) {
 	set.SetOutput(io.Discard)
 	set.StringVar(&f.dir, "dir", ".", "the repository's checkout")
 	set.StringVar(&f.target, "target", "", "the target to render for")
+	set.StringVar(&f.namespace, "namespace", "", "the environment's namespace, rather than the checkout's target's")
 	set.StringVar(&f.branch, "branch", "", "the branch delivered")
 	set.StringVar(&f.commit, "commit", "", "the commit delivered")
 	set.StringVar(&f.repository, "repository", "", "the repository's slug")
@@ -76,7 +79,7 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 	if err != nil {
 		return fmt.Errorf("parsing: %w", err)
 	}
-	target, err := delivery.Target(d, f.target)
+	target, err := renderTarget(d, f)
 	if err != nil {
 		return fmt.Errorf("planning: %w", err)
 	}
@@ -97,4 +100,17 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 		return fmt.Errorf("writing the render: %w", err)
 	}
 	return nil
+}
+
+// renderTarget is the target f renders for: the one f names with the namespace f names, or the checkout's target of
+// that name without one.
+func renderTarget(d code.Delivery, f renderFlags) (code.Target, error) {
+	if f.namespace != "" {
+		return code.Target{Name: f.target, Namespace: f.namespace}, nil
+	}
+	target, err := delivery.Target(d, f.target)
+	if err != nil {
+		return code.Target{}, fmt.Errorf("%w: give the environment's namespace, or name a target the checkout declares", err)
+	}
+	return target, nil
 }
