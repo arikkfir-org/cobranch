@@ -2379,7 +2379,12 @@
         : r.state === "running" ? "Nothing logged yet." : r.startedAt ? "It kept no logs." : "None until it starts.";
       const draw = (logs) => body.replaceChildren(...(logs.length ? logs.map((l) => h("div", {}, h("code", {}, l.container), h("pre", { class: "log" }, l.text)))
         : [h("p", { class: "muted" }, none)]));
-      draw(await api("GET", url).then((d) => d.logs));
+      try {
+        draw(await api("GET", url).then((d) => d.logs));
+      } catch (err) { // the run's page still draws, its logs saying why they're missing
+        body.replaceChildren(h("p", { class: "alert" }, "The logs couldn't be read: " + err.message));
+        return panel;
+      }
       if (r.state !== "running") return panel;
       status.textContent = "Live";
       const stop = new AbortController();

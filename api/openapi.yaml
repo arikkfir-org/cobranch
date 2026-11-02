@@ -4522,8 +4522,8 @@ paths:
     get:
       operationId: getRunLog
       summary: >-
-        One of a run's containers' logs as text, with the values the run masks hidden, as getRunLogs reads them; takes
-        repo.read. A container that hasn't logged answers 404.
+        One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as
+        U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"

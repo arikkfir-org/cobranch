@@ -49,10 +49,10 @@ func TestRunLogsAPI(t *testing.T) {
 			}},
 		{name: "a run that isn't there", viewer: withLogs(maxReading), method: http.MethodGet, path: fixed(runsPath + "/9/logs"), wantStatus: 404},
 		{name: "someone who can't read it", viewer: withLogs(nia), method: http.MethodGet, path: fixed(runsPath + "/1/logs"), wantStatus: 404},
-		{name: "a container's, as it was logged", viewer: withLogs(maxReading), method: http.MethodGet, path: fixed(runsPath + "/1/logs/main"), wantStatus: 200,
+		{name: "a container's, as UTF-8", viewer: withLogs(maxReading), method: http.MethodGet, path: fixed(runsPath + "/1/logs/main"), wantStatus: 200,
 			wantHeader: http.Header{"Content-Type": {"text/plain; charset=utf-8"}, "X-Content-Type-Options": {"nosniff"}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if string(body) != "built \xff\n" {
+				if string(body) != "built \uFFFD\n" {
 					t.Errorf("log = %q", body)
 				}
 			}},

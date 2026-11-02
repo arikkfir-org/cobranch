@@ -193,8 +193,8 @@ func annotationOf(a queries.Annotation, displayName *string) code.Annotation {
 // reported.
 var reportedState = map[code.AnnotationStatus]jobs.State{code.AnnotationSuccessful: jobs.StateSucceeded, code.AnnotationFailed: jobs.StateFailed}
 
-// reportedRuns ends the running webhook runs of the job that set the annotation, when it is the job's own annotation
-// and says Successful or Failed: their receiver reported. annotationSet calls it after it queues the runs the
+// reportedRuns ends the webhook runs of the job that set the annotation that haven't ended, queued ones included, when
+// it is the job's own annotation and says Successful or Failed: their receiver reported. annotationSet calls it after it queues the runs the
 // annotation triggers, so that those name them as their cause, as a pod's run is while it runs.
 func reportedRuns(ctx context.Context, q *queries.Queries, actor, repoID uuid.UUID, sha, name string, status code.AnnotationStatus) error {
 	state := reportedState[status]

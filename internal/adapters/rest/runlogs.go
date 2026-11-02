@@ -23,7 +23,8 @@ func (a api) GetRunLogs(ctx context.Context, req GetRunLogsRequestObject) (GetRu
 	return out, nil
 }
 
-// GetRunLog answers one of a run's containers' logs as text, as it was logged.
+// GetRunLog answers one of a run's containers' logs as UTF-8 text, as its content type says: bytes that aren't UTF-8
+// read as U+FFFD, as GetRunLogs has them.
 func (a api) GetRunLog(ctx context.Context, req GetRunLogRequestObject) (GetRunLogResponseObject, error) {
 	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
 	if err != nil {
@@ -33,6 +34,7 @@ func (a api) GetRunLog(ctx context.Context, req GetRunLogRequestObject) (GetRunL
 	if err != nil {
 		return nil, fail(err, "log")
 	}
-	return GetRunLog200TextplainCharsetUtf8Response{Body: bytes.NewReader(l.Text), ContentLength: int64(len(l.Text)),
+	text := []byte(strings.ToValidUTF8(string(l.Text), "�"))
+	return GetRunLog200TextplainCharsetUtf8Response{Body: bytes.NewReader(text), ContentLength: int64(len(text)),
 		Headers: GetRunLog200ResponseHeaders{XContentTypeOptions: "nosniff"}}, nil
 }

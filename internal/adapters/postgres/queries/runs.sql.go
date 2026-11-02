@@ -124,9 +124,10 @@ func (q *Queries) DeleteRunToken(ctx context.Context, runID uuid.UUID) error {
 }
 
 const finishReportedRuns = `-- name: FinishReportedRuns :many
-UPDATE job_runs r SET state = $1::text, reason = $2, ended_at = now(), lease_until = NULL
+UPDATE job_runs r SET state = $1::text, reason = $2, started_at = coalesce(r.started_at, now()), ended_at = now(),
+    lease_until = NULL
 FROM jobs j
-WHERE r.job_id = $3 AND r.repo_id = $4 AND r.sha = $5 AND r.state = 'running'
+WHERE r.job_id = $3 AND r.repo_id = $4 AND r.sha = $5 AND r.state IN ('queued', 'running')
     AND r.definition -> 'webhook' IS NOT NULL AND j.principal_id = r.job_id AND j.name = $6
 RETURNING r.id
 `
@@ -140,8 +141,9 @@ type FinishReportedRunsParams struct {
 	Name   string
 }
 
-// FinishReportedRuns ends the running webhook runs of a job at a commit as their receiver reported through the job's
-// own annotation, Successful or Failed, and answers them.
+// FinishReportedRuns ends the webhook runs of a job at a commit that haven't ended as their receiver reported through
+// the job's own annotation, Successful or Failed, and answers them. A queued one ends too: the controller records its
+// token before it posts it, so its receiver may report before the controller sees the 2xx and marks it running.
 func (q *Queries) FinishReportedRuns(ctx context.Context, arg FinishReportedRunsParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, finishReportedRuns,
 		arg.State,

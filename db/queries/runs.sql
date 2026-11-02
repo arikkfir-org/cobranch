@@ -56,12 +56,14 @@ FROM jobs j
 WHERE r.id = @id AND r.state IN ('queued', 'running') AND j.principal_id = r.job_id
 RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 
--- FinishReportedRuns ends the running webhook runs of a job at a commit as their receiver reported through the job's
--- own annotation, Successful or Failed, and answers them.
+-- FinishReportedRuns ends the webhook runs of a job at a commit that haven't ended as their receiver reported through
+-- the job's own annotation, Successful or Failed, and answers them. A queued one ends too: the controller records its
+-- token before it posts it, so its receiver may report before the controller sees the 2xx and marks it running.
 -- name: FinishReportedRuns :many
-UPDATE job_runs r SET state = @state::text, reason = @reason, ended_at = now(), lease_until = NULL
+UPDATE job_runs r SET state = @state::text, reason = @reason, started_at = coalesce(r.started_at, now()), ended_at = now(),
+    lease_until = NULL
 FROM jobs j
-WHERE r.job_id = @job_id AND r.repo_id = @repo_id AND r.sha = @sha AND r.state = 'running'
+WHERE r.job_id = @job_id AND r.repo_id = @repo_id AND r.sha = @sha AND r.state IN ('queued', 'running')
     AND r.definition -> 'webhook' IS NOT NULL AND j.principal_id = r.job_id AND j.name = @name
 RETURNING r.id;
 

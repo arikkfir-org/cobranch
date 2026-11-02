@@ -88,7 +88,8 @@ func (s *Service) deliver(ctx context.Context, run Run) error {
 		return s.retry(ctx, run, timeout, err)
 	}
 	if _, err := s.store.MarkRunning(ctx, run.ID); err != nil {
-		// A run a member cancelled meanwhile stays cancelled: its token goes with the next sweep.
+		// A run a member cancelled meanwhile stays cancelled, and its token goes with the next sweep; one whose receiver
+		// reported before it answered ended then, and stays as it reported.
 		return fmt.Errorf("marking run %s running: %w", run.ID, err)
 	}
 	return nil

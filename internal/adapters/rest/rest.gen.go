@@ -3769,7 +3769,7 @@ type ServerInterface interface {
 	// GetRunLogs One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow; takes repo.read. A run that never started a pod, such as a webhook's, has none.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs)
 	GetRunLogs(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
-	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
+	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs/{container})
 	GetRunLog(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, container string)
 	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
@@ -26340,7 +26340,7 @@ type StrictServerInterface interface {
 	// GetRunLogs One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow; takes repo.read. A run that never started a pod, such as a webhook's, has none.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs)
 	GetRunLogs(ctx context.Context, request GetRunLogsRequestObject) (GetRunLogsResponseObject, error)
-	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
+	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs/{container})
 	GetRunLog(ctx context.Context, request GetRunLogRequestObject) (GetRunLogResponseObject, error)
 	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
