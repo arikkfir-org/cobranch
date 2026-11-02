@@ -40,6 +40,10 @@ type Code interface {
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
+	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
+	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 }
 
 func principal(p *code.Principal) *Principal {
@@ -98,6 +102,9 @@ func branch(b code.Branch) Branch {
 	}
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
+	}
+	if b.SettingsError != "" {
+		out.SettingsError = &b.SettingsError
 	}
 	return out
 }

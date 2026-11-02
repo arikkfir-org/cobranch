@@ -108,6 +108,9 @@ func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 	if err := moveRefs(ctx, q, orgID, push); err != nil {
 		return err
 	}
+	if err := recordSettings(ctx, q, orgID, push); err != nil {
+		return err
+	}
 	if err := recordFacts(ctx, q, orgID, push); err != nil {
 		return err
 	}
@@ -221,9 +224,14 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	if err != nil {
 		return err
 	}
+	peeled, err := json.Marshal(nonNilMap(push.Peeled))
+	if err != nil {
+		return fmt.Errorf("encoding the push's tags: %w", err)
+	}
 	if err := q.InsertPush(ctx, queries.InsertPushParams{
 		ID: push.ID, OrgID: orgID, RepoID: push.RepoID, PusherID: &push.PusherID, Transport: string(push.Transport),
 		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt, Traceparent: traceparent(ctx), Merged: merged,
+		Peeled: peeled,
 	}); err != nil {
 		return fmt.Errorf("recording the push: %w", err)
 	}
@@ -300,16 +308,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		if err := s.attribute(ctx, q, claimed); err != nil {
 			return err
 		}
-		if err := linkPushed(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := recordMerges(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := finishMerged(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
+		if err := followPush(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
@@ -325,6 +324,18 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
+}
+
+// followPush does, in the push worker's transaction, what the claimed push brings once its commits are attributed:
+// links its branches to their issues, records its merges and finishes their issues, queues its jobs' runs, and works
+// out the status of the branches waiting on it.
+func followPush(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	for _, step := range []func(context.Context, *queries.Queries, queries.ClaimPushRow) error{linkPushed, recordMerges, finishMerged, queuePushRuns} {
+		if err := step(ctx, q, claimed); err != nil {
+			return err
+		}
+	}
+	return restatusWaiting(ctx, q, claimed.RepoID, claimed.ID)
 }
 
 // traceparent is the W3C traceparent of the span in ctx, or "" without one.
@@ -509,6 +520,14 @@ func updatesJSON(updates []git.RefUpdate) []refUpdateJSON {
 		out = append(out, refUpdateJSON(u))
 	}
 	return out
+}
+
+// nonNilMap is m, or an empty map for a nil one.
+func nonNilMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }
 
 // nonNil is s, or an empty slice for a nil one: a root commit's parents are none, not unknown.
