@@ -15,20 +15,33 @@ import (
 func working(number int64) func(f *orgFixture) *auth.Authenticated {
 	return func(f *orgFixture) *auth.Authenticated {
 		f.store.AddMember(f.acme.ID, f.scout.ID, auth.RoleMember)
-		task, err := f.agentStore.Task(context.Background(), f.acme.ID, number)
-		if err != nil {
-			panic(err)
-		}
-		return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: f.scout.ID, Kind: auth.KindAgent, DisplayName: "Scout"}},
-			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: f.scout.ID,
-				Task: auth.TaskGrant{ID: task.ID, OrgID: f.acme.ID, AssignerID: task.AssignedBy.ID}}}
+		return token(f, number)
 	}
+}
+
+// workingInRepo is working with Scout holding only Developer on website, and so no org.read.
+func workingInRepo(number int64) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		f.store.Grant(f.scout.ID, auth.RoleDeveloper, auth.ScopeRepository, f.website.ID)
+		return token(f, number)
+	}
+}
+
+// token is a viewer under a task token of Scout's for Acme's task number.
+func token(f *orgFixture, number int64) *auth.Authenticated {
+	task, err := f.agentStore.Task(context.Background(), f.acme.ID, number)
+	if err != nil {
+		panic(err)
+	}
+	return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: f.scout.ID, Kind: auth.KindAgent, DisplayName: "Scout"}},
+		Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: f.scout.ID,
+			Task: auth.TaskGrant{ID: task.ID, OrgID: f.acme.ID, AssignerID: task.AssignedBy.ID}}}
 }
 
 // appended has task 1's token append its first n entries, then gives body.
 func appended(n int, body string) func(f *orgFixture) string {
 	return func(f *orgFixture) string {
-		v := working(1)(f)
+		v := token(f, 1)
 		ctx := auth.WithViewer(context.Background(), *v)
 		for seq := 1; seq <= n; seq++ {
 			if _, _, err := f.agents.Append(ctx, v.User, f.acme.ID, 1, agents.Entry{Seq: seq, Kind: agents.EntryTurn, Body: json.RawMessage(`{"text":"Hm"}`)}); err != nil {
@@ -93,6 +106,15 @@ func TestTranscriptAPI(t *testing.T) {
 			body: `{"seq":1,"kind":"turn","body":{}}`, wantStatus: 409, wantCode: "task.ended"},
 		{name: "append to another task", viewer: working(1), method: "POST", path: fixed("/v1/orgs/acme/tasks/3/transcript"),
 			body: `{"seq":1,"kind":"turn","body":{}}`, wantStatus: 403, wantCode: "auth.forbidden"},
+		{name: "append as an agent holding only a repository role", viewer: workingInRepo(1), method: "POST", path: path,
+			body: `{"seq":1,"kind":"input","body":{"text":"Tidy up"}}`, wantStatus: 201},
+		{name: "list as an agent holding only a repository role", viewer: workingInRepo(1), method: "GET", path: path,
+			headerFor: func(f *orgFixture) http.Header { appended(2, "")(f); return nil }, wantStatus: 200, check: wantEntries(1, 2)},
+		{name: "get an entry as an agent holding only a repository role", viewer: workingInRepo(1), method: "GET",
+			path: fixed("/v1/orgs/acme/tasks/1/transcript/1"), headerFor: func(f *orgFixture) http.Header { appended(1, "")(f); return nil },
+			wantStatus: 200, wantTag: `"1-`},
+		{name: "list another organization's as a task token", viewer: workingInRepo(1), method: "GET", path: fixed("/v1/orgs/globex/tasks/1/transcript"),
+			wantStatus: 404, wantCode: "organization.not_found"},
 		{name: "append as a person", viewer: maxim, method: "POST", path: path, body: `{"seq":1,"kind":"turn","body":{}}`,
 			wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "list as the assigner", viewer: maxim, method: "GET", path: path, headerFor: func(f *orgFixture) http.Header { appended(3, "")(f); return nil },
