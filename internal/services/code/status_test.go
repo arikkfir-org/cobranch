@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 )
@@ -50,6 +52,68 @@ func TestEvaluate(t *testing.T) {
 			want: code.StatusMerged, wantChecks: []code.Check{{Kind: code.CheckUpToDate, Count: 2}}},
 		{name: "ready", in: code.Standing{Requirements: requireBuild, Facts: git.Facts{Ahead: 2}, Annotations: build(code.AnnotationSuccessful)},
 			want: code.StatusReady, wantChecks: []code.Check{{Kind: code.CheckAnnotation, Name: "ci/build", Status: code.AnnotationSuccessful, Met: true}, upToDate}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, checks := code.Evaluate(tt.in)
+			if got != tt.want {
+				t.Errorf("Evaluate() = %s, want %s", got, tt.want)
+			}
+			if !reflect.DeepEqual(checks, tt.wantChecks) {
+				t.Errorf("checks = %+v, want %+v", checks, tt.wantChecks)
+			}
+		})
+	}
+}
+
+func TestEvaluateReviews(t *testing.T) {
+	alice, bob, carol, agent := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	by := func(id uuid.UUID, name string, state code.ReviewState) code.Review {
+		return code.Review{ID: uuid.New(), State: state, Reviewer: &code.Principal{ID: id, DisplayName: name}, Person: id != agent}
+	}
+	two := git.Requirements{Branch: "main", Reviews: &git.ReviewRequirements{Approvals: 2}}
+	none := git.Requirements{Branch: "main", Reviews: &git.ReviewRequirements{}}
+	upToDate := code.Check{Kind: code.CheckUpToDate, Met: true}
+	approvals := func(n int) code.Check {
+		return code.Check{Kind: code.CheckApprovals, Count: n, Required: 2, Met: n >= 2}
+	}
+	tests := []struct {
+		name       string
+		in         code.Standing
+		want       code.BranchStatus
+		wantChecks []code.Check
+	}{
+		{name: "no reviews where two approvals are required", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1}},
+			want: code.StatusBlocked, wantChecks: []code.Check{approvals(0), upToDate}},
+		{name: "two people approve", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewApproved), by(bob, "Bob", code.ReviewApproved)}},
+			want: code.StatusReady, wantChecks: []code.Check{approvals(2), upToDate}},
+		{name: "the author's and the pusher's approvals don't count", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewApproved), by(bob, "Bob", code.ReviewApproved), by(carol, "Carol", code.ReviewApproved)},
+			Authors: []uuid.UUID{alice, bob}},
+			want: code.StatusBlocked, wantChecks: []code.Check{approvals(1), upToDate}},
+		{name: "an agent's approval doesn't count", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewApproved), by(agent, "AI reviewer", code.ReviewApproved)}},
+			want: code.StatusBlocked, wantChecks: []code.Check{approvals(1), upToDate}},
+		{name: "a reviewer's latest review counts", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewApproved), by(bob, "Bob", code.ReviewApproved), by(alice, "Alice", code.ReviewNeutral)}},
+			want: code.StatusBlocked, wantChecks: []code.Check{approvals(1), upToDate}},
+		{name: "a gone reviewer's approval doesn't count", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewApproved), {ID: uuid.New(), State: code.ReviewApproved, Person: true}}},
+			want: code.StatusBlocked, wantChecks: []code.Check{approvals(1), upToDate}},
+		{name: "changes requested by anyone block, an agent's too", in: code.Standing{Requirements: none, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(agent, "AI reviewer", code.ReviewChangesRequested), by(alice, "Alice", code.ReviewChangesRequested)}},
+			want: code.StatusBlocked, wantChecks: []code.Check{{Kind: code.CheckChangesRequested, Name: "AI reviewer"},
+				{Kind: code.CheckChangesRequested, Name: "Alice"}, upToDate}},
+		{name: "changes requested, then approved", in: code.Standing{Requirements: two, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewChangesRequested), by(bob, "Bob", code.ReviewApproved), by(alice, "Alice", code.ReviewApproved)}},
+			want: code.StatusReady, wantChecks: []code.Check{approvals(2), upToDate}},
+		{name: "reviews with no approvals required and none requesting changes", in: code.Standing{Requirements: none, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewNeutral)}},
+			want: code.StatusReady, wantChecks: []code.Check{upToDate}},
+		{name: "changes requested where the base requires no reviews", in: code.Standing{Requirements: git.Requirements{Branch: "main"}, Facts: git.Facts{Ahead: 1},
+			Reviews: []code.Review{by(alice, "Alice", code.ReviewChangesRequested)}},
+			want: code.StatusReady, wantChecks: []code.Check{upToDate}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

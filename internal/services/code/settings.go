@@ -79,7 +79,8 @@ func ParseSettings(content []byte) ([]git.Requirements, error) {
 	return out, nil
 }
 
-// branchRequirements reads one branch's settings under branches: requires, with its annotations and linearHistory.
+// branchRequirements reads one branch's settings under branches: requires, with its annotations, linearHistory and
+// reviews.
 func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error) {
 	r := git.Requirements{Branch: branch}
 	if isNull(node) {
@@ -92,7 +93,7 @@ func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error
 	if requires == nil || isNull(requires) {
 		return r, nil
 	}
-	if err := onlyKeys(requires, "requires", "annotations", "linearHistory"); err != nil {
+	if err := onlyKeys(requires, "requires", "annotations", "linearHistory", "reviews"); err != nil {
 		return r, err
 	}
 	if n := valueOf(requires, "annotations"); n != nil && !isNull(n) {
@@ -109,7 +110,31 @@ func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error
 		}
 		r.LinearHistory = linear
 	}
+	if n := valueOf(requires, "reviews"); n != nil && !isNull(n) {
+		reviews, err := reviewRequirements(n)
+		if err != nil {
+			return r, err
+		}
+		r.Reviews = &reviews
+	}
 	return r, nil
+}
+
+// reviewRequirements reads the reviews a branch requires: how many approvals, from 0 to git.MaxApprovals, 0 when left
+// out, which still holds a merge back while a reviewer requests changes.
+func reviewRequirements(node *yaml.Node) (git.ReviewRequirements, error) {
+	var out git.ReviewRequirements
+	if err := onlyKeys(node, "reviews", "approvals"); err != nil {
+		return out, err
+	}
+	if n := valueOf(node, "approvals"); n != nil && !isNull(n) {
+		var approvals int
+		if n.Kind != yaml.ScalarNode || n.Tag != "!!int" || n.Decode(&approvals) != nil || approvals < 0 || approvals > git.MaxApprovals {
+			return out, &SettingsError{Line: n.Line, Message: fmt.Sprintf("approvals must be a whole number from 0 to %d", git.MaxApprovals)}
+		}
+		out.Approvals = approvals
+	}
+	return out, nil
 }
 
 // annotationNames reads a list of annotations' names, each once.

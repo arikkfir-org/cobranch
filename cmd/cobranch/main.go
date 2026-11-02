@@ -15,7 +15,7 @@ import (
 	"cobranch.dev/internal/system/buildinfo"
 )
 
-const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | admin-server | git-server | push-worker | git-hook | maintenance"
+const usage = "usage: cobranch version | migrate | auth-server | rest-server | graphql-server | admin-server | git-server | push-worker | git-hook | maintenance | render"
 
 // telemetryFlushTimeout bounds how long a workload waits, as it exits, for its last spans to be exported.
 const telemetryFlushTimeout = 5 * time.Second
@@ -28,8 +28,11 @@ func main() {
 }
 
 // run runs the subcommand args name until it ends or ctx does, and returns the process's exit code: 0 on success, 1
-// when the subcommand fails, 2 on a command line it does not know.
+// when the subcommand fails, 2 on a command line it does not know. Only render, a one-off command, takes arguments.
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) > 0 && args[0] == "render" {
+		return runRender(ctx, args[1:], stdout, stderr)
+	}
 	if len(args) != 1 {
 		_, _ = fmt.Fprintln(stderr, usage) // stderr is gone; nothing to tell
 		return 2
