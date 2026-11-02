@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -19,6 +20,8 @@ type chatStep struct {
 	path    string
 	body    string
 	ifMatch string
+	// move is the commit feature/login moves to before the request; empty leaves it.
+	move string
 	// ifNoneMatch is the ETag the caller holds.
 	ifNoneMatch string
 	wantStatus  int
@@ -41,37 +44,37 @@ func TestChats(t *testing.T) {
 	steps := []chatStep{
 		{name: "an Owner starts an anchored thread", viewer: olivia, method: "POST", path: "/threads", body: `{"body":"Why *this*?",` + anchor + `}`,
 			wantStatus: 201, want: []string{`"outdated":false`, `"html":"\u003cp\u003eWhy \u003cem\u003ethis\u003c/em\u003e?`, `"startedBy":{"displayName":"Olivia"`},
-			wantHeader: map[string]string{"ETag": `"1"`, "Location": chat + "/threads/{thread}"}},
+			wantHeader: map[string]string{"ETag": tagAt(1, "c"), "Location": chat + "/threads/{thread}"}},
 		{name: "a Reader reads the chat", viewer: maxAs(auth.RoleReader), method: "GET", path: "", wantStatus: 200,
 			want: []string{`"after":"1"`, `"id":"{thread}"`, `"path":"README.md"`}},
 		{name: "a Reader may not post", viewer: maxAs(auth.RoleReader), method: "POST", path: "/threads/{thread}/messages", body: `{"body":"Hi"}`,
 			wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a Developer replies", viewer: maxAs(auth.RoleDeveloper), method: "POST", path: "/threads/{thread}/messages", body: `{"body":"Because"}`,
 			wantStatus: 201, want: []string{`"body":"Because"`, `"author":{"displayName":"Max"`},
-			wantHeader: map[string]string{"ETag": `"1"`, "Location": chat + "/threads/{thread}/messages/{message}"}},
+			wantHeader: map[string]string{"ETag": tagAt(1, "c"), "Location": chat + "/threads/{thread}/messages/{message}"}},
 		{name: "the reply, read", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", wantStatus: 200,
-			wantHeader: map[string]string{"ETag": `"1"`}},
-		{name: "the reply, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", ifNoneMatch: `"1"`,
-			wantStatus: 304, wantHeader: map[string]string{"ETag": `"1"`}},
-		{name: "the reply bumped the thread's version", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: `"1"`,
-			wantStatus: 200, want: []string{`"version":2`}, wantHeader: map[string]string{"ETag": `"2"`}},
-		{name: "the thread, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: `"2"`,
-			wantStatus: 304, wantHeader: map[string]string{"ETag": `"2"`}},
+			wantHeader: map[string]string{"ETag": tagAt(1, "c")}},
+		{name: "the reply, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", ifNoneMatch: tagAt(1, "c"),
+			wantStatus: 304, wantHeader: map[string]string{"ETag": tagAt(1, "c")}},
+		{name: "the reply bumped the thread's version", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: tagAt(1, "c"),
+			wantStatus: 200, want: []string{`"version":2`}, wantHeader: map[string]string{"ETag": tagAt(2, "c")}},
+		{name: "the thread, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: tagAt(2, "c"),
+			wantStatus: 304, wantHeader: map[string]string{"ETag": tagAt(2, "c")}},
 		{name: "another's ID", viewer: olivia, method: "POST", path: "/threads/{thread}/messages", body: `{"id":"{message}","body":"Mine"}`,
 			wantStatus: 409, wantCode: "chat.id_taken"},
 		{name: "an edit names the ETag", viewer: maxAs(auth.RoleDeveloper), method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Because, really"}`, wantStatus: 428, wantCode: "precondition.required"},
 		{name: "its author edits it", viewer: maxAs(auth.RoleDeveloper), method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Because, really"}`, ifMatch: `"1"`, wantStatus: 200, want: []string{`"body":"Because, really"`, `"editedAt":`},
-			wantHeader: map[string]string{"ETag": `"2"`}},
+			wantHeader: map[string]string{"ETag": tagAt(2, "c")}},
 		{name: "a stale edit", viewer: maxAs(auth.RoleDeveloper), method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Stale"}`, ifMatch: `"1"`, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "another may not edit it", viewer: olivia, method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Mine now"}`, ifMatch: "*", wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "a resolution from before the edit", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: `"2"`,
 			wantStatus: 412, wantCode: "precondition.failed"},
-		{name: "its starter resolves the thread", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: `"3"`,
-			wantStatus: 200, want: []string{`"resolvedBy":{"displayName":"Olivia"`, `"version":4`}, wantHeader: map[string]string{"ETag": `"4"`}},
+		{name: "its starter resolves the thread", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: tagAt(3, "c"),
+			wantStatus: 200, want: []string{`"resolvedBy":{"displayName":"Olivia"`, `"version":4`}, wantHeader: map[string]string{"ETag": tagAt(4, "c")}},
 		{name: "the updates, in order", viewer: olivia, method: "GET", path: "/updates?after=0", wantStatus: 200,
 			want: []string{`"after":"4"`, `"kind":"thread.started"`, `"kind":"message.posted"`, `"kind":"message.edited"`, `"kind":"thread.resolved"`}},
 		{name: "none after the last", viewer: olivia, method: "GET", path: "/updates?after=4&wait=0", wantStatus: 200,
@@ -98,6 +101,35 @@ func TestChats(t *testing.T) {
 	}
 }
 
+func TestChatTagsFollowTheHead(t *testing.T) {
+	const chat = "/v1/orgs/acme/repos/website/branches/feature%2Flogin/chat"
+	anchor := `"anchor":{"sha":"` + shaOf("c") + `","path":"README.md","startLine":1,"endLine":2}`
+	steps := []chatStep{
+		{name: "an Owner starts an anchored thread", viewer: olivia, method: "POST", path: "/threads", body: `{"body":"Why?",` + anchor + `}`,
+			wantStatus: 201, want: []string{`"outdated":false`}, wantHeader: map[string]string{"ETag": tagAt(1, "c")}},
+		{name: "she replies", viewer: olivia, method: "POST", path: "/threads/{thread}/messages", body: `{"body":"![logo](logo.png)"}`,
+			wantStatus: 201, want: []string{shaOf("c")}, wantHeader: map[string]string{"ETag": tagAt(1, "c")}},
+		{name: "a push outdates the thread and changes its tag", move: "d", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: tagAt(2, "c"),
+			wantStatus: 200, want: []string{`"outdated":true`, `"version":2`}, wantHeader: map[string]string{"ETag": tagAt(2, "d")}},
+		{name: "a push changes a message's tag", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", ifNoneMatch: tagAt(1, "c"),
+			wantStatus: 200, want: []string{`"version":1`, shaOf("d")}, wantHeader: map[string]string{"ETag": tagAt(1, "d")}},
+		{name: "the thread, at the new head", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: tagAt(2, "d"),
+			wantStatus: 304, wantHeader: map[string]string{"ETag": tagAt(2, "d")}},
+		{name: "a change from before the push applies", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: tagAt(2, "c"),
+			wantStatus: 200, want: []string{`"version":3`}, wantHeader: map[string]string{"ETag": tagAt(3, "d")}},
+	}
+	f := newOrgFixture(t)
+	var ids chatIDs
+	for _, s := range steps {
+		s.run(t, f, chat, &ids)
+	}
+}
+
+// tagAt is the ETag of a thread or a message at version, read while feature/login is at commit.
+func tagAt(version int, commit string) string {
+	return `"` + strconv.Itoa(version) + "-" + shaOf(commit) + `"`
+}
+
 // chatIDs are the last thread started and message posted.
 type chatIDs struct{ thread, message string }
 
@@ -109,6 +141,13 @@ func (ids *chatIDs) expand(s string) string {
 // posts.
 func (s chatStep) run(t *testing.T, f *orgFixture, chat string, ids *chatIDs) {
 	t.Helper()
+	if s.move != "" {
+		subj, err := f.chatStore.Subject(t.Context(), f.website.ID, "feature/login")
+		if err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
+		f.chatStore.Move(subj.BranchID, shaOf(s.move))
+	}
 	header := http.Header{}
 	if s.ifMatch != "" {
 		header.Set("If-Match", s.ifMatch)

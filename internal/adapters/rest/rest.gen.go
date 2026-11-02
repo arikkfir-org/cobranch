@@ -611,7 +611,7 @@ type ChatMessage struct {
 	Id       openapi_types.UUID `json:"id"`
 	ThreadId openapi_types.UUID `json:"threadId"`
 
-	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	// Version Counts its changes from 1. Its ETag is this number and the branch's head, which shapes how it reads, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
 	Version int64 `json:"version"`
 }
 
@@ -652,7 +652,7 @@ type ChatThread struct {
 	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 	StartedBy *Principal `json:"startedBy,omitempty"`
 
-	// Version Counts its changes and its messages' from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	// Version Counts its changes and its messages' from 1. Its ETag is this number and the branch's head, which shapes how it reads, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
 	Version int64 `json:"version"`
 }
 

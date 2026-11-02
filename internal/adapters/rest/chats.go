@@ -74,9 +74,10 @@ func chatUpdate(u chats.Update) ChatUpdate {
 	return out
 }
 
-// versionTag is the ETag of a thread or a message at version: the number, quoted.
-func versionTag(version int64) string {
-	return `"` + strconv.FormatInt(version, 10) + `"`
+// chatTag is the ETag of a thread or a message at version, read on a branch at head, quoted: the head shapes how it
+// reads (whether a thread is outdated, which commit a message's links lead to), so a push changes the tag too.
+func chatTag(version int64, head string) string {
+	return `"` + strconv.FormatInt(version, 10) + "-" + head + `"`
 }
 
 // chatPath is the path of the subject's chat from the API's base, by the current slugs, with the parts that follow.
@@ -154,7 +155,7 @@ func (a api) StartChatThread(ctx context.Context, req StartChatThreadRequestObje
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return StartChatThread201JSONResponse{Body: chatThread(t), Headers: StartChatThread201ResponseHeaders{ETag: versionTag(t.Version),
+	return StartChatThread201JSONResponse{Body: chatThread(t), Headers: StartChatThread201ResponseHeaders{ETag: chatTag(t.Version, subj.Head),
 		Location: chatPath(subj, "threads", t.ID.String())}}, nil
 }
 
@@ -168,7 +169,7 @@ func (a api) GetChatThread(ctx context.Context, req GetChatThreadRequestObject) 
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	tag := versionTag(t.Version)
+	tag := chatTag(t.Version, subj.Head)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetChatThread304Response{Headers: GetChatThread304ResponseHeaders{ETag: tag}}, nil
 	}
@@ -189,7 +190,7 @@ func (a api) UpdateChatThread(ctx context.Context, req UpdateChatThreadRequestOb
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return UpdateChatThread200JSONResponse{Body: chatThread(t), Headers: UpdateChatThread200ResponseHeaders{ETag: versionTag(t.Version)}}, nil
+	return UpdateChatThread200JSONResponse{Body: chatThread(t), Headers: UpdateChatThread200ResponseHeaders{ETag: chatTag(t.Version, subj.Head)}}, nil
 }
 
 // PostChatMessage posts a message to one of a branch's chat threads for the viewer.
@@ -206,7 +207,7 @@ func (a api) PostChatMessage(ctx context.Context, req PostChatMessageRequestObje
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return PostChatMessage201JSONResponse{Body: chatMessage(m), Headers: PostChatMessage201ResponseHeaders{ETag: versionTag(m.Version),
+	return PostChatMessage201JSONResponse{Body: chatMessage(m), Headers: PostChatMessage201ResponseHeaders{ETag: chatTag(m.Version, subj.Head),
 		Location: chatPath(subj, "threads", req.ThreadID.String(), "messages", m.ID.String())}}, nil
 }
 
@@ -220,7 +221,7 @@ func (a api) GetChatMessage(ctx context.Context, req GetChatMessageRequestObject
 	if err != nil {
 		return nil, fail(err, "message")
 	}
-	tag := versionTag(m.Version)
+	tag := chatTag(m.Version, subj.Head)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetChatMessage304Response{Headers: GetChatMessage304ResponseHeaders{ETag: tag}}, nil
 	}
@@ -241,7 +242,7 @@ func (a api) EditChatMessage(ctx context.Context, req EditChatMessageRequestObje
 	if err != nil {
 		return nil, fail(err, "message")
 	}
-	return EditChatMessage200JSONResponse{Body: chatMessage(m), Headers: EditChatMessage200ResponseHeaders{ETag: versionTag(m.Version)}}, nil
+	return EditChatMessage200JSONResponse{Body: chatMessage(m), Headers: EditChatMessage200ResponseHeaders{ETag: chatTag(m.Version, subj.Head)}}, nil
 }
 
 // DeleteChatMessage deletes a message, keeping its place in its thread.
@@ -290,7 +291,8 @@ func (a api) ListChatUpdates(ctx context.Context, req ListChatUpdatesRequestObje
 
 // chatMatch is the version of a thread or a message that If-Match names, chats.AnyVersion for *: a refusal with 428
 // without the header, and with 412 for a tag that names no version, a weak one included, since If-Match compares
-// strongly.
+// strongly. It compares the version alone: a push changes how a thread or a message reads, not what a change acts on,
+// so a change made from before one still applies.
 func chatMatch(header *string) (int64, error) {
 	if header == nil || strings.TrimSpace(*header) == "" {
 		return 0, refuse(http.StatusPreconditionRequired, "precondition.required", "Name its ETag in If-Match, or * for whichever version is there.")
@@ -299,7 +301,8 @@ func chatMatch(header *string) (int64, error) {
 	if tag == "*" {
 		return chats.AnyVersion, nil
 	}
-	version, err := strconv.ParseInt(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), 10, 64)
+	number, _, _ := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), "-")
+	version, err := strconv.ParseInt(number, 10, 64)
 	if err != nil || version < 1 {
 		return 0, refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no version of it.")
 	}
