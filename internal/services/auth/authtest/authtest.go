@@ -233,10 +233,10 @@ func (s *Store) DeleteSSHKey(_ context.Context, userID, id uuid.UUID) error {
 	return auth.ErrNotFound
 }
 
-// TouchCredential marks credential id used at usedAt.
-func (s *Store) TouchCredential(_ context.Context, id uuid.UUID, usedAt time.Time) error {
+// TouchCredential marks credential id, of kind, used at usedAt.
+func (s *Store) TouchCredential(_ context.Context, id uuid.UUID, kind auth.CredentialKind, usedAt time.Time) error {
 	for k, c := range s.Credentials {
-		if c.ID == id {
+		if c.ID == id && c.Kind == kind {
 			c.LastUsedAt = usedAt
 			s.Credentials[k] = c
 		}

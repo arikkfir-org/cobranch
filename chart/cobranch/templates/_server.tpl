@@ -2,8 +2,9 @@
 A server of one API: its Deployment, Service and budget. Pass a dict of the root context, the component, which names
 the subcommand too, and the server's values; and, for the Git workloads, bucket (true for the one that reads packs),
 service (false for one nobody calls), env (more of the container's variables, as YAML), volumes (more emptyDirs: a
-name, a mountPath and the emptyDir each) and ports (more of the container's: a name and a containerPort each). Values
-without replicas leave the count to an autoscaler.
+name, a mountPath and the emptyDir each) and ports (more of the container's: a name and a containerPort each); and,
+for the controller, serviceAccount (a ServiceAccount of its own, whose token it mounts). Values without replicas leave
+the count to an autoscaler.
 */}}
 {{- define "cobranch.server" -}}
 {{- $root := .root }}
@@ -43,10 +44,15 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- if .serviceAccount }}
+      serviceAccountName: {{ .serviceAccount }}
+      automountServiceAccountToken: true
+      {{- else }}
       {{- if $bucket }}
       serviceAccountName: {{ include "cobranch.serviceAccount" $root }}
       {{- end }}
       automountServiceAccountToken: false
+      {{- end }}
       {{- with $root.Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -94,7 +100,7 @@ spec:
             {{- end }}
             {{- include "cobranch.providersEnv" $root | nindent 12 }}
             {{- include "cobranch.secretsKeyEnv" $root | nindent 12 }}
-            {{- else if or (eq .component "rest-server") (eq .component "graphql-server") }}
+            {{- else if has .component (list "rest-server" "graphql-server" "controller") }}
             {{- include "cobranch.secretsKeyEnv" $root | nindent 12 }}
             {{- end }}
             {{- else }}

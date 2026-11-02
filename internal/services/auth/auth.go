@@ -153,7 +153,7 @@ func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
 }
 
-// CredentialKind is what a credential is: an API key's secret, or a user's personal token or SSH key.
+// CredentialKind is what a credential is: an API key's secret, a user's personal token or SSH key, or a run's token.
 type CredentialKind string
 
 // The credential kinds.
@@ -164,6 +164,9 @@ const (
 	CredentialPersonalToken CredentialKind = "personal_token"
 	// CredentialSSHKey is an SSH public key, which acts as the user who added it, unnarrowed, as their session would.
 	CredentialSSHKey CredentialKind = "ssh_key"
+	// CredentialRunToken is a run's token, which acts as the run's job while it runs: it reads the run's organization
+	// and does what the job declared on the run's repository, besides what the job's grants give.
+	CredentialRunToken CredentialKind = "run_token"
 	// CredentialTaskToken is a task token, which acts as an agent for one of its tasks, capped by the task's assigner.
 	CredentialTaskToken CredentialKind = "task_token"
 )
@@ -193,6 +196,9 @@ type Credential struct {
 	// PublicKey is an SSH key's public half, its type and base64, as an authorized_keys line has it without a comment;
 	// empty for the others.
 	PublicKey string
+	// OrgID and RepoID are where a run's token acts: its run's organization and repository; uuid.Nil for the others.
+	// Its ID is its run's, and its Permissions what its job declared.
+	OrgID, RepoID uuid.UUID
 	// Task is the task a task token works; zero for the others.
 	Task TaskGrant
 }
