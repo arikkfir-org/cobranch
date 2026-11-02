@@ -126,7 +126,7 @@ func parseID(ctx context.Context, id, kind string) (uuid.UUID, error) {
 // organization is o as the API shows it; its lazy fields resolve on their own.
 func organization(o orgs.Organization) *Organization {
 	return &Organization{ID: o.ID.String(), Slug: o.Slug, Name: o.Name, MembershipRoleID: o.MembershipRoleID.String(),
-		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, CreatedAt: o.CreatedAt}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, Providers: o.Providers, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt}
 }
 
 func role(r orgs.Role) *Role {
@@ -200,8 +200,12 @@ func settings(ctx context.Context, input OrganizationSettings) (orgs.Settings, e
 	if err != nil {
 		return orgs.Settings{}, err
 	}
-	return orgs.Settings{Slug: input.Slug, Name: input.Name, MembershipRoleID: roleID,
-		AcceptsJoinRequests: input.AcceptsJoinRequests, Providers: input.Providers}, nil
+	out := orgs.Settings{Slug: input.Slug, Name: input.Name, MembershipRoleID: roleID,
+		AcceptsJoinRequests: input.AcceptsJoinRequests, Providers: input.Providers}
+	if input.IssueKey != nil {
+		out.IssueKey = *input.IssueKey
+	}
+	return out, nil
 }
 
 // act runs an operation on an organization and one of its objects, both named by ID, and answers true when it did.

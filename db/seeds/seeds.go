@@ -21,4 +21,5 @@ var Go = []*goose.Migration{
 	goose.NewGoMigration(5, &goose.GoFunc{RunTx: apiKeys}, nil),
 	goose.NewGoMigration(6, &goose.GoFunc{RunTx: admin}, nil),
 	goose.NewGoMigration(7, &goose.GoFunc{RunTx: repositories}, nil),
+	goose.NewGoMigration(8, &goose.GoFunc{RunTx: issues}, nil),
 }
