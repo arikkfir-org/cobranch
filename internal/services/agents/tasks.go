@@ -14,8 +14,12 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// visible answers orgs.ErrNotFound for a task that names a repository v doesn't read, as for a task that isn't there.
-func (s *Service) visible(ctx context.Context, v Viewer, t Task) error {
+// visible answers orgs.ErrNotFound for a task that names a repository v doesn't read, or of a kind whose guard held
+// lacks, as for a task that isn't there.
+func (s *Service) visible(ctx context.Context, v Viewer, held []string, t Task) error {
+	if permission, ok := s.guards[t.Kind]; ok && !slices.Contains(held, permission) {
+		return orgs.ErrNotFound
+	}
 	if t.RepoID == uuid.Nil {
 		return nil
 	}
@@ -30,7 +34,7 @@ func (s *Service) visible(ctx context.Context, v Viewer, t Task) error {
 }
 
 // Tasks lists a page of at most limit, 1 to MaxPage, of the organization's tasks that match the filter, newest first,
-// leaving out those on repositories v doesn't read; it takes org.read.
+// leaving out those on repositories v doesn't read and those of kinds whose guard v lacks; it takes org.read.
 func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFilter, limit int) (TaskPage, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Tasks", onOrg(orgID))
 	defer span.End()
@@ -42,14 +46,15 @@ func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFi
 			return TaskPage{}, failed(span, "listing the tasks", invalid("state", "task.state_invalid", "not a task state"))
 		}
 	}
-	if _, err := s.held(ctx, v, orgID); err != nil {
+	held, err := s.held(ctx, v, orgID)
+	if err != nil {
 		return TaskPage{}, failed(span, "listing the tasks", err)
 	}
 	readable, err := s.authz.Repositories(ctx, v.ID, orgID, repos.PermRead)
 	if err != nil {
 		return TaskPage{}, failed(span, "listing the repositories the viewer reads", err)
 	}
-	tasks, err := s.store.Tasks(ctx, orgID, f, readable, limit+1)
+	tasks, err := s.store.Tasks(ctx, orgID, f, readable, s.hidden(held), limit+1)
 	if err != nil {
 		return TaskPage{}, failed(span, "listing the tasks", err)
 	}
@@ -61,19 +66,20 @@ func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFi
 	return page, nil
 }
 
-// Task finds one of the organization's tasks by its number; it takes org.read, and repo.read on the repository it
-// names.
+// Task finds one of the organization's tasks by its number; it takes org.read, repo.read on the repository it names,
+// and its kind's guard.
 func (s *Service) Task(ctx context.Context, v Viewer, orgID uuid.UUID, number int64) (Task, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.Task", onOrg(orgID, attribute.Int64("cobranch.task.number", number)))
 	defer span.End()
-	if _, err := s.held(ctx, v, orgID); err != nil {
+	held, err := s.held(ctx, v, orgID)
+	if err != nil {
 		return Task{}, failed(span, "finding the task", err)
 	}
 	t, err := s.store.Task(ctx, orgID, number)
 	if err != nil {
 		return Task{}, failed(span, "finding the task", err)
 	}
-	if err := s.visible(ctx, v, t); err != nil {
+	if err := s.visible(ctx, v, held, t); err != nil {
 		return Task{}, failed(span, "finding the task", err)
 	}
 	return t, nil
@@ -186,7 +192,7 @@ func (s *Service) CancelTask(ctx context.Context, v Viewer, orgID uuid.UUID, num
 	if err != nil {
 		return Task{}, failed(span, "finding the task", err)
 	}
-	if err := s.visible(ctx, v, t); err != nil {
+	if err := s.visible(ctx, v, held, t); err != nil {
 		return Task{}, failed(span, "finding the task", err)
 	}
 	mine := t.AssignedBy != nil && t.AssignedBy.ID == v.ID

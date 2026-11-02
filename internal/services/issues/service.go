@@ -38,8 +38,12 @@ type Store interface {
 	Delete(ctx context.Context, actor uuid.UUID, issue Issue, version int64) error
 	// Activity lists the issue's events, oldest first.
 	Activity(ctx context.Context, issueID uuid.UUID) ([]Event, error)
-	// Member finds one of the organization's members, whom an issue may be assigned to, or ErrNotFound.
-	Member(ctx context.Context, orgID, principalID uuid.UUID) (Principal, error)
+	// Assignee finds whom an issue of the organization may be assigned to, one of its members or of its agents, or
+	// ErrNotFound.
+	Assignee(ctx context.Context, orgID, principalID uuid.UUID) (Principal, error)
+	// Transact runs fn in one transaction that acts for actor: the writes of this store and of the agents' tasks that
+	// fn makes with the context it gets all happen, or none do.
+	Transact(ctx context.Context, actor uuid.UUID, fn func(ctx context.Context) error) error
 	// Repository finds one of the organization's repositories, or ErrNotFound.
 	Repository(ctx context.Context, orgID, repoID uuid.UUID) (Repository, error)
 	// ByID finds an issue by its ID, or ErrNotFound.
@@ -76,6 +80,8 @@ type Service struct {
 	labels   LabelStore
 	markdown Renderer
 	authz    *auth.Authorizer
+	agents   Agents
+	tasks    Tasks
 	now      func() time.Time
 }
 
@@ -118,10 +124,14 @@ func (s *Service) readable(ctx context.Context, v Viewer, orgID uuid.UUID) ([]uu
 	return ids, nil
 }
 
-// shown is issue as v sees it: without its repository unless v reads it.
+// shown is issue as v sees it: without its repository unless v reads it, and without its task unless v reads the
+// repository the task works in.
 func shown(issue Issue, readable []uuid.UUID) Issue {
 	if issue.Repository != nil && !slices.Contains(readable, issue.Repository.ID) {
 		issue.Repository = nil
+	}
+	if issue.Task != nil && issue.Task.RepoID != uuid.Nil && !slices.Contains(readable, issue.Task.RepoID) {
+		issue.Task = nil
 	}
 	return issue
 }
@@ -275,7 +285,7 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	if issue.Labels, err = s.issueLabels(ctx, orgID, in.LabelIDs); err != nil {
 		return Issue{}, failed(span, "creating the issue", err)
 	}
-	created, err := s.store.Create(ctx, v.ID, issue)
+	created, err := s.save(ctx, v, Issue{}, issue, func(ctx context.Context) (Issue, error) { return s.store.Create(ctx, v.ID, issue) })
 	if err != nil {
 		return Issue{}, failed(span, "creating the issue", err)
 	}
@@ -283,14 +293,15 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	return s.rendered(ctx, created)
 }
 
-// assignee is the member of the organization id names, or nil for uuid.Nil; anyone else is a *orgs.ValidationError.
+// assignee is the member or the agent of the organization id names, or nil for uuid.Nil; anyone else is a
+// *orgs.ValidationError.
 func (s *Service) assignee(ctx context.Context, orgID, id uuid.UUID) (*Principal, error) {
 	if id == uuid.Nil {
 		return nil, nil
 	}
-	p, err := s.store.Member(ctx, orgID, id)
+	p, err := s.store.Assignee(ctx, orgID, id)
 	if errors.Is(err, ErrNotFound) {
-		return nil, &orgs.ValidationError{Field: "assigneeId", Code: "assignee.invalid", Message: "not a member of this organization"}
+		return nil, &orgs.ValidationError{Field: "assigneeId", Code: "assignee.invalid", Message: "not a member or an agent of this organization"}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("finding the assignee: %w", err)

@@ -133,7 +133,7 @@ const cancelTask = `-- name: CancelTask :one
 UPDATE agent_tasks SET state = 'cancelled', cancelled_by = $1, ended_at = now(), reason = $2
 WHERE org_id = $3 AND number = $4 AND state IN ('queued', 'running', 'waiting')
     AND ($5::bigint < 0 OR version = $5::bigint)
-RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version
+RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id
 `
 
 type CancelTaskParams struct {
@@ -175,6 +175,7 @@ func (q *Queries) CancelTask(ctx context.Context, arg CancelTaskParams) (AgentTa
 		&i.StartedAt,
 		&i.EndedAt,
 		&i.Version,
+		&i.IssueID,
 	)
 	return i, err
 }
@@ -244,9 +245,9 @@ func (q *Queries) InsertAgentPrincipal(ctx context.Context, arg InsertAgentPrinc
 }
 
 const insertTask = `-- name: InsertTask :exec
-INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id)
+INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11)
+    $11, $12)
 `
 
 type InsertTaskParams struct {
@@ -261,6 +262,7 @@ type InsertTaskParams struct {
 	RepoID       *uuid.UUID
 	BranchID     *uuid.UUID
 	ThreadID     *uuid.UUID
+	IssueID      *uuid.UUID
 }
 
 // InsertTask records a task, Queued.
@@ -277,6 +279,7 @@ func (q *Queries) InsertTask(ctx context.Context, arg InsertTaskParams) error {
 		arg.RepoID,
 		arg.BranchID,
 		arg.ThreadID,
+		arg.IssueID,
 	)
 	return err
 }
@@ -330,7 +333,7 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 }
 
 const task = `-- name: Task :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
@@ -372,6 +375,7 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.AgentTask.StartedAt,
 		&i.AgentTask.EndedAt,
 		&i.AgentTask.Version,
+		&i.AgentTask.IssueID,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,
@@ -400,7 +404,7 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 }
 
 const tasks = `-- name: Tasks :many
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
@@ -410,8 +414,9 @@ WHERE t.org_id = $1
     AND (cardinality($3::text[]) = 0 OR t.state = ANY ($3::text[]))
     AND ($4::uuid IS NULL OR t.repo_id = $4::uuid)
     AND (t.repo_id IS NULL OR t.repo_id = ANY ($5::uuid[]))
-    AND ($6::bigint IS NULL OR t.number < $6::bigint)
-ORDER BY t.number DESC LIMIT $7
+    AND NOT (t.kind = ANY ($6::text[]))
+    AND ($7::bigint IS NULL OR t.number < $7::bigint)
+ORDER BY t.number DESC LIMIT $8
 `
 
 type TasksParams struct {
@@ -420,6 +425,7 @@ type TasksParams struct {
 	States   []string
 	RepoID   *uuid.UUID
 	Readable []uuid.UUID
+	Hidden   []string
 	Before   *int64
 	Lim      int32
 }
@@ -434,8 +440,8 @@ type TasksRow struct {
 }
 
 // Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
-// agent, the states and the repository when they're given, and naming no repository or one of readable, with the
-// names of their agents, assigners, cancellers, repositories and branches.
+// agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
+// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches.
 func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error) {
 	rows, err := q.db.Query(ctx, tasks,
 		arg.OrgID,
@@ -443,6 +449,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 		arg.States,
 		arg.RepoID,
 		arg.Readable,
+		arg.Hidden,
 		arg.Before,
 		arg.Lim,
 	)
@@ -473,6 +480,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.AgentTask.StartedAt,
 			&i.AgentTask.EndedAt,
 			&i.AgentTask.Version,
+			&i.AgentTask.IssueID,
 			&i.AgentName,
 			&i.AssignerName,
 			&i.CancellerName,

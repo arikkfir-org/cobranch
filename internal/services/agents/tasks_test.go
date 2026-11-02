@@ -192,3 +192,54 @@ func TestCancelTask(t *testing.T) {
 		})
 	}
 }
+
+// TestGuardedTasks guards the kind issue with issues.read: Gus, a guest who reads website, and Stu, a steward, who
+// manages the principals but reads no issues, find no task of an issue, on website or on no repository, where Max, a
+// member who reads website, finds both.
+func TestGuardedTasks(t *testing.T) {
+	t.Parallel()
+	f := newFixture(t)
+	f.service.Guard("issue", "issues.read")
+	f.grants.Grant(f.gus.ID, auth.RoleReader, auth.ScopeRepository, f.website)
+	scout := f.agent(t, f.olive, "Scout")
+	f.assign(t, f.mel, scout, "Plain", f.website)
+	for _, repo := range []uuid.UUID{f.website, uuid.Nil} {
+		task := agents.Task{OrgID: f.org, Agent: agents.Principal{ID: scout.ID}, Kind: "issue", AssignedBy: &agents.Principal{ID: f.mel.ID},
+			Title: "ACME-1 What the issue says", Instructions: "Only issues.read reads this", RepoID: repo, State: agents.TaskQueued}
+		if _, err := f.store.Assign(context.Background(), f.mel.ID, task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		name   string
+		viewer agents.Viewer
+		want   []int64
+	}{
+		{name: "a member who reads the repository", viewer: f.max, want: []int64{3, 2, 1}},
+		{name: "a guest who reads the repository", viewer: f.gus, want: []int64{1}},
+		{name: "a steward who reads no issues", viewer: f.stu},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page, err := f.service.Tasks(context.Background(), tt.viewer, f.org, agents.TaskFilter{}, 10)
+			if err != nil || !slices.Equal(numbers(page.Tasks), tt.want) {
+				t.Errorf("Tasks() = %v, %v; want %v", numbers(page.Tasks), err, tt.want)
+			}
+			findsOnly(t, f, tt.viewer, 3, tt.want)
+			if _, err := f.service.CancelTask(context.Background(), tt.viewer, f.org, 3, agents.AnyVersion); !slices.Contains(tt.want, 3) && !errors.Is(err, orgs.ErrNotFound) {
+				t.Errorf("CancelTask(3) = %v, want %v", err, orgs.ErrNotFound)
+			}
+		})
+	}
+}
+
+// findsOnly checks that v finds, of the tasks numbered 1 to last, those of want and no others.
+func findsOnly(t *testing.T, f *fixture, v agents.Viewer, last int64, want []int64) {
+	t.Helper()
+	for number := int64(1); number <= last; number++ {
+		_, err := f.service.Task(context.Background(), v, f.org, number)
+		if found := slices.Contains(want, number); found != (err == nil) || (err != nil && !errors.Is(err, orgs.ErrNotFound)) {
+			t.Errorf("Task(%d) = %v, want found %t", number, err, found)
+		}
+	}
+}

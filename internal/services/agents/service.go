@@ -42,9 +42,9 @@ type Store interface {
 	Branch(ctx context.Context, repoID, id uuid.UUID, name string) (uuid.UUID, string, error)
 	// ThreadBranch answers the branch a chat thread belongs to; uuid.Nil for one of an issue's chat, which belongs to none.
 	ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid.UUID, error)
-	// Tasks lists a page of at most limit of the organization's tasks, newest first, that match the filter and either
-	// name no repository or one of readable.
-	Tasks(ctx context.Context, orgID uuid.UUID, f TaskFilter, readable []uuid.UUID, limit int) ([]Task, error)
+	// Tasks lists a page of at most limit of the organization's tasks, newest first, that match the filter, either
+	// name no repository or one of readable, and are of none of the kinds in hidden.
+	Tasks(ctx context.Context, orgID uuid.UUID, f TaskFilter, readable []uuid.UUID, hidden []string, limit int) ([]Task, error)
 	// Task finds one of the organization's tasks by its number.
 	Task(ctx context.Context, orgID uuid.UUID, number int64) (Task, error)
 	// Assign numbers the task in its organization and records it for actor, Queued, and answers it.
@@ -56,15 +56,37 @@ type Store interface {
 
 // Service keeps an organization's agents and tasks for the viewers who read the organization: every operation checks
 // org.read through the authorizer first, and answers orgs.ErrNotFound without it, as for an organization that isn't
-// there. A task that names a repository is the same to a viewer who doesn't read the repository.
+// there. A task that names a repository is the same to a viewer who doesn't read the repository, and a task of a
+// guarded kind to a viewer who lacks the kind's permission (Guard).
 type Service struct {
-	store Store
-	authz *auth.Authorizer
+	store  Store
+	authz  *auth.Authorizer
+	guards map[string]string
 }
 
 // NewService returns a Service over store that checks permissions with authz.
 func NewService(store Store, authz *auth.Authorizer) *Service {
-	return &Service{store: store, authz: authz}
+	return &Service{store: store, authz: authz, guards: map[string]string{}}
+}
+
+// Guard has the service show a task of kind only to viewers who hold permission at its organization, beside repo.read
+// on the repository it names. A slice whose tasks carry what one of its permissions guards, such as an issue's title
+// and description, guards their kind with it, so the tasks show no more than the slice does. Call it while wiring,
+// before the service serves.
+func (s *Service) Guard(kind, permission string) {
+	s.guards[kind] = permission
+}
+
+// hidden lists the guarded kinds whose permission held lacks, in order.
+func (s *Service) hidden(held []string) []string {
+	out := []string{}
+	for kind, permission := range s.guards {
+		if !slices.Contains(held, permission) {
+			out = append(out, kind)
+		}
+	}
+	slices.Sort(out)
+	return out
 }
 
 // held returns what v holds at the organization, or orgs.ErrNotFound without org.read.
