@@ -76,7 +76,9 @@ func (q *Queries) InsertIssue(ctx context.Context, arg InsertIssueParams) error 
 
 const issueByNumber = `-- name: IssueByNumber :one
 SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name
+       r.slug AS repo_slug, r.name AS repo_name,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -93,10 +95,11 @@ type IssueByNumberRow struct {
 	CreatorName  *string
 	RepoSlug     *string
 	RepoName     *string
+	Labels       []byte
 }
 
-// IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, and the names of
-// who it is assigned to, who created it and the repository it is about.
+// IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
+// is assigned to, who created it and the repository it is about, and its labels by name.
 func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int32) (IssueByNumberRow, error) {
 	row := q.db.QueryRow(ctx, issueByNumber, orgID, number)
 	var i IssueByNumberRow
@@ -121,6 +124,7 @@ func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int
 		&i.CreatorName,
 		&i.RepoSlug,
 		&i.RepoName,
+		&i.Labels,
 	)
 	return i, err
 }
@@ -171,7 +175,9 @@ func (q *Queries) IssueEvents(ctx context.Context, issueID *uuid.UUID) ([]IssueE
 
 const listIssues = `-- name: ListIssues :many
 SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name
+       r.slug AS repo_slug, r.name AS repo_name,
+       (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -183,10 +189,11 @@ WHERE i.org_id = $1
        OR i.assignee_id IS NOT DISTINCT FROM nullif($3::uuid, '00000000-0000-0000-0000-000000000000'))
   AND ($4::uuid IS NULL
        OR i.repo_id IS NOT DISTINCT FROM nullif($4::uuid, '00000000-0000-0000-0000-000000000000'))
-  AND ($5::text = '' OR i.title ILIKE $5 OR i.description ILIKE $5 OR i.number = $6::integer)
-  AND ($7::integer = 0 OR i.number < $7::integer)
+  AND (SELECT count(*) FROM issue_labels il WHERE il.issue_id = i.id AND il.label_id = ANY ($5::uuid[])) = cardinality($5::uuid[])
+  AND ($6::text = '' OR i.title ILIKE $6 OR i.description ILIKE $6 OR i.number = $7::integer)
+  AND ($8::integer = 0 OR i.number < $8::integer)
 ORDER BY i.number DESC
-LIMIT $8::integer
+LIMIT $9::integer
 `
 
 type ListIssuesParams struct {
@@ -194,6 +201,7 @@ type ListIssuesParams struct {
 	States     []string
 	AssigneeID *uuid.UUID
 	RepoID     *uuid.UUID
+	LabelIds   []uuid.UUID
 	Pattern    string
 	Number     int32
 	Below      int32
@@ -208,18 +216,20 @@ type ListIssuesRow struct {
 	CreatorName  *string
 	RepoSlug     *string
 	RepoName     *string
+	Labels       []byte
 }
 
 // ListIssues lists a page of an organization's issues, newest first, as IssueByNumber answers each: those in the
 // states, assigned to the assignee (nobody for the nil UUID, anyone for none), about the repository (none for the nil
-// UUID, any for none), whose title or description matches the pattern or whose number the text names (any for an
-// empty pattern), and numbered below below (any for 0).
+// UUID, any for none), carrying every one of the labels, whose title or description matches the pattern or whose
+// number the text names (any for an empty pattern), and numbered below below (any for 0).
 func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListIssuesRow, error) {
 	rows, err := q.db.Query(ctx, listIssues,
 		arg.OrgID,
 		arg.States,
 		arg.AssigneeID,
 		arg.RepoID,
+		arg.LabelIds,
 		arg.Pattern,
 		arg.Number,
 		arg.Below,
@@ -253,6 +263,7 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.CreatorName,
 			&i.RepoSlug,
 			&i.RepoName,
+			&i.Labels,
 		); err != nil {
 			return nil, err
 		}

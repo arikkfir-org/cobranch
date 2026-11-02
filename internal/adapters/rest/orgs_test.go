@@ -152,17 +152,27 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 }
 
 type orgCase struct {
-	name       string
-	viewer     func(f *orgFixture) *auth.Authenticated
-	method     string
-	path       func(f *orgFixture) string
-	body       string
+	name   string
+	viewer func(f *orgFixture) *auth.Authenticated
+	method string
+	path   func(f *orgFixture) string
+	body   string
+	// bodyOf is the body when it names the fixture's IDs, in place of body.
+	bodyOf     func(f *orgFixture) string
 	header     http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
 	// wantHeader holds fields the answer must carry, with their values.
 	wantHeader http.Header
+}
+
+// bodyFor is the case's body for the fixture f.
+func (tt orgCase) bodyFor(f *orgFixture) string {
+	if tt.bodyOf != nil {
+		return tt.bodyOf(f)
+	}
+	return tt.body
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -174,7 +184,7 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.callWith(viewer, tt.method, tt.path(f), tt.body, tt.header)
+			rec := f.callWith(viewer, tt.method, tt.path(f), tt.bodyFor(f), tt.header)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

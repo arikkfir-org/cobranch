@@ -51,3 +51,9 @@ INSERT INTO issue_numbers (org_id, last) VALUES ($1, $2);
 
 -- name: InsertSeedEvent :exec
 INSERT INTO events (actor_id, kind, subject_id, details, org_id) VALUES (@actor_id, @kind, @subject_id, @details, @org_id);
+
+-- name: InsertSeedLabel :exec
+INSERT INTO labels (id, org_id, name, color, description) VALUES (@id, @org_id, @name, @color, @description);
+
+-- name: InsertSeedIssueLabel :exec
+INSERT INTO issue_labels (issue_id, label_id) VALUES ($1, $2);

@@ -1094,6 +1094,15 @@ paths:
           description: Those about one repository, by ID, or about none, for none.
           schema:
             type: string
+        - name: label
+          in: query
+          description: Those that carry every one of these labels, by ID, one parameter each, at most 20.
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
         - name: q
           in: query
           description: Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
@@ -1320,6 +1329,163 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels:
+    get:
+      operationId: listLabels
+      summary: The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The labels.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labels]
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Label"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createLabel
+      summary: Creates a label in the organization, named unlike its others whatever their case; takes issues.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelInput"
+      responses:
+        "201":
+          description: The label.
+          headers:
+            Location:
+              description: The label's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels/{label}:
+    get:
+      operationId: getLabel
+      summary: One of the organization's labels; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The label.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "304":
+          description: The label is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateLabel
+      summary: Changes the fields the merge patch (RFC 7396) names of one of the organization's labels, which its issues then show; takes issues.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/LabelPatch"
+      responses:
+        "200":
+          description: The label as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteLabel
+      summary: Deletes one of the organization's labels, which takes it off every issue; takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -2336,6 +2502,21 @@ components:
       description: The issue's number in its organization, such as 42 for ACME-42.
       schema:
         type: integer
+    label:
+      name: label
+      in: path
+      required: true
+      description: The label's ID.
+      x-go-name: LabelID
+      schema:
+        type: string
+        format: uuid
+    ifMatchLabel:
+      name: If-Match
+      in: header
+      description: The ETag of the label the change was made from; a change made meanwhile is refused with 412.
+      schema:
+        type: string
     ifMatchIssue:
       name: If-Match
       in: header
@@ -3093,7 +3274,7 @@ components:
     Issue:
       type: object
       description: A piece of the organization's work, named by its organization's issue key and its number.
-      required: [id, number, identifier, title, description, state, priority, createdAt, updatedAt, version]
+      required: [id, number, identifier, title, description, state, priority, labels, createdAt, updatedAt, version]
       properties:
         id:
           type: string
@@ -3119,6 +3300,11 @@ components:
           $ref: "#/components/schemas/Principal"
         repository:
           $ref: "#/components/schemas/IssueRepository"
+        labels:
+          type: array
+          description: The organization's labels it carries, by name.
+          items:
+            $ref: "#/components/schemas/IssueLabel"
         createdBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -3170,6 +3356,12 @@ components:
           type: string
           format: uuid
           description: One of the organization's repositories, which the viewer reads.
+        labelIds:
+          type: array
+          description: The organization's labels it carries, at most 20.
+          items:
+            type: string
+            format: uuid
     IssuePatch:
       type: object
       description: What changes an issue, as a merge patch; a field left out keeps its value.
@@ -3190,6 +3382,78 @@ components:
           type: [string, "null"]
           format: uuid
           description: One of the organization's repositories, which the viewer reads, or null for none.
+        labelIds:
+          type: array
+          description: The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+          items:
+            type: string
+            format: uuid
+    IssueLabel:
+      type: object
+      description: A label as an issue shows it.
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+    LabelColor:
+      type: string
+      description: A label's colour, which the Console draws in its tones of both themes.
+      enum: [gray, blue, green, yellow, red]
+    Label:
+      type: object
+      description: One of an organization's labels, which its issues carry.
+      required: [id, name, color, description, issues, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+          description: What it is for, at most 200 characters on one line.
+        issues:
+          type: integer
+          description: How many issues carry it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1; its ETag.
+    LabelInput:
+      type: object
+      description: What creates a label.
+      required: [name]
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+    LabelPatch:
+      type: object
+      description: What changes a label, as a merge patch; a field left out keeps its value.
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
     IssueEvent:
       type: object
       description: Something that happened to an issue.
@@ -3230,12 +3494,12 @@ components:
           $ref: "#/components/schemas/LinkedBy"
     IssueChange:
       type: object
-      description: A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+      description: A field a change changed, with its values as people read them, a labels' change their names by name, comma-separated; a description's change names no values, and a repository's only those the viewer reads.
       required: [field]
       properties:
         field:
           type: string
-          enum: [title, description, state, priority, assignee, repository]
+          enum: [title, description, state, priority, assignee, repository, labels]
         from:
           type: string
         to:
