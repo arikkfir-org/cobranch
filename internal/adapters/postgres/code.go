@@ -80,6 +80,35 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 	return b, nil
 }
 
+// DeletedBranch finds the latest deletion of the repository's branch of name, with its head commit (code.Store).
+func (s *CodeStore) DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (code.DeletedBranch, error) {
+	r, err := s.q.DeletedBranch(ctx, repoID, name)
+	if err != nil {
+		return code.DeletedBranch{}, wrapRepo("finding the deleted branch", err)
+	}
+	b := code.DeletedBranch{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt}
+	if r.DeletedAt != nil {
+		b.DeletedAt = *r.DeletedAt
+	}
+	if r.DeletedBy != nil && r.DeletedByName != nil {
+		b.DeletedBy = &code.Principal{ID: *r.DeletedBy, DisplayName: *r.DeletedByName}
+	}
+	if r.MergedHead != nil && r.MergedAt != nil {
+		b.Merge = &code.Merge{Head: *r.MergedHead, At: *r.MergedAt}
+		if r.MergedBy != nil && r.MergedByName != nil {
+			b.Merge.By = &code.Principal{ID: *r.MergedBy, DisplayName: *r.MergedByName}
+		}
+	}
+	commits, err := s.CommitsAt(ctx, repoID, []string{r.Head})
+	if err != nil {
+		return code.DeletedBranch{}, err
+	}
+	if c, ok := commits[r.Head]; ok {
+		b.Commit = &c
+	}
+	return b, nil
+}
+
 // branchFrom is the domain's view of a branch's row: every branch but the default merges into it, and shows
 // Processing until a push works out its status.
 func branchFrom(r queries.LiveBranchesRow) (code.Branch, error) {

@@ -36,16 +36,34 @@ the full table as the layout grows.
 ## Continuous integration
 
 Pipeline `ci` runs four tasks side by side, each in a pod of its own, and reports check `Continuous Integration`, which
-fails when any does: the check takes as long as its longest task, `chart`, about seven and a half minutes on a busy
-pool. Task `build` checks and builds the Go module. `generated` fails when `go generate` changes the checkout, so the
-REST and GraphQL stubs match `api/` and the queries match `db/`; `build` builds the binaries and `version` runs one.
-Task `lint` runs golangci-lint's standard linters, the house rules' (errcheck, wrapcheck, contextcheck, sloglint,
-spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt, then `go vet`. Task `test` runs the tests with
-the race detector against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach
-it. A test that sets up a database or a Git server of its own runs in parallel with the others: one at a time, the Git
-server's took four minutes. Go Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiles on
-its own cold cache: its steps keep about two cores busy and peak near 2.1Gi (`generated`) or 1.5Gi (`lint`, `test`),
-hence the tasks' sizes.
+fails when any does: the check takes as long as its longest task, `chart`, which took about seven and a half minutes on
+a busy pool before the tasks restored `main`'s Go caches. Task `build` checks and builds the Go module. `generated`
+fails when `go generate` changes the checkout, so the REST and GraphQL stubs match `api/` and the queries match `db/`;
+`build` builds the binaries and `version` runs one. Task `lint` runs golangci-lint's standard linters, the house rules'
+(errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt,
+then `go vet`. Task `test` runs the tests with the race detector against the PostgreSQL sidecar, and with `CI` set a
+test fails rather than skip when it can't reach it. A test that sets up a database or a Git server of its own runs in
+parallel with the others: one at a time, the Git server's took four minutes. Go Cloud's drivers bring the AWS, Azure and
+Google Cloud SDKs, which each task compiled on a cold cache: its steps kept about two cores busy and peaked near 2.1Gi
+(`generated`) or 1.5Gi (`lint`, `test`), hence the tasks' sizes.
+
+Every task starts from `main`'s Go caches, so a run downloads and compiles only what its commit changed. `restore`
+streams archive `main/go.tar.gz` of bucket `arikkfir-cobranch-ci-cache` into the task's caches (modules, builds and
+golangci-lint's), and dates their entries two hours back; without the archive, the task starts cold. Pipeline `main`
+saves it: beside `publish`, task `warm` restores it, compiles what `ci` compiles as `ci` compiles it (the generators,
+the static binaries, `go vet`, the tests with the race detector, linked but never run, and golangci-lint), and saves it
+again, trimmed to the entries Go marked as used, which it does by their modification time, and to the modules `go.sum`
+names, unpacked, without their zips or test data. A warm-up step that fails costs later runs time, never `main` its
+images. `ci` and `preview` only read the archive, as ServiceAccounts that can't write it: no pull request changes what
+`main` and the other pull requests reuse.
+
+The image builds reuse the same archive. The Dockerfile's build stage keeps Go's module and build caches in cache
+mounts, which a developer's Docker daemon keeps between builds. Before task `chart` and task `publish` build the images,
+`.tekton/go-cache.Dockerfile` seeds those mounts in their fresh daemon: a build that runs `restore`'s script with the
+pod's access token as a build secret, and extracts the archive straight into them. Alpine's Go reuses the entries
+Debian's Go compiled, since both build the static binary with `-trimpath`, which keeps the checkout's path out of them:
+on a seeded daemon, image `cobranch`'s Go build compiles only what the commit changed, where it took about four minutes
+cold.
 
 **Pipeline ci runs four tasks side by side, each in a pod of its own**
 
@@ -53,7 +71,7 @@ hence the tasks' sizes.
 
 Every image is pinned to a version, and the steps set `GOMAXPROCS=4`, so their memory doesn’t grow with the node’s CPUs;
 each task requests the cores and memory its steps were measured to use. The clone is anonymous: the repository is
-public, so the run holds no token.
+public, so the run holds no token. The tasks run as `ci-cobranch-ci`, which may only read `main`’s Go caches.
 
 Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
 throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
@@ -82,13 +100,15 @@ reports as its version too. An installation that follows `main` runs the images 
 newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
 commit always gets its images.
 
-**Pipeline main publishes the images of main’s newest commit, tagged with its short SHA**
+**Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, and saves its Go caches**
 
-![Pipeline main publishes the images of main’s newest commit, tagged with its short SHA](repository/main.svg)
+![Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, and saves its Go caches](repository/main.svg)
 
-The repository, its address and its grants are infra’s ([Artifact
-Registry](../../infra/terraform/gcp.md#artifact-registry)); ServiceAccount `ci-cobranch-release` and the branches it may
-run from are delivery’s ([CI tenants](../../delivery/platform.md#ci-tenants)).
+The cache bucket is `arikkfir-cobranch-ci-cache`. The repository, the bucket and their grants are infra’s ([Artifact
+Registry](../../infra/terraform/gcp.md#artifact-registry), [buckets](../../infra/terraform/gcp.md#buckets));
+ServiceAccount `ci-cobranch-release` and the branches it may run from are delivery’s ([CI
+tenants](../../delivery/platform.md#ci-tenants)). A step of `warm` that fails costs later runs time, never `main` its
+images.
 
 Pipeline `preview` runs on every pull request, as `ci` does, with the same task as `main`: it builds the images of the
 head commit and pushes them to repository `cobranch-previews`, tagged the same way, for the pull request's preview. The
@@ -164,7 +184,7 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | Public, under the MIT License | Cobranch is a product anyone may install, and its source is open with it | Internal until a license was chosen |
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token |
 | golangci-lint from the first commit | The house rules' linters hold from the first line, instead of a cleanup later | Adding them later |
-| Four tasks side by side, each sized as measured | The check takes as long as its longest task, about seven and a half minutes, instead of the sum of seven steps (10 to 17 minutes); requests below what the steps used let runs pack onto one node, where the same step ran two to three times slower | One pod for every Go step, sharing one cold cache but adding up their times |
+| Four tasks side by side, each sized as measured | The check takes as long as its longest task, about seven and a half minutes on cold caches, instead of the sum of seven steps (10 to 17 minutes); requests below what the steps used let runs pack onto one node, where the same step ran two to three times slower | One pod for every Go step, sharing one cold cache but adding up their times |
 | The Git server's and the stores' tests in parallel | Each sets up a database, and the Git server's a server and clones, which in order took four and two minutes; each test's state is its own, and subtests that share their parent's still run in order | Sharding the packages over pods |
 | kind's release binary, checked against its pinned checksum | The same assurance as its module's checksum, without compiling kind in every run | `go install` from its module |
 | A disrupted run runs again; no task retries | Octomaton reruns a run the cluster disrupted, keeping a merge queue entry's place; a Tekton retry leaves the failed attempt's sidecars running | Tekton's `retries` |
@@ -173,13 +193,19 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | The chart beside the images, in repository `cobranch`, as OCI | One public repository, one grant and one cleanup for all of Cobranch's releases; Helm installs OCI charts directly | GitHub's container registry; a chart repository's `index.yaml` in a bucket |
 | One version, `1.2.3`, for the chart, its app version and the image tags; `v1.2.3` for the Git tag | A chart's version is SemVer without the `v`, and the chart's images default to its app version, so the images carry the same string | Octomaton's `v1.2.3` image tags, a second spelling beside the chart's |
 | `tag` runs `main`'s scripts on the tagged commit's chart | A tag can name any commit; only `main`'s files are reviewed | Running the tagged commit's checkout |
-| No persistent Go cache yet | With the tasks side by side a cold run takes about seven and a half minutes, building the images in task `chart` its longest part; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
+| `main`'s Go caches in a bucket, which `main` alone writes | Every task downloaded its modules and compiled everything, image `cobranch`'s build in task `chart` longest of all; with many pull requests at once, those runs filled the CI pool. Only `main`'s warm-up writes the archive, so no pull request can change what the others reuse, and a commit compiles only what it changed since `main` | Each pull request's caches too, as Octomaton keeps, worth it if a pull request's own pushes come to dominate; no cache, which left the check at seven and a half minutes |
+| The image builds' caches seeded by a download inside a build | The archive streams straight into the daemon's cache mounts, with the token as a build secret, and the Dockerfile stays as a developer builds it; alpine's Go reuses what Debian's compiled, so one archive serves every task | Sending the extracted caches as a build context, which took four minutes for 6GB; building the binary outside Docker and copying it in, which would leave the Dockerfile untested |
 
 ## Security and failure modes
 
-- Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/` as the tenant's ServiceAccount `pipeline`,
-  which holds no Google Cloud role, and with no GitHub token. Octomaton ignores forks, so a stranger's pull request runs
-  nothing.
+- Any branch's pull request runs its own `.octomaton.yaml` and `.tekton/`, its `ci` as ServiceAccount `ci-cobranch-ci`,
+  whose one Google Cloud role reads bucket `arikkfir-cobranch-ci-cache`, and with no GitHub token. Octomaton ignores
+  forks, so a stranger's pull request runs nothing.
+- Only `ci-cobranch-release`, which runs from `main` and `v*` tags alone, writes `main`'s Go caches, which every run and
+  every image build trusts; `ci-cobranch-ci` and `ci-cobranch-preview` can only read them. The caches hold nothing
+  secret, and the image builds get the access token as a build secret, which no layer keeps.
+- A missing, unreadable or corrupt archive leaves the run cold, never failed; a save that fails keeps the last one, and
+  without a push to `main` it expires after 14 days.
 - Pipeline `preview` runs any branch's pull request as `ci-cobranch-preview`, which may write only repository
   `cobranch-previews`: what it pushes runs only in that pull request's preview, never in an installation that follows
   `main` or a version, and never in Fin's previews.

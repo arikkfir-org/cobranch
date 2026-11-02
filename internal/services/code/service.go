@@ -27,6 +27,9 @@ type Store interface {
 	Branches(ctx context.Context, repoID uuid.UUID) ([]Branch, error)
 	// Branch finds one of the repository's live branches by name, with its head commit, or repos.ErrNotFound.
 	Branch(ctx context.Context, repoID uuid.UUID, name string) (Branch, error)
+	// DeletedBranch finds the latest deletion of the repository's branch of name, with its head commit, or
+	// repos.ErrNotFound when no branch of that name was deleted, or one is live.
+	DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (DeletedBranch, error)
 	// FirstParents lists at most limit of the repository's commits, from sha along each one's first parent, nearest
 	// first: none when the repository recorded no commit sha.
 	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
