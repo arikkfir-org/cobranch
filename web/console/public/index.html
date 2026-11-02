@@ -2955,20 +2955,24 @@
 
     // showAgents renders the organization's agents, a form for a viewer holding agents.create to make one, and one for a
     // viewer holding agents.assign to assign a task. An agent's creator changes it; org.principals.manage changes and
-    // deletes any.
-    async function showAgents(org, main, can) {
-      const error = h("p", { class: "alert", hidden: true });
+    // deletes any, and picks its model and the secrets its tasks receive. problem, when given, is what went wrong in the
+    // step that drew the page again.
+    async function showAgents(org, main, can, problem = null) {
+      const error = h("p", { class: "alert", hidden: !problem }, problem || "");
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = () => showAgents(org, main, can).catch(fail);
+      // redraw draws the page again, saying what went wrong, if anything, in the step that drew it.
+      const redraw = (problem = null) => showAgents(org, main, can, problem).catch(fail);
       const manage = can("org.principals.manage");
-      const [list, repos] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
-        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
+      const [list, repos, providers] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
+        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories),
+        api("GET", "/orgs/" + org.slug + "/model-providers").then((d) => d.modelProviders)]);
       const agentPath = (a) => "/orgs/" + org.slug + "/agents/" + a.id;
       const edit = (a, row) => {
         const name = h("input", { required: true, maxlength: 100, value: a.name });
         const description = h("input", { maxlength: 1000, value: a.description });
         const instructions = h("textarea", { maxlength: 20000, rows: 6 }, a.instructions);
-        const editor = h("tr", {}, h("td", { colspan: 4 }, h("form", { onsubmit: (e) => {
+        const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: (e) => {
           e.preventDefault();
           api("PATCH", agentPath(a), { name: name.value, description: description.value, instructions: instructions.value }, { "If-Match": `"${a.version}"` })
             .then(refresh).catch(fail);
@@ -2978,23 +2982,84 @@
       };
       const agentRow = (a) => {
         const mine = a.createdBy && a.createdBy.id === me.id;
+        const named = Object.keys(a.secrets).length;
         const row = h("tr", {}, h("td", {}, a.name, a.builtIn ? [" ", h("span", { class: "chip" }, "Built-in")] : null, a.description ? h("p", {}, a.description) : null),
           h("td", {}, grantChips(a.grants)),
+          h("td", {}, a.provider ? [a.provider, " · ", h("code", {}, a.model)] : h("span", { class: "muted" }, "None"),
+            named ? h("p", {}, named === 1 ? "1 secret" : named + " secrets") : null),
           h("td", {}, a.createdBy ? a.createdBy.displayName : h("span", { class: "muted" }, a.builtIn ? "Cobranch" : "Someone since gone"), h("p", {}, when(a.createdAt))),
           h("td", { class: "actions" },
             h("a", { class: "button small", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), "data-nav": "" }, "Tasks"),
             mine || manage ? [" ", h("button", { class: "button small", type: "button", onclick: () => edit(a, row) }, "Edit")] : null,
+            manage ? [" ", h("button", { class: "button small", type: "button", onclick: () => row.replaceWith(modelEditor(org, a, providers, can, row, redraw)) }, "Model"),
+              " ", h("button", { class: "button small", type: "button", onclick: () => secretsEditor(org, a, repos, row, redraw).then((editor) => row.replaceWith(editor)).catch(fail) }, "Secrets")] : null,
             manage && !a.builtIn ? [" ", h("button", { class: "button small danger", type: "button", title: "Delete " + a.name + ", its grants and its tasks",
               onclick: () => confirm("Delete " + a.name + " with its grants and tasks?") && api("DELETE", agentPath(a), undefined, { "If-Match": `"${a.version}"` }).then(refresh).catch(fail) }, "Delete")] : null));
         return row;
       };
       const sections = [h("h1", {}, "Agents"), error, h("section", { class: "panel" },
         h("p", {}, "An agent is a principal of this organization that takes tasks, with roles of its own. A task does no more than both its agent and its assigner may, so assigning one never lends anyone more than they hold."),
-        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Roles"), h("th", {}, "Created by"), h("th", {}))), h("tbody", {}, list.map(agentRow)))
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Roles"), h("th", {}, "Model"), h("th", {}, "Created by"), h("th", {}))), h("tbody", {}, list.map(agentRow)))
           : h("p", {}, "No agents yet."))];
       if (can("agents.create")) sections.push(newAgentForm(org, repos, refresh, fail));
       if (can("agents.assign") && list.length) sections.push(assignForm(org, list, repos, fail));
       main.replaceChildren(...sections);
+    }
+
+    // modelEditor puts agent a on a model of one of the organization's providers, or on none, in place of row; it offers
+    // a viewer who manages the organization's grants to let the agent read the provider's key in the same step, which a
+    // task needs to run. done draws the page again, with what went wrong, if anything.
+    function modelEditor(org, a, providers, can, row, done) {
+      const provider = h("select", {}, h("option", { value: "" }, "None"),
+        providers.map((p) => h("option", { value: p.name, selected: p.name === a.provider }, p.name + (p.broken ? " (its key is gone)" : ""))));
+      const model = h("input", { maxlength: 200, value: a.model || "", placeholder: "As the provider names it" });
+      const grant = h("input", { type: "checkbox", checked: true });
+      const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: async (e) => {
+        e.preventDefault();
+        const picked = providers.find((p) => p.name === provider.value);
+        try {
+          await api("PUT", "/orgs/" + org.slug + "/agents/" + a.id + "/model", picked ? { provider: picked.name, model: model.value } : {}, { "If-Match": `"${a.version}"` });
+        } catch (err) {
+          return done(err.message);
+        }
+        if (!picked || !picked.secretId || !grant.checked || !can("org.grants.manage")) return done();
+        api("POST", "/orgs/" + org.slug + "/secrets/" + picked.secretId + "/access", { principalId: a.id })
+          .then(() => done(), (err) => done(err.code === "grant.exists" ? null : "The model is picked, but the agent may not read the provider's key: " + err.message));
+      } }, h("h3", {}, a.name + "'s model"),
+        providers.length ? null : h("p", {}, "The organization has no model providers yet: an admin adds one, with its key, in Settings."),
+        h("label", {}, "Provider", provider),
+        h("label", {}, "Model", h("span", {}, "Its name as the provider knows it. Cobranch doesn't check it, so a model works the day the provider ships it."), model),
+        can("org.grants.manage") ? h("label", { class: "check" }, grant, "Let the agent read the provider's key (Secret reader on it), as its tasks need") : null,
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(row) }, "Cancel")))));
+      return editor;
+    }
+
+    // secretsEditor names the secrets agent a's tasks receive, each an environment variable from one of the secrets the
+    // viewer manages, the organization's or its repositories', in place of row. done draws the page again.
+    async function secretsEditor(org, a, repos, row, done) {
+      const lists = await Promise.all([api("GET", "/orgs/" + org.slug + "/secrets").then((d) => d.secrets.map((s) => ({ id: s.id, label: s.name }))).catch(() => []),
+        ...repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/secrets").then((d) => d.secrets.map((s) => ({ id: s.id, label: r.slug + " / " + s.name }))).catch(() => []))]);
+      const owned = lists.flat();
+      const lines = h("div");
+      const line = (name = "", id = "") => {
+        const env = h("input", { required: true, maxlength: 100, pattern: "[A-Za-z_][A-Za-z0-9_]*", value: name, placeholder: "NPM_TOKEN" });
+        const pick = h("select", { required: true }, owned.map((s) => h("option", { value: s.id, selected: s.id === id }, s.label)),
+          id && !owned.some((s) => s.id === id) ? h("option", { value: id, selected: true }, "A secret you don't manage") : null);
+        const el = h("div", { class: "row" }, env, pick, h("button", { class: "button small", type: "button", onclick: () => el.remove() }, "Remove"));
+        el.named = () => [env.value.trim(), pick.value];
+        return el;
+      };
+      lines.append(...Object.entries(a.secrets).map(([name, id]) => line(name, id)));
+      const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: (e) => {
+        e.preventDefault();
+        const secrets = Object.fromEntries([...lines.children].map((el) => el.named()));
+        api("PUT", "/orgs/" + org.slug + "/agents/" + a.id + "/secrets", { secrets }, { "If-Match": `"${a.version}"` }).then(() => done(), (err) => done(err.message));
+      } }, h("h3", {}, "Secrets " + a.name + "'s tasks receive"),
+        h("p", {}, "Each goes in a task's environment under the name given, if the agent may read it: grant it Secret reader on the secret. Not PATH, HOME, or a name starting COBRANCH_, GIT_ or LD_."),
+        lines,
+        h("div", {}, owned.length ? h("button", { class: "button small", type: "button", onclick: () => lines.append(line()) }, "Add a secret") : h("span", { class: "muted" }, "No secrets you manage to add.")),
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(row) }, "Cancel")))));
+      return editor;
     }
 
     // newAgentForm makes an agent with its first roles: at the organization, and perhaps one on a repository, each one
@@ -3094,11 +3159,15 @@
     }
 
     // showSettings is an organization's usage against its limits, for anyone who reads it, and, with org.manage, the
-    // form that changes its settings.
+    // form that changes its settings and its model providers.
     async function showSettings(org, main, can) {
       const usage = await api("GET", "/orgs/" + org.slug + "/usage");
       const sections = [h("h1", {}, "Settings"), usagePanel(org, usage)];
-      if (can("org.manage")) sections.push(...settingsForm(org));
+      if (can("org.manage")) {
+        const error = h("p", { class: "alert", hidden: true });
+        const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+        sections.push(...settingsForm(org), error, await providersSection(org, can, fail, () => showSettings(org, main, can)));
+      }
       main.replaceChildren(...sections);
     }
 
@@ -3167,6 +3236,53 @@
         h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
       return [error, saved, h("section", { class: "panel" }, form)];
+    }
+
+    // providersSection lists the model providers the organization added, each with the secret its API key is in, and the
+    // forms that add one the installation knows, name another key, and remove one no agent runs on. A key is one of the
+    // organization's own secrets, which a viewer who manages secrets picks; render draws the page again.
+    async function providersSection(org, can, fail, render) {
+      const path = "/orgs/" + org.slug + "/model-providers";
+      const [{ modelProviders: list, available }, keys] = await Promise.all([api("GET", path),
+        can("secrets.manage") ? api("GET", "/orgs/" + org.slug + "/secrets").then((d) => d.secrets) : []]);
+      const item = (name) => path + "/" + encodeURIComponent(name);
+      const keySelect = (selected) => h("select", { required: true }, keys.map((s) => h("option", { value: s.id, selected: s.id === selected }, s.name)));
+      const row = (p) => {
+        const tr = h("tr", {}, h("td", {}, h("code", {}, p.name)),
+          h("td", {}, p.broken ? h("span", { class: "badge tone-danger" }, icon("circle-x"), "Its key is gone") : p.secretName ? h("code", {}, p.secretName) : h("span", { class: "muted" }, "A secret you don't manage")),
+          h("td", {}, p.createdBy ? p.createdBy.displayName : h("span", { class: "muted" }, "Someone since gone"), h("p", {}, when(p.updatedAt))),
+          h("td", { class: "actions" },
+            keys.length ? h("button", { class: "button small", type: "button", onclick: () => {
+              const key = keySelect(p.secretId);
+              const editor = h("tr", {}, h("td", { colspan: 4 }, h("form", { class: "inline with-role", onsubmit: (e) => {
+                e.preventDefault();
+                api("PUT", item(p.name), { secretId: key.value }, { "If-Match": `"${p.version}"` }).then(render).catch(fail);
+              } }, h("label", {}, "Key", key), h("button", { class: "button primary", type: "submit" }, "Save"), " ",
+                h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(tr) }, "Cancel"))));
+              tr.replaceWith(editor);
+            } }, "Change key") : null, " ",
+            h("button", { class: "button small danger", type: "button", title: "Remove " + p.name,
+              onclick: () => confirm("Remove " + p.name + "? Agents on it must move to another provider first.") && api("DELETE", item(p.name), undefined, { "If-Match": `"${p.version}"` }).then(render).catch(fail) }, "Remove")));
+        return tr;
+      };
+      const left = available.filter((name) => !list.some((p) => p.name === name));
+      const section = h("section", { class: "panel" }, h("h3", {}, "Model providers"),
+        h("p", {}, "The providers this organization's agents run on, each with its API key, kept as one of the organization's secrets. An agent's tasks run only while the agent may read its provider's key."),
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Provider"), h("th", {}, "Key"), h("th", {}, "Set by"), h("th", {}))), h("tbody", {}, list.map(row)))
+          : h("p", {}, "No providers yet."));
+      if (!left.length) return section;
+      if (!keys.length) {
+        section.append(h("p", { class: "muted" }, can("secrets.manage") ? ["Add a provider's API key as one of the organization's ", h("a", { href: base + org.slug + "/secrets", "data-nav": "" }, "secrets"), " to add the provider."]
+          : "Adding a provider takes picking its key among the organization's secrets, which only those who manage them see."));
+        return section;
+      }
+      const provider = h("select", { required: true }, left.map((name) => h("option", { value: name }, name)));
+      const key = keySelect();
+      section.append(h("form", { class: "inline with-role", onsubmit: (e) => {
+        e.preventDefault();
+        api("PUT", item(provider.value), { secretId: key.value }, { "If-None-Match": "*" }).then(render).catch(fail);
+      } }, h("label", {}, "Provider", provider), h("label", {}, "Key", key), h("button", { class: "button primary", type: "submit" }, "Add")));
+      return section;
     }
   </script>
 </body>
