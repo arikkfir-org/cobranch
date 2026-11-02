@@ -304,9 +304,11 @@ pushWorker:
 # organization's in a namespace of its own that it creates
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "The chart"). It is the only
 # workload that calls the Kubernetes API, through a ServiceAccount of its own: cluster-wide, it creates and deletes its
-# job namespaces and binds itself there, and in each it runs pods; jobs.pods false renders none of it. It keeps ended
-# runs' logs in the object store, as the Git server keeps packs: a bucket the servers reach through serviceAccount's
-# identity needs the controller's ServiceAccount, <release>-controller, granted too.
+# job namespaces and binds itself there, and in each it runs pods. With jobs.pods false it still runs, under the
+# servers' ServiceAccount with no token, and the chart renders neither its ServiceAccount nor its cluster-wide RBAC. It
+# keeps ended runs' logs in the object store, as the Git server keeps packs: a bucket the servers reach through
+# serviceAccount's identity needs the controller's ServiceAccount, <release>-controller, granted too, unless jobs.pods
+# is false.
 controller:
   replicas: 2
   resources:
