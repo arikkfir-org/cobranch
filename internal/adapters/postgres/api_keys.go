@@ -2,10 +2,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
@@ -45,10 +48,13 @@ func nilIfZero(t time.Time) *time.Time {
 	return &t
 }
 
-// Credential finds a credential by its token's hash, with the principal it acts as: an API key, or a user with their
-// emails.
+// Credential finds a credential by its token's hash, with the principal it acts as: an API key, a user with their
+// emails, or, for a running run's token, its job.
 func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
 	row, err := s.q.CredentialByToken(ctx, tokenHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return s.runToken(ctx, tokenHash)
+	}
 	if err != nil {
 		return auth.Credential{}, auth.User{}, wrap("reading the credential", err)
 	}
@@ -59,9 +65,32 @@ func (s *AuthStore) Credential(ctx context.Context, tokenHash []byte) (auth.Cred
 	return credential(row.Credential), u, nil
 }
 
-// TouchCredential records that credential id was used at usedAt.
-func (s *AuthStore) TouchCredential(ctx context.Context, id uuid.UUID, usedAt time.Time) error {
-	if err := s.q.TouchCredential(ctx, usedAt, id); err != nil {
+// runToken finds the token of a run that hasn't ended by its hash, with the job it acts as: a credential named by its
+// run's ID, which does what the job declared on the run's repository.
+func (s *AuthStore) runToken(ctx context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
+	row, err := s.q.RunTokenByHash(ctx, tokenHash)
+	if err != nil {
+		return auth.Credential{}, auth.User{}, wrap("reading the run's token", err)
+	}
+	var permissions []string
+	if err := json.Unmarshal(row.Permissions, &permissions); err != nil {
+		return auth.Credential{}, auth.User{}, fmt.Errorf("reading run %s's permissions: %w", row.RunID, err)
+	}
+	c := auth.Credential{ID: row.RunID, Kind: auth.CredentialRunToken, PrincipalID: row.Principal.ID, Hint: row.Hint,
+		CreatedAt: row.CreatedAt, ExpiresAt: row.ExpiresAt, LastUsedAt: orZero(row.LastUsedAt), Permissions: permissions,
+		OrgID: row.OrgID, RepoID: row.RepoID}
+	p := row.Principal
+	return c, auth.User{Principal: auth.Principal{ID: p.ID, Kind: auth.Kind(p.Kind), DisplayName: p.DisplayName, Suspended: p.Suspended},
+		CreatedAt: p.CreatedAt}, nil
+}
+
+// TouchCredential records that credential id, of kind, was used at usedAt.
+func (s *AuthStore) TouchCredential(ctx context.Context, id uuid.UUID, kind auth.CredentialKind, usedAt time.Time) error {
+	touch := s.q.TouchCredential
+	if kind == auth.CredentialRunToken {
+		touch = s.q.TouchRunToken
+	}
+	if err := touch(ctx, usedAt, id); err != nil {
 		return fmt.Errorf("marking the credential used: %w", err)
 	}
 	return nil

@@ -144,7 +144,7 @@ spec:
     matchLabels:
       {{- include "cobranch.selectorLabels" $component | nindent 6 }}
 ---
-# Only the servers and the migrate Job reach the database.
+# Only the servers, the controller and the migrate Job reach the database.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -166,7 +166,7 @@ spec:
               - key: app.kubernetes.io/component
                 operator: In
                 values:
-                  [rest-server, graphql-server, auth-server, admin-server, git-server, push-worker, migrate, maintenance]
+                  [rest-server, graphql-server, auth-server, admin-server, git-server, push-worker, controller, migrate, maintenance]
       ports:
         - port: postgresql
 {{- end }}

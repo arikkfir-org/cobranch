@@ -47,7 +47,7 @@ Seven constraints from the [product design](product.md#principles) decide most o
 ## Components
 
 Ten workloads, plus the job and agent pods the controller creates and a migration Job per upgrade. Only the Git server
-reads Git objects or moves refs, and only the controller makes and watches pods; the REST and GraphQL servers' one
+reads Git objects or moves refs, and only the controller makes and polls pods; the REST and GraphQL servers' one
 Kubernetes call reads a running job's logs.
 
 **All state lives in PostgreSQL and the object store, itself PostgreSQL by default**
@@ -90,7 +90,7 @@ The `cobranch` image runs `cobranch <workload>`: `auth-server`, `graphql-server`
 | Admin server | Deployment | 1 | None | No token |
 | Git server | Deployment | 2 | Ephemeral volume, the pack cache | No token |
 | Push worker | Deployment | 2, or none while no push waits | None | No token |
-| Controller | Deployment | 2 | None | Create job namespaces and their policies; create, watch and delete pods and Secrets in them |
+| Controller | Deployment | 2 | None | Create job namespaces and their policies; create, poll and delete pods and Secrets in them |
 | Maintenance | CronJob, hourly | 1 | Ephemeral volume, for repacking | No token |
 | Migration | Job, per upgrade | 1 | None | No token |
 | PostgreSQL | StatefulSet, optional | 1 | Persistent volume | No token |
@@ -122,13 +122,14 @@ domain, which the session cookie names.
 
 ### Job isolation
 
-**Agreed** (review, 2026-10-27): each organization's jobs, and for now its agents' pods, run in a namespace of their
-own. Its NetworkPolicies admit no ingress at all, and allow egress to the internet and to cluster DNS only, never to the
-cluster's pods or Services.
+**Changed** (jobs, 2026-11-01; agreed in review on 2026-10-27 without the servers): each organization's jobs, and for
+now its agents' pods, run in a namespace of their own. Its NetworkPolicies admit no ingress at all, and allow egress to
+cluster DNS, to the internet and to the installation's REST, GraphQL and Git servers on their port, never to any other
+pod or Service: runs reach Cobranch at its Services, whatever its public URLs resolve to inside the cluster.
 
-**A job or agent reaches the internet and nothing else in the cluster**
+**A job or agent reaches the internet and Cobranch’s servers, and nothing else in the cluster**
 
-![A job or agent reaches the internet and nothing else in the cluster](architecture/isolation.svg)
+![A job or agent reaches the internet and Cobranch’s servers, and nothing else in the cluster](architecture/isolation.svg)
 
 The controller creates the namespace and its policies with the organization’s first job or agent task, and binds the
 chart’s role that lets the REST and GraphQL servers read its pods’ logs.
@@ -585,7 +586,7 @@ design, and settled the open questions.
 | The Auth, GraphQL, REST and Admin servers are workloads of their own, routed by the operator under one parent domain | The operator routes, scales and exposes each surface on its own | Changed |
 | A `cobranch migrate` Job runs SQL and Go migrations compatible with the previous release, before the servers roll out; pods never migrate | No race to migrate at startup, and the old release keeps working | Changed |
 | REST is the SDKs' surface, GraphQL the Console's, a separate Admin API the Back-office's | Each where its tooling is strongest; admin permissions at any scope | Changed |
-| Each organization's jobs and, for now, agent pods run in a namespace of their own: no ingress, egress to the internet and DNS only | A job or agent reaches nothing in the cluster that another organization uses | Agreed |
+| Each organization's jobs and, for now, agent pods run in a namespace of their own: no ingress, egress to the internet, DNS and the installation's servers only | A job or agent reaches nothing in the cluster that another organization uses | Changed |
 | Cron triggers come from the default branch's `/cobranch.yaml` only | A branch cannot schedule work | Agreed |
 | Secrets are encrypted rows in organization or repository settings; `secrets.read` grants decide who receives them; `/cobranch.yaml` names them by ID | The chart already holds keys; no secret store to add; agents hold outside credentials the same way | Agreed |
 | An admin picks each agent's provider and model: Anthropic, Google, xAI, OpenAI or DeepSeek | Agents of one organization can each run on the model that suits them | Agreed |

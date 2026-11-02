@@ -3,7 +3,8 @@
 # the APIs, and, with the demo data on, a seeded sign-in makes a session the REST API accepts, which the Admin API
 # refuses unless the user administers the installation, who reads its settings and identity providers; with the Git
 # server, the user makes a personal token, clones a repository the demo data's Job pushed to, pushes to it and finds
-# the push in a fresh clone and in the REST API's files, and its SSH Service, given one, answers.
+# the push in a fresh clone and in the REST API's files, and its SSH Service, given one, answers; with the controller,
+# a job the user's next push triggers runs to success.
 apiVersion: v1
 kind: Pod
 metadata:
@@ -126,6 +127,33 @@ spec:
           # Its history through every parent, which the Git server walks, holds the commit.
           wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/commits?parents=all" | tee /dev/stderr \
             | grep -q "\"sha\":\"$(git -C website rev-parse HEAD)\""
+          {{- if .Values.jobs.pods }}
+          # A job the website's /cobranch.yaml declares runs on the next push, as a script in Acme's job namespace: it
+          # finds its commit checked out, and reads the repository through the REST API with its run's token.
+          cat >website/cobranch.yaml <<'YAML'
+          jobs:
+            helm-test:
+              on: {push: }
+              script: |
+                grep -q 'Pushed by helm test' README.md
+                wget -qO- --header "Authorization: Bearer $COBRANCH_TOKEN" "$COBRANCH_URL/v1/orgs/$COBRANCH_ORG/repos/$COBRANCH_REPO"
+          YAML
+          # A test run after an upgrade finds the file pushed already, and pushes a commit of no change to run it.
+          git -C website add cobranch.yaml
+          git -C website -c user.name='Helm test' -c user.email=helm-test@cobranch.example commit -q --allow-empty -m 'Run a job'
+          git -C website push origin HEAD:refs/heads/main
+          sha=$(git -C website rev-parse HEAD)
+          for _ in $(seq 90); do
+            runs="$(wget -qO- --header "Cookie: $cookie" "$rest/v1/orgs/acme/repos/website/runs?sha=$sha")"
+            case "$runs" in
+              *'"state":"succeeded"'*) break ;;
+              *'"state":"failed"'* | *'"state":"cancelled"'*) echo "$runs" >&2; exit 1 ;;
+            esac
+            sleep 2
+          done
+          echo "$runs" >&2
+          echo "$runs" | grep -q '"state":"succeeded"'
+          {{- end }}
           {{- end }}
           {{- end }}
           echo "Cobranch {{ .Values.images.cobranch.tag | default .Chart.AppVersion }} answers, built as $version"
