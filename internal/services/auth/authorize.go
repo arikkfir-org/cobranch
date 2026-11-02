@@ -9,7 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// Scope is where a grant applies: the installation, an organization or a repository.
+// Scope is where a grant applies: the installation, an organization, a repository, or one secret, for secret
+// permissions only.
 type Scope string
 
 // The scopes.
@@ -17,6 +18,7 @@ const (
 	ScopeInstallation Scope = "installation"
 	ScopeOrganization Scope = "organization"
 	ScopeRepository   Scope = "repository"
+	ScopeSecret       Scope = "secret"
 )
 
 // ErrForbidden is a principal that lacks a permission it needs.
@@ -25,7 +27,8 @@ var ErrForbidden = errors.New("forbidden")
 // Grants is what the authorizer reads: the permissions a principal's roles hold at a scope, through every grant it
 // has there. scopeID is uuid.Nil at the installation. A grant reaches its scope and everything inside it: at a
 // repository, Permissions answers the permissions of the grants on it and the repository permissions of the roles at
-// its organization.
+// its organization; at a secret, the secret permissions of the grants on it, on its repository and at its
+// organization.
 type Grants interface {
 	Permissions(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error)
 	// Repositories lists the IDs of the organization's repositories where the principal holds permission, through a

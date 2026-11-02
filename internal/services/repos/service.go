@@ -325,8 +325,9 @@ func (s *Service) roles(ctx context.Context, orgID uuid.UUID, all bool) ([]orgs.
 
 // grantable finds the repository, the role and the principal a grant or a revocation names, for a viewer with
 // org.grants.manage at the repository's organization who holds every permission the role gives on the repository. A
-// revocation finds the role among all the organization's, so a grant whose role has since lost its repository
-// permissions can still be taken back.
+// job is granted Secret reader alone: its declaration and main's ceiling decide the rest. A revocation finds the role
+// among all the organization's, and takes any from a job, so a grant whose role has since lost its repository
+// permissions, or that a job should never have held, can still be taken back.
 func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID, revoking bool) (Repository, orgs.Role, error) {
 	repo, held, err := s.require(ctx, v, repoID, PermRead)
 	if err != nil {
@@ -350,14 +351,18 @@ func (s *Service) grantable(ctx context.Context, v Viewer, repoID, principalID, 
 	if !auth.Covers(held, roles[i].Permissions) {
 		return Repository{}, orgs.Role{}, fmt.Errorf("%w: granting %s takes every permission it gives on the repository", auth.ErrForbidden, roles[i].Name)
 	}
-	if _, err := s.store.Principal(ctx, repo.OrgID, principalID); err != nil {
+	p, err := s.store.Principal(ctx, repo.OrgID, principalID)
+	if err != nil {
 		return Repository{}, orgs.Role{}, wrap("finding the principal", err)
+	}
+	if !revoking && p.Kind == auth.KindJob && roleID != auth.RoleSecretReader {
+		return Repository{}, orgs.Role{}, &orgs.ValidationError{Field: "roleId", Code: "role.invalid", Message: "a job holds no role but Secret reader"}
 	}
 	return repo, roles[i], nil
 }
 
-// Grant gives one of the organization's members or API keys a role on the repository; it takes org.grants.manage
-// and every permission the role gives there.
+// Grant gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret
+// reader; it takes org.grants.manage and every permission the role gives there.
 func (s *Service) Grant(ctx context.Context, v Viewer, repoID, principalID, roleID uuid.UUID) error {
 	repo, role, err := s.grantable(ctx, v, repoID, principalID, roleID, false)
 	if err != nil {

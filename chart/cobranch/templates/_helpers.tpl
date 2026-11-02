@@ -258,7 +258,8 @@ its own Service, which no route names. Nothing without a Git server. */}}
 {{ .Values.gitServer.ssh.hostKey.existingSecret | default (printf "%s-git-ssh-host-key" (include "cobranch.fullname" .)) }}
 {{- end -}}
 
-{{/* The secrets key, which the Auth and Admin servers read: it seals the Back-office's providers' client secrets. */}}
+{{/* The secrets key, which the Auth, Admin, REST and GraphQL servers read: it seals the Back-office's providers'
+client secrets and the organizations' and repositories' secrets. */}}
 {{- define "cobranch.secretsKeyEnv" -}}
 - name: COBRANCH_SECRETS_KEY
   valueFrom:

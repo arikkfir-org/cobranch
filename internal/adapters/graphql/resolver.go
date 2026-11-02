@@ -40,4 +40,6 @@ type Resolver struct {
 	Chats Chats
 	// Agents is the service of the organizations' agents and their tasks.
 	Agents Agents
+	// Secrets is the service of the organizations' and repositories' secrets.
+	Secrets Secrets
 }

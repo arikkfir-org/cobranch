@@ -47,6 +47,7 @@ models:
       tasks: { resolver: true }
       task: { resolver: true }
       labels: { resolver: true }
+      secrets: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
@@ -85,6 +86,8 @@ models:
       environments: { resolver: true }
       environment: { resolver: true }
       delivery: { resolver: true }
+      secrets: { resolver: true }
+      jobPrincipals: { resolver: true }
   Environment:
     fields:
       deliveries: { resolver: true }
@@ -92,3 +95,6 @@ models:
       RepositoryID:
         description: The ID of the environment's repository, which its deliveries read.
         type: string
+  Secret:
+    fields:
+      access: { resolver: true }

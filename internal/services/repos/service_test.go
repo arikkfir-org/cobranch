@@ -23,7 +23,7 @@ var now = time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
 // fixture is Acme, with Olivia its Owner, Max a Member, Gwen a Guest and Rita a Release manager (a custom role that
 // reads every repository and merges); Nia belongs nowhere. Acme has two repositories: website, which Olivia created
 // and where Max is a Developer, and secret, which Olivia created and nobody else was granted. Deploy is one of Acme's
-// API keys.
+// API keys, and build one of its jobs.
 type fixture struct {
 	orgs                         *orgstest.Store
 	store                        *repostest.Store
@@ -32,6 +32,7 @@ type fixture struct {
 	olivia, max, gwen, rita, nia repos.Viewer
 	website, secret              repos.Repository
 	deploy                       orgs.APIKey
+	build                        uuid.UUID
 	releaseManager, membersRole  orgs.Role
 }
 
@@ -61,6 +62,8 @@ func newFixture(t *testing.T) *fixture {
 	f.deploy = orgs.APIKey{ID: uuid.New(), OrgID: f.acme.ID, Name: "Deploy"}
 	o.Keys[f.deploy.ID] = f.deploy
 	o.Grant(f.deploy.ID, auth.RoleGuest, auth.ScopeOrganization, f.acme.ID)
+	f.build = uuid.New()
+	s.Jobs[f.build] = repostest.Job{OrgID: f.acme.ID, Name: "build"}
 	for _, r := range []*repos.Repository{&f.website, &f.secret} {
 		*r = repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Name: "x", ObjectFormat: repos.ObjectFormatSHA1, CreatedBy: f.olivia.ID, CreatedAt: now}
 	}
@@ -368,7 +371,7 @@ func TestAccessAndRoles(t *testing.T) {
 			t.Errorf("Release manager gives %v on a repository, want its repository permissions alone", r.Permissions)
 		}
 	}
-	if want := []string{"Reader", "Developer", "Maintainer", "Automation", "Release manager"}; !slices.Equal(names, want) {
+	if want := []string{"Reader", "Developer", "Maintainer", "Automation", "Secret reader", "Release manager"}; !slices.Equal(names, want) {
 		t.Errorf("Roles() = %v, want %v (Inviter holds no repository permission)", names, want)
 	}
 }
@@ -391,6 +394,15 @@ func TestGrant(t *testing.T) {
 		{name: "a custom role's repository permissions", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.gwen.ID, f.releaseManager.ID))
 		}, wantEvents: []string{"repo.role_granted"}},
+		{name: "an Owner grants a job Secret reader", run: func(ctx context.Context, f *fixture) error {
+			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.build, auth.RoleSecretReader))
+		}, wantEvents: []string{"repo.role_granted"}},
+		{name: "a job and any other role", run: func(ctx context.Context, f *fixture) error {
+			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.build, auth.RoleDeveloper))
+		}, wantCode: "role.invalid"},
+		{name: "a job and a custom role", run: func(ctx context.Context, f *fixture) error {
+			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.build, f.releaseManager.ID))
+		}, wantCode: "role.invalid"},
 		{name: "a role held already", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Grant(ctx, f.olivia, f.website.ID, f.max.ID, auth.RoleDeveloper))
 		}, wantErr: repos.ErrGranted},
@@ -424,6 +436,10 @@ func TestRevoke(t *testing.T) {
 		{name: "a role not held", run: func(ctx context.Context, f *fixture) error {
 			return got(f.service.Revoke(ctx, f.olivia, f.website.ID, f.gwen.ID, auth.RoleReader))
 		}, wantErr: repos.ErrNotFound},
+		{name: "a job's role it should never have held", run: func(ctx context.Context, f *fixture) error {
+			f.orgs.Grant(f.build, auth.RoleDeveloper, auth.ScopeRepository, f.website.ID)
+			return got(f.service.Revoke(ctx, f.olivia, f.website.ID, f.build, auth.RoleDeveloper))
+		}, wantEvents: []string{"repo.role_revoked"}},
 		{name: "a custom role that has since lost its repository permissions", run: func(ctx context.Context, f *fixture) error {
 			if err := f.service.Grant(ctx, f.olivia, f.website.ID, f.gwen.ID, f.releaseManager.ID); err != nil {
 				return got(err)
