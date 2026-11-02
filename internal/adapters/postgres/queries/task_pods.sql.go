@@ -15,8 +15,18 @@ import (
 const activeTasks = `-- name: ActiveTasks :many
 SELECT t.id, t.org_id, t.number, t.state, coalesce(t.started_at, t.created_at)::timestamptz AS started_at, p.attempt,
     coalesce(p.pod_started_at, t.created_at)::timestamptz AS pod_started_at,
-    coalesce((SELECT max(k.created_at) FROM agent_task_tokens k WHERE k.task_id = t.id), 'epoch')::timestamptz AS token_at
+    coalesce((SELECT max(k.created_at) FROM agent_task_tokens k WHERE k.task_id = t.id), 'epoch')::timestamptz AS token_at,
+    s.state_at, (p.stopped_at IS NOT NULL)::boolean AS stopped, p.stops,
+    EXISTS (
+        SELECT 1 FROM chat_messages m
+        WHERE m.thread_id = t.thread_id AND m.created_at > s.state_at AND m.deleted_at IS NULL
+            AND m.task_id IS DISTINCT FROM t.id
+    ) AS answered
 FROM agent_tasks t JOIN agent_task_pods p ON p.task_id = t.id
+CROSS JOIN LATERAL (
+    SELECT coalesce(max(e.created_at), t.started_at, t.created_at)::timestamptz AS state_at
+    FROM agent_task_entries e WHERE e.task_id = t.id AND e.kind = 'state'
+) s
 WHERE t.state IN ('running', 'waiting')
 `
 
@@ -29,10 +39,15 @@ type ActiveTasksRow struct {
 	Attempt      int32
 	PodStartedAt time.Time
 	TokenAt      time.Time
+	StateAt      time.Time
+	Stopped      bool
+	Stops        int32
+	Answered     bool
 }
 
-// ActiveTasks lists the tasks that run or wait in the pods the controller started, with their newest pod and when
-// their newest token was issued.
+// ActiveTasks lists the tasks that run or wait in the pods the controller started, with their newest pod, when their
+// newest token was issued, when they last changed state, whether their pod stopped while they wait, and whether
+// someone posted in their thread since they last changed state.
 func (q *Queries) ActiveTasks(ctx context.Context) ([]ActiveTasksRow, error) {
 	rows, err := q.db.Query(ctx, activeTasks)
 	if err != nil {
@@ -51,6 +66,10 @@ func (q *Queries) ActiveTasks(ctx context.Context) ([]ActiveTasksRow, error) {
 			&i.Attempt,
 			&i.PodStartedAt,
 			&i.TokenAt,
+			&i.StateAt,
+			&i.Stopped,
+			&i.Stops,
+			&i.Answered,
 		); err != nil {
 			return nil, err
 		}
@@ -192,13 +211,30 @@ func (q *Queries) MarkTaskRunning(ctx context.Context, id uuid.UUID) (MarkTaskRu
 }
 
 const recordTaskPod = `-- name: RecordTaskPod :exec
-UPDATE agent_task_pods SET attempt = $1, pod_started_at = now(), lease_until = NULL WHERE task_id = $2
+UPDATE agent_task_pods SET attempt = $1, pod_started_at = now(), lease_until = NULL, stopped_at = NULL
+WHERE task_id = $2
 `
 
-// RecordTaskPod records that a task's pod numbered attempt started now.
+// RecordTaskPod records that a task's pod numbered attempt started now, which ends a stop.
 func (q *Queries) RecordTaskPod(ctx context.Context, attempt int32, taskID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, recordTaskPod, attempt, taskID)
 	return err
+}
+
+const stopTaskPod = `-- name: StopTaskPod :one
+UPDATE agent_task_pods p SET stopped_at = now(), stops = p.stops + 1
+FROM agent_tasks t
+WHERE p.task_id = $1 AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
+RETURNING p.task_id
+`
+
+// StopTaskPod records that the controller stops the pod of a task that waits, and answers whether it does: no row when
+// the task no longer waits, or its pod stopped already.
+func (q *Queries) StopTaskPod(ctx context.Context, taskID uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, stopTaskPod, taskID)
+	var task_id uuid.UUID
+	err := row.Scan(&task_id)
+	return task_id, err
 }
 
 const taskStates = `-- name: TaskStates :many

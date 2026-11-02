@@ -39,6 +39,8 @@ type store struct {
 	ended bool
 	// restarting is the pod of each task whose restart a controller leased.
 	restarting map[uuid.UUID]int
+	// answered is a task that moves on as the controller stops its pod: Stop finds it no longer waits.
+	answered bool
 }
 
 func (s *store) Claim(_ context.Context, leaseUntil time.Time) (taskrunner.Task, bool, error) {
@@ -94,6 +96,14 @@ func (s *store) LeaseRestart(_ context.Context, taskID uuid.UUID, pod int, _ tim
 func (s *store) Started(_ context.Context, taskID uuid.UUID, pod int) error {
 	s.events = append(s.events, fmt.Sprintf("%s's pod %d started", taskID.String()[:4], pod))
 	return nil
+}
+
+func (s *store) Stop(_ context.Context, taskID uuid.UUID) (bool, error) {
+	if s.answered {
+		return false, nil
+	}
+	s.events = append(s.events, taskID.String()[:4]+"'s pod stopped")
+	return true, nil
 }
 
 func (s *store) Fail(_ context.Context, _ uuid.UUID, reason string) (bool, error) {
@@ -183,7 +193,7 @@ func (v vault) Receive(_ context.Context, principalID uuid.UUID, ids []uuid.UUID
 }
 
 var settings = taskrunner.Settings{Pods: true, Lease: 2 * time.Minute, RoomRetry: 30 * time.Second, Timeout: 24 * time.Hour,
-	Vanished: time.Minute, RESTURL: "https://api.example.com/v1", GitURL: "https://git.example.com", MaxTurns: 200,
+	Idle: 30 * time.Minute, Vanished: time.Minute, RESTURL: "https://api.example.com/v1", GitURL: "https://git.example.com", MaxTurns: 200,
 	ShellTimeout: 10 * time.Minute, MaxTokens: 8192}
 
 func task(change func(*taskrunner.Task)) taskrunner.Task {
@@ -320,6 +330,7 @@ type followCase struct {
 	startErr    error
 	gone        bool
 	restarting  map[uuid.UUID]int
+	answered    bool
 	wantEvents  []string
 	wantCluster []string
 	wantErr     string
@@ -330,7 +341,7 @@ func followCases() []followCase {
 	org, other := id("0001"), id("0003")
 	running := func(prefix string, orgID uuid.UUID, pod int, change func(*taskrunner.Active)) taskrunner.Active {
 		a := taskrunner.Active{ID: id(prefix), OrgID: orgID, Number: 7, State: agents.TaskRunning, StartedAt: now.Add(-time.Hour), Pod: pod,
-			PodStartedAt: now.Add(-20 * time.Minute), TokenAt: now.Add(-10 * time.Minute)}
+			PodStartedAt: now.Add(-20 * time.Minute), TokenAt: now.Add(-10 * time.Minute), StateAt: now.Add(-5 * time.Minute)}
 		if change != nil {
 			change(&a)
 		}
@@ -377,16 +388,55 @@ func followCases() []followCase {
 	}
 }
 
+// idleCases are TestFollow's cases of tasks that wait for an answer, at now.
+func idleCases() []followCase {
+	org := id("0001")
+	waiting := func(pod int, change func(*taskrunner.Active)) []taskrunner.Active {
+		a := taskrunner.Active{ID: id("aaaa"), OrgID: org, Number: 7, State: agents.TaskWaiting, StartedAt: now.Add(-2 * time.Hour), Pod: pod,
+			PodStartedAt: now.Add(-time.Hour), TokenAt: now.Add(-10 * time.Minute), StateAt: now.Add(-31 * time.Minute)}
+		if change != nil {
+			change(&a)
+		}
+		return []taskrunner.Active{a}
+	}
+	stopped := func(a *taskrunner.Active) { a.Stopped, a.Stops = true, 1 }
+	runs := map[uuid.UUID]map[uuid.UUID]taskrunner.Pod{org: {id("aaaa"): {Number: 1, Pod: runner.Pod{Outcome: runner.Pending}}}}
+	woke := []string{"removed aaaa", "prepared 0001", "started aaaa/2"}
+	return []followCase{
+		{name: "a task that waited past agents.idle", active: waiting(1, nil), pods: runs,
+			wantEvents: []string{"aaaa's pod stopped"}, wantCluster: []string{"removed aaaa"}},
+		{name: "a task that waits within agents.idle", active: waiting(1, func(a *taskrunner.Active) { a.StateAt = now.Add(-29 * time.Minute) }), pods: runs},
+		{name: "a task with an answer its harness hasn't read yet", active: waiting(1, func(a *taskrunner.Active) { a.Answered = true }), pods: runs},
+		{name: "a task that moves on as its pod stops", active: waiting(1, nil), pods: runs, answered: true},
+		{name: "a stopped task without an answer", active: waiting(1, stopped)},
+		{name: "a stopped task's pod left behind", active: waiting(1, stopped), pods: runs, wantCluster: []string{"removed aaaa"}},
+		{name: "a stopped task with an answer", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.Answered = true }),
+			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: woke},
+		{name: "a stopped task that runs again", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.State = agents.TaskRunning }),
+			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: woke},
+		{name: "no room to wake a stopped task", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.Answered = true }),
+			startErr: runner.ErrNoRoom, wantCluster: []string{"removed aaaa", "prepared 0001"}},
+		{name: "a stopped task past its timeout", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.StartedAt = now.Add(-25 * time.Hour) }),
+			wantEvents: []string{"failed: timed out after 24h0m0s"}, wantCluster: []string{"removed aaaa"}},
+		{name: "a pod that failed after a stop", active: waiting(taskrunner.MaxPods, func(a *taskrunner.Active) { a.State, a.Stops = agents.TaskRunning, 1 }),
+			pods:       map[uuid.UUID]map[uuid.UUID]taskrunner.Pod{org: {id("aaaa"): {Number: taskrunner.MaxPods, Pod: runner.Pod{Outcome: runner.Failed, Reason: "OOMKilled"}}}},
+			wantEvents: []string{"aaaa's pod 5 started"}, wantCluster: []string{"removed aaaa", "prepared 0001", "started aaaa/5"}},
+		{name: "the last pod that failed after a stop", active: waiting(taskrunner.MaxPods+1, func(a *taskrunner.Active) { a.State, a.Stops = agents.TaskRunning, 1 }),
+			pods:       map[uuid.UUID]map[uuid.UUID]taskrunner.Pod{org: {id("aaaa"): {Number: taskrunner.MaxPods + 1, Pod: runner.Pod{Outcome: runner.Failed, Reason: "OOMKilled"}}}},
+			wantEvents: []string{"failed: its pod died 4 times; the last time, OOMKilled"}, wantCluster: []string{"removed aaaa"}},
+	}
+}
+
 func TestFollow(t *testing.T) {
 	other := id("0003")
-	for _, tt := range followCases() {
+	for _, tt := range append(followCases(), idleCases()...) {
 		t.Run(tt.name, func(t *testing.T) {
 			tasks := map[uuid.UUID]taskrunner.Task{}
 			if !tt.gone {
 				tasks[id("aaaa")] = task(func(t *taskrunner.Task) { t.Pods = 1 })
 				tasks[id("bbbb")] = task(func(t *taskrunner.Task) { t.ID, t.OrgID, t.Pods = id("bbbb"), other, 1 })
 			}
-			s := &store{active: tt.active, tasks: tasks, tokens: map[uuid.UUID]time.Time{}, restarting: tt.restarting}
+			s := &store{active: tt.active, tasks: tasks, tokens: map[uuid.UUID]time.Time{}, restarting: tt.restarting, answered: tt.answered}
 			c := &cluster{pods: tt.pods, podsErr: tt.podsErr, startErr: tt.startErr}
 			svc := taskrunner.NewService(s, c, vault{}, settings)
 			svc.SetClock(func() time.Time { return now })

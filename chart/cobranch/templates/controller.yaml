@@ -67,6 +67,7 @@ controller's defaults stand in for what is unset. */}}
   "IMAGE" ($agents.image | default $image)
   "RESOURCES" (toJson $agents.resources)
   "TIMEOUT" $agents.timeout
+  "IDLE" $agents.idle
   "MAX_TURNS" (toString $agents.maxTurns)
   "SHELL_TIMEOUT" $agents.shellTimeout
   "MODEL_MAX_TOKENS" (toString $agents.maxTokens)

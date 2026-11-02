@@ -57,6 +57,8 @@ type Agents struct {
 	Resources JSON[corev1.ResourceRequirements] `envconfig:"RESOURCES"`
 	// Timeout is the longest a task may run.
 	Timeout time.Duration `envconfig:"TIMEOUT" default:"24h"`
+	// Idle is how long a task that waits for an answer keeps its pod.
+	Idle time.Duration `envconfig:"IDLE" default:"30m"`
 	// MaxTurns, ShellTimeout and MaxTokens bound the harness: its model's turns, a shell command, and a turn's tokens.
 	MaxTurns     int           `envconfig:"MAX_TURNS" default:"200"`
 	ShellTimeout time.Duration `envconfig:"SHELL_TIMEOUT" default:"10m"`
@@ -170,8 +172,8 @@ func LoadController() (Controller, error) {
 		return Controller{}, fmt.Errorf("COBRANCH_JOBS_TIMEOUT is %s and COBRANCH_JOBS_MAX_TIMEOUT %s: a run's default must be positive and within the most", c.Timeout, c.MaxTimeout)
 	case c.LogsMaxBytes <= 0:
 		return Controller{}, errors.New("COBRANCH_JOBS_LOGS_MAX_BYTES must be positive")
-	case c.Agents.Timeout <= 0 || c.Agents.MaxTurns <= 0 || c.Agents.ShellTimeout <= 0 || c.Agents.MaxTokens <= 0:
-		return Controller{}, errors.New("COBRANCH_AGENTS_TIMEOUT, COBRANCH_AGENTS_MAX_TURNS, COBRANCH_AGENTS_SHELL_TIMEOUT and COBRANCH_AGENTS_MODEL_MAX_TOKENS must be positive")
+	case c.Agents.Timeout <= 0 || c.Agents.Idle <= 0 || c.Agents.MaxTurns <= 0 || c.Agents.ShellTimeout <= 0 || c.Agents.MaxTokens <= 0:
+		return Controller{}, errors.New("COBRANCH_AGENTS_TIMEOUT, COBRANCH_AGENTS_IDLE, COBRANCH_AGENTS_MAX_TURNS, COBRANCH_AGENTS_SHELL_TIMEOUT and COBRANCH_AGENTS_MODEL_MAX_TOKENS must be positive")
 	case c.RenderTimeout <= 0 || c.HealthInterval <= 0:
 		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT and COBRANCH_DELIVERY_HEALTH_INTERVAL must be positive")
 	case c.RendersKeep < 1:

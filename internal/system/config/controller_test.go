@@ -33,8 +33,8 @@ func TestLoadController(t *testing.T) {
 			return c.PollInterval == 5*time.Second && c.SweepInterval == 5*time.Minute && c.Pods && c.Lease == 2*time.Minute &&
 				c.Timeout == time.Hour && c.MaxTimeout == 24*time.Hour && c.LogsMaxBytes == 10<<20 && c.PodSecurity == "restricted" &&
 				c.Quota.Value == nil && c.Affinity.Value == nil && c.OwnerRole == "cobranch-cobranch-controller" && c.Agents.Image == "cobranch:v1" &&
-				c.Agents.Timeout == 24*time.Hour && c.Agents.MaxTurns == 200 && c.Agents.ShellTimeout == 10*time.Minute && c.Agents.MaxTokens == 8192 &&
-				c.Agents.Resources.Value.Limits == nil && !c.InCluster &&
+				c.Agents.Timeout == 24*time.Hour && c.Agents.Idle == 30*time.Minute && c.Agents.MaxTurns == 200 && c.Agents.ShellTimeout == 10*time.Minute &&
+				c.Agents.MaxTokens == 8192 && c.Agents.Resources.Value.Limits == nil && !c.InCluster &&
 				c.RenderTimeout == 10*time.Minute && c.HealthInterval == 15*time.Second && c.DeliveryPodSecurity == "restricted" &&
 				c.RendersKeep == 10
 		}},
@@ -61,10 +61,13 @@ func TestLoadController(t *testing.T) {
 func TestLoadControllerAgents(t *testing.T) {
 	checkControllers(t, []controllerCase{
 		{name: "agents' own", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_IMAGE": "tools:v2", "COBRANCH_AGENTS_TIMEOUT": "2h",
-			"COBRANCH_AGENTS_MAX_TURNS": "50", "COBRANCH_AGENTS_RESOURCES": `{"limits":{"memory":"4Gi"}}`}), check: func(c Controller) bool {
-			return c.Agents.Image == "tools:v2" && c.Agents.Timeout == 2*time.Hour && c.Agents.MaxTurns == 50 && c.Agents.Resources.Value.Limits.Memory().String() == "4Gi"
-		}},
+			"COBRANCH_AGENTS_IDLE": "5m", "COBRANCH_AGENTS_MAX_TURNS": "50", "COBRANCH_AGENTS_RESOURCES": `{"limits":{"memory":"4Gi"}}`}),
+			check: func(c Controller) bool {
+				return c.Agents.Image == "tools:v2" && c.Agents.Timeout == 2*time.Hour && c.Agents.Idle == 5*time.Minute && c.Agents.MaxTurns == 50 &&
+					c.Agents.Resources.Value.Limits.Memory().String() == "4Gi"
+			}},
 		{name: "no turns", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_MAX_TURNS": "0"}), wantErr: "COBRANCH_AGENTS_MAX_TURNS"},
+		{name: "no idle time", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_IDLE": "0s"}), wantErr: "COBRANCH_AGENTS_IDLE"},
 		{name: "a provider's gateway", env: controllerEnv(map[string]string{"COBRANCH_AGENTS_PROVIDER_URLS": `{"anthropic":"https://gateway.example.com/anthropic"}`}),
 			check: func(c Controller) bool {
 				return c.Agents.ProviderURLs.Value["anthropic"] == "https://gateway.example.com/anthropic"

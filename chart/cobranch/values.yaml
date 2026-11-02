@@ -405,6 +405,9 @@ agents:
   resources: {}
   # The longest a task may run, after which it fails.
   timeout: 24h
+  # How long a task that asked a question in its thread keeps its pod while it waits for the answer. Then the pod stops,
+  # and the next message in the thread starts the task's next pod, which carries on from its transcript.
+  idle: 30m
   # The most turns of its model a task takes, the longest one shell command of it may run, and the most tokens of one
   # turn's answer.
   maxTurns: 200

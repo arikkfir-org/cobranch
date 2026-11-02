@@ -137,12 +137,25 @@ func (s *TaskPodStore) LeaseRestart(ctx context.Context, taskID uuid.UUID, pod i
 	return true, nil
 }
 
-// Started records that the task's pod numbered pod started now (taskrunner.Store).
+// Started records that the task's pod numbered pod started now, which ends a stop (taskrunner.Store).
 func (s *TaskPodStore) Started(ctx context.Context, taskID uuid.UUID, pod int) error {
-	if err := s.q.RecordTaskPod(ctx, int32(pod), taskID); err != nil { //nolint:gosec // at most taskrunner.MaxPods
+	if err := s.q.RecordTaskPod(ctx, int32(pod), taskID); err != nil { //nolint:gosec // a task has far fewer pods
 		return fmt.Errorf("recording the task's pod: %w", err)
 	}
 	return nil
+}
+
+// Stop records that the task's pod stops while it waits, and answers whether it does: false when the task no longer
+// waits, or its pod stopped already (taskrunner.Store).
+func (s *TaskPodStore) Stop(ctx context.Context, taskID uuid.UUID) (bool, error) {
+	_, err := s.q.StopTaskPod(ctx, taskID)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("stopping the task's pod: %w", err)
+	}
+	return true, nil
 }
 
 // Fail ends a task that hasn't ended Failed, for reason, and appends the change to its transcript, which no harness
@@ -183,7 +196,8 @@ func (s *TaskPodStore) Active(ctx context.Context) ([]taskrunner.Active, error) 
 	out := make([]taskrunner.Active, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, taskrunner.Active{ID: r.ID, OrgID: r.OrgID, Number: r.Number, State: agents.TaskState(r.State), StartedAt: r.StartedAt,
-			Pod: int(r.Attempt), PodStartedAt: r.PodStartedAt, TokenAt: r.TokenAt})
+			Pod: int(r.Attempt), PodStartedAt: r.PodStartedAt, TokenAt: r.TokenAt, StateAt: r.StateAt, Stopped: r.Stopped, Stops: int(r.Stops),
+			Answered: r.Answered})
 	}
 	return out, nil
 }

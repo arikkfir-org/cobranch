@@ -97,7 +97,7 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
 	a := cfg.Agents
 	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), c.tasks, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
-		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
+		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Idle: a.Idle, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
 		ShellTimeout: a.ShellTimeout, MaxTokens: a.MaxTokens})
 	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
 		Lease: j.Lease, RoomRetry: j.RoomRetry, Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL,
