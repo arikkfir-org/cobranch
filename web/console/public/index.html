@@ -299,6 +299,13 @@
     .activity li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
     .activity li:first-child { border-top: 0; }
     .activity li .muted { white-space: nowrap; }
+    .linked { list-style: none; margin: 0; padding: 0; }
+    .linked li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+    .linked li:first-child { border-top: 0; }
+    .linked li a { min-width: 0; overflow-wrap: anywhere; }
+    .works-on { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
+    .works-on form { display: flex; gap: 8px; align-items: center; }
+    .works-on input { width: 9em; }
     @media (max-width: 720px) {
       .issue, .filters { grid-template-columns: minmax(0, 1fr); }
       .issue aside.side { order: -1; }
@@ -660,7 +667,7 @@
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
-      else if (sub === "branches" && rest.length) sections = await repositoryBranch(path, at, rest.join("/"), can, fail);
+      else if (sub === "branches" && rest.length) sections = await repositoryBranch(org, path, at, rest.join("/"), can, orgCan, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
@@ -703,6 +710,7 @@
         '<path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/>',
       "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+      "circle-dot": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
       "eye": '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
       "circle-slash": '<circle cx="12" cy="12" r="10"/><line x1="9" x2="15" y1="15" y2="9"/>',
@@ -1164,10 +1172,10 @@
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
-    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, and the
-    // reviews and annotations of its head. main's page names what merges into it need instead, and a branch that isn't
-    // live any more, its deletion.
-    async function repositoryBranch(path, at, name, can, fail) {
+    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, the issue it works on,
+    // its commits, and the reviews and annotations of its head. main's page names what merges into it need instead, and
+    // a branch that isn't live any more, its deletion.
+    async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
       let b;
       try {
         b = await api("GET", path + "/branches/" + encodeURIComponent(name));
@@ -1178,7 +1186,7 @@
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
         h("div", { class: "row" }, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
-      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail), worksOn(org, path, b, orgCan, fail))];
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
@@ -1328,6 +1336,30 @@
           .then(render).catch((err) => { button.disabled = false; fail(err); });
       };
       return h("form", { class: "row merge", onsubmit: merge }, method, button, remove ? h("label", { class: "check" }, remove, "Delete the branch once merged") : null, how);
+    }
+
+    // worksOn is the issue b works on, linked to its page with its state and how b was linked, for a viewer with
+    // issues.read, and for one with issues.write a field to link it to an issue by identifier, and Unlink. Nothing for
+    // a viewer without issues.read.
+    function worksOn(org, path, b, orgCan, fail) {
+      if (!orgCan("issues.read")) return null;
+      const at = path + "/branches/" + encodeURIComponent(b.name) + "/issue";
+      const i = b.issue;
+      const line = h("div", { class: "works-on" }, icon("circle-dot"), i
+        ? ["Works on ", h("a", { href: base + org.slug + "/issues/" + i.identifier, "data-nav": "" }, h("code", {}, i.identifier), " ", i.title), issueBadge(i.state),
+          h("span", { class: "muted" }, i.linkedBy === "name" ? "linked by its name" : "linked by hand")]
+        : h("span", {}, "Works on no issue. Name it after one, such as ", h("code", {}, org.issueKey.toLowerCase() + "-42-" + "what-it-does"), ", or link one."));
+      if (!orgCan("issues.write")) return line;
+      const identifier = h("input", { name: "issue", required: true, placeholder: org.issueKey + "-42", "aria-label": "Issue", pattern: "\\s*(?:[A-Za-z][A-Za-z0-9]*-)?\\d+\\s*" });
+      const link = (e) => {
+        e.preventDefault();
+        const number = Number(/(\d+)\s*$/.exec(identifier.value)[1]);
+        api("PUT", at, { number }).then(render).catch(fail);
+      };
+      const unlink = () => api("DELETE", at).then(render).catch(fail);
+      line.append(h("form", { onsubmit: link }, identifier, h("button", { class: "button small", type: "submit" }, i ? "Link another" : "Link")));
+      if (i) line.append(h("button", { class: "button small", type: "button", onclick: unlink }, "Unlink"));
+      return line;
     }
 
     // wantsToMerge says what b would merge into its base: how many commits, after the author of its head.
@@ -1666,7 +1698,8 @@
       }
       if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
       const write = can("issues.write");
-      const [events, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events), write ? issueChoices(org) : null]);
+      const [events, branches, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
+        api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null]);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
@@ -1692,9 +1725,22 @@
         title.focus();
       }
       show();
+      const linked = h("section", { class: "panel" }, h("h3", {}, "Branches"), branches.length
+        ? h("ul", { class: "linked" }, branches.map((b) => issueBranchLine(org, b)))
+        : h("p", {}, "No branch works on it yet: push one whose name holds ", h("code", {}, issue.identifier.toLowerCase()), ", or link one from its page."));
       const activity = h("section", { class: "panel" }, h("h3", {}, "Activity"), h("ul", { class: "activity" }, events.flatMap(issueEventLines)));
       const notes = h("p", { class: "alert", hidden: !notice }, notice || "");
-      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+    }
+
+    // issueBranchLine is a branch linked to an issue as a branch row: its repository and name, linked to its page while
+    // it lives, its status, and how it was linked.
+    function issueBranchLine(org, b) {
+      const name = h("code", {}, b.repository.slug + " / " + b.name);
+      const page = base + org.slug + "/" + b.repository.slug + "/branches/" + b.name.split("/").map(encodeURIComponent).join("/");
+      return h("li", {}, icon("git-branch"), b.deleted ? name : h("a", { href: page, "data-nav": "" }, name),
+        b.deleted ? h("span", { class: "chip" }, "deleted") : b.status ? branchBadge(b.status) : null,
+        h("span", { class: "muted" }, b.linkedBy === "name" ? "by its name" : "by hand"));
     }
 
     // issueSide is an issue's side column: its fields, each a select that saves at once for a viewer with issues.write
@@ -1726,6 +1772,11 @@
     function issueEventLines(e) {
       const line = (...what) => h("li", {}, h("span", {}, h("strong", {}, e.actor ? e.actor.displayName : "Someone since gone"), " ", ...what), h("span", { class: "muted" }, whenExactly(e.at)));
       if (e.kind === "issue.created") return [line("created it")];
+      if (e.kind === "issue.branch_linked" || e.kind === "issue.branch_unlinked") {
+        const b = e.branch;
+        const what = b && b.name ? h("code", {}, b.repository + " / " + b.name) : "a branch of a repository you don't read";
+        return [line(e.kind === "issue.branch_linked" ? "linked " : "unlinked ", what, b && b.linkedBy === "name" ? " by its name" : "")];
+      }
       if (e.kind !== "issue.changed") return [line(h("code", {}, e.kind))];
       return e.changes.map((c) => line(...issueChangeWords(c)));
     }
