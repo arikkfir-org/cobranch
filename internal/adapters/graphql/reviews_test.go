@@ -2,6 +2,7 @@ package graphql
 
 import (
 	"context"
+	"slices"
 	"testing"
 
 	"cobranch.dev/internal/services/auth"
@@ -40,6 +41,29 @@ func TestSubmitReviewMutation(t *testing.T) {
 		{name: "a commit the repository doesn't hold", viewer: olivia, document: submit(shaOf("e"), `{state: APPROVED}`),
 			wantCode: notFound, wantReason: "commit.not_found"},
 		{name: "an abbreviated commit", viewer: olivia, document: submit("ccccccc", `{state: APPROVED}`), wantCode: badUserInput, wantReason: "sha.invalid"},
+	})
+}
+
+func TestSubmitReviewCommentsMutation(t *testing.T) {
+	commented := func(branch, sha string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			return `mutation { submitReview(repositoryId: "` + f.website.ID.String() + `", sha: "` + shaOf("c") + `", input: {state: CHANGES_REQUESTED, branch: "` +
+				branch + `", comments: [{anchor: {sha: "` + sha + `", path: "src/main.go", startLine: 3, endLine: 4}, body: "Rename this"}]}) { state } }`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "changes requested in a comment", viewer: maxHolding(auth.RoleDeveloper), document: commented("feature", shaOf("a")),
+			want: []string{`"submitReview":{"state":"CHANGES_REQUESTED"}`}, check: func(t *testing.T, f *orgFixture, _ string) {
+				want := []code.ReviewComment{{Anchor: code.Anchor{SHA: shaOf("a"), Path: "src/main.go", StartLine: 3, EndLine: 4}, Body: "Rename this"}}
+				in := f.codeStore.Submitted[f.codeStore.ReviewList[f.website.ID][0].ID]
+				if in.Branch != "feature" || !slices.Equal(in.Comments, want) {
+					t.Errorf("submitted %+v, want comments %+v on feature", in, want)
+				}
+			}},
+		{name: "comments on a branch the repository doesn't have", viewer: maxHolding(auth.RoleDeveloper), document: commented("nowhere", shaOf("a")),
+			wantCode: badUserInput, wantReason: "branch.unknown"},
+		{name: "a comment on a commit the repository doesn't hold", viewer: maxHolding(auth.RoleDeveloper), document: commented("feature", shaOf("e")),
+			wantCode: badUserInput, wantReason: "anchor.commit_not_found"},
 	})
 }
 

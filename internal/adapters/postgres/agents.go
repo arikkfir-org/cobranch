@@ -234,13 +234,16 @@ func (s *AgentStore) Branch(ctx context.Context, repoID, id uuid.UUID, name stri
 	return row.ID, row.Name, nil
 }
 
-// ThreadBranch answers the branch a chat thread belongs to (agents.Store).
+// ThreadBranch answers the branch a chat thread belongs to, uuid.Nil for an issue's (agents.Store).
 func (s *AgentStore) ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid.UUID, error) {
 	id, err := s.q.ThreadBranch(ctx, threadID)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("finding thread %s: %w", threadID, notFound(err))
 	}
-	return id, nil
+	if id == nil {
+		return uuid.Nil, nil
+	}
+	return *id, nil
 }
 
 // taskRow is what a read of a task answers: the row and the names around it.

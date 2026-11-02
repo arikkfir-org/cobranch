@@ -7,7 +7,7 @@
 **Status**: Proposed 2026-11-02 · [ENG-216](https://linear.app/arikkfir/issue/ENG-216) · Builds the [product’s AI
 review](product.md#agents-and-ai-review) on [branch status](branch-status.md) and the agents of
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Adds no workload and no chart value · Built by
-[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in three pull requests
+[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in four pull requests
 
 People and agents review commits, and `main`’s `/cobranch.yaml` can require approvals before a branch merges. Every push
 of a branch gets a review from the organization’s built-in AI reviewer, an agent whose model an admin picks and whose
@@ -55,7 +55,7 @@ verdict by submitting again.
   toward a requirement is the requirement's business. `repo.read` reads them. Developers, Maintainers and Automation
   review; the AI reviewer holds Automation.
 - **What it says.** A body of at most 65,536 characters of Markdown, rendered as the Console renders files; and up to
-  100 comments, each on one file's lines of the reviewed commit ([Comments](#comments)).
+  100 comments, each on one file's lines of the change it reviewed ([Comments](#comments)).
 - **One transaction** stores the review and its comments, appends the
   [architecture](architecture.md#events-and-background-work)'s `review.submitted`, recomputes the status of every live
   branch whose head is the commit, and queues the jobs its review triggers ([Jobs on reviews](#jobs-on-reviews)).
@@ -198,14 +198,22 @@ its organization pays for.
 Threads, messages, their anchors and live delivery are [ENG-215](https://linear.app/arikkfir/issue/ENG-215)’s; a thread
 gains the review it belongs to.
 
-- **A comment is a chat thread.** Submitting a review takes its comments, each a path, a line range on the reviewed
-  commit's side or its parent's, and a body; the review's transaction opens one thread per comment in the branch's chat,
-  anchored there, carrying the review, its first message the comment. People and agents answer in the thread like any
-  other ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)).
-- **Anchored to the reviewed commit,** so the thread still points at what the reviewer saw after the branch moves on;
-  the Console marks it outdated once the head changes those lines.
-- **Sent whole.** The Console keeps comments drafted on the diff in the browser until the reviewer submits, so a review
-  never shows half its comments.
+- **A comment is a chat thread.** Submitting a review takes the branch whose chat it comments in and its comments, each
+  a path, a line range of a commit the repository holds, the head's side of the diff or its base's, and a body of at
+  most 20,000 characters; the review's transaction opens one thread per comment in the branch's chat, anchored there,
+  carrying the review (`chat_threads.review_id`), its first message the comment, and appends each thread's
+  `chat.thread.started`. People and agents answer in the thread like any other
+  ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)).
+- **Who.** Comments are chat messages, so a review with comments takes `messages.post` beside `reviews.submit`; every
+  built-in role that reviews holds both. A branch deleted meanwhile refuses the review whole, as its chat refuses every
+  change.
+- **A thread outlives its review.** Reviews are never deleted by people; if one goes with its commit, its threads stay
+  in the chat with their answers, no longer tied to it.
+- **Anchored where the reviewer saw it,** on the head's side of the diff or its base's, so the thread still points at
+  what the reviewer saw after the branch moves on; a comment is outdated once the branch moves on from the commit its
+  review reviewed, wherever on the diff it is anchored.
+- **Sent whole.** The Console keeps comments drafted on the diff in the browser tab until the reviewer submits, so a
+  review never shows half its comments; a head that moved on starts afresh.
 - **Change requests stay whole for now.** A review that requests changes does so as a whole; resolving its threads one
   by one is the chat's, and doesn't change the review.
 
@@ -283,9 +291,10 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 | `POST /branches/{branch}/review` | `requestReview` | `repo.push` |
 
 `POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`.
-Every `GET` answers a strong `ETag`, and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages
-with an opaque cursor and `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and
-its AI review's task.
+It takes `branch` and `comments` beside `state` and `body`, and with comments `messages.post` too; a branch deleted
+meanwhile is `409 branch.deleted`. A thread carries the review it is a comment of as `reviewId`. Every `GET` answers a
+strong `ETag`, and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages with an opaque cursor
+and `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and its AI review's task.
 
 ## Data model
 
@@ -298,21 +307,21 @@ history is Git’s. Every new row carries `org_id`.
 
 ## Rollout
 
-**Three pull requests, each with its tests and its Console pages**
+**Four pull requests, each with its tests and its Console pages**
 
-![Three pull requests, each with its tests and its Console pages](reviews/rollout.svg)
+![Four pull requests, each with its tests and its Console pages](reviews/rollout.svg)
 
 Nothing changes for an operator: no workload and no chart value is added. A repository opts into required reviews
 through its own `/cobranch.yaml`, and an organization into AI review by giving its reviewer a model.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-216](https://linear.app/arikkfir/issue/ENG-216); the
-  third closes it. The first and second need nothing of the slices beside it; the third waits for
-  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s agents, tasks, harness and chats to merge.
-- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the third pull request's
+  fourth closes it. The first and second need nothing of the slices beside it; the third stacks on
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them, and the fourth waits for its
+  agents, tasks and harness.
+- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the fourth pull request's
   migration, and it reviews nothing until an admin gives it a model.
 - **A repository adopts required reviews** by pushing a `reviews` key under `branches` into `main`.
-- **Bodies show as written until the third,** which renders them as Markdown, as the Console renders files, beside its
-  comments.
+- **Bodies show as written until the fourth,** which renders them as Markdown, as the chat renders its messages.
 
 ## Risks
 

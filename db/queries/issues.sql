@@ -66,9 +66,9 @@ RETURNING version, updated_at;
 -- name: DeleteIssue :execrows
 DELETE FROM issues WHERE id = @id AND version = @version;
 
--- DeleteIssueEvents deletes an issue's activity, which goes with it.
+-- DeleteIssueEvents deletes an issue's activity and its chat's events, which go with it.
 -- name: DeleteIssueEvents :exec
-DELETE FROM events WHERE subject_id = @issue_id AND kind LIKE 'issue.%';
+DELETE FROM events WHERE subject_id = @issue_id AND (kind LIKE 'issue.%' OR kind LIKE 'chat.%');
 
 -- IssueEvents lists an issue's activity, oldest first, with the display names of those who acted.
 -- name: IssueEvents :many

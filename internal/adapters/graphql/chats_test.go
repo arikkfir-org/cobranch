@@ -15,10 +15,11 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 )
 
-// chatStep is one document of a conversation on feature/login's chat, against one fixture: it may name {repo},
-// {thread} and {message}, the website's ID and the last thread started and message posted.
+// chatStep is one document of a conversation on feature/login's chat, or an issue's, against one fixture: it may name
+// {repo}, {org}, {thread} and {message}, the website's ID, Acme's, and the last thread started and message posted.
 type chatStep struct {
 	name                 string
 	viewer               func(f *orgFixture) *auth.Authenticated
@@ -35,8 +36,8 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 	}
 }
 
-// startedID finds the ID a startChatThread or postChatMessage answered with.
-var startedID = regexp.MustCompile(`"(startChatThread|postChatMessage)":\{"id":"([0-9a-f-]{36})"`)
+// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' counterparts.
+var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage)":\{"id":"([0-9a-f-]{36})"`)
 
 func TestChats(t *testing.T) {
 	const target = `repositoryId: "{repo}", branch: "feature/login"`
@@ -89,10 +90,10 @@ type chatIDs struct{ thread, message string }
 func (s chatStep) run(t *testing.T, f *orgFixture, ids *chatIDs) {
 	t.Helper()
 	expand := func(text string) string {
-		return strings.NewReplacer("{repo}", f.website.ID.String(), "{thread}", ids.thread, "{message}", ids.message).Replace(text)
+		return strings.NewReplacer("{repo}", f.website.ID.String(), "{org}", f.acme.ID.String(), "{thread}", ids.thread, "{message}", ids.message).Replace(text)
 	}
 	body := f.query(s.viewer(f), expand(s.document))
-	if m := startedID.FindStringSubmatch(body); m != nil && m[1] == "startChatThread" {
+	if m := startedID.FindStringSubmatch(body); m != nil && strings.HasPrefix(m[1], "start") {
 		ids.thread = m[2]
 	} else if m != nil {
 		ids.message = m[2]
@@ -243,5 +244,25 @@ func TestChatUpdatesSubscription(t *testing.T) {
 	if m := c.read(); m.Type != "next" || m.ID != "1" || !strings.Contains(string(m.Payload), `"cursor":"1","kind":"THREAD_STARTED"`) ||
 		!strings.Contains(string(m.Payload), `"message":{"body":"Hello"}`) {
 		t.Fatalf("update = %s %s, want the thread started", m.Type, m.Payload)
+	}
+}
+
+func TestChatThreadNamesItsReview(t *testing.T) {
+	review := uuid.New()
+	tests := []struct {
+		name   string
+		review *uuid.UUID
+		want   *string
+	}{
+		{name: "a review's comment", review: &review, want: new(review.String())},
+		{name: "a thread started in the chat"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := chatThread(chats.Thread{ID: uuid.New(), ReviewID: tt.review}).ReviewID
+			if (got == nil) != (tt.want == nil) || got != nil && *got != *tt.want {
+				t.Errorf("chatThread().ReviewID = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

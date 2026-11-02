@@ -26,10 +26,10 @@ func (q *Queries) DeleteIssue(ctx context.Context, iD uuid.UUID, version int64) 
 }
 
 const deleteIssueEvents = `-- name: DeleteIssueEvents :exec
-DELETE FROM events WHERE subject_id = $1 AND kind LIKE 'issue.%'
+DELETE FROM events WHERE subject_id = $1 AND (kind LIKE 'issue.%' OR kind LIKE 'chat.%')
 `
 
-// DeleteIssueEvents deletes an issue's activity, which goes with it.
+// DeleteIssueEvents deletes an issue's activity and its chat's events, which go with it.
 func (q *Queries) DeleteIssueEvents(ctx context.Context, issueID *uuid.UUID) error {
 	_, err := q.db.Exec(ctx, deleteIssueEvents, issueID)
 	return err
