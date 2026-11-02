@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -66,8 +67,8 @@ func ReviewInstructions(branch, sha string) string {
 // ReviewTitle is a review task's title: the branch and its head, within the 200 characters a title holds.
 func ReviewTitle(branch, sha string) string {
 	title := "Review " + branch + " at " + sha[:min(len(sha), 12)]
-	if len(title) > 200 {
-		title = title[:197] + "..."
+	if utf8.RuneCountInString(title) > 200 {
+		title = string([]rune(title)[:197]) + "..."
 	}
 	return title
 }

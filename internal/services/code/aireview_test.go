@@ -58,12 +58,13 @@ func TestRequestReview(t *testing.T) {
 }
 
 func TestReviewTitle(t *testing.T) {
-	long := strings.Repeat("b", 250)
+	long, hebrew := strings.Repeat("b", 250), strings.Repeat("ענף", 80)
 	tests := []struct {
 		name, branch, want string
 	}{
 		{name: "a branch and its head", branch: "feature/login", want: "Review feature/login at 0123456789ab"},
 		{name: "a name too long for a title", branch: long, want: ("Review " + long)[:197] + "..."},
+		{name: "a long name cut between its characters", branch: hebrew, want: string([]rune("Review " + hebrew)[:197]) + "..."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
