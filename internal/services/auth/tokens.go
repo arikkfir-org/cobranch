@@ -122,7 +122,7 @@ func (s *Service) authenticateCredential(ctx context.Context, hash []byte, kind 
 		return Authenticated{}, ErrUnauthenticated
 	}
 	if now.Sub(credential.LastUsedAt) >= touchEvery {
-		if err := s.store.TouchCredential(ctx, credential.ID, now); err != nil {
+		if err := s.store.TouchCredential(ctx, credential.ID, credential.Kind, now); err != nil {
 			return Authenticated{}, fmt.Errorf("marking the credential used: %w", err)
 		}
 		credential.LastUsedAt = now

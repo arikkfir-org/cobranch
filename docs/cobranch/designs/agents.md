@@ -203,7 +203,7 @@ Running meanwhile.
 ## The agent's pod
 
 **Agreed** ([architecture](architecture.md#job-isolation)): an agent works in a pod of Cobranch's agent image, in its
-organization's job namespace, reaching Cobranch through its public URLs like any outside client.
+organization's job namespace, reaching Cobranch's servers as a job's run does.
 
 **Assigning a task starts a pod that works through Cobranch’s APIs**
 
@@ -231,9 +231,9 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
 - **A pod that dies** is started again by the controller, at most three times, and the harness resumes from the
   transcript.
 
-**An agent pod holds its workspace, a token file and its secrets, and reaches only the internet**
+**An agent pod holds its workspace, a token file and its secrets, and reaches only the internet and Cobranch’s servers**
 
-![An agent pod holds its workspace, a token file and its secrets, and reaches only the internet](agents/pod.svg)
+![An agent pod holds its workspace, a token file and its secrets, and reaches only the internet and Cobranch’s servers](agents/pod.svg)
 
 The harness reads the token file before each call, so a renewed token is picked up without a restart. No Kubernetes
 token is mounted.
@@ -397,8 +397,9 @@ land.
   providers it trusts with them.
 - **Model calls cost money,** charged to the organization's own key; `agents.maxTurns` and the timeout bound one task,
   and [ENG-238](https://linear.app/arikkfir/issue/ENG-238)'s quotas bound the rest.
-- **A shell in the pod runs what the model asks.** The pod's bounds are the namespace's: no ingress, egress to the
-  internet only, Pod Security `restricted`, no Kubernetes token, and a token capped by the assigner.
+- **A shell in the pod runs what the model asks.** The pod's bounds are the namespace's: no ingress, egress to DNS,
+  the internet and Cobranch's servers only, Pod Security `restricted`, no Kubernetes token, and a token capped by the
+  assigner.
 - **The shell runs as the harness does,** so a command could read the files the harness reads, the provider's key among
   them, though no tool's environment names them. The controller's pod keeps the key from the tools: it mounts the key
   where the harness reads it once at its start, as a user the tools don't run as, or the controller hands it over

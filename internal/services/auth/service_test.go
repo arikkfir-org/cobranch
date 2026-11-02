@@ -584,6 +584,50 @@ func TestAuthenticateAPIKey(t *testing.T) {
 	}
 }
 
+// TestAuthenticateRunToken resolves runs' tokens: bearer tokens that act as a run's job, where the run acts, until its
+// timeout.
+func TestAuthenticateRunToken(t *testing.T) {
+	job := auth.Principal{ID: uuid.New(), Kind: auth.KindJob, DisplayName: "ci/build"}
+	org, repo := uuid.New(), uuid.New()
+	tests := []struct {
+		name    string
+		kind    auth.CredentialKind
+		token   string // instead of the run's token
+		at      time.Time
+		wantErr error
+	}{
+		{name: "a running run's token", kind: auth.CredentialRunToken, at: now},
+		{name: "past its run's timeout", kind: auth.CredentialRunToken, at: now.Add(time.Hour), wantErr: auth.ErrUnauthenticated},
+		{name: "a token nobody has", kind: auth.CredentialRunToken, token: auth.NewSecret(auth.PrefixRunToken), at: now, wantErr: auth.ErrUnauthenticated},
+		{name: "an API key's secret by a run's prefix", kind: auth.CredentialAPIKey, at: now, wantErr: auth.ErrUnauthenticated},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, store, _ := newService(auth.Settings{}, alice)
+			secret := auth.NewSecret(auth.PrefixRunToken)
+			c := store.AddCredential(secret, job, now.Add(time.Hour))
+			c.Kind, c.OrgID, c.RepoID, c.Permissions = tt.kind, org, repo, []string{"repo.read"}
+			store.Credentials[string(auth.Hash(secret))] = c
+			s.SetClock(func() time.Time { return tt.at })
+			token := secret
+			if tt.token != "" {
+				token = tt.token
+			}
+			got, err := s.Authenticate(context.Background(), token)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.User.ID != job.ID || got.User.Kind != auth.KindJob || got.Credential.Kind != auth.CredentialRunToken ||
+				got.Credential.OrgID != org || got.Credential.RepoID != repo {
+				t.Errorf("Authenticate() = %+v", got)
+			}
+		})
+	}
+}
+
 func TestSignUpSettings(t *testing.T) {
 	on, off := true, false
 	invited := auth.PolicyInvited

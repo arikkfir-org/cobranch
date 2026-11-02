@@ -12,6 +12,7 @@ func TestNewSecret(t *testing.T) {
 	}{
 		{name: "a session token", prefix: PrefixSession},
 		{name: "an API key", prefix: PrefixAPIKey},
+		{name: "a run's token", prefix: PrefixRunToken},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

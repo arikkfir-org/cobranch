@@ -44,7 +44,7 @@ func TestOrgStoreAPIKeys(t *testing.T) {
 	if err != nil || cred.Kind != auth.CredentialAPIKey || cred.PrincipalID != key.ID || cred.Hint != keys[0].Secrets[0].Hint || principal.Kind != auth.KindAPIKey || principal.DisplayName != "Deploy" {
 		t.Errorf("Credential() = %+v, %+v, %v", cred, principal, err)
 	}
-	if err := auths.TouchCredential(ctx, cred.ID, now.Add(time.Minute)); err != nil {
+	if err := auths.TouchCredential(ctx, cred.ID, cred.Kind, now.Add(time.Minute)); err != nil {
 		t.Error(err)
 	}
 	if got, err := f.s.APIKey(ctx, f.acme.ID, key.ID); err != nil || !got.Secrets[0].LastUsedAt.Equal(now.Add(time.Minute)) {
