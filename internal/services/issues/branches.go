@@ -131,12 +131,16 @@ func (s *Service) Branches(ctx context.Context, v Viewer, orgID uuid.UUID, numbe
 	return shown, nil
 }
 
-// OfBranch is the issue a live branch of the organization's repository works on, for v: nil when it has none, or when
-// v holds no issues.read, since a branch shows its issue only to those who read issues. v must read the repository.
+// OfBranch is the issue a live branch of the organization's repository works on, for v: nil when it has none, when
+// v holds no issues.read, since a branch shows its issue only to those who read issues, and when v doesn't read the
+// repository or the branch doesn't live, as the branch's own page answers those.
 func (s *Service) OfBranch(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, name string) (*Link, error) {
 	ctx, span := tracer.Start(ctx, "issues.Service.OfBranch")
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", name))
+	if name == git.DefaultBranch {
+		return nil, nil
+	}
 	held, err := s.authz.Holds(ctx, v.ID, auth.ScopeOrganization, orgID)
 	if err != nil {
 		return nil, failed(span, "reading the branch's issue", fmt.Errorf("reading the viewer's permissions: %w", err))
@@ -145,6 +149,9 @@ func (s *Service) OfBranch(ctx context.Context, v Viewer, orgID, repoID uuid.UUI
 		return nil, nil
 	}
 	b, err := s.branch(ctx, v, orgID, repoID, name)
+	if errors.Is(err, ErrBranchNotFound) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, failed(span, "reading the branch's issue", err)
 	}

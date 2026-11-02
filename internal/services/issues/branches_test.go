@@ -174,9 +174,9 @@ func TestOfBranch(t *testing.T) {
 		{"a guest reads no issues", func(f *fixture) issues.Viewer { return f.gwen }, func(f *fixture) uuid.UUID { return f.website.ID }, "ship", false,
 			nil},
 		{"a repository the viewer doesn't read", func(f *fixture) issues.Viewer { return f.max }, func(f *fixture) uuid.UUID { return f.secret.ID },
-			"ship", false, issues.ErrBranchNotFound},
-		{"no such branch", func(f *fixture) issues.Viewer { return f.max }, func(f *fixture) uuid.UUID { return f.website.ID }, "nope", false,
-			issues.ErrBranchNotFound},
+			"ship", false, nil},
+		{"no such branch", func(f *fixture) issues.Viewer { return f.max }, func(f *fixture) uuid.UUID { return f.website.ID }, "nope", false, nil},
+		{"the default branch", func(f *fixture) issues.Viewer { return f.max }, func(f *fixture) uuid.UUID { return f.website.ID }, "main", false, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			link, err := f.service.OfBranch(ctx, tc.viewer(f), f.acme.ID, tc.repo(f), tc.branch)
