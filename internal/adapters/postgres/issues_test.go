@@ -42,6 +42,7 @@ func (f *issueFixture) create(t *testing.T, issue issues.Issue) issues.Issue {
 }
 
 func TestIssueKeys(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	org, err := f.s.ByID(ctx, f.acme.ID)
@@ -69,6 +70,7 @@ func TestIssueKeys(t *testing.T) {
 }
 
 func TestIssueStoreCreate(t *testing.T) {
+	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
 	first := f.newIssue("Show pushes")
@@ -121,6 +123,7 @@ func TestIssueStoreCreate(t *testing.T) {
 }
 
 func TestIssueStoreList(t *testing.T) {
+	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
 	login := f.newIssue("Fix the 100% login")
@@ -173,6 +176,7 @@ func TestIssueStoreList(t *testing.T) {
 }
 
 func TestIssueStoreUpdate(t *testing.T) {
+	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
 	issue := f.create(t, f.newIssue("Show pushes"))
@@ -208,6 +212,7 @@ func TestIssueStoreUpdate(t *testing.T) {
 }
 
 func TestIssueStoreDelete(t *testing.T) {
+	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
 	issue := f.create(t, f.newIssue("A mistake"))
@@ -233,6 +238,7 @@ func TestIssueStoreDelete(t *testing.T) {
 }
 
 func TestIssueStoreMemberAndRepository(t *testing.T) {
+	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
 	if p, err := f.is.Member(ctx, f.acme.ID, f.max); err != nil || p.ID != f.max || p.DisplayName == "" {
