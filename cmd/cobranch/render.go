@@ -1,19 +1,26 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"time"
 
 	"cobranch.dev/internal/adapters/render"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/delivery"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/system/config"
 )
 
 // renderUsage is what `cobranch render` takes: its input, as flags, since it is a one-off command.
@@ -24,9 +31,10 @@ var errUsage = errors.New(renderUsage)
 
 // runRender prints what a delivery of a branch's commit to one of its targets would apply: the roots of the
 // checkout's /cobranch.yaml, rendered for the target, as one YAML stream. A delivery's render pod names the target's
-// environment namespace, which main's file grants, since a branch's own targets count for nothing; a developer may
-// leave it to the checkout's targets instead, to see what Cobranch would apply before pushing. It returns run's exit
-// code: 2 on a command line it doesn't take.
+// environment namespace, which main's file grants, since a branch's own targets count for nothing, and uploads the
+// render rather than print it, since it may hold Secrets; a developer may leave the namespace to the checkout's
+// targets instead, to see what Cobranch would apply before pushing. It returns run's exit code: 2 on a command line it
+// doesn't take.
 func runRender(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	err := renderCheckout(ctx, args, stdout)
 	switch {
@@ -71,15 +79,14 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 	if err != nil {
 		return err
 	}
-	content, err := os.ReadFile(filepath.Join(f.dir, git.SettingsFile))
+	up, err := config.LoadRender()
 	if err != nil {
-		return fmt.Errorf("reading /%s: %w", git.SettingsFile, err)
+		return fmt.Errorf("configuring: %w", err)
 	}
-	settings, err := code.ParseSettings(content)
+	d, err := checkoutDelivery(f.dir)
 	if err != nil {
-		return fmt.Errorf("parsing: %w", err)
+		return err
 	}
-	d := settings.Delivery
 	target, err := renderTarget(d, f)
 	if err != nil {
 		return fmt.Errorf("planning: %w", err)
@@ -97,8 +104,58 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 	if err != nil {
 		return fmt.Errorf("rendering: %w", err)
 	}
+	if up.URL != "" {
+		return upload(ctx, up, out, stdout)
+	}
 	if _, err := stdout.Write(out); err != nil {
 		return fmt.Errorf("writing the render: %w", err)
+	}
+	return nil
+}
+
+// checkoutDelivery is the delivery settings of the checkout at dir's /cobranch.yaml: none without the file, which
+// renders nothing.
+func checkoutDelivery(dir string) (code.DeliverySettings, error) {
+	content, err := os.ReadFile(filepath.Join(dir, git.SettingsFile))
+	if errors.Is(err, fs.ErrNotExist) {
+		return code.DeliverySettings{}, nil
+	} else if err != nil {
+		return code.DeliverySettings{}, fmt.Errorf("reading /%s: %w", git.SettingsFile, err)
+	}
+	settings, err := code.ParseSettings(content)
+	if err != nil {
+		return code.DeliverySettings{}, fmt.Errorf("parsing: %w", err)
+	}
+	return settings.Delivery, nil
+}
+
+// uploadTimeout is how long an upload may take.
+const uploadTimeout = 2 * time.Minute
+
+// upload posts the render to its delivery, as up says, and says how much it uploaded on stdout. The REST server keeps
+// it once, while the delivery renders: anything but 201 fails, with the server's problem.
+func upload(ctx context.Context, up config.Render, render []byte, stdout io.Writer) error {
+	ctx, cancel := context.WithTimeout(ctx, uploadTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, up.URL, bytes.NewReader(render))
+	if err != nil {
+		return fmt.Errorf("uploading the render to %s: %w", up.URL, err)
+	}
+	req.Header.Set("Content-Type", "application/yaml")
+	req.Header.Set("Authorization", "Bearer "+up.Token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("uploading the render: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }() // read to its end or abandoned; nothing to tell
+	if resp.StatusCode != http.StatusCreated {
+		var problem struct{ Title, Detail string }
+		_ = json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&problem) // a body that isn't a problem says nothing more
+		why := slices.DeleteFunc([]string{resp.Status, problem.Title, problem.Detail}, func(s string) bool { return s == "" })
+		return fmt.Errorf("uploading the render: %s", strings.Join(why, ": "))
+	}
+	if _, err := fmt.Fprintf(stdout, "Uploaded the render, %d bytes.\n", len(render)); err != nil {
+		return fmt.Errorf("writing what it uploaded: %w", err)
 	}
 	return nil
 }

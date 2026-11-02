@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -254,4 +255,26 @@ func (a api) StartDelivery(ctx context.Context, req StartDeliveryRequestObject) 
 	}
 	headers := StartDelivery202ResponseHeaders{ETag: tag, Location: deliveryLocation(req.Org, req.Repo, d.Number)}
 	return StartDelivery202JSONResponse{Body: body, Headers: headers}, nil
+}
+
+// UploadManifests keeps a delivery's render, which its render pod uploads with the delivery's own token, and names it
+// in Location. It reads one byte past the most a render may be, so that a larger one is refused as such.
+func (a api) UploadManifests(ctx context.Context, req UploadManifestsRequestObject) (UploadManifestsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	manifests, err := io.ReadAll(io.LimitReader(req.Body, code.MaxRender+1))
+	if err != nil {
+		return nil, refuse(http.StatusBadRequest, "request.invalid", "Reading the render failed: "+err.Error())
+	}
+	if err := a.code.UploadRender(ctx, v, repo.ID, req.Number, manifests); err != nil {
+		return nil, fail(err, "delivery")
+	}
+	location := deliveryLocation(req.Org, req.Repo, req.Number) + "/manifests"
+	return UploadManifests201Response{Headers: UploadManifests201ResponseHeaders{Location: location}}, nil
 }

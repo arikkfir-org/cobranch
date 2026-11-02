@@ -3664,6 +3664,9 @@ type ServerInterface interface {
 	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
 	GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams)
+	// UploadManifests Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/manifests)
+	UploadManifests(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
@@ -8533,6 +8536,50 @@ func (siw *ServerInterfaceWrapper) GetDelivery(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// UploadManifests operation middleware
+func (siw *ServerInterfaceWrapper) UploadManifests(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UploadManifests(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // StartDelivery operation middleware
 func (siw *ServerInterfaceWrapper) StartDelivery(w http.ResponseWriter, r *http.Request) {
 
@@ -10835,6 +10882,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/resume", wrapper.ResumeEnvironment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/manifests", wrapper.UploadManifests)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -20983,6 +21031,120 @@ func (response GetDeliverydefaultApplicationProblemPlusJSONResponse) VisitGetDel
 	return err
 }
 
+type UploadManifestsRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+	Body   io.Reader
+}
+
+type UploadManifestsResponseObject interface {
+	VisitUploadManifestsResponse(w http.ResponseWriter) error
+}
+
+type UploadManifests201ResponseHeaders struct {
+	Location string
+}
+
+type UploadManifests201Response struct {
+	Headers UploadManifests201ResponseHeaders
+}
+
+func (response UploadManifests201Response) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	return nil
+}
+
+type UploadManifests401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UploadManifests401ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests403ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests403ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests404ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests404ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests409ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests409ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifests413ApplicationProblemPlusJSONResponse Problem
+
+func (response UploadManifests413ApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(413)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UploadManifestsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UploadManifestsdefaultApplicationProblemPlusJSONResponse) VisitUploadManifestsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type StartDeliveryRequestObject struct {
 	Org    Org            `json:"org"`
 	Repo   Repo           `json:"repo"`
@@ -25505,6 +25667,9 @@ type StrictServerInterface interface {
 	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
 	GetDelivery(ctx context.Context, request GetDeliveryRequestObject) (GetDeliveryResponseObject, error)
+	// UploadManifests Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/manifests)
+	UploadManifests(ctx context.Context, request UploadManifestsRequestObject) (UploadManifestsResponseObject, error)
 	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
 	StartDelivery(ctx context.Context, request StartDeliveryRequestObject) (StartDeliveryResponseObject, error)
@@ -28700,6 +28865,36 @@ func (sh *strictHandler) GetDelivery(w http.ResponseWriter, r *http.Request, org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetDeliveryResponseObject); ok {
 		if err := validResponse.VisitGetDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UploadManifests operation middleware
+func (sh *strictHandler) UploadManifests(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber) {
+	var request UploadManifestsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	request.Body = r.Body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UploadManifests(ctx, request.(UploadManifestsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UploadManifests")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UploadManifestsResponseObject); ok {
+		if err := validResponse.VisitUploadManifestsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

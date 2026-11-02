@@ -35,8 +35,10 @@ type Store struct {
 	// EnvironmentList and DeliveryList hold each repository's environments and deliveries, in the order added.
 	EnvironmentList map[uuid.UUID][]code.Environment
 	DeliveryList    map[uuid.UUID][]code.Delivery
-	Now             time.Time
-	Fail            error
+	// Renders holds the renders kept, by delivery ID.
+	Renders map[uuid.UUID][]byte
+	Now     time.Time
+	Fail    error
 }
 
 // NewStore returns an empty Store.
@@ -46,7 +48,7 @@ func NewStore() *Store {
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
 		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
-		DeliveryList: map[uuid.UUID][]code.Delivery{}}
+		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{}}
 }
 
 // Add records commits in the repository, as push brought them.

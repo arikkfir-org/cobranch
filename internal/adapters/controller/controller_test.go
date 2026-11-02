@@ -66,7 +66,7 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			r := &runner{queue: tt.queue, stop: cancel}
-			controller.Run(ctx, r, time.Hour, time.Hour)
+			controller.Run(ctx, "runs", r, time.Hour, time.Hour)
 			if r.dispatched != tt.wantFirst || r.followed != 1 || r.swept != 1 {
 				t.Errorf("one pass dispatched %d, followed %d, swept %d, want %d, 1, 1", r.dispatched, r.followed, r.swept, tt.wantFirst)
 			}
@@ -78,7 +78,7 @@ func TestRunPollsAndSweeps(t *testing.T) {
 	r := &runner{}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	controller.Run(ctx, r, 10*time.Millisecond, 50*time.Millisecond)
+	controller.Run(ctx, "runs", r, 10*time.Millisecond, 50*time.Millisecond)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.followed < 5 || r.swept < 2 || r.swept >= r.followed {

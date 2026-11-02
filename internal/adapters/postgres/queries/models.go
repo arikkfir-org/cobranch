@@ -199,6 +199,20 @@ type Environment struct {
 	Version   int64
 }
 
+type EnvironmentObject struct {
+	EnvironmentID uuid.UUID
+	Position      int32
+	ApiGroup      string
+	Version       string
+	Kind          string
+	Namespace     string
+	Name          string
+	Uid           string
+	DeliveryID    *uuid.UUID
+	Health        string
+	Message       string
+}
+
 type Identity struct {
 	Issuer        string
 	Subject       string

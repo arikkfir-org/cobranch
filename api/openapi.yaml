@@ -4461,6 +4461,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}/manifests:
+    post:
+      operationId: uploadManifests
+      summary: Keeps the render of one of the repository's deliveries, as its render pod uploads it, once, while the delivery renders; takes the delivery's own token, which only its render pod holds. The controller then applies it. A delivery that doesn't render, or has its render, answers 409 delivery.not_rendering; a render past 16 MiB, 413 render.too_large.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+      requestBody:
+        required: true
+        description: What `cobranch render` printed for the delivery, one stream of YAML documents, each one object; at most 16 MiB.
+        content:
+          application/yaml:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: The render is kept; Location names it.
+          headers:
+            Location:
+              description: The render's URL.
+              required: true
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "413":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags

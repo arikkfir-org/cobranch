@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
 )
 
@@ -42,27 +43,44 @@ const (
 // Start creates the run's pod in its organization's namespace, then its Secret, which the pod owns and waits for
 // (runner.Cluster). A pod left by an earlier attempt, which may have started with an older token, is removed instead,
 // and the run starts again once its claim lapses.
-func (c *Cluster) Start(ctx context.Context, l runner.Launch) (err error) {
-	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Start", runAttrs(l.Run.OrgID, l.Run.ID))
+func (c *Cluster) Start(ctx context.Context, l runner.Launch) error {
+	return c.start(ctx, runs, l)
+}
+
+// StartRender creates a delivery's render pod, `cobranch render` in Cobranch's own image with the delivery's commit
+// checked out first, and its Secret, as Start does a run's (deliverer.Pods).
+func (c *Cluster) StartRender(ctx context.Context, r deliverer.Render) error {
+	spec, err := json.Marshal(corev1.PodSpec{Containers: []corev1.Container{{Name: "render", Image: c.cfg.CheckoutImage,
+		Args: append([]string{"render"}, r.Args...), Resources: c.cfg.RenderResources}}})
+	if err != nil {
+		return fmt.Errorf("encoding delivery %s's render pod: %w", r.Delivery.ID, err)
+	}
+	return c.start(ctx, renders, runner.Launch{Run: runner.Run{ID: r.Delivery.ID, OrgID: r.Delivery.OrgID}, Pod: spec, Env: r.Env,
+		Masked: r.Masked, Checkout: true, Timeout: r.Timeout})
+}
+
+// start creates the pod of the workload l launches, and its Secret.
+func (c *Cluster) start(ctx context.Context, w workload, l runner.Launch) (err error) {
+	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Start", w.attrs(l.Run.OrgID, l.Run.ID))
 	defer span.End()
 	defer func() { record(span, err) }()
-	pod, err := c.podOf(l)
+	pod, err := c.podOf(l, w)
 	if err != nil {
 		return fmt.Errorf("%w: %w", runner.ErrRefused, err)
 	}
-	ns := c.namespace(l.Run.OrgID)
+	ns, name := c.namespace(l.Run.OrgID), w.name(l.Run.ID)
 	created, err := c.client.CoreV1().Pods(ns).Create(ctx, pod, metav1.CreateOptions{FieldManager: fieldManager})
 	switch {
 	case apierrors.IsAlreadyExists(err):
-		if err := c.Remove(ctx, l.Run.OrgID, l.Run.ID); err != nil {
+		if err := c.remove(ctx, ns, name); err != nil {
 			return err
 		}
-		return fmt.Errorf("run %s's pod from an earlier attempt was still there; it is removed, and the run starts again", l.Run.ID)
+		return fmt.Errorf("pod %s from an earlier attempt was still there; it is removed, and starts again", name)
 	case apierrors.IsNotFound(err):
 		c.forget(l.Run.OrgID)
-		return fmt.Errorf("creating run %s's pod in namespace %s, which isn't there: %w", l.Run.ID, ns, err)
+		return fmt.Errorf("creating pod %s in namespace %s, which isn't there: %w", name, ns, err)
 	case err != nil:
-		return classify(err, "creating run "+l.Run.ID.String()+"'s pod")
+		return classify(err, "creating pod "+name)
 	}
 	secret, err := secretOf(l, created)
 	if err != nil {
@@ -73,7 +91,7 @@ func (c *Cluster) Start(ctx context.Context, l runner.Launch) (err error) {
 		_, err = secrets.Update(ctx, secret, metav1.UpdateOptions{FieldManager: fieldManager})
 	}
 	if err != nil {
-		return classify(err, "creating run "+l.Run.ID.String()+"'s Secret")
+		return classify(err, "creating Secret "+name)
 	}
 	return nil
 }
@@ -96,8 +114,8 @@ func classify(err error, what string) error {
 	return fmt.Errorf("%s: %w", what, err)
 }
 
-// podOf is the run's pod: its job's pod spec, or a script's container, with what every run needs.
-func (c *Cluster) podOf(l runner.Launch) (*corev1.Pod, error) {
+// podOf is the workload's pod: its pod spec, or a script's container, with what every run and render needs.
+func (c *Cluster) podOf(l runner.Launch, w workload) (*corev1.Pod, error) {
 	spec, err := specOf(l)
 	if err != nil {
 		return nil, err
@@ -115,21 +133,21 @@ func (c *Cluster) podOf(l runner.Launch) (*corev1.Pod, error) {
 	spec.Volumes = append(spec.Volumes,
 		corev1.Volume{Name: volumeWorkspace, VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 		corev1.Volume{Name: volumeRun, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
-			SecretName: podName(l.Run.ID), DefaultMode: new(int32(0o444)),
+			SecretName: w.name(l.Run.ID), DefaultMode: new(int32(0o444)),
 			Items: []corev1.KeyToPath{{Key: keyEvent, Path: "event.json"}, {Key: keyScript, Path: "script"}}}}})
 	if l.Checkout {
 		checkout := corev1.Container{Name: "cobranch-checkout", Image: c.cfg.CheckoutImage, Args: []string{"checkout"}}
 		spec.InitContainers = append([]corev1.Container{checkout}, spec.InitContainers...)
 	}
-	env := envOf(l)
+	env := envOf(l, w.name(l.Run.ID))
 	for i := range spec.InitContainers {
 		dress(&spec.InitContainers[i], env)
 	}
 	for i := range spec.Containers {
 		dress(&spec.Containers[i], env)
 	}
-	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: podName(l.Run.ID), Namespace: c.namespace(l.Run.OrgID),
-		Labels: map[string]string{labelManagedBy: "cobranch", labelRun: l.Run.ID.String()}}, Spec: spec}, nil
+	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: w.name(l.Run.ID), Namespace: c.namespace(l.Run.OrgID),
+		Labels: map[string]string{labelManagedBy: "cobranch", w.label: l.Run.ID.String()}}, Spec: spec}, nil
 }
 
 // specOf is the run's job's pod spec, or a pod of one container that runs the script in the image.
@@ -191,8 +209,9 @@ func dress(container *corev1.Container, env []corev1.EnvVar) {
 	}
 }
 
-// envOf is every variable of the run, Cobranch's and the job's secrets, each read from the run's Secret, in order.
-func envOf(l runner.Launch) []corev1.EnvVar {
+// envOf is every variable of the run, Cobranch's and the job's secrets, each read from the run's Secret, secret, in
+// order.
+func envOf(l runner.Launch, secret string) []corev1.EnvVar {
 	names := make([]string, 0, len(l.Env))
 	for name := range l.Env {
 		names = append(names, name)
@@ -201,7 +220,7 @@ func envOf(l runner.Launch) []corev1.EnvVar {
 	env := make([]corev1.EnvVar, 0, len(names))
 	for _, name := range names {
 		env = append(env, corev1.EnvVar{Name: name, ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
-			LocalObjectReference: corev1.LocalObjectReference{Name: podName(l.Run.ID)}, Key: name}}})
+			LocalObjectReference: corev1.LocalObjectReference{Name: secret}, Key: name}}})
 	}
 	return env
 }

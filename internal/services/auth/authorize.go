@@ -49,8 +49,8 @@ func NewAuthorizer(grants Grants) *Authorizer {
 }
 
 // Holds lists the permissions principalID holds at the scope, sorted: under a personal token of theirs, only those the
-// token lists too; under a run's token of theirs, also what the run may do there; under a task token of theirs, only
-// those the task's assigner holds there too.
+// token lists too; under a run's or a delivery's token of theirs, also what the run or the delivery may do there;
+// under a task token of theirs, only those the task's assigner holds there too.
 func (a *Authorizer) Holds(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error) {
 	permissions, err := a.grants.Permissions(ctx, principalID, scope, scopeID)
 	if err != nil {
@@ -66,18 +66,18 @@ func (a *Authorizer) Holds(ctx context.Context, principalID uuid.UUID, scope Sco
 	return slices.Compact(permissions), nil
 }
 
-// runToken is the run's token the request comes with, when it acts as principalID.
+// runToken is the run's or the delivery's token the request comes with, when it acts as principalID.
 func runToken(ctx context.Context, principalID uuid.UUID) (Credential, bool) {
 	v, ok := Viewer(ctx)
-	if !ok || v.Credential.Kind != CredentialRunToken || v.User.ID != principalID {
+	if !ok || (v.Credential.Kind != CredentialRunToken && v.Credential.Kind != CredentialDeliveryToken) || v.User.ID != principalID {
 		return Credential{}, false
 	}
 	return v.Credential, true
 }
 
-// widened is held and what a run's token of principalID's lets it do at the scope besides: read the run's
-// organization, and do what its job declared on the run's repository. A job holds no role but Secret reader; the rest
-// it may do only while a run of it runs, there.
+// widened is held and what a run's or a delivery's token of principalID's lets it do at the scope besides: read the
+// organization, and do what its job declared, or read, on the repository. A job or a target holds no role but Secret
+// reader; the rest it may do only while a run of it runs, or a delivery to it renders, there.
 func widened(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID, held []string) []string {
 	run, ok := runToken(ctx, principalID)
 	switch {
@@ -138,8 +138,8 @@ func (a *Authorizer) Can(ctx context.Context, principalID uuid.UUID, permission 
 
 // Repositories lists the IDs of the organization's repositories where principalID holds permission: every one of
 // them when one of its roles at the organization holds it, and otherwise those its grants on them give it; none under
-// a personal token of theirs that doesn't list it, its run's repository under a run's token that may, and under a
-// task token of theirs only those where the task's assigner holds it too.
+// a personal token of theirs that doesn't list it, its run's or its delivery's repository under a token of one that
+// may, and under a task token of theirs only those where the task's assigner holds it too.
 func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
 	if len(narrowed(ctx, principalID, []string{permission})) == 0 {
 		return nil, nil
@@ -170,6 +170,16 @@ func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.U
 		}
 	}
 	return kept, nil
+}
+
+// Renders reports whether the request comes with the token of delivery deliveryID, the one credential that may upload
+// its render: nil when it does, ErrForbidden when it doesn't.
+func (a *Authorizer) Renders(ctx context.Context, deliveryID uuid.UUID) error {
+	v, ok := Viewer(ctx)
+	if !ok || v.Credential.Kind != CredentialDeliveryToken || v.Credential.ID != deliveryID {
+		return fmt.Errorf("%w: only the delivery's own token uploads its render", ErrForbidden)
+	}
+	return nil
 }
 
 // Covers reports whether held includes every one of permissions: the grant rules, under which nobody grants or

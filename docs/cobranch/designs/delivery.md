@@ -147,9 +147,9 @@ same way; a resync re-applies the last render without rendering again.
   init container fetches the commit. It reads the roots from the commit's `/cobranch.yaml` and the target from the
   controller, its name and the environment's namespace, which `main`'s grants (`--target`, `--namespace`), since the
   commit's own targets count for nothing; it renders each root in order, and uploads the manifests with
-  `PUT /v1/orgs/{org}/repos/{repo}/deliveries/{id}/manifests`, using a token scoped to that one delivery, `cbd_…`, valid
-  for the render's timeout, 10 minutes by default. The REST server stores the render in the object store, under
-  `deliveries/<repo-id>/<delivery-id>`, at most 16 MiB.
+  `POST /v1/orgs/{org}/repos/{repo}/deliveries/{n}/manifests`, using a token scoped to that one delivery, `cbd_…`, valid
+  for the render's timeout, 10 minutes by default. The REST server keeps the render once, while the delivery renders,
+  in the database beside the delivery, at most 16 MiB; it never prints it, since it may hold Secrets.
 - **Helm** renders the chart at `path` as `helm template` would, release `release`, namespace the environment's, its
   values from `valuesFiles` (relative to `path`, in order) then `values`. `.Capabilities` are the target cluster's: the
   controller reads its version and API groups before the render and passes them in, so charts that check for an API
@@ -269,8 +269,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
 - **A target is a principal,** one per name in a repository, so the audit log reads "target `production` of `acme/api`".
 - **It holds no role**, only Secret reader on the secret its `cluster` names, granted by a principal with
   `org.grants.manage`. A delivery whose target may not read its secret fails before rendering, naming the secret.
-- **Its token** `cbd_…` may only upload its delivery's manifests: the render pod can't read the repository, set
-  annotations or call any other API.
+- **Its token** `cbd_…` reads its repository, to check the commit out, and uploads its delivery's manifests, once:
+  the render pod can't set annotations, read another repository or call any other API.
 
 ## Clusters
 
@@ -281,7 +281,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
 ![In this installation’s cluster, an environment gets a namespace Cobranch makes and fences](delivery/in-cluster.svg)
 
 The controller applies as the delivery account, never as itself, so an environment’s manifests can do only what
-`<release>-delivery` allows, and only in its own namespace. `delivery.inCluster.enabled: false` renders none of it.
+`<release>-delivery` allows, and only in its own namespace. It is off by default: `delivery.inCluster.enabled: false`
+renders none of it.
 
 - **The controller makes the namespace,** labelled with the installation and the environment, enforcing the chart's Pod
   Security level, `restricted` by default. A namespace that exists without those labels is refused, so a repository
@@ -291,10 +292,15 @@ The controller applies as the delivery account, never as itself, so an environme
   every address outside `jobs.egress.except`, so an environment reaches neither Cobranch's PostgreSQL nor the cloud's
   metadata server; a LimitRange and an optional ResourceQuota from `delivery.inCluster.resources` and `quota`.
 - **It applies as `<release>-delivery`,** a ServiceAccount it impersonates, bound in each environment namespace to the
-  ClusterRole of the same name (`admin`'s rules), so a render can do only what a namespace's admin can, there. The
-  admission policy keeps that account off the namespace and its guards.
-- **`delivery.inCluster.enabled: false`** renders none of it, and targets without a `cluster` fail with
-  `this installation delivers to no cluster of its own`.
+  ClusterRole of the same name (`admin`'s rules but NetworkPolicy writes, and `delivery.inCluster.rules` for the
+  cluster's CRDs), so a render can do only what a namespace's admin can, there. A render that holds a NetworkPolicy,
+  LimitRange or ResourceQuota is refused, since it would widen the fence, and the admission policy keeps the account
+  off them and off the controller's RoleBindings there, whatever the role grants.
+- **Namespaces outlive an uninstall:** an environment's namespace is the environment's, not the release's, and its
+  teardown deletes it.
+- **`delivery.inCluster.enabled: false`,** the default, renders none of it, and targets without a `cluster` fail with
+  `this installation delivers to no cluster of its own`. An installation that hosts many organizations, such as a
+  hosted service, leaves it off: any organization's target could then make namespaces of any free name.
 
 ### Other clusters
 
@@ -347,7 +353,7 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 | `GET /deliveries/{n}`, `/manifests`, `/logs` | `Delivery.manifests`, `Delivery.logs` | `repo.read` |
 | `POST /environments/{id}/redeliver`, `/pause`, `/resume` | `redeliver`, `pauseEnvironment`, `resumeEnvironment` | `delivery.run` |
 | `POST /deliveries/{n}/start` | `startDelivery` | `delivery.run` |
-| `PUT /deliveries/{id}/manifests` | None | The delivery's own `cbd_…` token |
+| `POST /deliveries/{n}/manifests` | None | The delivery's own `cbd_…` token, while it renders |
 
 - **`delivery.run`** is a new permission, held by the built-in roles that hold `jobs.run`.
 - **An environment's page** shows its objects with their health and kind, its deliveries with each render's manifests
@@ -357,11 +363,14 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 
 | Value | Default | What it sets |
 | --- | --- | --- |
-| `delivery.inCluster.enabled` | `true` | Whether targets without a `cluster` deliver into this installation's cluster |
+| `delivery.inCluster.enabled` | `false` | Whether targets without a `cluster` deliver into this installation's cluster; needs `jobs.pods` |
 | `delivery.inCluster.podSecurity` | `restricted` | The Pod Security level environment namespaces enforce |
+| `delivery.inCluster.namespaceLabels` | None | More labels for environment namespaces |
 | `delivery.inCluster.ingressFrom` | None | Namespace selectors admitted into environment namespaces, such as the Gateway's |
 | `delivery.inCluster.resources`, `quota` | Requests 100m, 128Mi; memory limit 2Gi; no quota | Each environment namespace's LimitRange and ResourceQuota |
-| `delivery.render.timeout`, `resources` | 10m; requests 250m, 512Mi, memory limit 2Gi | Render pods |
+| `delivery.inCluster.rules` | None | More rules for the delivery role: the kinds of the cluster's CRDs renders may hold |
+| `delivery.render.timeout`, `resources` | 10m; requests 100m, 256Mi, memory limit 1Gi | Render pods |
+| `delivery.healthInterval` | 15s | How often a Progressing environment's health is read again |
 | `delivery.resync` | 10m | How often each environment is re-applied and its health read |
 | `delivery.teardownTimeout` | 10m | How long a teardown waits for objects to go |
 | `delivery.renders.keep` | 10 per environment | Renders kept; maintenance deletes older ones |
@@ -381,7 +390,8 @@ Git’s, and deliveries are history themselves. Every row carries `org_id`.
 
 ![Five pull requests, each keeping main working; three wait for a part of jobs](delivery/rollout.svg)
 
-An operator upgrading to the fourth grants the chart’s delivery RBAC, or sets `delivery.inCluster.enabled: false`.
+An operator upgrading to the fourth who wants delivery into this cluster sets `delivery.inCluster.enabled: true`, which
+grants the chart’s delivery RBAC.
 
 - **The first two need nothing of jobs:** the schema, rendering and `cobranch render`, then applying, pruning and
   health, tested against a real API server. Nothing delivers until the fourth.
@@ -389,9 +399,10 @@ An operator upgrading to the fourth grants the chart’s delivery RBAC, or sets 
   members list, redeliver, pause, resume and start through the APIs and the Console. A push into `main` that adds a
   target or widens its `branches` makes the other branches' environments from the fifth on; until then, from each
   branch's next push.
-- **The fourth needs the operator's consent:** the chart starts granting the controller namespaces, `bind` on the
-  delivery roles and impersonation. An operator who can't grant them sets `delivery.inCluster.enabled: false` and
-  delivers only to other clusters.
+- **The fourth delivers into this installation's cluster, with the operator's consent:** the controller renders, applies,
+  prunes and follows health, and `delivery.inCluster.enabled: true` grants it namespaces, `bind` on the delivery roles
+  and impersonation. Off, the default, those deliveries fail, saying so, and targets with a `cluster` wait for the
+  fifth.
 - **A repository adopts delivery** by pushing a `delivery` key into `main`.
 
 ## Risks
@@ -421,7 +432,11 @@ An operator upgrading to the fourth grants the chart’s delivery RBAC, or sets 
 | Each delivery reports `delivery/<target>` on its commit, as the target's principal | Merge requirements and job triggers can follow delivery, with no new mechanism | Proposed |
 | One principal per target, holding only Secret reader on its cluster's secret | The jobs model: least privilege, audit by name | Proposed |
 | Other clusters through a kubeconfig secret, exec plugins refused | No new credential store; the other cluster's RBAC bounds it | Proposed |
-| This installation's cluster on by default, in namespaces the controller makes, fences and applies to as an impersonated, namespace-bound account | Works out of the box like `jobs.pods`, without granting renders anything cluster-wide | Proposed |
+| This installation's cluster in namespaces the controller makes, fences and applies to as an impersonated, namespace-bound account, off by default | Grants renders nothing cluster-wide; off until an operator consents, since any organization's target can then make a namespace of any free name | Agreed: off by default, a reversible default (Open question 3) |
+| Renders kept in the database, beside the delivery, rather than in the object store | The REST server, which takes the upload, holds no object store; a render is at most 16 MiB, and maintenance deletes old ones | Proposed |
+| The upload is a `POST` of a delivery's number, creating its render once | The API's routes name deliveries by number, and a `PUT` would need `If-Match` for a resource the token can't read | Proposed |
+| The render pod's token also reads its repository | The checkout fetches the commit with it, as a run's token does; one token per pod | Proposed |
+| A failed render's reason is the last line its failed container logged | `cobranch render` and the checkout end with their error, which then reads on the commit's annotation | Proposed |
 | Resync re-applies the last render every 10 minutes | Self-healing, as GitOps promises, without rendering again | Proposed |
 | Deliveries are their own queue, claimed under a lease, one at a time per environment | The jobs model; an apply is never interleaved with another | Proposed |
 | Waves, hooks, promotion, charts from registries, secrets in manifests, cloud identities, several namespaces and diffs come later | Keeps this slice to its issue | Proposed |
@@ -432,8 +447,9 @@ An operator upgrading to the fourth grants the chart’s delivery RBAC, or sets 
    a branch from testing its own chart changes; targets from the branch would let it deliver anywhere.
 2. **Do renders run in the organization's job namespace, rather than in the controller?** Recommended: yes. It costs a
    pod's start, seconds per delivery, and buys the jobs' sandbox for code the repository controls.
-3. **Is delivery into this installation's cluster on by default?** Recommended: yes, fenced as above, with `false` one
-   value away for operators who host many organizations or can't grant the RBAC.
+3. **Is delivery into this installation's cluster on by default?** Taken: off for now, `true` one value away, fenced as
+   above, for an operator who hosts one organization or trusts every organization with namespaces of any free name.
+   Whether a hosted installation hosts its tenants' workloads is the owner's to decide.
 4. **Does every environment self-heal by default?** Recommended: yes, every 10 minutes. The alternative, reporting drift
    without fixing it, needs a diff view this slice defers.
 

@@ -59,8 +59,8 @@ type Store interface {
 	Session(ctx context.Context, tokenHash []byte) (Session, User, error)
 	// Touch records that session id was used at seen.
 	Touch(ctx context.Context, id uuid.UUID, seen time.Time) error
-	// Credential finds a credential by its token's hash, a run's token included, with the principal it acts as (a user
-	// with their emails), or ErrNotFound.
+	// Credential finds a credential by its token's hash, a run's or a delivery's token included, with the principal it
+	// acts as (a user with their emails), or ErrNotFound.
 	Credential(ctx context.Context, tokenHash []byte) (Credential, User, error)
 	// TouchCredential records that credential id, of kind, was used at usedAt.
 	TouchCredential(ctx context.Context, id uuid.UUID, kind CredentialKind, usedAt time.Time) error
@@ -363,8 +363,8 @@ func (s *Service) SeededUsers(ctx context.Context) ([]Seeded, error) {
 }
 
 // Authenticated is who a credential resolved to: a user and the session it came from if a cookie's, a user and their
-// personal token, an API key's principal and its secret, a job and its run's token, or an agent and the task token
-// it works a task with.
+// personal token, an API key's principal and its secret, a job and its run's token, an agent and the task token it
+// works a task with, or a target and its delivery's token.
 type Authenticated struct {
 	User       User
 	Session    Session
@@ -372,7 +372,8 @@ type Authenticated struct {
 }
 
 // Authenticate resolves a token to who it acts as: a session token (the cookie's) to its user, a personal token to
-// its user, an API key's secret to the key, a run's token to the run's job, a task token to its task's agent.
+// its user, an API key's secret to the key, a run's token to the run's job, a task token to its task's agent, a
+// delivery's token to its target.
 // ErrUnauthenticated when it matches nothing, expired, was revoked or its principal is suspended. A live credential is
 // marked used, at most once a minute.
 func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated, error) {
@@ -387,6 +388,8 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Authenticated
 		return s.authenticateCredential(ctx, Hash(token), CredentialRunToken)
 	case ValidSecret(PrefixTaskToken, token):
 		return s.authenticateTaskToken(ctx, Hash(token))
+	case ValidSecret(PrefixDeliveryToken, token):
+		return s.authenticateCredential(ctx, Hash(token), CredentialDeliveryToken)
 	}
 	return Authenticated{}, ErrUnauthenticated
 }

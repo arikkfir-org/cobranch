@@ -25,6 +25,9 @@ const (
 	KindJob Kind = "job"
 	// KindAgent is an agent: a principal of an organization that does the tasks its members assign it.
 	KindAgent Kind = "agent"
+	// KindTarget is a delivery target a repository declares: a principal of its organization that its deliveries act
+	// as.
+	KindTarget Kind = "target"
 )
 
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
@@ -154,7 +157,8 @@ func (s Session) Live(now time.Time) bool {
 	return s.RevokedAt.IsZero() && now.Before(s.IdleExpiresAt) && now.Before(s.ExpiresAt)
 }
 
-// CredentialKind is what a credential is: an API key's secret, a user's personal token or SSH key, or a run's token.
+// CredentialKind is what a credential is: an API key's secret, a user's personal token or SSH key, a run's token, a
+// task token, or a delivery's token.
 type CredentialKind string
 
 // The credential kinds.
@@ -170,6 +174,10 @@ const (
 	CredentialRunToken CredentialKind = "run_token"
 	// CredentialTaskToken is a task token, which acts as an agent for one of its tasks, capped by the task's assigner.
 	CredentialTaskToken CredentialKind = "task_token"
+	// CredentialDeliveryToken is a delivery's token, which acts as the delivery's target while it renders: it reads the
+	// delivery's organization and repository, to check its commit out, and uploads its render, which no other
+	// credential may.
+	CredentialDeliveryToken CredentialKind = "delivery_token"
 )
 
 // Credential is a secret that acts as a principal: an API key's or a user's personal token, shown once when made and
@@ -197,8 +205,9 @@ type Credential struct {
 	// PublicKey is an SSH key's public half, its type and base64, as an authorized_keys line has it without a comment;
 	// empty for the others.
 	PublicKey string
-	// OrgID and RepoID are where a run's token acts: its run's organization and repository; uuid.Nil for the others.
-	// Its ID is its run's, and its Permissions what its job declared.
+	// OrgID and RepoID are where a run's or a delivery's token acts: its organization and repository; uuid.Nil for the
+	// others. Its ID is its run's or its delivery's, and its Permissions what its job declared, or a delivery's
+	// repo.read.
 	OrgID, RepoID uuid.UUID
 	// Task is the task a task token works; zero for the others.
 	Task TaskGrant
