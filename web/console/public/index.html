@@ -1894,7 +1894,7 @@
       main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / labels"), h("h1", {}, "Labels")),
         h("p", { class: "alert", hidden: !notice }, notice || ""), error,
         h("section", { class: "panel" }, labels.length ? h("table", { class: "labels-table" }, h("tbody", {}, labels.map(row)))
-          : h("p", {}, manage ? "No labels yet. Create the first below." : "No labels yet.")), add);
+          : h("p", {}, manage ? "No labels yet. Create the first below." : "No labels yet.")), ...(add ? [add] : []));
     }
 
     function notFound(slug) {
