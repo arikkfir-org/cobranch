@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"testing"
 
@@ -198,7 +199,7 @@ func TestAgentStoreAssign(t *testing.T) {
 			for _, task := range list {
 				got = append(got, task.Number)
 			}
-			if len(got) != len(tt.want) || len(got) > 0 && (got[0] != tt.want[0] || got[len(got)-1] != tt.want[len(tt.want)-1]) {
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("Tasks() = %v, want %v", got, tt.want)
 			}
 		})

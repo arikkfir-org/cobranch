@@ -110,9 +110,9 @@ func (s *Service) reads(ctx context.Context, v Viewer, repoID uuid.UUID) (bool, 
 	return slices.Contains(held, repos.PermRead), nil
 }
 
-// orgSpan starts a span of an operation on the organization's agents or tasks.
-func orgSpan(ctx context.Context, name string, orgID uuid.UUID, attrs ...attribute.KeyValue) (context.Context, trace.Span) {
-	return tracer.Start(ctx, "agents.Service."+name, trace.WithAttributes(append(attrs, attribute.String("cobranch.organization.id", orgID.String()))...))
+// onOrg gives the span of an operation on the organization's agents or tasks the organization's ID and attrs.
+func onOrg(orgID uuid.UUID, attrs ...attribute.KeyValue) trace.SpanStartOption {
+	return trace.WithAttributes(append(attrs, attribute.String("cobranch.organization.id", orgID.String()))...)
 }
 
 // failed records err on span, wrapped with what the operation was doing unless it is one of the domain's own, and
@@ -142,7 +142,7 @@ func wrap(what string, err error) error {
 
 // Agents lists the organization's agents by name, each with its grants; it takes org.read.
 func (s *Service) Agents(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Agent, error) {
-	ctx, span := orgSpan(ctx, "Agents", orgID)
+	ctx, span := tracer.Start(ctx, "agents.Service.Agents", onOrg(orgID))
 	defer span.End()
 	if _, err := s.held(ctx, v, orgID); err != nil {
 		return nil, failed(span, "listing the agents", err)
@@ -153,7 +153,7 @@ func (s *Service) Agents(ctx context.Context, v Viewer, orgID uuid.UUID) ([]Agen
 
 // Agent finds one of the organization's agents with its grants; it takes org.read.
 func (s *Service) Agent(ctx context.Context, v Viewer, orgID, id uuid.UUID) (Agent, error) {
-	ctx, span := orgSpan(ctx, "Agent", orgID, attribute.String("cobranch.agent.id", id.String()))
+	ctx, span := tracer.Start(ctx, "agents.Service.Agent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
 	if _, err := s.held(ctx, v, orgID); err != nil {
 		return Agent{}, failed(span, "finding the agent", err)
@@ -214,7 +214,7 @@ func (s *Service) grant(ctx context.Context, v Viewer, orgID uuid.UUID, known *r
 		return g, invalid("grants", "repository.invalid", "not a repository of this organization")
 	}
 	if err != nil {
-		return g, err
+		return g, fmt.Errorf("finding the repository: %w", err)
 	}
 	g.RepoSlug = slug
 	onRepo, err := s.authz.Holds(ctx, v.ID, auth.ScopeRepository, g.RepoID)
@@ -236,7 +236,7 @@ func (s *Service) grant(ctx context.Context, v Viewer, orgID uuid.UUID, known *r
 // CreateAgent makes an agent of the organization with in's first grants, each a role whose permissions v holds where
 // it applies; it takes agents.create, and no org.grants.manage. An agent makes no agents.
 func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in Input) (Agent, error) {
-	ctx, span := orgSpan(ctx, "CreateAgent", orgID)
+	ctx, span := tracer.Start(ctx, "agents.Service.CreateAgent", onOrg(orgID))
 	defer span.End()
 	if err := person(v, "makes no agents"); err != nil {
 		return Agent{}, failed(span, "creating the agent", err)
@@ -272,7 +272,7 @@ func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in
 // UpdateAgent changes one of the organization's agents from version, or from any version for AnyVersion; it takes
 // being its creator, or org.principals.manage.
 func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID, version int64, c Change) (Agent, error) {
-	ctx, span := orgSpan(ctx, "UpdateAgent", orgID, attribute.String("cobranch.agent.id", id.String()))
+	ctx, span := tracer.Start(ctx, "agents.Service.UpdateAgent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
 	held, err := s.held(ctx, v, orgID)
 	if err != nil {
@@ -296,7 +296,7 @@ func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 // for AnyVersion; it takes org.principals.manage and every permission of the roles the agent holds where they apply,
 // as removing a member does. A built-in agent is never deleted: ErrBuiltIn.
 func (s *Service) DeleteAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID, version int64) error {
-	ctx, span := orgSpan(ctx, "DeleteAgent", orgID, attribute.String("cobranch.agent.id", id.String()))
+	ctx, span := tracer.Start(ctx, "agents.Service.DeleteAgent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
 	atOrg, err := s.require(ctx, v, orgID, orgs.PermPrincipalsManage)
 	if err != nil {

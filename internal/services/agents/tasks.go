@@ -32,7 +32,7 @@ func (s *Service) visible(ctx context.Context, v Viewer, t Task) error {
 // Tasks lists a page of at most limit, 1 to MaxPage, of the organization's tasks that match the filter, newest first,
 // leaving out those on repositories v doesn't read; it takes org.read.
 func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFilter, limit int) (TaskPage, error) {
-	ctx, span := orgSpan(ctx, "Tasks", orgID)
+	ctx, span := tracer.Start(ctx, "agents.Service.Tasks", onOrg(orgID))
 	defer span.End()
 	if limit < 1 || limit > MaxPage {
 		return TaskPage{}, failed(span, "listing the tasks", invalid("limit", "limit.invalid", fmt.Sprintf("a page holds 1 to %d tasks", MaxPage)))
@@ -64,7 +64,7 @@ func (s *Service) Tasks(ctx context.Context, v Viewer, orgID uuid.UUID, f TaskFi
 // Task finds one of the organization's tasks by its number; it takes org.read, and repo.read on the repository it
 // names.
 func (s *Service) Task(ctx context.Context, v Viewer, orgID uuid.UUID, number int64) (Task, error) {
-	ctx, span := orgSpan(ctx, "Task", orgID, attribute.Int64("cobranch.task.number", number))
+	ctx, span := tracer.Start(ctx, "agents.Service.Task", onOrg(orgID, attribute.Int64("cobranch.task.number", number)))
 	defer span.End()
 	if _, err := s.held(ctx, v, orgID); err != nil {
 		return Task{}, failed(span, "finding the task", err)
@@ -159,7 +159,7 @@ func (s *Service) where(ctx context.Context, v Viewer, orgID uuid.UUID, in TaskI
 // permissions as they are whenever it acts; it takes agents.assign, and repo.read on the repository it names. An agent
 // assigns no tasks.
 func (s *Service) Assign(ctx context.Context, v Viewer, orgID, agentID uuid.UUID, in TaskInput) (Task, error) {
-	ctx, span := orgSpan(ctx, "Assign", orgID, attribute.String("cobranch.agent.id", agentID.String()))
+	ctx, span := tracer.Start(ctx, "agents.Service.Assign", onOrg(orgID, attribute.String("cobranch.agent.id", agentID.String())))
 	defer span.End()
 	t, err := s.Prepare(ctx, v, orgID, agentID, in)
 	if err != nil {
@@ -176,7 +176,7 @@ func (s *Service) Assign(ctx context.Context, v Viewer, orgID, agentID uuid.UUID
 // CancelTask cancels one of the organization's tasks that has yet to end, from version, or from any version for
 // AnyVersion; it takes being its assigner, or org.principals.manage. A task that has ended is ErrEnded.
 func (s *Service) CancelTask(ctx context.Context, v Viewer, orgID uuid.UUID, number, version int64) (Task, error) {
-	ctx, span := orgSpan(ctx, "CancelTask", orgID, attribute.Int64("cobranch.task.number", number))
+	ctx, span := tracer.Start(ctx, "agents.Service.CancelTask", onOrg(orgID, attribute.Int64("cobranch.task.number", number)))
 	defer span.End()
 	held, err := s.held(ctx, v, orgID)
 	if err != nil {
