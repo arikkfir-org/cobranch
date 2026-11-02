@@ -19,6 +19,7 @@ import (
 	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/server"
+	"cobranch.dev/internal/adapters/webhook"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
@@ -68,11 +69,17 @@ func runController(ctx context.Context, logs io.Writer) error {
 }
 
 // controllerLoops are the runs' domain and the deliveries' over pool's database, the cluster the controller runs in,
-// the secrets the key opens and the object store, which the returned func closes, by what each works through.
+// the secrets the key opens, the object store, which the returned func closes, and the webhooks' receivers, by what
+// each works through.
 func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (map[string]controller.Runner, func(), error) {
 	c, err := clusterOf(cfg)
 	if err != nil {
 		return nil, nil, err
+	}
+	j, d := cfg.Jobs, cfg.Delivery
+	poster, err := webhook.New(j.EgressExcept, j.WebhooksAllowedCIDRs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configuring the webhooks: %w", err)
 	}
 	box, err := sealer(cfg.SecretsKey)
 	if err != nil {
@@ -83,8 +90,8 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 		return nil, nil, fmt.Errorf("opening the object store: %w", err)
 	}
 	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
-	j, d, archive := cfg.Jobs, cfg.Delivery, blob.Logs{Bucket: bucket}
-	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, runner.Settings{Pods: j.Pods, Lease: j.Lease,
+	archive := blob.Logs{Bucket: bucket}
+	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, poster, runner.Settings{Pods: j.Pods, Lease: j.Lease,
 		RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout, ScriptImage: j.ScriptImage, RESTURL: j.RESTURL,
 		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
 	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
@@ -109,19 +116,16 @@ func clusterOf(cfg config.Controller) (kube, error) {
 	if !j.Pods {
 		return kube{runs: runner.NoPods{}, renders: deliverer.NoPods{}}, nil
 	}
-	rc, err := rest.InClusterConfig()
+	rc, client, err := inClusterConfig()
 	if err != nil {
-		return kube{}, fmt.Errorf("reaching the cluster from its pod: %w", err)
-	}
-	client, err := kubernetes.NewForConfig(rc)
-	if err != nil {
-		return kube{}, fmt.Errorf("making the cluster's client: %w", err)
+		return kube{}, err
 	}
 	jobs := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
 		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value,
-		Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value,
-		CheckoutImage: j.CheckoutImage, RenderResources: cfg.RenderResources.Value})
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept,
+		DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value,
+		Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage,
+		RenderResources: cfg.RenderResources.Value})
 	k := kube{runs: jobs, renders: jobs}
 	if !cfg.InCluster {
 		return k, nil
@@ -136,6 +140,26 @@ func clusterOf(cfg config.Controller) (kube, error) {
 	}
 	k.target = target
 	return k, nil
+}
+
+// inCluster is a client of the cluster the workload runs in, as its pod's ServiceAccount.
+func inCluster() (kubernetes.Interface, error) {
+	_, client, err := inClusterConfig()
+	return client, err
+}
+
+// inClusterConfig is the configuration of a client of the cluster the workload runs in, as its pod's ServiceAccount,
+// and that client.
+func inClusterConfig() (*rest.Config, kubernetes.Interface, error) {
+	kube, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(kube)
+	if err != nil {
+		return nil, nil, fmt.Errorf("making the cluster's client: %w", err)
+	}
+	return kube, client, nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

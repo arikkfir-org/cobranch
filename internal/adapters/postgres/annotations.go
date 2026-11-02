@@ -10,6 +10,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -81,12 +82,15 @@ func (s *CodeStore) SetAnnotation(ctx context.Context, actor uuid.UUID, repoID u
 }
 
 // annotationSet works out again the status of the branches at the commit of an annotation actor set to in and, when
-// its status moved, queues the runs it triggers.
+// its status moved, queues the runs it triggers and ends the webhook runs it reports.
 func annotationSet(ctx context.Context, q *queries.Queries, actor, repoID uuid.UUID, sha string, in code.AnnotationInput, moved bool) error {
 	if err := restatusAt(ctx, q, repoID, sha); err != nil || !moved {
 		return err
 	}
-	return annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
+	if err := annotationRuns(ctx, q, actor, repoID, sha, in.Name, in.Status); err != nil {
+		return err
+	}
+	return reportedRuns(ctx, q, actor, repoID, sha, in.Name, in.Status)
 }
 
 // lockAnnotation answers the annotation in.Name on the commit, locked until the transaction ends, and false; or, when
@@ -183,4 +187,29 @@ func annotationOf(a queries.Annotation, displayName *string) code.Annotation {
 	return code.Annotation{ID: a.ID, Name: a.Name, Status: code.AnnotationStatus(a.Status), Summary: a.Summary, Link: a.Link,
 		Principal: principalOf(a.CreatedBy, displayName), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, StartedAt: a.StartedAt,
 		CompletedAt: a.CompletedAt, Version: a.Version}
+}
+
+// reportedState is the state a webhook run ends in when its job's own annotation reaches a status: its receiver
+// reported.
+var reportedState = map[code.AnnotationStatus]jobs.State{code.AnnotationSuccessful: jobs.StateSucceeded, code.AnnotationFailed: jobs.StateFailed}
+
+// reportedRuns ends the webhook runs of the job that set the annotation that haven't ended, queued ones included, when
+// it is the job's own annotation and says Successful or Failed: their receiver reported. annotationSet calls it after it queues the runs the
+// annotation triggers, so that those name them as their cause, as a pod's run is while it runs.
+func reportedRuns(ctx context.Context, q *queries.Queries, actor, repoID uuid.UUID, sha, name string, status code.AnnotationStatus) error {
+	state := reportedState[status]
+	if state == "" {
+		return nil
+	}
+	ended, err := q.FinishReportedRuns(ctx, queries.FinishReportedRunsParams{State: string(state), Reason: "its webhook's receiver reported " + string(status),
+		JobID: actor, RepoID: repoID, Sha: sha, Name: name})
+	if err != nil {
+		return fmt.Errorf("ending the webhook runs annotation %s reports: %w", name, err)
+	}
+	for _, id := range ended {
+		if err := q.DeleteRunToken(ctx, id); err != nil {
+			return fmt.Errorf("deleting run %s's token: %w", id, err)
+		}
+	}
+	return nil
 }

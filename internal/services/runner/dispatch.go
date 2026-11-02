@@ -47,8 +47,12 @@ func (s *Service) Dispatch(ctx context.Context) (_ bool, err error) {
 	return true, s.start(ctx, run)
 }
 
-// start starts a claimed run: it makes the run's launch, prepares its organization's namespace, and creates its pod.
+// start starts a claimed run: a webhook's it delivers; for a pod's or a script's it makes the run's launch, prepares
+// its organization's namespace, and creates its pod.
 func (s *Service) start(ctx context.Context, run Run) error {
+	if run.Definition.Kind() == jobs.KindWebhook {
+		return s.deliver(ctx, run)
+	}
 	launch, refusal, err := s.launch(ctx, run)
 	if err != nil {
 		return err
@@ -91,7 +95,11 @@ func (s *Service) launch(ctx context.Context, run Run) (Launch, string, error) {
 	if job.Checkout && s.settings.GitURL == "" {
 		return Launch{}, "this installation serves no Git over HTTPS to check its commit out from", nil
 	}
-	values, refusal, err := s.receive(ctx, run)
+	ids := make([]uuid.UUID, 0, len(job.Secrets))
+	for _, id := range job.Secrets {
+		ids = append(ids, id)
+	}
+	values, refusal, err := s.receive(ctx, run, ids)
 	if err != nil || refusal != "" {
 		return Launch{}, refusal, err
 	}
@@ -132,12 +140,8 @@ func checkPod(pod json.RawMessage) string {
 	return ""
 }
 
-// receive reads the values of the secrets the run's job names, or answers why it may not have them.
-func (s *Service) receive(ctx context.Context, run Run) (map[uuid.UUID][]byte, string, error) {
-	ids := make([]uuid.UUID, 0, len(run.Definition.Secrets))
-	for _, id := range run.Definition.Secrets {
-		ids = append(ids, id)
-	}
+// receive reads the values of the secrets ids, which the run's job names, or answers why it may not have them.
+func (s *Service) receive(ctx context.Context, run Run, ids []uuid.UUID) (map[uuid.UUID][]byte, string, error) {
 	values, err := s.secrets.Receive(ctx, run.JobID, ids)
 	var refused *secrets.RefusedError
 	switch {

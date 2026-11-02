@@ -60,6 +60,9 @@ type Store interface {
 	// SubmitReview records actor's review in of one of the repository's commits, works out again the status of the
 	// branches at it, and answers the review: repos.ErrNotFound when the repository holds no such commit.
 	SubmitReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in ReviewInput) (Review, error)
+	// RequestReview has the repository's organization's AI reviewer review the branch's head again for actor,
+	// superseding its open review task, and answers the new one.
+	RequestReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, branch string) (AIReview, error)
 	// Tags lists the repository's tags by name.
 	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
 	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
@@ -75,6 +78,7 @@ type Service struct {
 	objects  Objects
 	markdown Renderer
 	authz    *auth.Authorizer
+	logs     runLogs
 }
 
 // NewService returns a Service over store, objects for what only the Git server reads and markdown for rendering

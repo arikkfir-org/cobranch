@@ -61,6 +61,11 @@ models:
     fields:
       issue: { resolver: true }
       environments: { resolver: true }
+  # jobs.go's, which knows the repository its logs resolve from.
+  Run:
+    model: cobranch.dev/internal/adapters/graphql.Run
+    fields:
+      logs: { resolver: true }
   # A null clears an issue's assignee or repository; a field left out keeps it.
   IssuePatch:
     fields:

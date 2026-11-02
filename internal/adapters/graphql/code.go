@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ type Code interface {
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
 	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
+	RequestReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.AIReview, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
@@ -29,6 +31,7 @@ type Code interface {
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	RunLogs(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]code.RunLog, error)
 	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	Environments(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.Environment, error)
@@ -267,6 +270,7 @@ type Branch struct {
 	Requirements  *MergeRequirements `json:"requirements,omitempty"`
 	Merge         *BranchMerge       `json:"merge,omitempty"`
 	SettingsError *string            `json:"settingsError,omitempty"`
+	AIReview      *AIReview          `json:"aiReview,omitempty"`
 	ManualJobs    []string           `json:"manualJobs"`
 
 	orgID, repoID uuid.UUID
@@ -313,6 +317,18 @@ func branch(b code.Branch) *Branch {
 		out.SettingsError = &b.SettingsError
 	}
 	out.ManualJobs = append([]string{}, b.ManualJobs...)
+	if b.AIReview != nil {
+		out.AIReview = aiReview(*b.AIReview)
+	}
+	return out
+}
+
+// aiReview is the AI reviewer's task for a branch's head as the API shows it.
+func aiReview(r code.AIReview) *AIReview {
+	out := &AIReview{Task: int(r.Task), State: AIReviewState(strings.ToUpper(string(r.State)))}
+	if r.Reason != "" {
+		out.Reason = &r.Reason
+	}
 	return out
 }
 

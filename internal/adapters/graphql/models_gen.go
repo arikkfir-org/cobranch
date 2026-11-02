@@ -12,6 +12,15 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 )
 
+// The AI reviewer's task for a branch's head, an agent task of kind review. Its review, once it submits one, is among the head's.
+type AIReview struct {
+	// The task's number among its organization's tasks.
+	Task  int           `json:"task"`
+	State AIReviewState `json:"state"`
+	// Why it waits, failed or was cancelled; null otherwise.
+	Reason *string `json:"reason,omitempty"`
+}
+
 // One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
 type Agent struct {
 	// Its principal's ID.
@@ -1099,36 +1108,13 @@ type RoleInput struct {
 	Permissions []string `json:"permissions"`
 }
 
-// One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then.
-type Run struct {
-	ID string `json:"id"`
-	// Counts the repository's runs from 1.
-	Number int `json:"number"`
-	// The job's principal, named as the job.
-	Job *CommitPrincipal `json:"job"`
-	Sha string           `json:"sha"`
-	// The branch or tag it runs on, in full.
-	Ref string `json:"ref"`
-	// The event that queued it.
-	Trigger *RunTrigger `json:"trigger"`
-	// The number of the run whose annotation triggered it; null for any other.
-	CauseRun *int `json:"causeRun,omitempty"`
-	// Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt.
-	Attempt int `json:"attempt"`
-	// The number of the run its attempts started from; null for a first attempt.
-	RerunOf *int `json:"rerunOf,omitempty"`
-	// The job as it was declared when the run was queued.
-	Definition *Job     `json:"definition"`
-	State      RunState `json:"state"`
-	// Why it waits, failed or was cancelled; empty otherwise.
-	Reason string `json:"reason"`
-	// Who started it from WAITING, or re-ran it; null for any other run.
-	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
-	QueuedAt  time.Time        `json:"queuedAt"`
-	StartedAt *time.Time       `json:"startedAt,omitempty"`
-	EndedAt   *time.Time       `json:"endedAt,omitempty"`
-	// Counts its changes from 1.
-	Version int `json:"version"`
+// One of a run's containers' logs, with the values the run masks hidden.
+type RunLog struct {
+	Container string `json:"container"`
+	// The log, its bytes that aren't UTF-8 replaced.
+	Text string `json:"text"`
+	// Whether it was read from the running pod, and grows until the run ends.
+	Live bool `json:"live"`
 }
 
 // A page of a repository's runs, newest first.
@@ -1381,6 +1367,74 @@ type User struct {
 type ViewerUsage struct {
 	// The organizations the viewer created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
 	Organizations *Usage `json:"organizations"`
+}
+
+// Where the AI reviewer's task for a branch's head stands.
+type AIReviewState string
+
+const (
+	// Waits for a member to ask for it: the head was pushed from outside the organization.
+	AIReviewStateWaiting AIReviewState = "WAITING"
+	AIReviewStateQueued  AIReviewState = "QUEUED"
+	AIReviewStateRunning AIReviewState = "RUNNING"
+	// Ended with its review submitted.
+	AIReviewStateSucceeded AIReviewState = "SUCCEEDED"
+	// Ended without a review, for its reason.
+	AIReviewStateFailed AIReviewState = "FAILED"
+	// Superseded by a newer push, the branch's deletion or a request for another review.
+	AIReviewStateCancelled AIReviewState = "CANCELLED"
+)
+
+var AllAIReviewState = []AIReviewState{
+	AIReviewStateWaiting,
+	AIReviewStateQueued,
+	AIReviewStateRunning,
+	AIReviewStateSucceeded,
+	AIReviewStateFailed,
+	AIReviewStateCancelled,
+}
+
+func (e AIReviewState) IsValid() bool {
+	switch e {
+	case AIReviewStateWaiting, AIReviewStateQueued, AIReviewStateRunning, AIReviewStateSucceeded, AIReviewStateFailed, AIReviewStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e AIReviewState) String() string {
+	return string(e)
+}
+
+func (e *AIReviewState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = AIReviewState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid AIReviewState", str)
+	}
+	return nil
+}
+
+func (e AIReviewState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *AIReviewState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e AIReviewState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
 }
 
 // Where an annotation stands, in any order its principal sets them.

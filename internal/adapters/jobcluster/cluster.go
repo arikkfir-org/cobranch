@@ -71,6 +71,10 @@ type Config struct {
 	// OwnerRole is the controller's own ClusterRole, which every job namespace names as its owner, so that deleting
 	// the installation deletes them.
 	OwnerRole string
+	// LogsRole is the ClusterRole each namespace's other RoleBinding grants the servers' ServiceAccount in Home,
+	// LogsReader, so that the REST and GraphQL servers read the runs' pods, their logs and the values they mask; none
+	// without it.
+	LogsRole, LogsReader string
 	// EgressExcept are the address ranges the runs may not reach: private, link-local and shared ones, cloud metadata
 	// servers among them.
 	EgressExcept []string

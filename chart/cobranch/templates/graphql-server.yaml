@@ -1,2 +1,6 @@
 {{- include "cobranch.checkDatabase" . }}
-{{- include "cobranch.server" (dict "root" . "component" "graphql-server" "values" .Values.graphqlServer "env" (include "cobranch.gitInternalEnv" . | trim)) }}
+{{- /* It reads runs' logs: ended runs' from the object store, running runs' from their pods, as the servers'
+ServiceAccount, whose token it mounts where runs execute pods. */}}
+{{- $env := list (include "cobranch.gitInternalEnv" . | trim) (include "cobranch.runLogsEnv" . | trim) | compact | join "\n" }}
+{{- $account := ternary (include "cobranch.serviceAccount" .) "" .Values.jobs.pods }}
+{{- include "cobranch.server" (dict "root" . "component" "graphql-server" "values" .Values.graphqlServer "bucket" true "serviceAccount" $account "env" $env) }}

@@ -15,7 +15,7 @@ UPDATE run_tokens SET last_used_at = @used_at::timestamptz WHERE run_id = @run_i
 -- name: ClaimRun :one
 WITH claimed AS (
     SELECT r.id FROM job_runs r
-    WHERE r.state = 'queued' AND coalesce(r.lease_until, r.queued_at) <= now() AND r.definition -> 'webhook' IS NULL
+    WHERE r.state = 'queued' AND coalesce(r.lease_until, r.queued_at) <= now()
     ORDER BY coalesce(r.lease_until, r.queued_at)
     LIMIT 1
     FOR UPDATE SKIP LOCKED
@@ -56,6 +56,17 @@ FROM jobs j
 WHERE r.id = @id AND r.state IN ('queued', 'running') AND j.principal_id = r.job_id
 RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 
+-- FinishReportedRuns ends the webhook runs of a job at a commit that haven't ended as their receiver reported through
+-- the job's own annotation, Successful or Failed, and answers them. A queued one ends too: the controller records its
+-- token before it posts it, so its receiver may report before the controller sees the 2xx and marks it running.
+-- name: FinishReportedRuns :many
+UPDATE job_runs r SET state = @state::text, reason = @reason, started_at = coalesce(r.started_at, now()), ended_at = now(),
+    lease_until = NULL
+FROM jobs j
+WHERE r.job_id = @job_id AND r.repo_id = @repo_id AND r.sha = @sha AND r.state IN ('queued', 'running')
+    AND r.definition -> 'webhook' IS NOT NULL AND j.principal_id = r.job_id AND j.name = @name
+RETURNING r.id;
+
 -- DeleteRunToken deletes a run's token: the run ended.
 -- name: DeleteRunToken :exec
 DELETE FROM run_tokens WHERE run_id = $1;
@@ -70,6 +81,12 @@ WHERE r.id = t.run_id AND (r.state NOT IN ('queued', 'running') OR t.expires_at 
 -- name: RunningRuns :many
 SELECT id, org_id, repo_id, number, started_at, definition FROM job_runs
 WHERE state = 'running' AND definition -> 'webhook' IS NULL
+ORDER BY started_at;
+
+-- RunningWebhookRuns lists the webhook runs that run, waiting for their receivers to report.
+-- name: RunningWebhookRuns :many
+SELECT id, org_id, repo_id, number, started_at, definition FROM job_runs
+WHERE state = 'running' AND definition -> 'webhook' IS NOT NULL
 ORDER BY started_at;
 
 -- RunsStanding finds those of ids that are runs, with where each stands and its repository.
