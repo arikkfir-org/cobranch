@@ -82,7 +82,8 @@ func TestReportPageViews(t *testing.T) {
 }
 
 // TestPageViewsNameEveryConsolePage keeps the names the Console's page modules report their views under among the
-// pages the API records, so a new page's views aren't skipped.
+// pages the API records, so a new page's views aren't skipped, and holds a module whose own page the API records to
+// that name, so it isn't counted as another page's.
 func TestPageViewsNameEveryConsolePage(t *testing.T) {
 	for _, dir := range []struct{ glob, prefix string }{
 		{glob: "../../../web/console/public/assets/pages/org/*.js", prefix: "organization."},
@@ -93,10 +94,15 @@ func TestPageViewsNameEveryConsolePage(t *testing.T) {
 			t.Fatalf("the Console's pages in %s: %v, %v", dir.glob, files, err)
 		}
 		for _, f := range files {
-			for _, name := range consoleViews(t, f, dir.prefix) {
+			own := dir.prefix + strings.TrimSuffix(filepath.Base(f), ".js")
+			names := consoleViews(t, f, own)
+			for _, name := range names {
 				if !PageViewPage(name).Valid() {
 					t.Errorf("%s reports its views as %q, which PageView.page in api/openapi.yaml doesn't name", f, name)
 				}
+			}
+			if PageViewPage(own).Valid() && !slices.Contains(names, own) {
+				t.Errorf("%s reports its views as %q, though the API records its own page, %q", f, names, own)
 			}
 		}
 	}
@@ -106,8 +112,8 @@ func TestPageViewsNameEveryConsolePage(t *testing.T) {
 var quotedName = regexp.MustCompile(`"([^"]+)"`)
 
 // consoleViews reads the names the Console's page module at path reports its views under, as the Console's router
-// names them: its view's, a name or those its function returns, or else prefix and the module's name.
-func consoleViews(t *testing.T, path, prefix string) []string {
+// names them: its view's, a name or those its function returns, or else own, the module's own page.
+func consoleViews(t *testing.T, path, own string) []string {
 	t.Helper()
 	src, err := os.ReadFile(path)
 	if err != nil {
@@ -125,7 +131,7 @@ func consoleViews(t *testing.T, path, prefix string) []string {
 			return names
 		}
 	}
-	return []string{prefix + strings.TrimSuffix(filepath.Base(path), ".js")}
+	return []string{own}
 }
 
 // recordedViews collects the page views' metrics from reader: "page navigation count sum" of each duration's data
