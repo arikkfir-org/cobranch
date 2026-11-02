@@ -87,6 +87,18 @@ organizations:
   # values', which the Back-office only shows; null, the Back-office's (on until an administrator changes it).
   selfServe: null
 
+# Quotas (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md): what a creation or a push
+# that would cross one is refused with. Set, each is the values', for every organization without a limit of its own;
+# null, the built-in default. 0 caps nothing.
+limits:
+  # The organizations a user creates for themselves; 5 by default. Those an administrator creates for a user count
+  # against nobody.
+  organizationsPerUser: null
+  # The repositories an organization holds; 100 by default.
+  repositoriesPerOrganization: null
+  # The Git data an organization stores, its repositories' packs, such as 5Gi; 1Gi by default.
+  gitDataPerOrganization: null
+
 # The object store, where the Git server and maintenance keep Git's packs
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-object-storage.md).
 blob:

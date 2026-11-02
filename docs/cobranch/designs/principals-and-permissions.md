@@ -2,7 +2,7 @@
 
 > **Snapshot.** This design lives in its [principals and permissions
 > page](https://claude.ai/artifact/J8TVehKS9N6qGSsgjBH7hw), linked with Cobranch's other designs; this file is generated
-> from it, with its diagrams, as of 2026-10-30, and synced again once Cobranch's shape settles.
+> from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
 
 **Status**: Agreed 2026-10-27 · [ENG-196](https://linear.app/arikkfir/issue/ENG-196) ·
 [ENG-203](https://linear.app/arikkfir/issue/ENG-203) · Revised after review, 2026-10-27 · Fills in the
@@ -242,12 +242,13 @@ No API returns a value: only a job run or an agent task receives it.
 
 ## Permissions
 
-**Twenty-five permissions, each at one scope**
+**The core’s twenty-five permissions, each at one scope**
 
-![Twenty-five permissions, each at one scope](principals-and-permissions/permissions.svg)
+![The core’s twenty-five permissions, each at one scope](principals-and-permissions/permissions.svg)
 
-Names are `<object>.<action>`. A release may add permissions but never renames one; issues, delivery and agents add
-theirs in their own designs.
+Names are `<object>.<action>`. A release may add permissions but never renames one; later designs add theirs to the
+catalog, at the organization: issues add `issues.read`, `issues.write` and `issues.manage`
+([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs.
 
 | Permission | Allows |
 | --- | --- |

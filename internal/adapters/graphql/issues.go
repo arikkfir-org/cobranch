@@ -7,6 +7,7 @@ import (
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/issues"
 )
 
@@ -18,6 +19,10 @@ type Issues interface {
 	Update(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, p issues.Patch) (issues.Issue, error)
 	Delete(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, version int64) error
 	Activity(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.Event, error)
+	Branches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.LinkedBranch, error)
+	OfBranch(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) (*issues.Link, error)
+	Link(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string, number int) (issues.Link, error)
+	Unlink(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) error
 }
 
 // issueStates maps the domain's states to the schema's.
@@ -86,14 +91,42 @@ func issueEvent(e issues.Event) *IssueEvent {
 		}
 		out.Changes = append(out.Changes, change)
 	}
+	if b := e.Branch; b != nil {
+		out.Branch = &IssueEventBranch{LinkedBy: linkedBy[b.LinkedBy]}
+		if b.Name != "" {
+			out.Branch.Repository, out.Branch.Name = &b.Repository, &b.Name
+		}
+	}
 	return out
 }
 
-// issueFail is fail for issues: NOT_FOUND for an issue that isn't there, CONFLICT for one that changed.
+// linkedBy maps the domain's ways of linking a branch to the schema's.
+var linkedBy = map[issues.LinkedBy]LinkedBy{issues.LinkedByName: LinkedByName, issues.LinkedByHand: LinkedByHand}
+
+// branchIssue is a branch's link as the API shows it.
+func branchIssue(l issues.Link) *BranchIssue {
+	return &BranchIssue{Issue: issueOf(l.Issue), LinkedBy: linkedBy[l.LinkedBy]}
+}
+
+func issueBranch(b issues.LinkedBranch) *IssueBranch {
+	out := &IssueBranch{Repository: &IssueRepository{ID: b.Repository.ID.String(), Slug: b.Repository.Slug, Name: b.Repository.Name}, Name: b.Name,
+		Head: b.Head, Deleted: b.Deleted, LinkedBy: linkedBy[b.LinkedBy], LinkedAt: b.LinkedAt.UTC()}
+	if b.Status != "" {
+		status := branchStatuses[code.BranchStatus(b.Status)]
+		out.Status = &status
+	}
+	return out
+}
+
+// issueFail is fail for issues: NOT_FOUND for an issue or a branch that isn't there, CONFLICT for an issue that changed.
 func issueFail(ctx context.Context, err error, what string) error {
 	switch {
+	case err == nil:
+		return nil
 	case errors.Is(err, issues.ErrNotFound):
 		return refuse(ctx, notFound, "issue.not_found", "there is no such issue, or you may not see it")
+	case errors.Is(err, issues.ErrBranchNotFound):
+		return refuse(ctx, notFound, "branch.not_found", "there is no such branch, or you may not see it")
 	case errors.Is(err, issues.ErrChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the issue changed since you read it: read it again")
 	}

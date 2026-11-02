@@ -28,8 +28,9 @@ func NewIssueStore(pool *pgxpool.Pool) *IssueStore {
 
 var _ issues.Store = (*IssueStore)(nil)
 
-// Create numbers the issue after its organization's last, records it and appends event issue.created, in one
-// transaction that acts for actor (issues.Store).
+// Create numbers the issue after its organization's last, records it and appends event issue.created, then links the
+// live branches whose names name it and have no link, which starts it, in one transaction that acts for actor
+// (issues.Store).
 func (s *IssueStore) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
 	var out issues.Issue
 	err := transact(ctx, s.pool, s.q, "creating the issue", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -49,6 +50,14 @@ func (s *IssueStore) Create(ctx context.Context, actor uuid.UUID, issue issues.I
 		row, err := q.IssueByNumber(ctx, issue.OrgID, number)
 		if err != nil {
 			return fmt.Errorf("reading the issue back: %w", err)
+		}
+		out = issueOf(row)
+		started, err := linkNaming(ctx, q, actor, out)
+		if err != nil || !started {
+			return err
+		}
+		if row, err = q.IssueByNumber(ctx, issue.OrgID, number); err != nil {
+			return fmt.Errorf("reading the started issue back: %w", err)
 		}
 		out = issueOf(row)
 		return nil
@@ -181,13 +190,21 @@ func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.
 			e.Actor = &issues.Principal{ID: r.ActorID, DisplayName: *r.ActorName}
 		}
 		var details struct {
-			Changes []change `json:"changes"`
+			Changes []change  `json:"changes"`
+			Branch  string    `json:"branch"`
+			RepoID  uuid.UUID `json:"repoId"`
+			Repo    string    `json:"repo"`
+			By      string    `json:"by"`
 		}
 		if err := json.Unmarshal(r.Details, &details); err != nil {
 			return nil, fmt.Errorf("reading event %s: %w", r.ID, err)
 		}
 		for _, c := range details.Changes {
 			e.Changes = append(e.Changes, issues.Change{Field: c.Field, From: c.From, To: c.To, FromID: c.FromID, ToID: c.ToID})
+		}
+		if details.Branch != "" {
+			e.Branch = &issues.EventBranch{RepositoryID: details.RepoID, Repository: details.Repo, Name: details.Branch,
+				LinkedBy: issues.LinkedBy(details.By)}
 		}
 		out = append(out, e)
 	}

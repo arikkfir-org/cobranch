@@ -177,7 +177,16 @@ func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBran
 	if err != nil {
 		return nil, fail(err, "branch")
 	}
-	return GetBranch200JSONResponse(branch(b)), nil
+	out := branch(b)
+	link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, failIssue(err)
+	}
+	if link != nil {
+		issue := branchIssue(*link)
+		out.Issue = &issue
+	}
+	return GetBranch200JSONResponse(out), nil
 }
 
 // MergeBranch merges a branch into its base for the viewer.

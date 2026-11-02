@@ -19,6 +19,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/limits"
 )
 
 // GitStore keeps Git hosting's rows (db/migrations/00012_git.sql): git.Store on PostgreSQL, through the queries sqlc
@@ -207,6 +208,9 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	pack := ""
 	if push.Pack != nil {
 		pack = push.Pack.Name
+		if err := weighPack(ctx, q, orgID, push); err != nil {
+			return err
+		}
 		if err := q.InsertPack(ctx, queries.InsertPackParams{RepoID: push.RepoID, Name: pack, OrgID: orgID, Upload: push.Pack.Upload,
 			Size: push.Pack.Size, Objects: push.Pack.Objects}); err != nil {
 			return fmt.Errorf("listing the pack: %w", err)
@@ -232,6 +236,36 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 		return fmt.Errorf("recording the push: %w", err)
 	}
 	return insertCommits(ctx, q, orgID, push)
+}
+
+// weighPack refuses the push's pack, with a *git.RefusedError, when listing it would bring the organization's active
+// packs over the push's Git data limit: it sums them under the organization's lock for the limit, which pushes into
+// its other repositories take too, so two can't both fit on one sum. A pack the repository lists as active already
+// adds nothing.
+func weighPack(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push) error {
+	if push.GitDataLimit == 0 {
+		return nil
+	}
+	if err := lockLimit(ctx, q, limits.KindGitData, orgID); err != nil {
+		return err
+	}
+	used, err := q.GitData(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("summing the organization's Git data: %w", err)
+	}
+	active, err := q.PackActive(ctx, push.RepoID, push.Pack.Name)
+	if err != nil {
+		return fmt.Errorf("looking the pack up: %w", err)
+	}
+	adding := push.Pack.Size
+	if active {
+		adding = 0
+	}
+	if limits.Exceeds(push.GitDataLimit, used, adding) {
+		exceeded := &limits.ExceededError{Kind: limits.KindGitData, Limit: push.GitDataLimit, Used: used, Adding: adding}
+		return &git.RefusedError{Message: exceeded.Error()}
+	}
+	return nil
 }
 
 // insertCommits records the push's commits in one batch; the push worker resolves their authors and committers.
@@ -274,13 +308,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		if err := s.attribute(ctx, q, claimed); err != nil {
 			return err
 		}
-		if err := recordMerges(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := queuePushRuns(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
+		if err := followPush(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
@@ -296,6 +324,18 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
+}
+
+// followPush does, in the push worker's transaction, what the claimed push brings once its commits are attributed:
+// links its branches to their issues, records its merges and finishes their issues, queues its jobs' runs, and works
+// out the status of the branches waiting on it.
+func followPush(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	for _, step := range []func(context.Context, *queries.Queries, queries.ClaimPushRow) error{linkPushed, recordMerges, finishMerged, queuePushRuns} {
+		if err := step(ctx, q, claimed); err != nil {
+			return err
+		}
+	}
+	return restatusWaiting(ctx, q, claimed.RepoID, claimed.ID)
 }
 
 // traceparent is the W3C traceparent of the span in ctx, or "" without one.

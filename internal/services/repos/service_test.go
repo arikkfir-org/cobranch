@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
@@ -65,7 +66,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.website.Slug, f.secret.Slug = "website", "secret"
 	for _, r := range []repos.Repository{f.website, f.secret} {
-		if err := s.Create(t.Context(), f.olivia.ID, r); err != nil {
+		if err := s.Create(t.Context(), f.olivia.ID, r, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -457,5 +458,47 @@ func TestGrantRules(t *testing.T) {
 	}
 	if err := f.service.Grant(ctx, f.gwen, f.website.ID, f.rita.ID, auth.RoleDeveloper); !errors.Is(err, auth.ErrForbidden) {
 		t.Errorf("granting Developer: %v, want %v", err, auth.ErrForbidden)
+	}
+}
+
+// orgLimits are the same limits for every organization, or err.
+type orgLimits struct {
+	limits.Limits
+	err error
+}
+
+func (l orgLimits) Organization(context.Context, uuid.UUID) (limits.Limits, error) {
+	return l.Limits, l.err
+}
+
+func TestCreateHeldToLimit(t *testing.T) {
+	broken := errors.New("broken")
+	tests := []struct {
+		name         string
+		limits       orgLimits
+		wantExceeded *limits.ExceededError
+		wantErr      error
+	}{
+		{name: "under the limit", limits: orgLimits{Limits: limits.Limits{RepositoriesPerOrganization: 3}}},
+		{name: "at the limit", limits: orgLimits{Limits: limits.Limits{RepositoriesPerOrganization: 2}},
+			wantExceeded: &limits.ExceededError{Kind: limits.KindRepositories, Limit: 2, Used: 2, Adding: 1}},
+		{name: "no limit", limits: orgLimits{}},
+		{name: "the limits can't be read", limits: orgLimits{err: broken}, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t) // Acme holds website and secret
+			f.service.WithLimits(tt.limits)
+			_, err := f.service.Create(t.Context(), f.olivia, f.acme.ID, repos.Input{Slug: "tools"})
+			var exceeded *limits.ExceededError
+			switch {
+			case tt.wantExceeded != nil:
+				if !errors.As(err, &exceeded) || *exceeded != *tt.wantExceeded || len(f.store.Events) != 0 {
+					t.Errorf("Create() = %v, events %v, want %v and none", err, f.store.Events, tt.wantExceeded)
+				}
+			case !errors.Is(err, tt.wantErr):
+				t.Errorf("Create() = %v, want %v", err, tt.wantErr)
+			}
+		})
 	}
 }

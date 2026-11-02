@@ -50,9 +50,3 @@ func deliveryPage(page code.DeliveryPage) *DeliveryPage {
 	}
 	return out
 }
-
-// ofRepository is b, a branch of repo, which its environments read.
-func ofRepository(repo *Repository, b *Branch) *Branch {
-	b.RepositoryID = repo.ID
-	return b
-}

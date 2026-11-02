@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -186,6 +187,36 @@ func codeRepo(ctx context.Context, repositoryID string) (code.Viewer, uuid.UUID,
 		return code.Viewer{}, uuid.Nil, err
 	}
 	return v.User, repoID, nil
+}
+
+// Branch is one of a repository's live branches as the schema shows it, with the organization and repository it is
+// of, from which its issue and environments resolve.
+type Branch struct {
+	Name          string             `json:"name"`
+	Head          string             `json:"head"`
+	Commit        *Commit            `json:"commit,omitempty"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	UpdatedAt     time.Time          `json:"updatedAt"`
+	Base          *string            `json:"base,omitempty"`
+	Status        *BranchStatus      `json:"status,omitempty"`
+	Checks        []*BranchCheck     `json:"checks"`
+	Ahead         *int               `json:"ahead,omitempty"`
+	Behind        *int               `json:"behind,omitempty"`
+	Requirements  *MergeRequirements `json:"requirements,omitempty"`
+	Merge         *BranchMerge       `json:"merge,omitempty"`
+	SettingsError *string            `json:"settingsError,omitempty"`
+
+	orgID, repoID uuid.UUID
+}
+
+// of makes b the branch of repo, which its issue and environments resolve from.
+func (b *Branch) of(ctx context.Context, repo *Repository) error {
+	var err error
+	if b.orgID, err = parseID(ctx, repo.OrganizationID, "organization"); err != nil {
+		return err
+	}
+	b.repoID, err = parseID(ctx, repo.ID, "repository")
+	return err
 }
 
 // branch is b as the API shows it: every branch but main with its base, status, checks and facts, any branch

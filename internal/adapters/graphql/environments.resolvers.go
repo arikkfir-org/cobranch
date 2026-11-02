@@ -15,15 +15,15 @@ import (
 
 // Environments is the resolver for the environments field.
 func (r *branchResolver) Environments(ctx context.Context, obj *Branch) ([]*Environment, error) {
-	v, repoID, err := codeRepo(ctx, obj.RepositoryID)
+	v, err := viewer(ctx)
 	if err != nil {
 		return nil, err
 	}
-	list, err := r.Code.Environments(ctx, v, repoID, obj.Name)
+	list, err := r.Code.Environments(ctx, v.User, obj.repoID, obj.Name)
 	if err != nil {
 		return nil, fail(ctx, err, "repository", "listing the branch's environments")
 	}
-	return environments(obj.RepositoryID, list), nil
+	return environments(obj.repoID.String(), list), nil
 }
 
 // Deliveries is the resolver for the deliveries field.

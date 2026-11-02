@@ -87,8 +87,10 @@ const (
 // reach, and what its refs say of the branches once it applies.
 type Push struct {
 	// ID names the push: the Git server asks again with it when it lost the answer.
-	ID         uuid.UUID
-	RepoID     uuid.UUID
+	ID     uuid.UUID
+	RepoID uuid.UUID
+	// OrgID is the repository's organization, whose Git data limit holds the push's pack.
+	OrgID      uuid.UUID
 	PusherID   uuid.UUID
 	Transport  Transport
 	Updates    []RefUpdate
@@ -116,6 +118,9 @@ type Push struct {
 	// Peeled names the commit each tag the push creates or moves names, by ref, through any annotated tags; a tag that
 	// names no commit is absent.
 	Peeled map[string]string
+	// GitDataLimit is the most bytes of active packs the organization may hold once the push's pack is listed, which
+	// the store holds the push to in its transaction; 0 for none. Service.Record sets it.
+	GitDataLimit int64
 }
 
 // TipSettings is the SettingsFile at a branch's tip: its object's name and what it says, as JSON, or why it doesn't
