@@ -36,8 +36,9 @@ need its controller.
 
 Choices beyond the agreed designs are under [Decisions](#decisions), and the owner's answers to three questions under
 [Open questions](#open-questions). Branch chats, live, agents with their tasks, model providers with agents' models and
-secrets, the task token with the transcript it appends, and the harness with its provider adapters and workspace tools
-are built; the controller's agent pods, then agents posting and pushing, follow.
+secrets, the task token with the transcript it appends, the harness with its provider adapters and workspace tools, the
+controller's agent pods, and agents posting in chats and pushing branches are built; asking in a thread and waiting for
+the answer follows.
 
 ## Branch chats
 
@@ -123,8 +124,10 @@ admin changes its model, its secrets, or deletes it.
 - **Its creator and `org.principals.manage`** change its name, description and instructions. **Only
   `org.principals.manage`** picks its model and the secrets its tasks receive, and deletes it, holding every permission
   of the roles the agent holds where they apply, as revoking them would take; its creator alone can't delete it.
-- **It has an email of its own,** `<agent ID>@agents.<Console host>`, verified, written when it is created: the harness
-  commits with it, so the push worker maps the agent's commits to the agent.
+- **It has an email of its own,** `<agent ID>@agents.cobranch.invalid`, verified, which a trigger writes whenever an
+  agent is made, by the agents store, a migration or a seed: the harness commits with it, so the push worker maps the
+  agent's commits to the agent. `.invalid` never resolves, so no mail goes anywhere, and the name stays the same
+  whatever the installation's host.
 - **Built-in agents,** such as the [AI reviewer](product.md#agents-and-ai-review) of
   [ENG-216](https://linear.app/arikkfir/issue/ENG-216), are marked `built_in`: an admin changes their model, never
   deletes them.
@@ -283,10 +286,15 @@ adapters stay the same.
   links included, and to what a pod's memory holds: `read_file` reads only the lines it shows, each cut at 2,000 bytes,
   `edit_file` takes files up to 8 MiB, and `search` skips those over 1 MiB; `shell`, a command there in a process group
   its timeout kills whole, whose long output keeps its start and its end; Git through the shell with a credential helper
-  that reads the token file; the task's chat thread (read, post, ask and wait for an answer); and `finish`. The file
-  tools and the shell are built; Git, the thread and the checkout come with agents posting and pushing.
+  that reads the token file, for the Git server's URL alone; the task's chat thread (`read_thread`, `post_message`, and
+  asking and waiting for an answer); and `finish`. Asking and waiting come last.
 - **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` at the task's
-  branch, or `main`, before its first turn, and commits as the agent.
+  branch, or `main`, before its first turn, and commits as the agent, with its name and email. A pod that starts again
+  clones afresh, and the harness tells the model that what it hadn't pushed is gone.
+- **The thread.** A task talks in its thread: the one it was assigned from, or else the first it starts in its branch's
+  chat, or its issue's for an issue's task, which becomes its thread, so a pod that starts again posts there.
+  `post_message` names its message, or the thread it starts, by its call's key; `read_thread` shows the newest messages
+  that fit in a result, the agent's own marked.
 
 ### The transcript
 
@@ -327,7 +335,8 @@ An agent’s commits carry its own no-reply email, so the push worker maps them 
 as its work.
 
 - **Posting.** A message an agent posts shows the agent as its author, marked as an agent, and links the task it came
-  from.
+  from: `chat_messages.task_id`, which the APIs show as `taskId` and `taskNumber`, and the Console as a link to the
+  task.
 - **Pushing.** The Git server takes a task token over HTTPS as it takes a personal token: the push is the agent's,
   checked against `repo.push` as capped, and against the merge requirements like anyone's, so an agent brings work into
   `main` only through a Ready branch, unless its cap includes `repo.bypass`.
@@ -458,6 +467,8 @@ land.
 | A provider's refusal fails the task; its overload, rate limit or failure is retried, then restarts the pod | A refusal comes again on every retry; the rest pass | Proposed |
 | The harness reads the REST API through a client generated from the OpenAPI document, limited to its calls | The contract is the OpenAPI document; the agent binary carries only what it calls | Proposed |
 | Each agent holds a verified no-reply email, so its commits map to it | Agents push like any principal | Proposed |
+| The email is `<agent ID>@agents.cobranch.invalid`, written by a trigger on `agents`, not one under the Console's host | Migrations and seeds that make agents can't know the host, a host that changes would strand its emails, and `.invalid` never resolves | Proposed |
+| A task's first thread in its branch's or issue's chat becomes its thread, and its messages link the task | A restarted pod finds the thread it started; readers see which task spoke | Proposed |
 | Mentions, agents waking on chat messages by themselves, and agents' files in the object store come later | Keeps this slice to its issue | Proposed |
 
 ## Open questions
