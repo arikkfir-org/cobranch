@@ -96,6 +96,13 @@ type Delivery struct {
 	HealthInterval time.Duration `envconfig:"DELIVERY_HEALTH_INTERVAL" default:"15s"`
 	// RendersKeep is how many renders each environment keeps; the controller's sweep deletes older ones.
 	RendersKeep int `envconfig:"DELIVERY_RENDERS_KEEP" default:"10"`
+	// Resync is how often each environment's last render is applied again; TeardownTimeout how long a teardown waits
+	// for what it deleted to go.
+	Resync          time.Duration `envconfig:"DELIVERY_RESYNC" default:"10m"`
+	TeardownTimeout time.Duration `envconfig:"DELIVERY_TEARDOWN_TIMEOUT" default:"10m"`
+	// ClustersAllowedCIDRs are ranges of the jobs' EgressExcept where other clusters' API servers may be all the same:
+	// private clusters'.
+	ClustersAllowedCIDRs []string `envconfig:"DELIVERY_CLUSTERS_ALLOWED_CIDRS"`
 }
 
 // Jobs are the installation's settings for runs, from the chart's jobs values.
@@ -174,8 +181,9 @@ func LoadController() (Controller, error) {
 		return Controller{}, errors.New("COBRANCH_JOBS_LOGS_MAX_BYTES must be positive")
 	case c.Agents.Timeout <= 0 || c.Agents.Idle <= 0 || c.Agents.MaxTurns <= 0 || c.Agents.ShellTimeout <= 0 || c.Agents.MaxTokens <= 0:
 		return Controller{}, errors.New("COBRANCH_AGENTS_TIMEOUT, COBRANCH_AGENTS_IDLE, COBRANCH_AGENTS_MAX_TURNS, COBRANCH_AGENTS_SHELL_TIMEOUT and COBRANCH_AGENTS_MODEL_MAX_TOKENS must be positive")
-	case c.RenderTimeout <= 0 || c.HealthInterval <= 0:
-		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT and COBRANCH_DELIVERY_HEALTH_INTERVAL must be positive")
+	case c.RenderTimeout <= 0 || c.HealthInterval <= 0 || c.Resync <= 0 || c.TeardownTimeout <= 0:
+		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT, COBRANCH_DELIVERY_HEALTH_INTERVAL, COBRANCH_DELIVERY_RESYNC and " +
+			"COBRANCH_DELIVERY_TEARDOWN_TIMEOUT must be positive")
 	case c.RendersKeep < 1:
 		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDERS_KEEP must be positive: an environment keeps the render it delivered")
 	case c.InCluster && (c.Account == "" || c.DeliveryRole == "" || c.FenceRole == ""):

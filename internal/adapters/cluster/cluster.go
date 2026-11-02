@@ -36,6 +36,16 @@ const (
 	FieldManager = "cobranch"
 )
 
+// The labels the controller writes on an environment's namespace when it makes one, beside EnvironmentLabel.
+const (
+	// InstallationLabel marks it as one installation's, as the job namespaces are.
+	InstallationLabel = "cobranch.dev/installation"
+	// OrganizationLabel names the organization whose environment it holds.
+	OrganizationLabel = "cobranch.dev/organization"
+	// ManagedByLabel says Cobranch made it.
+	ManagedByLabel = "app.kubernetes.io/managed-by"
+)
+
 // ErrRefused is a render the cluster won't get: an object that names another namespace, a Namespace, a
 // cluster-scoped object in the installation's own cluster, an object something else owns, one the cluster serves no
 // kind for, or one rendered twice. Nothing of a refused render is applied.

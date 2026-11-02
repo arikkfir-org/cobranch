@@ -18,6 +18,7 @@ import (
 	"cobranch.dev/internal/adapters/incluster"
 	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/postgres"
+	"cobranch.dev/internal/adapters/remote"
 	"cobranch.dev/internal/adapters/server"
 	"cobranch.dev/internal/adapters/webhook"
 	"cobranch.dev/internal/services/auth"
@@ -70,8 +71,8 @@ func runController(ctx context.Context, logs io.Writer) error {
 }
 
 // controllerLoops are the runs' domain, the agents' tasks' and the deliveries' over pool's database, the cluster the
-// controller runs in, the secrets the key opens, the object store, which the returned func closes, and the webhooks'
-// receivers, by what each works through.
+// controller runs in and the others targets' kubeconfigs reach, the secrets the key opens, the object store, which the
+// returned func closes, and the webhooks' receivers, by what each works through.
 func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (map[string]controller.Runner, func(), error) {
 	c, err := clusterOf(cfg)
 	if err != nil {
@@ -99,9 +100,14 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), c.tasks, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
 		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Idle: a.Idle, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
 		ShellTimeout: a.ShellTimeout, MaxTokens: a.MaxTokens})
-	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
-		Lease: j.Lease, RoomRetry: j.RoomRetry, Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL,
-		LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished, HealthEvery: d.HealthInterval, KeepRenders: d.RendersKeep})
+	clusters, err := remote.New(j.Installation, j.EgressExcept, d.ClustersAllowedCIDRs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configuring other clusters: %w", err)
+	}
+	deliveries := deliverer.NewService(deliverer.Ports{Store: postgres.NewDeliveryStore(pool), Pods: c.renders, Target: c.target,
+		Clusters: clusters, Secrets: vault, Archive: archive}, deliverer.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry,
+		Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished,
+		HealthEvery: d.HealthInterval, KeepRenders: d.RendersKeep, Resync: d.Resync, TeardownTimeout: d.TeardownTimeout})
 	// A store closed as the controller exits has nothing left to flush.
 	return map[string]controller.Runner{"runs": runs, "tasks": tasks, "deliveries": deliveries}, func() { _ = bucket.Close() }, nil
 }

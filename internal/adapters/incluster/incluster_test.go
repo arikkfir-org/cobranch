@@ -380,3 +380,27 @@ func names(objects []deliverer.Object) []string {
 	}
 	return out
 }
+
+// TestRelease deletes the environment's namespace, as the controller, and leaves another's.
+func TestRelease(t *testing.T) {
+	f := newFixture(t, incluster.Config{})
+	ctx := context.Background()
+	if err := f.target.Prepare(ctx, f.env); err != nil {
+		t.Fatal(err)
+	}
+	another := f.env
+	another.ID = uuid.New()
+	if gone, err := f.target.Release(ctx, another); !gone || err != nil {
+		t.Errorf("Release(another environment) = %t, %v, want the namespace left, counted gone", gone, err)
+	}
+	// The test's API server runs no namespace controller, so the namespace stays as it is deleting.
+	for range 2 {
+		if gone, err := f.target.Release(ctx, f.env); gone || err != nil {
+			t.Errorf("Release() = %t, %v, want the namespace deleting", gone, err)
+		}
+	}
+	ns, err := f.admin.CoreV1().Namespaces().Get(ctx, f.env.Namespace, metav1.GetOptions{})
+	if err != nil || ns.DeletionTimestamp == nil {
+		t.Errorf("the namespace = %+v, %v, want it deleting", ns, err)
+	}
+}

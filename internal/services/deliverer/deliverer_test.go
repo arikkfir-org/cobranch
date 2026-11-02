@@ -40,16 +40,29 @@ type world struct {
 	startErr error
 	logs     map[string][]byte
 	// The cluster's: what each call answers.
-	prepareErr, applyErr, pruneErr, healthErr error
-	applied                                   []deliverer.Object
-	health                                    code.Health
-	healths                                   map[string]code.Health
+	prepareErr, applyErr, pruneErr, healthErr, capErr error
+	applied                                           []deliverer.Object
+	health                                            code.Health
+	healths                                           map[string]code.Health
+	// The teardowns': those TakeTeardown answers, what their environment holds, what remains of it and whether the
+	// namespace is gone.
+	teardowns   map[uuid.UUID]deliverer.Teardown
+	inventory   []deliverer.Object
+	remaining   []deliverer.Object
+	teardownErr error
+	released    bool
+	releaseErr  error
+	// The other clusters': the kubeconfigs targets read, what reading one answers, and what opening one does.
+	kubeconfigs map[uuid.UUID][]byte
+	secretErr   error
+	openErr     error
 }
 
 func newWorld() *world {
 	return &world{applies: map[uuid.UUID]deliverer.Apply{}, standing: map[uuid.UUID]deliverer.Standing{}, tokens: map[uuid.UUID]time.Time{},
 		objects: map[uuid.UUID][]deliverer.Object{}, pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{}, health: code.Healthy,
-		logs: map[string][]byte{"checkout": []byte("Checked out.\n"), "render": []byte("Rendering chart.\n")}}
+		logs:      map[string][]byte{"checkout": []byte("Checked out.\n"), "render": []byte("Rendering chart.\n")},
+		teardowns: map[uuid.UUID]deliverer.Teardown{}, released: true, kubeconfigs: map[uuid.UUID][]byte{}}
 }
 
 func (w *world) log(format string, args ...any) {
@@ -90,7 +103,35 @@ func (s store) MarkRendering(context.Context, uuid.UUID) (bool, error) {
 	return true, nil
 }
 
+func (s store) MarkDeleting(context.Context, uuid.UUID) (bool, error) {
+	s.log("deleting")
+	return true, nil
+}
+
 func (s store) Working(context.Context) ([]deliverer.Working, error) { return s.working, nil }
+
+func (s store) TakeTeardown(_ context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Teardown, bool, error) {
+	t, ok := s.teardowns[deliveryID]
+	if ok {
+		s.log("holding teardown #%d until %s", t.Number, leaseUntil.Format(time.TimeOnly))
+	}
+	return t, ok, nil
+}
+
+func (s store) LookAgain(_ context.Context, _ uuid.UUID, at time.Time) error {
+	s.log("looking again at %s", at.Format(time.TimeOnly))
+	return nil
+}
+
+func (s store) EndTeardown(_ context.Context, _ deliverer.Teardown, remaining []deliverer.Object, state code.DeliveryState, reason string) error {
+	s.log("teardown %s %q, holding %q", state, reason, inventory(remaining))
+	return nil
+}
+
+func (s store) Schedule(_ context.Context, every time.Duration) (int, error) {
+	s.log("scheduled every %s", every)
+	return 2, nil
+}
 
 func (s store) TakeApply(_ context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Apply, bool, error) {
 	a, ok := s.applies[deliveryID]
@@ -187,6 +228,9 @@ func (p pods) Namespaces(context.Context) ([]uuid.UUID, error) {
 type target struct{ *world }
 
 func (t target) Capabilities(context.Context) (string, []string, error) {
+	if t.capErr != nil {
+		return "", nil, t.capErr
+	}
 	return "v1.34.1", []string{"v1", "v1/ConfigMap", "apps/v1"}, nil
 }
 
@@ -222,6 +266,41 @@ func (t target) Health(_ context.Context, objects []deliverer.Object) ([]deliver
 	return out, t.health, nil
 }
 
+func (t target) Teardown(_ context.Context, env deliverer.Environment, objects []deliverer.Object) ([]deliverer.Object, error) {
+	t.log("deleted %d from %s", len(objects), env.Namespace)
+	return t.remaining, t.teardownErr
+}
+
+func (t target) Release(_ context.Context, env deliverer.Environment) (bool, error) {
+	t.log("released namespace %s: %t", env.Namespace, t.released)
+	return t.released, t.releaseErr
+}
+
+// clusters is the world's deliverer.Clusters: each kubeconfig opens the world's target.
+type clusters struct{ *world }
+
+func (c clusters) Open(_ context.Context, kubeconfig []byte) (deliverer.Target, error) {
+	if c.openErr != nil {
+		return nil, c.openErr
+	}
+	c.log("opened %q", kubeconfig)
+	return target(c), nil
+}
+
+// vault is the world's deliverer.Secrets.
+type vault struct{ *world }
+
+func (v vault) Receive(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map[uuid.UUID][]byte, error) {
+	if v.secretErr != nil {
+		return nil, v.secretErr
+	}
+	out := map[uuid.UUID][]byte{}
+	for _, id := range ids {
+		out[id] = v.kubeconfigs[id]
+	}
+	return out, nil
+}
+
 // archive is the world's deliverer.Archive.
 type archive struct{ *world }
 
@@ -232,15 +311,16 @@ func (a archive) Put(_ context.Context, _, deliveryID uuid.UUID, container strin
 
 var settings = deliverer.Settings{Pods: true, Lease: 2 * time.Minute, RoomRetry: 30 * time.Second, Timeout: 10 * time.Minute,
 	RESTURL: "http://rest", GitURL: "http://git/", LogLimit: 1 << 20, Vanished: time.Minute, HealthEvery: 15 * time.Second,
-	KeepRenders: 10}
+	KeepRenders: 10, Resync: 10 * time.Minute, TeardownTimeout: 10 * time.Minute}
 
-// service is a Service over w, at now, delivering into a cluster unless noCluster.
+// service is a Service over w, at now, delivering into a cluster of its own unless noCluster, and into others.
 func service(w *world, s deliverer.Settings, noCluster bool) *deliverer.Service {
 	var t deliverer.Target = target{w}
 	if noCluster {
 		t = nil
 	}
-	svc := deliverer.NewService(store{w}, pods{w}, t, archive{w}, s)
+	svc := deliverer.NewService(deliverer.Ports{Store: store{w}, Pods: pods{w}, Target: t, Clusters: clusters{w}, Secrets: vault{w},
+		Archive: archive{w}}, s)
 	svc.SetClock(func() time.Time { return now })
 	return svc
 }
@@ -248,7 +328,8 @@ func service(w *world, s deliverer.Settings, noCluster bool) *deliverer.Service 
 // delivery is a queued delivery of acme/site's preview to namespace website-x.
 func delivery() deliverer.Delivery {
 	return deliverer.Delivery{ID: uuid.New(), OrgID: uuid.New(), RepoID: uuid.New(), EnvironmentID: uuid.New(), TargetID: uuid.New(), Number: 7,
-		Target: "preview", Branch: "feature/x", SHA: strings.Repeat("a", 40), OrgSlug: "acme", RepoSlug: "site", Namespace: "website-x"}
+		Kind: code.DeliverCommit, Target: "preview", Branch: "feature/x", SHA: strings.Repeat("a", 40), OrgSlug: "acme", RepoSlug: "site",
+		Namespace: "website-x"}
 }
 
 // TestDispatch renders a claimed delivery in a pod of its organization's job namespace, or ends it, saying why it
@@ -381,6 +462,9 @@ func TestFollowApplies(t *testing.T) {
 			},
 			want:      applying(`recorded failed, healthy: failed "Preparing namespace website-x failed: namespace website-x exists, and isn't this environment's"`),
 			inventory: []string{"ConfigMap/site:unknown", "ConfigMap/old:unknown"}},
+		{name: "no cluster any more", noCluster: true, working: rendered, taken: true,
+			want:      applying(`recorded failed, healthy: failed "This installation delivers to no cluster of its own"`),
+			inventory: []string{"ConfigMap/site:unknown", "ConfigMap/old:unknown"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, tt.run)
@@ -420,8 +504,6 @@ func TestFollowEndsRenders(t *testing.T) {
 		{name: "a pod not seen yet"},
 		{name: "a pod that vanished", working: func(w *deliverer.Working) { w.StartedAt = now.Add(-2 * time.Minute) },
 			want: ended("its render pod vanished")},
-		{name: "no cluster any more", noCluster: true, working: func(w *deliverer.Working) { w.Rendered = true },
-			want: ended("this installation delivers to no cluster of its own")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, tt.run)
@@ -452,8 +534,8 @@ func (tt followCase) run(t *testing.T) {
 	w.working = []deliverer.Working{work}
 	if tt.taken {
 		w.applies[d.ID] = deliverer.Apply{ID: d.ID, OrgID: d.OrgID, RepoID: d.RepoID, EnvironmentID: d.EnvironmentID, Number: 7,
-			Target: "preview", SHA: d.SHA, Namespace: "website-x", Health: code.Healthy, Manifests: []byte("kind: ConfigMap"),
-			Inventory: []deliverer.Object{object("site"), object("old")}}
+			Kind: code.DeliverCommit, Target: "preview", SHA: d.SHA, Namespace: "website-x", Health: code.Healthy,
+			Manifests: []byte("kind: ConfigMap"), Rendered: true, Inventory: []deliverer.Object{object("site"), object("old")}}
 	}
 	w.pods[d.OrgID] = map[uuid.UUID]runner.Pod{}
 	if tt.pod != nil {
@@ -528,7 +610,7 @@ func TestSweep(t *testing.T) {
 // TestNoPods sweeps nothing and renders nothing: deliveries fail, saying why.
 func TestNoPods(t *testing.T) {
 	w := newWorld()
-	svc := deliverer.NewService(store{w}, deliverer.NoPods{}, nil, archive{w}, deliverer.Settings{})
+	svc := deliverer.NewService(deliverer.Ports{Store: store{w}, Pods: deliverer.NoPods{}, Archive: archive{w}}, deliverer.Settings{})
 	ctx := context.Background()
 	if err := svc.Sweep(ctx); err != nil {
 		t.Errorf("Sweep() = %v", err)

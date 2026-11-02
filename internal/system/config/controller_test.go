@@ -36,7 +36,7 @@ func TestLoadController(t *testing.T) {
 				c.Agents.Timeout == 24*time.Hour && c.Agents.Idle == 30*time.Minute && c.Agents.MaxTurns == 200 && c.Agents.ShellTimeout == 10*time.Minute &&
 				c.Agents.MaxTokens == 8192 && c.Agents.Resources.Value.Limits == nil && !c.InCluster &&
 				c.RenderTimeout == 10*time.Minute && c.HealthInterval == 15*time.Second && c.DeliveryPodSecurity == "restricted" &&
-				c.RendersKeep == 10
+				c.RendersKeep == 10 && c.Resync == 10*time.Minute && c.TeardownTimeout == 10*time.Minute && len(c.ClustersAllowedCIDRs) == 0
 		}},
 		{name: "the chart's maps and lists", env: controllerEnv(map[string]string{
 			"COBRANCH_JOBS_NAMESPACE_LABELS": `{"example.com/team":"ci"}`, "COBRANCH_JOBS_EGRESS_EXCEPT": "10.0.0.0/8,fc00::/7",
@@ -93,6 +93,13 @@ func TestLoadControllerDelivery(t *testing.T) {
 		{name: "delivery into this cluster without its account", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true"}),
 			wantErr: "COBRANCH_DELIVERY_ACCOUNT"},
 		{name: "no render timeout", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDER_TIMEOUT": "0s"}), wantErr: "must be positive"},
+		{name: "other clusters", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RESYNC": "1h", "COBRANCH_DELIVERY_TEARDOWN_TIMEOUT": "30m",
+			"COBRANCH_DELIVERY_CLUSTERS_ALLOWED_CIDRS": "10.20.0.0/16,fd00:20::/64"}),
+			check: func(c Controller) bool {
+				return c.Resync == time.Hour && c.TeardownTimeout == 30*time.Minute && slices.Equal(c.ClustersAllowedCIDRs, []string{"10.20.0.0/16", "fd00:20::/64"})
+			}},
+		{name: "no resync", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RESYNC": "0s"}), wantErr: "COBRANCH_DELIVERY_RESYNC"},
+		{name: "no teardown timeout", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_TEARDOWN_TIMEOUT": "-1m"}), wantErr: "COBRANCH_DELIVERY_TEARDOWN_TIMEOUT"},
 		{name: "no renders kept", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDERS_KEEP": "0"}), wantErr: "COBRANCH_DELIVERY_RENDERS_KEEP"},
 	})
 }

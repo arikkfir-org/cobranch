@@ -306,6 +306,44 @@ func (q *Queries) EnvironmentsOf(ctx context.Context, repoID uuid.UUID, branch s
 	return items, nil
 }
 
+const hasActiveDelivery = `-- name: HasActiveDelivery :one
+SELECT EXISTS (SELECT 1 FROM deliveries WHERE environment_id = $1
+    AND state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))::boolean
+`
+
+// HasActiveDelivery reports whether any of an environment's deliveries hasn't ended.
+func (q *Queries) HasActiveDelivery(ctx context.Context, environmentID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveDelivery, environmentID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const hasActiveTeardown = `-- name: HasActiveTeardown :one
+SELECT EXISTS (SELECT 1 FROM deliveries WHERE environment_id = $1 AND kind = 'teardown'
+    AND state IN ('queued', 'deleting'))::boolean
+`
+
+// HasActiveTeardown reports whether an environment's teardown is queued or deleting.
+func (q *Queries) HasActiveTeardown(ctx context.Context, environmentID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasActiveTeardown, environmentID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const hasLiveEnvironments = `-- name: HasLiveEnvironments :one
+SELECT EXISTS (SELECT 1 FROM environments WHERE repo_id = $1 AND deleted_at IS NULL)::boolean
+`
+
+// HasLiveEnvironments reports whether a repository has a live environment.
+func (q *Queries) HasLiveEnvironments(ctx context.Context, repoID uuid.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiveEnvironments, repoID)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const insertDelivery = `-- name: InsertDelivery :exec
 INSERT INTO deliveries (id, org_id, repo_id, number, environment_id, kind, sha, trigger, push_id, state, reason, started_by, ended_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
@@ -475,6 +513,36 @@ func (q *Queries) LatestDeliveries(ctx context.Context, ids []uuid.UUID) ([]Late
 	return items, nil
 }
 
+const liveBranchHeads = `-- name: LiveBranchHeads :many
+SELECT name, head FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY name
+`
+
+type LiveBranchHeadsRow struct {
+	Name string
+	Head string
+}
+
+// LiveBranchHeads lists a repository's live branches and their heads, by name.
+func (q *Queries) LiveBranchHeads(ctx context.Context, repoID uuid.UUID) ([]LiveBranchHeadsRow, error) {
+	rows, err := q.db.Query(ctx, liveBranchHeads, repoID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LiveBranchHeadsRow
+	for rows.Next() {
+		var i LiveBranchHeadsRow
+		if err := rows.Scan(&i.Name, &i.Head); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const liveEnvironment = `-- name: LiveEnvironment :one
 SELECT id, org_id, repo_id, target_id, branch, cluster, namespace, revision, synced_at, sync, health, paused, created_at, deleted_at, version FROM environments WHERE target_id = $1 AND branch = $2 AND deleted_at IS NULL
 `
@@ -590,19 +658,20 @@ func (q *Queries) StartWaitingDelivery(ctx context.Context, startedBy *uuid.UUID
 
 const supersedeDeliveries = `-- name: SupersedeDeliveries :many
 UPDATE deliveries SET state = 'cancelled', reason = $1, ended_at = now(), lease_until = NULL
-WHERE environment_id = $2 AND state IN ('waiting', 'queued', 'rendering')
-RETURNING id, sha
+WHERE environment_id = $2 AND state IN ('waiting', 'queued', 'rendering') AND (kind <> 'teardown' OR $3::boolean)
+RETURNING id, kind, sha
 `
 
 type SupersedeDeliveriesRow struct {
-	ID  uuid.UUID
-	Sha *string
+	ID   uuid.UUID
+	Kind string
+	Sha  *string
 }
 
-// SupersedeDeliveries cancels an environment's deliveries that haven't started applying, with the reason, and answers
-// the commit of each.
-func (q *Queries) SupersedeDeliveries(ctx context.Context, reason string, environmentID uuid.UUID) ([]SupersedeDeliveriesRow, error) {
-	rows, err := q.db.Query(ctx, supersedeDeliveries, reason, environmentID)
+// SupersedeDeliveries cancels an environment's deliveries that haven't started applying, with the reason, but its
+// queued teardown unless @teardowns, and answers the kind and commit of each.
+func (q *Queries) SupersedeDeliveries(ctx context.Context, reason string, environmentID uuid.UUID, teardowns bool) ([]SupersedeDeliveriesRow, error) {
+	rows, err := q.db.Query(ctx, supersedeDeliveries, reason, environmentID, teardowns)
 	if err != nil {
 		return nil, err
 	}
@@ -610,7 +679,7 @@ func (q *Queries) SupersedeDeliveries(ctx context.Context, reason string, enviro
 	var items []SupersedeDeliveriesRow
 	for rows.Next() {
 		var i SupersedeDeliveriesRow
-		if err := rows.Scan(&i.ID, &i.Sha); err != nil {
+		if err := rows.Scan(&i.ID, &i.Kind, &i.Sha); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

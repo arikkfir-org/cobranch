@@ -12,15 +12,14 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"net/netip"
 	"net/url"
-	"syscall"
 	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
+	"cobranch.dev/internal/adapters/egress"
 	"cobranch.dev/internal/services/runner"
 )
 
@@ -39,62 +38,20 @@ var _ runner.Poster = (*Poster)(nil)
 // New returns a Poster that never connects to an address in except, the ranges runs may not reach, unless allowed, the
 // private ranges the operator lets webhooks reach, holds it too; the unspecified addresses it never reaches.
 func New(except, allowed []string) (*Poster, error) {
-	deny, err := prefixes(except)
+	deny, err := egress.Prefixes(except)
 	if err != nil {
 		return nil, fmt.Errorf("reading the ranges webhooks may not reach: %w", err)
 	}
-	allow, err := prefixes(allowed)
+	allow, err := egress.Prefixes(allowed)
 	if err != nil {
 		return nil, fmt.Errorf("reading the ranges webhooks may reach: %w", err)
 	}
-	dialer := &net.Dialer{Timeout: timeout, Control: func(_, address string, _ syscall.RawConn) error {
-		return check(address, deny, allow)
-	}}
+	dialer := egress.Guard{Deny: deny, Allow: allow, Refused: runner.ErrUnreachable}.Dialer(timeout)
 	transport := &http.Transport{DialContext: dialer.DialContext, TLSHandshakeTimeout: timeout, ForceAttemptHTTP2: true,
 		MaxIdleConns: 10, IdleConnTimeout: 90 * time.Second}
 	// No Proxy: a proxy would connect for it, past the address check.
 	return &Poster{client: &http.Client{Transport: transport, Timeout: timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}, nil
-}
-
-// prefixes parses CIDRs.
-func prefixes(cidrs []string) ([]netip.Prefix, error) {
-	out := make([]netip.Prefix, 0, len(cidrs))
-	for _, c := range cidrs {
-		p, err := netip.ParsePrefix(c)
-		if err != nil {
-			return nil, fmt.Errorf("range %q: %w", c, err)
-		}
-		out = append(out, p.Masked())
-	}
-	return out, nil
-}
-
-// check refuses an address the Poster may not connect to: one in deny and not in allow, or an unspecified one.
-func check(address string, deny, allow []netip.Prefix) error {
-	host, _, err := net.SplitHostPort(address)
-	if err != nil {
-		return fmt.Errorf("reading address %q: %w", address, err)
-	}
-	ip, err := netip.ParseAddr(host)
-	if err != nil {
-		return fmt.Errorf("reading address %q: %w", address, err)
-	}
-	ip = ip.Unmap()
-	if ip.IsUnspecified() {
-		return fmt.Errorf("%w: %s", runner.ErrUnreachable, ip)
-	}
-	for _, p := range allow {
-		if p.Contains(ip) {
-			return nil
-		}
-	}
-	for _, p := range deny {
-		if p.Contains(ip) {
-			return fmt.Errorf("%w: %s, in %s", runner.ErrUnreachable, ip, p)
-		}
-	}
-	return nil
 }
 
 // Post posts body to an https target with headers, and answers nil once the receiver answers 2xx (runner.Poster).

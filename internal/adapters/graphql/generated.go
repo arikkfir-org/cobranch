@@ -6634,6 +6634,8 @@ enum DeliveryTrigger {
   PUSH
   REDELIVER
   RESUME
+  "The controller's own: it resyncs each environment every while, and tears down one whose branch is gone."
+  SCHEDULE
 }
 
 "Where a delivery stands."
@@ -6644,6 +6646,8 @@ enum DeliveryState {
   QUEUED
   RENDERING
   APPLYING
+  "A teardown deletes what its environment held, until it is gone."
+  DELETING
   SUCCEEDED
   "It ended badly, or never started."
   FAILED

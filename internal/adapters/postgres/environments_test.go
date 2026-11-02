@@ -32,7 +32,7 @@ const deliveryFile = `delivery:
     - path: deploy
 `
 
-// deliveries lists the repository's deliveries, oldest first, as "#n target branch@sha state: reason".
+// deliveries lists the deliveries of the repository's live environments, oldest first, as deliveryLine says them.
 func (f *jobsFixture) deliveries(t *testing.T, repoID uuid.UUID) []string {
 	t.Helper()
 	ctx := context.Background()
@@ -51,13 +51,26 @@ func (f *jobsFixture) deliveries(t *testing.T, repoID uuid.UUID) []string {
 	slices.SortFunc(all, func(a, b code.Delivery) int { return int(a.Number - b.Number) })
 	out := make([]string, 0, len(all))
 	for _, d := range all {
-		line := fmt.Sprintf("#%d %s %s@%s %s", d.Number, d.Target, d.Branch, d.SHA[:1], d.State)
-		if d.Reason != "" {
-			line += ": " + d.Reason
-		}
-		out = append(out, line)
+		out = append(out, deliveryLine(d.Number, d.Target, d.Branch, d.SHA, d.Kind, d.State, d.Reason))
 	}
 	return out
+}
+
+// deliveryLine is a delivery as "#n target branch@sha kind state: reason": its kind named unless it delivers a commit,
+// and no commit for a teardown, which has none.
+func deliveryLine(number int64, target, branch, sha string, kind code.DeliveryKind, state code.DeliveryState, reason string) string {
+	line := fmt.Sprintf("#%d %s %s", number, target, branch)
+	if sha != "" {
+		line += "@" + sha[:1]
+	}
+	if kind != code.DeliverCommit {
+		line += " " + string(kind)
+	}
+	line += " " + string(state)
+	if reason != "" {
+		line += ": " + reason
+	}
+	return line
 }
 
 // environments lists the repository's environments as "target branch namespace sync", with " paused" when it is.
@@ -276,7 +289,7 @@ func TestCodeStoreWaitsForAQueueingPush(t *testing.T) {
 				q := queries.New(tx)
 				env, err := q.LiveEnvironment(context.Background(), production.Target.ID, "main")
 				if err == nil {
-					_, err = enqueue(context.Background(), q, queuedDelivery{env: env, target: "production", sha: shaA,
+					_, err = enqueue(context.Background(), q, queuedDelivery{env: env, target: "production", kind: code.DeliverCommit, sha: shaA,
 						trigger: code.TriggeredByPush, state: code.DeliveryQueued})
 				}
 				if err != nil {

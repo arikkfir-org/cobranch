@@ -52,7 +52,8 @@ func recordSettings(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 // queuePushRuns queues the runs the claimed push triggers, in the push worker's transaction: for each branch it
 // creates or moves, and each tag that names a commit, the jobs that match. It reads where any ref stands under the
 // repository's run lock, which followPush took, so a later push that another push worker processed meanwhile is seen:
-// a ref that moved on since this push queues nothing. Each branch it creates or moves also queues its deliveries.
+// a ref that moved on since this push queues nothing. Each branch it creates or moves also queues its deliveries, and
+// each it deletes its environments' teardowns.
 func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	var updates []refUpdateJSON
 	if err := json.Unmarshal(claimed.RefUpdates, &updates); err != nil {
@@ -67,6 +68,12 @@ func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.Clai
 		pushed.ActorID = *claimed.PusherID
 	}
 	for _, u := range updates {
+		if branch, isBranch := git.Branch(u.Name); isBranch && u.New == git.ZeroSHA {
+			if err := tearDownBranch(ctx, q, claimed.RepoID, branch, claimed.ID); err != nil {
+				return err
+			}
+			continue
+		}
 		e, ok, err := pushEvent(ctx, q, pushed, u, peeled[u.Name])
 		switch {
 		case err != nil:
@@ -271,20 +278,26 @@ func waits(ctx context.Context, q *queries.Queries, e jobs.Event) (bool, error) 
 	case jobs.EventPush:
 		return waitsForMember(ctx, q, e.RepoID, e.ActorID)
 	case jobs.EventAnnotation, jobs.EventReview:
-		pusher, err := q.HeadPusher(ctx, e.RepoID, e.Ref, e.SHA)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		if err != nil {
-			return false, fmt.Errorf("finding who pushed %s: %w", e.Ref, err)
-		}
-		var id uuid.UUID
-		if pusher != nil {
-			id = *pusher
-		}
-		return waitsForMember(ctx, q, e.RepoID, id)
+		return headWaits(ctx, q, e.RepoID, e.Ref, e.SHA)
 	}
 	return false, nil
+}
+
+// headWaits reports whether work on ref's head, sha, waits for a member: when whoever pushed it there is outside the
+// organization, as waitsForMember tells. A head no push brought, such as a merge Cobranch made, is inside.
+func headWaits(ctx context.Context, q *queries.Queries, repoID uuid.UUID, ref, sha string) (bool, error) {
+	pusher, err := q.HeadPusher(ctx, repoID, ref, sha)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("finding who pushed %s: %w", ref, err)
+	}
+	var id uuid.UUID
+	if pusher != nil {
+		id = *pusher
+	}
+	return waitsForMember(ctx, q, repoID, id)
 }
 
 // waitsForMember reports whether work that follows a push by pusherID into the repository waits for a member to

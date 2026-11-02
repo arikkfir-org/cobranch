@@ -176,7 +176,9 @@ func (f *deliveryFixture) checkHealth(t *testing.T, d deliverer.Delivery) {
 	t.Helper()
 	ctx := context.Background()
 	envs, err := f.d.Progressing(ctx)
-	if err != nil || len(envs) != 1 || envs[0] != (deliverer.Environment{ID: d.EnvironmentID, OrgID: d.OrgID, RepoID: d.RepoID, Namespace: "shop"}) {
+	want := deliverer.Environment{ID: d.EnvironmentID, OrgID: d.OrgID, RepoID: d.RepoID, TargetID: d.TargetID, Target: "production",
+		Namespace: "shop"}
+	if err != nil || len(envs) != 1 || envs[0] != want {
 		t.Fatalf("Progressing() = %+v, %v, want production", envs, err)
 	}
 	healthy := code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}
