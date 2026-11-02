@@ -97,9 +97,12 @@ outlives the run: the clone is anonymous, and the task holds no token and no clo
 
 Pipeline `main` runs on pushes to `main`. It builds the images in a Docker daemon, as task `chart` does, and pushes them
 to Cobranch's public repository on Artifact Registry, tagged with the commit's first seven characters, which the binary
-reports as its version too. An installation that follows `main` runs the images of the commit it is at, so only the
-newest waiting push is built: one that a newer push overtakes while it waits publishes nothing, and `main`'s newest
-commit always gets its images.
+reports as its version too. Only then does task `publish-chart` push the commit's chart beside them, as
+`charts/cobranch` at version `0.0.0-main.<n>.g<short SHA>`, where `n` counts `main`'s commits up to it, with the short
+SHA as its app version, so that its images default to those just pushed. An installation that follows `main` installs
+`main`'s newest chart (`>=0.0.0-main.0, <0.0.0`, which no version matches), so it never rolls out a commit before its
+images are there, and only the newest waiting push is built: one that a newer push overtakes while it waits publishes
+nothing, and `main`'s newest commit always gets its images and its chart.
 
 **Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, and saves its Go caches**
 
@@ -194,6 +197,7 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | The chart beside the images, in repository `cobranch`, as OCI | One public repository, one grant and one cleanup for all of Cobranch's releases; Helm installs OCI charts directly | GitHub's container registry; a chart repository's `index.yaml` in a bucket |
 | One version, `1.2.3`, for the chart, its app version and the image tags; `v1.2.3` for the Git tag | A chart's version is SemVer without the `v`, and the chart's images default to its app version, so the images carry the same string | Octomaton's `v1.2.3` image tags, a second spelling beside the chart's |
 | `tag` runs `main`'s scripts on the tagged commit's chart | A tag can name any commit; only `main`'s files are reviewed | Running the tagged commit's checkout |
+| `main`'s chart of every commit, published after its images, at `0.0.0-main.<n>.g<short SHA>` | An installation that followed `main`'s head in Git rolled out each merge before its images were there, and a commit whose build a newer push overtook never got them, holding the rollout until its migrate Job's deadline. The version grows with `main`'s history, so the newest chart is the newest commit whose images are there; as a prerelease of `0.0.0` it sorts below every version, and Helm installs it only when asked | A Git ref that the pipeline moves, which takes write access to the repository; a chart tag that moves, which a build that finished late could move back; the commit's time as the version, which two merge queue groups can share |
 | `main`'s Go caches in a bucket, which `main` alone writes | Every task downloaded its modules and compiled everything, image `cobranch`'s build in task `chart` longest of all; with many pull requests at once, those runs filled the CI pool. Only `main`'s warm-up writes the archive, so no pull request can change what the others reuse, and a commit compiles only what it changed since `main` | Each pull request's caches too, as Octomaton keeps, worth it if a pull request's own pushes come to dominate; no cache, which left the check at seven and a half minutes |
 | The image builds' caches seeded by a download inside a build | The archive streams straight into the daemon's cache mounts, with the token as a build secret, and the Dockerfile stays as a developer builds it; alpine's Go reuses what Debian's compiled, so one archive serves every task | Sending the extracted caches as a build context, which took four minutes for 6GB; building the binary outside Docker and copying it in, which would leave the Dockerfile untested |
 

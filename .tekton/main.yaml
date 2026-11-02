@@ -1,5 +1,6 @@
 # Cobranch's build of main: build images cobranch, cobranch-console and cobranch-back-office of a commit and push them
-# to Artifact Registry, tagged with the commit's short SHA (publish.task.yaml), and, beside it, save the Go caches that
+# to Artifact Registry, tagged with the commit's short SHA (publish.task.yaml), then its chart beside them
+# (publish-chart.task.yaml), and, beside it, save the Go caches that
 # every run restores (warm.task.yaml). The pods run as ServiceAccount ci-cobranch-release, through
 # Workload Identity: the one ServiceAccount allowed to push to main's and the versions' repository and to save main's
 # Go caches, which only main and v* tags may use (octomaton.dev/branches, octomaton.dev/tags); pipeline preview pushes
@@ -20,6 +21,14 @@ spec:
           memory: 128Mi
         limits:
           memory: 256Mi
+    # A fetch of main's history and helm, which peaked near 50Mi.
+    - pipelineTaskName: publish-chart
+      computeResources:
+        requests:
+          cpu: 100m
+          memory: 64Mi
+        limits:
+          memory: 128Mi
     # As ci.yaml's build, lint and test, whose compiles it repeats.
     - pipelineTaskName: warm
       computeResources:
@@ -55,6 +64,22 @@ spec:
             workspace: source
         taskRef:
           name: publish # .tekton/publish.task.yaml
+      # Only once publish has pushed the images: an installation that follows main installs main's newest chart, so never
+      # a commit whose images aren't there.
+      - name: publish-chart
+        runAfter: [publish]
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+          - name: registry
+            value: me-west1-docker.pkg.dev/arikkfir/cobranch
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: publish-chart # .tekton/publish-chart.task.yaml
       - name: warm
         params:
           - name: repo-url
