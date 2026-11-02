@@ -24,6 +24,7 @@ var now = time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 type store struct {
 	queued   []runner.Run
 	running  []runner.Running
+	webhooks []runner.Running
 	standing map[uuid.UUID]runner.Standing
 	orgs     []uuid.UUID
 	tokens   map[uuid.UUID]time.Time
@@ -73,6 +74,8 @@ func (s *store) Finish(_ context.Context, _ uuid.UUID, state jobs.State, reason 
 }
 
 func (s *store) Running(context.Context) ([]runner.Running, error) { return s.running, s.fail }
+
+func (s *store) RunningWebhooks(context.Context) ([]runner.Running, error) { return s.webhooks, s.fail }
 
 func (s *store) Runs(_ context.Context, ids []uuid.UUID) (map[uuid.UUID]runner.Standing, error) {
 	out := map[uuid.UUID]runner.Standing{}
@@ -184,6 +187,24 @@ func (v vault) Receive(_ context.Context, _ uuid.UUID, ids []uuid.UUID) (map[uui
 	return out, nil
 }
 
+// poster is a runner.Poster that answers err, recording what it posted.
+type poster struct {
+	err   error
+	posts []post
+}
+
+// post is what a poster posted.
+type post struct {
+	url     string
+	body    []byte
+	headers map[string]string
+}
+
+func (p *poster) Post(_ context.Context, url string, body []byte, headers map[string]string) error {
+	p.posts = append(p.posts, post{url: url, body: body, headers: headers})
+	return p.err
+}
+
 // archive is a runner.Archive in memory.
 type archive map[string]string
 
@@ -262,7 +283,7 @@ func TestDispatch(t *testing.T) {
 			if tt.vault.values == nil {
 				tt.vault.values = map[uuid.UUID][]byte{id("5ec1"): []byte("s3cret")}
 			}
-			svc := runner.NewService(s, c, tt.vault, archive{}, set)
+			svc := runner.NewService(s, c, tt.vault, archive{}, &poster{}, set)
 			svc.SetClock(func() time.Time { return now })
 			ok, err := svc.Dispatch(context.Background())
 			if ok != tt.wantOK || (err == nil) != (tt.wantErr == "") || (err != nil && err.Error() != tt.wantErr) {
@@ -337,7 +358,7 @@ func TestTimeouts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &store{queued: []runner.Run{scriptRun(func(j *jobs.Job) { j.Timeout = jobs.Duration(tt.timeout) })}, tokens: map[uuid.UUID]time.Time{}}
 			c := &cluster{}
-			svc := runner.NewService(s, c, vault{values: map[uuid.UUID][]byte{}}, archive{}, settings)
+			svc := runner.NewService(s, c, vault{values: map[uuid.UUID][]byte{}}, archive{}, &poster{}, settings)
 			svc.SetClock(func() time.Time { return now })
 			if _, err := svc.Dispatch(context.Background()); err != nil || len(c.started) != 1 || c.started[0].Timeout != tt.want {
 				t.Errorf("Dispatch() = %v, started %+v, want a timeout of %s", err, c.started, tt.want)
@@ -389,7 +410,7 @@ func TestFollow(t *testing.T) {
 			s := &store{running: tt.running}
 			c := &cluster{pods: tt.pods, podsErr: tt.podsErr}
 			a := archive{}
-			svc := runner.NewService(s, c, vault{}, a, settings)
+			svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
 			svc.SetClock(func() time.Time { return now })
 			err := svc.Follow(context.Background())
 			if (err == nil) != (tt.wantErr == "") || (err != nil && err.Error() != tt.wantErr) {
@@ -435,7 +456,7 @@ func TestSweep(t *testing.T) {
 	s := &store{standing: standing, orgs: []uuid.UUID{org}}
 	c := &cluster{pods: pods()}
 	a := archive{}
-	svc := runner.NewService(s, c, vault{}, a, settings)
+	svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
 	svc.SetClock(func() time.Time { return now })
 	if err := svc.Sweep(context.Background()); err != nil {
 		t.Fatalf("Sweep() = %v", err)
@@ -475,7 +496,7 @@ func TestSchedule(t *testing.T) {
 				scheduled = append(scheduled, runner.Scheduled{RepoID: id("0004"), Jobs: []jobs.Job{broken}})
 			}
 			s := &store{scheduled: scheduled, slotFails: tt.fails}
-			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, settings)
+			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, &poster{}, settings)
 			svc.SetClock(func() time.Time { return tt.at })
 			var err error
 			for range tt.passes {
@@ -488,8 +509,8 @@ func TestSchedule(t *testing.T) {
 	}
 }
 
-// TestNoPods runs an installation without pods: its controller fails a queued run of a script, fails a run left
-// running when pods went off once its pod counts as vanished, and sweeps without a cluster.
+// TestNoPods runs an installation without pods: its controller fails a queued run of a script, still delivers a
+// webhook, fails a run left running when pods went off once its pod counts as vanished, and sweeps without a cluster.
 func TestNoPods(t *testing.T) {
 	off := settings
 	off.Pods = false
@@ -505,6 +526,12 @@ func TestNoPods(t *testing.T) {
 				return err //nolint:wrapcheck // the error under test
 			},
 			wantEvents: []string{"claimed #7 until 09:02:00", "failed: this installation runs no pods"}},
+		{name: "a queued webhook", store: &store{queued: []runner.Run{webhookRun(0)}, tokens: map[uuid.UUID]time.Time{}},
+			step: func(svc *runner.Service) error {
+				_, err := svc.Dispatch(context.Background())
+				return err //nolint:wrapcheck // the error under test
+			},
+			wantEvents: []string{"claimed #7 until 09:02:00", "running"}},
 		{name: "a run still running", store: &store{running: []runner.Running{{ID: id("aaaa"), OrgID: id("0001"), RepoID: id("0002"),
 			StartedAt: now.Add(-10 * time.Minute)}}},
 			step:       func(svc *runner.Service) error { return svc.Follow(context.Background()) },
@@ -514,7 +541,7 @@ func TestNoPods(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc := runner.NewService(tt.store, runner.NoPods{}, vault{}, archive{}, off)
+			svc := runner.NewService(tt.store, runner.NoPods{}, vault{values: map[uuid.UUID][]byte{id("5160"): []byte("signing-key")}}, archive{}, &poster{}, off)
 			svc.SetClock(func() time.Time { return now })
 			if err := tt.step(svc); err != nil {
 				t.Fatalf("step = %v", err)

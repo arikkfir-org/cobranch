@@ -2414,6 +2414,22 @@ type Run struct {
 	Version int64 `json:"version"`
 }
 
+// RunLog One of a run's containers' logs, with the values the run masks hidden.
+type RunLog struct {
+	Container string `json:"container"`
+
+	// Live Whether it was read from the running pod, and grows until the run ends.
+	Live bool `json:"live"`
+
+	// Text The log, its bytes that aren't UTF-8 replaced.
+	Text string `json:"text"`
+}
+
+// RunLogs defines model for RunLogs.
+type RunLogs struct {
+	Logs []RunLog `json:"logs"`
+}
+
 // RunState Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
 type RunState string
 
@@ -3801,6 +3817,12 @@ type ServerInterface interface {
 	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// GetRunLogs One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow; takes repo.read. A run that never started a pod, such as a webhook's, has none.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs)
+	GetRunLogs(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs/{container})
+	GetRunLog(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, container string)
 	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/rerun)
 	RerunRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
@@ -9556,6 +9578,103 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetRunLogs operation middleware
+func (siw *ServerInterfaceWrapper) GetRunLogs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunLogs(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRunLog operation middleware
+func (siw *ServerInterfaceWrapper) GetRunLog(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "container" -------------
+	var container string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "container", r.PathValue("container"), &container, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "container", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunLog(w, r, org, repo, number, container)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RerunRun operation middleware
 func (siw *ServerInterfaceWrapper) RerunRun(w http.ResponseWriter, r *http.Request) {
 
@@ -11111,6 +11230,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/rerun", wrapper.RerunRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs", wrapper.GetRunLogs)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs/{container}", wrapper.GetRunLog)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs", wrapper.RunJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/events", wrapper.PostEvent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
@@ -22972,6 +23093,161 @@ func (response CancelRundefaultApplicationProblemPlusJSONResponse) VisitCancelRu
 	return err
 }
 
+type GetRunLogsRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+}
+
+type GetRunLogsResponseObject interface {
+	VisitGetRunLogsResponse(w http.ResponseWriter) error
+}
+
+type GetRunLogs200JSONResponse RunLogs
+
+func (response GetRunLogs200JSONResponse) VisitGetRunLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogs401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRunLogs401ApplicationProblemPlusJSONResponse) VisitGetRunLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogs404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLogs404ApplicationProblemPlusJSONResponse) VisitGetRunLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRunLogsdefaultApplicationProblemPlusJSONResponse) VisitGetRunLogsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogRequestObject struct {
+	Org       Org       `json:"org"`
+	Repo      Repo      `json:"repo"`
+	Number    RunNumber `json:"number"`
+	Container string    `json:"container"`
+}
+
+type GetRunLogResponseObject interface {
+	VisitGetRunLogResponse(w http.ResponseWriter) error
+}
+
+type GetRunLog200ResponseHeaders struct {
+	XContentTypeOptions string
+}
+
+type GetRunLog200TextplainCharsetUtf8Response struct {
+	Body          io.Reader
+	Headers       GetRunLog200ResponseHeaders
+	ContentLength int64
+}
+
+func (response GetRunLog200TextplainCharsetUtf8Response) VisitGetRunLogResponse(w http.ResponseWriter) error {
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.Header().Set("X-Content-Type-Options", fmt.Sprint(response.Headers.XContentTypeOptions))
+	w.WriteHeader(200)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetRunLog401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRunLog401ApplicationProblemPlusJSONResponse) VisitGetRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLog404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunLog404ApplicationProblemPlusJSONResponse) VisitGetRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunLogdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRunLogdefaultApplicationProblemPlusJSONResponse) VisitGetRunLogResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type RerunRunRequestObject struct {
 	Org    Org       `json:"org"`
 	Repo   Repo      `json:"repo"`
@@ -26267,6 +26543,12 @@ type StrictServerInterface interface {
 	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
 	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// GetRunLogs One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow; takes repo.read. A run that never started a pod, such as a webhook's, has none.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs)
+	GetRunLogs(ctx context.Context, request GetRunLogsRequestObject) (GetRunLogsResponseObject, error)
+	// GetRunLog One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/logs/{container})
+	GetRunLog(ctx context.Context, request GetRunLogRequestObject) (GetRunLogResponseObject, error)
 	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/rerun)
 	RerunRun(ctx context.Context, request RerunRunRequestObject) (RerunRunResponseObject, error)
@@ -29908,6 +30190,63 @@ func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, org O
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
 		if err := validResponse.VisitCancelRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRunLogs operation middleware
+func (sh *strictHandler) GetRunLogs(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+	var request GetRunLogsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRunLogs(ctx, request.(GetRunLogsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRunLogs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunLogsResponseObject); ok {
+		if err := validResponse.VisitGetRunLogsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRunLog operation middleware
+func (sh *strictHandler) GetRunLog(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, container string) {
+	var request GetRunLogRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+	request.Container = container
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRunLog(ctx, request.(GetRunLogRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRunLog")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunLogResponseObject); ok {
+		if err := validResponse.VisitGetRunLogResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

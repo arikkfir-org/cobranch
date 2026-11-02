@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/runner"
@@ -155,5 +156,140 @@ func TestRunStoreDropsTokens(t *testing.T) {
 	}
 	if _, _, err := f.auths.Credential(ctx, live); err != nil {
 		t.Errorf("Credential() of a queued run's token = %v, want it", err)
+	}
+}
+
+// hookFile declares a webhook job on every push.
+const hookFile = `jobs:
+  deploy:
+    on: {push: }
+    webhook: {url: "https://deploy.example.com/hook", signingSecret: 0b9e5a3c-7d1f-4e2a-9c8b-5f6d7e8a9b0c}
+`
+
+func TestRunStoreEndsWebhookRunsTheirReceiversReport(t *testing.T) {
+	t.Parallel()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", hookFile))
+	run := f.claim(t)
+	if run.Definition.Kind() != jobs.KindWebhook || run.Job != "deploy" || run.QueuedAt.IsZero() {
+		t.Fatalf("Claim() = %+v, want deploy's webhook run, with when it was queued", run)
+	}
+	hash := f.token(t, run.ID, time.Now().Add(time.Hour))
+	if marked, err := f.r.MarkRunning(ctx, run.ID); !marked || err != nil {
+		t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
+	if running, err := f.r.Running(ctx); err != nil || len(running) != 0 {
+		t.Errorf("Running() = %+v, %v, want no pod's run", running, err)
+	}
+	report := func(status code.AnnotationStatus) {
+		t.Helper()
+		in := code.AnnotationInput{Name: "deploy", Status: status, Summary: "Deploying", Version: code.AnyVersion}
+		if _, err := f.c.SetAnnotation(ctx, run.JobID, repo, shaA, in); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(code.AnnotationInProgress)
+	if running, err := f.r.RunningWebhooks(ctx); err != nil || len(running) != 1 || running[0].ID != run.ID || running[0].StartedAt.IsZero() {
+		t.Errorf("RunningWebhooks() after In progress = %+v, %v, want the run", running, err)
+	}
+	report(code.AnnotationSuccessful)
+	if got, want := f.runs(t, repo), []string{"#1 deploy main@a succeeded: its webhook's receiver reported successful"}; !slices.Equal(got, want) {
+		t.Errorf("runs = %q, want %q", got, want)
+	}
+	if got := f.note(t, repo, shaA, "deploy"); got != "successful: Deploying by deploy" {
+		t.Errorf("annotation = %q, want the receiver's", got)
+	}
+	if _, _, err := f.auths.Credential(ctx, hash); !errors.Is(err, auth.ErrNotFound) {
+		t.Errorf("Credential() of the reported run's token: error = %v, want not found", err)
+	}
+	if running, err := f.r.RunningWebhooks(ctx); err != nil || len(running) != 0 {
+		t.Errorf("RunningWebhooks() = %+v, %v, want none", running, err)
+	}
+}
+
+// TestRunStoreEndsAWebhookRunReportedBeforeItRuns has a receiver report before its post's 2xx reaches the controller,
+// while the run is still queued: the report ends the run, which then names it as the cause of the runs it triggers,
+// and the controller's mark comes too late to undo it.
+func TestRunStoreEndsAWebhookRunReportedBeforeItRuns(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		status code.AnnotationStatus
+		want   string
+	}{
+		{"Successful", code.AnnotationSuccessful, "#1 deploy main@a succeeded: its webhook's receiver reported successful"},
+		{"Failed", code.AnnotationFailed, "#1 deploy main@a failed: its webhook's receiver reported failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			checkEarlyReport(t, tt.status, tt.want)
+		})
+	}
+}
+
+// checkEarlyReport has deploy's receiver report status while its run is queued, and checks that the run ended so, want
+// being its line, that the report named it as the cause of what it triggered, and that the controller's mark after
+// changed nothing.
+func checkEarlyReport(t *testing.T, status code.AnnotationStatus, want string) {
+	t.Helper()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", hookFile+followerOfDeploy))
+	run := f.claim(t)
+	hash := f.token(t, run.ID, time.Now().Add(time.Hour))
+	in := code.AnnotationInput{Name: "deploy", Status: status, Summary: "Deployed", Version: code.AnyVersion}
+	if _, err := f.c.SetAnnotation(ctx, run.JobID, repo, shaA, in); err != nil {
+		t.Fatal(err)
+	}
+	if marked, err := f.r.MarkRunning(ctx, run.ID); marked || err != nil {
+		t.Errorf("MarkRunning() after the report = %t, %v, want the run ended", marked, err)
+	}
+	got := f.runs(t, repo)
+	if len(got) < 1 || got[0] != want {
+		t.Errorf("runs = %q, want %q first", got, want)
+	}
+	if got := f.note(t, repo, shaA, "deploy"); got != string(status)+": Deployed by deploy" {
+		t.Errorf("annotation = %q, want the receiver's", got)
+	}
+	if _, _, err := f.auths.Credential(ctx, hash); !errors.Is(err, auth.ErrNotFound) {
+		t.Errorf("Credential() of the reported run's token: error = %v, want not found", err)
+	}
+	ended, err := f.c.Run(ctx, repo, run.Number)
+	if err != nil || ended.StartedAt == nil {
+		t.Errorf("Run() = %+v, %v, want it started when it was reported", ended, err)
+	}
+	if status == code.AnnotationSuccessful {
+		if smoke, err := f.c.Run(ctx, repo, run.Number+1); err != nil || smoke.CauseRun != run.Number {
+			t.Errorf("Run() of the run the report triggered = %+v, %v, want #%d its cause", smoke, err, run.Number)
+		}
+	}
+}
+
+// followerOfDeploy declares a job that runs once deploy succeeds.
+const followerOfDeploy = `  smoke:
+    on: {annotation: {names: [deploy], statuses: [successful]}}
+    script: make smoke
+`
+
+func TestRunStoreEndsNoPodRunItsAnnotationReports(t *testing.T) {
+	t.Parallel()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", jobsFile))
+	run := f.claim(t)
+	if marked, err := f.r.MarkRunning(ctx, run.ID); !marked || err != nil {
+		t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
+	in := code.AnnotationInput{Name: "ci/build", Status: code.AnnotationSuccessful, Version: code.AnyVersion}
+	if _, err := f.c.SetAnnotation(ctx, run.JobID, repo, shaA, in); err != nil {
+		t.Fatal(err)
+	}
+	if running, err := f.r.Running(ctx); err != nil || len(running) != 1 || running[0].ID != run.ID {
+		t.Errorf("Running() = %+v, %v, want the script's run, which its pod ends", running, err)
 	}
 }

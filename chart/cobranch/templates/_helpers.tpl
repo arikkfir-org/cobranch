@@ -359,3 +359,16 @@ when a namespace's name, the prefix and an organization's ID of 36 characters, w
 {{- end -}}
 {{ $prefix }}
 {{- end -}}
+
+{{/* Where the REST and GraphQL servers read runs' logs: the object store's, which the server's bucket gives, and, where
+runs execute pods, their job namespaces', in the cluster, as the servers' ServiceAccount. */}}
+{{- define "cobranch.runLogsEnv" -}}
+- name: COBRANCH_JOBS_LOGS_MAX_BYTES
+  value: {{ .Values.jobs.logs.maxBytes | toString | quote }}
+{{- if .Values.jobs.pods }}
+- name: COBRANCH_JOBS_PODS
+  value: "true"
+- name: COBRANCH_JOBS_NAMESPACE_PREFIX
+  value: {{ include "cobranch.jobsPrefix" . | quote }}
+{{- end }}
+{{- end -}}

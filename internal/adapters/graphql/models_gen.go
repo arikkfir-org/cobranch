@@ -1108,36 +1108,13 @@ type RoleInput struct {
 	Permissions []string `json:"permissions"`
 }
 
-// One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then.
-type Run struct {
-	ID string `json:"id"`
-	// Counts the repository's runs from 1.
-	Number int `json:"number"`
-	// The job's principal, named as the job.
-	Job *CommitPrincipal `json:"job"`
-	Sha string           `json:"sha"`
-	// The branch or tag it runs on, in full.
-	Ref string `json:"ref"`
-	// The event that queued it.
-	Trigger *RunTrigger `json:"trigger"`
-	// The number of the run whose annotation triggered it; null for any other.
-	CauseRun *int `json:"causeRun,omitempty"`
-	// Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt.
-	Attempt int `json:"attempt"`
-	// The number of the run its attempts started from; null for a first attempt.
-	RerunOf *int `json:"rerunOf,omitempty"`
-	// The job as it was declared when the run was queued.
-	Definition *Job     `json:"definition"`
-	State      RunState `json:"state"`
-	// Why it waits, failed or was cancelled; empty otherwise.
-	Reason string `json:"reason"`
-	// Who started it from WAITING, or re-ran it; null for any other run.
-	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
-	QueuedAt  time.Time        `json:"queuedAt"`
-	StartedAt *time.Time       `json:"startedAt,omitempty"`
-	EndedAt   *time.Time       `json:"endedAt,omitempty"`
-	// Counts its changes from 1.
-	Version int `json:"version"`
+// One of a run's containers' logs, with the values the run masks hidden.
+type RunLog struct {
+	Container string `json:"container"`
+	// The log, its bytes that aren't UTF-8 replaced.
+	Text string `json:"text"`
+	// Whether it was read from the running pod, and grows until the run ends.
+	Live bool `json:"live"`
 }
 
 // A page of a repository's runs, newest first.

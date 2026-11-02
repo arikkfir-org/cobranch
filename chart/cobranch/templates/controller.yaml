@@ -24,18 +24,21 @@
   "RELEASE" .Release.Name
   "RUNNER_ROLE" (printf "%s-jobs-runner" $cluster)
   "OWNER_ROLE" (printf "%s-controller" $cluster)
+  "LOGS_ROLE" (printf "%s-jobs-logs" $cluster)
+  "LOGS_READER" (include "cobranch.serviceAccount" .)
   "EGRESS_EXCEPT" (join "," $jobs.egress.except)
   "EGRESS_DNS" (toJson $jobs.egress.dns)
   "RESOURCES" (toJson $jobs.resources)
   "QUOTA" (toJson $jobs.quota)
   "NODE_SELECTOR" (toJson $jobs.nodeSelector)
   "TOLERATIONS" (toJson $jobs.tolerations)
-  "AFFINITY" (toJson $jobs.affinity) }}
+  "AFFINITY" (toJson $jobs.affinity)
+  "WEBHOOKS_ALLOWED_CIDRS" (join "," (dig "webhooks" "allowedCIDRs" list $jobs)) }}
 {{- $vars := list }}
 {{- range $name, $value := $env }}
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
 {{- end }}
-{{- /* Without pods, the controller mounts no token: it reaches nothing in the cluster but the database. */}}
+{{- /* Without pods, the controller only delivers webhooks: it reaches no Kubernetes API, so it mounts no token. */}}
 {{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" (ternary $controller "" $jobs.pods) "env" (join "\n" $vars)) }}
 {{- if $jobs.pods }}
 ---
@@ -51,8 +54,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 ---
-# Cluster-wide, the controller makes and deletes its job namespaces and binds itself there to the runner role alone.
-# It reads this role, which each job namespace names as its owner, so that uninstalling deletes them.
+# Cluster-wide, the controller makes and deletes its job namespaces and binds there itself to the runner role and the
+# servers to the logs role, and nothing else. It reads this role, which each job namespace names as its owner, so that
+# uninstalling deletes them.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -69,7 +73,7 @@ rules:
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [get, bind]
-    resourceNames: [{{ $cluster }}-jobs-runner]
+    resourceNames: [{{ $cluster }}-jobs-runner, {{ $cluster }}-jobs-logs]
   - apiGroups: [rbac.authorization.k8s.io]
     resources: [clusterroles]
     verbs: [get]
@@ -108,10 +112,23 @@ rules:
   - apiGroups: [networking.k8s.io]
     resources: [networkpolicies]
     verbs: [get, list, watch, create, update, patch, delete]
+---
+# What the REST and GraphQL servers read in a job namespace, where the controller binds their ServiceAccount to this
+# role: a running run's pod, its logs, and its Secret, for the values the logs never show.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $cluster }}-jobs-logs
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, secrets]
+    verbs: [get]
 {{- if $jobs.admissionPolicy }}
 ---
 # Holds the controller to its own job namespaces, labelled as this release's, and its RoleBindings there to the
-# runner role and its own ServiceAccount, whatever RBAC grants it.
+# runner role for its own ServiceAccount and the logs role for the servers', whatever RBAC grants it.
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicy
 metadata:
@@ -150,10 +167,11 @@ spec:
       messageExpression: "'The controller binds roles only in its own job namespaces, ' + variables.prefix + '….'"
     - expression: >-
         request.resource.resource != 'rolebindings' || request.operation == 'DELETE'
-        || (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == {{ printf "%s-jobs-runner" $cluster | squote }}
-          && has(object.subjects) && size(object.subjects) > 0 && object.subjects.all(s, s.kind == 'ServiceAccount'
-            && has(s.namespace) && s.namespace == {{ .Release.Namespace | squote }} && s.name == {{ $controller | squote }}))
-      message: The controller binds, in its job namespaces, only the runner role, and only to itself.
+        || (object.roleRef.kind == 'ClusterRole' && has(object.subjects) && size(object.subjects) > 0
+          && object.subjects.all(s, s.kind == 'ServiceAccount' && has(s.namespace) && s.namespace == {{ .Release.Namespace | squote }}
+            && ((object.roleRef.name == {{ printf "%s-jobs-runner" $cluster | squote }} && s.name == {{ $controller | squote }})
+              || (object.roleRef.name == {{ printf "%s-jobs-logs" $cluster | squote }} && s.name == {{ include "cobranch.serviceAccount" . | squote }}))))
+      message: The controller binds, in its job namespaces, only the runner role to itself and the logs role to the servers.
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingAdmissionPolicyBinding

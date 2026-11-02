@@ -17,6 +17,7 @@ import (
 	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/server"
+	"cobranch.dev/internal/adapters/webhook"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/runner"
 	"cobranch.dev/internal/services/secrets"
@@ -64,12 +65,17 @@ func runController(ctx context.Context, logs io.Writer) error {
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
-// runService is the runs' domain over pool's database, the cluster the controller runs in, the secrets the key opens
-// and the object store, which the returned func closes.
+// runService is the runs' domain over pool's database, the cluster the controller runs in, unless it runs no pods, the
+// secrets the key opens, the object store, which the returned func closes, and the webhooks' receivers.
 func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (*runner.Service, func(), error) {
-	cluster, err := jobsCluster(cfg.Jobs)
+	j := cfg.Jobs
+	cluster, err := jobsCluster(j)
 	if err != nil {
 		return nil, nil, err
+	}
+	poster, err := webhook.New(j.EgressExcept, j.WebhooksAllowedCIDRs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("configuring the webhooks: %w", err)
 	}
 	box, err := sealer(cfg.SecretsKey)
 	if err != nil {
@@ -80,10 +86,9 @@ func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) 
 		return nil, nil, fmt.Errorf("opening the object store: %w", err)
 	}
 	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
-	j := cfg.Jobs
 	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
 		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}
-	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, settings)
+	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, poster, settings)
 	return svc, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
 }
 
@@ -93,6 +98,19 @@ func jobsCluster(j config.Jobs) (runner.Cluster, error) {
 	if !j.Pods {
 		return runner.NoPods{}, nil
 	}
+	client, err := inCluster()
+	if err != nil {
+		return nil, err
+	}
+	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
+		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value,
+		Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value,
+		Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
+}
+
+// inCluster is a client of the cluster the workload runs in, as its pod's ServiceAccount.
+func inCluster() (kubernetes.Interface, error) {
 	kube, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
@@ -101,10 +119,7 @@ func jobsCluster(j config.Jobs) (runner.Cluster, error) {
 	if err != nil {
 		return nil, fmt.Errorf("making the cluster's client: %w", err)
 	}
-	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
-		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
-		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
+	return client, nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

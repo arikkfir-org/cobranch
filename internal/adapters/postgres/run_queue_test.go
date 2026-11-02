@@ -3,6 +3,7 @@ package postgres
 import (
 	"cmp"
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -115,6 +116,29 @@ func TestQueueingLocksTheRunQueueFirst(t *testing.T) {
 			t.Parallel()
 			newQueueFixture(t, cmp.Or(tt.file, followingFile)).checkQueuesFirst(t, tt.step)
 		})
+	}
+}
+
+// TestReportingAWebhookRunLocksTheRunQueueFirst has a webhook's receiver report Successful while the repository's run
+// queue is held: the report, which ends the run, waits for the queue before it locks the run or its annotation.
+func TestReportingAWebhookRunLocksTheRunQueueFirst(t *testing.T) {
+	t.Parallel()
+	f := &queueFixture{runFixture: newRunFixture(t)}
+	ctx := context.Background()
+	f.repo = f.website.ID
+	f.push(t, pushOf(f.repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", hookFile))
+	f.run = f.claim(t)
+	if marked, err := f.r.MarkRunning(ctx, f.run.ID); !marked || err != nil {
+		t.Fatalf("MarkRunning() = %t, %v", marked, err)
+	}
+	f.checkQueuesFirst(t, func(ctx context.Context, f *queueFixture) error {
+		in := code.AnnotationInput{Name: "deploy", Status: code.AnnotationSuccessful, Version: code.AnyVersion}
+		_, err := f.c.SetAnnotation(ctx, f.run.JobID, f.repo, shaA, in)
+		return err
+	})
+	if got, want := f.runs(t, f.repo), []string{"#1 deploy main@a succeeded: its webhook's receiver reported successful"}; !slices.Equal(got, want) {
+		t.Errorf("runs = %q, want %q", got, want)
 	}
 }
 

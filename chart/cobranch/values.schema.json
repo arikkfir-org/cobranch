@@ -681,6 +681,10 @@
                 "string",
                 "integer"
               ]
+            },
+            "retention": {
+              "type": "string",
+              "pattern": "^(([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+)?$"
             }
           }
         },
@@ -707,6 +711,18 @@
         },
         "affinity": {
           "type": "object"
+        },
+        "webhooks": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowedCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
         },
         "admissionPolicy": {
           "type": "boolean"

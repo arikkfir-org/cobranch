@@ -14,6 +14,29 @@ import (
 	"cobranch.dev/internal/services/jobs"
 )
 
+// Run is one run of a repository's job as the schema shows it, with the repository it is of, from which its logs
+// resolve.
+type Run struct {
+	ID         string           `json:"id"`
+	Number     int              `json:"number"`
+	Job        *CommitPrincipal `json:"job"`
+	Sha        string           `json:"sha"`
+	Ref        string           `json:"ref"`
+	Trigger    *RunTrigger      `json:"trigger"`
+	CauseRun   *int             `json:"causeRun,omitempty"`
+	Attempt    int              `json:"attempt"`
+	RerunOf    *int             `json:"rerunOf,omitempty"`
+	Definition *Job             `json:"definition"`
+	State      RunState         `json:"state"`
+	Reason     string           `json:"reason"`
+	StartedBy  *CommitPrincipal `json:"startedBy,omitempty"`
+	QueuedAt   time.Time        `json:"queuedAt"`
+	StartedAt  *time.Time       `json:"startedAt,omitempty"`
+	EndedAt    *time.Time       `json:"endedAt,omitempty"`
+	Version    int              `json:"version"`
+	repoID     uuid.UUID
+}
+
 // run is r as the API shows it.
 func run(r code.Run) (*Run, error) {
 	def, err := job(r.Definition)
@@ -23,7 +46,7 @@ func run(r code.Run) (*Run, error) {
 	out := &Run{ID: r.ID.String(), Number: int(r.Number), Job: commitPrincipal(&r.Job), Sha: r.SHA, Ref: r.Ref,
 		Trigger: trigger(r.Trigger), Definition: def, State: RunState(strings.ToUpper(string(r.State))), Reason: r.Reason,
 		StartedBy: commitPrincipal(r.StartedBy), QueuedAt: r.QueuedAt.UTC(), StartedAt: utc(r.StartedAt),
-		EndedAt: utc(r.EndedAt), Version: int(r.Version)}
+		EndedAt: utc(r.EndedAt), Version: int(r.Version), repoID: r.RepoID}
 	if r.CauseRun != 0 {
 		cause := int(r.CauseRun)
 		out.CauseRun = &cause
@@ -154,4 +177,13 @@ func nonEmpty(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// runLogs is logs as the API shows them, their bytes that aren't UTF-8 replaced.
+func runLogs(logs []code.RunLog) []*RunLog {
+	out := make([]*RunLog, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, &RunLog{Container: l.Container, Text: strings.ToValidUTF8(string(l.Text), "\uFFFD"), Live: l.Live})
+	}
+	return out
 }

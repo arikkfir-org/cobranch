@@ -222,6 +222,8 @@
     .commits a.subject { color: var(--color-fg-default); font-weight: 500; text-decoration: none; }
     .commits a.subject:hover { color: var(--color-accent); }
     pre.message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
+    pre.log { margin: 8px 0 0; max-height: 600px; overflow: auto; padding: 8px 12px; border-radius: 6px; background: var(--color-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/20px var(--font-mono); color: var(--color-fg-default); }
+    .logs { display: grid; gap: 12px; }
     dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
     dl.facts dt { color: var(--color-fg-muted); }
     dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
@@ -2289,6 +2291,7 @@
         h("dt", {}, "Timeout"), h("dd", {}, d.timeout || "The installation's"),
         d.secrets ? [h("dt", {}, "Secrets"), h("dd", {}, Object.keys(d.secrets).map((env, i) => [i ? " " : null, h("code", {}, env)]))] : null);
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, h("code", {}, r.job.displayName), " #" + r.number), h("div", {}, runActions(path, at, r, can, fail))), facts),
+        await runLogs(path, r),
         h("section", { class: "panel" }, h("h3", {}, "Job"), h("p", {}, "As ", h("code", {}, "/cobranch.yaml"), " declared it when the run was queued."), ...work, definition)];
     }
 
@@ -2387,6 +2390,49 @@
       if (d.trigger === "resume") return "Resumed by " + by;
       return "A push" + (d.startedBy ? ", started by " + by : "");
     };
+
+    // runLogs is a run's logs, each container's, the checkout's first, with the values the run masks hidden: as the
+    // controller kept them once it ended, and while it runs, read from its pod again every five seconds, until it ends,
+    // when the page draws again, or the panel leaves the page.
+    async function runLogs(path, r) {
+      const url = path + "/runs/" + r.number + "/logs";
+      const status = h("span", { class: "muted" });
+      const body = h("div", { class: "logs" });
+      const panel = h("section", { class: "panel" }, h("div", { class: "row" }, h("h3", {}, "Logs"), status), body);
+      const none = r.definition.kind === "webhook" ? "A webhook's run keeps no logs here: its receiver keeps its own."
+        : r.state === "running" ? "Nothing logged yet." : r.startedAt ? "It kept no logs." : "None until it starts.";
+      const draw = (logs) => body.replaceChildren(...(logs.length ? logs.map((l) => h("div", {}, h("code", {}, l.container), h("pre", { class: "log" }, l.text)))
+        : [h("p", { class: "muted" }, none)]));
+      try {
+        draw(await api("GET", url).then((d) => d.logs));
+      } catch (err) { // the run's page still draws, its logs saying why they're missing
+        body.replaceChildren(h("p", { class: "alert" }, "The logs couldn't be read: " + err.message));
+        return panel;
+      }
+      if (r.state !== "running") return panel;
+      status.textContent = "Live";
+      const stop = new AbortController();
+      follows(stop);
+      (async () => {
+        while (!stop.signal.aborted) {
+          await new Promise((resolve) => setTimeout(resolve, 5000));
+          if (stop.signal.aborted || !panel.isConnected) return;
+          try {
+            const now = await api("GET", path + "/runs/" + r.number, undefined, {}, stop.signal);
+            if (!panel.isConnected) return;
+            if (now.state !== "running") return void render(); // it ended: the page draws its end and its archived logs
+            const logs = await api("GET", url, undefined, {}, stop.signal).then((d) => d.logs);
+            if (!panel.isConnected) return;
+            if (logs.length) draw(logs);
+            status.textContent = "Live";
+          } catch (err) {
+            if (stop.signal.aborted) return;
+            status.textContent = "Reconnecting…";
+          }
+        }
+      })();
+      return panel;
+    }
 
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants
     // and revokes them: roles of the repository, to the organization's members and API keys.

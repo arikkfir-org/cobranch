@@ -128,3 +128,21 @@ func (r *repositoryResolver) Run(ctx context.Context, obj *Repository, number in
 	}
 	return run(found)
 }
+
+// Logs is the resolver for the logs field.
+func (r *runResolver) Logs(ctx context.Context, obj *Run) ([]*RunLog, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	logs, err := r.Code.RunLogs(ctx, v.User, obj.repoID, int64(obj.Number))
+	if err != nil {
+		return nil, fail(ctx, err, "run", "reading the run's logs")
+	}
+	return runLogs(logs), nil
+}
+
+// Run returns RunResolver implementation.
+func (r *Resolver) Run() RunResolver { return &runResolver{r} }
+
+type runResolver struct{ *Resolver }

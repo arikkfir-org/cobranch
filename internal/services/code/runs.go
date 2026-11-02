@@ -28,6 +28,8 @@ const MaxRunsPage = 100
 // it was then (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's life").
 type Run struct {
 	ID uuid.UUID
+	// RepoID is its repository's, and OrgID that repository's organization's, in whose job namespace its pod runs.
+	RepoID, OrgID uuid.UUID
 	// Number counts the repository's runs from 1.
 	Number int64
 	// Job is the job's principal, named as the job.
