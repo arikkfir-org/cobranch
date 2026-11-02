@@ -35,8 +35,9 @@ Chats, agents and tasks come first and need nothing else; providers, models and 
 need its controller.
 
 Choices beyond the agreed designs are under [Decisions](#decisions), and the owner's answers to three questions under
-[Open questions](#open-questions). Branch chats, live, and agents with their tasks are built (cobranch's first two pull
-requests for [ENG-215](https://linear.app/arikkfir/issue/ENG-215)); the rest follows in three more.
+[Open questions](#open-questions). Branch chats, live, agents with their tasks, model providers with agents' models and
+secrets, and the task token with the transcript it appends are built; agent pods with the harness, then agents posting
+and pushing, follow.
 
 ## Branch chats
 
@@ -216,9 +217,11 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   as an agent task.
 - **One pod per task, for as long as the task lives.** A task can take hours and many turns of conversation; its pod
   keeps its workspace meanwhile. Two tasks never share a pod, so one assigner's work never leaks into another's.
-- **The token is a file.** The task token, `cba_…`, is valid for an hour; the controller renews it every half hour into
-  the pod's Secret, which the pod mounts, and the harness reads it before every call. It acts as the agent, capped by
-  the assigner, on the task's organization only.
+- **The token is a file.** The task token, `cba_…`, is valid for an hour and kept only as its hash, in
+  `agent_task_tokens`; the controller renews it every half hour into the pod's Secret, which the pod mounts, and the
+  harness reads it before every call. It acts as the agent, capped by the assigner, and only while its task hasn't
+  ended: once the task ends, or its hour is up, it is refused, and maintenance sweeps it. `GET /v1/me/task` tells the
+  harness which task it works.
 - **The pod** runs `cobranch agent` in the image `cobranch-agent` as a non-root user under Pod Security `restricted`,
   with `/workspace` on an `emptyDir`, the operator's `agents.resources`, and `COBRANCH_URL`, `COBRANCH_GIT_URL`,
   `COBRANCH_TASK` and the token's path in its environment. The provider's key reaches the harness alone.
@@ -263,15 +266,20 @@ adapters stay the same.
 An append names its number, so one that repeats answers the entry already there. `post_message` carries its message’s
 ID, so re-running it never posts twice.
 
-- **Every step is an entry,** appended through the REST API before the next step starts: the instructions it began with,
-  each model turn with the tool calls it asked for, each tool's result, and each change of state. An entry's number is
-  the next in its task, so an append that repeats one answers the one already there.
+- **Every step is an entry,** appended through the REST API before the next step starts: the instructions it began with
+  (`input`), each model turn with the tool calls it asked for (`turn`), each tool's result (`result`), and each change
+  of state (`state`), a JSON object of at most 256 KiB. An entry's number is the next in its task: an append that
+  repeats one answers the one already there, even once the task has ended, and one that skips a number is refused.
+- **A state entry moves the task:** Running to Waiting while the agent waits for an answer, Waiting back to Running, and
+  Running or Waiting to Succeeded, with its summary, or Failed, with its reason. Only the controller starts a Queued
+  task, and nothing moves one that has ended.
 - **Resuming replays it.** A new pod reads the transcript, rebuilds the conversation, and re-runs only the tool calls
   that have no result yet; the tools that change something outside the pod, posting and pushing, are safe to repeat,
   since a message carries its ID and a push names the commit it moves from.
 - **Large outputs are cut** to 64 KiB in the transcript, marked as cut; the model sees the same cut.
-- **Who reads it.** The assigner, `org.principals.manage`, and anyone who reads the task's repository, live on the
-  task's page.
+- **Who reads it.** The task's own token, the assigner, `org.principals.manage`, and anyone who reads the task's
+  repository; a task without a repository, only its assigner and admins. The task's page reads it as it grows, every few
+  seconds, until the task ends.
 
 ## Agents act as principals
 
@@ -329,7 +337,8 @@ A message an agent posts links its task’s page, so a reader sees how it got th
 | `PUT /agents/{agent}/model`, `PUT /agents/{agent}/secrets` | `setAgentModel`, `setAgentSecrets` | `org.principals.manage` |
 | `GET`, `PUT`, `DELETE /model-providers/{provider}` | `modelProviders`, `setModelProvider`, `removeModelProvider` | `org.read`; `org.manage` |
 | `GET`, `POST /tasks`; `GET /tasks/{n}`; `POST /tasks/{n}/cancel` | `tasks`, `assignTask`, `cancelTask` | `org.read`, and its kind's guard; `agents.assign`; its assigner or `org.principals.manage` |
-| `GET`, `POST /tasks/{n}/transcript` | `Task.transcript`, `taskUpdates` (subscription) | Who reads the task; the task's own token appends |
+| `GET`, `POST /tasks/{n}/transcript`; `GET /tasks/{n}/transcript/{seq}` | `Task.transcript`, `appendTranscriptEntry` | Who reads the task; the task's own token appends |
+| `GET /v1/me/task`, outside `/orgs` | `myTask` | A task token, for the task it works |
 
 Changes take `If-Match` with the version they read, as every change does; a stale one is refused (412, or
 `precondition.failed`). The Console shows a branch's chat on its page and follows it live; on a branch's file, a click
@@ -343,8 +352,8 @@ threads on the file.
 ![This slice’s tables: chats, agents, providers, tasks and transcripts](agents/er.svg)
 
 `chat_threads`, `chat_messages`, `agents`, `model_providers` and `agent_tasks` carry trigger `audit()`; transcripts are
-the task’s own record and don’t. Every new row carries `org_id`. A message’s `task_id` names the task an agent posted it
-from.
+the task’s own record and don’t, and task tokens, which Cobranch alone makes and sweeps, don’t either. Every new row
+carries `org_id`. A message’s `task_id` names the task an agent posted it from.
 
 ## Rollout
 
@@ -395,6 +404,8 @@ land.
 | One pod per task, kept while the task lives, stopped when it waits past `agents.idle` | Tasks never share a workspace across assigners; resuming already exists | Agreed |
 | Agent tasks are the controller's queue beside runs, in the same namespaces, through the same secrets call | One runtime for jobs and agents | Proposed |
 | Task tokens are files the controller renews hourly | The principals design's one-hour token for long tasks | Agreed |
+| Task tokens are a table of their own, hashed, not a kind of personal token or API key | They act for a task, not a person or a key, and end with it; slices' migrations don't contend for one constraint | Agreed |
+| The Console's task page reads the transcript every few seconds while the task hasn't ended, not over a subscription | Entries come a turn at a time; one poll path for REST and the Console | Proposed |
 | The harness speaks to providers through one interface, an adapter each; xAI and DeepSeek through OpenAI's protocol | Vendors stay optional adapters | Agreed |
 | The transcript is appended entry by entry through the REST API, numbered per task | A restarted pod resumes; the Console shows it live | Agreed |
 | Each agent holds a verified no-reply email, so its commits map to it | Agents push like any principal | Proposed |
