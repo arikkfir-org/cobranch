@@ -42,6 +42,35 @@ type Blob struct {
 	WrittenAt          time.Time
 }
 
+type ChatMessage struct {
+	ID        uuid.UUID
+	ThreadID  uuid.UUID
+	OrgID     uuid.UUID
+	AuthorID  *uuid.UUID
+	Body      string
+	CreatedAt time.Time
+	EditedAt  *time.Time
+	DeletedAt *time.Time
+	DeletedBy *uuid.UUID
+	Version   int64
+}
+
+type ChatThread struct {
+	ID         uuid.UUID
+	OrgID      uuid.UUID
+	RepoID     uuid.UUID
+	BranchID   uuid.UUID
+	Sha        *string
+	Path       *string
+	StartLine  *int32
+	EndLine    *int32
+	CreatedBy  *uuid.UUID
+	CreatedAt  time.Time
+	ResolvedAt *time.Time
+	ResolvedBy *uuid.UUID
+	Version    int64
+}
+
 type Commit struct {
 	RepoID         uuid.UUID
 	Sha            string

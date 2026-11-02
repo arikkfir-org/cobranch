@@ -36,4 +36,6 @@ type Resolver struct {
 	Code Code
 	// IssueService is the organizations' issues' service: Issues would clash with Organization's field's resolver.
 	IssueService Issues
+	// Chats is the service of the branches' chats.
+	Chats Chats
 }
