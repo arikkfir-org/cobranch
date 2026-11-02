@@ -109,7 +109,7 @@ func branch(b code.Branch) Branch {
 	if r := b.Requirements; r != nil {
 		out.Requirements = &MergeRequirements{Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
 		if r.Reviews != nil {
-			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals}
+			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals, Ai: r.Reviews.AI}
 		}
 	}
 	if m := b.Merge; m != nil {
@@ -142,6 +142,12 @@ func check(c code.Check) BranchCheck {
 		out.Name = &c.Name
 	case code.CheckApprovals:
 		out.Count, out.Required = &c.Count, &c.Required
+	case code.CheckAI:
+		state := AICheckState(c.AI)
+		out.Ai = &state
+		if c.Reason != "" {
+			out.Reason = &c.Reason
+		}
 	default:
 		out.Count = &c.Count
 	}

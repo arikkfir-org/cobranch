@@ -127,3 +127,76 @@ func TestEvaluateReviews(t *testing.T) {
 		})
 	}
 }
+
+func TestEvaluateAI(t *testing.T) {
+	alice, reviewer := uuid.New(), uuid.New()
+	by := func(id uuid.UUID, name string, state code.ReviewState) code.Review {
+		return code.Review{ID: uuid.New(), State: state, Reviewer: &code.Principal{ID: id, DisplayName: name}, Person: id == alice}
+	}
+	approved, changes := by(reviewer, "AI reviewer", code.ReviewApproved), by(reviewer, "AI reviewer", code.ReviewChangesRequested)
+	task := func(state code.ReviewTaskState, reason string) code.AIReviewer {
+		return code.AIReviewer{ID: reviewer, Task: &code.AIReview{Task: 7, State: state, Reason: reason}}
+	}
+	ai := git.Requirements{Branch: "main", Reviews: &git.ReviewRequirements{AI: true}}
+	upToDate := code.Check{Kind: code.CheckUpToDate, Met: true}
+	check := func(state code.AIState, reason string) code.Check {
+		return code.Check{Kind: code.CheckAI, AI: state, Reason: reason, Met: state == code.AIApproved}
+	}
+	tests := []struct {
+		name       string
+		reviews    []code.Review
+		reviewer   code.AIReviewer
+		want       code.BranchStatus
+		wantChecks []code.Check
+	}{
+		{name: "a review task waiting for a member", reviewer: task(code.ReviewWaiting, "outside"), want: code.StatusProcessing,
+			wantChecks: []code.Check{check(code.AIWaiting, ""), upToDate}},
+		{name: "a queued review task", reviewer: task(code.ReviewQueued, ""), want: code.StatusProcessing,
+			wantChecks: []code.Check{check(code.AIQueued, ""), upToDate}},
+		{name: "a review asked for again after an approval", reviews: []code.Review{approved}, reviewer: task(code.ReviewRunning, ""),
+			want: code.StatusProcessing, wantChecks: []code.Check{check(code.AIRunning, ""), upToDate}},
+		{name: "the reviewer approves", reviews: []code.Review{approved}, reviewer: task(code.ReviewSucceeded, ""), want: code.StatusReady,
+			wantChecks: []code.Check{check(code.AIApproved, ""), upToDate}},
+		{name: "a person's approval isn't the reviewer's", reviews: []code.Review{by(alice, "Alice", code.ReviewApproved)},
+			reviewer: task(code.ReviewSucceeded, ""), want: code.StatusBlocked, wantChecks: []code.Check{check(code.AINotApproved, ""), upToDate}},
+		{name: "the reviewer requests changes, once among the checks", reviews: []code.Review{changes, by(alice, "Alice", code.ReviewChangesRequested)},
+			reviewer: task(code.ReviewSucceeded, ""), want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AIChangesRequested, ""), {Kind: code.CheckChangesRequested, Name: "Alice"}, upToDate}},
+		{name: "the reviewer only comments", reviews: []code.Review{by(reviewer, "AI reviewer", code.ReviewNeutral)},
+			reviewer: task(code.ReviewSucceeded, ""), want: code.StatusBlocked, wantChecks: []code.Check{check(code.AINotApproved, ""), upToDate}},
+		{name: "its review task failed", reviewer: task(code.ReviewFailed, "The model's provider refused the credentials."),
+			want: code.StatusBlocked, wantChecks: []code.Check{check(code.AIFailed, "The model's provider refused the credentials."), upToDate}},
+		{name: "its review task was cancelled", reviewer: task(code.ReviewCancelled, "Cancelled"), want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AICancelled, "Cancelled"), upToDate}},
+		{name: "no review task and no review", reviewer: code.AIReviewer{ID: reviewer}, want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AIUnreviewed, ""), upToDate}},
+		{name: "a reviewer without a model", reviewer: code.AIReviewer{ID: reviewer, Off: code.ErrReviewerNoModel}, want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AINoModel, ""), upToDate}},
+		{name: "a suspended reviewer", reviewer: code.AIReviewer{ID: reviewer, Off: code.ErrReviewerSuspended}, want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AISuspended, ""), upToDate}},
+		{name: "settings that leave the branch out", reviewer: code.AIReviewer{ID: reviewer, Off: code.ErrReviewOff}, want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AIOff, ""), upToDate}},
+		{name: "an organization without its reviewer", reviewer: code.AIReviewer{Off: code.ErrNoReviewer}, want: code.StatusBlocked,
+			wantChecks: []code.Check{check(code.AIMissing, ""), upToDate}},
+		{name: "an approval stands once the reviewer lost its model", reviews: []code.Review{approved},
+			reviewer: code.AIReviewer{ID: reviewer, Off: code.ErrReviewerNoModel}, want: code.StatusReady,
+			wantChecks: []code.Check{check(code.AIApproved, ""), upToDate}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			checkEvaluate(t, code.Standing{Requirements: ai, Facts: git.Facts{Ahead: 1}, Reviews: tt.reviews, Reviewer: tt.reviewer}, tt.want, tt.wantChecks)
+		})
+	}
+}
+
+// checkEvaluate checks that Evaluate finds in at status want, for the checks want.
+func checkEvaluate(t *testing.T, in code.Standing, want code.BranchStatus, wantChecks []code.Check) {
+	t.Helper()
+	got, checks := code.Evaluate(in)
+	if got != want {
+		t.Errorf("Evaluate() = %s, want %s", got, want)
+	}
+	if !reflect.DeepEqual(checks, wantChecks) {
+		t.Errorf("checks = %+v, want %+v", checks, wantChecks)
+	}
+}

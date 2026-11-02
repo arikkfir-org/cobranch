@@ -8,9 +8,10 @@ FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizat
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
 WHERE t.id = @id;
 
--- LockTask holds the task's row until the transaction ends, so its transcript grows one entry at a time.
+-- LockTask holds the task's row until the transaction ends, so its transcript grows one entry at a time, and answers
+-- what it is of.
 -- name: LockTask :one
-SELECT org_id, number, state FROM agent_tasks WHERE id = $1 FOR UPDATE;
+SELECT org_id, number, state, kind, repo_id, sha FROM agent_tasks WHERE id = $1 FOR UPDATE;
 
 -- name: LastEntry :one
 SELECT coalesce(max(seq), 0)::integer AS seq FROM agent_task_entries WHERE task_id = $1;

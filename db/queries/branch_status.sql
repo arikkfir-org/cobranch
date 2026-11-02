@@ -8,13 +8,13 @@ SELECT id FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY id FO
 DELETE FROM merge_requirements WHERE repo_id = $1;
 
 -- name: InsertMergeRequirements :batchexec
-INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history, approvals)
-VALUES (@repo_id, @branch, @org_id, @annotations, @linear_history, sqlc.narg(approvals));
+INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history, approvals, ai)
+VALUES (@repo_id, @branch, @org_id, @annotations, @linear_history, sqlc.narg(approvals), @ai);
 
 -- MergeRequirementsOf finds what a merge into a repository's branch needs: none when /cobranch.yaml names no such
 -- branch.
 -- name: MergeRequirementsOf :one
-SELECT annotations, linear_history, approvals FROM merge_requirements WHERE repo_id = $1 AND branch = $2;
+SELECT annotations, linear_history, approvals, ai FROM merge_requirements WHERE repo_id = $1 AND branch = $2;
 
 -- SetBranchFacts stores what a push's objects say of a live branch against its base, and has it wait for the push,
 -- when the push moved it or its base (force), or the facts changed, or none were stored before.
@@ -27,7 +27,7 @@ WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL
 
 -- BranchesWaitingFor lists the live branches that wait for a push, by ID, locked until the transaction ends.
 -- name: BranchesWaitingFor :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
+SELECT id, repo_id, name, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE waits_for = $1 AND deleted_at IS NULL
 ORDER BY id
 FOR UPDATE;
@@ -35,10 +35,19 @@ FOR UPDATE;
 -- BranchesAt lists a repository's live branches whose head is a commit and that have a base, by ID, locked until the
 -- transaction ends.
 -- name: BranchesAt :many
-SELECT id, repo_id, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
+SELECT id, repo_id, name, head, base, ahead, behind, merges, waits_for, merged_head FROM branches
 WHERE repo_id = $1 AND head = $2 AND deleted_at IS NULL AND base IS NOT NULL
 ORDER BY id
 FOR UPDATE;
+
+-- BranchesRequiringAI lists an organization's live branches whose base requires the AI reviewer's approval, but those
+-- that wait for the push worker, by ID, locked until the transaction ends.
+-- name: BranchesRequiringAI :many
+SELECT b.id, b.repo_id, b.name, b.head, b.base, b.ahead, b.behind, b.merges, b.waits_for, b.merged_head FROM branches b
+JOIN merge_requirements m ON m.repo_id = b.repo_id AND m.branch = b.base AND m.ai
+WHERE m.org_id = $1 AND b.deleted_at IS NULL AND b.waits_for IS NULL
+ORDER BY b.id
+FOR UPDATE OF b;
 
 -- name: SetBranchStatus :exec
 UPDATE branches SET status = @status::text, checks = @checks, waits_for = NULL WHERE id = @id;

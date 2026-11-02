@@ -83,20 +83,31 @@ func (q *Queries) LastEntry(ctx context.Context, taskID uuid.UUID) (int32, error
 }
 
 const lockTask = `-- name: LockTask :one
-SELECT org_id, number, state FROM agent_tasks WHERE id = $1 FOR UPDATE
+SELECT org_id, number, state, kind, repo_id, sha FROM agent_tasks WHERE id = $1 FOR UPDATE
 `
 
 type LockTaskRow struct {
 	OrgID  uuid.UUID
 	Number int64
 	State  string
+	Kind   string
+	RepoID *uuid.UUID
+	Sha    *string
 }
 
-// LockTask holds the task's row until the transaction ends, so its transcript grows one entry at a time.
+// LockTask holds the task's row until the transaction ends, so its transcript grows one entry at a time, and answers
+// what it is of.
 func (q *Queries) LockTask(ctx context.Context, id uuid.UUID) (LockTaskRow, error) {
 	row := q.db.QueryRow(ctx, lockTask, id)
 	var i LockTaskRow
-	err := row.Scan(&i.OrgID, &i.Number, &i.State)
+	err := row.Scan(
+		&i.OrgID,
+		&i.Number,
+		&i.State,
+		&i.Kind,
+		&i.RepoID,
+		&i.Sha,
+	)
 	return i, err
 }
 

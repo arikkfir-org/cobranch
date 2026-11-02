@@ -157,11 +157,17 @@ func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error
 }
 
 // reviewRequirements reads the reviews a branch requires: how many approvals, from 0 to git.MaxApprovals, 0 when left
-// out, which still holds a merge back while a reviewer requests changes.
+// out, which still holds a merge back while a reviewer requests changes; and whether the AI reviewer's approval, false
+// when left out.
 func reviewRequirements(node *yaml.Node) (git.ReviewRequirements, error) {
 	var out git.ReviewRequirements
-	if err := onlyKeys(node, "reviews", "approvals"); err != nil {
+	if err := onlyKeys(node, "reviews", "approvals", "ai"); err != nil {
 		return out, err
+	}
+	if n := valueOf(node, "ai"); n != nil && !isNull(n) {
+		if n.Kind != yaml.ScalarNode || n.Tag != "!!bool" || n.Decode(&out.AI) != nil {
+			return out, &SettingsError{Line: n.Line, Message: "ai must be true or false"}
+		}
 	}
 	if n := valueOf(node, "approvals"); n != nil && !isNull(n) {
 		var approvals int

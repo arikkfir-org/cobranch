@@ -92,8 +92,12 @@ status](branch-status.md#branch-status), in the same order of rules: Processing 
 - **Changes requested blocks.** Where the base requires reviews, any reviewer whose latest review of the head requests
   changes blocks the branch until they review it again or the branch moves; where it requires none, reviews only show.
 - **`ai` waits for the reviewer.** While the AI reviewer's task for the head is waiting, queued or running, the branch
-  is Processing, as it is while a required annotation runs. Then its latest review of the head must approve. A task that
-  failed, or a reviewer that is off for the repository or has no model, blocks the branch and says why.
+  is Processing, as it is while a required annotation runs. Then its latest review of the head must approve. Otherwise
+  the branch is Blocked and says why, the reviewer's verdict first, then how its task ended, then the reviewer's own
+  state: a task that failed or was cancelled, a reviewer that has no model, is suspended or is off for the branch, or a
+  head it never reviewed. An approval of the head stands whatever the reviewer's state since. The check comes with its
+  state (kind `ai`), and the status is worked out again as the reviewer's task moves, as someone asks for another
+  review, and as an admin changes the reviewer's model.
 - **Checked as strictly as the rest.** An unknown key under `reviews`, `approvals` outside 0 to 10 or `ai` not a boolean
   refuses the push into `main`, naming the line.
 
@@ -101,9 +105,11 @@ status](branch-status.md#branch-status), in the same order of rules: Processing 
 | --- | --- |
 | `main requires 2 approvals of its head, and it has 1` | Fewer people approved the head than `approvals` |
 | `Dana requested changes on its head` | A reviewer's latest review of the head requests changes |
-| `The AI reviewer requested changes` | `ai` is required and its latest review of the head doesn't approve |
-| `The AI review failed: the model's provider refused the credentials` | `ai` is required and its task for the head failed |
-| `The AI reviewer has no model` | `ai` is required and no admin gave the organization's reviewer a model |
+| `The AI reviewer requested changes on its head` | `ai` is required and its latest review of the head requests changes |
+| `The AI reviewer reviewed its head without approving it` | `ai` is required and its latest review of the head, or its task for it, ended without approving it |
+| `The AI review failed: the model's provider refused the credentials` | `ai` is required and its task for the head failed, or was cancelled, for that reason |
+| `The AI reviewer has no model` | `ai` is required and no admin gave the organization's reviewer a model; likewise a suspended reviewer, and `/cobranch-review.yaml` leaving the branch out |
+| `The AI reviewer hasn't reviewed its head` | `ai` is required and the head has neither a review task nor a review of the reviewer's: Ask for a review |
 
 ## The AI reviewer
 

@@ -427,6 +427,9 @@ func (s *AgentStore) Cancel(ctx context.Context, actor, orgID uuid.UUID, number,
 		if err := orgEvent(ctx, q, &orgID, actor, "task.cancelled", row.ID, map[string]any{"number": number}); err != nil {
 			return err
 		}
+		if err := restatusReviewed(ctx, q, row.Kind, row.RepoID, row.Sha); err != nil {
+			return err
+		}
 		out, err = findTask(ctx, q, orgID, number)
 		return err
 	})

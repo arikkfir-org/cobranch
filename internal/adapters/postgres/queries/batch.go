@@ -102,8 +102,8 @@ func (b *InsertCommitBatchResults) Close() error {
 }
 
 const insertMergeRequirements = `-- name: InsertMergeRequirements :batchexec
-INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history, approvals)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history, approvals, ai)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 `
 
 type InsertMergeRequirementsBatchResults struct {
@@ -119,6 +119,7 @@ type InsertMergeRequirementsParams struct {
 	Annotations   []string
 	LinearHistory bool
 	Approvals     *int32
+	Ai            bool
 }
 
 func (q *Queries) InsertMergeRequirements(ctx context.Context, arg []InsertMergeRequirementsParams) *InsertMergeRequirementsBatchResults {
@@ -131,6 +132,7 @@ func (q *Queries) InsertMergeRequirements(ctx context.Context, arg []InsertMerge
 			a.Annotations,
 			a.LinearHistory,
 			a.Approvals,
+			a.Ai,
 		}
 		batch.Queue(insertMergeRequirements, vals...)
 	}

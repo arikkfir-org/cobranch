@@ -306,7 +306,7 @@ func branch(b code.Branch) *Branch {
 		}
 		out.Requirements = &MergeRequirements{Annotations: annotations, LinearHistory: r.LinearHistory}
 		if r.Reviews != nil {
-			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals}
+			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals, Ai: r.Reviews.AI}
 		}
 	}
 	if m := b.Merge; m != nil {
@@ -352,7 +352,7 @@ var branchStatuses = map[code.BranchStatus]BranchStatus{
 // checkKinds maps the domain's kinds of checks to the schema's.
 var checkKinds = map[code.CheckKind]BranchCheckKind{
 	code.CheckAnnotation: BranchCheckKindAnnotation, code.CheckLinearHistory: BranchCheckKindLinearHistory, code.CheckApprovals: BranchCheckKindApprovals,
-	code.CheckChangesRequested: BranchCheckKindChangesRequested, code.CheckUpToDate: BranchCheckKindUpToDate,
+	code.CheckChangesRequested: BranchCheckKindChangesRequested, code.CheckAI: BranchCheckKindAi, code.CheckUpToDate: BranchCheckKindUpToDate,
 }
 
 // check is one of a branch's checks as the API shows it, each field only where its kind has it.
@@ -369,6 +369,12 @@ func check(c code.Check) *BranchCheck {
 		out.Name = &c.Name
 	case code.CheckApprovals:
 		out.Count, out.Required = &c.Count, &c.Required
+	case code.CheckAI:
+		state := AICheckState(strings.ToUpper(string(c.AI)))
+		out.Ai = &state
+		if c.Reason != "" {
+			out.Reason = &c.Reason
+		}
 	default:
 		out.Count = &c.Count
 	}
