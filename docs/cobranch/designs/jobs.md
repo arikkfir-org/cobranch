@@ -187,8 +187,8 @@ A job holds no role but Secret reader; everything else it may do, its definition
   queued, naming the permission; the ceiling is `main`'s at that moment, so a branch can't raise it, and a change to it
   on `main` reaches every branch's next runs.
 - **`secrets.read` is its one grant.** **Agreed:** a job receives no role but secrets. A principal with
-  `org.grants.manage` grants the new built-in role Secret reader to the job on the organization, the repository or one
-  secret ([Secrets](#secrets)).
+  `org.grants.manage` grants the new built-in role Secret reader to the job on its repository or on one secret
+  ([Secrets](#secrets)).
 - **The run token** is a credential of its own, `cbr_…`, made when the run starts and kept as the other credentials are,
   hashed, of kind `run_token`, naming the run; valid until the run ends and never longer than its timeout, at most 24
   hours. The REST server, the GraphQL server and the Git server accept it; its scope is the run's repository. The
@@ -282,10 +282,10 @@ A timeout deletes the pod and fails the run; a pod that vanished fails it too. W
 servers stream its logs from Kubernetes.
 
 - **`pod`** is a Kubernetes pod spec. The controller refuses what would leave the namespace's bounds: a ServiceAccount
-  or its token, host namespaces, host paths, node names, node selectors, affinities, tolerations, priority classes, and
-  volumes other than `emptyDir` and ephemeral ones. It sets what every run needs: `restartPolicy: Never`,
-  `activeDeadlineSeconds` from the timeout, the operator's `jobs.nodeSelector`, `jobs.tolerations` and `jobs.affinity`,
-  its labels, and no service links.
+  or its token, host namespaces, host paths, node names, node selectors, affinities, tolerations, priority classes,
+  volumes other than `emptyDir` and ephemeral ones, and variables read from the namespace's Secrets or ConfigMaps, which
+  hold the other runs'. It sets what every run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout,
+  the operator's `jobs.nodeSelector`, `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
 - **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, running
   the script with `bash -eo pipefail`. The script travels in the run's Secret, never in the pod's command line.
 - **The checkout.** An init container of Cobranch's own image fetches the run's commit into `/workspace`, which every
@@ -338,8 +338,13 @@ A grant can name one secret and reach only it, as a cloud’s IAM policy set on 
   pages or the APIs; no API, page or log returns a value once written.
 - **Named by ID** in `secrets` and `signingSecret`, so renaming a secret, or an organization and a repository each
   holding one of the same name, changes nothing.
-- **Granted with Secret reader,** a new built-in role holding `secrets.read` alone, at the organization, a repository or
-  one secret, which becomes a scope for secret permissions only, as the principals design decided.
+- **Granted with Secret reader,** a new built-in role of repositories holding `secrets.read` alone: on a repository it
+  reaches the repository's secrets, and on one secret, which becomes a scope for secret permissions only as the
+  principals design decided, that secret alone. An organization's own secrets reach a job through a grant on each; a
+  grant at the organization waits for organization roles that jobs can hold. Granting takes `org.grants.manage` and
+  `secrets.read` on the secret.
+- **A job is granted once it is a principal,** from its first queued run: the repository's Secrets tab lists its jobs,
+  and a run that names a secret its job may not read fails, naming it, until someone grants it.
 - **Checked at the start of every run.** The controller opens each secret the job names, if the job holds `secrets.read`
   on it, and writes them into the run's Secret; otherwise the run fails, naming the secret, before anything runs.
 
@@ -397,15 +402,18 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | `POST …/runs/{n}/start`, `/cancel`, `/rerun` | `startRun`, `cancelRun`, `rerunRun` | `jobs.run` |
 | `POST /repos/{repo}/branches/{branch}/jobs/{job}/runs` | `runJob` | `jobs.run`, the job declaring `manual` |
 | `POST /repos/{repo}/events` | `postEvent` | `jobs.run` |
-| `GET`, `POST`, `PUT`, `DELETE /secrets…` and `/repos/{repo}/secrets…` | `secrets`, `setSecret`, `deleteSecret` | `secrets.manage`; reads list names, never values |
+| `GET`, `POST /secrets`; `GET`, `PUT`, `DELETE /secrets/{id}` | `Organization.secrets`, `createSecret`, `updateSecret`, `deleteSecret` | `secrets.manage` where it lives; names, never values; a change names its ETag in `If-Match` |
+| `GET`, `POST /repos/{repo}/secrets` | `Repository.secrets`, `createSecret(repositoryId:)` | `secrets.manage` on the repository |
+| `GET`, `POST /secrets/{id}/access`, `DELETE …/access/{principal}` | `Secret.access`, `grantSecret`, `revokeSecret` | reading: `secrets.manage` on it or `org.grants.manage`; granting: `org.grants.manage` and `secrets.read` on it |
+| `GET /repos/{repo}/jobs` | `Repository.jobPrincipals` | `repo.read` |
 
 - **A repository's Runs tab** lists its runs, newest first; **a commit's page and a branch's** list the runs at the
   commit, or on the head, beneath its annotations, with Start for a waiting run, Run for a manual job, and Re-run and
   Cancel.
 - **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
   runs.
-- **Settings pages** of an organization and a repository list their secrets, and show each job principal with its
-  grants.
+- **An organization's Secrets page and a repository's Secrets tab** list their secrets, by name, with who is granted
+  each, add, change and delete them, and grant them to the organization's members, API keys and jobs.
 
 ## Data model
 
@@ -422,15 +430,17 @@ so they don’t. Every new row carries `org_id`.
 
 ![Four pull requests, each keeping main working](jobs/rollout.svg)
 
-Upgrading to the second needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
+Upgrading to the third needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-214](https://linear.app/arikkfir/issue/ENG-214); the
-  fourth closes it. Runs queued by the first wait for the controller the second brings; nothing requires a job's
+  fourth closes it. Runs queued by the first wait for the controller the third brings; nothing requires a job's
   annotation until a repository says so in its own `/cobranch.yaml`.
 - **The first** records each tip's `/cobranch.yaml`, makes job principals and queues runs from pushes and tags, with the
   gate, the ceiling and supersession, and lists, starts and cancels runs through the APIs and the Console. Re-runs and
   manual starts come with the fourth, beside the other triggers.
-- **The second needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy.
+- **The second** keeps secrets in organization and repository settings, adds Secret reader, and manages and grants them
+  through the APIs and the Console, so jobs can be granted theirs before the controller runs them.
+- **The third needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy.
   An operator who can't grant them sets `jobs.pods: false`.
 - **A repository adopts jobs** by pushing a `jobs` key into `main`, and requires them by naming their annotations under
   `branches`.

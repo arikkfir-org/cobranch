@@ -47,7 +47,8 @@ func CheckPod(spec map[string]any) error {
 	return checkVolumes(spec["volumes"])
 }
 
-// checkContainer checks the i-th container of a pod spec's list key: named, with an image, and not privileged.
+// checkContainer checks the i-th container of a pod spec's list key: named, with an image, not privileged, and
+// reading no Secret or ConfigMap of the namespace (checkEnv).
 func checkContainer(key string, i int, c any) error {
 	container, ok := c.(map[string]any)
 	if !ok {
@@ -61,6 +62,33 @@ func checkContainer(key string, i int, c any) error {
 	security, _ := container["securityContext"].(map[string]any) // none is fine
 	if privileged, _ := security["privileged"].(bool); privileged {
 		return fmt.Errorf("%s[%d] may not be privileged", key, i)
+	}
+	return checkEnv(fmt.Sprintf("%s[%d]", key, i), container)
+}
+
+// namespaceSources are the sources of a container's environment that read an object of its namespace, where every
+// run of the organization keeps its Secret: a job receives only the secrets its own run's Secret holds.
+var namespaceSources = []string{"secretRef", "configMapRef", "secretKeyRef", "configMapKeyRef"}
+
+// checkEnv checks that a container, which path names, takes no variable from a Secret or a ConfigMap of its
+// namespace, through envFrom or an env variable's valueFrom.
+func checkEnv(path string, container map[string]any) error {
+	for _, list := range [][2]string{{"envFrom", ""}, {"env", "valueFrom"}} {
+		entries, ok := container[list[0]].([]any)
+		if container[list[0]] != nil && !ok {
+			return fmt.Errorf("%s.%s must be a list", path, list[0])
+		}
+		for j, e := range entries {
+			entry, _ := e.(map[string]any) // Kubernetes refuses what isn't one
+			if list[1] != "" {
+				entry, _ = entry[list[1]].(map[string]any) // a plain value reads nothing
+			}
+			for _, source := range namespaceSources {
+				if _, ok := entry[source]; ok {
+					return fmt.Errorf("%s.%s[%d] may not read the namespace's %s: a job receives the secrets it names", path, list[0], j, source)
+				}
+			}
+		}
 	}
 	return nil
 }

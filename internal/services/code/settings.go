@@ -40,10 +40,14 @@ type Settings struct {
 	Jobs []jobs.Job `json:"jobs"`
 }
 
-// ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its repository, branches
-// and jobs keys, and every key under them is checked, so a misspelt requirement or trigger refuses the file rather
-// than requiring or running nothing. Other top-level keys, such as delivery, belong to what reads them, and are left
-// alone. An empty file says nothing: the repository's defaults, no requirements and no jobs.
+// SettingsKeys are the top-level keys a SettingsFile may have, each read by what it configures: repository, branches
+// and jobs by ParseSettings, delivery by ParseDelivery. A key that configures something new joins them.
+var SettingsKeys = []string{"repository", "branches", "jobs", "delivery"}
+
+// ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its top-level keys are
+// SettingsKeys, and every key under repository, branches and jobs is checked, so a misspelt key, requirement or trigger
+// refuses the file rather than requiring or running nothing. delivery's keys are ParseDelivery's to check. An empty
+// file says nothing: the repository's defaults, no requirements and no jobs.
 func ParseSettings(content []byte) (Settings, error) {
 	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}}
 	var doc yaml.Node
@@ -60,7 +64,7 @@ func ParseSettings(content []byte) (Settings, error) {
 	if root.Kind != yaml.MappingNode {
 		return Settings{}, &SettingsError{Line: root.Line, Message: "the settings must be a mapping"}
 	}
-	if err := uniqueKeys(root, "the settings"); err != nil {
+	if err := onlyKeys(root, "the settings", SettingsKeys...); err != nil {
 		return Settings{}, err
 	}
 	var err error

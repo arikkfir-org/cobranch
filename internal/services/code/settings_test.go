@@ -28,6 +28,8 @@ func TestParseSettings(t *testing.T) {
 			want: []git.Requirements{{Branch: "main"}}},
 		{name: "beside a key another reader owns", settings: "delivery:\n  targets: {}\nbranches:\n  main:\n    requires:\n      annotations: [ci/build]\n",
 			want: []git.Requirements{{Branch: "main", Annotations: []string{"ci/build"}}}},
+		{name: "an unknown key", settings: "branches:\nprotect: [main]\n", wantErr: `/cobranch.yaml: line 2: the settings takes no "protect"`},
+		{name: "a misspelt jobs key", settings: "job:\n  build:\n", wantErr: `/cobranch.yaml: line 1: the settings takes no "job"`},
 		{name: "a top-level key named twice", settings: "branches:\nbranches:\n", wantErr: `/cobranch.yaml: line 2: the settings names "branches" twice`},
 		{name: "beside jobs", settings: "jobs:\nbranches:\n  main:\n    requires:\n      annotations: [ai-review]\n",
 			want: []git.Requirements{{Branch: "main", Annotations: []string{"ai-review"}}}},
