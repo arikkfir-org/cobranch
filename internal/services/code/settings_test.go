@@ -26,9 +26,11 @@ func TestParseSettings(t *testing.T) {
 			want: []git.Requirements{{Branch: "release"}, {Branch: "main"}}},
 		{name: "linear history alone", settings: "branches:\n  main:\n    requires:\n      linearHistory: false\n",
 			want: []git.Requirements{{Branch: "main"}}},
+		{name: "beside a key another reader owns", settings: "delivery:\n  targets: {}\nbranches:\n  main:\n    requires:\n      annotations: [ci/build]\n",
+			want: []git.Requirements{{Branch: "main", Annotations: []string{"ci/build"}}}},
+		{name: "a top-level key named twice", settings: "branches:\nbranches:\n", wantErr: `/cobranch.yaml: line 2: the settings names "branches" twice`},
 		{name: "beside jobs", settings: "jobs:\nbranches:\n  main:\n    requires:\n      annotations: [ai-review]\n",
 			want: []git.Requirements{{Branch: "main", Annotations: []string{"ai-review"}}}},
-		{name: "an unknown key", settings: "branches:\nprotect: [main]\n", wantErr: `/cobranch.yaml: line 2: the settings takes no "protect"`},
 		{name: "not a mapping", settings: "- main\n", wantErr: "/cobranch.yaml: line 1: the settings must be a mapping"},
 		{name: "branches as a list", settings: "branches: [main]\n", wantErr: "/cobranch.yaml: line 1: branches must map branch names to their settings"},
 		{name: "a branch's settings as a list", settings: "branches:\n  main: [ci/build]\n", wantErr: "/cobranch.yaml: line 2: main's settings must be a mapping"},
@@ -47,21 +49,53 @@ func TestParseSettings(t *testing.T) {
 		{name: "not YAML", settings: "branches: [\n", wantErr: "/cobranch.yaml: line 1: did not find expected node content"},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := code.ParseSettings([]byte(tt.settings))
-			if tt.wantErr != "" {
-				var bad *code.SettingsError
-				if !errors.As(err, &bad) || err.Error() != tt.wantErr {
-					t.Fatalf("ParseSettings() = %v, want *SettingsError %q", err, tt.wantErr)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(got.Branches, tt.want) {
-				t.Errorf("ParseSettings() = %+v, want %+v", got, tt.want)
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { checkSettings(t, tt.settings, tt.want, tt.wantErr) })
+	}
+}
+
+func TestParseReviewRequirements(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings string
+		want     []git.Requirements
+		wantErr  string
+	}{
+		{name: "two approvals", settings: "branches:\n  main:\n    requires:\n      reviews:\n        approvals: 2\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{Approvals: 2}}}},
+		{name: "reviews with no approvals", settings: "branches:\n  main:\n    requires:\n      reviews: {}\n",
+			want: []git.Requirements{{Branch: "main", Reviews: &git.ReviewRequirements{}}}},
+		{name: "reviews of null", settings: "branches:\n  main:\n    requires:\n      reviews:\n",
+			want: []git.Requirements{{Branch: "main"}}},
+		{name: "reviews as a number", settings: "branches:\n  main:\n    requires:\n      reviews: 2\n", wantErr: "/cobranch.yaml: line 4: reviews must be a mapping"},
+		{name: "a misspelt review requirement", settings: "branches:\n  main:\n    requires:\n      reviews: {approval: 1}\n",
+			wantErr: `/cobranch.yaml: line 4: reviews takes no "approval"`},
+		{name: "too many approvals", settings: "branches:\n  main:\n    requires:\n      reviews: {approvals: 11}\n",
+			wantErr: "/cobranch.yaml: line 4: approvals must be a whole number from 0 to 10"},
+		{name: "negative approvals", settings: "branches:\n  main:\n    requires:\n      reviews: {approvals: -1}\n",
+			wantErr: "/cobranch.yaml: line 4: approvals must be a whole number from 0 to 10"},
+		{name: "approvals as a string", settings: "branches:\n  main:\n    requires:\n      reviews: {approvals: \"2\"}\n",
+			wantErr: "/cobranch.yaml: line 4: approvals must be a whole number from 0 to 10"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) { checkSettings(t, tt.settings, tt.want, tt.wantErr) })
+	}
+}
+
+// checkSettings checks that ParseSettings reads settings as want, or refuses them with a *SettingsError saying wantErr.
+func checkSettings(t *testing.T, settings string, want []git.Requirements, wantErr string) {
+	t.Helper()
+	got, err := code.ParseSettings([]byte(settings))
+	if wantErr != "" {
+		var bad *code.SettingsError
+		if !errors.As(err, &bad) || err.Error() != wantErr {
+			t.Fatalf("ParseSettings() = %v, want *SettingsError %q", err, wantErr)
+		}
+		return
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Branches, want) {
+		t.Errorf("ParseSettings() = %+v, want %+v", got.Branches, want)
 	}
 }

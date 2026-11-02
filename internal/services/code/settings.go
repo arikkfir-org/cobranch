@@ -40,10 +40,10 @@ type Settings struct {
 	Jobs []jobs.Job `json:"jobs"`
 }
 
-// ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its top-level keys are
-// repository, branches and jobs, and every key under them is checked, so a misspelt requirement or trigger refuses
-// the file rather than requiring or running nothing. An empty file says nothing: the repository's defaults, no
-// requirements and no jobs.
+// ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its repository, branches
+// and jobs keys, and every key under them is checked, so a misspelt requirement or trigger refuses the file rather
+// than requiring or running nothing. Other top-level keys, such as delivery, belong to what reads them, and are left
+// alone. An empty file says nothing: the repository's defaults, no requirements and no jobs.
 func ParseSettings(content []byte) (Settings, error) {
 	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}}
 	var doc yaml.Node
@@ -60,7 +60,7 @@ func ParseSettings(content []byte) (Settings, error) {
 	if root.Kind != yaml.MappingNode {
 		return Settings{}, &SettingsError{Line: root.Line, Message: "the settings must be a mapping"}
 	}
-	if err := onlyKeys(root, "the settings", "repository", "branches", "jobs"); err != nil {
+	if err := uniqueKeys(root, "the settings"); err != nil {
 		return Settings{}, err
 	}
 	var err error
@@ -103,7 +103,8 @@ func branchesRequirements(branches *yaml.Node) ([]git.Requirements, error) {
 	return out, nil
 }
 
-// branchRequirements reads one branch's settings under branches: requires, with its annotations and linearHistory.
+// branchRequirements reads one branch's settings under branches: requires, with its annotations, linearHistory and
+// reviews.
 func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error) {
 	r := git.Requirements{Branch: branch}
 	if isNull(node) {
@@ -116,7 +117,7 @@ func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error
 	if requires == nil || isNull(requires) {
 		return r, nil
 	}
-	if err := onlyKeys(requires, "requires", "annotations", "linearHistory"); err != nil {
+	if err := onlyKeys(requires, "requires", "annotations", "linearHistory", "reviews"); err != nil {
 		return r, err
 	}
 	if n := valueOf(requires, "annotations"); n != nil && !isNull(n) {
@@ -133,7 +134,31 @@ func branchRequirements(branch string, node *yaml.Node) (git.Requirements, error
 		}
 		r.LinearHistory = linear
 	}
+	if n := valueOf(requires, "reviews"); n != nil && !isNull(n) {
+		reviews, err := reviewRequirements(n)
+		if err != nil {
+			return r, err
+		}
+		r.Reviews = &reviews
+	}
 	return r, nil
+}
+
+// reviewRequirements reads the reviews a branch requires: how many approvals, from 0 to git.MaxApprovals, 0 when left
+// out, which still holds a merge back while a reviewer requests changes.
+func reviewRequirements(node *yaml.Node) (git.ReviewRequirements, error) {
+	var out git.ReviewRequirements
+	if err := onlyKeys(node, "reviews", "approvals"); err != nil {
+		return out, err
+	}
+	if n := valueOf(node, "approvals"); n != nil && !isNull(n) {
+		var approvals int
+		if n.Kind != yaml.ScalarNode || n.Tag != "!!int" || n.Decode(&approvals) != nil || approvals < 0 || approvals > git.MaxApprovals {
+			return out, &SettingsError{Line: n.Line, Message: fmt.Sprintf("approvals must be a whole number from 0 to %d", git.MaxApprovals)}
+		}
+		out.Approvals = approvals
+	}
+	return out, nil
 }
 
 // annotationNames reads a list of annotations' names, each once.

@@ -7,13 +7,13 @@ SELECT id FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY id FO
 DELETE FROM merge_requirements WHERE repo_id = $1;
 
 -- name: InsertMergeRequirements :batchexec
-INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history)
-VALUES (@repo_id, @branch, @org_id, @annotations, @linear_history);
+INSERT INTO merge_requirements (repo_id, branch, org_id, annotations, linear_history, approvals)
+VALUES (@repo_id, @branch, @org_id, @annotations, @linear_history, sqlc.narg(approvals));
 
 -- MergeRequirementsOf finds what a merge into a repository's branch needs: none when /cobranch.yaml names no such
 -- branch.
 -- name: MergeRequirementsOf :one
-SELECT annotations, linear_history FROM merge_requirements WHERE repo_id = $1 AND branch = $2;
+SELECT annotations, linear_history, approvals FROM merge_requirements WHERE repo_id = $1 AND branch = $2;
 
 -- SetBranchFacts stores what a push's objects say of a live branch against its base, and has it wait for the push,
 -- when the push moved it or its base (force), or the facts changed, or none were stored before.
