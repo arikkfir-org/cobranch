@@ -1278,6 +1278,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/diff:
+    get:
+      operationId: getBranchDiff
+      summary: >-
+        The branch's change as a request to merge into its base: from the merge base of its base's tip and its head
+        to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers
+        400 branch.default. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The branch's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/merge:
     post:
       operationId: mergeBranch
@@ -1531,17 +1568,74 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
-  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+  /orgs/{org}/repos/{repo}/commits/{sha}/diff:
     get:
-      operationId: listReviews
-      summary: The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      operationId: getCommitDiff
+      summary: >-
+        The commit's change against its first parent, or against the empty tree when it has none; takes repo.read.
+        It reads the Git server: an installation without one answers 503.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: The reviews.
+          description: The commit's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+    get:
+      operationId: listReviews
+      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many reviews the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The page's reviews, in the order they were submitted.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -1552,6 +1646,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Review"
+        "304":
+          description: The page is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -1609,13 +1708,22 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The review.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Review"
+        "304":
+          description: The review is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -2858,6 +2966,116 @@ components:
           type: integer
           format: int64
           description: A file's or a symlink's size in bytes.
+    Diff:
+      type: object
+      description: >-
+        A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in
+        all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it.
+      required: [head, files, filesLeftOut, additions, deletions]
+      properties:
+        base:
+          type: string
+          description: >-
+            The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent
+            when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+        baseTip:
+          type: string
+          description: A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+        head:
+          type: string
+          description: The commit it runs to.
+        files:
+          type: array
+          description: The files it changes, in Git's order, by path.
+          items:
+            $ref: "#/components/schemas/FileDiff"
+        filesLeftOut:
+          type: integer
+          description: How many files it changes past the 3000 it lists.
+        additions:
+          type: integer
+          description: The lines it adds, in every file it changes, those it left out included.
+        deletions:
+          type: integer
+          description: The lines it removes, in every file it changes, those it left out included.
+    FileDiff:
+      type: object
+      description: One file's change.
+      required: [status, path, binary, additions, deletions, truncated, hunks]
+      properties:
+        status:
+          type: string
+          description: What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+          enum: [added, modified, deleted, renamed, type_changed]
+        path:
+          type: string
+          description: Its path from the repository's root; a deleted file's old one.
+        oldPath:
+          type: string
+          description: The path it had before, for a renamed file.
+        oldMode:
+          type: string
+          description: Its mode before, as Git writes it; absent for an added file.
+        mode:
+          type: string
+          description: Its mode after; absent for a deleted file.
+        binary:
+          type: boolean
+          description: Whether Git reads it as binary, which shows no lines.
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        truncated:
+          type: boolean
+          description: >-
+            Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000
+            lines before it. Its counts stay.
+        hunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hunk"
+    Hunk:
+      type: object
+      description: One run of a file's changes, with up to three lines around them.
+      required: [oldStart, oldLines, newStart, newLines, section, lines]
+      properties:
+        oldStart:
+          type: integer
+          description: Its first line in the old file, or the line before it when it spans none.
+        oldLines:
+          type: integer
+        newStart:
+          type: integer
+          description: Its first line in the new file, or the line before it when it spans none.
+        newLines:
+          type: integer
+        section:
+          type: string
+          description: The heading Git found above it, such as a function's; empty when it found none.
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffLine"
+    DiffLine:
+      type: object
+      description: One of a hunk's lines, without its newline.
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [context, added, removed]
+        old:
+          type: integer
+          description: Its number in the old file; absent for an added line.
+        new:
+          type: integer
+          description: Its number in the new file; absent for a removed line.
+        text:
+          type: string
+        noNewline:
+          type: boolean
+          description: Present and true when the file ends on it without a newline.
     File:
       type: object
       description: A file or a symlink at a commit, and its text when it isn't binary.

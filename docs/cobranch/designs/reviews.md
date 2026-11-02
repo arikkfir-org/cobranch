@@ -225,7 +225,8 @@ adds them to it.
 - **Built by the Git server** on code browsing's internal call, in a throwaway repository of one snapshot: `git diff`
   with renames found, each file's status, its old and new paths, and its hunks.
 - **Up to limits:** 3,000 files, and 20,000 lines in all, past which the answer says what it left out; a file past 5,000
-  lines, or binary, is listed without hunks. Answers are cached by the pair of commits, which never change.
+  lines or with a line past 64 KiB, or binary, is listed with its counts but without hunks. An answer's ETag is the pair
+  of commits, which never change, so a client revalidates rather than reads it again.
 
 ## Jobs on reviews
 
@@ -259,8 +260,9 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 - **A branch's page** shows each reviewer's latest verdict on the head, earlier heads' reviews folded, and the AI
   review's state: Waiting, Queued, Running, Failed with its reason, or its review. **Review** opens the Changes tab
   ready to review; **Review again** asks the reviewer for another.
-- **The Changes tab** shows the branch's diff against `main`, file by file; a reviewer drafts comments on lines, then
-  submits Approve, Request changes or Comment with a body.
+- **The Changes tab** (`…/changes/<branch>`, since a branch's name may hold `/changes`) shows the branch's diff against
+  `main`, file by file, with the reviews of its head beneath; a reviewer drafts comments on lines, then submits Approve,
+  Request changes or Comment with a body.
 - **A commit's page** lists its reviews and shows its diff against its parent.
 - **The requirements panel** names `main`'s required approvals and `ai`, and a Blocked branch says which failed, as
   [branch status](branch-status.md#the-console) lists its other checks.
@@ -272,12 +274,14 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 | `GET /commits/{sha}/reviews` | `Commit.reviews` | `repo.read` |
 | `POST /commits/{sha}/reviews` | `submitReview` | `reviews.submit` |
 | `GET /reviews/{id}` | `Repository.review` | `repo.read` |
-| `GET /branches/{branch}/diff` | `Branch.diff` | `repo.read` |
-| `GET /commits/{sha}/diff` | `Commit.diff` | `repo.read` |
+| `GET /branches/{branch}/diff` | `Repository.branchDiff` | `repo.read` |
+| `GET /commits/{sha}/diff` | `Repository.commitDiff` | `repo.read` |
 | `POST /branches/{branch}/review` | `requestReview` | `repo.push` |
 
-`POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`. A
-branch carries its reviews checks with its others, and its AI review's task.
+`POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`.
+Every `GET` answers a strong `ETag`, and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages
+with an opaque cursor and `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and
+its AI review's task.
 
 ## Data model
 

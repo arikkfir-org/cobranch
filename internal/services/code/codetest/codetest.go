@@ -120,16 +120,25 @@ func (s *Store) reviewsOf(repoID uuid.UUID, sha string) []code.Review {
 	return out
 }
 
-// Reviews lists the reviews of the repository's commit in the order they were submitted, or repos.ErrNotFound
-// without the commit.
-func (s *Store) Reviews(_ context.Context, repoID uuid.UUID, sha string) ([]code.Review, error) {
+// Reviews lists at most limit of the reviews of the repository's commit in the order they were submitted, after the
+// one named after unless it is uuid.Nil; none when after names no review of the commit, and repos.ErrNotFound without
+// the commit.
+func (s *Store) Reviews(_ context.Context, repoID uuid.UUID, sha string, after uuid.UUID, limit int) ([]code.Review, error) {
 	if s.Fail != nil {
 		return nil, s.Fail
 	}
 	if _, ok := s.Commits[repoID][sha]; !ok {
 		return nil, repos.ErrNotFound
 	}
-	return s.reviewsOf(repoID, sha), nil
+	list := s.reviewsOf(repoID, sha)
+	if after != uuid.Nil {
+		i := slices.IndexFunc(list, func(r code.Review) bool { return r.ID == after })
+		if i < 0 {
+			return nil, nil
+		}
+		list = list[i+1:]
+	}
+	return list[:min(limit, len(list))], nil
 }
 
 // Review finds one of the repository's reviews, or repos.ErrNotFound.

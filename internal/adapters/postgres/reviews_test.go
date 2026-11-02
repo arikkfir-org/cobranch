@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -31,7 +32,7 @@ func TestCodeStoreSubmitReview(t *testing.T) {
 		t.Errorf("SubmitReview() on another commit = %v", err)
 	}
 
-	list, err := f.c.Reviews(ctx, f.website.ID, f.shaD)
+	list, err := f.c.Reviews(ctx, f.website.ID, f.shaD, uuid.Nil, 10)
 	if err != nil || len(list) != 2 || list[0].ID != changes.ID || list[1].ID != approved.ID {
 		t.Errorf("Reviews(d) = %+v, %v; want the two of Max's, in order", list, err)
 	}
@@ -52,7 +53,7 @@ func TestCodeStoreSubmitReview(t *testing.T) {
 			_, err := f.c.SubmitReview(ctx, f.max, f.secret.ID, f.shaD, code.ReviewInput{State: code.ReviewApproved})
 			return err
 		},
-		"the reviews of a commit the repository doesn't hold": func() error { _, err := f.c.Reviews(ctx, f.website.ID, f.shaE); return err },
+		"the reviews of a commit the repository doesn't hold": func() error { _, err := f.c.Reviews(ctx, f.website.ID, f.shaE, uuid.Nil, 10); return err },
 		"another repository's review":                         func() error { _, err := f.c.Review(ctx, f.secret.ID, approved.ID); return err },
 		"a review that isn't there":                           func() error { _, err := f.c.Review(ctx, f.website.ID, uuid.New()); return err },
 	} {
@@ -66,5 +67,48 @@ func TestCodeStoreSubmitReview(t *testing.T) {
 	}
 	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = 'review.submitted' AND actor_id = $1 AND org_id = $2", f.max, f.acme.ID); n != 2 {
 		t.Errorf("Max's review.submitted events = %d, want 2", n)
+	}
+}
+
+func TestCodeStoreReviewsPages(t *testing.T) {
+	t.Parallel()
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	var ids []uuid.UUID
+	for _, state := range []code.ReviewState{code.ReviewNeutral, code.ReviewApproved} {
+		r, err := f.c.SubmitReview(ctx, f.max, f.website.ID, f.shaD, code.ReviewInput{State: state, Body: "Reviewed"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, r.ID)
+	}
+	other, err := f.c.SubmitReview(ctx, f.nia, f.website.ID, shaB, code.ReviewInput{State: code.ReviewApproved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name  string
+		after uuid.UUID
+		limit int
+		want  []uuid.UUID
+	}{
+		{name: "every one", limit: 10, want: ids},
+		{name: "the first page", limit: 1, want: ids[:1]},
+		{name: "after the first", after: ids[0], limit: 1, want: ids[1:]},
+		{name: "after the last", after: ids[1], limit: 10},
+		{name: "after another commit's", after: other.ID, limit: 10},
+		{name: "after one that isn't there", after: uuid.New(), limit: 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := f.c.Reviews(ctx, f.website.ID, f.shaD, tt.after, tt.limit)
+			found := make([]uuid.UUID, 0, len(got))
+			for _, r := range got {
+				found = append(found, r.ID)
+			}
+			if err != nil || !slices.Equal(found, tt.want) {
+				t.Errorf("Reviews(d) = %v, %v; want %v", found, err, tt.want)
+			}
+		})
 	}
 }

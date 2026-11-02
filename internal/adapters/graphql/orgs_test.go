@@ -105,6 +105,8 @@ func newOrgFixture() *orgFixture {
 	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
+	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})
+	f.objects.Commit(shaOf("d"), map[string]string{"README.md": "# First\n", "feature.txt": "A feature\n"})
 	return f
 }
 

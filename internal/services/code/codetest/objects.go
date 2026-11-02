@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"io"
+	"maps"
 	"slices"
 	"strings"
 
@@ -17,12 +18,14 @@ import (
 // branches and tags that name commits, and the walk of history from each commit, newest first. A path ending in
 // Symlink holds a symlink, and one in Submodule a submodule. Every repository holds the same objects. Fail, when set,
 // fails every read and merge. Merges lists the merges asked for; each answers its head as the commit its base is at.
+// Diffs lists the diffs asked for.
 type Objects struct {
 	Files  map[string]map[string]string
 	Refs   map[string]string
 	Logs   map[string][]code.LogEntry
 	Fail   error
 	Merges []code.MergeRequest
+	Diffs  []code.DiffRequest
 }
 
 // The suffixes of the paths Objects holds a symlink or a submodule at.
@@ -189,4 +192,74 @@ func (o *Objects) Merge(_ context.Context, _ uuid.UUID, req code.MergeRequest) (
 	}
 	o.Merges = append(o.Merges, req)
 	return code.Merged{Base: req.Base, Head: req.Head, Commit: req.Head}, nil
+}
+
+// Diff compares the files of the commits req names, file by file in path order: each changed file is one hunk of its
+// old lines removed and its new ones added. Commits here have no history, so a merge base is the base itself; Diffs
+// lists the diffs asked for.
+func (o *Objects) Diff(_ context.Context, _ uuid.UUID, req code.DiffRequest) (code.Diff, error) {
+	o.Diffs = append(o.Diffs, req)
+	head, after, err := o.resolve(req.Head)
+	if err != nil {
+		return code.Diff{}, err
+	}
+	d := code.Diff{Head: head}
+	before := map[string]string{}
+	if req.Base != "" {
+		if d.Base, before, err = o.resolve(req.Base); err != nil {
+			return code.Diff{}, err
+		}
+	}
+	if req.MergeBase {
+		d.BaseTip = d.Base
+	}
+	paths := slices.Collect(maps.Keys(before))
+	for p := range after {
+		if _, ok := before[p]; !ok {
+			paths = append(paths, p)
+		}
+	}
+	slices.Sort(paths)
+	for _, p := range paths {
+		old, had := before[p]
+		content, has := after[p]
+		if had && has && old == content {
+			continue
+		}
+		f := fileDiff(p, old, had, content, has)
+		d.Files = append(d.Files, f)
+		d.Additions += f.Additions
+		d.Deletions += f.Deletions
+	}
+	return d, nil
+}
+
+// fileDiff is the change at path from old, when the base had it, to content, when the head has it: one hunk.
+func fileDiff(path, old string, had bool, content string, has bool) code.FileDiff {
+	f := code.FileDiff{Status: code.FileModified, Path: path, OldMode: "100644", Mode: "100644"}
+	switch {
+	case !had:
+		f.Status, f.OldMode = code.FileAdded, ""
+	case !has:
+		f.Status, f.Mode = code.FileDeleted, ""
+	}
+	h := code.Hunk{OldStart: 1, NewStart: 1}
+	for i, line := range lines(old) {
+		h.Lines = append(h.Lines, code.DiffLine{Kind: code.LineRemoved, Old: i + 1, Text: line})
+		h.OldLines++
+	}
+	for i, line := range lines(content) {
+		h.Lines = append(h.Lines, code.DiffLine{Kind: code.LineAdded, New: i + 1, Text: line})
+		h.NewLines++
+	}
+	f.Deletions, f.Additions, f.Hunks = h.OldLines, h.NewLines, []code.Hunk{h}
+	return f
+}
+
+// lines splits content into its lines, without their newlines.
+func lines(content string) []string {
+	if content == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(content, "\n"), "\n")
 }

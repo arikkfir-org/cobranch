@@ -97,6 +97,27 @@ func (e BranchStatus) Valid() bool {
 	}
 }
 
+// Defines values for DiffLineKind.
+const (
+	DiffLineKindAdded   DiffLineKind = "added"
+	DiffLineKindContext DiffLineKind = "context"
+	DiffLineKindRemoved DiffLineKind = "removed"
+)
+
+// Valid indicates whether the value is a known member of the DiffLineKind enum.
+func (e DiffLineKind) Valid() bool {
+	switch e {
+	case DiffLineKindAdded:
+		return true
+	case DiffLineKindContext:
+		return true
+	case DiffLineKindRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for FileKind.
 const (
 	FileKindBlob    FileKind = "blob"
@@ -109,6 +130,33 @@ func (e FileKind) Valid() bool {
 	case FileKindBlob:
 		return true
 	case FileKindSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileDiffStatus.
+const (
+	FileDiffStatusAdded       FileDiffStatus = "added"
+	FileDiffStatusDeleted     FileDiffStatus = "deleted"
+	FileDiffStatusModified    FileDiffStatus = "modified"
+	FileDiffStatusRenamed     FileDiffStatus = "renamed"
+	FileDiffStatusTypeChanged FileDiffStatus = "type_changed"
+)
+
+// Valid indicates whether the value is a known member of the FileDiffStatus enum.
+func (e FileDiffStatus) Valid() bool {
+	switch e {
+	case FileDiffStatusAdded:
+		return true
+	case FileDiffStatusDeleted:
+		return true
+	case FileDiffStatusModified:
+		return true
+	case FileDiffStatusRenamed:
+		return true
+	case FileDiffStatusTypeChanged:
 		return true
 	default:
 		return false
@@ -572,6 +620,48 @@ type Commit struct {
 	Tree      string `json:"tree"`
 }
 
+// Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it.
+type Diff struct {
+	// Additions The lines it adds, in every file it changes, those it left out included.
+	Additions int `json:"additions"`
+
+	// Base The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+	Base *string `json:"base,omitempty"`
+
+	// BaseTip A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+	BaseTip *string `json:"baseTip,omitempty"`
+
+	// Deletions The lines it removes, in every file it changes, those it left out included.
+	Deletions int `json:"deletions"`
+
+	// Files The files it changes, in Git's order, by path.
+	Files []FileDiff `json:"files"`
+
+	// FilesLeftOut How many files it changes past the 3000 it lists.
+	FilesLeftOut int `json:"filesLeftOut"`
+
+	// Head The commit it runs to.
+	Head string `json:"head"`
+}
+
+// DiffLine One of a hunk's lines, without its newline.
+type DiffLine struct {
+	Kind DiffLineKind `json:"kind"`
+
+	// New Its number in the new file; absent for a removed line.
+	New *int `json:"new,omitempty"`
+
+	// NoNewline Present and true when the file ends on it without a newline.
+	NoNewline *bool `json:"noNewline,omitempty"`
+
+	// Old Its number in the old file; absent for an added line.
+	Old  *int   `json:"old,omitempty"`
+	Text string `json:"text"`
+}
+
+// DiffLineKind defines model for DiffLine.Kind.
+type DiffLineKind string
+
 // Email defines model for Email.
 type Email struct {
 	Email    string `json:"email"`
@@ -612,6 +702,53 @@ type File struct {
 
 // FileKind defines model for File.Kind.
 type FileKind string
+
+// FileDiff One file's change.
+type FileDiff struct {
+	Additions int `json:"additions"`
+
+	// Binary Whether Git reads it as binary, which shows no lines.
+	Binary    bool   `json:"binary"`
+	Deletions int    `json:"deletions"`
+	Hunks     []Hunk `json:"hunks"`
+
+	// Mode Its mode after; absent for a deleted file.
+	Mode *string `json:"mode,omitempty"`
+
+	// OldMode Its mode before, as Git writes it; absent for an added file.
+	OldMode *string `json:"oldMode,omitempty"`
+
+	// OldPath The path it had before, for a renamed file.
+	OldPath *string `json:"oldPath,omitempty"`
+
+	// Path Its path from the repository's root; a deleted file's old one.
+	Path string `json:"path"`
+
+	// Status What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+	Status FileDiffStatus `json:"status"`
+
+	// Truncated Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay.
+	Truncated bool `json:"truncated"`
+}
+
+// FileDiffStatus What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+type FileDiffStatus string
+
+// Hunk One run of a file's changes, with up to three lines around them.
+type Hunk struct {
+	Lines    []DiffLine `json:"lines"`
+	NewLines int        `json:"newLines"`
+
+	// NewStart Its first line in the new file, or the line before it when it spans none.
+	NewStart int `json:"newStart"`
+	OldLines int `json:"oldLines"`
+
+	// OldStart Its first line in the old file, or the line before it when it spans none.
+	OldStart int `json:"oldStart"`
+
+	// Section The heading Git found above it, such as a function's; empty when it found none.
+	Section string `json:"section"`
+}
 
 // Invitation An invitation to an email, which only a user holding it, verified, accepts.
 type Invitation struct {
@@ -1175,6 +1312,12 @@ type GetBlobParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetBranchDiffParams defines parameters for GetBranchDiff.
+type GetBranchDiffParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // ListCommitsParams defines parameters for ListCommits.
 type ListCommitsParams struct {
 	// Branch The branch whose history the page lists, without refs/heads/, unless ref names another start.
@@ -1214,6 +1357,24 @@ type SetAnnotationParams struct {
 	IfNoneMatch *IfNoneMatchAnnotation `json:"If-None-Match,omitempty"`
 }
 
+// GetCommitDiffParams defines parameters for GetCommitDiff.
+type GetCommitDiffParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListReviewsParams defines parameters for ListReviews.
+type ListReviewsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many reviews the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetRawParams defines parameters for GetRaw.
 type GetRawParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -1225,6 +1386,12 @@ type GetRawParams struct {
 	// Download Whether to answer the bytes as an attachment, whatever they are.
 	Download *bool `form:"download,omitempty" json:"download,omitempty"`
 
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetReviewParams defines parameters for GetReview.
+type GetReviewParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -1448,6 +1615,9 @@ type ServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
+	GetBranchDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffParams)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -1466,9 +1636,12 @@ type ServerInterface interface {
 	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams)
-	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
+	GetCommitDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params GetCommitDiffParams)
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
-	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
@@ -1477,7 +1650,7 @@ type ServerInterface interface {
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
 	// GetReview One of the repository's reviews; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/reviews/{review})
-	GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID)
+	GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID, params GetReviewParams)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -2805,6 +2978,74 @@ func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// GetBranchDiff operation middleware
+func (siw *ServerInterfaceWrapper) GetBranchDiff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBranchDiffParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBranchDiff(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MergeBranch operation middleware
 func (siw *ServerInterfaceWrapper) MergeBranch(w http.ResponseWriter, r *http.Request) {
 
@@ -3234,6 +3475,74 @@ func (siw *ServerInterfaceWrapper) SetAnnotation(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetCommitDiff operation middleware
+func (siw *ServerInterfaceWrapper) GetCommitDiff(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCommitDiffParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCommitDiff(w, r, org, repo, sha, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListReviews operation middleware
 func (siw *ServerInterfaceWrapper) ListReviews(w http.ResponseWriter, r *http.Request) {
 
@@ -3267,8 +3576,58 @@ func (siw *ServerInterfaceWrapper) ListReviews(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListReviewsParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListReviews(w, r, org, repo, sha)
+		siw.Handler.ListReviews(w, r, org, repo, sha, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3453,8 +3812,32 @@ func (siw *ServerInterfaceWrapper) GetReview(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetReviewParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetReview(w, r, org, repo, review)
+		siw.Handler.GetReview(w, r, org, repo, review, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4007,12 +4390,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff", wrapper.GetBranchDiff)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/merge", wrapper.MergeBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.DeleteAnnotation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.SetAnnotation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/diff", wrapper.GetCommitDiff)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/reviews", wrapper.ListReviews)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/reviews", wrapper.SubmitReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/reviews/{review}", wrapper.GetReview)
@@ -7649,6 +8034,128 @@ func (response GetBranchdefaultApplicationProblemPlusJSONResponse) VisitGetBranc
 	return err
 }
 
+type GetBranchDiffRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     GetBranchDiffParams
+}
+
+type GetBranchDiffResponseObject interface {
+	VisitGetBranchDiffResponse(w http.ResponseWriter) error
+}
+
+type GetBranchDiff200ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranchDiff200JSONResponse struct {
+	Body    Diff
+	Headers GetBranchDiff200ResponseHeaders
+}
+
+func (response GetBranchDiff200JSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiff304ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranchDiff304Response struct {
+	Headers GetBranchDiff304ResponseHeaders
+}
+
+func (response GetBranchDiff304Response) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetBranchDiff400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetBranchDiff400ApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiff401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiff401ApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiff404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiff404ApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiff503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiff503ApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBranchDiffdefaultApplicationProblemPlusJSONResponse) VisitGetBranchDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MergeBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
@@ -8351,30 +8858,179 @@ func (response SetAnnotationdefaultApplicationProblemPlusJSONResponse) VisitSetA
 	return err
 }
 
+type GetCommitDiffRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Params GetCommitDiffParams
+}
+
+type GetCommitDiffResponseObject interface {
+	VisitGetCommitDiffResponse(w http.ResponseWriter) error
+}
+
+type GetCommitDiff200ResponseHeaders struct {
+	ETag string
+}
+
+type GetCommitDiff200JSONResponse struct {
+	Body    Diff
+	Headers GetCommitDiff200ResponseHeaders
+}
+
+func (response GetCommitDiff200JSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitDiff304ResponseHeaders struct {
+	ETag string
+}
+
+type GetCommitDiff304Response struct {
+	Headers GetCommitDiff304ResponseHeaders
+}
+
+func (response GetCommitDiff304Response) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetCommitDiff400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetCommitDiff400ApplicationProblemPlusJSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitDiff401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommitDiff401ApplicationProblemPlusJSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitDiff404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommitDiff404ApplicationProblemPlusJSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitDiff503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetCommitDiff503ApplicationProblemPlusJSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetCommitDiffdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetCommitDiffdefaultApplicationProblemPlusJSONResponse) VisitGetCommitDiffResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListReviewsRequestObject struct {
-	Org  Org  `json:"org"`
-	Repo Repo `json:"repo"`
-	SHA  SHA  `json:"sha"`
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	SHA    SHA  `json:"sha"`
+	Params ListReviewsParams
 }
 
 type ListReviewsResponseObject interface {
 	VisitListReviewsResponse(w http.ResponseWriter) error
 }
 
+type ListReviews200ResponseHeaders struct {
+	ETag string
+	Link *string
+}
+
 type ListReviews200JSONResponse struct {
-	Reviews []Review `json:"reviews"`
+	Body struct {
+		Reviews []Review `json:"reviews"`
+	}
+	Headers ListReviews200ResponseHeaders
 }
 
 func (response ListReviews200JSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListReviews304ResponseHeaders struct {
+	ETag string
+}
+
+type ListReviews304Response struct {
+	Headers ListReviews304ResponseHeaders
+}
+
+func (response ListReviews304Response) VisitListReviewsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListReviews400ApplicationProblemPlusJSONResponse struct {
@@ -8692,24 +9348,47 @@ type GetReviewRequestObject struct {
 	Org    Org                `json:"org"`
 	Repo   Repo               `json:"repo"`
 	Review openapi_types.UUID `json:"review"`
+	Params GetReviewParams
 }
 
 type GetReviewResponseObject interface {
 	VisitGetReviewResponse(w http.ResponseWriter) error
 }
 
-type GetReview200JSONResponse Review
+type GetReview200ResponseHeaders struct {
+	ETag string
+}
+
+type GetReview200JSONResponse struct {
+	Body    Review
+	Headers GetReview200ResponseHeaders
+}
 
 func (response GetReview200JSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetReview304ResponseHeaders struct {
+	ETag string
+}
+
+type GetReview304Response struct {
+	Headers GetReview304ResponseHeaders
+}
+
+func (response GetReview304Response) VisitGetReviewResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetReview400ApplicationProblemPlusJSONResponse struct {
@@ -9775,6 +10454,9 @@ type StrictServerInterface interface {
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
+	GetBranchDiff(ctx context.Context, request GetBranchDiffRequestObject) (GetBranchDiffResponseObject, error)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
@@ -9793,7 +10475,10 @@ type StrictServerInterface interface {
 	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(ctx context.Context, request SetAnnotationRequestObject) (SetAnnotationResponseObject, error)
-	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// GetCommitDiff The commit's change against its first parent, or against the empty tree when it has none; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/diff)
+	GetCommitDiff(ctx context.Context, request GetCommitDiffRequestObject) (GetCommitDiffResponseObject, error)
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(ctx context.Context, request ListReviewsRequestObject) (ListReviewsResponseObject, error)
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
@@ -11126,6 +11811,35 @@ func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org O
 	}
 }
 
+// GetBranchDiff operation middleware
+func (sh *strictHandler) GetBranchDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffParams) {
+	var request GetBranchDiffRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBranchDiff(ctx, request.(GetBranchDiffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBranchDiff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBranchDiffResponseObject); ok {
+		if err := validResponse.VisitGetBranchDiffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // MergeBranch operation middleware
 func (sh *strictHandler) MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
 	var request MergeBranchRequestObject
@@ -11315,13 +12029,43 @@ func (sh *strictHandler) SetAnnotation(w http.ResponseWriter, r *http.Request, o
 	}
 }
 
+// GetCommitDiff operation middleware
+func (sh *strictHandler) GetCommitDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params GetCommitDiffParams) {
+	var request GetCommitDiffRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetCommitDiff(ctx, request.(GetCommitDiffRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetCommitDiff")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetCommitDiffResponseObject); ok {
+		if err := validResponse.VisitGetCommitDiffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListReviews operation middleware
-func (sh *strictHandler) ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+func (sh *strictHandler) ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams) {
 	var request ListReviewsRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.SHA = sha
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.ListReviews(ctx, request.(ListReviewsRequestObject))
@@ -11407,12 +12151,13 @@ func (sh *strictHandler) GetRaw(w http.ResponseWriter, r *http.Request, org Org,
 }
 
 // GetReview operation middleware
-func (sh *strictHandler) GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID) {
+func (sh *strictHandler) GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID, params GetReviewParams) {
 	var request GetReviewRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.Review = review
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetReview(ctx, request.(GetReviewRequestObject))
