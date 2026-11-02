@@ -67,13 +67,9 @@ func runController(ctx context.Context, logs io.Writer) error {
 // runService is the runs' domain over pool's database, the cluster the controller runs in, the secrets the key opens
 // and the object store, which the returned func closes.
 func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (*runner.Service, func(), error) {
-	kube, err := rest.InClusterConfig()
+	cluster, err := jobsCluster(cfg.Jobs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
-	}
-	client, err := kubernetes.NewForConfig(kube)
-	if err != nil {
-		return nil, nil, fmt.Errorf("making the cluster's client: %w", err)
+		return nil, nil, err
 	}
 	box, err := sealer(cfg.SecretsKey)
 	if err != nil {
@@ -85,14 +81,30 @@ func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) 
 	}
 	vault := secrets.NewService(postgres.NewSecretStore(pool), auth.NewAuthorizer(postgres.NewOrgStore(pool)), box)
 	j := cfg.Jobs
-	cluster := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
-		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
-		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
-		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage})
 	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
 		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}
 	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, settings)
 	return svc, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
+}
+
+// jobsCluster is where runs execute: the cluster the controller runs in, through its pod's token, or, for an
+// installation that runs no pods, whose controller mounts no token, none.
+func jobsCluster(j config.Jobs) (runner.Cluster, error) {
+	if !j.Pods {
+		return runner.NoPods{}, nil
+	}
+	kube, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
+	}
+	client, err := kubernetes.NewForConfig(kube)
+	if err != nil {
+		return nil, fmt.Errorf("making the cluster's client: %w", err)
+	}
+	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
+		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
+		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
+		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

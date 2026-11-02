@@ -421,3 +421,41 @@ func TestSweep(t *testing.T) {
 	slices.Sort(wantCluster)
 	checkSwept(t, s, c, a, []string{"dropped dead tokens"}, wantCluster, []string{"bbbb/main"})
 }
+
+// TestNoPods runs an installation without pods: its controller fails a queued run of a script, fails a run left
+// running when pods went off once its pod counts as vanished, and sweeps without a cluster.
+func TestNoPods(t *testing.T) {
+	off := settings
+	off.Pods = false
+	tests := []struct {
+		name       string
+		store      *store
+		step       func(*runner.Service) error
+		wantEvents []string
+	}{
+		{name: "a queued script", store: &store{queued: []runner.Run{scriptRun(nil)}, tokens: map[uuid.UUID]time.Time{}},
+			step: func(svc *runner.Service) error {
+				_, err := svc.Dispatch(context.Background())
+				return err //nolint:wrapcheck // the error under test
+			},
+			wantEvents: []string{"claimed #7 until 09:02:00", "failed: this installation runs no pods"}},
+		{name: "a run still running", store: &store{running: []runner.Running{{ID: id("aaaa"), OrgID: id("0001"), RepoID: id("0002"),
+			StartedAt: now.Add(-10 * time.Minute)}}},
+			step:       func(svc *runner.Service) error { return svc.Follow(context.Background()) },
+			wantEvents: []string{"failed: its pod vanished"}},
+		{name: "a sweep", store: &store{}, step: func(svc *runner.Service) error { return svc.Sweep(context.Background()) },
+			wantEvents: []string{"dropped dead tokens"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := runner.NewService(tt.store, runner.NoPods{}, vault{}, archive{}, off)
+			svc.SetClock(func() time.Time { return now })
+			if err := tt.step(svc); err != nil {
+				t.Fatalf("step = %v", err)
+			}
+			if !slices.Equal(tt.store.events, tt.wantEvents) {
+				t.Errorf("events = %q, want %q", tt.store.events, tt.wantEvents)
+			}
+		})
+	}
+}

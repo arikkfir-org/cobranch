@@ -1,13 +1,13 @@
-{{- if .Values.jobs.pods }}
 {{- include "cobranch.checkDatabase" . }}
 {{- $cluster := include "cobranch.cluster" . }}
 {{- $controller := include "cobranch.controller" . }}
 {{- $component := dict "root" . "component" "controller" }}
 {{- $jobs := .Values.jobs }}
 {{- $image := include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
-{{- $rest := $jobs.urls.rest | default (ternary (printf "http://%s-rest-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) "" (not (empty .Values.urls.rest))) }}
+{{- $rest := $jobs.urls.rest | default (printf "http://%s-rest-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) }}
 {{- $git := $jobs.urls.git | default (ternary (printf "http://%s-git-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) "" (not (empty .Values.urls.git))) }}
 {{- $env := dict
+  "PODS" (toString $jobs.pods)
   "SCRIPT_IMAGE" ($jobs.script.image | default $image)
   "CHECKOUT_IMAGE" $image
   "REST_URL" $rest
@@ -35,7 +35,9 @@
 {{- range $name, $value := $env }}
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
 {{- end }}
-{{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" $controller "env" (join "\n" $vars)) }}
+{{- /* Without pods, the controller mounts no token: it reaches nothing in the cluster but the database. */}}
+{{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" (ternary $controller "" $jobs.pods) "env" (join "\n" $vars)) }}
+{{- if $jobs.pods }}
 ---
 # The controller's own ServiceAccount, the only one whose token a pod of the release mounts.
 apiVersion: v1

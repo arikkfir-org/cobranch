@@ -322,8 +322,9 @@ controller:
 
 # The organizations' job namespaces and the pods jobs run in.
 jobs:
-  # Whether runs execute pods at all. False renders no controller, no cluster-wide RBAC and no admission policy, for a
-  # cluster that can't grant them: runs of pods and scripts fail with "this installation runs no pods".
+  # Whether runs execute pods at all. False renders no cluster-wide RBAC and no admission policy, for a cluster that
+  # can't grant them, and the controller mounts no token: runs of pods and scripts fail with "this installation runs
+  # no pods".
   pods: true
   # Starts each job namespace's name, which the organization's ID ends. Empty: the release's namespace and -jobs-,
   # such as cobranch-jobs-0193a8c0-....
