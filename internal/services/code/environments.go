@@ -20,6 +20,9 @@ const PermRunDelivery = "delivery.run"
 // MaxDeliveriesPage is the most deliveries a page lists.
 const MaxDeliveriesPage = 100
 
+// MaxRender is the largest render a render pod may upload, in bytes: 16 MiB.
+const MaxRender = 16 << 20
+
 // DeliveryAnnotation is the name of the annotation a target sets on each commit delivered to it: delivery/<target>,
 // which no job may take.
 func DeliveryAnnotation(target string) string {
@@ -157,6 +160,10 @@ var (
 	ErrEnvironmentNotPaused = errors.New("the environment isn't paused")
 	// ErrDeliveryNotWaiting is a delivery asked to start that doesn't wait for a member.
 	ErrDeliveryNotWaiting = errors.New("the delivery doesn't wait for a member to start it")
+	// ErrDeliveryNotRendering is a render uploaded for a delivery that doesn't render, or has its render already.
+	ErrDeliveryNotRendering = errors.New("the delivery doesn't render, or has its render already")
+	// ErrRenderTooLarge is a render larger than MaxRender.
+	ErrRenderTooLarge = errors.New("the render is larger than 16 MiB")
 )
 
 // EnvironmentStore keeps a repository's environments and their deliveries.
@@ -186,6 +193,9 @@ type EnvironmentStore interface {
 	// StartDelivery queues a waiting delivery for actor, in one transaction that appends event delivery.started:
 	// repos.ErrNotFound without it, ErrDeliveryNotWaiting when it doesn't wait.
 	StartDelivery(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (Delivery, error)
+	// KeepRender keeps a rendering delivery's render, once: ErrDeliveryNotRendering when it doesn't render, or has
+	// one.
+	KeepRender(ctx context.Context, deliveryID uuid.UUID, manifests []byte) error
 }
 
 // Environments lists the repository's live environments, by target and then branch, those of branch alone when it is
@@ -325,6 +335,33 @@ func (s *Service) StartDelivery(ctx context.Context, v Viewer, repoID uuid.UUID,
 		return Delivery{}, failed(span, "starting the delivery", err)
 	}
 	return d, nil
+}
+
+// UploadRender keeps the render of one of the repository's deliveries, which its render pod uploads with the
+// delivery's own token: ErrForbidden under any other credential, ErrRenderTooLarge past MaxRender, and
+// ErrDeliveryNotRendering when the delivery doesn't render, or has its render already. The controller applies it.
+func (s *Service) UploadRender(ctx context.Context, v Viewer, repoID uuid.UUID, number int64, manifests []byte) error {
+	ctx, span := tracer.Start(ctx, "code.Service.UploadRender")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.Int64("cobranch.delivery.number", number),
+		attribute.Int("cobranch.render.bytes", len(manifests)))
+	if err := s.read(ctx, v, repoID); err != nil {
+		return failed(span, "uploading the render", err)
+	}
+	d, err := s.store.Delivery(ctx, repoID, number)
+	if err != nil {
+		return failed(span, "uploading the render", err)
+	}
+	if err := s.authz.Renders(ctx, d.ID); err != nil {
+		return failed(span, "uploading the render", err)
+	}
+	if len(manifests) > MaxRender {
+		return failed(span, "uploading the render", ErrRenderTooLarge)
+	}
+	if err := s.store.KeepRender(ctx, d.ID, manifests); err != nil {
+		return failed(span, "uploading the render", err)
+	}
+	return nil
 }
 
 // runDelivery checks that v holds delivery.run on the repository: repos.ErrNotFound without repo.read.

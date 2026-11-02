@@ -18,6 +18,7 @@ import (
 	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
 	networkingv1ac "k8s.io/client-go/applyconfigurations/networking/v1"
 	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 // The objects the controller keeps in every job namespace, by name.
@@ -134,21 +135,14 @@ func denyIngress(ns string) *networkingv1ac.NetworkPolicyApplyConfiguration {
 
 // egress lets the namespace's pods reach DNS, every address outside EgressExcept, and the installation's servers.
 func (c *Cluster) egress(ns string) (*networkingv1ac.NetworkPolicyApplyConfiguration, error) {
-	blocks, err := ipBlocks(c.cfg.EgressExcept)
+	dns, err := DNSEgress(c.cfg.DNS)
 	if err != nil {
 		return nil, err
 	}
-	dns := networkingv1ac.NetworkPolicyEgressRule().WithPorts(
-		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolUDP).WithPort(intstr.FromInt32(53)),
-		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolTCP).WithPort(intstr.FromInt32(53)))
-	for _, peer := range c.cfg.DNS {
-		applied, err := peerOf(peer)
-		if err != nil {
-			return nil, err
-		}
-		dns = dns.WithTo(applied)
+	internet, err := Internet(c.cfg.EgressExcept)
+	if err != nil {
+		return nil, fmt.Errorf("jobs' %w", err)
 	}
-	internet := networkingv1ac.NetworkPolicyEgressRule().WithTo(blocks...)
 	servers := networkingv1ac.NetworkPolicyEgressRule().
 		WithTo(networkingv1ac.NetworkPolicyPeer().
 			WithNamespaceSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"kubernetes.io/metadata.name": c.cfg.Home})).
@@ -161,13 +155,30 @@ func (c *Cluster) egress(ns string) (*networkingv1ac.NetworkPolicyApplyConfigura
 			WithEgress(dns, internet, servers)), nil
 }
 
-// ipBlocks are every IPv4 and IPv6 address but except's ranges, each family's block excepting its own.
-func ipBlocks(except []string) ([]*networkingv1ac.NetworkPolicyPeerApplyConfiguration, error) {
+// DNSEgress lets a namespace's pods ask DNS on port 53: of the peers dns names, or of any address without them, which
+// reaches the cluster's DNS however it is set up. The job namespaces and the environment namespaces both take it.
+func DNSEgress(dns []networkingv1.NetworkPolicyPeer) (*networkingv1ac.NetworkPolicyEgressRuleApplyConfiguration, error) {
+	rule := networkingv1ac.NetworkPolicyEgressRule().WithPorts(
+		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolUDP).WithPort(intstr.FromInt32(53)),
+		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolTCP).WithPort(intstr.FromInt32(53)))
+	for _, peer := range dns {
+		applied, err := PeerOf(peer)
+		if err != nil {
+			return nil, err
+		}
+		rule = rule.WithTo(applied)
+	}
+	return rule, nil
+}
+
+// Internet lets a namespace's pods reach every IPv4 and IPv6 address but except's ranges, each family's block
+// excepting its own.
+func Internet(except []string) (*networkingv1ac.NetworkPolicyEgressRuleApplyConfiguration, error) {
 	var v4, v6 []string
 	for _, cidr := range except {
 		prefix, err := netip.ParsePrefix(cidr)
 		if err != nil {
-			return nil, fmt.Errorf("jobs' egress excepts %q, which is no address range: %w", cidr, err)
+			return nil, fmt.Errorf("egress excepts %q, which is no address range: %w", cidr, err)
 		}
 		if prefix.Addr().Is4() {
 			v4 = append(v4, prefix.Masked().String())
@@ -175,20 +186,24 @@ func ipBlocks(except []string) ([]*networkingv1ac.NetworkPolicyPeerApplyConfigur
 			v6 = append(v6, prefix.Masked().String())
 		}
 	}
-	return []*networkingv1ac.NetworkPolicyPeerApplyConfiguration{
+	return networkingv1ac.NetworkPolicyEgressRule().WithTo(
 		networkingv1ac.NetworkPolicyPeer().WithIPBlock(networkingv1ac.IPBlock().WithCIDR("0.0.0.0/0").WithExcept(v4...)),
-		networkingv1ac.NetworkPolicyPeer().WithIPBlock(networkingv1ac.IPBlock().WithCIDR("::/0").WithExcept(v6...)),
-	}, nil
+		networkingv1ac.NetworkPolicyPeer().WithIPBlock(networkingv1ac.IPBlock().WithCIDR("::/0").WithExcept(v6...))), nil
 }
 
 // limits gives the namespace's containers the installation's defaults.
 func (c *Cluster) limits(ns string) *corev1ac.LimitRangeApplyConfiguration {
+	return Limits(ns, c.cfg.Resources)
+}
+
+// Limits is the LimitRange that gives namespace ns's containers r's requests and limits where they name none.
+func Limits(ns string, r corev1.ResourceRequirements) *corev1ac.LimitRangeApplyConfiguration {
 	item := corev1ac.LimitRangeItem().WithType(corev1.LimitTypeContainer)
-	if len(c.cfg.Resources.Limits) > 0 {
-		item = item.WithDefault(c.cfg.Resources.Limits)
+	if len(r.Limits) > 0 {
+		item = item.WithDefault(r.Limits)
 	}
-	if len(c.cfg.Resources.Requests) > 0 {
-		item = item.WithDefaultRequest(c.cfg.Resources.Requests)
+	if len(r.Requests) > 0 {
+		item = item.WithDefaultRequest(r.Requests)
 	}
 	return corev1ac.LimitRange(limitRange, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
 		WithSpec(corev1ac.LimitRangeSpec().WithLimits(item))
@@ -196,46 +211,56 @@ func (c *Cluster) limits(ns string) *corev1ac.LimitRangeApplyConfiguration {
 
 // quota applies the installation's quota to namespace ns, or deletes the one there when it has none.
 func (c *Cluster) quota(ctx context.Context, ns string, apply metav1.ApplyOptions) error {
-	quotas := c.client.CoreV1().ResourceQuotas(ns)
-	if len(c.cfg.Quota) == 0 {
+	return ApplyQuota(ctx, c.client, ns, c.cfg.Quota, apply)
+}
+
+// ApplyQuota applies hard as namespace ns's ResourceQuota, or deletes the one there when hard is empty.
+func ApplyQuota(ctx context.Context, client kubernetes.Interface, ns string, hard corev1.ResourceList, apply metav1.ApplyOptions) error {
+	quotas := client.CoreV1().ResourceQuotas(ns)
+	if len(hard) == 0 {
 		if err := quotas.Delete(ctx, resourceQuota, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 			return fmt.Errorf("deleting the quota in namespace %s: %w", ns, err)
 		}
 		return nil
 	}
 	q := corev1ac.ResourceQuota(resourceQuota, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
-		WithSpec(corev1ac.ResourceQuotaSpec().WithHard(c.cfg.Quota))
+		WithSpec(corev1ac.ResourceQuotaSpec().WithHard(hard))
 	if _, err := quotas.Apply(ctx, q, apply); err != nil {
 		return fmt.Errorf("applying the quota in namespace %s: %w", ns, err)
 	}
 	return nil
 }
 
-// peerOf is a NetworkPolicy peer as an apply configuration, which has its JSON.
-func peerOf(peer networkingv1.NetworkPolicyPeer) (*networkingv1ac.NetworkPolicyPeerApplyConfiguration, error) {
+// PeerOf is a NetworkPolicy peer as an apply configuration, which has its JSON.
+func PeerOf(peer networkingv1.NetworkPolicyPeer) (*networkingv1ac.NetworkPolicyPeerApplyConfiguration, error) {
 	encoded, err := json.Marshal(peer)
 	if err != nil {
-		return nil, fmt.Errorf("encoding a DNS peer: %w", err)
+		return nil, fmt.Errorf("encoding a NetworkPolicy peer: %w", err)
 	}
 	var applied networkingv1ac.NetworkPolicyPeerApplyConfiguration
 	if err := json.Unmarshal(encoded, &applied); err != nil {
-		return nil, fmt.Errorf("decoding a DNS peer: %w", err)
+		return nil, fmt.Errorf("decoding a NetworkPolicy peer: %w", err)
 	}
 	return &applied, nil
 }
 
-// untilBound calls write until the controller's new binding lets it, as RBAC's caches take the binding in: again while
-// it is forbidden, every bindRetry, for bindWait at most.
+// untilBound calls write until the controller's new binding lets it.
 func (c *Cluster) untilBound(ctx context.Context, write func() error) error {
-	deadline := c.now().Add(bindWait)
+	return UntilBound(ctx, c.now, write)
+}
+
+// UntilBound calls write until a new RoleBinding lets it, as RBAC's caches take the binding in: again while it is
+// forbidden, every bindRetry, for bindWait at most.
+func UntilBound(ctx context.Context, now func() time.Time, write func() error) error {
+	deadline := now().Add(bindWait)
 	for {
 		err := write()
-		if !apierrors.IsForbidden(err) || !c.now().Before(deadline) {
+		if !apierrors.IsForbidden(err) || !now().Before(deadline) {
 			return err
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("waiting for the controller's binding: %w", ctx.Err())
+			return fmt.Errorf("waiting for a binding: %w", ctx.Err())
 		case <-time.After(bindRetry):
 		}
 	}

@@ -28,8 +28,25 @@ func TestLoadController(t *testing.T) {
 		{name: "defaults", env: controllerEnv(nil), check: func(c Controller) bool {
 			return c.PollInterval == 5*time.Second && c.SweepInterval == 5*time.Minute && c.Pods && c.Lease == 2*time.Minute &&
 				c.Timeout == time.Hour && c.MaxTimeout == 24*time.Hour && c.LogsMaxBytes == 10<<20 && c.PodSecurity == "restricted" &&
-				c.Quota.Value == nil && c.Affinity.Value == nil && c.OwnerRole == "cobranch-cobranch-controller"
+				c.Quota.Value == nil && c.Affinity.Value == nil && c.OwnerRole == "cobranch-cobranch-controller" && !c.InCluster &&
+				c.RenderTimeout == 10*time.Minute && c.HealthInterval == 15*time.Second && c.DeliveryPodSecurity == "restricted" &&
+				c.RendersKeep == 10
 		}},
+		{name: "delivery into this cluster", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true",
+			"COBRANCH_DELIVERY_ACCOUNT": "cobranch-delivery", "COBRANCH_DELIVERY_ROLE": "cobranch-cobranch-delivery",
+			"COBRANCH_DELIVERY_FENCE_ROLE": "cobranch-cobranch-environments", "COBRANCH_DELIVERY_POD_SECURITY": "baseline",
+			"COBRANCH_DELIVERY_INGRESS_FROM":   `[{"matchLabels":{"kubernetes.io/metadata.name":"gateway"}}]`,
+			"COBRANCH_DELIVERY_QUOTA":          `{"pods":"20"}`,
+			"COBRANCH_DELIVERY_RENDER_TIMEOUT": "5m", "COBRANCH_DELIVERY_RENDER_RESOURCES": `{"limits":{"memory":"512Mi"}}`}),
+			check: func(c Controller) bool {
+				return c.InCluster && c.Account == "cobranch-delivery" && c.DeliveryPodSecurity == "baseline" && len(c.IngressFrom.Value) == 1 &&
+					c.DeliveryQuota.Value.Pods().String() == "20" && c.RenderTimeout == 5*time.Minute &&
+					c.RenderResources.Value.Limits.Memory().String() == "512Mi" && c.PodSecurity == "restricted"
+			}},
+		{name: "delivery into this cluster without its account", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_IN_CLUSTER": "true"}),
+			wantErr: "COBRANCH_DELIVERY_ACCOUNT"},
+		{name: "no render timeout", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDER_TIMEOUT": "0s"}), wantErr: "must be positive"},
+		{name: "no renders kept", env: controllerEnv(map[string]string{"COBRANCH_DELIVERY_RENDERS_KEEP": "0"}), wantErr: "COBRANCH_DELIVERY_RENDERS_KEEP"},
 		{name: "the chart's maps and lists", env: controllerEnv(map[string]string{
 			"COBRANCH_JOBS_NAMESPACE_LABELS": `{"example.com/team":"ci"}`, "COBRANCH_JOBS_EGRESS_EXCEPT": "10.0.0.0/8,fc00::/7",
 			"COBRANCH_JOBS_EGRESS_DNS": `[{"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}},"namespaceSelector":{}}]`,

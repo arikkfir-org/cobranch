@@ -240,3 +240,51 @@ func TestAuthorizerUnderATaskToken(t *testing.T) {
 		})
 	}
 }
+
+// TestAuthorizerUnderADeliveryToken holds a delivery's token, which acts as its target while it renders, to reading
+// its organization and repository, and to uploading its own delivery's render.
+func TestAuthorizerUnderADeliveryToken(t *testing.T) {
+	target, org, repo, delivery := uuid.New(), uuid.New(), uuid.New(), uuid.New()
+	g := scoped{repo: repo, held: []string{"secrets.read"}}
+	token := auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: target, Kind: auth.KindTarget}},
+		Credential: auth.Credential{ID: delivery, Kind: auth.CredentialDeliveryToken, PrincipalID: target, OrgID: org, RepoID: repo,
+			Permissions: []string{"repo.read"}}}
+	run := token
+	run.Credential.Kind = auth.CredentialRunToken
+	tests := []struct {
+		name       string
+		viewer     *auth.Authenticated
+		scope      auth.Scope
+		scopeID    uuid.UUID
+		want       []string
+		uploads    uuid.UUID
+		wantUpload bool
+	}{
+		{name: "its repository: reading it", viewer: &token, scope: auth.ScopeRepository, scopeID: repo,
+			want: []string{"repo.read", "secrets.read"}, uploads: delivery, wantUpload: true},
+		{name: "its organization: reading it", viewer: &token, scope: auth.ScopeOrganization, scopeID: org, want: []string{"org.read"},
+			uploads: delivery, wantUpload: true},
+		{name: "another repository: nothing, and not another delivery's render", viewer: &token, scope: auth.ScopeRepository,
+			scopeID: uuid.New(), uploads: uuid.New()},
+		{name: "a run's token by the same ID uploads nothing", viewer: &run, scope: auth.ScopeRepository, scopeID: repo,
+			want: []string{"repo.read", "secrets.read"}, uploads: delivery},
+		{name: "no token: its grants alone", scope: auth.ScopeRepository, scopeID: repo, want: []string{"secrets.read"}, uploads: delivery},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx := context.Background()
+			if tt.viewer != nil {
+				ctx = auth.WithViewer(ctx, *tt.viewer)
+			}
+			a := auth.NewAuthorizer(g)
+			held, err := a.Holds(ctx, target, tt.scope, tt.scopeID)
+			if err != nil || !slices.Equal(held, tt.want) {
+				t.Errorf("Holds() = %v, %v, want %v", held, err, tt.want)
+			}
+			err = a.Renders(ctx, tt.uploads)
+			if tt.wantUpload != (err == nil) || err != nil && !errors.Is(err, auth.ErrForbidden) {
+				t.Errorf("Renders() = %v, want allowed %t", err, tt.wantUpload)
+			}
+		})
+	}
+}

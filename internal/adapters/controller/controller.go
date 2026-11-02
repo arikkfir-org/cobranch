@@ -1,8 +1,9 @@
-// Package controller is the job controller's loop: on each poll it starts every queued run it can claim, then follows
-// the runs that run to their end; every minute it queues the schedules' runs, and every sweep it cleans up after what
-// ended otherwise. Any number of replicas may run
-// it: each claims a run under a lease, and ending a run twice ends it once
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's life").
+// Package controller is the controller's loop, which it runs for its runs and for its deliveries alike: on each poll it
+// starts every queued one it can claim, then follows those that work to their end; every minute it queues the
+// schedules' runs, and every sweep it cleans up after what ended otherwise. Any number of replicas may run it: each
+// claims under a lease, and ending one twice ends it once
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's life", and
+// https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "A delivery's life").
 package controller
 
 import (
@@ -11,41 +12,46 @@ import (
 	"time"
 )
 
-// maxStarts is the most runs a pass starts before it follows the runs that run, so that a long queue never holds up
-// the runs that ended.
+// maxStarts is the most a pass starts before it follows those that work, so that a long queue never holds up those
+// that ended.
 const maxStarts = 50
 
 // scheduleEvery is how often the loop queues the schedules' runs: a schedule fires on whole minutes.
 const scheduleEvery = time.Minute
 
-// Runner starts, follows and sweeps the runs, and queues the schedules': runner.Service.
+// Runner starts, follows and sweeps the runs, or the deliveries: runner.Service, deliverer.Service.
 type Runner interface {
 	Dispatch(ctx context.Context) (bool, error)
 	Follow(ctx context.Context) error
 	Sweep(ctx context.Context) error
+}
+
+// Scheduler is a Runner that also queues the schedules' runs: runner.Service.
+type Scheduler interface {
 	Schedule(ctx context.Context) error
 }
 
-// Run drives r until ctx ends: a sweep first and then every sweep, the schedules every minute, and a pass every poll.
-// A failure is logged, and the next pass tries again.
-func Run(ctx context.Context, r Runner, poll, sweep time.Duration) {
+// Run drives r, which works through what, until ctx ends: a sweep first and then every sweep, the schedules every
+// minute if r is a Scheduler, and a pass every poll. A failure is logged, naming what, and the next pass tries again.
+func Run(ctx context.Context, what string, r Runner, poll, sweep time.Duration) {
 	ticker := time.NewTicker(poll)
 	defer ticker.Stop()
+	scheduler, schedules := r.(Scheduler)
 	var swept, scheduled time.Time
 	for {
 		if time.Since(swept) >= sweep {
 			if err := r.Sweep(ctx); err != nil {
-				slog.ErrorContext(ctx, "Sweeping the job namespaces failed", "error", err)
+				slog.ErrorContext(ctx, "Sweeping failed", "work", what, "error", err)
 			}
 			swept = time.Now()
 		}
-		if time.Since(scheduled) >= scheduleEvery {
-			if err := r.Schedule(ctx); err != nil {
-				slog.ErrorContext(ctx, "Queueing the schedules' runs failed", "error", err)
+		if schedules && time.Since(scheduled) >= scheduleEvery {
+			if err := scheduler.Schedule(ctx); err != nil {
+				slog.ErrorContext(ctx, "Queueing the schedules' runs failed", "work", what, "error", err)
 			}
 			scheduled = time.Now()
 		}
-		pass(ctx, r)
+		pass(ctx, what, r)
 		select {
 		case <-ctx.Done():
 			return
@@ -54,21 +60,21 @@ func Run(ctx context.Context, r Runner, poll, sweep time.Duration) {
 	}
 }
 
-// pass starts the queued runs, up to maxStarts, until none waits or claiming fails, then follows the runs that run.
-func pass(ctx context.Context, r Runner) {
+// pass starts the queued ones, up to maxStarts, until none waits or claiming fails, then follows those that work.
+func pass(ctx context.Context, what string, r Runner) {
 	for range maxStarts {
 		if ctx.Err() != nil {
 			return
 		}
 		started, err := r.Dispatch(ctx)
 		if err != nil {
-			slog.ErrorContext(ctx, "Starting a run failed", "error", err)
+			slog.ErrorContext(ctx, "Starting failed", "work", what, "error", err)
 		}
 		if !started {
 			break // none waits, or the database itself failed: wait for the next pass
 		}
 	}
 	if err := r.Follow(ctx); err != nil {
-		slog.ErrorContext(ctx, "Following the runs failed", "error", err)
+		slog.ErrorContext(ctx, "Following failed", "work", what, "error", err)
 	}
 }

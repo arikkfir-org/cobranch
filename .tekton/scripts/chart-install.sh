@@ -3,7 +3,8 @@
 # its administrator among auth.admins, or upgrades it there rolling every workload, and waits for the migrate Job to
 # finish and every pod to be ready. The packs live in the database, the chart's default, so a pack one Git server
 # stored is every Git server's, across an upgrade too, and maintenance's, which compacts a repository's packs once it
-# has two. The Git server serves SSH too. An upgrade must keep the generated database password and SSH host
+# has two. The Git server serves SSH too, and the controller delivers into the cluster, under its admission policies.
+# An upgrade must keep the generated database password and SSH host
 # key, and its migrate Job find nothing left to apply.
 set -eu
 action=$1
@@ -29,7 +30,7 @@ set -- --namespace "$ns" --wait --wait-for-jobs --timeout 5m \
   --set urls.admin=https://cobranch.test/admin --set urls.backOffice=https://cobranch.test/back-office \
   --set urls.git=https://cobranch.test/git --set urls.gitSsh=ssh://git@cobranch.test \
   --set maintenance.compaction.packs=2 \
-  --set seed.enabled=true --set 'auth.admins[0]=ada@cobranch.example'
+  --set seed.enabled=true --set 'auth.admins[0]=ada@cobranch.example' --set delivery.inCluster.enabled=true
 password() { kubectl -n "$ns" get secret cobranch-postgresql -o jsonpath='{.data.password}'; }
 hostKey() { kubectl -n "$ns" get secret cobranch-git-ssh-host-key -o jsonpath='{.data.key}'; }
 case "$action" in

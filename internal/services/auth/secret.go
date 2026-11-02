@@ -20,6 +20,8 @@ const (
 	PrefixRunToken = "cbr_"
 	// PrefixTaskToken starts an agent task's token.
 	PrefixTaskToken = "cba_"
+	// PrefixDeliveryToken starts a delivery's token, which its render pod checks out and uploads with.
+	PrefixDeliveryToken = "cbd_"
 )
 
 const (

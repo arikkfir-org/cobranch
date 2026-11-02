@@ -170,6 +170,23 @@ func (s *Store) StartDelivery(ctx context.Context, actor uuid.UUID, repoID uuid.
 	return d, nil
 }
 
+// KeepRender keeps a rendering delivery's render, once, as code.Store does.
+func (s *Store) KeepRender(_ context.Context, deliveryID uuid.UUID, manifests []byte) error {
+	for _, list := range s.DeliveryList {
+		for _, d := range list {
+			if d.ID != deliveryID {
+				continue
+			}
+			if _, kept := s.Renders[deliveryID]; kept || d.State != code.DeliveryRendering {
+				return code.ErrDeliveryNotRendering
+			}
+			s.Renders[deliveryID] = manifests
+			return nil
+		}
+	}
+	return code.ErrDeliveryNotRendering
+}
+
 // deliverHead queues a delivery of the head of e's branch for actor, superseding e's others.
 func (s *Store) deliverHead(repoID uuid.UUID, e code.Environment, actor uuid.UUID, trigger code.DeliveryTrigger) (code.Delivery, error) {
 	i := slices.IndexFunc(s.BranchList[repoID], func(b code.Branch) bool { return b.Name == e.Branch })

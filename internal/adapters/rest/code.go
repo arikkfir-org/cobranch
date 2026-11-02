@@ -55,6 +55,7 @@ type Code interface {
 	PauseEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	ResumeEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
+	UploadRender(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64, manifests []byte) error
 	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
 	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)

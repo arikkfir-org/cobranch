@@ -729,6 +729,85 @@
         }
       }
     },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "render": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        },
+        "healthInterval": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+        },
+        "renders": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "keep": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "inCluster": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "podSecurity": {
+              "enum": [
+                "restricted",
+                "baseline",
+                "privileged"
+              ]
+            },
+            "namespaceLabels": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              }
+            },
+            "ingressFrom": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "resources": {
+              "type": "object"
+            },
+            "quota": {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              }
+            },
+            "rules": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "migrate": {
       "type": "object",
       "additionalProperties": false,

@@ -388,9 +388,63 @@ jobs:
     # Ranges of egress.except that webhooks may reach all the same, such as a private receiver's: the controller checks
     # the address it connects to, so a webhook reaches only what a job pod could, and these.
     allowedCIDRs: []
-  # The ValidatingAdmissionPolicy that holds the controller to its job namespaces, and its RoleBindings there to its
-  # own roles and ServiceAccounts. Off only where your cluster's own policies hold it so.
+  # The ValidatingAdmissionPolicies that hold the controller to its job namespaces and its environments' namespaces,
+  # and its RoleBindings there to its own roles and ServiceAccounts, and keep the delivery account off an environment's
+  # guards. Off only where your cluster's own policies hold them so.
   admissionPolicy: true
+
+# Deliveries of branches to their targets' environments
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "The chart"). Each renders in a
+# pod of its organization's job namespace, under jobs' egress, defaults and quota, which then uploads the render for the
+# controller to apply.
+delivery:
+  render:
+    # How long a render may take, after which its delivery fails.
+    timeout: 10m
+    # The render pod's container's requests and memory limit: Helm and Kustomize hold a render in memory.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 1Gi
+  # How often an environment that is Progressing has its health read again.
+  healthInterval: 15s
+  renders:
+    # How many renders each environment keeps, for its deliveries' pages; the controller deletes older ones, but those
+    # of deliveries still working and the environment's last to succeed.
+    keep: 10
+  inCluster:
+    # Whether targets without a cluster deliver into this installation's cluster: each environment into a namespace
+    # the controller makes, labels and fences, applying as the delivery account, a ServiceAccount <release>-delivery
+    # that a RoleBinding there alone lets do what <namespace>-<release>-delivery allows. It needs jobs.pods, and grants
+    # the controller more cluster-wide: it creates the environments' namespaces, which an uninstall leaves behind, and
+    # binds roles there. False renders none of it, and those targets' deliveries fail with "this installation delivers
+    # to no cluster of its own". Turn it on only where every organization may make namespaces of the names its
+    # repositories' targets give.
+    enabled: false
+    # The Pod Security Standard the environments' namespaces enforce: restricted, baseline or privileged.
+    podSecurity: restricted
+    # Labels for every environment's namespace, beside Cobranch's own and its Pod Security level's.
+    namespaceLabels: {}
+    # Namespace selectors whose pods may reach an environment's, such as your Gateway's:
+    # [{matchLabels: {kubernetes.io/metadata.name: gateway}}]. An environment's own pods always may; nothing else does.
+    # They reach DNS and every address outside jobs.egress.except.
+    ingressFrom: []
+    # A container's requests and memory limit when its manifest names none.
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 2Gi
+    # The most one environment takes at once, as a ResourceQuota's hard limits, such as {pods: "20",
+    # requests.cpu: "4"}. Empty: none.
+    quota: {}
+    # More rules for the delivery role, beside a namespace's admin's: the kinds of your cluster's CRDs that renders
+    # may hold, such as cert-manager's Certificates. Never NetworkPolicies, LimitRanges or ResourceQuotas: the
+    # controller keeps those, and the admission policy refuses the account them.
+    rules: []
 
 # The Job that migrates the database before the servers of a new version roll out.
 migrate:
