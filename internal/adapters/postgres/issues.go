@@ -81,12 +81,15 @@ func (s *IssueStore) List(ctx context.Context, orgID uuid.UUID, q issues.Query) 
 	for _, st := range q.States {
 		states = append(states, string(st))
 	}
-	number := q.Number
-	if number > maxInt32 {
-		number = 0
+	number, below := q.Number, q.Below
+	if number < 1 || number > maxInt32 {
+		number = 0 // no issue has it
+	}
+	if below < 1 || below > maxInt32 {
+		below = 0 // every issue is below it
 	}
 	rows, err := s.q.ListIssues(ctx, queries.ListIssuesParams{OrgID: orgID, States: states, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID,
-		Pattern: pattern(q.Text), Number: int32(number), Below: int32(q.Below), Lim: int32(q.Limit + 1)})
+		Pattern: pattern(q.Text), Number: int32(number), Below: int32(below), Lim: int32(q.Limit + 1)})
 	if err != nil {
 		return nil, false, fmt.Errorf("listing the issues: %w", err)
 	}
