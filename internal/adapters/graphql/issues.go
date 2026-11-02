@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/google/uuid"
@@ -75,6 +76,9 @@ func issueOf(i issues.Issue) *Issue {
 	}
 	if r := i.Repository; r != nil {
 		out.Repository = &IssueRepository{ID: r.ID.String(), Slug: r.Slug, Name: r.Name}
+	}
+	if t := i.Task; t != nil {
+		out.Task = &IssueTask{Number: int(t.Number), State: TaskState(strings.ToUpper(string(t.State)))}
 	}
 	out.Labels = mapAll(i.Labels, func(l issues.IssueLabel) *IssueLabel {
 		return &IssueLabel{ID: l.ID.String(), Name: l.Name, Color: labelColors[l.Color]}

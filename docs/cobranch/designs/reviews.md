@@ -7,7 +7,7 @@
 **Status**: Proposed 2026-11-02 · [ENG-216](https://linear.app/arikkfir/issue/ENG-216) · Builds the [product’s AI
 review](product.md#agents-and-ai-review) on [branch status](branch-status.md) and the agents of
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Adds no workload and no chart value · Built by
-[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in four pull requests
+[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in five pull requests
 
 People and agents review commits, and `main`’s `/cobranch.yaml` can require approvals before a branch merges. Every push
 of a branch gets a review from the organization’s built-in AI reviewer, an agent whose model an admin picks and whose
@@ -115,9 +115,8 @@ organization, holding Automation there.
   `org.principals.manage` picks its provider and model, or suspends it, as for any agent
   ([models](architecture.md#settings-secrets-and-models)). Until it has a model, it reviews nothing.
 - **It reviews every push of a branch,** but `main`, to a new head, in a repository it reviews: the push worker's
-  transaction queues a review task for it at that head, the way it queues [job
-  runs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#triggers). A newer push of the branch, or its deletion,
-  cancels the branch's open review task.
+  transaction queues a review task for it at that head, the way it queues [job runs](jobs.md#triggers). A newer push of
+  the branch, or its deletion, cancels the branch's open review task.
 - **It reads** the branch's diff against `main` and the files at the head through the same APIs as anyone, and its
   instructions: its built-in ones, then `main`'s `/cobranch-review.yaml` and the files it names. Never the branch's own
   copy.
@@ -149,9 +148,8 @@ kind, `review`, and names the repository, the branch and the head.
   harness gets two tools of this slice beside its own: read the branch's diff, and submit the review; its comments go
   with the review.
 - **Outside pushes wait.** A head pushed from outside the organization doesn't spend the organization's model on its
-  own: when `main`'s `repository.jobs.outsidePushes` keeps [jobs
-  waiting](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#outside), the review task waits too, until a member with
-  `repo.push` starts it.
+  own: when `main`'s `repository.jobs.outsidePushes` keeps [jobs waiting](jobs.md#the-outside-push-gate), the review
+  task waits too, until a member with `repo.push` starts it.
 - **Review again.** A member with `repo.push` asks for another review of the head at any time, which supersedes the open
   one: after a failure, or once a discussion in the chat settled a comment.
 - **Its timeout** is 30 minutes. A task that fails or times out leaves no review, and the reason on the branch.
@@ -180,12 +178,15 @@ The [architecture](architecture.md#decisions) agreed that the reviewer reads the
 cannot rewrite its own reviewer’s instructions; keeping the model out of the file keeps a repository from choosing what
 its organization pays for.
 
-- **No file is the defaults:** every branch, nothing ignored, no instructions of the repository's own. Whether the
-  reviewer reviews a repository without one is [open question 2](#open-questions); recommended, yes, once its
-  organization gave it a model.
+- **No file is the defaults:** every branch, nothing ignored, no instructions of the repository's own, and
+  `maxDiffLines` 5000. Whether the reviewer reviews a repository without one is [open question 2](#open-questions);
+  recommended, yes, once its organization gave it a model.
 - **Read as the requirements are.** A push that moves `main` reads the file at the new tip and replaces the repository's
-  parsed copy in its transaction; a file that doesn't parse refuses the push, naming the line. `include` names at most
-  20 paths or globs, read at review time from `main`'s tip, 256 KiB in all.
+  parsed copy in its transaction; a file that doesn't parse refuses the push, naming the line. Every key is checked, so
+  a misspelt one refuses the file rather than being ignored. `include` names at most 20 paths or globs, read at review
+  time from `main`'s tip, 256 KiB in all; `paths.ignore` at most 100 globs; `instructions` hold at most 20,000
+  characters; `maxDiffLines` runs from 1 to 20,000, the most a diff holds. Patterns match as the jobs' branch patterns
+  do: `*` within a name, `**` across them.
 - **No model in the file.** The organization's admin picks the reviewer's model, so a repository can't choose what its
   organization pays for.
 
@@ -242,9 +243,9 @@ adds them to it.
 
 ## Jobs on reviews
 
-[Jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#triggers) declares the trigger, `review: {states, branches}`: a
-review submitted of the head of a live branch matching `branches`, in one of `states` (all three by default), queues the
-job, with the definitions of that head, at that head.
+[Jobs](jobs.md#triggers) declares the trigger, `review: {states, branches}`: a review submitted of the head of a live
+branch matching `branches`, in one of `states` (all three by default), queues the job, with the definitions of that
+head, at that head.
 
 **Submitting is one transaction: the review, its threads, its event, the status and the jobs**
 
@@ -256,8 +257,7 @@ happen.
 - **The review's own transaction** queues the runs, through [ENG-214](https://linear.app/arikkfir/issue/ENG-214)'s
   `queueRuns`, with the review's state, so a job never runs for a review that didn't happen, and a branch whose required
   job was just queued stays Processing.
-- **Outside pushes** gate these runs as they gate the review task, by [the jobs'
-  rule](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y#outside).
+- **Outside pushes** gate these runs as they gate the review task, by [the jobs' rule](jobs.md#the-outside-push-gate).
 - **A review task ends** when its review is submitted, in the same transaction.
 
 ## The Console
@@ -307,21 +307,24 @@ history is Git’s. Every new row carries `org_id`.
 
 ## Rollout
 
-**Four pull requests, each with its tests and its Console pages**
+**Five pull requests, each with its tests and its Console pages**
 
-![Four pull requests, each with its tests and its Console pages](reviews/rollout.svg)
+![Five pull requests, each with its tests and its Console pages](reviews/rollout.svg)
 
 Nothing changes for an operator: no workload and no chart value is added. A repository opts into required reviews
 through its own `/cobranch.yaml`, and an organization into AI review by giving its reviewer a model.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-216](https://linear.app/arikkfir/issue/ENG-216); the
-  fourth closes it. The first and second need nothing of the slices beside it; the third stacks on
-  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them, and the fourth waits for its
+  fifth closes it. The first, second and fourth need nothing of the slices beside it; the third stacks on
+  [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them, and the fifth waits for its
   agents, tasks and harness.
-- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the fourth pull request's
+- **The settings come before the reviewer.** The fourth reads `main`'s `/cobranch-review.yaml` on every push that moves
+  `main`, refuses one that doesn't parse, and keeps the parsed copy, so a repository's settings are in place when the
+  fifth starts reviewing.
+- **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the fifth pull request's
   migration, and it reviews nothing until an admin gives it a model.
 - **A repository adopts required reviews** by pushing a `reviews` key under `branches` into `main`.
-- **Bodies show as written until the fourth,** which renders them as Markdown, as the chat renders its messages.
+- **Bodies show as written until the fifth,** which renders them as Markdown, as the chat renders its messages.
 
 ## Risks
 

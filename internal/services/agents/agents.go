@@ -163,7 +163,9 @@ type Task struct {
 	Branch   string
 	// ThreadID is the thread of that branch's chat it talks in; uuid.Nil for none.
 	ThreadID uuid.UUID
-	State    TaskState
+	// IssueID is the issue it works on, for a task its assignment to the issue gave it; uuid.Nil for none.
+	IssueID uuid.UUID
+	State   TaskState
 	// Reason says why it failed or was cancelled; empty otherwise.
 	Reason string
 	// Summary is what the agent said it did, once it ended.

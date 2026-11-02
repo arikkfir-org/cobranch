@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -79,6 +80,16 @@ func ParsePriority(name string) (Priority, error) {
 type Principal struct {
 	ID          uuid.UUID
 	DisplayName string
+	// Agent is whether it is one of the organization's agents, whom assigning the issue hands it as a task.
+	Agent bool
+}
+
+// Task is the task an issue's agent assignee works on it in: the newest its assignment gave the agent.
+type Task struct {
+	Number int64
+	State  agents.TaskState
+	// RepoID is the repository it works in, whose readers alone see the task; uuid.Nil for none.
+	RepoID uuid.UUID
 }
 
 // Repository is the repository an issue is about.
@@ -104,6 +115,9 @@ type Issue struct {
 	Priority        Priority
 	// Assignee is who works on it; nil for nobody, or once they are gone.
 	Assignee *Principal
+	// Task is the task its assignee works on it in, when its assignee is an agent; nil otherwise, and for a viewer who
+	// doesn't read the repository the task works in.
+	Task *Task
 	// Repository is the repository it is about; nil for none, or for a viewer who doesn't read it.
 	Repository *Repository
 	// Labels are the organization's labels it carries, by name.

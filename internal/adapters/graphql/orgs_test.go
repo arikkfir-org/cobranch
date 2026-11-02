@@ -123,7 +123,10 @@ func newOrgFixture() *orgFixture {
 	f.commitObjects()
 	f.issueStore = issuestest.NewStore(store)
 	f.issueStore.Repos[f.website.ID] = f.website
-	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.issueStore.Agents[f.scout.ID] = f.acme.ID
+	f.issueStore.TaskOf = issuestest.TasksOf(f.agentStore.KeptTasks)
+	store.AddUser(f.scout.ID, f.scout.Name)
+	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store)).WithAgents(f.agents, f.agentStore)
 	f.issues.SetClock(func() time.Time { return now })
 	return f
 }

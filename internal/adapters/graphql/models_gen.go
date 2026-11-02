@@ -470,6 +470,8 @@ type Issue struct {
 	Priority        IssuePriority `json:"priority"`
 	// Who works on it; null for nobody, or once they are gone.
 	Assignee *IssuePrincipal `json:"assignee,omitempty"`
+	// The task its agent assignee works on it in, the newest its assignment gave the agent; null when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+	Task *IssueTask `json:"task,omitempty"`
 	// The repository it is about; null for none, and for a viewer who doesn't read it.
 	Repository *IssueRepository `json:"repository,omitempty"`
 	// The organization's labels it carries, by name.
@@ -559,7 +561,7 @@ type IssueInput struct {
 	State *IssueState `json:"state,omitempty"`
 	// NONE when left out.
 	Priority *IssuePriority `json:"priority,omitempty"`
-	// One of the organization's members.
+	// One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads.
 	AssigneeID *string `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads.
 	RepositoryID *string `json:"repositoryId,omitempty"`
@@ -588,7 +590,7 @@ type IssuePatch struct {
 	Description *string        `json:"description,omitempty"`
 	State       *IssueState    `json:"state,omitempty"`
 	Priority    *IssuePriority `json:"priority,omitempty"`
-	// One of the organization's members, or null for nobody.
+	// One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads; or null for nobody. Moving the issue from an agent cancels the agent's task, unless it has ended.
 	AssigneeID graphql.Omittable[*string] `json:"assigneeId,omitempty"`
 	// One of the organization's repositories, which the viewer reads, or null for none.
 	RepositoryID graphql.Omittable[*string] `json:"repositoryId,omitempty"`
@@ -607,6 +609,13 @@ type IssueRepository struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
 	Name string `json:"name"`
+}
+
+// The task an issue's agent assignee works on it in.
+type IssueTask struct {
+	// Its number among the organization's tasks.
+	Number int       `json:"number"`
+	State  TaskState `json:"state"`
 }
 
 // A job as /cobranch.yaml declared it.
@@ -771,9 +780,9 @@ type Organization struct {
 	Agents []*Agent `json:"agents"`
 	// One of the organization's agents by ID: null unless it is there; takes org.read.
 	Agent *Agent `json:"agent,omitempty"`
-	// A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100.
+	// A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100.
 	Tasks *TaskPage `json:"tasks"`
-	// One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read.
+	// One of the organization's tasks by number: null unless it is there, the viewer reads the repository it names, and, for an issue's task, holds issues.read; takes org.read.
 	Task *Task `json:"task,omitempty"`
 	// The model providers the organization added, by name; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
 	ModelProviders []*ModelProvider `json:"modelProviders"`

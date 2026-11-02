@@ -100,6 +100,10 @@ type Push struct {
 	// Requirements replace the repository's merge requirements when the push moves the default branch: those of
 	// SettingsFile at its new tip, none without one or when the push deletes the branch.
 	Requirements []Requirements
+	// ReviewSettings replace the repository's AI review settings when the push moves the default branch: those of
+	// ReviewSettingsFile at its new tip, the defaults without one or when the push deletes the branch; nil when it
+	// doesn't move it.
+	ReviewSettings *ReviewSettings
 	// Facts are every live branch's but the default's once the push applies, when it moves a branch; nil when it moves
 	// none.
 	Facts []Facts
@@ -162,6 +166,34 @@ func (p Push) MovesDefault() bool {
 // merge requirements (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md,
 // "Merge requirements").
 const SettingsFile = "cobranch.yaml"
+
+// ReviewSettingsFile is the path of the AI reviewer's settings for a repository in its default branch
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md, "/cobranch-review.yaml").
+const ReviewSettingsFile = "cobranch-review.yaml"
+
+// ReviewSettings are what a ReviewSettingsFile says: whether the AI reviewer reviews the repository's pushes, of which
+// branches, the paths it leaves out of the diff it reads, the instructions it adds to its own and the files of the
+// default branch it reads as more, and the largest diff it reviews.
+type ReviewSettings struct {
+	Enabled bool
+	// Branches are the patterns of the branches whose pushes it reviews, never the default branch.
+	Branches []string
+	// Ignore are the patterns of the paths it leaves out of the diff it reads.
+	Ignore       []string
+	Instructions string
+	// Include are the paths, or their patterns, of the default branch's files it reads as instructions.
+	Include      []string
+	MaxDiffLines int
+}
+
+// DefaultMaxDiffLines is the largest diff the AI reviewer reviews when a ReviewSettingsFile names none.
+const DefaultMaxDiffLines = 5000
+
+// DefaultReviewSettings are a repository's without a ReviewSettingsFile: every branch, nothing ignored, no
+// instructions of its own.
+func DefaultReviewSettings() ReviewSettings {
+	return ReviewSettings{Enabled: true, Branches: []string{"**"}, Ignore: []string{}, Include: []string{}, MaxDiffLines: DefaultMaxDiffLines}
+}
 
 // Requirements are what a merge into a branch needs, as SettingsFile names them under branches: the annotations the
 // incoming head must carry, Successful, whether history stays linear, and the reviews of the incoming head it needs,

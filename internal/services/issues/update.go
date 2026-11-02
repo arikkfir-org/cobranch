@@ -42,7 +42,9 @@ func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, number 
 	if len(changes) == 0 {
 		return s.rendered(ctx, shown(cur, readable))
 	}
-	updated, err := s.store.Update(ctx, v.ID, next, cur.Version, changes)
+	updated, err := s.save(ctx, v, cur, next, func(ctx context.Context) (Issue, error) {
+		return s.store.Update(ctx, v.ID, next, cur.Version, changes)
+	})
 	if err != nil {
 		return Issue{}, failed(span, "changing the issue", err)
 	}
@@ -92,7 +94,8 @@ func (s *Service) apply(ctx context.Context, v Viewer, cur Issue, p Patch) (Issu
 	return s.move(ctx, v, cur, next, changes, p.RepositoryID)
 }
 
-// reassign is next assigned to whom id names, and its change; next as it is for nil.
+// reassign is next assigned to whom id names, without the task of the agent it was assigned to, and its change; next
+// as it is for nil.
 func (s *Service) reassign(ctx context.Context, cur, next Issue, changes []Change, id *uuid.UUID) (Issue, []Change, error) {
 	if id == nil || *id == idOf(cur.Assignee) {
 		return next, changes, nil
@@ -101,7 +104,7 @@ func (s *Service) reassign(ctx context.Context, cur, next Issue, changes []Chang
 	if err != nil {
 		return Issue{}, nil, err
 	}
-	next.Assignee = assignee
+	next.Assignee, next.Task = assignee, nil
 	c := Change{Field: "assignee", FromID: idOf(cur.Assignee), ToID: *id}
 	if cur.Assignee != nil {
 		c.From = cur.Assignee.DisplayName
@@ -182,10 +185,10 @@ func (s *Service) Delete(ctx context.Context, v Viewer, orgID uuid.UUID, number 
 	if Stale(version, issue.Version) {
 		return ErrChanged
 	}
-	if err := s.store.Delete(ctx, v.ID, issue, issue.Version); err != nil {
-		return failed(span, "deleting the issue", err)
-	}
-	return nil
+	_, err = s.save(ctx, v, issue, Issue{}, func(ctx context.Context) (Issue, error) {
+		return Issue{}, s.store.Delete(ctx, v.ID, issue, issue.Version)
+	})
+	return failed(span, "deleting the issue", err)
 }
 
 // Activity lists what happened to one of the organization's issues, oldest first; it takes issues.read. A change of
