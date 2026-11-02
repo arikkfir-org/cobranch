@@ -1,5 +1,5 @@
-# Task test of .tekton/ci.yaml: check out the commit and test it, with the race detector, against a PostgreSQL sidecar.
-# Octomaton inlines it, and the step it references, into the PipelineRun.
+# Task test of .tekton/ci.yaml: check out the commit, restore main's Go caches and test it, with the race detector,
+# against a PostgreSQL sidecar. Octomaton inlines it, and the steps it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
 kind: Task
 metadata:
@@ -61,6 +61,8 @@ spec:
           value: $(params.repo-url)
         - name: revision
           value: $(params.revision)
+    - name: restore
+      ref: {name: go-cache-restore} # go-cache-restore.step.yaml
     - name: test
       image: docker.io/library/golang:1.27.1
       env:
