@@ -74,7 +74,10 @@ type Store interface {
 	Defer(ctx context.Context, taskID uuid.UUID, until time.Time) error
 	// MarkRunning marks a queued task running in its first pod; false when it is no longer queued.
 	MarkRunning(ctx context.Context, taskID uuid.UUID) (bool, error)
-	// Started records that the task's pod numbered pod started now.
+	// LeaseRestart claims a task whose newest pod is pod, for this controller alone to start its next, until leaseUntil;
+	// false when another controller holds it, or started its next pod already.
+	LeaseRestart(ctx context.Context, taskID uuid.UUID, pod int, leaseUntil time.Time) (bool, error)
+	// Started records that the task's pod numbered pod started now, and ends the lease of its restart.
 	Started(ctx context.Context, taskID uuid.UUID, pod int) error
 	// Fail ends a task that hasn't ended Failed, for reason, recording the change in its transcript; false when it had
 	// ended already.

@@ -120,6 +120,19 @@ func (s *TaskPodStore) MarkRunning(ctx context.Context, taskID uuid.UUID) (bool,
 	return marked, err
 }
 
+// LeaseRestart claims a task whose newest pod is pod, for this controller alone to start its next, until leaseUntil;
+// false when another controller holds it, or started its next pod already (taskrunner.Store).
+func (s *TaskPodStore) LeaseRestart(ctx context.Context, taskID uuid.UUID, pod int, leaseUntil time.Time) (bool, error) {
+	_, err := s.q.LeaseTaskRestart(ctx, leaseUntil, taskID, int32(pod)) //nolint:gosec // at most taskrunner.MaxPods
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("leasing the task's restart: %w", err)
+	}
+	return true, nil
+}
+
 // Started records that the task's pod numbered pod started now (taskrunner.Store).
 func (s *TaskPodStore) Started(ctx context.Context, taskID uuid.UUID, pod int) error {
 	if err := s.q.RecordTaskPod(ctx, int32(pod), taskID); err != nil { //nolint:gosec // at most taskrunner.MaxPods

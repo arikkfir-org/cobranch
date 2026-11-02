@@ -68,11 +68,16 @@ func (s *Service) follow(ctx context.Context, a Active, pod Pod) error {
 	return nil
 }
 
-// restart starts a's next pod in place of the one that died for reason, or fails a once it has had MaxPods. A task that
-// ended meanwhile leaves its pods to the sweep.
+// restart starts a's next pod in place of the one that died for reason, or fails a once it has had MaxPods. Every
+// controller follows every task, so it first leases the restart: of the controllers that saw the pod die, one starts
+// the next, and the others leave it be. A task that ended meanwhile leaves its pods to the sweep.
 func (s *Service) restart(ctx context.Context, a Active, reason string) error {
 	if a.Pod >= MaxPods {
 		return s.end(ctx, a, fmt.Sprintf("its pod died %d times; the last time, %s", a.Pod, reason))
+	}
+	leased, err := s.store.LeaseRestart(ctx, a.ID, a.Pod, s.now().Add(s.settings.Lease))
+	if err != nil || !leased {
+		return wrapIf(err, "leasing task "+a.ID.String()+"'s restart")
 	}
 	t, err := s.store.Task(ctx, a.ID)
 	switch {

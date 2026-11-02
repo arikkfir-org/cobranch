@@ -37,6 +37,8 @@ type store struct {
 	events []string
 	// ended is a task a member cancels while its pod is made: MarkRunning finds it no longer queued.
 	ended bool
+	// restarting is the pod of each task whose restart a controller leased.
+	restarting map[uuid.UUID]int
 }
 
 func (s *store) Claim(_ context.Context, leaseUntil time.Time) (taskrunner.Task, bool, error) {
@@ -75,6 +77,17 @@ func (s *store) MarkRunning(context.Context, uuid.UUID) (bool, error) {
 		return false, nil
 	}
 	s.events = append(s.events, "running")
+	return true, nil
+}
+
+func (s *store) LeaseRestart(_ context.Context, taskID uuid.UUID, pod int, _ time.Time) (bool, error) {
+	if s.restarting[taskID] >= pod {
+		return false, nil
+	}
+	if s.restarting == nil {
+		s.restarting = map[uuid.UUID]int{}
+	}
+	s.restarting[taskID] = pod
 	return true, nil
 }
 
@@ -306,6 +319,7 @@ type followCase struct {
 	podsErr     map[uuid.UUID]error
 	startErr    error
 	gone        bool
+	restarting  map[uuid.UUID]int
 	wantEvents  []string
 	wantCluster []string
 	wantErr     string
@@ -345,6 +359,8 @@ func followCases() []followCase {
 			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: []string{"removed aaaa", "prepared 0001", "started aaaa/2"}},
 		{name: "a pod that failed", active: []taskrunner.Active{running("aaaa", org, 1, nil)}, pods: pods(org, "aaaa", failed),
 			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: []string{"removed aaaa", "prepared 0001", "started aaaa/2"}},
+		{name: "a pod whose restart another controller holds", active: []taskrunner.Active{running("aaaa", org, 1, nil)}, pods: pods(org, "aaaa", failed),
+			restarting: map[uuid.UUID]int{id("aaaa"): 1}},
 		{name: "a harness that exited while its task ran", active: []taskrunner.Active{running("aaaa", org, 1, nil)},
 			pods:       pods(org, "aaaa", taskrunner.Pod{Number: 1, Pod: runner.Pod{Outcome: runner.Succeeded}}),
 			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: []string{"removed aaaa", "prepared 0001", "started aaaa/2"}},
@@ -370,7 +386,7 @@ func TestFollow(t *testing.T) {
 				tasks[id("aaaa")] = task(func(t *taskrunner.Task) { t.Pods = 1 })
 				tasks[id("bbbb")] = task(func(t *taskrunner.Task) { t.ID, t.OrgID, t.Pods = id("bbbb"), other, 1 })
 			}
-			s := &store{active: tt.active, tasks: tasks, tokens: map[uuid.UUID]time.Time{}}
+			s := &store{active: tt.active, tasks: tasks, tokens: map[uuid.UUID]time.Time{}, restarting: tt.restarting}
 			c := &cluster{pods: tt.pods, podsErr: tt.podsErr, startErr: tt.startErr}
 			svc := taskrunner.NewService(s, c, vault{}, settings)
 			svc.SetClock(func() time.Time { return now })
@@ -381,6 +397,26 @@ func TestFollow(t *testing.T) {
 			checkEvents(t, s, c, tt.wantEvents, tt.wantCluster)
 		})
 	}
+}
+
+func TestFollowOnTwoControllers(t *testing.T) {
+	// Every controller follows every task: two that saw the same pod fail, from the same list of tasks, start its next
+	// pod once, the second leaving it to the first.
+	org := id("0001")
+	active := []taskrunner.Active{{ID: id("aaaa"), OrgID: org, Number: 7, State: agents.TaskRunning, StartedAt: now.Add(-time.Hour), Pod: 1,
+		PodStartedAt: now.Add(-20 * time.Minute), TokenAt: now.Add(-10 * time.Minute)}}
+	s := &store{active: active, tasks: map[uuid.UUID]taskrunner.Task{id("aaaa"): task(func(t *taskrunner.Task) { t.Pods = 1 })},
+		tokens: map[uuid.UUID]time.Time{}}
+	c := &cluster{pods: map[uuid.UUID]map[uuid.UUID]taskrunner.Pod{org: {id("aaaa"): {Number: 1,
+		Pod: runner.Pod{Outcome: runner.Failed, Reason: "container harness exited 1"}}}}}
+	for i := range 2 {
+		svc := taskrunner.NewService(s, c, vault{}, settings)
+		svc.SetClock(func() time.Time { return now })
+		if err := svc.Follow(context.Background()); err != nil {
+			t.Fatalf("controller %d: Follow() = %v", i+1, err)
+		}
+	}
+	checkEvents(t, s, c, []string{"aaaa's pod 2 started"}, []string{"removed aaaa", "prepared 0001", "started aaaa/2"})
 }
 
 func TestSweep(t *testing.T) {

@@ -145,6 +145,22 @@ func (q *Queries) FailTask(ctx context.Context, reason string, iD uuid.UUID) (Fa
 	return i, err
 }
 
+const leaseTaskRestart = `-- name: LeaseTaskRestart :one
+UPDATE agent_task_pods SET lease_until = $1::timestamptz
+WHERE task_id = $2 AND attempt = $3 AND coalesce(lease_until, '-infinity') <= now()
+RETURNING task_id
+`
+
+// LeaseTaskRestart claims a running or waiting task whose newest pod is attempt, for one controller to start its next
+// pod, until a time; no row when another controller holds it, or started its next pod already. The row's lock makes
+// the claims of controllers that race for it take turns, and the one that waited sees the other's lease.
+func (q *Queries) LeaseTaskRestart(ctx context.Context, leaseUntil time.Time, taskID uuid.UUID, attempt int32) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, leaseTaskRestart, leaseUntil, taskID, attempt)
+	var task_id uuid.UUID
+	err := row.Scan(&task_id)
+	return task_id, err
+}
+
 const markTaskRunning = `-- name: MarkTaskRunning :one
 UPDATE agent_tasks SET state = 'running', started_at = now() WHERE id = $1 AND state = 'queued'
 RETURNING org_id, number, agent_id

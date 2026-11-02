@@ -37,6 +37,14 @@ UPDATE agent_task_pods SET lease_until = @until::timestamptz WHERE task_id = @ta
 UPDATE agent_tasks SET state = 'running', started_at = now() WHERE id = $1 AND state = 'queued'
 RETURNING org_id, number, agent_id;
 
+-- LeaseTaskRestart claims a running or waiting task whose newest pod is attempt, for one controller to start its next
+-- pod, until a time; no row when another controller holds it, or started its next pod already. The row's lock makes
+-- the claims of controllers that race for it take turns, and the one that waited sees the other's lease.
+-- name: LeaseTaskRestart :one
+UPDATE agent_task_pods SET lease_until = @lease_until::timestamptz
+WHERE task_id = @task_id AND attempt = @attempt AND coalesce(lease_until, '-infinity') <= now()
+RETURNING task_id;
+
 -- RecordTaskPod records that a task's pod numbered attempt started now.
 -- name: RecordTaskPod :exec
 UPDATE agent_task_pods SET attempt = @attempt, pod_started_at = now(), lease_until = NULL WHERE task_id = @task_id;

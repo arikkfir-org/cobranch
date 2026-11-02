@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"maps"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -101,9 +103,7 @@ func TestTaskPodStoreRunsATask(t *testing.T) {
 		}
 	}
 	f.checkActive(t, task.ID, 1)
-	if err := f.s.Started(ctx, task.ID, 2); err != nil {
-		t.Fatal(err)
-	}
+	f.checkRestartLease(t, task.ID)
 	f.checkActive(t, task.ID, 2)
 	if got, err := f.s.Task(ctx, task.ID); err != nil || got.Pods != 2 || got.KeyID != f.key || got.Secrets["TOKEN"] != f.token {
 		t.Errorf("Task() = %+v, %v, want its second pod", got, err)
@@ -114,6 +114,44 @@ func TestTaskPodStoreRunsATask(t *testing.T) {
 	f.checkFail(t, task.ID, queued.ID)
 	if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind IN ('task.running', 'task.failed') AND actor_id = $1", f.scout.ID); n != 3 {
 		t.Errorf("task events = %d, want 3", n)
+	}
+}
+
+// checkRestartLease checks that of the controllers that race to start task's second pod, one leases it, and that its
+// next restart waits for the second pod to start; then starts it.
+func (f *taskPodFixture) checkRestartLease(t *testing.T, task uuid.UUID) {
+	t.Helper()
+	ctx, until := context.Background(), time.Now().Add(time.Minute)
+	if leased, err := f.s.LeaseRestart(ctx, task, 2, until); err != nil || leased {
+		t.Errorf("LeaseRestart(a pod not started) = %t, %v; want false", leased, err)
+	}
+	var wins atomic.Int32
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Go(func() {
+			leased, err := f.s.LeaseRestart(ctx, task, 1, until)
+			if err != nil {
+				t.Errorf("LeaseRestart() = %v", err)
+			}
+			if leased {
+				wins.Add(1)
+			}
+		})
+	}
+	wg.Wait()
+	if wins.Load() != 1 {
+		t.Errorf("LeaseRestart() leased %d times to controllers racing for it, want once", wins.Load())
+	}
+	if err := f.s.Started(ctx, task, 2); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		pod  int
+		want bool
+	}{{pod: 1, want: false}, {pod: 2, want: true}} {
+		if leased, err := f.s.LeaseRestart(ctx, task, c.pod, until); err != nil || leased != c.want {
+			t.Errorf("LeaseRestart(pod %d) after pod 2 started = %t, %v; want %t", c.pod, leased, err, c.want)
+		}
 	}
 }
 
