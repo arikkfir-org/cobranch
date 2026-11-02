@@ -3,6 +3,7 @@ package restclient
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/google/uuid"
 
@@ -105,4 +106,82 @@ func chatMessage(m ChatMessage) harness.ChatMessage {
 		out.Author = m.Author.DisplayName
 	}
 	return out
+}
+
+// chatWait is how long a read of a chat's updates waits for one, the most the REST server waits.
+const chatWait = 15
+
+// ChatCursor answers where the updates of one of the organization's chats stand now: the after of a page of its
+// threads (harness.Cobranch).
+func (c *API) ChatCursor(ctx context.Context, org string, chat harness.Chat) (string, error) {
+	limit := 1
+	var (
+		after  *string
+		status int
+		body   []byte
+	)
+	if chat.Branch != "" {
+		resp, err := c.api.ListChatThreadsWithResponse(ctx, org, chat.Repo, chat.Branch, &ListChatThreadsParams{Limit: &limit})
+		if err != nil {
+			return "", fmt.Errorf("reading the chat: %w", err)
+		}
+		if resp.JSON200 != nil {
+			after = &resp.JSON200.After
+		}
+		status, body = resp.StatusCode(), resp.Body
+	} else {
+		resp, err := c.api.ListIssueChatThreadsWithResponse(ctx, org, int(chat.Issue), &ListIssueChatThreadsParams{Limit: &limit})
+		if err != nil {
+			return "", fmt.Errorf("reading the chat: %w", err)
+		}
+		if resp.JSON200 != nil {
+			after = &resp.JSON200.After
+		}
+		status, body = resp.StatusCode(), resp.Body
+	}
+	if after == nil {
+		return "", refused("reading the chat", status, body)
+	}
+	return *after, nil
+}
+
+// ChatUpdates waits up to chatWait seconds for updates of one of the organization's chats after the cursor, and
+// answers the threads they changed, in order and each once, and the cursor after them (harness.Cobranch).
+func (c *API) ChatUpdates(ctx context.Context, org string, chat harness.Chat, after string) ([]uuid.UUID, string, error) {
+	wait := chatWait
+	var (
+		updates *[]ChatUpdate
+		next    string
+		status  int
+		body    []byte
+	)
+	if chat.Branch != "" {
+		resp, err := c.api.ListChatUpdatesWithResponse(ctx, org, chat.Repo, chat.Branch, &ListChatUpdatesParams{After: after, Wait: &wait})
+		if err != nil {
+			return nil, "", fmt.Errorf("waiting for the chat's updates: %w", err)
+		}
+		if resp.JSON200 != nil {
+			updates, next = &resp.JSON200.Updates, resp.JSON200.After
+		}
+		status, body = resp.StatusCode(), resp.Body
+	} else {
+		resp, err := c.api.ListIssueChatUpdatesWithResponse(ctx, org, int(chat.Issue), &ListIssueChatUpdatesParams{After: after, Wait: &wait})
+		if err != nil {
+			return nil, "", fmt.Errorf("waiting for the chat's updates: %w", err)
+		}
+		if resp.JSON200 != nil {
+			updates, next = &resp.JSON200.Updates, resp.JSON200.After
+		}
+		status, body = resp.StatusCode(), resp.Body
+	}
+	if updates == nil {
+		return nil, "", refused("waiting for the chat's updates", status, body)
+	}
+	var changed []uuid.UUID
+	for _, u := range *updates {
+		if !slices.Contains(changed, u.Thread.Id) {
+			changed = append(changed, u.Thread.Id)
+		}
+	}
+	return changed, next, nil
 }

@@ -44,8 +44,8 @@ func (r *run) where() string {
 		if chat.Branch == "" {
 			name = "issue #" + strconv.FormatInt(chat.Issue, 10) + "'s chat"
 		}
-		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, and post there with " +
-			"post_message."
+		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, post there with " +
+			"post_message, and ask there with ask when you can't go on without an answer."
 	}
 	switch c := r.clone; {
 	case c.Commit != "":

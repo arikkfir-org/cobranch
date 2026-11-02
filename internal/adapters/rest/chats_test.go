@@ -106,6 +106,8 @@ func TestChats(t *testing.T) {
 			body: `{"body":"Back"}`, ifMatch: "*", wantStatus: 409, wantCode: "message.deleted"},
 		{name: "an agent posts through its task's token", viewer: agentOnTask(2), method: "POST", path: "/threads/{thread}/messages", body: `{"body":"Done."}`,
 			wantStatus: 201, want: []string{`"author":{"displayName":"Scout"`, `"taskId":"`, `"taskNumber":2`}},
+		{name: "an agent follows the chat through its task's token", viewer: agentOnTask(2), method: "GET", path: "/updates?after=4&wait=1", wantStatus: 200,
+			want: []string{`"after":"6"`, `"kind":"message.deleted"`, `"kind":"message.posted"`, `"taskNumber":2`}},
 	}
 	f := newOrgFixture(t)
 	var ids chatIDs

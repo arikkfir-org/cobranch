@@ -50,6 +50,11 @@ type Cobranch interface {
 	StartThread(ctx context.Context, org string, chat Chat, id uuid.UUID, body string) error
 	// Post posts message id to a thread of one of the organization's chats; posting it again changes nothing.
 	Post(ctx context.Context, org string, chat Chat, threadID, id uuid.UUID, body string) error
+	// ChatCursor answers where the updates of one of the organization's chats stand now.
+	ChatCursor(ctx context.Context, org string, chat Chat) (string, error)
+	// ChatUpdates waits a while for updates of one of the organization's chats after the cursor, and answers the threads
+	// they changed, none when it waited in vain, and the cursor after them.
+	ChatUpdates(ctx context.Context, org string, chat Chat, after string) ([]uuid.UUID, string, error)
 }
 
 // Chat names one of an organization's chats: a branch's, by its repository and name, or an issue's, by its number.

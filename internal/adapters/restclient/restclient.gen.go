@@ -18,6 +18,36 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for ChatUpdateKind.
+const (
+	MessageDeleted ChatUpdateKind = "message.deleted"
+	MessageEdited  ChatUpdateKind = "message.edited"
+	MessagePosted  ChatUpdateKind = "message.posted"
+	ThreadReopened ChatUpdateKind = "thread.reopened"
+	ThreadResolved ChatUpdateKind = "thread.resolved"
+	ThreadStarted  ChatUpdateKind = "thread.started"
+)
+
+// Valid indicates whether the value is a known member of the ChatUpdateKind enum.
+func (e ChatUpdateKind) Valid() bool {
+	switch e {
+	case MessageDeleted:
+		return true
+	case MessageEdited:
+		return true
+	case MessagePosted:
+		return true
+	case ThreadReopened:
+		return true
+	case ThreadResolved:
+		return true
+	case ThreadStarted:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DiffLineKind.
 const (
 	DiffLineKindAdded   DiffLineKind = "added"
@@ -278,6 +308,22 @@ type ChatThreadInput struct {
 	// Id The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
 	Id *openapi_types.UUID `json:"id,omitempty"`
 }
+
+// ChatUpdate A change to a chat, with the thread and the message it changed as they are now.
+type ChatUpdate struct {
+	// Cursor Where it stands among the chat's updates. Opaque.
+	Cursor string         `json:"cursor"`
+	Kind   ChatUpdateKind `json:"kind"`
+
+	// Message One of a thread's messages, in Markdown.
+	Message *ChatMessage `json:"message,omitempty"`
+
+	// Thread One of a branch's chat threads.
+	Thread ChatThread `json:"thread"`
+}
+
+// ChatUpdateKind defines model for ChatUpdate.Kind.
+type ChatUpdateKind string
 
 // Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
@@ -645,10 +691,28 @@ type TaskNumber = int64
 // ThreadID defines model for thread.
 type ThreadID = openapi_types.UUID
 
+// ListIssueChatThreadsParams defines parameters for ListIssueChatThreads.
+type ListIssueChatThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetIssueChatThreadParams defines parameters for GetIssueChatThread.
 type GetIssueChatThreadParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListIssueChatUpdatesParams defines parameters for ListIssueChatUpdates.
+type ListIssueChatUpdatesParams struct {
+	// After Where the updates start, as listIssueChatThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // GetBlobParams defines parameters for GetBlob.
@@ -663,10 +727,28 @@ type GetBlobParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListChatThreadsParams defines parameters for ListChatThreads.
+type ListChatThreadsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest thread when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many threads the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetChatThreadParams defines parameters for GetChatThread.
 type GetChatThreadParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListChatUpdatesParams defines parameters for ListChatUpdates.
+type ListChatUpdatesParams struct {
+	// After Where the updates start, as listChatThreads' after or a previous answer's names it. Opaque.
+	After string `form:"after" json:"after"`
+
+	// Wait How many seconds to wait for an update when there is none yet; at most 15, so a server that stops lets every wait end first.
+	Wait *int `form:"wait,omitempty" json:"wait,omitempty"`
 }
 
 // GetBranchDiffParams defines parameters for GetBranchDiff.
@@ -805,6 +887,11 @@ type ClientInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+	//
+	// Corresponds with GET /orgs/{org}/issues/{number}/chat (the `ListIssueChatThreads` operationId).
+	ListIssueChatThreads(ctx context.Context, org Org, number Number, params *ListIssueChatThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartIssueChatThreadWithBody Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
 	// Takes any type of body and a specified content type.
@@ -838,10 +925,20 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages (the `PostIssueChatMessage` operationId).
 	PostIssueChatMessage(ctx context.Context, org Org, number Number, threadID ThreadID, body PostIssueChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListIssueChatUpdates The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	//
+	// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
+	ListIssueChatUpdates(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
 	GetBlob(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat (the `ListChatThreads` operationId).
+	ListChatThreads(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StartChatThreadWithBody Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
@@ -875,6 +972,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 	PostChatMessage(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
+	ListChatUpdates(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	//
@@ -930,6 +1032,21 @@ type ClientInterface interface {
 // Corresponds with GET /me/task (the `GetMyTask` operationId).
 func (c *Client) GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetMyTaskRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListIssueChatThreads A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+//
+// Corresponds with GET /orgs/{org}/issues/{number}/chat (the `ListIssueChatThreads` operationId).
+func (c *Client) ListIssueChatThreads(ctx context.Context, org Org, number Number, params *ListIssueChatThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListIssueChatThreadsRequest(c.Server, org, number, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1023,11 +1140,41 @@ func (c *Client) PostIssueChatMessage(ctx context.Context, org Org, number Numbe
 	return c.Client.Do(req)
 }
 
+// ListIssueChatUpdates The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+//
+// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
+func (c *Client) ListIssueChatUpdates(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListIssueChatUpdatesRequest(c.Server, org, number, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 //
 // Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
 func (c *Client) GetBlob(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetBlobRequest(c.Server, org, repo, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListChatThreads A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat (the `ListChatThreads` operationId).
+func (c *Client) ListChatThreads(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatThreadsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListChatThreadsRequest(c.Server, org, repo, branchName, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1111,6 +1258,21 @@ func (c *Client) PostChatMessageWithBody(ctx context.Context, org Org, repo Repo
 // Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 func (c *Client) PostChatMessage(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostChatMessageRequest(c.Server, org, repo, branchName, threadID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListChatUpdates The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
+func (c *Client) ListChatUpdates(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListChatUpdatesRequest(c.Server, org, repo, branchName, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1266,6 +1428,86 @@ func NewGetMyTaskRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListIssueChatThreadsRequest constructs an http.Request for the ListIssueChatThreads method
+func NewListIssueChatThreadsRequest(server string, org Org, number Number, params *ListIssueChatThreadsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "number", number, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/issues/%s/chat", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -1454,6 +1696,82 @@ func NewPostIssueChatMessageRequestWithBody(server string, org Org, number Numbe
 	return req, nil
 }
 
+// NewListIssueChatUpdatesRequest constructs an http.Request for the ListIssueChatUpdates method
+func NewListIssueChatUpdatesRequest(server string, org Org, number Number, params *ListIssueChatUpdatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "number", number, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "integer", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/issues/%s/chat/updates", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetBlobRequest constructs an http.Request for the GetBlob method
 func NewGetBlobRequest(server string, org Org, repo Repo, params *GetBlobParams) (*http.Request, error) {
 	var err error
@@ -1540,6 +1858,93 @@ func NewGetBlobRequest(server string, org Org, repo Repo, params *GetBlobParams)
 			req.Header.Set("If-None-Match", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewListChatThreadsRequest constructs an http.Request for the ListChatThreads method
+func NewListChatThreadsRequest(server string, org Org, repo Repo, branchName BranchName, params *ListChatThreadsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "branch", branchName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/branches/%s/chat", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -1740,6 +2145,89 @@ func NewPostChatMessageRequestWithBody(server string, org Org, repo Repo, branch
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListChatUpdatesRequest constructs an http.Request for the ListChatUpdates method
+func NewListChatUpdatesRequest(server string, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "branch", branchName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/branches/%s/chat/updates", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.Wait != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "wait", *params.Wait, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -2250,6 +2738,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTaskWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyTaskResponse, error)
 
+	// ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/issues/{number}/chat (the `ListIssueChatThreads` operationId).
+	ListIssueChatThreadsWithResponse(ctx context.Context, org Org, number Number, params *ListIssueChatThreadsParams, reqEditors ...RequestEditorFn) (*ListIssueChatThreadsResponse, error)
+
 	// StartIssueChatThreadWithBodyWithResponse Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -2285,12 +2780,26 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages (the `PostIssueChatMessage` operationId).
 	PostIssueChatMessageWithResponse(ctx context.Context, org Org, number Number, threadID ThreadID, body PostIssueChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostIssueChatMessageResponse, error)
 
+	// ListIssueChatUpdatesWithResponse The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
+	ListIssueChatUpdatesWithResponse(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListIssueChatUpdatesResponse, error)
+
 	// GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
 	GetBlobWithResponse(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*GetBlobResponse, error)
+
+	// ListChatThreadsWithResponse A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat (the `ListChatThreads` operationId).
+	ListChatThreadsWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatThreadsParams, reqEditors ...RequestEditorFn) (*ListChatThreadsResponse, error)
 
 	// StartChatThreadWithBodyWithResponse Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
@@ -2326,6 +2835,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 	PostChatMessageWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostChatMessageResponse, error)
+
+	// ListChatUpdatesWithResponse The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
+	ListChatUpdatesWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListChatUpdatesResponse, error)
 
 	// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	//
@@ -2440,6 +2956,97 @@ func (r GetMyTaskResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetMyTaskResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListIssueChatThreadsResponse200Headers the declared response headers of an HTTP 200 response for ListIssueChatThreads
+type ListIssueChatThreadsResponse200Headers struct {
+	Link *string
+}
+
+type ListIssueChatThreadsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the chat's updates stood when the page was read, as listIssueChatUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListIssueChatThreadsResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListIssueChatThreadsResponse) GetJSON200() *struct {
+	// After Where the chat's updates stood when the page was read, as listIssueChatUpdates takes it. Opaque.
+	After   string       `json:"after"`
+	Threads []ChatThread `json:"threads"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListIssueChatThreadsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListIssueChatThreadsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListIssueChatThreadsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListIssueChatThreadsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListIssueChatThreadsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListIssueChatThreadsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListIssueChatThreadsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListIssueChatThreadsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListIssueChatThreadsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2711,6 +3318,90 @@ func (r PostIssueChatMessageResponse) ContentType() string {
 	return ""
 }
 
+type ListIssueChatUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+		After   string       `json:"after"`
+		Updates []ChatUpdate `json:"updates"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListIssueChatUpdatesResponse) GetJSON200() *struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListIssueChatUpdatesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListIssueChatUpdatesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r ListIssueChatUpdatesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListIssueChatUpdatesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListIssueChatUpdatesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListIssueChatUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListIssueChatUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListIssueChatUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListIssueChatUpdatesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetBlobResponse200Headers the declared response headers of an HTTP 200 response for GetBlob
 type GetBlobResponse200Headers struct {
 	ETag string
@@ -2795,6 +3486,90 @@ func (r GetBlobResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetBlobResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListChatThreadsResponse200Headers the declared response headers of an HTTP 200 response for ListChatThreads
+type ListChatThreadsResponse200Headers struct {
+	Link *string
+}
+
+type ListChatThreadsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+		After   string       `json:"after"`
+		Threads []ChatThread `json:"threads"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListChatThreadsResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListChatThreadsResponse) GetJSON200() *struct {
+	// After Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+	After   string       `json:"after"`
+	Threads []ChatThread `json:"threads"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListChatThreadsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListChatThreadsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListChatThreadsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListChatThreadsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListChatThreadsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListChatThreadsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListChatThreadsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListChatThreadsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3053,6 +3828,83 @@ func (r PostChatMessageResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PostChatMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ListChatUpdatesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+		After   string       `json:"after"`
+		Updates []ChatUpdate `json:"updates"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListChatUpdatesResponse) GetJSON200() *struct {
+	// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+	After   string       `json:"after"`
+	Updates []ChatUpdate `json:"updates"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListChatUpdatesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListChatUpdatesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListChatUpdatesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListChatUpdatesResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListChatUpdatesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListChatUpdatesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListChatUpdatesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListChatUpdatesResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -3622,6 +4474,19 @@ func (c *ClientWithResponses) GetMyTaskWithResponse(ctx context.Context, reqEdit
 	return ParseGetMyTaskResponse(rsp)
 }
 
+// ListIssueChatThreadsWithResponse A page of the issue's chat, its comments: its threads newest first, each with its messages in the order they were posted; takes issues.read. Its after is where the chat's updates stood when the page was read: listIssueChatUpdates after it answers every change the page may lack.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/issues/{number}/chat (the `ListIssueChatThreads` operationId).
+func (c *ClientWithResponses) ListIssueChatThreadsWithResponse(ctx context.Context, org Org, number Number, params *ListIssueChatThreadsParams, reqEditors ...RequestEditorFn) (*ListIssueChatThreadsResponse, error) {
+	rsp, err := c.ListIssueChatThreads(ctx, org, number, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListIssueChatThreadsResponse(rsp)
+}
+
 // StartIssueChatThreadWithBodyWithResponse Starts a thread on the issue's chat for the viewer, with its first message; takes issues.write. An issue's threads point at no file, so an anchor answers 400. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -3687,6 +4552,19 @@ func (c *ClientWithResponses) PostIssueChatMessageWithResponse(ctx context.Conte
 	return ParsePostIssueChatMessageResponse(rsp)
 }
 
+// ListIssueChatUpdatesWithResponse The changes to the issue's chat after a cursor, in order, each with its thread and message as they are now; takes issues.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/issues/{number}/chat/updates (the `ListIssueChatUpdates` operationId).
+func (c *ClientWithResponses) ListIssueChatUpdatesWithResponse(ctx context.Context, org Org, number Number, params *ListIssueChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListIssueChatUpdatesResponse, error) {
+	rsp, err := c.ListIssueChatUpdates(ctx, org, number, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListIssueChatUpdatesResponse(rsp)
+}
+
 // GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 //
 // Returns a wrapper object for the known response body format(s).
@@ -3698,6 +4576,19 @@ func (c *ClientWithResponses) GetBlobWithResponse(ctx context.Context, org Org, 
 		return nil, err
 	}
 	return ParseGetBlobResponse(rsp)
+}
+
+// ListChatThreadsWithResponse A page of the branch's chat, its threads newest first, each with its messages in the order they were posted; takes repo.read. Its after is where the chat's updates stood when the page was read: listChatUpdates after it answers every change the page may lack.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat (the `ListChatThreads` operationId).
+func (c *ClientWithResponses) ListChatThreadsWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatThreadsParams, reqEditors ...RequestEditorFn) (*ListChatThreadsResponse, error) {
+	rsp, err := c.ListChatThreads(ctx, org, repo, branchName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListChatThreadsResponse(rsp)
 }
 
 // StartChatThreadWithBodyWithResponse Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
@@ -3763,6 +4654,19 @@ func (c *ClientWithResponses) PostChatMessageWithResponse(ctx context.Context, o
 		return nil, err
 	}
 	return ParsePostChatMessageResponse(rsp)
+}
+
+// ListChatUpdatesWithResponse The changes to the branch's chat after a cursor, in order, each with its thread and message as they are now; takes repo.read, checked at every read. With none yet, it waits up to wait seconds for one, so a client follows the chat by asking again after the answer's after. Applying them in order, replacing threads and messages by ID, holds the chat as it is.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/updates (the `ListChatUpdates` operationId).
+func (c *ClientWithResponses) ListChatUpdatesWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *ListChatUpdatesParams, reqEditors ...RequestEditorFn) (*ListChatUpdatesResponse, error) {
+	rsp, err := c.ListChatUpdates(ctx, org, repo, branchName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListChatUpdatesResponse(rsp)
 }
 
 // GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
@@ -3911,6 +4815,84 @@ func ParseGetMyTaskResponse(rsp *http.Response) (*GetMyTaskResponse, error) {
 		}
 		response.ApplicationproblemJSONDefault = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseListIssueChatThreadsResponse parses an HTTP response from a ListIssueChatThreadsWithResponse call
+func ParseListIssueChatThreadsResponse(rsp *http.Response) (*ListIssueChatThreadsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListIssueChatThreadsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the chat's updates stood when the page was read, as listIssueChatUpdates takes it. Opaque.
+			After   string       `json:"after"`
+			Threads []ChatThread `json:"threads"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListIssueChatThreadsResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -4172,6 +5154,71 @@ func ParsePostIssueChatMessageResponse(rsp *http.Response) (*PostIssueChatMessag
 	return response, nil
 }
 
+// ParseListIssueChatUpdatesResponse parses an HTTP response from a ListIssueChatUpdatesWithResponse call
+func ParseListIssueChatUpdatesResponse(rsp *http.Response) (*ListIssueChatUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListIssueChatUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+			After   string       `json:"after"`
+			Updates []ChatUpdate `json:"updates"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetBlobResponse parses an HTTP response from a GetBlobWithResponse call
 func ParseGetBlobResponse(rsp *http.Response) (*GetBlobResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -4254,6 +5301,77 @@ func ParseGetBlobResponse(rsp *http.Response) (*GetBlobResponse, error) {
 			headers.ETag = value
 		}
 		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListChatThreadsResponse parses an HTTP response from a ListChatThreadsWithResponse call
+func ParseListChatThreadsResponse(rsp *http.Response) (*ListChatThreadsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListChatThreadsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the chat's updates stood when the page was read, as listChatUpdates takes it. Opaque.
+			After   string       `json:"after"`
+			Threads []ChatThread `json:"threads"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListChatThreadsResponse200Headers
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
 	}
 
 	return response, nil
@@ -4503,6 +5621,64 @@ func ParsePostChatMessageResponse(rsp *http.Response) (*PostChatMessageResponse,
 			headers.Location = value
 		}
 		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListChatUpdatesResponse parses an HTTP response from a ListChatUpdatesWithResponse call
+func ParseListChatUpdatesResponse(rsp *http.Response) (*ListChatUpdatesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListChatUpdatesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// After Where the next read starts, after the last update; the request's after when there is none. Opaque.
+			After   string       `json:"after"`
+			Updates []ChatUpdate `json:"updates"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
 	}
 
 	return response, nil
