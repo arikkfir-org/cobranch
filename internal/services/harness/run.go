@@ -21,6 +21,7 @@ type Harness struct {
 	model    Model
 	tools    []Tool
 	maxTurns int
+	checkout Checkout
 }
 
 // New returns a Harness that works through c, asks m for its turns, offers it the tools and finish, and fails a task
@@ -30,6 +31,12 @@ func New(c Cobranch, m Model, maxTurns int, tools ...Tool) *Harness {
 		maxTurns = DefaultMaxTurns
 	}
 	return &Harness{cobranch: c, model: m, tools: tools, maxTurns: maxTurns}
+}
+
+// WithCheckout has the Harness ready the task's workspace with c before it works the task, and answers it.
+func (h *Harness) WithCheckout(c Checkout) *Harness {
+	h.checkout = c
+	return h
 }
 
 // Run works the task until it ends, from where its transcript stops. It returns nil once the task ends, or once
@@ -49,7 +56,8 @@ func (h *Harness) Run(ctx context.Context) error {
 	return failed(span, err)
 }
 
-// resume reads the task and its transcript, and answers the run that carries it on; nil when the task has ended.
+// resume reads the task and its transcript, readies its workspace, and answers the run that carries it on; nil when
+// the task has ended.
 func (h *Harness) resume(ctx context.Context) (*run, error) {
 	w, err := h.cobranch.Work(ctx)
 	if err != nil {
@@ -65,7 +73,9 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 		return nil, fmt.Errorf("reading the transcript: %w", err)
 	}
 	slog.InfoContext(ctx, "Working the task", "entries", len(entries))
-	return &run{Harness: h, work: w, entries: entries}, nil
+	r := &run{Harness: h, work: w, entries: entries, thread: w.Task.ThreadID}
+	r.offered = append(r.chatTools(), h.tools...)
+	return r, r.prepare(ctx)
 }
 
 // run is a task the harness works, and its transcript so far.
@@ -73,6 +83,26 @@ type run struct {
 	*Harness
 	work    agents.Work
 	entries []agents.Entry
+	// thread is the thread of its chat the task talks in; uuid.Nil until it has one.
+	thread uuid.UUID
+	// offered are the tools the model may call besides finish: its chat's, when the task has one, then the Harness's.
+	offered []Tool
+}
+
+// prepare readies the task's workspace, and tells the model when a task under way got a fresh one, as it does when
+// its pod starts again: what it didn't push is gone.
+func (r *run) prepare(ctx context.Context) error {
+	if r.checkout == nil {
+		return nil
+	}
+	cloned, err := r.checkout.Prepare(ctx, r.work)
+	if err != nil {
+		return fmt.Errorf("preparing the workspace: %w", err)
+	}
+	if !cloned || len(r.entries) == 0 {
+		return nil
+	}
+	return r.append(ctx, agents.EntryInput, input{Text: freshWorkspace, By: byHarness})
 }
 
 // loop takes the task's steps until it ends.

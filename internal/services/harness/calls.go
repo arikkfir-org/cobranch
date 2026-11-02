@@ -35,8 +35,8 @@ var errDropped = errors.New("the turn was too large to record whole, so this cal
 
 // specs describes the tools to the model, finish last.
 func (r *run) specs() []Spec {
-	out := make([]Spec, 0, len(r.tools)+1)
-	for _, t := range r.tools {
+	out := make([]Spec, 0, len(r.offered)+1)
+	for _, t := range r.offered {
 		out = append(out, t.Spec())
 	}
 	return append(out, finishSpec)
@@ -88,7 +88,7 @@ func (r *run) invoke(ctx context.Context, c Call) (string, error) {
 	if c.Dropped {
 		return "", errDropped
 	}
-	for _, t := range r.tools {
+	for _, t := range r.offered {
 		if t.Spec().Name != c.Name {
 			continue
 		}

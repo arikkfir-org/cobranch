@@ -25,8 +25,28 @@ func (r *run) system() string {
 	}
 	prompt += "\n\nWork through the tools you have: your messages reach no one but the task's transcript. Once the task " +
 		"is done, or you find you can't do it, call finish, which ends the task."
+	prompt += r.where()
 	if r.work.AgentInstructions != "" {
 		prompt += "\n\nYour standing instructions, which every task of yours starts from:\n\n" + r.work.AgentInstructions
 	}
 	return prompt
+}
+
+// where tells the model where people follow the task, and where its work goes: its chat's thread, and the clone of its
+// repository in the workspace.
+func (r *run) where() string {
+	var out string
+	if chat, ok := r.chat(); ok {
+		name := "branch " + chat.Branch + "'s chat"
+		if chat.Branch == "" {
+			name = "issue #" + strconv.FormatInt(chat.Issue, 10) + "'s chat"
+		}
+		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, and post there with " +
+			"post_message."
+	}
+	if r.checkout != nil && r.work.Task.RepoSlug != "" {
+		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + ". Commit there, as " +
+			r.work.AgentEmail + ", and push with git: what you don't push is lost when the task ends."
+	}
+	return out
 }

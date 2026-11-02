@@ -21,6 +21,7 @@ type Workspace struct {
 	dir          string
 	root         *os.Root
 	shellTimeout time.Duration
+	git          Git
 }
 
 // New returns the Workspace of dir, whose shell commands run for at most shellTimeout each.

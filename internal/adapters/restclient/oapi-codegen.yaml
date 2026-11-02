@@ -6,5 +6,6 @@ generate:
   models: true
   client: true
 output-options:
-  include-operation-ids: [getMyTask, listTranscript, appendTranscript]
+  include-operation-ids: [getMyTask, listTranscript, appendTranscript, getChatThread, startChatThread, postChatMessage,
+    getIssueChatThread, startIssueChatThread, postIssueChatMessage]
   nullable-type: true

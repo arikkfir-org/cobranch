@@ -15,6 +15,10 @@ const byHarness = "harness"
 // nudge is the input the harness gives a model that ended its turn without calling a tool.
 const nudge = "Your last turn called no tool. Carry on with the tools, or call finish to end the task."
 
+// freshWorkspace is the input the harness gives a model whose task's pod started again, with a fresh workspace.
+const freshWorkspace = "Your task's pod started again, so the workspace is a fresh clone of the repository: whatever " +
+	"you hadn't pushed before is gone. Check what the branch holds, and carry on from there."
+
 // input is an input entry's body: what the task began with, or a message since.
 type input struct {
 	Text string `json:"text"`

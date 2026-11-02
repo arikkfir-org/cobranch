@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 
 	"cobranch.dev/internal/services/agents"
@@ -41,6 +43,39 @@ type Cobranch interface {
 	// Append records e, the next entry of the organization's task, and answers it; an entry already numbered e.Seq
 	// answers that one.
 	Append(ctx context.Context, org string, number int64, e agents.Entry) (agents.Entry, error)
+	// Thread lists the messages of a thread of one of the organization's chats, in the order they were posted.
+	Thread(ctx context.Context, org string, chat Chat, threadID uuid.UUID) ([]ChatMessage, error)
+	// StartThread starts thread id of one of the organization's chats with its first message; starting it again
+	// changes nothing.
+	StartThread(ctx context.Context, org string, chat Chat, id uuid.UUID, body string) error
+	// Post posts message id to a thread of one of the organization's chats; posting it again changes nothing.
+	Post(ctx context.Context, org string, chat Chat, threadID, id uuid.UUID, body string) error
+}
+
+// Chat names one of an organization's chats: a branch's, by its repository and name, or an issue's, by its number.
+type Chat struct {
+	Repo, Branch string
+	Issue        int64
+}
+
+// ChatMessage is a message of a chat's thread, as the model reads it.
+type ChatMessage struct {
+	ID uuid.UUID
+	// Author is who posted it; empty once they are gone.
+	Author string
+	// Task is the number of the agent's task it came from; 0 for a person's message.
+	Task    int64
+	At      time.Time
+	Body    string
+	Deleted bool
+}
+
+// Checkout readies the task's workspace before the harness works it.
+type Checkout interface {
+	// Prepare readies the workspace for the task: Git's identity, the agent's, and its credentials; and, when the task
+	// names a repository that the workspace doesn't hold yet, the repository, cloned at the task's branch, or its
+	// default one. It reports whether it cloned.
+	Prepare(ctx context.Context, w agents.Work) (bool, error)
 }
 
 // Model is the agent's model, behind its provider's adapter.
