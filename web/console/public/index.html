@@ -1375,15 +1375,17 @@
 
     // branchChat is a branch's chat, which it follows live: its threads, newest first, each perhaps on lines of a file at
     // a commit, with their messages in Markdown, to which a viewer with messages.post replies. It reads the chat's
-    // updates as they come, each read waiting up to 15 seconds for one, until the Console draws another page.
+    // updates as they come, each read waiting up to 15 seconds for one, until the Console draws another page. A deleted
+    // branch's chat (b.deletedAt) stays as it was: it shows to be read, and nothing follows it.
     async function branchChat(path, at, b, can) {
       const chat = path + "/branches/" + encodeURIComponent(b.name) + "/chat";
-      const post = can("messages.post"), moderate = can("messages.moderate");
+      const gone = !!b.deletedAt;
+      const post = !gone && can("messages.post"), moderate = !gone && can("messages.moderate");
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const live = h("span", { class: "muted" });
       const list = h("div", { class: "threads" });
-      const empty = h("p", {}, "No threads yet.", post ? " Start one here, or on lines of a file from its page on this branch." : "");
+      const empty = h("p", {}, gone ? "It had no threads." : "No threads yet.", post ? " Start one here, or on lines of a file from its page on this branch." : "");
       const more = h("button", { class: "button small", type: "button", hidden: true }, "Older threads");
       const shown = new Map(); // each thread's view, by its ID: the thread as last read, its element, and its messages'
       let page;
@@ -1516,9 +1518,12 @@
         } }, text, h("div", { class: "row" }, h("span", { class: "spacer" }), button));
       }
       const panel = h("section", { class: "panel chat" }, h("div", { class: "row" }, h("h3", {}, "Chat"), live), error, start, empty, list, more);
-      const stop = new AbortController();
-      follows(stop);
-      followChat(chat, page.data.after, apply, panel, live, stop.signal);
+      if (gone) live.textContent = "As it was when the branch was deleted";
+      else {
+        const stop = new AbortController();
+        follows(stop);
+        followChat(chat, page.data.after, apply, panel, live, stop.signal);
+      }
       // A link to a thread brings it into view once the page is drawn: after the calls that draw it, which take no turn.
       setTimeout(() => {
         const el = location.hash.startsWith("#thread-") && document.getElementById(location.hash.slice(1));
@@ -1551,7 +1556,8 @@
     }
 
     // deletedBranchPage is the page of a branch of name that isn't live: who deleted it and when, the head it was at,
-    // and its merge, as its latest deletion recorded them; or that there is none, for a name no branch had.
+    // and its merge, as its latest deletion recorded them, with its chat as it was; or that there is none, for a name
+    // no branch had.
     async function deletedBranchPage(path, at, name) {
       let d;
       try {
@@ -1568,7 +1574,7 @@
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("div", { class: "title" }, icon("trash-2"), h("h2", {}, h("code", {}, d.name)), h("span", { class: "chip" }, "Deleted"))),
         h("p", {}, "Deleted by ", by, " · ", whenExactly(d.deletedAt)),
         h("p", {}, "It was at ", head, d.commit ? [" · ", subject(d.commit.message)] : null, "."),
-        h("p", {}, merged))];
+        h("p", {}, merged)), await branchChat(path, at, d, () => false)];
     }
 
     // mayDelete reports whether the viewer may delete b: with repo.push, and repo.bypass too for a branch main's
