@@ -370,8 +370,8 @@ threads on the file.
 
 `chat_threads`, `chat_messages`, `agents`, `model_providers` and `agent_tasks` carry trigger `audit()`; transcripts are
 the task’s own record and don’t, and task tokens, which Cobranch alone makes and sweeps, don’t either. Every new row
-carries `org_id`, except a task's own, its transcript's entries, its tokens and its pods' record, which reach their
-organization through `task_id`. A message’s `task_id` names the task an agent posted it from.
+carries `org_id`, except a task's transcript entries, its tokens and its pods' record, which reach their organization
+through `task_id`. A message’s `task_id` names the task an agent posted it from.
 
 ## Rollout
 
