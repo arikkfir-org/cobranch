@@ -6,7 +6,10 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/google/uuid"
+
 	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/auth"
 )
 
 // defaultTranscriptPage is how many entries a page holds unless the request names a limit.
@@ -25,6 +28,22 @@ func transcriptPath(org string, number int64, seq int) string {
 	return taskPath(org, number) + "/transcript/" + strconv.Itoa(seq)
 }
 
+// transcriptOrg finds the organization of the transcript a request names. A task token finds its own task's by the
+// task it works, without org.read, which an agent holding only repository roles lacks, and agents.Service then holds it
+// to that task; any other request finds it as agentOrg does.
+func (a api) transcriptOrg(ctx context.Context, slug string) (agents.Viewer, uuid.UUID, string, error) {
+	if who, ok := auth.Viewer(ctx); ok && who.Credential.Kind == auth.CredentialTaskToken {
+		w, err := a.agents.Work(ctx, who.User)
+		if err != nil {
+			return agents.Viewer{}, uuid.Nil, "", fail(err, "task")
+		}
+		if w.OrgSlug == slug {
+			return who.User, w.Task.OrgID, w.OrgSlug, nil
+		}
+	}
+	return a.agentOrg(ctx, slug)
+}
+
 // GetMyTask answers the task the request's task token works, for the agent's harness to start from.
 func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTaskResponseObject, error) {
 	v, err := viewer(ctx)
@@ -40,7 +59,7 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 
 // ListTranscript lists a page of the entries of one of the organization's tasks, in order.
 func (a api) ListTranscript(ctx context.Context, req ListTranscriptRequestObject) (ListTranscriptResponseObject, error) {
-	v, orgID, _, err := a.agentOrg(ctx, req.Org)
+	v, orgID, _, err := a.transcriptOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +93,7 @@ func (a api) ListTranscript(ctx context.Context, req ListTranscriptRequestObject
 
 // AppendTranscript appends the next entry to the transcript of one of the organization's tasks, as its own token.
 func (a api) AppendTranscript(ctx context.Context, req AppendTranscriptRequestObject) (AppendTranscriptResponseObject, error) {
-	v, orgID, slug, err := a.agentOrg(ctx, req.Org)
+	v, orgID, slug, err := a.transcriptOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +117,7 @@ func (a api) AppendTranscript(ctx context.Context, req AppendTranscriptRequestOb
 
 // GetTranscriptEntry answers one entry of a task's transcript by its number.
 func (a api) GetTranscriptEntry(ctx context.Context, req GetTranscriptEntryRequestObject) (GetTranscriptEntryResponseObject, error) {
-	v, orgID, _, err := a.agentOrg(ctx, req.Org)
+	v, orgID, _, err := a.transcriptOrg(ctx, req.Org)
 	if err != nil {
 		return nil, err
 	}
