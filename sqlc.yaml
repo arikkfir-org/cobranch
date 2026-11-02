@@ -46,6 +46,11 @@ sql:
             go_type:
               type: int32
               pointer: true
+          - db_type: pg_catalog.int8
+            nullable: true
+            go_type:
+              type: int64
+              pointer: true
   # The seeds run in goose's database/sql transactions, so theirs is a second package, on database/sql.
   - engine: postgresql
     schema: db/migrations

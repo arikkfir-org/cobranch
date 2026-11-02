@@ -1358,7 +1358,7 @@ type ServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(w http.ResponseWriter, r *http.Request, id openapi_types.UUID)
-	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
+	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(w http.ResponseWriter, r *http.Request)
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
@@ -1421,7 +1421,7 @@ type ServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
-	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(w http.ResponseWriter, r *http.Request, org Org)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.
@@ -9685,7 +9685,7 @@ type StrictServerInterface interface {
 	// RevokeMyToken Revokes one of the user's personal tokens; the next request with it fails.
 	// (DELETE /me/tokens/{id})
 	RevokeMyToken(ctx context.Context, request RevokeMyTokenRequestObject) (RevokeMyTokenResponseObject, error)
-	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create.
+	// CreateOrganization Creates an organization, with the user its first Owner; takes orgs.create. A user who created as many organizations as the installation allows is refused with 409 limit.organizations.
 	// (POST /orgs)
 	CreateOrganization(ctx context.Context, request CreateOrganizationRequestObject) (CreateOrganizationResponseObject, error)
 	// GetOrganization An organization by its slug, or an old slug of its; takes org.read, and otherwise answers 404.
@@ -9748,7 +9748,7 @@ type StrictServerInterface interface {
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
-	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create.
+	// CreateRepository Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused with 409 limit.repositories.
 	// (POST /orgs/{org}/repos)
 	CreateRepository(ctx context.Context, request CreateRepositoryRequestObject) (CreateRepositoryResponseObject, error)
 	// GetRepository A repository by its slug, or an old slug of its; takes repo.read, and otherwise answers 404.

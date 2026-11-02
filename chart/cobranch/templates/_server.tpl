@@ -83,6 +83,11 @@ spec:
               value: {{ . | quote }}
             {{- end }}
             {{- end }}
+            {{- if ne .component "push-worker" }}
+            {{- with include "cobranch.limitsEnv" $root | trim }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- end }}
             {{- if eq .component "admin-server" }}
             {{- with include "cobranch.signUpEnv" $root | trim }}
             {{- . | nindent 12 }}

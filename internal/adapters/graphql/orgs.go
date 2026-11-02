@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -91,11 +92,14 @@ func refuse(ctx context.Context, code, reason, message string) error {
 func fail(ctx context.Context, err error, kind, what string) error {
 	var verr *orgs.ValidationError
 	var taken *code.TakenError
+	var exceeded *limits.ExceededError
 	switch {
 	case errors.As(err, &verr):
 		return refuse(ctx, badUserInput, verr.Code, verr.Message)
 	case errors.As(err, &taken):
 		return refuse(ctx, conflict, "annotation.taken", taken.Error())
+	case errors.As(err, &exceeded):
+		return refuse(ctx, conflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(ctx, conflict, "precondition.failed", "the annotation changed since you read it: read it again")
 	case errors.Is(err, auth.ErrForbidden):

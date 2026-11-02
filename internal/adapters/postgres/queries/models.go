@@ -106,13 +106,16 @@ type IdentityProvider struct {
 }
 
 type InstallationSetting struct {
-	ID            bool
-	SignUp        *string
-	SignUpDomains []string
-	SelfServe     *bool
-	Version       int64
-	UpdatedAt     time.Time
-	UpdatedBy     *uuid.UUID
+	ID                          bool
+	SignUp                      *string
+	SignUpDomains               []string
+	SelfServe                   *bool
+	Version                     int64
+	UpdatedAt                   time.Time
+	UpdatedBy                   *uuid.UUID
+	OrganizationsPerUser        *int64
+	RepositoriesPerOrganization *int64
+	GitDataPerOrganization      *int64
 }
 
 type Invitation struct {
@@ -154,6 +157,7 @@ type Organization struct {
 	AcceptsJoinRequests bool
 	Providers           []string
 	CreatedAt           time.Time
+	CreatedBy           *uuid.UUID
 }
 
 type Principal struct {

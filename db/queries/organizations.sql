@@ -1,6 +1,12 @@
+-- InsertOrganization makes an organization; created_by is the user it counts against, NULL for one an administrator
+-- made for its first Owner.
 -- name: InsertOrganization :exec
-INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at)
-VALUES (@id, @slug, @name, @membership_role_id, @accepts_join_requests, @providers, @created_at);
+INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at, created_by)
+VALUES (@id, @slug, @name, @membership_role_id, @accepts_join_requests, @providers, @created_at, @created_by);
+
+-- CreatedOrganizations counts the organizations the user created for themselves.
+-- name: CreatedOrganizations :one
+SELECT count(*) FROM organizations WHERE created_by = @user_id::uuid;
 
 -- InsertSlug claims a slug for an organization; the primary key refuses one another organization has or had.
 -- name: InsertSlug :exec

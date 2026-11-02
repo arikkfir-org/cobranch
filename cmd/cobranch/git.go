@@ -22,6 +22,7 @@ import (
 	"cobranch.dev/internal/adapters/server"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/git"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
@@ -64,7 +65,7 @@ func runGitServer(ctx context.Context, logs io.Writer) error {
 	gitServer, err := gitserver.New(ctx, gitserver.Config{DataDir: cfg.DataDir, CacheSize: int64(cfg.CacheSize), MaxPushSize: int64(cfg.MaxPushSize), Hook: []string{self, "git-hook"}},
 		auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{}),
 		repos.NewService(postgres.NewRepoStore(pool), auth.NewAuthorizer(orgStore)),
-		gitservice(pool), gitservice(pool), stores.Bucket)
+		gitservice(pool), gitservice(pool).WithQuotas(limitsService(pool, cfg.Limits)), stores.Bucket)
 	if err != nil {
 		return fmt.Errorf("preparing the Git server: %w", err)
 	}
@@ -160,6 +161,12 @@ func runPushWorker(ctx context.Context, logs io.Writer) error {
 // gitservice is Git hosting's domain over pool's database.
 func gitservice(pool *pgxpool.Pool) *git.Service {
 	return git.NewService(postgres.NewGitStore(pool))
+}
+
+// limitsService works out the limits over pool's database, under those the values set.
+func limitsService(pool *pgxpool.Pool, values config.Limits) *limits.Service {
+	return limits.NewService(postgres.NewLimitStore(pool), limits.Settings{OrganizationsPerUser: values.OrganizationsPerUser,
+		RepositoriesPerOrganization: values.RepositoriesPerOrganization, GitDataPerOrganization: values.GitDataPerOrganization.Bytes})
 }
 
 // serve listens on addr and serves handler until ctx ends, then waits up to timeout for requests in flight.

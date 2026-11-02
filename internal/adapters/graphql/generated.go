@@ -2695,7 +2695,7 @@ extend type Organization {
 }
 
 extend type Mutation {
-  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create."
+  "Creates an empty repository in the organization, with the viewer its Maintainer, and answers it with the visibility its grants give it (Internal at once where an organization role reads every repository); takes repos.create. An organization that holds as many repositories as its limit allows is refused (CONFLICT, limit.repositories)."
   createRepository(organizationId: ID!, input: RepositoryInput!): Repository!
   "Changes a repository's slug, name and description; takes repo.manage. A new slug keeps the old one as a redirect."
   updateRepository(id: ID!, input: RepositoryInput!): Repository!
@@ -2881,7 +2881,7 @@ extend type User {
 }
 
 extend type Mutation {
-  "Creates an organization and makes the viewer its Owner; takes orgs.create."
+  "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!
   "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
   updateOrganization(id: ID!, input: OrganizationSettings!): Organization!

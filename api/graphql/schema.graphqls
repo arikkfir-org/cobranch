@@ -133,7 +133,7 @@ extend type User {
 }
 
 extend type Mutation {
-  "Creates an organization and makes the viewer its Owner; takes orgs.create."
+  "Creates an organization and makes the viewer its Owner; takes orgs.create. A viewer who created as many organizations as the installation allows is refused (CONFLICT, limit.organizations)."
   createOrganization(slug: String!, name: String!): Organization!
   "Changes an organization's settings; takes org.manage. A new slug keeps the old one as an alias."
   updateOrganization(id: ID!, input: OrganizationSettings!): Organization!

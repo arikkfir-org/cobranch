@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -101,11 +102,14 @@ var conflicts = map[error]string{
 func fail(err error, kind string) error {
 	var verr *orgs.ValidationError
 	var taken *code.TakenError
+	var exceeded *limits.ExceededError
 	switch {
 	case errors.As(err, &verr):
 		return refuse(http.StatusBadRequest, verr.Code, verr.Message)
 	case errors.As(err, &taken):
 		return refuse(http.StatusConflict, "annotation.taken", taken.Error())
+	case errors.As(err, &exceeded):
+		return refuse(http.StatusConflict, "limit."+string(exceeded.Kind), exceeded.Error())
 	case errors.Is(err, code.ErrAnnotationChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The annotation changed since you read it: read it again.")
 	case errors.Is(err, auth.ErrForbidden):

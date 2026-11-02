@@ -86,9 +86,9 @@ func (s *Store) VerifiedEmailHolder(_ context.Context, email string) (uuid.UUID,
 	return uuid.Nil, orgs.ErrNotFound
 }
 
-// CreateFor records the organization with owner its first Owner.
+// CreateFor records the organization with owner its first Owner, counted against nobody.
 func (s *Store) CreateFor(ctx context.Context, _, owner uuid.UUID, org orgs.Organization) error {
-	return s.Create(ctx, owner, org)
+	return s.create(ctx, owner, org)
 }
 
 // Enter makes actor an Owner of the organization, a member first, and records the entry.

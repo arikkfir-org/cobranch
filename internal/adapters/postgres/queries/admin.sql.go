@@ -14,7 +14,7 @@ import (
 
 const adminOrganizations = `-- name: AdminOrganizations :many
 
-SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members
+SELECT o.id, o.slug, o.name, o.membership_role_id, o.accepts_join_requests, o.providers, o.created_at, o.created_by, (SELECT count(*) FROM memberships m WHERE m.org_id = o.id) AS members
 FROM organizations o
 WHERE ($1::uuid IS NULL OR o.id < $1::uuid)
     AND (o.slug ILIKE $2 OR o.name ILIKE $2)
@@ -47,6 +47,7 @@ func (q *Queries) AdminOrganizations(ctx context.Context, after *uuid.UUID, patt
 			&i.Organization.AcceptsJoinRequests,
 			&i.Organization.Providers,
 			&i.Organization.CreatedAt,
+			&i.Organization.CreatedBy,
 			&i.Members,
 		); err != nil {
 			return nil, err

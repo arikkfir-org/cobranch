@@ -18,7 +18,7 @@ func TestOrgStoreAllOrganizations(t *testing.T) {
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	globex := orgs.Organization{ID: uuid.Must(uuid.NewV7()), Slug: "globex", Name: "Globex 100%", MembershipRoleID: auth.RoleMember, CreatedAt: now}
-	if err := f.s.Create(ctx, f.nia, globex); err != nil {
+	if err := f.s.Create(ctx, f.nia, globex, 0); err != nil {
 		t.Fatal(err)
 	}
 	newest := globex.ID

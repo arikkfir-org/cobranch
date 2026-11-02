@@ -59,6 +59,12 @@ Every value has a default: `values.yaml` lists them, and `values.schema.json` ch
   autoscaler, which may scale it to zero while no push waits: KEDA's PostgreSQL scaler, for one, counting
   `SELECT count(*) FROM pushes WHERE processed_at IS NULL AND retry_at <= now()`. The maintenance CronJob compacts a repository's packs into one once it has `maintenance.compaction.packs` (8), on a disk of `maintenance.storage.sizeLimit` and with the Git server's ServiceAccount for a bucket, and deletes what compaction replaced a day later; null leaves packs alone, as a `file://` URL on a `blob.volume` that is an `emptyDir` does, since only each Git server's own pod holds that directory. Set `urls.gitSsh` too, such as `ssh://git@git.cobranch.example.com`, for Git over SSH with the SSH keys users add in the Console: the Git server also listens on port 2222, behind Service `<fullname>-git-server-ssh` (`<fullname>` is the release's name when it holds `cobranch`, and `<release>-cobranch` otherwise; `gitServer.ssh.service`: ClusterIP on port 22 by default, or LoadBalancer with your cloud's annotations), which no route reaches, so expose it yourself and name its port in `urls.gitSsh` unless it is 22. Its host key is a Secret the chart generates on install and keeps; under Argo CD, or anything else that renders without the cluster, set `gitServer.ssh.hostKey.existingSecret`, a Secret holding a private key in PEM under `key` (`gitServer.ssh.hostKey.secretKey`), such as `ssh-keygen -t ed25519 -N '' -f host_key` writes
   ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md)). The REST and GraphQL servers read repositories' trees and files from the Git server's port 8081, behind Service `<fullname>-git-server-internal`, which no route names, each read carrying the viewer's own token, which the Git server checks itself; if your NetworkPolicies select the Git server's pods, admit the REST and GraphQL servers' pods to that port ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md)).
+- **Quotas.** A user creates 5 organizations for themselves, and an organization holds 100 repositories and stores 1 GiB
+  of Git data, its repositories' packs, unless `limits.organizationsPerUser`, `limits.repositoriesPerOrganization` and
+  `limits.gitDataPerOrganization` (such as `5Gi`) say otherwise; 0 caps nothing. A creation or a push that would cross
+  one is refused with a message that names it, and nothing over it is stored. Organizations an administrator creates
+  for a user count against nobody
+  ([the design](https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md)).
 - **Secrets key.** The Auth and Admin servers seal the identity providers the Back-office adds, their client secrets,
   with a key the chart generates on install and keeps. Under Argo CD, or anything else that renders without the
   cluster, set `secretsKey.existingSecret`, a Secret holding 32 characters or more under `key` (`secretsKey.secretKey`). A lost key loses those
@@ -90,6 +96,10 @@ helm upgrade cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cob
 rest. `--reuse-values` keeps the previous version's defaults too, so a value a version adds or changes stays as it was:
 from a version before the Back-office's settings, it keeps `auth.signUp: anyone` and `organizations.selfServe: true`,
 which then lock those settings in the Back-office.
+
+From a version before quotas, the built-in limits apply as soon as the new pods serve: a user who already created 5
+organizations, or an organization that already holds 100 repositories or 1 GiB of Git data, keeps what it has and is
+refused more. Set `limits` before upgrading to lift them.
 
 The new version's migrate Job brings the schema forward while the old pods serve; the new pods turn ready once it is
 done. Each version's migrations keep the previous version's pods working, so roll back one version at most.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -17,8 +18,9 @@ import (
 // is named, so the audit log records who changed each row.
 type Store interface {
 	// Create makes the repository, claims its slug, grants its creator Maintainer on it and records the event, or
-	// ErrSlugTaken.
-	Create(ctx context.Context, actor uuid.UUID, repo Repository) error
+	// ErrSlugTaken. Under a lock of its organization's, it refuses with a *limits.ExceededError an organization that
+	// holds limit repositories already; 0 caps nothing.
+	Create(ctx context.Context, actor uuid.UUID, repo Repository, limit int64) error
 	// BySlug finds one of the organization's repositories by any slug it has had there, or ErrNotFound.
 	BySlug(ctx context.Context, orgID uuid.UUID, slug string) (Repository, error)
 	// ByPath finds a repository by its organization's slug and its own, each one it has or had, or ErrNotFound.
@@ -58,11 +60,17 @@ const (
 	PermBypass = "repo.bypass"
 )
 
+// Limits says which limits apply to an organization: limits.Service.
+type Limits interface {
+	Organization(ctx context.Context, orgID uuid.UUID) (limits.Limits, error)
+}
+
 // Service runs repositories: every operation checks its viewer's permissions through the authorizer first.
 type Service struct {
-	store Store
-	authz *auth.Authorizer
-	now   func() time.Time
+	store  Store
+	authz  *auth.Authorizer
+	limits Limits
+	now    func() time.Time
 }
 
 // NewService returns a Service over store, checking permissions with authz.
@@ -73,6 +81,13 @@ func NewService(store Store, authz *auth.Authorizer) *Service {
 // SetClock makes the service read the time from now: for tests.
 func (s *Service) SetClock(now func() time.Time) {
 	s.now = now
+}
+
+// WithLimits caps the repositories each organization holds with the limits l says apply; without it, nothing caps
+// them.
+func (s *Service) WithLimits(l Limits) *Service {
+	s.limits = l
+	return s
 }
 
 // Viewer is who an operation runs for: a signed-in user, or an API key.
@@ -120,7 +135,8 @@ func (s *Service) require(ctx context.Context, v Viewer, repoID uuid.UUID, permi
 	return repo, held, nil
 }
 
-// Create makes an empty repository in the organization, its creator v its Maintainer; it takes repos.create there.
+// Create makes an empty repository in the organization, its creator v its Maintainer; it takes repos.create there, and
+// is refused with a *limits.ExceededError once the organization holds as many repositories as it may.
 func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Input) (Repository, error) {
 	held, err := s.orgHolds(ctx, v, orgID)
 	if err != nil {
@@ -139,7 +155,15 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	}
 	repo := Repository{ID: id, OrgID: orgID, Slug: in.Slug, Name: in.Name, Description: in.Description, ObjectFormat: ObjectFormatSHA1,
 		CreatedBy: v.ID, CreatedAt: s.now()}
-	if err := s.store.Create(ctx, v.ID, repo); err != nil {
+	var limit int64
+	if s.limits != nil {
+		l, err := s.limits.Organization(ctx, orgID)
+		if err != nil {
+			return Repository{}, fmt.Errorf("reading the organization's limits: %w", err)
+		}
+		limit = l.RepositoriesPerOrganization
+	}
+	if err := s.store.Create(ctx, v.ID, repo, limit); err != nil {
 		return Repository{}, wrap("creating the repository", err)
 	}
 	// Read back for its visibility, which the store infers: an organization role may read it from the start.

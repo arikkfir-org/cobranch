@@ -1008,6 +1008,39 @@
           "description": "Every new user may create organizations; null, the Back-office's setting."
         }
       }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "organizationsPerUser": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The organizations a user creates for themselves; 0 caps nothing, null takes the built-in default."
+        },
+        "repositoriesPerOrganization": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "The repositories an organization holds; 0 caps nothing, null takes the built-in default."
+        },
+        "gitDataPerOrganization": {
+          "type": [
+            "string",
+            "integer",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*(Ki|Mi|Gi|Ti)?)$",
+          "minimum": 0,
+          "maximum": 0,
+          "description": "The Git data an organization stores, such as 5Gi; 0 caps nothing, null takes the built-in default."
+        }
+      }
     }
   },
   "required": [
