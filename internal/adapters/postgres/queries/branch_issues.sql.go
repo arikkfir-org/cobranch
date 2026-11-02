@@ -66,10 +66,12 @@ func (q *Queries) IssueBranches(ctx context.Context, issueID *uuid.UUID) ([]Issu
 }
 
 const issueByID = `-- name: IssueByID :one
-SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name,
+SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
+       c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
-        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
+       (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -83,10 +85,12 @@ type IssueByIDRow struct {
 	OrgSlug      string
 	IssueKey     string
 	AssigneeName *string
+	AssigneeKind *string
 	CreatorName  *string
 	RepoSlug     *string
 	RepoName     *string
 	Labels       []byte
+	Task         []byte
 }
 
 // IssueByID finds an issue by its ID, as IssueByNumber answers it.
@@ -111,10 +115,12 @@ func (q *Queries) IssueByID(ctx context.Context, id uuid.UUID) (IssueByIDRow, er
 		&i.OrgSlug,
 		&i.IssueKey,
 		&i.AssigneeName,
+		&i.AssigneeKind,
 		&i.CreatorName,
 		&i.RepoSlug,
 		&i.RepoName,
 		&i.Labels,
+		&i.Task,
 	)
 	return i, err
 }

@@ -13,6 +13,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"cobranch.dev/internal/adapters/postgres/queries"
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
 )
 
@@ -224,16 +226,22 @@ func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.
 	return out, nil
 }
 
-// Member finds one of the organization's members, or issues.ErrNotFound (issues.Store).
-func (s *IssueStore) Member(ctx context.Context, orgID, principalID uuid.UUID) (issues.Principal, error) {
-	row, err := s.q.OrganizationMember(ctx, orgID, principalID)
+// Assignee finds one of the organization's members or agents, or issues.ErrNotFound (issues.Store).
+func (s *IssueStore) Assignee(ctx context.Context, orgID, principalID uuid.UUID) (issues.Principal, error) {
+	row, err := s.q.IssueAssignee(ctx, principalID, orgID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return issues.Principal{}, issues.ErrNotFound
 	}
 	if err != nil {
-		return issues.Principal{}, fmt.Errorf("finding the member: %w", err)
+		return issues.Principal{}, fmt.Errorf("finding the assignee: %w", err)
 	}
-	return issues.Principal{ID: row.ID, DisplayName: row.DisplayName}, nil
+	return issues.Principal{ID: row.ID, DisplayName: row.DisplayName, Agent: row.Kind == string(auth.KindAgent)}, nil
+}
+
+// Transact runs fn in one transaction that acts for actor, which the writes of the stores it calls with its context
+// join (issues.Store).
+func (s *IssueStore) Transact(ctx context.Context, actor uuid.UUID, fn func(ctx context.Context) error) error {
+	return transact(ctx, s.pool, s.q, "changing the issue", actor, func(ctx context.Context, _ *queries.Queries) error { return fn(ctx) })
 }
 
 // Repository finds one of the organization's repositories, or issues.ErrNotFound (issues.Store).
@@ -277,13 +285,35 @@ func issueOf(r queries.IssueByNumberRow) issues.Issue {
 		Description: i.Description, State: issues.State(i.State), Priority: issues.Priority(i.Priority), CreatedAt: i.CreatedAt,
 		UpdatedAt: i.UpdatedAt, ClosedAt: i.ClosedAt, Version: i.Version, Labels: issueLabelsOf(r.Labels)}
 	if i.AssigneeID != nil && r.AssigneeName != nil {
-		out.Assignee = &issues.Principal{ID: *i.AssigneeID, DisplayName: *r.AssigneeName}
+		out.Assignee = &issues.Principal{ID: *i.AssigneeID, DisplayName: *r.AssigneeName, Agent: r.AssigneeKind != nil && *r.AssigneeKind == string(auth.KindAgent)}
 	}
+	out.Task = issueTaskOf(r.Task)
 	if i.CreatedBy != nil && r.CreatorName != nil {
 		out.CreatedBy = &issues.Principal{ID: *i.CreatedBy, DisplayName: *r.CreatorName}
 	}
 	if i.RepoID != nil && r.RepoSlug != nil && r.RepoName != nil {
 		out.Repository = &issues.Repository{ID: *i.RepoID, Slug: *r.RepoSlug, Name: *r.RepoName}
+	}
+	return out
+}
+
+// issueTaskOf is the task an issue's agent assignee works on it in, from the JSON IssueByNumber reads; nil for none.
+func issueTaskOf(raw []byte) *issues.Task {
+	if len(raw) == 0 {
+		return nil
+	}
+	var t struct {
+		Number int64      `json:"number"`
+		State  string     `json:"state"`
+		Repo   *uuid.UUID `json:"repo"`
+	}
+	// The query builds this JSON itself: it never fails to read, and an issue shows no task if it somehow did.
+	if err := json.Unmarshal(raw, &t); err != nil {
+		return nil
+	}
+	out := &issues.Task{Number: t.Number, State: agents.TaskState(t.State)}
+	if t.Repo != nil {
+		out.RepoID = *t.Repo
 	}
 	return out
 }

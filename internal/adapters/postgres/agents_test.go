@@ -178,10 +178,13 @@ func TestAgentStoreAssign(t *testing.T) {
 		name     string
 		filter   agents.TaskFilter
 		readable []uuid.UUID
+		hidden   []string
 		want     []int64
 	}{
 		{name: "every task, newest first", readable: all, want: []int64{2, 1}},
 		{name: "none on a repository the viewer doesn't read", readable: nil, want: []int64{1}},
+		{name: "none of a hidden kind", readable: all, hidden: []string{agents.KindAssigned}},
+		{name: "those of kinds not hidden", readable: all, hidden: []string{"issue"}, want: []int64{2, 1}},
 		{name: "on website", filter: agents.TaskFilter{RepoID: f.website.ID}, readable: all, want: []int64{2}},
 		{name: "Scout's", filter: agents.TaskFilter{AgentID: f.scout.ID}, readable: all, want: []int64{2, 1}},
 		{name: "another agent's", filter: agents.TaskFilter{AgentID: uuid.New()}, readable: all},
@@ -191,7 +194,7 @@ func TestAgentStoreAssign(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			list, err := f.a.Tasks(ctx, f.acme.ID, tt.filter, tt.readable, 10)
+			list, err := f.a.Tasks(ctx, f.acme.ID, tt.filter, tt.readable, tt.hidden, 10)
 			if err != nil {
 				t.Fatal(err)
 			}

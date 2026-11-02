@@ -11,12 +11,15 @@ VALUES (@id, @org_id, @number, @title, @description, @state, @priority, sqlc.nar
         @created_at, @created_at, sqlc.narg(closed_at));
 
 -- IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
--- is assigned to, who created it and the repository it is about, and its labels by name.
+-- is assigned to, who created it and the repository it is about, and its labels by name, and its assignee's newest
+-- task on it when its assignee is an agent.
 -- name: IssueByNumber :one
-SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name,
+SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
+       c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
-        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
+       (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -29,10 +32,12 @@ WHERE i.org_id = $1 AND i.number = $2;
 -- UUID, any for none), carrying every one of the labels, whose title or description matches the pattern or whose
 -- number the text names (any for an empty pattern), and numbered below below (any for 0).
 -- name: ListIssues :many
-SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name,
+SELECT sqlc.embed(i), o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
+       c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
-        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
+       (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -72,9 +77,13 @@ FROM events e LEFT JOIN principals p ON p.id = e.actor_id
 WHERE e.subject_id = @issue_id AND e.kind LIKE 'issue.%'
 ORDER BY e.seq;
 
--- OrganizationMember finds one of an organization's members, by their principal, with their display name.
--- name: OrganizationMember :one
-SELECT p.id, p.display_name FROM memberships m JOIN principals p ON p.id = m.user_id WHERE m.org_id = $1 AND m.user_id = $2;
+-- IssueAssignee finds whom an organization's issue may be assigned to, by their principal, with their display name and
+-- kind: one of its members, or one of its agents.
+-- name: IssueAssignee :one
+SELECT p.id, p.display_name, p.kind FROM principals p
+WHERE p.id = @principal_id
+  AND (EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = @org_id AND m.user_id = p.id)
+       OR EXISTS (SELECT 1 FROM agents ag WHERE ag.org_id = @org_id AND ag.principal_id = p.id));
 
 -- OrganizationRepository finds one of an organization's repositories.
 -- name: OrganizationRepository :one

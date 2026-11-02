@@ -305,6 +305,7 @@ type ComplexityRoot struct {
 		Priority        func(childComplexity int) int
 		Repository      func(childComplexity int) int
 		State           func(childComplexity int) int
+		Task            func(childComplexity int) int
 		Title           func(childComplexity int) int
 		UpdatedAt       func(childComplexity int) int
 		Version         func(childComplexity int) int
@@ -361,6 +362,11 @@ type ComplexityRoot struct {
 		ID   func(childComplexity int) int
 		Name func(childComplexity int) int
 		Slug func(childComplexity int) int
+	}
+
+	IssueTask struct {
+		Number func(childComplexity int) int
+		State  func(childComplexity int) int
 	}
 
 	Job struct {
@@ -2033,6 +2039,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Issue.State(childComplexity), true
+	case "Issue.task":
+		if e.ComplexityRoot.Issue.Task == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Issue.Task(childComplexity), true
 	case "Issue.title":
 		if e.ComplexityRoot.Issue.Title == nil {
 			break
@@ -2233,6 +2245,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IssueRepository.Slug(childComplexity), true
+
+	case "IssueTask.number":
+		if e.ComplexityRoot.IssueTask.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueTask.Number(childComplexity), true
+	case "IssueTask.state":
+		if e.ComplexityRoot.IssueTask.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueTask.State(childComplexity), true
 
 	case "Job.checkout":
 		if e.ComplexityRoot.Job.Checkout == nil {
@@ -4498,9 +4523,9 @@ extend type Organization {
   agents: [Agent!]!
   "One of the organization's agents by ID: null unless it is there; takes org.read."
   agent(id: ID!): Agent
-  "A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
+  "A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
   tasks(agent: ID, states: [TaskState!], repositoryId: ID, first: Int! = 30, after: String): TaskPage!
-  "One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read."
+  "One of the organization's tasks by number: null unless it is there, the viewer reads the repository it names, and, for an issue's task, holds issues.read; takes org.read."
   task(number: Int!): Task
 }
 
@@ -5362,6 +5387,8 @@ type Issue {
   priority: IssuePriority!
   "Who works on it; null for nobody, or once they are gone."
   assignee: IssuePrincipal
+  "The task its agent assignee works on it in, the newest its assignment gave the agent; null when no agent is assigned, and for a viewer who doesn't read the repository the task works in."
+  task: IssueTask
   "The repository it is about; null for none, and for a viewer who doesn't read it."
   repository: IssueRepository
   "The organization's labels it carries, by name."
@@ -5475,6 +5502,13 @@ type IssuePrincipal {
   displayName: String!
 }
 
+"The task an issue's agent assignee works on it in."
+type IssueTask {
+  "Its number among the organization's tasks."
+  number: Int!
+  state: TaskState!
+}
+
 "The repository an issue is about."
 type IssueRepository {
   id: ID!
@@ -5514,7 +5548,7 @@ input IssueInput {
   state: IssueState
   "NONE when left out."
   priority: IssuePriority
-  "One of the organization's members."
+  "One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads."
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads."
   repositoryId: ID
@@ -5528,7 +5562,7 @@ input IssuePatch {
   description: String
   state: IssueState
   priority: IssuePriority
-  "One of the organization's members, or null for nobody."
+  "One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads; or null for nobody. Moving the issue from an agent cancels the agent's task, unless it has ended."
   assigneeId: ID
   "One of the organization's repositories, which the viewer reads, or null for none."
   repositoryId: ID
@@ -6624,6 +6658,8 @@ func (ec *executionContext) childFields_Issue(ctx context.Context, field graphql
 		return ec.fieldContext_Issue_priority(ctx, field)
 	case "assignee":
 		return ec.fieldContext_Issue_assignee(ctx, field)
+	case "task":
+		return ec.fieldContext_Issue_task(ctx, field)
 	case "repository":
 		return ec.fieldContext_Issue_repository(ctx, field)
 	case "labels":
@@ -6752,6 +6788,16 @@ func (ec *executionContext) childFields_IssueRepository(ctx context.Context, fie
 		return ec.fieldContext_IssueRepository_name(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type IssueRepository", field.Name)
+}
+
+func (ec *executionContext) childFields_IssueTask(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "number":
+		return ec.fieldContext_IssueTask_number(ctx, field)
+	case "state":
+		return ec.fieldContext_IssueTask_state(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type IssueTask", field.Name)
 }
 
 func (ec *executionContext) childFields_Job(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -14146,6 +14192,38 @@ func (ec *executionContext) fieldContext_Issue_assignee(_ context.Context, field
 	return fc, nil
 }
 
+func (ec *executionContext) _Issue_task(ctx context.Context, field graphql.CollectedField, obj *Issue) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Issue_task(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Task, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *IssueTask) graphql.Marshaler {
+			return ec.marshalOIssueTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueTask(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Issue_task(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Issue",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueTask(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Issue_repository(ctx context.Context, field graphql.CollectedField, obj *Issue) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -15152,6 +15230,52 @@ func (ec *executionContext) _IssueRepository_name(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_IssueRepository_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("IssueRepository", field, false, false, "String")
+}
+
+func (ec *executionContext) _IssueTask_number(ctx context.Context, field graphql.CollectedField, obj *IssueTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueTask_number(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueTask_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueTask", field, false, false, "Int")
+}
+
+func (ec *executionContext) _IssueTask_state(ctx context.Context, field graphql.CollectedField, obj *IssueTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueTask_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v TaskState) graphql.Marshaler {
+			return ec.marshalNTaskState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTaskState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueTask_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueTask", field, false, false, "TaskState")
 }
 
 func (ec *executionContext) _Job_name(ctx context.Context, field graphql.CollectedField, obj *Job) (ret graphql.Marshaler) {
@@ -27933,6 +28057,11 @@ func (ec *executionContext) _Issue(ctx context.Context, sel ast.SelectionSet, ob
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "task":
+			out.Values[i] = ec._Issue_task(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "repository":
 			out.Values[i] = ec._Issue_repository(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -28352,6 +28481,44 @@ func (ec *executionContext) _IssueRepository(ctx context.Context, sel ast.Select
 			}
 		case "name":
 			out.Values[i] = ec._IssueRepository_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var issueTaskImplementors = []string{"IssueTask"}
+
+func (ec *executionContext) _IssueTask(ctx context.Context, sel ast.SelectionSet, obj *IssueTask) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, issueTaskImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IssueTask")
+		case "number":
+			out.Values[i] = ec._IssueTask_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._IssueTask_state(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -33200,6 +33367,13 @@ func (ec *executionContext) marshalOIssueState2ᚖcobranchᚗdevᚋinternalᚋad
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOIssueTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueTask(ctx context.Context, sel ast.SelectionSet, v *IssueTask) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._IssueTask(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOLabelColor2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLabelColor(ctx context.Context, v any) (*LabelColor, error) {

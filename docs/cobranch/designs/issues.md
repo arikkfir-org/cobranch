@@ -58,9 +58,10 @@ A branch works on one issue at most; an issue has any number of branches, in any
 - **Its repository is a hint,** not an owner: the agent its task goes to works there, and the Console filters by it.
   Only viewers who read that repository see which one it is.
 - **A version, its ETag.** Each change bumps an issue's version. Its ETag is the version and the organization's key,
-  `"3-ACME"`, since a changed key renames the issue without changing it. REST's `PATCH` and `DELETE` name the ETag they
-  were made from in `If-Match`, by its version: 412 when another change came first, 428 without it, as for annotations
-  ([branch status](branch-status.md#annotations)); a key changed meanwhile doesn't refuse them. GraphQL's
+  `"3-ACME"`, since a changed key renames the issue without changing it, and while an agent works on it, its task's
+  number and state, `"3-ACME-12-running"`, since the task moves on without changing it. REST's `PATCH` and `DELETE` name
+  the ETag they were made from in `If-Match`, by its version: 412 when another change came first, 428 without it, as for
+  annotations ([branch status](branch-status.md#annotations)); a key changed meanwhile doesn't refuse them. GraphQL's
   `expectedVersion` does the same, optionally.
 - **Its activity** is the [architecture](architecture.md#events-and-background-work)'s events with the issue as their
   subject: `issue.created`, `issue.changed` with each field's old and new value (a label's by name),
@@ -225,12 +226,19 @@ tasks and chats are its own, and issues use both rather than a second model.
 Reassigning the issue cancels the agent’s open task. Mentioning the agent in the issue’s comments, its chat, hands it
 work as in a branch chat, once agents follow mentions.
 
-- **Assigning an agent creates its task,** in the same transaction as the assignment, through the agents service: the
-  viewer is the task's assigner, so the agent does no more than they can; its title is the issue's identifier and title,
-  its instructions the description, and its repository the issue's. The task row names its issue
-  (`agent_tasks.issue_id`), and the issue page shows the task's state beside the agent.
-- **Reassigning cancels it.** Moving the issue to another assignee cancels the agent's open task, through the same
-  service; Done or Canceled leaves a running task to finish its turn and record it.
+- **Assigning an agent creates its task,** in the same transaction as the assignment: the agents service checks it and
+  the agents' store records it in the issue's transaction, so both happen or neither does. The viewer is the task's
+  assigner, so the agent does no more than they can, and must read the issue's repository, where the task works. The
+  task is of kind `issue`; its title is the issue's identifier and title, its instructions the description, cut to the
+  20,000 characters a task holds with a line that says so. The task row names its issue (`agent_tasks.issue_id`), and
+  the issue shows the task's number and state beside the agent, to viewers who read its repository.
+- **Its task reads as the issue does.** The task carries the issue's title and description, so the agents service shows
+  a task of kind `issue` only to viewers who hold `issues.read`, beside `repo.read` on the repository it names: a Guest
+  who reads the repository finds neither the issue nor its task, and nobody without `issues.read` finds the task of an
+  issue about no repository.
+- **Reassigning cancels it.** Moving the issue to another assignee, or nobody, cancels the agent's open task in the same
+  transaction, for whoever moved it; a task that has ended stays as it ended. Done or Canceled leaves a running task to
+  finish its turn and record it. Deleting the issue cancels its task too, which then names no issue.
 - **The agent works like anyone.** It pushes a branch named after the issue, which links by name and moves the issue to
   In progress, and the branch's merge moves it to Done.
 - **Comments reach it as a chat does.** The issue's [comments](#comments) are a chat, so mentioning an agent there hands
@@ -247,6 +255,7 @@ change, merge patches, and lists paged by an opaque cursor with `Link: rel="next
 | Create an issue | `POST /issues`, 201 with `Location` | `createIssue` | `issues.write` |
 | Read one, with its rendered description | `GET /issues/{number}`, 304 on its ETag | `Organization.issue(number)` | `issues.read` |
 | Change fields | `PATCH /issues/{number}`, merge patch, `If-Match` | `updateIssue` | `issues.write`, and `agents.assign` for an agent |
+| Its agent's task, number and state | the issue's `task` | `Issue.task` | `issues.read`, and `repo.read` on the task's repository |
 | Delete | `DELETE /issues/{number}`, `If-Match` | `deleteIssue` | `issues.manage` |
 | Its activity, oldest first | `GET /issues/{number}/activity` | `Issue.activity` | `issues.read` |
 | Its branches | `GET /issues/{number}/branches` | `Issue.branches` | `issues.read`, and `repo.read` per branch |
@@ -280,8 +289,8 @@ the page instead of overwriting it.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
   description, its branches with their status as branch rows, its activity, oldest first, and its [comments](#comments),
   live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
-  version it was made from, and shows who created it. "Assign to an agent" lists the organization's agents once they
-  exist.
+  version it was made from, and shows who created it. The assignee menu lists the organization's agents too, for a
+  viewer who holds `agents.assign`, and an agent's task shows under it with its state, linked to the agent's tasks.
 - **Labels** at `/<org>/issues/labels` lists the organization's labels with what each is for and how many issues carry
   it, linked to the list filtered by it; for `issues.manage`, each row edits or deletes its label, and a form adds one.
 - **New issue** at `/<org>/issues/new` asks for a title, then the rest, as the side column does. `issues` joins the
@@ -304,6 +313,8 @@ do.
   issue is a branch unlinked by hand, which the push worker leaves alone.
 - **`labels` is unique by name in any case,** an index on the organization and the lowercased name; `issue_labels` joins
   an issue to a label, and deleting either deletes the row.
+- **`agent_tasks` takes `issue_id`,** which a deleted issue sets to null, and `task_kinds` the kind `issue`; the issue
+  shows its assignee's newest task on it.
 - **`chat_threads` takes `issue_id`** beside `branch_id`, exactly one of them set, and `repo_id` only with a branch; an
   issue's thread has no anchor. Its messages, their trigger `audit()` and the events stay as the branch chats have them.
 - **Every new row carries `org_id`,** but `issue_labels`, which joins two rows that do; `issues`, `branch_issues`,

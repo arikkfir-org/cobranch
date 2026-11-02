@@ -237,15 +237,15 @@ func TestIssueStoreDelete(t *testing.T) {
 	}
 }
 
-func TestIssueStoreMemberAndRepository(t *testing.T) {
+func TestIssueStoreAssigneeAndRepository(t *testing.T) {
 	t.Parallel()
 	f := newIssueFixture(t)
 	ctx := context.Background()
-	if p, err := f.is.Member(ctx, f.acme.ID, f.max); err != nil || p.ID != f.max || p.DisplayName == "" {
-		t.Errorf("Member(Max) = %+v, %v", p, err)
+	if p, err := f.is.Assignee(ctx, f.acme.ID, f.max); err != nil || p.ID != f.max || p.DisplayName == "" || p.Agent {
+		t.Errorf("Assignee(Max) = %+v, %v", p, err)
 	}
-	if _, err := f.is.Member(ctx, f.acme.ID, f.nia); !errors.Is(err, issues.ErrNotFound) {
-		t.Errorf("Member(Nia), who isn't one, = %v, want %v", err, issues.ErrNotFound)
+	if _, err := f.is.Assignee(ctx, f.acme.ID, f.nia); !errors.Is(err, issues.ErrNotFound) {
+		t.Errorf("Assignee(Nia), who isn't a member, = %v, want %v", err, issues.ErrNotFound)
 	}
 	if r, err := f.is.Repository(ctx, f.acme.ID, f.website.ID); err != nil || r.Slug != "website" {
 		t.Errorf("Repository(website) = %+v, %v", r, err)
