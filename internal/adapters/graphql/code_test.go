@@ -1,8 +1,10 @@
 package graphql
 
 import (
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
@@ -137,5 +139,65 @@ func TestMergeMutation(t *testing.T) {
 			wantCode: conflict, wantReason: "branch.moved"},
 		{name: "an installation without a Git server", viewer: failingFor(code.ErrUnavailable), document: merge("feature", ""),
 			wantCode: unavailable, wantReason: "git.unavailable"},
+	})
+}
+
+func TestDeleteBranchMutation(t *testing.T) {
+	deleteBranch := func(branch, expected string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			args := `repositoryId: "` + f.website.ID.String() + `", branch: "` + branch + `"`
+			if expected != "" {
+				args += `, expectedHead: "` + expected + `"`
+			}
+			return `mutation { deleteBranch(` + args + `) }`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "wherever it is", viewer: olivia, document: deleteBranch("feature", ""), want: []string{`"deleteBranch":true`},
+			check: deletionOf("feature", shaOf("d"))},
+		{name: "at the head the viewer saw", viewer: olivia, document: deleteBranch("feature", shaOf("d")), want: []string{`"deleteBranch":true`},
+			check: deletionOf("feature", shaOf("d"))},
+		{name: "a head the branch moved from", viewer: olivia, document: deleteBranch("feature", shaOf("c")), wantCode: conflict, wantReason: "branch.moved",
+			check: deletionOf("", "")},
+		{name: "main is never deleted", viewer: olivia, document: deleteBranch("main", ""), wantCode: conflict, wantReason: code.DeleteDefault},
+		{name: "a Reader may not delete", viewer: maxHolding(auth.RoleReader), document: deleteBranch("feature", ""), wantCode: forbidden},
+		{name: "a Developer deletes", viewer: maxHolding(auth.RoleDeveloper), document: deleteBranch("feature", ""), want: []string{`"deleteBranch":true`}},
+		{name: "a branch that doesn't live", viewer: olivia, document: deleteBranch("gone", ""), wantCode: notFound, wantReason: "branch.not_found"},
+		{name: "a deletion the push refuses", viewer: failingFor(&code.DeleteError{Code: code.DeleteRefused, Message: "refused"}),
+			document: deleteBranch("feature", ""), wantCode: conflict, wantReason: code.DeleteRefused},
+		{name: "a branch that moved while the Git server deleted it", viewer: failingFor(code.ErrBranchMoved), document: deleteBranch("feature", ""),
+			wantCode: conflict, wantReason: "branch.moved"},
+		{name: "an installation without a Git server", viewer: failingFor(code.ErrUnavailable), document: deleteBranch("feature", ""),
+			wantCode: unavailable, wantReason: "git.unavailable"},
+	})
+}
+
+// deletionOf checks that the Git server was asked to delete branch at head for Olivia, or nothing for "".
+func deletionOf(branch, head string) func(t *testing.T, f *orgFixture, body string) {
+	return func(t *testing.T, f *orgFixture, _ string) {
+		var want []code.DeleteRequest
+		if branch != "" {
+			want = []code.DeleteRequest{{Branch: branch, Head: head, By: f.olivia.User.ID}}
+		}
+		if !slices.Equal(f.objects.Deletions, want) {
+			t.Errorf("the Git server was asked for %+v, want %+v", f.objects.Deletions, want)
+		}
+	}
+}
+
+func TestDeletedBranchQuery(t *testing.T) {
+	deleted := func(name string) func(*orgFixture) string {
+		return func(f *orgFixture) string {
+			by := &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}
+			at := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
+			f.codeStore.Deleted[f.website.ID] = []code.DeletedBranch{{Name: "old", Head: shaOf("d"), CreatedAt: at, DeletedAt: at.Add(time.Hour),
+				DeletedBy: by, Merge: &code.Merge{Head: shaOf("d"), By: by, At: at}}}
+			return `{ organization(slug: "acme") { repository(slug: "website") { deletedBranch(name: "` + name + `") { name head deletedAt deletedBy { displayName } merge { head } } } } }`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "who deleted it and when, and its merge", viewer: olivia, document: deleted("old"),
+			want: []string{`"deletedBranch":{"name":"old","head":"` + shaOf("d") + `","deletedAt":"2026-11-02T10:00:00Z","deletedBy":{"displayName":"Olivia"},"merge":{"head":"` + shaOf("d") + `"}}`}},
+		{name: "a live branch's name is null", viewer: olivia, document: deleted("feature"), want: []string{`"deletedBranch":null`}},
 	})
 }

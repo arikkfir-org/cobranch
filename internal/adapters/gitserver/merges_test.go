@@ -170,6 +170,39 @@ func TestMergeByPush(t *testing.T) {
 	}
 }
 
+// TestMergeOfADeletedBranch checks that a merge into main keeps its record on its branch once the branch is deleted
+// before the push worker records the merge, as a deletion pushed right after the merge leaves it.
+func TestMergeOfADeletedBranch(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name   string
+		pushes [][]string
+	}{
+		{name: "deleted right after a fast-forward", pushes: [][]string{{"feature:main"}, {":feature"}}},
+		{name: "deleted right after a merge commit", pushes: [][]string{{"merged:main"}, {":feature"}}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s, dir, feature := branchToMerge(t, mergeCase{})
+			mustGit(t, dir, "checkout", "-q", "-b", "merged", "main")
+			mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
+			for _, refs := range tt.pushes {
+				mustGit(t, dir, append([]string{"push", "-q", "origin"}, refs...)...)
+			}
+			s.process()
+			var head, by *string
+			if err := s.pool.QueryRow(t.Context(), "SELECT merged_head, merged_by::text FROM branches WHERE repo_id = $1 AND name = 'feature' AND deleted_at IS NOT NULL",
+				website).Scan(&head, &by); err != nil {
+				t.Fatalf("reading the deleted branch: %v", err)
+			}
+			if head == nil || *head != feature || by == nil || *by != olivia.String() {
+				t.Errorf("feature's merge = %v by %v, want %s by Olivia", head, by, feature)
+			}
+		})
+	}
+}
+
 // branchToMerge sets up tt's repository: main, with tt's /cobranch.yaml if any, and branch feature a commit ahead of
 // it, processed and, if tt says so, annotated; it returns the stack, the clone and feature's head.
 func branchToMerge(t *testing.T, tt mergeCase) (*stack, string, string) {

@@ -14,13 +14,15 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a code.Store in memory: each repository's commits by name, branches, tags, pushes and slugs, the
-// organization's then its own, and the annotations on its commits and the reviews of them, in the order they were
-// submitted. Fail, when set, fails every listing and every change. Names names the principals who set annotations and
-// submit reviews, by ID, and NotPeople holds those who aren't people; Now is the time it records changes at.
+// Store is a code.Store in memory: each repository's commits by name, branches, deleted branches, oldest deletion
+// first, tags, pushes and slugs, the organization's then its own, and the annotations on its commits and the reviews
+// of them, in the order they were submitted. Fail, when set, fails every listing and every change. Names names the
+// principals who set annotations and submit reviews, by ID, and NotPeople holds those who aren't people; Now is the
+// time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
+	Deleted    map[uuid.UUID][]code.DeletedBranch
 	TagList    map[uuid.UUID][]code.Tag
 	Pushes     map[uuid.UUID]code.Push
 	SlugList   map[uuid.UUID][2]string
@@ -34,7 +36,8 @@ type Store struct {
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
+	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{},
+		Deleted: map[uuid.UUID][]code.DeletedBranch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
 		ReviewList: map[uuid.UUID][]code.Review{}, Names: map[uuid.UUID]string{}, NotPeople: map[uuid.UUID]bool{}}
 }
@@ -91,6 +94,24 @@ func (s *Store) Branch(_ context.Context, repoID uuid.UUID, name string) (code.B
 		}
 	}
 	return code.Branch{}, repos.ErrNotFound
+}
+
+// DeletedBranch finds the latest deletion of the repository's branch of name, or repos.ErrNotFound when there is none
+// or a branch of that name is live.
+func (s *Store) DeletedBranch(_ context.Context, repoID uuid.UUID, name string) (code.DeletedBranch, error) {
+	if s.Fail != nil {
+		return code.DeletedBranch{}, s.Fail
+	}
+	if slices.ContainsFunc(s.BranchList[repoID], func(b code.Branch) bool { return b.Name == name }) {
+		return code.DeletedBranch{}, repos.ErrNotFound
+	}
+	deleted := s.Deleted[repoID]
+	for i := len(deleted) - 1; i >= 0; i-- {
+		if deleted[i].Name == name {
+			return deleted[i], nil
+		}
+	}
+	return code.DeletedBranch{}, repos.ErrNotFound
 }
 
 // annotatedBranch is b with its commit's annotations.

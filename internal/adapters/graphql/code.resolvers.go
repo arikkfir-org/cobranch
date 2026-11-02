@@ -60,6 +60,22 @@ func (r *mutationResolver) MergeBranch(ctx context.Context, repositoryID string,
 	return &MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}, nil
 }
 
+// DeleteBranch is the resolver for the deleteBranch field.
+func (r *mutationResolver) DeleteBranch(ctx context.Context, repositoryID string, branch string, expectedHead *string) (bool, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return false, err
+	}
+	head := ""
+	if expectedHead != nil {
+		head = *expectedHead
+	}
+	if err := r.Code.DeleteBranch(ctx, v, repoID, branch, head); err != nil {
+		return false, deleteFail(ctx, err)
+	}
+	return true, nil
+}
+
 // SubmitReview is the resolver for the submitReview field.
 func (r *mutationResolver) SubmitReview(ctx context.Context, repositoryID string, sha string, input ReviewInput) (*Review, error) {
 	v, repoID, err := codeRepo(ctx, repositoryID)
@@ -96,6 +112,22 @@ func (r *repositoryResolver) Branch(ctx context.Context, obj *Repository, name s
 		return nil, fail(ctx, err, "branch", "reading the branch")
 	}
 	return branch(b), nil
+}
+
+// DeletedBranch is the resolver for the deletedBranch field.
+func (r *repositoryResolver) DeletedBranch(ctx context.Context, obj *Repository, name string) (*DeletedBranch, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	b, err := r.Code.DeletedBranch(ctx, v, repoID, name)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, fail(ctx, err, "branch", "reading the deleted branch")
+	}
+	return deletedBranch(b), nil
 }
 
 // History is the resolver for the history field.

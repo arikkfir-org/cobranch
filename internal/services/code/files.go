@@ -27,6 +27,9 @@ type Objects interface {
 	Merge(ctx context.Context, repoID uuid.UUID, req MergeRequest) (Merged, error)
 	// Diff reads the change req asks for, up to the limits of a diff.
 	Diff(ctx context.Context, repoID uuid.UUID, req DiffRequest) (Diff, error)
+	// DeleteBranch records the deletion req asks for as a push that deletes its branch's ref, answering once it is
+	// committed: ErrBranchMoved when the branch moved, and a *DeleteError for a deletion Cobranch won't make.
+	DeleteBranch(ctx context.Context, repoID uuid.UUID, req DeleteRequest) error
 }
 
 // unavailable answers every read with ErrUnavailable, for an installation that runs no Git server.
@@ -54,6 +57,10 @@ func (unavailable) Merge(context.Context, uuid.UUID, MergeRequest) (Merged, erro
 
 func (unavailable) Diff(context.Context, uuid.UUID, DiffRequest) (Diff, error) {
 	return Diff{}, ErrUnavailable
+}
+
+func (unavailable) DeleteBranch(context.Context, uuid.UUID, DeleteRequest) error {
+	return ErrUnavailable
 }
 
 // Tags lists the repository's tags by name, each with the object its ref names; it takes repo.read.
