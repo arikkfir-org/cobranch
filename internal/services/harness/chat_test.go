@@ -49,27 +49,24 @@ func keyed(c harness.Call, key uuid.UUID) harness.Call {
 }
 
 func TestChat(t *testing.T) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases()) {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runChat(t, tc)
+		})
+	}
+}
+
+// threadCases are TestChat's cases of a task's thread: starting it, and reading it.
+func threadCases() []chatCase {
 	ours, theirs := uuid.MustParse("0190f1b2-0000-7000-8000-0000000000aa"), uuid.MustParse("0190f1b2-0000-7000-8000-0000000000bb")
 	tidy := harness.Chat{Repo: "website", Branch: "tidy"}
 	begun := entry(nil, agents.EntryInput, `{"text":"# Sweep"}`)
-	tt := []chatCase{
+	return []chatCase{
 		{name: "the first post starts the task's thread, and the next replies there", branch: "tidy",
 			turns: []harness.Turn{calling(call("a", "post_message", `{"body":"Starting."}`)), calling(call("b", "post_message", `{"body":"Swept."}`)),
 				calling(call("c", "read_thread", `{}`)), done},
-			check: func(t *testing.T, c *cobranch, m *model) {
-				if len(c.threads) != 1 {
-					t.Fatalf("started %d threads", len(c.threads))
-				}
-				for id, th := range c.threads {
-					if th.chat != tidy || len(th.messages) != 2 || th.messages[0].Body != "Starting." || th.messages[1].Body != "Swept." {
-						t.Errorf("thread %s = %+v", id, th)
-					}
-				}
-				read := m.requests[3].Messages[6].Results[0].Text
-				if !strings.Contains(read, "From you at 2026-11-02 09:00 UTC") || !strings.Contains(read, "Starting.") || !strings.Contains(read, "Swept.") {
-					t.Errorf("read_thread answered %q", read)
-				}
-			}},
+			check: startedAndReplied},
 		{name: "a post starts no thread again after a restart", branch: "tidy", thread: ours,
 			threads: map[uuid.UUID]*thread{ours: {chat: tidy, messages: []harness.ChatMessage{{ID: uuid.New(), Body: "Starting.", Task: 7}}}},
 			entries: entry(begun, agents.EntryTurn, `{"calls":[{"id":"a","name":"post_message","arguments":{"body":"Starting."},"key":"`+ours.String()+`"}]}`),
@@ -92,11 +89,8 @@ func TestChat(t *testing.T) {
 				}
 				resultAt(2, "Posted.", false)(t, c, nil, nil)
 				resultAt(3, "From Olivia at 2026-11-02 08:00 UTC, message", false)(t, c, nil, nil)
-				for _, want := range []string{"Please sweep.", "From Reviewer (an agent, on task #9)", "From someone since gone", "(deleted)", "From you", "On it."} {
-					if !strings.Contains(string(c.entries[3].Body), want) {
-						t.Errorf("read_thread answered %s, without %q", c.entries[3].Body, want)
-					}
-				}
+				containsAll(t, string(c.entries[3].Body), "Please sweep.", "From Reviewer (an agent, on task #9)", "From someone since gone", "(deleted)",
+					"From you", "On it.")
 			}},
 		{name: "a thread too long to show whole", branch: "tidy", thread: theirs,
 			threads: map[uuid.UUID]*thread{theirs: {chat: tidy, messages: long(40)}},
@@ -112,6 +106,12 @@ func TestChat(t *testing.T) {
 			check: func(t *testing.T, c *cobranch, _ *model) {
 				resultAt(2, "The task has no thread yet: post_message starts one.", false)(t, c, nil, nil)
 			}},
+	}
+}
+
+// postCases are TestChat's cases of a task's posts, and of a task without a chat.
+func postCases() []chatCase {
+	return []chatCase{
 		{name: "an issue's task talks in its chat", issue: 12,
 			turns: []harness.Turn{calling(call("a", "post_message", `{"body":"Looking."}`)), done},
 			check: func(t *testing.T, c *cobranch, m *model) {
@@ -140,12 +140,29 @@ func TestChat(t *testing.T) {
 				}
 			}},
 	}
-	tt = append(tt, checkoutCases()...)
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			runChat(t, tc)
-		})
+}
+
+// startedAndReplied checks that the task started one thread of branch tidy's chat, posted twice there, and read both.
+func startedAndReplied(t *testing.T, c *cobranch, m *model) {
+	if len(c.threads) != 1 {
+		t.Fatalf("started %d threads", len(c.threads))
+	}
+	for id, th := range c.threads {
+		if th.chat != (harness.Chat{Repo: "website", Branch: "tidy"}) || len(th.messages) != 2 || th.messages[0].Body != "Starting." ||
+			th.messages[1].Body != "Swept." {
+			t.Errorf("thread %s = %+v", id, th)
+		}
+	}
+	containsAll(t, m.requests[3].Messages[6].Results[0].Text, "From you at 2026-11-02 09:00 UTC", "Starting.", "Swept.")
+}
+
+// containsAll checks that a tool's answer holds each of wants.
+func containsAll(t *testing.T, answer string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(answer, want) {
+			t.Errorf("the tool answered %s, without %q", answer, want)
+		}
 	}
 }
 

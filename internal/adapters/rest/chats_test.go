@@ -106,6 +106,17 @@ func TestChats(t *testing.T) {
 			body: `{"body":"Back"}`, ifMatch: "*", wantStatus: 409, wantCode: "message.deleted"},
 		{name: "an agent posts through its task's token", viewer: agentOnTask(2), method: "POST", path: "/threads/{thread}/messages", body: `{"body":"Done."}`,
 			wantStatus: 201, want: []string{`"author":{"displayName":"Scout"`, `"taskId":"`, `"taskNumber":2`}},
+	}
+	f := newOrgFixture(t)
+	var ids chatIDs
+	for _, s := range append(steps, chatRefusals()...) {
+		s.run(t, f, chat, &ids)
+	}
+}
+
+// chatRefusals are the steps TestChats ends with: what a branch's chat refuses.
+func chatRefusals() []chatStep {
+	return []chatStep{
 		{name: "a blank thread", viewer: olivia, method: "POST", path: "/threads", body: `{"body":" "}`, wantStatus: 400, wantCode: "body.empty"},
 		{name: "a commit the repository lacks", viewer: olivia, method: "POST", path: "/threads",
 			body: `{"body":"Hm","anchor":{"sha":"` + shaOf("f") + `","path":"a","startLine":1,"endLine":1}}`, wantStatus: 400, wantCode: "anchor.commit_not_found"},
@@ -114,11 +125,6 @@ func TestChats(t *testing.T) {
 		{name: "a wait past 15 seconds", viewer: olivia, method: "GET", path: "/updates?after=0&wait=60", wantStatus: 400, wantCode: "wait.invalid"},
 		{name: "no such thread", viewer: olivia, method: "GET", path: "/threads/" + uuid.NewString(), wantStatus: 404, wantCode: "thread.not_found"},
 		{name: "an outsider finds no repository", viewer: nia, method: "GET", path: "", wantStatus: 404, wantCode: "repository.not_found"},
-	}
-	f := newOrgFixture(t)
-	var ids chatIDs
-	for _, s := range steps {
-		s.run(t, f, chat, &ids)
 	}
 }
 

@@ -49,17 +49,20 @@ func work(repo, branch string) agents.Work {
 		Task: agents.Task{Number: 7, Agent: agents.Principal{ID: agent, DisplayName: "Scout"}, RepoSlug: repo, Branch: branch}}
 }
 
+// prepareCase is a task's workspace to prepare, from a Git server's URL, and what it should hold.
+type prepareCase struct {
+	name         string
+	url, branch  string
+	repo         string
+	wantCloned   bool
+	wantErr      string
+	wantSubject  string
+	wantBranches string
+}
+
 func TestPrepare(t *testing.T) {
 	url := server(t)
-	tt := []struct {
-		name         string
-		url, branch  string
-		repo         string
-		wantCloned   bool
-		wantErr      string
-		wantSubject  string
-		wantBranches string
-	}{
+	tt := []prepareCase{
 		{name: "the task's branch", url: url, repo: "website", branch: "tidy", wantCloned: true, wantSubject: "First", wantBranches: "tidy"},
 		{name: "the default branch", url: url, repo: "website", wantCloned: true, wantSubject: "Second", wantBranches: "main"},
 		{name: "a task without a repository", url: url},
@@ -85,23 +88,30 @@ func TestPrepare(t *testing.T) {
 			if err != nil || cloned != tc.wantCloned {
 				t.Fatalf("Prepare() = %v, %v, want %v", cloned, err, tc.wantCloned)
 			}
-			if gitIn(t, w.dir, "config", "--global", "user.email") != agents.Email(uuid.MustParse("0190f1b2-0000-7000-8000-00000000000a")) ||
-				gitIn(t, w.dir, "config", "--global", "user.name") != "Scout" {
-				t.Errorf("Git names %s", gitIn(t, w.dir, "config", "--global", "--list"))
-			}
-			if !tc.wantCloned {
-				return
-			}
-			if got := gitIn(t, w.dir, "log", "-1", "--format=%s"); got != tc.wantSubject {
-				t.Errorf("the clone is at %q, want %q", got, tc.wantSubject)
-			}
-			if got := gitIn(t, w.dir, "branch", "--format=%(refname:short)"); got != tc.wantBranches {
-				t.Errorf("the clone's branches are %q, want %q", got, tc.wantBranches)
-			}
-			if again, err := w.Prepare(context.Background(), work(tc.repo, tc.branch)); err != nil || again {
-				t.Errorf("Prepare() again = %v, %v, want no clone", again, err)
-			}
+			checkPrepared(t, w, tc)
 		})
+	}
+}
+
+// checkPrepared checks that w's Git names the agent, and that its clone, if tc wants one, is at tc's commit, holds tc's
+// branches, and isn't cloned again.
+func checkPrepared(t *testing.T, w *Workspace, tc prepareCase) {
+	t.Helper()
+	if gitIn(t, w.dir, "config", "--global", "user.email") != agents.Email(uuid.MustParse("0190f1b2-0000-7000-8000-00000000000a")) ||
+		gitIn(t, w.dir, "config", "--global", "user.name") != "Scout" {
+		t.Errorf("Git names %s", gitIn(t, w.dir, "config", "--global", "--list"))
+	}
+	if !tc.wantCloned {
+		return
+	}
+	if got := gitIn(t, w.dir, "log", "-1", "--format=%s"); got != tc.wantSubject {
+		t.Errorf("the clone is at %q, want %q", got, tc.wantSubject)
+	}
+	if got := gitIn(t, w.dir, "branch", "--format=%(refname:short)"); got != tc.wantBranches {
+		t.Errorf("the clone's branches are %q, want %q", got, tc.wantBranches)
+	}
+	if again, err := w.Prepare(context.Background(), work(tc.repo, tc.branch)); err != nil || again {
+		t.Errorf("Prepare() again = %v, %v, want no clone", again, err)
 	}
 }
 
