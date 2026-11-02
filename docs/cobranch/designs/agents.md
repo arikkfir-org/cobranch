@@ -36,8 +36,8 @@ need its controller.
 
 Choices beyond the agreed designs are under [Decisions](#decisions), and the owner's answers to three questions under
 [Open questions](#open-questions). Branch chats, live, agents with their tasks, model providers with agents' models and
-secrets, and the task token with the transcript it appends are built; agent pods with the harness, then agents posting
-and pushing, follow.
+secrets, the task token with the transcript it appends, and the harness with its provider adapters and workspace tools
+are built; the controller's agent pods, then agents posting and pushing, follow.
 
 ## Branch chats
 
@@ -221,10 +221,13 @@ Every arrow into REST / GraphQL or Git carries the task token, so each is checke
   `agent_task_tokens`; the controller renews it every half hour into the pod's Secret, which the pod mounts, and the
   harness reads it before every call. It acts as the agent, capped by the assigner, and only while its task hasn't
   ended: once the task ends, or its hour is up, it is refused, and maintenance sweeps it. `GET /v1/me/task` tells the
-  harness which task it works.
+  harness which task it works, with its agent's standing instructions.
 - **The pod** runs `cobranch agent` in the image `cobranch-agent` as a non-root user under Pod Security `restricted`,
-  with `/workspace` on an `emptyDir`, the operator's `agents.resources`, and `COBRANCH_URL`, `COBRANCH_GIT_URL`,
-  `COBRANCH_TASK` and the token's path in its environment. The provider's key reaches the harness alone.
+  with `/workspace` on an `emptyDir`, the operator's `agents.resources`, and in its environment the REST server's URL
+  (`COBRANCH_REST_URL`), the Git server's (`COBRANCH_GIT_URL`), the token's file (`COBRANCH_TOKEN_FILE`), the agent's
+  provider and model (`COBRANCH_MODEL_PROVIDER`, `COBRANCH_MODEL`), its key's file (`COBRANCH_MODEL_KEY_FILE`), and the
+  operator's limits (`COBRANCH_MAX_TURNS`, `COBRANCH_SHELL_TIMEOUT`, `COBRANCH_MODEL_MAX_TOKENS`). The provider's key
+  reaches the harness alone: no tool's environment holds a `COBRANCH_` variable.
 - **A pod that dies** is started again by the controller, at most three times, and the harness resumes from the
   transcript.
 
@@ -244,16 +247,28 @@ token is mounted.
 [ENG-216](https://linear.app/arikkfir/issue/ENG-216) registers its review tools for its task kind; the loop and the
 adapters stay the same.
 
-- **A loop over one model interface.** The harness asks the agent's model for its next turn, with the conversation so
-  far and the tools it offers, runs the tools the model calls, and loops until the model calls `finish`, or the task
-  reaches `agents.maxTurns`, its timeout or its cancellation.
+- **A loop over one model interface.** The harness asks the agent's model for its next turn, with a system prompt naming
+  the agent, its organization, the task and where it works, then the agent's standing instructions, the conversation so
+  far and the tools it offers; runs the tools the model calls, recording each result; and loops until the model calls
+  `finish`, or the task reaches `agents.maxTurns` (200 unless the operator says otherwise), its timeout or its
+  cancellation. A turn that calls no tool gets a nudge, an `input` entry from the harness, to carry on or finish.
+- **`finish` ends the task,** as Succeeded with a summary or Failed with a reason, which Cobranch validates as a state
+  entry; one it refuses comes back to the model as the call's failure. It runs after the turn's other calls.
+- **What fails a task, and what restarts its pod.** A provider's refusal, such as an unknown model or a key it doesn't
+  take, fails the task with the provider's message; its overload, rate limit or own failure is retried, waiting as long
+  as it asks, and only then exits for the controller to start the pod again. A refused token ends the harness cleanly:
+  the task ended, or was cancelled.
 - **One adapter per provider:** Anthropic's Messages API; OpenAI's Chat Completions, which xAI and DeepSeek also speak
-  at their own addresses; Google's Gemini API. Each is optional code behind the interface, and none is called unless an
-  organization added that provider.
+  at their own addresses; Google's Gemini API, whose thought signatures go back with the calls they came with. Each is
+  optional code behind the interface, and none is called unless an organization added that provider. An operator may
+  point a provider at another address that speaks its protocol, such as a proxy (`COBRANCH_MODEL_URL`). Requests to a
+  provider carry no trace context.
 - **The tools,** chosen by the task's kind, so [ENG-216](https://linear.app/arikkfir/issue/ENG-216)'s review tasks add
-  theirs: files in `/workspace` (list, read, search, write, edit), a shell there with a timeout, Git through the shell
-  with a credential helper that reads the token file, the task's chat thread (read, post, ask and wait for an answer),
-  and `finish`.
+  theirs: files in `/workspace` (`list_files`, `read_file`, `search`, `write_file`, `edit_file`), which keep to it,
+  links included; `shell`, a command there in a process group its timeout kills whole, whose long output keeps its start
+  and its end; Git through the shell with a credential helper that reads the token file; the task's chat thread (read,
+  post, ask and wait for an answer); and `finish`. The file tools and the shell are built; Git, the thread and the
+  checkout come with agents posting and pushing.
 - **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` at the task's
   branch, or `main`, before its first turn, and commits as the agent.
 
@@ -384,6 +399,10 @@ land.
   and [ENG-238](https://linear.app/arikkfir/issue/ENG-238)'s quotas bound the rest.
 - **A shell in the pod runs what the model asks.** The pod's bounds are the namespace's: no ingress, egress to the
   internet only, Pod Security `restricted`, no Kubernetes token, and a token capped by the assigner.
+- **The shell runs as the harness does,** so a command could read the files the harness reads, the provider's key among
+  them, though no tool's environment names them. The controller's pod keeps the key from the tools: it mounts the key
+  where the harness reads it once at its start, as a user the tools don't run as, or the controller hands it over
+  another way; the pod's design settles which.
 - **Prompt injection.** Code, files and messages may carry instructions to the agent; the cap means it can only do what
   its assigner could, and every push still meets the merge requirements.
 
@@ -408,6 +427,9 @@ land.
 | The Console's task page reads the transcript every few seconds while the task hasn't ended, not over a subscription | Entries come a turn at a time; one poll path for REST and the Console | Proposed |
 | The harness speaks to providers through one interface, an adapter each; xAI and DeepSeek through OpenAI's protocol | Vendors stay optional adapters | Agreed |
 | The transcript is appended entry by entry through the REST API, numbered per task | A restarted pod resumes; the Console shows it live | Agreed |
+| A turn that calls no tool gets a nudge to carry on or finish, rather than ending the task | A task ends only by `finish`, with a summary for its assigner; `agents.maxTurns` bounds a model that never calls it | Proposed |
+| A provider's refusal fails the task; its overload, rate limit or failure is retried, then restarts the pod | A refusal comes again on every retry; the rest pass | Proposed |
+| The harness reads the REST API through a client generated from the OpenAPI document, limited to its calls | The contract is the OpenAPI document; the agent binary carries only what it calls | Proposed |
 | Each agent holds a verified no-reply email, so its commits map to it | Agents push like any principal | Proposed |
 | Mentions, agents waking on chat messages by themselves, and agents' files in the object store come later | Keeps this slice to its issue | Proposed |
 
