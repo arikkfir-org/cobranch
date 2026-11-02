@@ -79,14 +79,14 @@ var StartsFrom = []State{StateBacklog, StateTodo}
 var FinishesFrom = []State{StateBacklog, StateTodo, StateInProgress, StateInReview}
 
 // Named is the number of the issue a branch's name names under the organization's key: its first identifier that
-// stands as a word of its own, in any case, bounded by the name's ends or by anything but a letter or a digit, so
-// acme-42-login, alice/ACME-42 and fix/acme-42_retry name 42, acme-420 names 420, and xacme-42 none. The default branch
-// names none.
+// stands as a word of its own, in any case, bounded by the name's ends or by anything but a letter or a digit of any
+// script, so acme-42-login, alice/ACME-42 and fix/acme-42_retry name 42, acme-420 names 420, and xacme-42 and caféacme-42
+// none. The default branch names none.
 func Named(name, key string) (int, bool) {
 	if name == git.DefaultBranch || key == "" {
 		return 0, false
 	}
-	pattern, err := regexp.Compile(`(?i)(?:^|[^a-z0-9])` + regexp.QuoteMeta(key) + `-([0-9]+)(?:$|[^a-z0-9])`)
+	pattern, err := regexp.Compile(`(?i)(?:^|[^\p{L}\p{N}])` + regexp.QuoteMeta(key) + `-([0-9]+)(?:$|[^\p{L}\p{N}])`)
 	if err != nil {
 		return 0, false // a key is letters and digits: it always compiles
 	}

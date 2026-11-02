@@ -35,6 +35,11 @@ func TestNamed(t *testing.T) {
 		{"main", "ACME", 0, false},
 		{"acme-1", "", 0, false},
 		{"a1-5", "A1", 5, true},
+		{"über/acme-42", "ACME", 42, true},
+		{"acme-42—retry", "ACME", 42, true},
+		{"caféacme-42", "ACME", 0, false},
+		{"acme-42é", "ACME", 0, false},
+		{"acme-42٣", "ACME", 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, ok := issues.Named(tc.name, tc.key)
