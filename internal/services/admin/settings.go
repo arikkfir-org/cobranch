@@ -14,13 +14,17 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
 // The settings' names, as the Back-office and the values' locks name them.
 const (
-	SettingSignUp    = "signUp"
-	SettingSelfServe = "selfServe"
+	SettingSignUp                      = "signUp"
+	SettingSelfServe                   = "selfServe"
+	SettingOrganizationsPerUser        = "organizationsPerUser"
+	SettingRepositoriesPerOrganization = "repositoriesPerOrganization"
+	SettingGitDataPerOrganization      = "gitDataPerOrganization"
 )
 
 var (
@@ -30,12 +34,22 @@ var (
 	ErrLocked = errors.New("the chart's values set this")
 )
 
-// Settings are the installation's settings as the Back-office shows them: those a sign-up follows, which of them the
-// chart's values lock, and when the database's last changed, by whom.
+// StoredSettings are the installation's settings as the database keeps them: those a sign-up follows, and the
+// installation's limits.
+type StoredSettings struct {
+	auth.InstallationSettings
+	// Limits are the limits an administrator set: nil where they set none.
+	Limits limits.Settings
+}
+
+// Settings are the installation's settings as the Back-office shows them: those a sign-up follows, the limits, which
+// of them the chart's values lock, and when the database's last changed, by whom.
 type Settings struct {
 	auth.SignUpSettings
-	// Locked names the settings the chart's values set (SettingSignUp, SettingSelfServe), which the Back-office only
-	// shows.
+	// Limits are the installation's limits: each the values', else an administrator's, else the built-in default.
+	Limits limits.Limits
+	// Locked names the settings the chart's values set (SettingSignUp, SettingSelfServe and the limits'), which the
+	// Back-office only shows.
 	Locked []string
 	// Version counts the database's changes.
 	Version   int64
@@ -47,8 +61,9 @@ type Settings struct {
 // Fingerprint changes whenever what the settings show does: the database's version, or the values' settings and locks.
 // The Admin API's ETag is made of it.
 func (s Settings) Fingerprint() string {
-	sum := sha256.Sum256(fmt.Appendf(nil, "%d|%s|%s|%t|%s", s.Version, s.SignUp, strings.Join(s.SignUpDomains, ","),
-		s.SelfServe, strings.Join(s.Locked, ",")))
+	sum := sha256.Sum256(fmt.Appendf(nil, "%d|%s|%s|%t|%d|%d|%d|%s", s.Version, s.SignUp, strings.Join(s.SignUpDomains, ","),
+		s.SelfServe, s.Limits.OrganizationsPerUser, s.Limits.RepositoriesPerOrganization, s.Limits.GitDataPerOrganization,
+		strings.Join(s.Locked, ",")))
 	return hex.EncodeToString(sum[:12])
 }
 
@@ -57,6 +72,10 @@ type SettingsChange struct {
 	SignUp        *auth.Policy
 	SignUpDomains *[]string
 	SelfServe     *bool
+	// The installation's limits, each 0 for none, or more.
+	OrganizationsPerUser        *int64
+	RepositoriesPerOrganization *int64
+	GitDataPerOrganization      *int64
 }
 
 // MaxDomains is the most domains the domains policy lists.
@@ -103,20 +122,69 @@ func (s *Service) ChangeSettings(ctx context.Context, v auth.User, match string,
 }
 
 // show is what the Back-office shows of the stored settings, under the values'.
-func (s *Service) show(stored auth.InstallationSettings) Settings {
-	out := Settings{SignUpSettings: s.values.SignUpSettings(stored), Version: stored.Version, UpdatedAt: stored.UpdatedAt,
-		UpdatedBy: stored.UpdatedBy}
+func (s *Service) show(stored StoredSettings) Settings {
+	out := Settings{SignUpSettings: s.values.SignUpSettings(stored.InstallationSettings), Limits: limits.Resolve(s.limitValues, stored.Limits),
+		Version: stored.Version, UpdatedAt: stored.UpdatedAt, UpdatedBy: stored.UpdatedBy}
 	if s.values.SignUpLocked() {
 		out.Locked = append(out.Locked, SettingSignUp)
 	}
 	if s.values.SelfServeLocked() {
 		out.Locked = append(out.Locked, SettingSelfServe)
 	}
+	for _, l := range s.limitSettings(nil, SettingsChange{}) {
+		if l.locked {
+			out.Locked = append(out.Locked, l.name)
+		}
+	}
 	return out
 }
 
 // apply makes change to the stored settings, or refuses it: a setting the values lock, or a value that isn't one.
-func (s *Service) apply(stored auth.InstallationSettings, change SettingsChange) (auth.InstallationSettings, error) {
+func (s *Service) apply(stored StoredSettings, change SettingsChange) (StoredSettings, error) {
+	signUp, err := s.applySignUp(stored.InstallationSettings, change)
+	if err != nil {
+		return stored, err
+	}
+	next := StoredSettings{InstallationSettings: signUp, Limits: stored.Limits}
+	for _, l := range s.limitSettings(&next.Limits, change) {
+		switch {
+		case l.change == nil:
+			continue
+		case l.locked:
+			return stored, fmt.Errorf("%w: %s", ErrLocked, l.name)
+		case *l.change < 0:
+			return stored, &orgs.ValidationError{Field: l.name, Code: "limit.invalid", Message: "a limit is 0, for none, or more"}
+		}
+		value := *l.change
+		*l.to = &value
+	}
+	return next, nil
+}
+
+// limitSetting is one of the installation's limits as a change to the settings meets it: its name, whether the values
+// lock it, the change's value, and where the change writes it.
+type limitSetting struct {
+	name   string
+	locked bool
+	change *int64
+	to     **int64
+}
+
+// limitSettings are the installation's limits, as change meets them, written to into.
+func (s *Service) limitSettings(into *limits.Settings, change SettingsChange) []limitSetting {
+	if into == nil {
+		into = &limits.Settings{}
+	}
+	return []limitSetting{
+		{SettingOrganizationsPerUser, s.limitValues.OrganizationsPerUser != nil, change.OrganizationsPerUser, &into.OrganizationsPerUser},
+		{SettingRepositoriesPerOrganization, s.limitValues.RepositoriesPerOrganization != nil, change.RepositoriesPerOrganization, &into.RepositoriesPerOrganization},
+		{SettingGitDataPerOrganization, s.limitValues.GitDataPerOrganization != nil, change.GitDataPerOrganization, &into.GitDataPerOrganization},
+	}
+}
+
+// applySignUp makes change to the stored sign-up settings, or refuses it: a setting the values lock, or a value that
+// isn't one.
+func (s *Service) applySignUp(stored auth.InstallationSettings, change SettingsChange) (auth.InstallationSettings, error) {
 	next := stored
 	if change.SignUp != nil || change.SignUpDomains != nil {
 		if s.values.SignUpLocked() {
