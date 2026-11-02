@@ -11,6 +11,34 @@ extend type Organization {
   tasks(agent: ID, states: [TaskState!], repositoryId: ID, first: Int! = 30, after: String): TaskPage!
   "One of the organization's tasks by number: null unless it is there, the viewer reads the repository it names, and, for an issue's task, holds issues.read; takes org.read."
   task(number: Int!): Task
+  "The model providers the organization added, by name; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization."
+  modelProviders: [ModelProvider!]!
+  "The model providers the installation knows, by name: those the organization may add."
+  availableModelProviders: [String!]!
+}
+
+"A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run."
+type ModelProvider {
+  "The provider's name, as the installation knows it."
+  name: String!
+  "The organization's secret that holds its API key; null once that secret is deleted."
+  secretId: ID
+  "That secret's name, shown to a viewer holding secrets.manage at the organization; null otherwise."
+  secretName: String
+  "Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another."
+  broken: Boolean!
+  "Who added it; null once they are gone."
+  createdBy: CommitPrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile."
+  version: Int!
+}
+
+"A secret an agent's tasks receive, in the environment variable name."
+type AgentSecret {
+  name: String!
+  secretId: ID!
 }
 
 "One of an organization's agents, a principal it owns that takes tasks, with the roles it holds."
@@ -31,6 +59,12 @@ type Agent {
   version: Int!
   "The roles it holds, those at the organization first."
   grants: [AgentGrant!]!
+  "The model provider it runs on, one the organization added; null while it runs on none."
+  provider: String
+  "The model it runs on, as its provider names it; null while it runs on none."
+  model: String
+  "The secrets its tasks receive, by the environment variables they go in."
+  secrets: [AgentSecret!]!
 }
 
 "A role an agent holds, at its organization or, with a repository, on that repository."
@@ -122,6 +156,12 @@ input AgentPatch {
   instructions: String
 }
 
+"A secret an agent's tasks receive: the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and one of the organization's secrets or its repositories'."
+input AgentSecretInput {
+  name: String!
+  secretId: ID!
+}
+
 "A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat."
 input TaskInput {
   agentId: ID!
@@ -143,6 +183,14 @@ extend type Mutation {
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
   "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
+  "Puts an agent on a model of a provider the organization added, or on none with neither given; takes org.principals.manage, and a person. A provider the organization hasn't added is refused (BAD_USER_INPUT, agent.provider_invalid); with expectedVersion, so is an agent at another version (CONFLICT, precondition.failed)."
+  setAgentModel(organizationId: ID!, id: ID!, provider: String, model: String, expectedVersion: Int): Agent!
+  "Names the secrets an agent's tasks receive, at most 50, in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. With expectedVersion, an agent at another version is refused (CONFLICT, precondition.failed)."
+  setAgentSecrets(organizationId: ID!, id: ID!, secrets: [AgentSecretInput!]!, expectedVersion: Int): Agent!
+  "Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, or names another secret for the one it has, and answers it; takes org.manage. A provider the installation doesn't know is refused (NOT_FOUND, model_provider.not_found), and a secret that isn't the organization's own (BAD_USER_INPUT, model_provider.secret_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
+  setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
+  "Removes a provider from the organization, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model_provider.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  removeModelProvider(organizationId: ID!, provider: String!, expectedVersion: Int): Boolean!
   "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
   "Cancels one of the organization's tasks that hasn't ended, and answers it as it now is; takes being its assigner, or org.principals.manage. A task that has ended is refused (CONFLICT, task.ended); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."

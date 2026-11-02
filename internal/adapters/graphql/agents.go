@@ -2,6 +2,9 @@ package graphql
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,6 +25,12 @@ type Agents interface {
 	Task(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64) (agents.Task, error)
 	Assign(ctx context.Context, v agents.Viewer, orgID, agentID uuid.UUID, in agents.TaskInput) (agents.Task, error)
 	CancelTask(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number, version int64) (agents.Task, error)
+	ProviderNames() []string
+	ModelProviders(ctx context.Context, v agents.Viewer, orgID uuid.UUID) ([]agents.ModelProvider, error)
+	SetModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, secretID uuid.UUID, version int64) (agents.ModelProvider, bool, error)
+	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
+	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
+	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
 }
 
 func agentPrincipal(p *agents.Principal) *CommitPrincipal {
@@ -54,7 +63,54 @@ func agent(a agents.Agent) *Agent {
 	for _, g := range a.Grants {
 		out.Grants = append(out.Grants, &AgentGrant{RoleID: g.RoleID.String(), RoleName: g.RoleName, RepositoryID: idOf(g.RepoID), RepositorySlug: text(g.RepoSlug)})
 	}
+	if a.Provider != "" {
+		out.Provider, out.Model = &a.Provider, &a.Model
+	}
+	out.Secrets = make([]*AgentSecret, 0, len(a.Secrets))
+	for _, name := range slices.Sorted(maps.Keys(a.Secrets)) {
+		out.Secrets = append(out.Secrets, &AgentSecret{Name: name, SecretID: a.Secrets[name].String()})
+	}
 	return out
+}
+
+func modelProvider(p agents.ModelProvider) *ModelProvider {
+	return &ModelProvider{Name: p.Name, SecretID: idOf(p.SecretID), SecretName: text(p.SecretName), Broken: p.Broken(), CreatedBy: agentPrincipal(p.CreatedBy),
+		CreatedAt: p.CreatedAt.UTC(), UpdatedAt: p.UpdatedAt.UTC(), Version: int(p.Version)}
+}
+
+// agentSecrets is the secrets an input names, by the environment variables they go in, or a BAD_USER_INPUT error for
+// an ID that names nothing, or a variable named twice.
+func agentSecrets(ctx context.Context, in []*AgentSecretInput) (map[string]uuid.UUID, error) {
+	out := make(map[string]uuid.UUID, len(in))
+	for _, s := range in {
+		id, err := inputID(ctx, &s.SecretID, "agent.secrets_invalid")
+		if err != nil {
+			return nil, err
+		}
+		if _, twice := out[s.Name]; twice {
+			return nil, refuse(ctx, badUserInput, "agent.secrets_invalid", fmt.Sprintf("%q is named twice", s.Name))
+		}
+		out[s.Name] = id
+	}
+	return out, nil
+}
+
+// agentTarget is the organization and the agent a mutation names, or a NOT_FOUND error for an ID that names nothing.
+func agentTarget(ctx context.Context, organizationID, id string) (uuid.UUID, uuid.UUID, error) {
+	orgID, err := parseID(ctx, organizationID, "organization")
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	agentID, err := parseID(ctx, id, "agent")
+	return orgID, agentID, err
+}
+
+// providerVersion is the version expectedVersion names, where 0 adds the provider alone; agents.AnyVersion without it.
+func providerVersion(ctx context.Context, expectedVersion *int) (int64, error) {
+	if expectedVersion != nil && *expectedVersion == 0 {
+		return agents.NoVersion, nil
+	}
+	return agentVersion(ctx, expectedVersion)
 }
 
 func task(t agents.Task) *Task {

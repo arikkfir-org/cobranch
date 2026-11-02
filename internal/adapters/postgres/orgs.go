@@ -82,10 +82,17 @@ func issueKey(org orgs.Organization) string {
 // Permissions lists what principalID's roles hold at the scope, through every grant it has there: at a repository,
 // also the repository permissions of its roles at the repository's organization.
 func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
-	if scope == auth.ScopeRepository {
+	switch scope {
+	case auth.ScopeRepository:
 		permissions, err := s.q.RepositoryPermissions(ctx, principalID, scopeID, auth.RepositoryPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("reading the permissions at the repository: %w", err)
+		}
+		return permissions, nil
+	case auth.ScopeSecret:
+		permissions, err := s.q.SecretPermissions(ctx, principalID, scopeID, auth.SecretPermissions)
+		if err != nil {
+			return nil, fmt.Errorf("reading the permissions on the secret: %w", err)
 		}
 		return permissions, nil
 	}
@@ -330,7 +337,8 @@ func (s *OrgStore) MemberByEmail(ctx context.Context, orgID uuid.UUID, email str
 	return id, nil
 }
 
-// Leave drops the member and every role they hold at the organization and on its repositories; actor is who did it.
+// Leave drops the member and every role they hold at the organization, on its repositories and on its secrets; actor is
+// who did it.
 // The organization's row is locked first, so two Owners leaving at once can't both go: the last one gets ErrLastOwner.
 func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uuid.UUID, _ time.Time) error {
 	return s.transact(ctx, "dropping the member", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -352,6 +360,9 @@ func (s *OrgStore) Leave(ctx context.Context, actor uuid.UUID, orgID, userID uui
 		}
 		if _, err := q.DeleteRepositoryGrantsAt(ctx, userID, orgID); err != nil {
 			return fmt.Errorf("deleting the grants on the organization's repositories: %w", err)
+		}
+		if _, err := q.DeleteSecretGrantsAt(ctx, userID, orgID); err != nil {
+			return fmt.Errorf("deleting the grants on the organization's secrets: %w", err)
 		}
 		if err := dropPending(ctx, q, orgID, userID); err != nil {
 			return err

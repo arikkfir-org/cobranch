@@ -878,6 +878,236 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/secrets:
+    get:
+      operationId: listSecrets
+      summary: The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The secrets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createSecret
+      summary: Adds a secret to the organization's settings, sealed with the installation's secrets key; takes secrets.manage at the organization. Without a secrets key, the answer is 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSecret"
+      responses:
+        "201":
+          description: The secret, without its value.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              description: The secret's URL.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secret"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/secrets/{id}:
+    get:
+      operationId: getSecret
+      summary: One of the organization's secrets, its repositories' included, without its value; takes secrets.manage on it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The secret.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secret"
+        "304":
+          description: The caller holds the secret as it is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: replaceSecret
+      summary: Renames a secret and, when the body gives one, replaces its value; takes secrets.manage on it. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatchSecret"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecretChange"
+      responses:
+        "200":
+          description: The secret as it now is, without its value.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secret"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteSecret
+      summary: Deletes a secret and every grant on it; takes secrets.manage on it. Jobs that still name it fail as they start. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatchSecret"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/secrets/{id}/access:
+    get:
+      operationId: listSecretAccess
+      summary: Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The principals.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access]
+                properties:
+                  access:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Grantee"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: grantSecret
+      summary: Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [principalId]
+              properties:
+                principalId:
+                  type: string
+                  format: uuid
+      responses:
+        "204":
+          description: Granted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/secrets/{id}/access/{principal}:
+    delete:
+      operationId: revokeSecret
+      summary: Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/principal"
+      responses:
+        "204":
+          description: Revoked.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/invitations:
     get:
       operationId: listInvitations
@@ -1070,6 +1300,135 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/model-providers:
+    get:
+      operationId: listModelProviders
+      summary: >-
+        The model providers the organization added, by name, and those the installation knows; takes org.read. The
+        names of their secrets show to a viewer holding secrets.manage at the organization.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProviderList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/model-providers/{provider}:
+    get:
+      operationId: getModelProvider
+      summary: A model provider the organization added; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The provider.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "304":
+          description: The provider is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    put:
+      operationId: setModelProvider
+      summary: >-
+        Adds a provider the installation knows to the organization, with the organization's own secret that holds its
+        API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage.
+        A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400
+        model_provider.secret_invalid, and a request with neither header 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifMatchModelProvider"
+        - $ref: "#/components/parameters/ifNoneMatchModelProvider"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModelProviderInput"
+      responses:
+        "200":
+          description: The provider, with the secret it now names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "201":
+          description: The provider, added.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelProvider"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: removeModelProvider
+      summary: >-
+        Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409
+        model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/provider"
+        - $ref: "#/components/parameters/ifMatchModelProvider"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/agents:
     get:
       operationId: listAgents
@@ -1223,6 +1582,89 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}/model:
+    put:
+      operationId: setAgentModel
+      summary: >-
+        Puts an agent on a model of a provider the organization added, or on none with neither named; takes
+        org.principals.manage, and a person. A provider the organization hasn't added answers 400
+        agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentModel"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}/secrets:
+    put:
+      operationId: setAgentSecrets
+      summary: >-
+        Names the secrets an agent's tasks receive, each an environment variable from one of the organization's
+        secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task
+        receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without
+        it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentSecrets"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         "412":
           $ref: "#/components/responses/Problem"
@@ -2340,7 +2782,7 @@ paths:
   /orgs/{org}/repos/{repo}/access/{principal}/roles:
     post:
       operationId: grantRepositoryRole
-      summary: Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+      summary: Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -2388,6 +2830,93 @@ paths:
         "401":
           $ref: "#/components/responses/Problem"
         "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/secrets:
+    get:
+      operationId: listRepositorySecrets
+      summary: The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The secrets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecretList"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createRepositorySecret
+      summary: Adds a secret to the repository's settings, sealed with the installation's secrets key; takes secrets.manage on the repository. Without a secrets key, the answer is 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewSecret"
+      responses:
+        "201":
+          description: The secret, without its value.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              description: The secret's URL.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Secret"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/jobs:
+    get:
+      operationId: listRepositoryJobs
+      summary: The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      responses:
+        "200":
+          description: The jobs.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs]
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Grantee"
+        "401":
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
@@ -3512,6 +4041,266 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments:
+    get:
+      operationId: listEnvironments
+      summary: The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: branch
+          in: query
+          description: Only the environments of this branch, by its short name.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The environments.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [environments]
+                properties:
+                  environments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}:
+    get:
+      operationId: getEnvironment
+      summary: One of the repository's environments, with its newest delivery; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The environment.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "304":
+          description: The environment is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/deliveries:
+    get:
+      operationId: listDeliveries
+      summary: A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many deliveries the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's deliveries, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deliveries]
+                properties:
+                  deliveries:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Delivery"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/redeliver:
+    post:
+      operationId: redeliver
+      summary: Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "202":
+          description: The delivery, queued; Location names it, where it reports how it goes.
+          headers:
+            Location:
+              description: The delivery's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/pause:
+    post:
+      operationId: pauseEnvironment
+      summary: Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "200":
+          description: The environment, paused.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/environments/{environment}/resume:
+    post:
+      operationId: resumeEnvironment
+      summary: Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/environmentId"
+      responses:
+        "200":
+          description: The environment, resumed, with the delivery it queued as its newest.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Environment"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}:
+    get:
+      operationId: getDelivery
+      summary: One of the repository's deliveries by its number; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The delivery.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "304":
+          description: The delivery is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deliveries/{number}/start:
+    post:
+      operationId: startDelivery
+      summary: Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/deliveryNumber"
+      responses:
+        "202":
+          description: The delivery, queued; Location names it, where it reports how it goes.
+          headers:
+            Location:
+              description: The delivery's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags
@@ -3692,6 +4481,23 @@ paths:
           $ref: "#/components/responses/Problem"
 components:
   parameters:
+    environmentId:
+      name: environment
+      in: path
+      required: true
+      description: The environment's ID.
+      schema:
+        type: string
+        format: uuid
+    deliveryNumber:
+      name: number
+      in: path
+      required: true
+      description: The delivery's number in its repository.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
     runNumber:
       name: number
       in: path
@@ -3789,6 +4595,12 @@ components:
       description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
       schema:
         type: string
+    ifMatchSecret:
+      name: If-Match
+      in: header
+      description: The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
     ifNoneMatchAnnotation:
       name: If-None-Match
       in: header
@@ -3813,7 +4625,7 @@ components:
       name: principal
       in: path
       required: true
-      description: One of the organization's members or API keys, by principal ID.
+      description: One of the organization's members, API keys, jobs or agents, by principal ID.
       x-go-name: PrincipalID
       schema:
         type: string
@@ -3904,6 +4716,25 @@ components:
       name: If-Match
       in: header
       description: The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    provider:
+      name: provider
+      in: path
+      required: true
+      description: A model provider, by the name the installation knows it by.
+      schema:
+        type: string
+    ifMatchModelProvider:
+      name: If-Match
+      in: header
+      description: The ETag of the provider the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    ifNoneMatchModelProvider:
+      name: If-None-Match
+      in: header
+      description: "*, to add a provider the organization hasn't added: one it has refuses with 412."
       schema:
         type: string
     ifMatchTask:
@@ -4237,7 +5068,7 @@ components:
           format: uuid
         kind:
           type: string
-          enum: [user, api_key]
+          enum: [user, api_key, job, agent]
         displayName:
           type: string
         roles:
@@ -5198,6 +6029,117 @@ components:
           type: array
           items:
             type: string
+    Environment:
+      type: object
+      description: A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+      required: [id, target, branch, namespace, sync, health, paused, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        target:
+          $ref: "#/components/schemas/Principal"
+        branch:
+          type: string
+          description: The branch's short name.
+        cluster:
+          type: string
+          format: uuid
+          description: The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+        namespace:
+          type: string
+        revision:
+          type: string
+          description: The commit of its last successful delivery; absent before one.
+        syncedAt:
+          type: string
+          format: date-time
+          description: When a delivery last succeeded; absent before one.
+        sync:
+          $ref: "#/components/schemas/EnvironmentSync"
+        health:
+          $ref: "#/components/schemas/EnvironmentHealth"
+        paused:
+          type: boolean
+          description: A paused environment takes no delivery until resumed.
+        latest:
+          $ref: "#/components/schemas/Delivery"
+        createdAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
+    EnvironmentSync:
+      type: string
+      description: Whether the environment's cluster holds its branch's newest commit.
+      enum: [synced, out_of_sync]
+    EnvironmentHealth:
+      type: string
+      description: The worst of the environment's objects' health; unknown until a delivery reads it.
+      enum: [healthy, progressing, unknown, missing, degraded]
+    Delivery:
+      type: object
+      description: One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+      required: [id, number, environment, target, branch, kind, trigger, state, reason, queuedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int64
+          description: Counts the repository's deliveries from 1.
+        environment:
+          type: string
+          format: uuid
+          description: Its environment's ID.
+        target:
+          type: string
+          description: Its environment's target's name.
+        branch:
+          type: string
+          description: Its environment's branch.
+        kind:
+          type: string
+          description: What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+          enum: [deliver, resync, teardown]
+        sha:
+          type: string
+          description: The commit it delivers; absent for a teardown.
+        trigger:
+          type: string
+          description: What queued it.
+          enum: [push, redeliver, resume]
+        push:
+          type: string
+          format: uuid
+          description: The push that queued it; absent for any other.
+        state:
+          $ref: "#/components/schemas/DeliveryState"
+        reason:
+          type: string
+          description: Why it waits, failed or was cancelled; empty otherwise.
+        startedBy:
+          $ref: "#/components/schemas/Principal"
+        queuedAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
+    DeliveryState:
+      type: string
+      description: Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+      enum: [waiting, queued, rendering, applying, succeeded, failed, cancelled]
     AnnotationStatus:
       type: string
       description: Where an annotation stands, in any order its principal sets them.
@@ -5505,6 +6447,85 @@ components:
         neverExpires:
           type: boolean
           description: True for a secret with no end; not with expiresAt.
+    Secret:
+      type: object
+      description: >-
+        A secret of the organization's or of one of its repositories, as its manager sees it: never with its value,
+        which only the jobs it is granted to receive.
+      required: [id, orgId, name, version, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          format: uuid
+        repoId:
+          type: string
+          format: uuid
+          description: The repository it belongs to; absent for the organization's own.
+        name:
+          type: string
+          description: The name it is listed under; jobs name it by its ID.
+        version:
+          type: integer
+          format: int64
+          description: Its version, which every change bumps and its ETag carries.
+        createdBy:
+          type: string
+          format: uuid
+          description: Who added it; absent once they are gone.
+        createdAt:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+          format: uuid
+          description: Who last changed it; absent once they are gone.
+        updatedAt:
+          type: string
+          format: date-time
+    SecretList:
+      type: object
+      required: [secrets]
+      properties:
+        secrets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Secret"
+    NewSecret:
+      type: object
+      description: What makes a secret.
+      required: [name, value]
+      properties:
+        name:
+          type: string
+          description: At most 100 characters, unique where the secret lives.
+        value:
+          type: string
+          description: At most 64 KiB; sealed as it arrives and never shown again.
+    SecretChange:
+      type: object
+      description: What changes a secret; without a value, it keeps the one it has.
+      required: [name]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+    Grantee:
+      type: object
+      description: A principal holding a grant, by name.
+      required: [principalId, kind, displayName]
+      properties:
+        principalId:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum: [user, api_key, job, agent]
+        displayName:
+          type: string
     ApiKeyInput:
       type: object
       description: What makes an API key; its first secret's expiry as SecretInput's.
@@ -5799,7 +6820,7 @@ components:
     Agent:
       type: object
       description: One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
-      required: [id, name, description, instructions, builtIn, createdAt, updatedAt, version, grants]
+      required: [id, name, description, instructions, builtIn, secrets, createdAt, updatedAt, version, grants]
       properties:
         id:
           type: string
@@ -5815,6 +6836,18 @@ components:
         builtIn:
           type: boolean
           description: Whether Cobranch made it for the organization; it is never deleted.
+        provider:
+          type: string
+          description: The model provider it runs on, one the organization added; absent while it runs on none.
+        model:
+          type: string
+          description: The model it runs on, as its provider names it; absent while it runs on none.
+        secrets:
+          type: object
+          description: The secrets its tasks receive, by the environment variable each goes in.
+          additionalProperties:
+            type: string
+            format: uuid
         createdBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -5888,6 +6921,83 @@ components:
           type: string
         instructions:
           type: string
+    ModelProvider:
+      type: object
+      description: >-
+        A model provider an organization added, one the installation knows, with the organization's own secret that
+        holds its API key. An agent on one of its models must read that secret for its tasks to run.
+      required: [name, broken, createdAt, updatedAt, version]
+      properties:
+        name:
+          type: string
+          description: The provider's name, as the installation knows it.
+        secretId:
+          type: string
+          format: uuid
+          description: The organization's secret that holds its API key; absent once that secret is deleted.
+        secretName:
+          type: string
+          description: That secret's name, shown to a viewer holding secrets.manage at the organization.
+        broken:
+          type: boolean
+          description: Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    ModelProviderList:
+      type: object
+      required: [modelProviders, available]
+      properties:
+        modelProviders:
+          type: array
+          description: The providers the organization added, by name.
+          items:
+            $ref: "#/components/schemas/ModelProvider"
+        available:
+          type: array
+          description: The providers the installation knows, by name, which the organization may add.
+          items:
+            type: string
+    ModelProviderInput:
+      type: object
+      description: The secret a provider's API key is in.
+      required: [secretId]
+      properties:
+        secretId:
+          type: string
+          format: uuid
+          description: One of the organization's own secrets, not a repository's.
+    AgentModel:
+      type: object
+      description: The model an agent runs on, a provider the organization added and one of its models, or neither for none.
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+          description: The model's name as the provider knows it, 1 to 200 characters on one line.
+    AgentSecrets:
+      type: object
+      description: The secrets an agent's tasks receive.
+      required: [secrets]
+      properties:
+        secrets:
+          type: object
+          description: >-
+            At most 50, each the name of the environment variable it goes in, other than those the harness sets
+            itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and the secret's ID.
+          additionalProperties:
+            type: string
+            format: uuid
     TaskState:
       type: string
       description: Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.

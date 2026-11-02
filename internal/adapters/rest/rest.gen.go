@@ -128,6 +128,81 @@ func (e ChatUpdateKind) Valid() bool {
 	}
 }
 
+// Defines values for DeliveryKind.
+const (
+	Deliver  DeliveryKind = "deliver"
+	Resync   DeliveryKind = "resync"
+	Teardown DeliveryKind = "teardown"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryKind enum.
+func (e DeliveryKind) Valid() bool {
+	switch e {
+	case Deliver:
+		return true
+	case Resync:
+		return true
+	case Teardown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryTrigger.
+const (
+	DeliveryTriggerPush      DeliveryTrigger = "push"
+	DeliveryTriggerRedeliver DeliveryTrigger = "redeliver"
+	DeliveryTriggerResume    DeliveryTrigger = "resume"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryTrigger enum.
+func (e DeliveryTrigger) Valid() bool {
+	switch e {
+	case DeliveryTriggerPush:
+		return true
+	case DeliveryTriggerRedeliver:
+		return true
+	case DeliveryTriggerResume:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryState.
+const (
+	DeliveryStateApplying  DeliveryState = "applying"
+	DeliveryStateCancelled DeliveryState = "cancelled"
+	DeliveryStateFailed    DeliveryState = "failed"
+	DeliveryStateQueued    DeliveryState = "queued"
+	DeliveryStateRendering DeliveryState = "rendering"
+	DeliveryStateSucceeded DeliveryState = "succeeded"
+	DeliveryStateWaiting   DeliveryState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryState enum.
+func (e DeliveryState) Valid() bool {
+	switch e {
+	case DeliveryStateApplying:
+		return true
+	case DeliveryStateCancelled:
+		return true
+	case DeliveryStateFailed:
+		return true
+	case DeliveryStateQueued:
+		return true
+	case DeliveryStateRendering:
+		return true
+	case DeliveryStateSucceeded:
+		return true
+	case DeliveryStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DiffLineKind.
 const (
 	DiffLineKindAdded   DiffLineKind = "added"
@@ -143,6 +218,51 @@ func (e DiffLineKind) Valid() bool {
 	case DiffLineKindContext:
 		return true
 	case DiffLineKindRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvironmentHealth.
+const (
+	Degraded    EnvironmentHealth = "degraded"
+	Healthy     EnvironmentHealth = "healthy"
+	Missing     EnvironmentHealth = "missing"
+	Progressing EnvironmentHealth = "progressing"
+	Unknown     EnvironmentHealth = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentHealth enum.
+func (e EnvironmentHealth) Valid() bool {
+	switch e {
+	case Degraded:
+		return true
+	case Healthy:
+		return true
+	case Missing:
+		return true
+	case Progressing:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvironmentSync.
+const (
+	OutOfSync EnvironmentSync = "out_of_sync"
+	Synced    EnvironmentSync = "synced"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentSync enum.
+func (e EnvironmentSync) Valid() bool {
+	switch e {
+	case OutOfSync:
+		return true
+	case Synced:
 		return true
 	default:
 		return false
@@ -188,6 +308,30 @@ func (e FileDiffStatus) Valid() bool {
 	case FileDiffStatusRenamed:
 		return true
 	case FileDiffStatusTypeChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GranteeKind.
+const (
+	GranteeKindAgent  GranteeKind = "agent"
+	GranteeKindApiKey GranteeKind = "api_key"
+	GranteeKindJob    GranteeKind = "job"
+	GranteeKindUser   GranteeKind = "user"
+)
+
+// Valid indicates whether the value is a known member of the GranteeKind enum.
+func (e GranteeKind) Valid() bool {
+	switch e {
+	case GranteeKindAgent:
+		return true
+	case GranteeKindApiKey:
+		return true
+	case GranteeKindJob:
+		return true
+	case GranteeKindUser:
 		return true
 	default:
 		return false
@@ -514,14 +658,20 @@ func (e RepositoryVisibility) Valid() bool {
 
 // Defines values for RepositoryAccessKind.
 const (
+	RepositoryAccessKindAgent  RepositoryAccessKind = "agent"
 	RepositoryAccessKindApiKey RepositoryAccessKind = "api_key"
+	RepositoryAccessKindJob    RepositoryAccessKind = "job"
 	RepositoryAccessKindUser   RepositoryAccessKind = "user"
 )
 
 // Valid indicates whether the value is a known member of the RepositoryAccessKind enum.
 func (e RepositoryAccessKind) Valid() bool {
 	switch e {
+	case RepositoryAccessKindAgent:
+		return true
 	case RepositoryAccessKindApiKey:
+		return true
+	case RepositoryAccessKindJob:
 		return true
 	case RepositoryAccessKindUser:
 		return true
@@ -733,9 +883,18 @@ type Agent struct {
 	Id openapi_types.UUID `json:"id"`
 
 	// Instructions The standing instructions, in Markdown, that every task of it starts from.
-	Instructions string    `json:"instructions"`
-	Name         string    `json:"name"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	Instructions string `json:"instructions"`
+
+	// Model The model it runs on, as its provider names it; absent while it runs on none.
+	Model *string `json:"model,omitempty"`
+	Name  string  `json:"name"`
+
+	// Provider The model provider it runs on, one the organization added; absent while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+
+	// Secrets The secrets its tasks receive, by the environment variable each goes in.
+	Secrets   map[string]openapi_types.UUID `json:"secrets"`
+	UpdatedAt time.Time                     `json:"updatedAt"`
 
 	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its creator's and its repositories' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
 	Version int64 `json:"version"`
@@ -771,11 +930,24 @@ type AgentInput struct {
 	Name string `json:"name"`
 }
 
+// AgentModel The model an agent runs on, a provider the organization added and one of its models, or neither for none.
+type AgentModel struct {
+	// Model The model's name as the provider knows it, 1 to 200 characters on one line.
+	Model    *string `json:"model,omitempty"`
+	Provider *string `json:"provider,omitempty"`
+}
+
 // AgentPatch What changes about an agent; a field left out keeps its value.
 type AgentPatch struct {
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
 	Name         *string `json:"name,omitempty"`
+}
+
+// AgentSecrets The secrets an agent's tasks receive.
+type AgentSecrets struct {
+	// Secrets At most 50, each the name of the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and the secret's ID.
+	Secrets map[string]openapi_types.UUID `json:"secrets"`
 }
 
 // Annotation A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -1129,6 +1301,58 @@ type DeletedBranch struct {
 	Name string `json:"name"`
 }
 
+// Delivery One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+type Delivery struct {
+	// Branch Its environment's branch.
+	Branch  string     `json:"branch"`
+	EndedAt *time.Time `json:"endedAt,omitempty"`
+
+	// Environment Its environment's ID.
+	Environment openapi_types.UUID `json:"environment"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Kind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+	Kind DeliveryKind `json:"kind"`
+
+	// Number Counts the repository's deliveries from 1.
+	Number int64 `json:"number"`
+
+	// Push The push that queued it; absent for any other.
+	Push     *openapi_types.UUID `json:"push,omitempty"`
+	QueuedAt time.Time           `json:"queuedAt"`
+
+	// Reason Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+
+	// Sha The commit it delivers; absent for a teardown.
+	Sha       *string    `json:"sha,omitempty"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	StartedBy *Principal `json:"startedBy,omitempty"`
+
+	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+	State DeliveryState `json:"state"`
+
+	// Target Its environment's target's name.
+	Target string `json:"target"`
+
+	// Trigger What queued it.
+	Trigger DeliveryTrigger `json:"trigger"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
+	Version int64 `json:"version"`
+}
+
+// DeliveryKind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+type DeliveryKind string
+
+// DeliveryTrigger What queued it.
+type DeliveryTrigger string
+
+// DeliveryState Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+type DeliveryState string
+
 // Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// Additions The lines it adds, in every file it changes, those it left out included.
@@ -1176,6 +1400,48 @@ type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
 }
+
+// Environment A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+type Environment struct {
+	// Branch The branch's short name.
+	Branch string `json:"branch"`
+
+	// Cluster The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+	Cluster   *openapi_types.UUID `json:"cluster,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+
+	// Health The worst of the environment's objects' health; unknown until a delivery reads it.
+	Health EnvironmentHealth  `json:"health"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// Latest One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+	Latest    *Delivery `json:"latest,omitempty"`
+	Namespace string    `json:"namespace"`
+
+	// Paused A paused environment takes no delivery until resumed.
+	Paused bool `json:"paused"`
+
+	// Revision The commit of its last successful delivery; absent before one.
+	Revision *string `json:"revision,omitempty"`
+
+	// Sync Whether the environment's cluster holds its branch's newest commit.
+	Sync EnvironmentSync `json:"sync"`
+
+	// SyncedAt When a delivery last succeeded; absent before one.
+	SyncedAt *time.Time `json:"syncedAt,omitempty"`
+
+	// Target Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Target Principal `json:"target"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
+	Version int64 `json:"version"`
+}
+
+// EnvironmentHealth The worst of the environment's objects' health; unknown until a delivery reads it.
+type EnvironmentHealth string
+
+// EnvironmentSync Whether the environment's cluster holds its branch's newest commit.
+type EnvironmentSync string
 
 // File A file or a symlink at a commit, and its text when it isn't binary.
 type File struct {
@@ -1242,6 +1508,16 @@ type FileDiff struct {
 
 // FileDiffStatus What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
 type FileDiffStatus string
+
+// Grantee A principal holding a grant, by name.
+type Grantee struct {
+	DisplayName string             `json:"displayName"`
+	Kind        GranteeKind        `json:"kind"`
+	PrincipalId openapi_types.UUID `json:"principalId"`
+}
+
+// GranteeKind defines model for Grantee.Kind.
+type GranteeKind string
 
 // Hunk One run of a file's changes, with up to three lines around them.
 type Hunk struct {
@@ -1619,6 +1895,53 @@ type MergeResult struct {
 
 	// Head The head merged.
 	Head string `json:"head"`
+}
+
+// ModelProvider A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
+type ModelProvider struct {
+	// Broken Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
+	Broken    bool      `json:"broken"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy *Principal `json:"createdBy,omitempty"`
+
+	// Name The provider's name, as the installation knows it.
+	Name string `json:"name"`
+
+	// SecretId The organization's secret that holds its API key; absent once that secret is deleted.
+	SecretId *openapi_types.UUID `json:"secretId,omitempty"`
+
+	// SecretName That secret's name, shown to a viewer holding secrets.manage at the organization.
+	SecretName *string   `json:"secretName,omitempty"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// ModelProviderInput The secret a provider's API key is in.
+type ModelProviderInput struct {
+	// SecretId One of the organization's own secrets, not a repository's.
+	SecretId openapi_types.UUID `json:"secretId"`
+}
+
+// ModelProviderList defines model for ModelProviderList.
+type ModelProviderList struct {
+	// Available The providers the installation knows, by name, which the organization may add.
+	Available []string `json:"available"`
+
+	// ModelProviders The providers the organization added, by name.
+	ModelProviders []ModelProvider `json:"modelProviders"`
+}
+
+// NewSecret What makes a secret.
+type NewSecret struct {
+	// Name At most 100 characters, unique where the secret lives.
+	Name string `json:"name"`
+
+	// Value At most 64 KiB; sealed as it arrives and never shown again.
+	Value string `json:"value"`
 }
 
 // Organization An organization, with what the viewer may do there.
@@ -2030,6 +2353,35 @@ type SSHKeyInput struct {
 	PublicKey string `json:"publicKey"`
 }
 
+// Secret A secret of the organization's or of one of its repositories, as its manager sees it: never with its value, which only the jobs it is granted to receive.
+type Secret struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who added it; absent once they are gone.
+	CreatedBy *openapi_types.UUID `json:"createdBy,omitempty"`
+	Id        openapi_types.UUID  `json:"id"`
+
+	// Name The name it is listed under; jobs name it by its ID.
+	Name  string             `json:"name"`
+	OrgId openapi_types.UUID `json:"orgId"`
+
+	// RepoId The repository it belongs to; absent for the organization's own.
+	RepoId    *openapi_types.UUID `json:"repoId,omitempty"`
+	UpdatedAt time.Time           `json:"updatedAt"`
+
+	// UpdatedBy Who last changed it; absent once they are gone.
+	UpdatedBy *openapi_types.UUID `json:"updatedBy,omitempty"`
+
+	// Version Its version, which every change bumps and its ETag carries.
+	Version int64 `json:"version"`
+}
+
+// SecretChange What changes a secret; without a value, it keeps the one it has.
+type SecretChange struct {
+	Name  string  `json:"name"`
+	Value *string `json:"value,omitempty"`
+}
+
 // SecretInput When a new secret stops working; a year from now when neither is given.
 type SecretInput struct {
 	// ExpiresAt The end, in the future.
@@ -2037,6 +2389,11 @@ type SecretInput struct {
 
 	// NeverExpires True for a secret with no end; not with expiresAt.
 	NeverExpires *bool `json:"neverExpires,omitempty"`
+}
+
+// SecretList defines model for SecretList.
+type SecretList struct {
+	Secrets []Secret `json:"secrets"`
 }
 
 // Session A signed-in browser.
@@ -2217,6 +2574,12 @@ type Name = string
 // BranchName defines model for branch.
 type BranchName = string
 
+// DeliveryNumber defines model for deliveryNumber.
+type DeliveryNumber = int64
+
+// EnvironmentId defines model for environmentId.
+type EnvironmentId = openapi_types.UUID
+
 // Id defines model for id.
 type Id = openapi_types.UUID
 
@@ -2238,6 +2601,12 @@ type IfMatchIssue = string
 // IfMatchLabel defines model for ifMatchLabel.
 type IfMatchLabel = string
 
+// IfMatchModelProvider defines model for ifMatchModelProvider.
+type IfMatchModelProvider = string
+
+// IfMatchSecret defines model for ifMatchSecret.
+type IfMatchSecret = string
+
 // IfMatchTask defines model for ifMatchTask.
 type IfMatchTask = string
 
@@ -2246,6 +2615,9 @@ type IfNoneMatch = string
 
 // IfNoneMatchAnnotation defines model for ifNoneMatchAnnotation.
 type IfNoneMatchAnnotation = string
+
+// IfNoneMatchModelProvider defines model for ifNoneMatchModelProvider.
+type IfNoneMatchModelProvider = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
@@ -2267,6 +2639,9 @@ type Path = string
 
 // PrincipalID defines model for principal.
 type PrincipalID = openapi_types.UUID
+
+// Provider defines model for provider.
+type Provider = string
 
 // Ref defines model for ref.
 type Ref = string
@@ -2323,6 +2698,18 @@ type GetAgentParams struct {
 
 // UpdateAgentParams defines parameters for UpdateAgent.
 type UpdateAgentParams struct {
+	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
+// SetAgentModelParams defines parameters for SetAgentModel.
+type SetAgentModelParams struct {
+	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
+// SetAgentSecretsParams defines parameters for SetAgentSecrets.
+type SetAgentSecretsParams struct {
 	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
 	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
 }
@@ -2460,6 +2847,27 @@ type GrantRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
 }
 
+// RemoveModelProviderParams defines parameters for RemoveModelProvider.
+type RemoveModelProviderParams struct {
+	// IfMatch The ETag of the provider the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModelProvider `json:"If-Match,omitempty"`
+}
+
+// GetModelProviderParams defines parameters for GetModelProvider.
+type GetModelProviderParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// SetModelProviderParams defines parameters for SetModelProvider.
+type SetModelProviderParams struct {
+	// IfMatch The ETag of the provider the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchModelProvider `json:"If-Match,omitempty"`
+
+	// IfNoneMatch *, to add a provider the organization hasn't added: one it has refuses with 412.
+	IfNoneMatch *IfNoneMatchModelProvider `json:"If-None-Match,omitempty"`
+}
+
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
 type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
@@ -2594,6 +3002,33 @@ type ListReviewsParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetDeliveryParams defines parameters for GetDelivery.
+type GetDeliveryParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListEnvironmentsParams defines parameters for ListEnvironments.
+type ListEnvironmentsParams struct {
+	// Branch Only the environments of this branch, by its short name.
+	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
+}
+
+// GetEnvironmentParams defines parameters for GetEnvironment.
+type GetEnvironmentParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListDeliveriesParams defines parameters for ListDeliveries.
+type ListDeliveriesParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many deliveries the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetRawParams defines parameters for GetRaw.
 type GetRawParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -2643,6 +3078,29 @@ type GetTreeParams struct {
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// DeleteSecretParams defines parameters for DeleteSecret.
+type DeleteSecretParams struct {
+	// IfMatch The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchSecret `json:"If-Match,omitempty"`
+}
+
+// GetSecretParams defines parameters for GetSecret.
+type GetSecretParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ReplaceSecretParams defines parameters for ReplaceSecret.
+type ReplaceSecretParams struct {
+	// IfMatch The ETag of the secret the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchSecret `json:"If-Match,omitempty"`
+}
+
+// GrantSecretJSONBody defines parameters for GrantSecret.
+type GrantSecretJSONBody struct {
+	PrincipalId openapi_types.UUID `json:"principalId"`
 }
 
 // ListTasksParams defines parameters for ListTasks.
@@ -2715,6 +3173,12 @@ type CreateAgentJSONRequestBody = AgentInput
 // UpdateAgentApplicationMergePatchPlusJSONRequestBody defines body for UpdateAgent for application/merge-patch+json ContentType.
 type UpdateAgentApplicationMergePatchPlusJSONRequestBody = AgentPatch
 
+// SetAgentModelJSONRequestBody defines body for SetAgentModel for application/json ContentType.
+type SetAgentModelJSONRequestBody = AgentModel
+
+// SetAgentSecretsJSONRequestBody defines body for SetAgentSecrets for application/json ContentType.
+type SetAgentSecretsJSONRequestBody = AgentSecrets
+
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = ApiKeyInput
 
@@ -2757,6 +3221,9 @@ type UpdateLabelApplicationMergePatchPlusJSONRequestBody = LabelPatch
 // GrantRoleJSONRequestBody defines body for GrantRole for application/json ContentType.
 type GrantRoleJSONRequestBody GrantRoleJSONBody
 
+// SetModelProviderJSONRequestBody defines body for SetModelProvider for application/json ContentType.
+type SetModelProviderJSONRequestBody = ModelProviderInput
+
 // CreateRepositoryJSONRequestBody defines body for CreateRepository for application/json ContentType.
 type CreateRepositoryJSONRequestBody = RepositoryInput
 
@@ -2790,11 +3257,23 @@ type SetAnnotationJSONRequestBody = AnnotationInput
 // SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
 type SubmitReviewJSONRequestBody = ReviewInput
 
+// CreateRepositorySecretJSONRequestBody defines body for CreateRepositorySecret for application/json ContentType.
+type CreateRepositorySecretJSONRequestBody = NewSecret
+
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = RoleInput
 
 // UpdateRoleJSONRequestBody defines body for UpdateRole for application/json ContentType.
 type UpdateRoleJSONRequestBody = RoleChanges
+
+// CreateSecretJSONRequestBody defines body for CreateSecret for application/json ContentType.
+type CreateSecretJSONRequestBody = NewSecret
+
+// ReplaceSecretJSONRequestBody defines body for ReplaceSecret for application/json ContentType.
+type ReplaceSecretJSONRequestBody = SecretChange
+
+// GrantSecretJSONRequestBody defines body for GrantSecret for application/json ContentType.
+type GrantSecretJSONRequestBody GrantSecretJSONBody
 
 // AssignTaskJSONRequestBody defines body for AssignTask for application/json ContentType.
 type AssignTaskJSONRequestBody = TaskInput
@@ -2873,6 +3352,12 @@ type ServerInterface interface {
 	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams)
+	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/model)
+	SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams)
+	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/secrets)
+	SetAgentSecrets(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentSecretsParams)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
 	// (GET /orgs/{org}/api-keys)
 	ListAPIKeys(w http.ResponseWriter, r *http.Request, org Org)
@@ -2987,6 +3472,18 @@ type ServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(w http.ResponseWriter, r *http.Request, org Org, userID UserID, roleID RoleID)
+	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	// (GET /orgs/{org}/model-providers)
+	ListModelProviders(w http.ResponseWriter, r *http.Request, org Org)
+	// RemoveModelProvider Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409 model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/model-providers/{provider})
+	RemoveModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params RemoveModelProviderParams)
+	// GetModelProvider A model provider the organization added; takes org.read.
+	// (GET /orgs/{org}/model-providers/{provider})
+	GetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params GetModelProviderParams)
+	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
+	// (PUT /orgs/{org}/model-providers/{provider})
+	SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
@@ -3002,7 +3499,7 @@ type ServerInterface interface {
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
-	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
 	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
 	GrantRepositoryRole(w http.ResponseWriter, r *http.Request, org Org, repo Repo, principalID PrincipalID)
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
@@ -3086,6 +3583,33 @@ type ServerInterface interface {
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
+	GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams)
+	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
+	StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments)
+	ListEnvironments(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListEnvironmentsParams)
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
+	GetEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params GetEnvironmentParams)
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
+	ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams)
+	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
+	PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// Redeliver Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/redeliver)
+	Redeliver(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
+	ResumeEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
+	// (GET /orgs/{org}/repos/{repo}/jobs)
+	ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
@@ -3107,6 +3631,12 @@ type ServerInterface interface {
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+	// (GET /orgs/{org}/repos/{repo}/secrets)
+	ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// CreateRepositorySecret Adds a secret to the repository's settings, sealed with the installation's secrets key; takes secrets.manage on the repository. Without a secrets key, the answer is 409.
+	// (POST /orgs/{org}/repos/{repo}/secrets)
+	CreateRepositorySecret(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -3125,6 +3655,30 @@ type ServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(w http.ResponseWriter, r *http.Request, org Org, roleID RoleID)
+	// ListSecrets The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+	// (GET /orgs/{org}/secrets)
+	ListSecrets(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateSecret Adds a secret to the organization's settings, sealed with the installation's secrets key; takes secrets.manage at the organization. Without a secrets key, the answer is 409.
+	// (POST /orgs/{org}/secrets)
+	CreateSecret(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteSecret Deletes a secret and every grant on it; takes secrets.manage on it. Jobs that still name it fail as they start. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/secrets/{id})
+	DeleteSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteSecretParams)
+	// GetSecret One of the organization's secrets, its repositories' included, without its value; takes secrets.manage on it.
+	// (GET /orgs/{org}/secrets/{id})
+	GetSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetSecretParams)
+	// ReplaceSecret Renames a secret and, when the body gives one, replaces its value; takes secrets.manage on it. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/secrets/{id})
+	ReplaceSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params ReplaceSecretParams)
+	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+	// (GET /orgs/{org}/secrets/{id}/access)
+	ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
+	// (POST /orgs/{org}/secrets/{id}/access)
+	GrantSecret(w http.ResponseWriter, r *http.Request, org Org, id Id)
+	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
+	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
+	RevokeSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
@@ -3748,6 +4302,124 @@ func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateAgent(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentModel operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentModel(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAgentModelParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAgent
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentModel(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetAgentSecrets operation middleware
+func (siw *ServerInterfaceWrapper) SetAgentSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetAgentSecretsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAgent
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetAgentSecrets(w, r, org, agentID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5485,6 +6157,228 @@ func (siw *ServerInterfaceWrapper) RevokeRole(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RevokeRole(w, r, org, userID, roleID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListModelProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListModelProviders(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListModelProviders(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveModelProvider operation middleware
+func (siw *ServerInterfaceWrapper) RemoveModelProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveModelProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModelProvider
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveModelProvider(w, r, org, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetModelProvider operation middleware
+func (siw *ServerInterfaceWrapper) GetModelProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetModelProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetModelProvider(w, r, org, provider, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetModelProvider operation middleware
+func (siw *ServerInterfaceWrapper) SetModelProvider(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "provider" -------------
+	var provider Provider
+
+	err = runtime.BindStyledParameterWithOptions("simple", "provider", r.PathValue("provider"), &provider, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetModelProviderParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchModelProvider
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatchModelProvider
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetModelProvider(w, r, org, provider, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -7470,6 +8364,477 @@ func (siw *ServerInterfaceWrapper) GetDeletedBranch(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetDelivery operation middleware
+func (siw *ServerInterfaceWrapper) GetDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDeliveryParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDelivery(w, r, org, repo, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartDelivery operation middleware
+func (siw *ServerInterfaceWrapper) StartDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartDelivery(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEnvironmentsParams
+
+	// ------------- Optional query parameter "branch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "branch", r.URL.Query(), &params.Branch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "branch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironments(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) GetEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEnvironmentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEnvironment(w, r, org, repo, environment, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDeliveriesParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDeliveries(w, r, org, repo, environment, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) PauseEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseEnvironment(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Redeliver operation middleware
+func (siw *ServerInterfaceWrapper) Redeliver(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Redeliver(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) ResumeEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeEnvironment(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRepositoryJobs operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositoryJobs(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositoryJobs(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRaw operation middleware
 func (siw *ServerInterfaceWrapper) GetRaw(w http.ResponseWriter, r *http.Request) {
 
@@ -7904,6 +9269,76 @@ func (siw *ServerInterfaceWrapper) StartRun(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListRepositorySecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListRepositorySecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRepositorySecrets(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateRepositorySecret operation middleware
+func (siw *ServerInterfaceWrapper) CreateRepositorySecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateRepositorySecret(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListTags operation middleware
 func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
 
@@ -8137,6 +9572,349 @@ func (siw *ServerInterfaceWrapper) UpdateRole(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateRole(w, r, org, roleID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSecrets operation middleware
+func (siw *ServerInterfaceWrapper) ListSecrets(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSecrets(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateSecret operation middleware
+func (siw *ServerInterfaceWrapper) CreateSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateSecret(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSecret operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSecretParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchSecret
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSecret(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSecret operation middleware
+func (siw *ServerInterfaceWrapper) GetSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSecretParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSecret(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReplaceSecret operation middleware
+func (siw *ServerInterfaceWrapper) ReplaceSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ReplaceSecretParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchSecret
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReplaceSecret(w, r, org, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSecretAccess operation middleware
+func (siw *ServerInterfaceWrapper) ListSecretAccess(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSecretAccess(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantSecret operation middleware
+func (siw *ServerInterfaceWrapper) GrantSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantSecret(w, r, org, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeSecret operation middleware
+func (siw *ServerInterfaceWrapper) RevokeSecret(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id Id
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", r.PathValue("id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "principal" -------------
+	var principalID PrincipalID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "principal", r.PathValue("principal"), &principalID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "principal", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeSecret(w, r, org, id, principalID)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8685,6 +10463,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}", wrapper.DeleteAPIKey)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/secrets", wrapper.RotateAPIKey)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/api-keys/{key}/secrets/{secret}", wrapper.RevokeAPIKeySecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets", wrapper.ListSecrets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets", wrapper.CreateSecret)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}", wrapper.DeleteSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets/{id}", wrapper.GetSecret)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/secrets/{id}", wrapper.ReplaceSecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.ListSecretAccess)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access", wrapper.GrantSecret)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/secrets/{id}/access/{principal}", wrapper.RevokeSecret)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.ListInvitations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.Invite)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/invitations/{id}", wrapper.CancelInvitation)
@@ -8692,11 +10478,17 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests", wrapper.RequestToJoin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/approve", wrapper.ApproveJoinRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/decline", wrapper.DeclineJoinRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/model-providers", wrapper.ListModelProviders)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.RemoveModelProvider)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.GetModelProvider)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/model-providers/{provider}", wrapper.SetModelProvider)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/model", wrapper.SetAgentModel)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/secrets", wrapper.SetAgentSecrets)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.ListTasks)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.AssignTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}", wrapper.GetTask)
@@ -8730,6 +10522,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access", wrapper.ListRepositoryAccess)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles", wrapper.GrantRepositoryRole)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.ListRepositorySecrets)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/secrets", wrapper.CreateRepositorySecret)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/jobs", wrapper.ListRepositoryJobs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
@@ -8760,6 +10555,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/cancel", wrapper.CancelRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/start", wrapper.StartRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments", wrapper.ListEnvironments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}", wrapper.GetEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/deliveries", wrapper.ListDeliveries)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/redeliver", wrapper.Redeliver)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/pause", wrapper.PauseEnvironment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/resume", wrapper.ResumeEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -10576,6 +12379,278 @@ type UpdateAgentdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateAgentdefaultApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModelRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  SetAgentModelParams
+	Body    *SetAgentModelJSONRequestBody
+}
+
+type SetAgentModelResponseObject interface {
+	VisitSetAgentModelResponse(w http.ResponseWriter) error
+}
+
+type SetAgentModel200ResponseHeaders struct {
+	ETag string
+}
+
+type SetAgentModel200JSONResponse struct {
+	Body    Agent
+	Headers SetAgentModel200ResponseHeaders
+}
+
+func (response SetAgentModel200JSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetAgentModel400ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentModel401ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentModel403ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentModel404ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentModel412ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModel428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentModel428ApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentModeldefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetAgentModeldefaultApplicationProblemPlusJSONResponse) VisitSetAgentModelResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecretsRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  SetAgentSecretsParams
+	Body    *SetAgentSecretsJSONRequestBody
+}
+
+type SetAgentSecretsResponseObject interface {
+	VisitSetAgentSecretsResponse(w http.ResponseWriter) error
+}
+
+type SetAgentSecrets200ResponseHeaders struct {
+	ETag string
+}
+
+type SetAgentSecrets200JSONResponse struct {
+	Body    Agent
+	Headers SetAgentSecrets200ResponseHeaders
+}
+
+func (response SetAgentSecrets200JSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetAgentSecrets400ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentSecrets401ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentSecrets403ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentSecrets404ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentSecrets412ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecrets428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetAgentSecrets428ApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetAgentSecretsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetAgentSecretsdefaultApplicationProblemPlusJSONResponse) VisitSetAgentSecretsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -14512,6 +16587,449 @@ func (response RevokeRoledefaultApplicationProblemPlusJSONResponse) VisitRevokeR
 	return err
 }
 
+type ListModelProvidersRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListModelProvidersResponseObject interface {
+	VisitListModelProvidersResponse(w http.ResponseWriter) error
+}
+
+type ListModelProviders200JSONResponse ModelProviderList
+
+func (response ListModelProviders200JSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelProviders401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListModelProviders401ApplicationProblemPlusJSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelProviders404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListModelProviders404ApplicationProblemPlusJSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListModelProvidersdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListModelProvidersdefaultApplicationProblemPlusJSONResponse) VisitListModelProvidersResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProviderRequestObject struct {
+	Org      Org      `json:"org"`
+	Provider Provider `json:"provider"`
+	Params   RemoveModelProviderParams
+}
+
+type RemoveModelProviderResponseObject interface {
+	VisitRemoveModelProviderResponse(w http.ResponseWriter) error
+}
+
+type RemoveModelProvider204Response struct {
+}
+
+func (response RemoveModelProvider204Response) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RemoveModelProvider401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RemoveModelProvider401ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModelProvider403ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModelProvider404ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProvider409ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModelProvider409ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProvider412ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModelProvider412ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProvider428ApplicationProblemPlusJSONResponse Problem
+
+func (response RemoveModelProvider428ApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RemoveModelProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RemoveModelProviderdefaultApplicationProblemPlusJSONResponse) VisitRemoveModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelProviderRequestObject struct {
+	Org      Org      `json:"org"`
+	Provider Provider `json:"provider"`
+	Params   GetModelProviderParams
+}
+
+type GetModelProviderResponseObject interface {
+	VisitGetModelProviderResponse(w http.ResponseWriter) error
+}
+
+type GetModelProvider200ResponseHeaders struct {
+	ETag string
+}
+
+type GetModelProvider200JSONResponse struct {
+	Body    ModelProvider
+	Headers GetModelProvider200ResponseHeaders
+}
+
+func (response GetModelProvider200JSONResponse) VisitGetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelProvider304ResponseHeaders struct {
+	ETag string
+}
+
+type GetModelProvider304Response struct {
+	Headers GetModelProvider304ResponseHeaders
+}
+
+func (response GetModelProvider304Response) VisitGetModelProviderResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetModelProvider401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetModelProvider401ApplicationProblemPlusJSONResponse) VisitGetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetModelProvider404ApplicationProblemPlusJSONResponse) VisitGetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetModelProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetModelProviderdefaultApplicationProblemPlusJSONResponse) VisitGetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProviderRequestObject struct {
+	Org      Org      `json:"org"`
+	Provider Provider `json:"provider"`
+	Params   SetModelProviderParams
+	Body     *SetModelProviderJSONRequestBody
+}
+
+type SetModelProviderResponseObject interface {
+	VisitSetModelProviderResponse(w http.ResponseWriter) error
+}
+
+type SetModelProvider200ResponseHeaders struct {
+	ETag string
+}
+
+type SetModelProvider200JSONResponse struct {
+	Body    ModelProvider
+	Headers SetModelProvider200ResponseHeaders
+}
+
+func (response SetModelProvider200JSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type SetModelProvider201JSONResponse struct {
+	Body    ModelProvider
+	Headers SetModelProvider201ResponseHeaders
+}
+
+func (response SetModelProvider201JSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SetModelProvider400ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider401ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelProvider401ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider403ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelProvider403ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider404ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelProvider404ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider412ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelProvider412ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProvider428ApplicationProblemPlusJSONResponse Problem
+
+func (response SetModelProvider428ApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SetModelProviderdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SetModelProviderdefaultApplicationProblemPlusJSONResponse) VisitSetModelProviderResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoriesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -18031,6 +20549,869 @@ func (response GetDeletedBranchdefaultApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type GetDeliveryRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+	Params GetDeliveryParams
+}
+
+type GetDeliveryResponseObject interface {
+	VisitGetDeliveryResponse(w http.ResponseWriter) error
+}
+
+type GetDelivery200ResponseHeaders struct {
+	ETag string
+}
+
+type GetDelivery200JSONResponse struct {
+	Body    Delivery
+	Headers GetDelivery200ResponseHeaders
+}
+
+func (response GetDelivery200JSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDelivery304ResponseHeaders struct {
+	ETag string
+}
+
+type GetDelivery304Response struct {
+	Headers GetDelivery304ResponseHeaders
+}
+
+func (response GetDelivery304Response) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetDelivery401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetDelivery401ApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetDelivery404ApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetDeliverydefaultApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeliveryRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+}
+
+type StartDeliveryResponseObject interface {
+	VisitStartDeliveryResponse(w http.ResponseWriter) error
+}
+
+type StartDelivery202ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartDelivery202JSONResponse struct {
+	Body    Delivery
+	Headers StartDelivery202ResponseHeaders
+}
+
+func (response StartDelivery202JSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartDelivery401ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery403ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery404ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery409ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartDeliverydefaultApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListEnvironmentsParams
+}
+
+type ListEnvironmentsResponseObject interface {
+	VisitListEnvironmentsResponse(w http.ResponseWriter) error
+}
+
+type ListEnvironments200JSONResponse struct {
+	Environments []Environment `json:"environments"`
+}
+
+func (response ListEnvironments200JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListEnvironments401ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEnvironments404ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListEnvironmentsdefaultApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+	Params      GetEnvironmentParams
+}
+
+type GetEnvironmentResponseObject interface {
+	VisitGetEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type GetEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type GetEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers GetEnvironment200ResponseHeaders
+}
+
+func (response GetEnvironment200JSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironment304ResponseHeaders struct {
+	ETag string
+}
+
+type GetEnvironment304Response struct {
+	Headers GetEnvironment304ResponseHeaders
+}
+
+func (response GetEnvironment304Response) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEnvironment401ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEnvironment404ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveriesRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+	Params      ListDeliveriesParams
+}
+
+type ListDeliveriesResponseObject interface {
+	VisitListDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListDeliveries200ResponseHeaders struct {
+	Link *string
+}
+
+type ListDeliveries200JSONResponse struct {
+	Body struct {
+		Deliveries []Delivery `json:"deliveries"`
+	}
+	Headers ListDeliveries200ResponseHeaders
+}
+
+func (response ListDeliveries200JSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListDeliveries400ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListDeliveries401ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListDeliveries404ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveriesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListDeliveriesdefaultApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type PauseEnvironmentResponseObject interface {
+	VisitPauseEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type PauseEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type PauseEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers PauseEnvironment200ResponseHeaders
+}
+
+func (response PauseEnvironment200JSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PauseEnvironment401ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment403ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment403ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment404ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment409ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment409ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PauseEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeliverRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type RedeliverResponseObject interface {
+	VisitRedeliverResponse(w http.ResponseWriter) error
+}
+
+type Redeliver202ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type Redeliver202JSONResponse struct {
+	Body    Delivery
+	Headers Redeliver202ResponseHeaders
+}
+
+func (response Redeliver202JSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response Redeliver401ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver403ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver403ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver404ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver404ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver409ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver409ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeliverdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RedeliverdefaultApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type ResumeEnvironmentResponseObject interface {
+	VisitResumeEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type ResumeEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type ResumeEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers ResumeEnvironment200ResponseHeaders
+}
+
+func (response ResumeEnvironment200JSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ResumeEnvironment401ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment403ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment403ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment404ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment409ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment409ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResumeEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryJobsRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListRepositoryJobsResponseObject interface {
+	VisitListRepositoryJobsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositoryJobs200JSONResponse struct {
+	Jobs []Grantee `json:"jobs"`
+}
+
+func (response ListRepositoryJobs200JSONResponse) VisitListRepositoryJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryJobs401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositoryJobs401ApplicationProblemPlusJSONResponse) VisitListRepositoryJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryJobs404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositoryJobs404ApplicationProblemPlusJSONResponse) VisitListRepositoryJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositoryJobsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositoryJobsdefaultApplicationProblemPlusJSONResponse) VisitListRepositoryJobsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRawRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -18758,6 +22139,213 @@ func (response StartRundefaultApplicationProblemPlusJSONResponse) VisitStartRunR
 	return err
 }
 
+type ListRepositorySecretsRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+}
+
+type ListRepositorySecretsResponseObject interface {
+	VisitListRepositorySecretsResponse(w http.ResponseWriter) error
+}
+
+type ListRepositorySecrets200JSONResponse SecretList
+
+func (response ListRepositorySecrets200JSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositorySecrets401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListRepositorySecrets401ApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositorySecrets403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositorySecrets403ApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositorySecrets404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListRepositorySecrets404ApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListRepositorySecretsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListRepositorySecretsdefaultApplicationProblemPlusJSONResponse) VisitListRepositorySecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecretRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *CreateRepositorySecretJSONRequestBody
+}
+
+type CreateRepositorySecretResponseObject interface {
+	VisitCreateRepositorySecretResponse(w http.ResponseWriter) error
+}
+
+type CreateRepositorySecret201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateRepositorySecret201JSONResponse struct {
+	Body    Secret
+	Headers CreateRepositorySecret201ResponseHeaders
+}
+
+func (response CreateRepositorySecret201JSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecret400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateRepositorySecret400ApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecret401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositorySecret401ApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositorySecret403ApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositorySecret404ApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecret409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateRepositorySecret409ApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateRepositorySecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateRepositorySecretdefaultApplicationProblemPlusJSONResponse) VisitCreateRepositorySecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListTagsRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -19328,6 +22916,847 @@ type UpdateRoledefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateRoledefaultApplicationProblemPlusJSONResponse) VisitUpdateRoleResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretsRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListSecretsResponseObject interface {
+	VisitListSecretsResponse(w http.ResponseWriter) error
+}
+
+type ListSecrets200JSONResponse SecretList
+
+func (response ListSecrets200JSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecrets401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListSecrets401ApplicationProblemPlusJSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecrets403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSecrets403ApplicationProblemPlusJSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecrets404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSecrets404ApplicationProblemPlusJSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListSecretsdefaultApplicationProblemPlusJSONResponse) VisitListSecretsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecretRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateSecretJSONRequestBody
+}
+
+type CreateSecretResponseObject interface {
+	VisitCreateSecretResponse(w http.ResponseWriter) error
+}
+
+type CreateSecret201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateSecret201JSONResponse struct {
+	Body    Secret
+	Headers CreateSecret201ResponseHeaders
+}
+
+func (response CreateSecret201JSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecret400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateSecret400ApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecret401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSecret401ApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSecret403ApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSecret404ApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecret409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateSecret409ApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateSecretdefaultApplicationProblemPlusJSONResponse) VisitCreateSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecretRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params DeleteSecretParams
+}
+
+type DeleteSecretResponseObject interface {
+	VisitDeleteSecretResponse(w http.ResponseWriter) error
+}
+
+type DeleteSecret204Response struct {
+}
+
+func (response DeleteSecret204Response) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteSecret401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteSecret401ApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSecret403ApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSecret404ApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecret412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSecret412ApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecret428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteSecret428ApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteSecretdefaultApplicationProblemPlusJSONResponse) VisitDeleteSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecretRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params GetSecretParams
+}
+
+type GetSecretResponseObject interface {
+	VisitGetSecretResponse(w http.ResponseWriter) error
+}
+
+type GetSecret200ResponseHeaders struct {
+	ETag string
+}
+
+type GetSecret200JSONResponse struct {
+	Body    Secret
+	Headers GetSecret200ResponseHeaders
+}
+
+func (response GetSecret200JSONResponse) VisitGetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecret304ResponseHeaders struct {
+	ETag string
+}
+
+type GetSecret304Response struct {
+	Headers GetSecret304ResponseHeaders
+}
+
+func (response GetSecret304Response) VisitGetSecretResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetSecret401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetSecret401ApplicationProblemPlusJSONResponse) VisitGetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetSecret403ApplicationProblemPlusJSONResponse) VisitGetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetSecret404ApplicationProblemPlusJSONResponse) VisitGetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetSecretdefaultApplicationProblemPlusJSONResponse) VisitGetSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecretRequestObject struct {
+	Org    Org `json:"org"`
+	Id     Id  `json:"id"`
+	Params ReplaceSecretParams
+	Body   *ReplaceSecretJSONRequestBody
+}
+
+type ReplaceSecretResponseObject interface {
+	VisitReplaceSecretResponse(w http.ResponseWriter) error
+}
+
+type ReplaceSecret200ResponseHeaders struct {
+	ETag string
+}
+
+type ReplaceSecret200JSONResponse struct {
+	Body    Secret
+	Headers ReplaceSecret200ResponseHeaders
+}
+
+func (response ReplaceSecret200JSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReplaceSecret400ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret401ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret401ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret403ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret404ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret409ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret409ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret412ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret412ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecret428ApplicationProblemPlusJSONResponse Problem
+
+func (response ReplaceSecret428ApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReplaceSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReplaceSecretdefaultApplicationProblemPlusJSONResponse) VisitReplaceSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccessRequestObject struct {
+	Org Org `json:"org"`
+	Id  Id  `json:"id"`
+}
+
+type ListSecretAccessResponseObject interface {
+	VisitListSecretAccessResponse(w http.ResponseWriter) error
+}
+
+type ListSecretAccess200JSONResponse struct {
+	Access []Grantee `json:"access"`
+}
+
+func (response ListSecretAccess200JSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccess401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListSecretAccess401ApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccess403ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSecretAccess403ApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccess404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListSecretAccess404ApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListSecretAccessdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListSecretAccessdefaultApplicationProblemPlusJSONResponse) VisitListSecretAccessResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecretRequestObject struct {
+	Org  Org `json:"org"`
+	Id   Id  `json:"id"`
+	Body *GrantSecretJSONRequestBody
+}
+
+type GrantSecretResponseObject interface {
+	VisitGrantSecretResponse(w http.ResponseWriter) error
+}
+
+type GrantSecret204Response struct {
+}
+
+func (response GrantSecret204Response) VisitGrantSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type GrantSecret400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GrantSecret400ApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecret401ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantSecret401ApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantSecret403ApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantSecret404ApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecret409ApplicationProblemPlusJSONResponse Problem
+
+func (response GrantSecret409ApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GrantSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GrantSecretdefaultApplicationProblemPlusJSONResponse) VisitGrantSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSecretRequestObject struct {
+	Org         Org         `json:"org"`
+	Id          Id          `json:"id"`
+	PrincipalID PrincipalID `json:"principal"`
+}
+
+type RevokeSecretResponseObject interface {
+	VisitRevokeSecretResponse(w http.ResponseWriter) error
+}
+
+type RevokeSecret204Response struct {
+}
+
+func (response RevokeSecret204Response) VisitRevokeSecretResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type RevokeSecret401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RevokeSecret401ApplicationProblemPlusJSONResponse) VisitRevokeSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSecret403ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeSecret403ApplicationProblemPlusJSONResponse) VisitRevokeSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSecret404ApplicationProblemPlusJSONResponse Problem
+
+func (response RevokeSecret404ApplicationProblemPlusJSONResponse) VisitRevokeSecretResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RevokeSecretdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RevokeSecretdefaultApplicationProblemPlusJSONResponse) VisitRevokeSecretResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -20135,6 +24564,12 @@ type StrictServerInterface interface {
 	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
+	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/model)
+	SetAgentModel(ctx context.Context, request SetAgentModelRequestObject) (SetAgentModelResponseObject, error)
+	// SetAgentSecrets Names the secrets an agent's tasks receive, each an environment variable from one of the organization's secrets or its repositories', in place of those it named; takes org.principals.manage, and a person. A task receives only those its agent holds secrets.read on. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/agents/{agent}/secrets)
+	SetAgentSecrets(ctx context.Context, request SetAgentSecretsRequestObject) (SetAgentSecretsResponseObject, error)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
 	// (GET /orgs/{org}/api-keys)
 	ListAPIKeys(ctx context.Context, request ListAPIKeysRequestObject) (ListAPIKeysResponseObject, error)
@@ -20249,6 +24684,18 @@ type StrictServerInterface interface {
 	// RevokeRole Takes a role from a member; takes org.grants.manage and every permission of the role. The last Owner keeps Owner.
 	// (DELETE /orgs/{org}/members/{user}/roles/{role})
 	RevokeRole(ctx context.Context, request RevokeRoleRequestObject) (RevokeRoleResponseObject, error)
+	// ListModelProviders The model providers the organization added, by name, and those the installation knows; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	// (GET /orgs/{org}/model-providers)
+	ListModelProviders(ctx context.Context, request ListModelProvidersRequestObject) (ListModelProvidersResponseObject, error)
+	// RemoveModelProvider Removes a provider from the organization; takes org.manage. While agents run on it, the answer is 409 model_provider.in_use. The removal names the provider's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/model-providers/{provider})
+	RemoveModelProvider(ctx context.Context, request RemoveModelProviderRequestObject) (RemoveModelProviderResponseObject, error)
+	// GetModelProvider A model provider the organization added; takes org.read.
+	// (GET /orgs/{org}/model-providers/{provider})
+	GetModelProvider(ctx context.Context, request GetModelProviderRequestObject) (GetModelProviderResponseObject, error)
+	// SetModelProvider Adds a provider the installation knows to the organization, with the organization's own secret that holds its API key, under If-None-Match: *; or names another secret for the one it has, under If-Match. Takes org.manage. A provider the installation doesn't know answers 404, a secret that isn't the organization's own 400 model_provider.secret_invalid, and a request with neither header 428.
+	// (PUT /orgs/{org}/model-providers/{provider})
+	SetModelProvider(ctx context.Context, request SetModelProviderRequestObject) (SetModelProviderResponseObject, error)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -20264,7 +24711,7 @@ type StrictServerInterface interface {
 	// ListRepositoryAccess Who holds grants on the repository, with the roles they hold there; takes repo.read. Roles at the organization reach it too.
 	// (GET /orgs/{org}/repos/{repo}/access)
 	ListRepositoryAccess(ctx context.Context, request ListRepositoryAccessRequestObject) (ListRepositoryAccessResponseObject, error)
-	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository; takes org.grants.manage and every permission the role gives there.
+	// GrantRepositoryRole Gives one of the organization's members or API keys a role on the repository, or one of its jobs Secret reader; takes org.grants.manage and every permission the role gives there.
 	// (POST /orgs/{org}/repos/{repo}/access/{principal}/roles)
 	GrantRepositoryRole(ctx context.Context, request GrantRepositoryRoleRequestObject) (GrantRepositoryRoleResponseObject, error)
 	// RevokeRepositoryRole Takes a role from a principal on the repository; takes org.grants.manage and every permission the role gives there.
@@ -20348,6 +24795,33 @@ type StrictServerInterface interface {
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(ctx context.Context, request GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error)
+	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
+	GetDelivery(ctx context.Context, request GetDeliveryRequestObject) (GetDeliveryResponseObject, error)
+	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
+	StartDelivery(ctx context.Context, request StartDeliveryRequestObject) (StartDeliveryResponseObject, error)
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments)
+	ListEnvironments(ctx context.Context, request ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error)
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
+	GetEnvironment(ctx context.Context, request GetEnvironmentRequestObject) (GetEnvironmentResponseObject, error)
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
+	ListDeliveries(ctx context.Context, request ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error)
+	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
+	PauseEnvironment(ctx context.Context, request PauseEnvironmentRequestObject) (PauseEnvironmentResponseObject, error)
+	// Redeliver Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/redeliver)
+	Redeliver(ctx context.Context, request RedeliverRequestObject) (RedeliverResponseObject, error)
+	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
+	ResumeEnvironment(ctx context.Context, request ResumeEnvironmentRequestObject) (ResumeEnvironmentResponseObject, error)
+	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
+	// (GET /orgs/{org}/repos/{repo}/jobs)
+	ListRepositoryJobs(ctx context.Context, request ListRepositoryJobsRequestObject) (ListRepositoryJobsResponseObject, error)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(ctx context.Context, request GetRawRequestObject) (GetRawResponseObject, error)
@@ -20369,6 +24843,12 @@ type StrictServerInterface interface {
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(ctx context.Context, request StartRunRequestObject) (StartRunResponseObject, error)
+	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
+	// (GET /orgs/{org}/repos/{repo}/secrets)
+	ListRepositorySecrets(ctx context.Context, request ListRepositorySecretsRequestObject) (ListRepositorySecretsResponseObject, error)
+	// CreateRepositorySecret Adds a secret to the repository's settings, sealed with the installation's secrets key; takes secrets.manage on the repository. Without a secrets key, the answer is 409.
+	// (POST /orgs/{org}/repos/{repo}/secrets)
+	CreateRepositorySecret(ctx context.Context, request CreateRepositorySecretRequestObject) (CreateRepositorySecretResponseObject, error)
 	// ListTags The repository's tags, by name, each with the object it names; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/tags)
 	ListTags(ctx context.Context, request ListTagsRequestObject) (ListTagsResponseObject, error)
@@ -20387,6 +24867,30 @@ type StrictServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(ctx context.Context, request UpdateRoleRequestObject) (UpdateRoleResponseObject, error)
+	// ListSecrets The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+	// (GET /orgs/{org}/secrets)
+	ListSecrets(ctx context.Context, request ListSecretsRequestObject) (ListSecretsResponseObject, error)
+	// CreateSecret Adds a secret to the organization's settings, sealed with the installation's secrets key; takes secrets.manage at the organization. Without a secrets key, the answer is 409.
+	// (POST /orgs/{org}/secrets)
+	CreateSecret(ctx context.Context, request CreateSecretRequestObject) (CreateSecretResponseObject, error)
+	// DeleteSecret Deletes a secret and every grant on it; takes secrets.manage on it. Jobs that still name it fail as they start. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/secrets/{id})
+	DeleteSecret(ctx context.Context, request DeleteSecretRequestObject) (DeleteSecretResponseObject, error)
+	// GetSecret One of the organization's secrets, its repositories' included, without its value; takes secrets.manage on it.
+	// (GET /orgs/{org}/secrets/{id})
+	GetSecret(ctx context.Context, request GetSecretRequestObject) (GetSecretResponseObject, error)
+	// ReplaceSecret Renames a secret and, when the body gives one, replaces its value; takes secrets.manage on it. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+	// (PUT /orgs/{org}/secrets/{id})
+	ReplaceSecret(ctx context.Context, request ReplaceSecretRequestObject) (ReplaceSecretResponseObject, error)
+	// ListSecretAccess Who holds Secret reader on the secret itself, by name; grants on its repository and at the organization reach it too. Takes secrets.manage on it, or org.grants.manage.
+	// (GET /orgs/{org}/secrets/{id}/access)
+	ListSecretAccess(ctx context.Context, request ListSecretAccessRequestObject) (ListSecretAccessResponseObject, error)
+	// GrantSecret Lets one of the organization's members, API keys, jobs or agents receive the secret, granting it Secret reader on the secret alone; takes org.grants.manage and secrets.read on the secret.
+	// (POST /orgs/{org}/secrets/{id}/access)
+	GrantSecret(ctx context.Context, request GrantSecretRequestObject) (GrantSecretResponseObject, error)
+	// RevokeSecret Takes Secret reader on the secret from a principal; takes org.grants.manage and secrets.read on the secret. Grants on its repository or at the organization still reach it.
+	// (DELETE /orgs/{org}/secrets/{id}/access/{principal})
+	RevokeSecret(ctx context.Context, request RevokeSecretRequestObject) (RevokeSecretResponseObject, error)
 	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
@@ -21076,6 +25580,76 @@ func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
 		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAgentModel operation middleware
+func (sh *strictHandler) SetAgentModel(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentModelParams) {
+	var request SetAgentModelRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	var body SetAgentModelJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAgentModel(ctx, request.(SetAgentModelRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAgentModel")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAgentModelResponseObject); ok {
+		if err := validResponse.VisitSetAgentModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetAgentSecrets operation middleware
+func (sh *strictHandler) SetAgentSecrets(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params SetAgentSecretsParams) {
+	var request SetAgentSecretsRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	var body SetAgentSecretsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetAgentSecrets(ctx, request.(SetAgentSecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetAgentSecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetAgentSecretsResponseObject); ok {
+		if err := validResponse.VisitSetAgentSecretsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -22226,6 +26800,123 @@ func (sh *strictHandler) RevokeRole(w http.ResponseWriter, r *http.Request, org 
 	}
 }
 
+// ListModelProviders operation middleware
+func (sh *strictHandler) ListModelProviders(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListModelProvidersRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListModelProviders(ctx, request.(ListModelProvidersRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListModelProviders")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListModelProvidersResponseObject); ok {
+		if err := validResponse.VisitListModelProvidersResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RemoveModelProvider operation middleware
+func (sh *strictHandler) RemoveModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params RemoveModelProviderParams) {
+	var request RemoveModelProviderRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RemoveModelProvider(ctx, request.(RemoveModelProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RemoveModelProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RemoveModelProviderResponseObject); ok {
+		if err := validResponse.VisitRemoveModelProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetModelProvider operation middleware
+func (sh *strictHandler) GetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params GetModelProviderParams) {
+	var request GetModelProviderRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetModelProvider(ctx, request.(GetModelProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetModelProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetModelProviderResponseObject); ok {
+		if err := validResponse.VisitGetModelProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SetModelProvider operation middleware
+func (sh *strictHandler) SetModelProvider(w http.ResponseWriter, r *http.Request, org Org, provider Provider, params SetModelProviderParams) {
+	var request SetModelProviderRequestObject
+
+	request.Org = org
+	request.Provider = provider
+	request.Params = params
+
+	var body SetModelProviderJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SetModelProvider(ctx, request.(SetModelProviderRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SetModelProvider")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SetModelProviderResponseObject); ok {
+		if err := validResponse.VisitSetModelProviderResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRepositories operation middleware
 func (sh *strictHandler) ListRepositories(w http.ResponseWriter, r *http.Request, org Org) {
 	var request ListRepositoriesRequestObject
@@ -23247,6 +27938,260 @@ func (sh *strictHandler) GetDeletedBranch(w http.ResponseWriter, r *http.Request
 	}
 }
 
+// GetDelivery operation middleware
+func (sh *strictHandler) GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams) {
+	var request GetDeliveryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDelivery(ctx, request.(GetDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDeliveryResponseObject); ok {
+		if err := validResponse.VisitGetDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartDelivery operation middleware
+func (sh *strictHandler) StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber) {
+	var request StartDeliveryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartDelivery(ctx, request.(StartDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartDeliveryResponseObject); ok {
+		if err := validResponse.VisitStartDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEnvironments operation middleware
+func (sh *strictHandler) ListEnvironments(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListEnvironmentsParams) {
+	var request ListEnvironmentsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEnvironments(ctx, request.(ListEnvironmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEnvironments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnvironmentsResponseObject); ok {
+		if err := validResponse.VisitListEnvironmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEnvironment operation middleware
+func (sh *strictHandler) GetEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params GetEnvironmentParams) {
+	var request GetEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEnvironment(ctx, request.(GetEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEnvironmentResponseObject); ok {
+		if err := validResponse.VisitGetEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDeliveries operation middleware
+func (sh *strictHandler) ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams) {
+	var request ListDeliveriesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDeliveries(ctx, request.(ListDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseEnvironment operation middleware
+func (sh *strictHandler) PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request PauseEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseEnvironment(ctx, request.(PauseEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseEnvironmentResponseObject); ok {
+		if err := validResponse.VisitPauseEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Redeliver operation middleware
+func (sh *strictHandler) Redeliver(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request RedeliverRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Redeliver(ctx, request.(RedeliverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Redeliver")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RedeliverResponseObject); ok {
+		if err := validResponse.VisitRedeliverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeEnvironment operation middleware
+func (sh *strictHandler) ResumeEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request ResumeEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeEnvironment(ctx, request.(ResumeEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeEnvironmentResponseObject); ok {
+		if err := validResponse.VisitResumeEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListRepositoryJobs operation middleware
+func (sh *strictHandler) ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListRepositoryJobsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositoryJobs(ctx, request.(ListRepositoryJobsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositoryJobs")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositoryJobsResponseObject); ok {
+		if err := validResponse.VisitListRepositoryJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetRaw operation middleware
 func (sh *strictHandler) GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams) {
 	var request GetRawRequestObject
@@ -23444,6 +28389,67 @@ func (sh *strictHandler) StartRun(w http.ResponseWriter, r *http.Request, org Or
 	}
 }
 
+// ListRepositorySecrets operation middleware
+func (sh *strictHandler) ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request ListRepositorySecretsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListRepositorySecrets(ctx, request.(ListRepositorySecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListRepositorySecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListRepositorySecretsResponseObject); ok {
+		if err := validResponse.VisitListRepositorySecretsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateRepositorySecret operation middleware
+func (sh *strictHandler) CreateRepositorySecret(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request CreateRepositorySecretRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body CreateRepositorySecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateRepositorySecret(ctx, request.(CreateRepositorySecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateRepositorySecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateRepositorySecretResponseObject); ok {
+		if err := validResponse.VisitCreateRepositorySecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListTags operation middleware
 func (sh *strictHandler) ListTags(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
 	var request ListTagsRequestObject
@@ -23612,6 +28618,245 @@ func (sh *strictHandler) UpdateRole(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSecrets operation middleware
+func (sh *strictHandler) ListSecrets(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListSecretsRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSecrets(ctx, request.(ListSecretsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSecrets")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSecretsResponseObject); ok {
+		if err := validResponse.VisitListSecretsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateSecret operation middleware
+func (sh *strictHandler) CreateSecret(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateSecretRequestObject
+
+	request.Org = org
+
+	var body CreateSecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateSecret(ctx, request.(CreateSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateSecretResponseObject); ok {
+		if err := validResponse.VisitCreateSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteSecret operation middleware
+func (sh *strictHandler) DeleteSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params DeleteSecretParams) {
+	var request DeleteSecretRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteSecret(ctx, request.(DeleteSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteSecretResponseObject); ok {
+		if err := validResponse.VisitDeleteSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetSecret operation middleware
+func (sh *strictHandler) GetSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params GetSecretParams) {
+	var request GetSecretRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetSecret(ctx, request.(GetSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetSecretResponseObject); ok {
+		if err := validResponse.VisitGetSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReplaceSecret operation middleware
+func (sh *strictHandler) ReplaceSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, params ReplaceSecretParams) {
+	var request ReplaceSecretRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.Params = params
+
+	var body ReplaceSecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReplaceSecret(ctx, request.(ReplaceSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReplaceSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReplaceSecretResponseObject); ok {
+		if err := validResponse.VisitReplaceSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListSecretAccess operation middleware
+func (sh *strictHandler) ListSecretAccess(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request ListSecretAccessRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListSecretAccess(ctx, request.(ListSecretAccessRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListSecretAccess")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListSecretAccessResponseObject); ok {
+		if err := validResponse.VisitListSecretAccessResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GrantSecret operation middleware
+func (sh *strictHandler) GrantSecret(w http.ResponseWriter, r *http.Request, org Org, id Id) {
+	var request GrantSecretRequestObject
+
+	request.Org = org
+	request.Id = id
+
+	var body GrantSecretJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GrantSecret(ctx, request.(GrantSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GrantSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GrantSecretResponseObject); ok {
+		if err := validResponse.VisitGrantSecretResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RevokeSecret operation middleware
+func (sh *strictHandler) RevokeSecret(w http.ResponseWriter, r *http.Request, org Org, id Id, principalID PrincipalID) {
+	var request RevokeSecretRequestObject
+
+	request.Org = org
+	request.Id = id
+	request.PrincipalID = principalID
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RevokeSecret(ctx, request.(RevokeSecretRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RevokeSecret")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RevokeSecretResponseObject); ok {
+		if err := validResponse.VisitRevokeSecretResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

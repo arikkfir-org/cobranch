@@ -30,6 +30,12 @@ type Agent struct {
 	Version int `json:"version"`
 	// The roles it holds, those at the organization first.
 	Grants []*AgentGrant `json:"grants"`
+	// The model provider it runs on, one the organization added; null while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+	// The model it runs on, as its provider names it; null while it runs on none.
+	Model *string `json:"model,omitempty"`
+	// The secrets its tasks receive, by the environment variables they go in.
+	Secrets []*AgentSecret `json:"secrets"`
 }
 
 // A role an agent holds, at its organization or, with a repository, on that repository.
@@ -64,6 +70,18 @@ type AgentPatch struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
+}
+
+// A secret an agent's tasks receive, in the environment variable name.
+type AgentSecret struct {
+	Name     string `json:"name"`
+	SecretID string `json:"secretId"`
+}
+
+// A secret an agent's tasks receive: the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and one of the organization's secrets or its repositories'.
+type AgentSecretInput struct {
+	Name     string `json:"name"`
+	SecretID string `json:"secretId"`
 }
 
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -320,6 +338,42 @@ type DeletedBranch struct {
 	Merge *BranchMerge `json:"merge,omitempty"`
 }
 
+// One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+type Delivery struct {
+	ID string `json:"id"`
+	// Counts the repository's deliveries from 1.
+	Number int `json:"number"`
+	// Its environment's ID.
+	EnvironmentID string `json:"environmentId"`
+	// Its environment's target's name.
+	Target string `json:"target"`
+	// Its environment's branch.
+	Branch string       `json:"branch"`
+	Kind   DeliveryKind `json:"kind"`
+	// The commit it delivers; null for a teardown.
+	Sha     *string         `json:"sha,omitempty"`
+	Trigger DeliveryTrigger `json:"trigger"`
+	// The push that queued it; null for any other.
+	Push  *string       `json:"push,omitempty"`
+	State DeliveryState `json:"state"`
+	// Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+	// Who redelivered it, resumed its environment or started it from WAITING; null for one a push queued that never waited.
+	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
+	QueuedAt  time.Time        `json:"queuedAt"`
+	StartedAt *time.Time       `json:"startedAt,omitempty"`
+	EndedAt   *time.Time       `json:"endedAt,omitempty"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+}
+
+// A page of an environment's deliveries, newest first.
+type DeliveryPage struct {
+	Deliveries []*Delivery `json:"deliveries"`
+	// Where the next page starts, as deliveries' after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
 // A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
@@ -353,6 +407,35 @@ type DiffLine struct {
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
+}
+
+// A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+type Environment struct {
+	ID string `json:"id"`
+	// The target's principal, named as the target.
+	Target *CommitPrincipal `json:"target"`
+	// The branch's short name.
+	Branch string `json:"branch"`
+	// The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster.
+	Cluster   *string `json:"cluster,omitempty"`
+	Namespace string  `json:"namespace"`
+	// The commit of its last successful delivery; null before one.
+	Revision *string `json:"revision,omitempty"`
+	// When a delivery last succeeded; null before one.
+	SyncedAt *time.Time        `json:"syncedAt,omitempty"`
+	Sync     EnvironmentSync   `json:"sync"`
+	Health   EnvironmentHealth `json:"health"`
+	// A paused environment takes no delivery until resumed.
+	Paused bool `json:"paused"`
+	// Its newest delivery; null before one.
+	Latest *Delivery `json:"latest,omitempty"`
+	// A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100.
+	Deliveries *DeliveryPage `json:"deliveries"`
+	CreatedAt  time.Time     `json:"createdAt"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+	// The ID of the environment's repository, which its deliveries read.
+	RepositoryID string `json:"-"`
 }
 
 // A file or a symlink at a commit, and its text when it isn't binary.
@@ -398,6 +481,14 @@ type FileDiff struct {
 	// Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay.
 	Truncated bool    `json:"truncated"`
 	Hunks     []*Hunk `json:"hunks"`
+}
+
+// A principal holding a grant, by name.
+type Grantee struct {
+	PrincipalID string `json:"principalId"`
+	// user, api_key, job or agent.
+	Kind        string `json:"kind"`
+	DisplayName string `json:"displayName"`
 }
 
 // One run of a file's changes, with up to three lines around them.
@@ -697,7 +788,33 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
+// A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
+type ModelProvider struct {
+	// The provider's name, as the installation knows it.
+	Name string `json:"name"`
+	// The organization's secret that holds its API key; null once that secret is deleted.
+	SecretID *string `json:"secretId,omitempty"`
+	// That secret's name, shown to a viewer holding secrets.manage at the organization; null otherwise.
+	SecretName *string `json:"secretName,omitempty"`
+	// Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
+	Broken bool `json:"broken"`
+	// Who added it; null once they are gone.
+	CreatedBy *CommitPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
 type Mutation struct {
+}
+
+// What makes a secret.
+type NewSecret struct {
+	// At most 100 characters, unique where the secret lives.
+	Name string `json:"name"`
+	// At most 64 KiB; sealed as it arrives and never shown again.
+	Value string `json:"value"`
 }
 
 // An organization: a slug for its URLs, a name, and its settings.
@@ -732,6 +849,10 @@ type Organization struct {
 	Tasks *TaskPage `json:"tasks"`
 	// One of the organization's tasks by number: null unless it is there, the viewer reads the repository it names, and, for an issue's task, holds issues.read; takes org.read.
 	Task *Task `json:"task,omitempty"`
+	// The model providers the organization added, by name; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	ModelProviders []*ModelProvider `json:"modelProviders"`
+	// The model providers the installation knows, by name: those the organization may add.
+	AvailableModelProviders []string `json:"availableModelProviders"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
 	IssueKey string `json:"issueKey"`
 	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
@@ -744,6 +865,8 @@ type Organization struct {
 	Repositories []*Repository `json:"repositories"`
 	// A repository by its slug, current or former: null unless the viewer reads it.
 	Repository *Repository `json:"repository,omitempty"`
+	// The organization's own secrets, which its repositories' jobs share, by name and never with their values; takes secrets.manage at the organization.
+	Secrets []*Secret `json:"secrets"`
 	// What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
 	Usage *OrganizationUsage `json:"usage"`
 }
@@ -869,16 +992,26 @@ type Repository struct {
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
+	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	Environments []*Environment `json:"environments"`
+	// One of the repository's environments by ID: null unless it is there; takes repo.read.
+	Environment *Environment `json:"environment,omitempty"`
+	// One of the repository's deliveries by number: null unless it is there; takes repo.read.
+	Delivery *Delivery `json:"delivery,omitempty"`
 	// A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100.
 	Runs *RunPage `json:"runs"`
 	// One of the repository's runs by number: null unless it is there; takes repo.read.
 	Run *Run `json:"run,omitempty"`
+	// The repository's own secrets, by name and never with their values; takes secrets.manage on the repository.
+	Secrets []*Secret `json:"secrets"`
+	// The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
+	JobPrincipals []*Grantee `json:"jobPrincipals"`
 }
 
 // A principal's grants on a repository.
 type RepositoryAccess struct {
 	PrincipalID string `json:"principalId"`
-	// user or api_key.
+	// user, api_key, job or agent.
 	Kind        string `json:"kind"`
 	DisplayName string `json:"displayName"`
 	// The roles it holds on the repository, each with the permissions it gives there.
@@ -1029,6 +1162,32 @@ type SSHKeyInput struct {
 	Name *string `json:"name,omitempty"`
 	// One public key as an authorized_keys line has it, such as ssh-ed25519 AAAA… you@laptop, with no options; Ed25519, ECDSA, or RSA of 2048 bits or more.
 	PublicKey string `json:"publicKey"`
+}
+
+// A secret of the organization's or of one of its repositories, as its manager sees it: never with its value, which only the jobs it is granted to receive.
+type Secret struct {
+	ID             string `json:"id"`
+	OrganizationID string `json:"organizationId"`
+	// The repository it belongs to; null for the organization's own.
+	RepositoryID *string `json:"repositoryId,omitempty"`
+	// The name it is listed under; jobs name it by its ID.
+	Name string `json:"name"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+	// Who added it; null once they are gone.
+	CreatedBy *string   `json:"createdBy,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	// Who last changed it; null once they are gone.
+	UpdatedBy *string   `json:"updatedBy,omitempty"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	// Who holds Secret reader on the secret itself, by name; takes secrets.manage on it, or org.grants.manage. Grants on its repository and at the organization reach it too.
+	Access []*Grantee `json:"access"`
+}
+
+// What changes a secret; without a value, it keeps the one it has.
+type SecretChange struct {
+	Name  string  `json:"name"`
+	Value *string `json:"value,omitempty"`
 }
 
 // When a new secret stops working; a year from now when neither is given.
@@ -1446,6 +1605,195 @@ func (e ChatUpdateKind) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// What a delivery does.
+type DeliveryKind string
+
+const (
+	// Render a commit and apply it.
+	DeliveryKindDeliver DeliveryKind = "DELIVER"
+	// Apply the last render again.
+	DeliveryKindResync DeliveryKind = "RESYNC"
+	// Delete what the environment holds.
+	DeliveryKindTeardown DeliveryKind = "TEARDOWN"
+)
+
+var AllDeliveryKind = []DeliveryKind{
+	DeliveryKindDeliver,
+	DeliveryKindResync,
+	DeliveryKindTeardown,
+}
+
+func (e DeliveryKind) IsValid() bool {
+	switch e {
+	case DeliveryKindDeliver, DeliveryKindResync, DeliveryKindTeardown:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryKind) String() string {
+	return string(e)
+}
+
+func (e *DeliveryKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryKind", str)
+	}
+	return nil
+}
+
+func (e DeliveryKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a delivery stands.
+type DeliveryState string
+
+const (
+	// It waits for a member to start it: its tip was pushed from outside the organization.
+	DeliveryStateWaiting DeliveryState = "WAITING"
+	// It waits for the controller, or for its environment's applying delivery to end.
+	DeliveryStateQueued    DeliveryState = "QUEUED"
+	DeliveryStateRendering DeliveryState = "RENDERING"
+	DeliveryStateApplying  DeliveryState = "APPLYING"
+	DeliveryStateSucceeded DeliveryState = "SUCCEEDED"
+	// It ended badly, or never started.
+	DeliveryStateFailed DeliveryState = "FAILED"
+	// It was cancelled, or superseded by a newer delivery.
+	DeliveryStateCancelled DeliveryState = "CANCELLED"
+)
+
+var AllDeliveryState = []DeliveryState{
+	DeliveryStateWaiting,
+	DeliveryStateQueued,
+	DeliveryStateRendering,
+	DeliveryStateApplying,
+	DeliveryStateSucceeded,
+	DeliveryStateFailed,
+	DeliveryStateCancelled,
+}
+
+func (e DeliveryState) IsValid() bool {
+	switch e {
+	case DeliveryStateWaiting, DeliveryStateQueued, DeliveryStateRendering, DeliveryStateApplying, DeliveryStateSucceeded, DeliveryStateFailed, DeliveryStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryState) String() string {
+	return string(e)
+}
+
+func (e *DeliveryState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryState", str)
+	}
+	return nil
+}
+
+func (e DeliveryState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What queued a delivery.
+type DeliveryTrigger string
+
+const (
+	DeliveryTriggerPush      DeliveryTrigger = "PUSH"
+	DeliveryTriggerRedeliver DeliveryTrigger = "REDELIVER"
+	DeliveryTriggerResume    DeliveryTrigger = "RESUME"
+)
+
+var AllDeliveryTrigger = []DeliveryTrigger{
+	DeliveryTriggerPush,
+	DeliveryTriggerRedeliver,
+	DeliveryTriggerResume,
+}
+
+func (e DeliveryTrigger) IsValid() bool {
+	switch e {
+	case DeliveryTriggerPush, DeliveryTriggerRedeliver, DeliveryTriggerResume:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryTrigger) String() string {
+	return string(e)
+}
+
+func (e *DeliveryTrigger) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryTrigger(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryTrigger", str)
+	}
+	return nil
+}
+
+func (e DeliveryTrigger) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryTrigger) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryTrigger) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository.
 type EntryKind string
 
@@ -1501,6 +1849,127 @@ func (e *EntryKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e EntryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// The worst of an environment's objects' health.
+type EnvironmentHealth string
+
+const (
+	EnvironmentHealthHealthy     EnvironmentHealth = "HEALTHY"
+	EnvironmentHealthProgressing EnvironmentHealth = "PROGRESSING"
+	// Not read yet.
+	EnvironmentHealthUnknown EnvironmentHealth = "UNKNOWN"
+	// An object it should hold is gone.
+	EnvironmentHealthMissing  EnvironmentHealth = "MISSING"
+	EnvironmentHealthDegraded EnvironmentHealth = "DEGRADED"
+)
+
+var AllEnvironmentHealth = []EnvironmentHealth{
+	EnvironmentHealthHealthy,
+	EnvironmentHealthProgressing,
+	EnvironmentHealthUnknown,
+	EnvironmentHealthMissing,
+	EnvironmentHealthDegraded,
+}
+
+func (e EnvironmentHealth) IsValid() bool {
+	switch e {
+	case EnvironmentHealthHealthy, EnvironmentHealthProgressing, EnvironmentHealthUnknown, EnvironmentHealthMissing, EnvironmentHealthDegraded:
+		return true
+	}
+	return false
+}
+
+func (e EnvironmentHealth) String() string {
+	return string(e)
+}
+
+func (e *EnvironmentHealth) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EnvironmentHealth(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EnvironmentHealth", str)
+	}
+	return nil
+}
+
+func (e EnvironmentHealth) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EnvironmentHealth) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EnvironmentHealth) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Whether an environment's cluster holds its branch's newest commit.
+type EnvironmentSync string
+
+const (
+	EnvironmentSyncSynced EnvironmentSync = "SYNCED"
+	// A newer commit waits, or its last delivery failed.
+	EnvironmentSyncOutOfSync EnvironmentSync = "OUT_OF_SYNC"
+)
+
+var AllEnvironmentSync = []EnvironmentSync{
+	EnvironmentSyncSynced,
+	EnvironmentSyncOutOfSync,
+}
+
+func (e EnvironmentSync) IsValid() bool {
+	switch e {
+	case EnvironmentSyncSynced, EnvironmentSyncOutOfSync:
+		return true
+	}
+	return false
+}
+
+func (e EnvironmentSync) String() string {
+	return string(e)
+}
+
+func (e *EnvironmentSync) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EnvironmentSync(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EnvironmentSync", str)
+	}
+	return nil
+}
+
+func (e EnvironmentSync) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EnvironmentSync) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EnvironmentSync) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

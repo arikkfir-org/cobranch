@@ -22,6 +22,9 @@ type Agent struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	Version      int64
+	Provider     *string
+	Model        *string
+	Secrets      []byte
 	Purpose      *string
 }
 
@@ -150,6 +153,44 @@ type Credential struct {
 	PublicKey   string
 }
 
+type Delivery struct {
+	ID            uuid.UUID
+	OrgID         uuid.UUID
+	RepoID        uuid.UUID
+	Number        int64
+	EnvironmentID uuid.UUID
+	Kind          string
+	Sha           *string
+	Trigger       string
+	PushID        *uuid.UUID
+	State         string
+	Reason        string
+	StartedBy     *uuid.UUID
+	LeaseUntil    *time.Time
+	QueuedAt      time.Time
+	StartedAt     *time.Time
+	EndedAt       *time.Time
+	Version       int64
+}
+
+type Environment struct {
+	ID        uuid.UUID
+	OrgID     uuid.UUID
+	RepoID    uuid.UUID
+	TargetID  uuid.UUID
+	Branch    string
+	Cluster   *uuid.UUID
+	Namespace string
+	Revision  *string
+	SyncedAt  *time.Time
+	Sync      string
+	Health    string
+	Paused    bool
+	CreatedAt time.Time
+	DeletedAt *time.Time
+	Version   int64
+}
+
 type Identity struct {
 	Issuer        string
 	Subject       string
@@ -265,6 +306,16 @@ type Membership struct {
 	OrgID    uuid.UUID
 	UserID   uuid.UUID
 	JoinedAt time.Time
+}
+
+type ModelProvider struct {
+	OrgID     uuid.UUID
+	Provider  string
+	SecretID  *uuid.UUID
+	CreatedBy *uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	Version   int64
 }
 
 type Organization struct {

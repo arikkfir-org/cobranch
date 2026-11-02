@@ -12,8 +12,9 @@ import (
 	"cobranch.dev/internal/services/auth"
 )
 
-// addAgents gives the fixture the agents' service, with Olivia's agent Scout and the built-in Reviewer, and Scout's
-// tasks: 1 by Max anywhere, 2 by Olivia on website's feature/login, which Max doesn't read, and 3 by Max, succeeded.
+// addAgents gives the fixture the agents' service, which knows the providers anthropic and openai, with Olivia's agent
+// Scout and the built-in Reviewer, Scout's tasks: 1 by Max anywhere, 2 by Olivia on website's feature/login, which Max
+// doesn't read, and 3 by Max, succeeded; and the secrets providerKey of Acme's and deployKey of website's.
 func (f *orgFixture) addAgents() {
 	f.agentStore = agentstest.NewStore()
 	f.agentStore.Now = now
@@ -22,7 +23,8 @@ func (f *orgFixture) addAgents() {
 	}
 	f.agentStore.Repos[f.website.ID] = agentstest.Repository{Org: f.acme.ID, Slug: "website"}
 	f.agentStore.Branches[uuid.New()] = agentstest.Branch{Repo: f.website.ID, Name: "feature/login"}
-	f.agents = agents.NewService(f.agentStore, auth.NewAuthorizer(f.store))
+	f.agents = agents.NewService(f.agentStore, auth.NewAuthorizer(f.store)).WithProviders("anthropic", "openai")
+	f.providerKey, f.deployKey = f.agentStore.AddSecret(f.acme.ID, uuid.Nil, "anthropic-key"), f.agentStore.AddSecret(f.acme.ID, f.website.ID, "deploy-key")
 	f.scout = f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, Name: "Scout", CreatedBy: &agents.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}})
 	f.agentStore.AddAgent(agents.Agent{OrgID: f.acme.ID, Name: "Reviewer", BuiltIn: true})
 	for _, a := range []struct {

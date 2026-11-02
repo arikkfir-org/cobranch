@@ -74,10 +74,11 @@ auth:
   # are never touched.
   admins: []
 
-# The key that seals the secrets Cobranch keeps in its database, the Back-office's identity providers' client secrets:
-# 32 characters at least. A Secret of yours that holds it under secretKey; without one, the chart generates a key on
-# install and keeps it on upgrade, which needs the cluster at render time: under Argo CD, or anything else that renders
-# without the cluster, give one. A lost key loses those secrets, which administrators then enter again.
+# The key that seals the secrets Cobranch keeps in its database, the Back-office's identity providers' client secrets
+# and the organizations' and repositories' secrets, which their jobs receive: 32 characters at least. A Secret of yours
+# that holds it under secretKey; without one, the chart generates a key on install and keeps it on upgrade, which needs
+# the cluster at render time: under Argo CD, or anything else that renders without the cluster, give one. A lost key
+# loses those secrets, which administrators and organizations then enter again.
 secretsKey:
   existingSecret: ""
   secretKey: key
@@ -298,6 +299,36 @@ pushWorker:
   tolerations: []
   affinity: {}
   podAnnotations: {}
+
+# The controller (cobranch controller), which runs the jobs repositories declare in /cobranch.yaml, each
+# organization's in a namespace of its own that it creates
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "The chart"). The workload comes
+# with a later version; these values and jobs below are its placement, which an installation sets ahead of it.
+controller:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The organizations' job namespaces and the pods jobs run in.
+jobs:
+  # Labels for every job namespace, beside Cobranch's own and its Pod Security level's: your cluster's policies may
+  # look for some.
+  namespaceLabels: {}
+  # Where job pods run: a pool for code anyone with push access wrote, apart from your own workloads.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # The ValidatingAdmissionPolicy that holds the controller to its job namespaces, and its RoleBindings there to its
+  # own roles and ServiceAccounts. Off only where your cluster's own policies hold it so.
+  admissionPolicy: true
 
 # The Job that migrates the database before the servers of a new version roll out.
 migrate:

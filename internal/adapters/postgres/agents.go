@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -76,13 +77,20 @@ func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (s
 }
 
 // agent is the domain's view of an agents row, with its creator's name.
-func agent(a queries.Agent, creator *string) agents.Agent {
+func agent(a queries.Agent, creator *string) (agents.Agent, error) {
 	out := agents.Agent{ID: a.PrincipalID, OrgID: a.OrgID, Name: a.Name, Description: a.Description, Instructions: a.Instructions,
-		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version}
+		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version,
+		Secrets: map[string]uuid.UUID{}}
 	if a.CreatedBy != nil && creator != nil {
 		out.CreatedBy = &agents.Principal{ID: *a.CreatedBy, DisplayName: *creator}
 	}
-	return out
+	if a.Provider != nil && a.Model != nil {
+		out.Provider, out.Model = *a.Provider, *a.Model
+	}
+	if err := json.Unmarshal(a.Secrets, &out.Secrets); err != nil {
+		return agents.Agent{}, fmt.Errorf("reading agent %s's secrets: %w", a.PrincipalID, err)
+	}
+	return out, nil
 }
 
 // withGrants fills in the grants of each of list.
@@ -115,7 +123,11 @@ func (s *AgentStore) Agents(ctx context.Context, orgID uuid.UUID) ([]agents.Agen
 	}
 	out := make([]agents.Agent, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, agent(r.Agent, r.CreatorName))
+		a, err := agent(r.Agent, r.CreatorName)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, a)
 	}
 	return out, withGrants(ctx, s.q, out)
 }
@@ -131,7 +143,11 @@ func findAgent(ctx context.Context, q *queries.Queries, orgID, id uuid.UUID) (ag
 	if err != nil {
 		return agents.Agent{}, fmt.Errorf("finding agent %s: %w", id, notFound(err))
 	}
-	out := []agents.Agent{agent(row.Agent, row.CreatorName)}
+	a, err := agent(row.Agent, row.CreatorName)
+	if err != nil {
+		return agents.Agent{}, err
+	}
+	out := []agents.Agent{a}
 	if err := withGrants(ctx, q, out); err != nil {
 		return agents.Agent{}, err
 	}

@@ -239,7 +239,7 @@
     .badge .icon svg { width: 14px; height: 14px; }
     .icons { display: inline-flex; gap: 2px; margin-right: 8px; }
     .annotations td { vertical-align: top; }
-    .annotations td.state, .runs td.state { width: 1%; white-space: nowrap; }
+    .annotations td.state, .runs td.state, .environments td.state, .deliveries td.state { width: 1%; white-space: nowrap; }
     .reviews { list-style: none; margin: 0; padding: 0; display: grid; }
     .reviews li { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--color-border-default); min-width: 0; }
     .reviews li:first-child { border-top: 0; }
@@ -661,15 +661,15 @@
     const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
 
     // An organization's own pages, which no repository's slug is: the repositories' reserved slugs.
-    const orgPages = ["members", "roles", "api-keys", "agents", "tasks", "settings", "repos", "new", "issues"];
+    const orgPages = ["members", "roles", "api-keys", "agents", "tasks", "secrets", "settings", "repos", "new", "issues"];
     // What a repository's visibility means, as the API names it.
     const visibilities = {
       private: { name: "Private", title: "Only those granted a role on it, and the organization's Owners, read it." },
       internal: { name: "Internal", title: "Others of the organization read it too, through a grant on it or an organization role." },
     };
 
-    // An organization's pages: its home with its repositories, its issues, members, roles, API keys, agents, tasks and settings, and
-    // its repositories' pages, under a bar with the switcher and the navigation.
+    // An organization's pages: its home with its repositories, its issues, members, roles, API keys, agents, tasks, secrets
+    // and settings, and its repositories' pages, under a bar with the switcher and the navigation.
     async function showOrganization(slug, page, sub, rest) {
       let org;
       try {
@@ -682,7 +682,9 @@
       try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
       roles = (await api("GET", "/orgs/" + org.slug + "/roles")).roles;
       const can = (p) => org.viewerPermissions.includes(p);
-      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"], ["agents", "Agents"], ["tasks", "Tasks"], ["settings", "Settings"]];
+      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"], ["agents", "Agents"], ["tasks", "Tasks"]];
+      if (can("secrets.manage")) pages.push(["secrets", "Secrets"]);
+      pages.push(["settings", "Settings"]);
       const current = orgPages.includes(page) ? page : "";
       const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, label);
       const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
@@ -697,6 +699,7 @@
       if (page === "api-keys") return showApiKeys(org, main, can);
       if (page === "agents") return showAgents(org, main, can);
       if (page === "tasks") return showTasks(org, main, can);
+      if (page === "secrets" && can("secrets.manage")) return showOrgSecrets(org, main, can);
       if (page === "settings") return showSettings(org, main, can);
       if (page === "new" && can("repos.create")) return showNewRepository(org, main);
       if (page === "issues" && can("issues.read")) return showIssues(org, main, can, sub);
@@ -737,7 +740,8 @@
     }
 
     // A repository's pages: its code (how to clone it, and a branch's history), its branches and each one's page, a
-    // commit, its jobs' runs and each one's page, who holds grants on it, and, with repo.manage, its settings.
+    // commit, its jobs' runs and each one's page, its environments and each one's page, who holds grants on it, and,
+    // with repo.manage, its settings.
     async function showRepository(org, main, orgCan, slug, sub, rest) {
       let repo;
       try {
@@ -749,11 +753,13 @@
       }
       if (repo.slug !== slug) return go("/" + [org.slug, repo.slug, sub, ...rest].filter(Boolean).map(encodeURIComponent).join("/"), true);
       const can = (p) => repo.viewerPermissions.includes(p);
-      const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["access", "Access"]];
+      const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["environments", "Environments"], ["access", "Access"]];
+      if (can("secrets.manage")) tabs.push(["secrets", "Secrets"]);
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
       // A directory, a file, a branch's history and a commit are the Code tab's; a branch's changes the Branches tab's.
       const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub === "changes" ? "branches" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "changes" && !rest.length) || (sub === "runs" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "changes" && !rest.length) || (sub === "runs" && rest.length > 1) ||
+        (sub === "environments" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -769,11 +775,14 @@
       const at = repoLinks(org, repo);
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
+      else if (sub === "secrets") sections = await secretsSections(org, path + "/secrets", orgCan("org.grants.manage"), fail, [repo]);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else if (sub === "branches" && rest.length) sections = await repositoryBranch(org, path, at, rest.join("/"), can, orgCan, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "runs" && rest.length) sections = await repositoryRun(path, at, rest[0], can, fail);
       else if (sub === "runs") sections = [await runsPanel(path, at, can, fail, "")];
+      else if (sub === "environments" && rest.length) sections = await repositoryEnvironment(path, at, rest[0], can, fail);
+      else if (sub === "environments") sections = [await environmentsPanel(path, at, "")];
       else if (sub === "changes") sections = await repositoryChanges(path, at, rest.join("/"), can, fail);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
@@ -783,8 +792,8 @@
     }
 
     // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-    // parents, to a branch's page and its changes, to a commit, to a run, to a directory or a file at a ref, and to a file's
-    // bytes, which the REST API serves.
+    // parents, to a branch's page and its changes, to a commit, to a run, to an environment, to a directory or a file
+    // at a ref, and to a file's bytes, which the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
@@ -794,6 +803,7 @@
         changes: (name) => root + "/changes/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         run: (number) => root + "/runs/" + number,
+        environment: (id) => root + "/environments/" + id,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
         blob: (ref, path) => root + "/blob/" + parts(ref, path),
         raw: (commit, path, download) => config.restUrl + "/v1/orgs/" + org.slug + "/repos/" + repo.slug + "/raw?" +
@@ -881,6 +891,32 @@
     // reviewBadge is a review's state as a badge, the same way.
     function reviewBadge(state) {
       const s = reviewStates[state];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // The delivery states, and the environments' syncs and healths, drawn as the run states are.
+    const deliveryStates = {
+      waiting: { word: "Waiting", icon: "circle-pause", tone: "neutral" },
+      queued: { word: "Queued", icon: "clock", tone: "neutral" },
+      rendering: { word: "Rendering", icon: "loader-circle", tone: "info" },
+      applying: { word: "Applying", icon: "loader-circle", tone: "info" },
+      succeeded: { word: "Succeeded", icon: "circle-check", tone: "success" },
+      failed: { word: "Failed", icon: "circle-x", tone: "danger" },
+      cancelled: { word: "Cancelled", icon: "ban", tone: "neutral" },
+    };
+    const environmentSyncs = {
+      synced: { word: "Synced", icon: "circle-check", tone: "success" },
+      out_of_sync: { word: "Out of sync", icon: "circle-dashed", tone: "neutral" },
+    };
+    const environmentHealths = {
+      healthy: { word: "Healthy", icon: "circle-check", tone: "success" },
+      progressing: { word: "Progressing", icon: "loader-circle", tone: "info" },
+      unknown: { word: "Unknown", icon: "circle", tone: "neutral" },
+      missing: { word: "Missing", icon: "circle-dashed", tone: "danger" },
+      degraded: { word: "Degraded", icon: "octagon-alert", tone: "danger" },
+    };
+    // badgeOf is a value as a badge, as one of the tables above draws it.
+    function badgeOf(table, value) {
+      const s = table[value];
       return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
     }
     // annotationIcons are a commit's annotations as icons alone, each named in its tooltip, as a history row shows them.
@@ -1309,8 +1345,8 @@
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
     // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, the issue it works on,
-    // its commits, and the reviews, annotations and runs of its head. main's page names what merges into it need
-    // instead, and a branch that isn't live any more, its deletion.
+    // its commits, the reviews, annotations and runs of its head, and its environments. main's page names what merges
+    // into it need instead, and its environments, and a branch that isn't live any more, its deletion.
     async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
       let b;
       try {
@@ -1323,13 +1359,14 @@
         h("div", { class: "row" }, b.base ? h("a", { class: "button small", href: at.changes(b.name), "data-nav": "" }, "Changes") : null,
           h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), mergeRequirements([b]),
-        await branchChat(path, at, b, can)].filter(Boolean);
+        await environmentsPanel(path, at, b.name), await branchChat(path, at, b, can)].filter(Boolean);
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail), worksOn(org, path, b, orgCan, fail))];
       if (b.settingsError) sections.push(settingsError(b));
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
       if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
       if (b.commit) sections.push(commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)), commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
+      sections.push(await environmentsPanel(path, at, b.name));
       sections.push(await branchChat(path, at, b, can));
       return sections;
     }
@@ -2198,6 +2235,102 @@
         h("section", { class: "panel" }, h("h3", {}, "Job"), h("p", {}, "As ", h("code", {}, "/cobranch.yaml"), " declared it when the run was queued."), ...work, definition)];
     }
 
+    // environmentsPanel lists the repository's environments, of branch unless it is empty, by target and then branch:
+    // each with its sync and health, where it delivers, the commit its cluster holds, and its newest delivery.
+    async function environmentsPanel(path, at, branch) {
+      const list = (await api("GET", path + "/environments" + (branch ? "?" + new URLSearchParams({ branch }) : ""))).environments;
+      const rows = list.map((e) => h("tr", {},
+        h("td", { class: "state" }, badgeOf(environmentSyncs, e.sync), " ", badgeOf(environmentHealths, e.health)),
+        h("td", {}, h("a", { href: at.environment(e.id), "data-nav": "" }, h("code", {}, e.target.displayName), branch ? null : [" of ", h("code", {}, e.branch)]),
+          e.paused ? [" ", h("span", { class: "chip" }, "Paused")] : null,
+          h("p", { class: "muted" }, deliversTo(e), " · ", e.revision ? ["at ", h("a", { href: at.commit(e.revision), "data-nav": "" }, h("code", {}, shortSha(e.revision)))] : "nothing delivered yet"),
+          e.latest ? h("p", { class: "muted" }, "Latest: #" + e.latest.number + " ", badgeOf(deliveryStates, e.latest.state), e.latest.reason ? " " + capitalized(e.latest.reason) : null) : null)));
+      const none = h("p", {}, branch ? "This branch delivers to no environment. " : "No environments yet. ", "Each target that ", h("code", {}, "/cobranch.yaml"),
+        " declares under ", h("code", {}, "delivery"), " on ", h("code", {}, "main"), " makes one for every branch it matches, on that branch's first push.");
+      return h("section", { class: "panel" }, h("h3", {}, "Environments"), rows.length ? h("table", { class: "environments" }, h("tbody", {}, rows)) : none);
+    }
+
+    // deliversTo says where an environment delivers: its namespace, in its target's cluster or this installation's.
+    const deliversTo = (e) => ["Namespace ", h("code", {}, e.namespace), e.cluster ? [" of cluster ", h("code", {}, e.cluster)] : " of this installation's cluster"];
+
+    // repositoryEnvironment is an environment's page: its target and branch, where it delivers, its sync, health and
+    // revision, Redeliver, Pause and Resume for a viewer holding delivery.run, and its deliveries.
+    async function repositoryEnvironment(path, at, id, can, fail) {
+      let e;
+      try {
+        e = await api("GET", path + "/environments/" + encodeURIComponent(id));
+      } catch (err) {
+        if (err.status !== 404 && err.status !== 400) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Environment"), h("p", {}, "This repository has no such environment."))];
+      }
+      const facts = h("dl", { class: "facts" },
+        h("dt", {}, "Branch"), h("dd", {}, h("a", { href: at.branchPage(e.branch), "data-nav": "" }, h("code", {}, e.branch))),
+        h("dt", {}, "Delivers to"), h("dd", {}, deliversTo(e)),
+        h("dt", {}, "State"), h("dd", {}, badgeOf(environmentSyncs, e.sync), " ", badgeOf(environmentHealths, e.health), e.paused ? [" ", h("span", { class: "chip" }, "Paused")] : null),
+        h("dt", {}, "Revision"), h("dd", {}, e.revision ? [h("a", { href: at.commit(e.revision), "data-nav": "" }, h("code", {}, e.revision)), " since ", whenExactly(e.syncedAt)] : "Nothing delivered yet"),
+        h("dt", {}, "Created"), h("dd", {}, whenExactly(e.createdAt)));
+      const title = h("h2", {}, h("code", {}, e.target.displayName), " of ", h("code", {}, e.branch));
+      return [h("section", { class: "panel" }, h("div", { class: "row" }, title, h("div", {}, environmentActions(path, e, can, fail))), facts),
+        await deliveriesPanel(path, at, e, can, fail)];
+    }
+
+    // environmentActions are Redeliver and Pause for an environment that isn't paused, and Resume for one that is, for a
+    // viewer holding delivery.run.
+    function environmentActions(path, e, can, fail) {
+      if (!can("delivery.run")) return null;
+      const act = (verb, button) => {
+        button.disabled = true;
+        api("POST", path + "/environments/" + e.id + "/" + verb).then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      const button = (verb, label, tone, title) => h("button", { class: "button small" + tone, type: "button", title, onclick: (ev) => act(verb, ev.currentTarget) }, label);
+      const name = e.target.displayName + " of " + e.branch;
+      if (e.paused) return button("resume", "Resume", " primary", "Resume " + name + " and deliver the head of " + e.branch);
+      return [button("redeliver", "Redeliver", " primary", "Deliver the head of " + e.branch + " to " + name + " again"), " ",
+        button("pause", "Pause", "", "Pause " + name + ": it takes no delivery until resumed")];
+    }
+
+    // deliveriesPanel lists an environment's deliveries, newest first, a page at a time: each with its state and why, its
+    // commit, what queued it and when, and Start while it waits, for a viewer holding delivery.run.
+    async function deliveriesPanel(path, at, e, can, fail) {
+      const rows = h("tbody");
+      let next = null;
+      const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older deliveries");
+      const start = (d, button) => {
+        button.disabled = true;
+        api("POST", path + "/deliveries/" + d.number + "/start").then(render).catch((err) => { button.disabled = false; fail(err); });
+      };
+      const row = (d) => h("tr", {},
+        h("td", { class: "state" }, badgeOf(deliveryStates, d.state)),
+        h("td", {}, "#" + d.number + " ", d.sha ? h("a", { href: at.commit(d.sha), "data-nav": "" }, h("code", {}, shortSha(d.sha))) : "Teardown",
+          d.reason ? h("p", {}, capitalized(d.reason)) : null, h("p", { class: "muted" }, queuedBy(d), " · ", whenExactly(d.queuedAt))),
+        h("td", { class: "actions" }, can("delivery.run") && d.state === "waiting" ? h("button", { class: "button small primary", type: "button",
+          title: "Start #" + d.number + ", delivering " + shortSha(d.sha) + " to " + e.target.displayName, onclick: (ev) => start(d, ev.currentTarget) }, "Start") : null));
+      async function load(from) {
+        older.disabled = true;
+        try {
+          const page = await apiPage(from);
+          rows.append(...page.data.deliveries.map(row));
+          next = page.next;
+          older.hidden = !next;
+        } catch (err) {
+          fail(err);
+        } finally {
+          older.disabled = false;
+        }
+      }
+      await load(path + "/environments/" + e.id + "/deliveries");
+      const none = h("p", {}, "No deliveries yet. A push to ", h("code", {}, e.branch), " delivers it.");
+      return h("section", { class: "panel" }, h("h3", {}, "Deliveries"), rows.children.length ? h("table", { class: "deliveries" }, rows) : none, h("div", {}, older));
+    }
+
+    // queuedBy says what queued a delivery, and who started it.
+    const queuedBy = (d) => {
+      const by = d.startedBy ? d.startedBy.displayName : "someone since gone";
+      if (d.trigger === "redeliver") return "Redelivered by " + by;
+      if (d.trigger === "resume") return "Resumed by " + by;
+      return "A push" + (d.startedBy ? ", started by " + by : "");
+    };
+
     // repositoryAccess lists who holds roles on repo, and, for a viewer who manages the organization's grants, grants
     // and revokes them: roles of the repository, to the organization's members and API keys.
     async function repositoryAccess(org, repo, path, manage, fail) {
@@ -2813,6 +2946,77 @@
       return { el, value };
     }
 
+    // showOrgSecrets renders the organization's own secrets, which its repositories' jobs share.
+    async function showOrgSecrets(org, main, can) {
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const repos = can("org.grants.manage") ? (await api("GET", "/orgs/" + org.slug + "/repos")).repositories : [];
+      main.replaceChildren(h("h1", {}, "Secrets"), error, ...await secretsSections(org, "/orgs/" + org.slug + "/secrets", can("org.grants.manage"), fail, repos));
+    }
+
+    // secretsSections lists the secrets at path, an organization's or a repository's, who receives each, and the forms
+    // that add, change, delete and grant them. The values are never shown: the API keeps them sealed for the jobs they
+    // are granted to. A viewer who manages the organization's grants grants them to its members, its API keys, its agents
+    // and the jobs of repos.
+    async function secretsSections(org, path, grants, fail, repos) {
+      const item = (s) => "/orgs/" + org.slug + "/secrets/" + s.id;
+      const list = (await api("GET", path)).secrets;
+      const [access, members, keys, agents, jobs] = await Promise.all([
+        Promise.all(list.map((s) => api("GET", item(s) + "/access").then((d) => d.access))),
+        grants ? api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members) : [],
+        grants ? api("GET", "/orgs/" + org.slug + "/api-keys").then((d) => d.apiKeys) : [],
+        grants ? api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents) : [],
+        grants ? Promise.all(repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/jobs").then((d) => d.jobs.map((j) => ({ ...j, repo: r }))))).then((all) => all.flat()) : [],
+      ]);
+      const ifMatch = (s) => ({ "If-Match": '"' + s.version + '"' });
+      const kinds = { api_key: "API key", job: "job", agent: "agent" };
+      const receiver = (s, a) => h("span", { class: "chip" }, a.displayName, kinds[a.kind] ? " (" + kinds[a.kind] + ")" : null, grants
+        ? h("button", { type: "button", title: "Revoke " + a.displayName, onclick: () => api("DELETE", item(s) + "/access/" + a.principalId).then(render).catch(fail) }, "×") : null);
+      const row = (s, i) => {
+        const tr = h("tr", {}, h("td", {}, h("code", {}, s.name), h("p", {}, "ID ", h("code", {}, s.id))),
+          h("td", {}, access[i].length ? access[i].map((a) => receiver(s, a)) : h("span", { class: "muted" }, "nobody granted on it alone")),
+          h("td", {}, whenExactly(s.updatedAt)),
+          h("td", { class: "actions" },
+            h("button", { class: "button small", type: "button", onclick: () => {
+              const name = h("input", { name: "name", required: true, maxlength: 100, value: s.name });
+              const value = h("textarea", { name: "value", rows: 3, placeholder: "Leave empty to keep the value it has" });
+              const editor = h("tr", {}, h("td", { colspan: 4 }, h("form", { onsubmit: (e) => {
+                e.preventDefault();
+                api("PUT", item(s), { name: name.value, value: value.value || undefined }, ifMatch(s)).then(render).catch(fail);
+              } }, h("label", {}, "Name", name), h("label", {}, "New value", value),
+                h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(tr) }, "Cancel")))));
+              tr.replaceWith(editor);
+            } }, "Change"), " ",
+            h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", item(s), undefined, ifMatch(s)).then(render).catch(fail) }, "Delete")));
+        return tr;
+      };
+      const sections = [h("section", { class: "panel" },
+        h("p", {}, "Values are sealed with this installation's secrets key as they arrive and never shown again. A job receives a secret that ", h("code", {}, "/cobranch.yaml"), " names by ID when it holds Secret reader on the secret, or on the repository that keeps it. A job becomes a principal you can grant to when it first queues a run."),
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Secret"), h("th", {}, "Granted on it to"), h("th", {}, "Changed"), h("th", {}))), h("tbody", {}, list.map(row)))
+          : h("p", {}, "No secrets here yet."))];
+      const name = h("input", { name: "name", required: true, maxlength: 100, placeholder: "npm-token" });
+      const value = h("textarea", { name: "value", required: true, rows: 3 });
+      sections.push(h("section", { class: "panel" }, h("h3", {}, "Add a secret"),
+        h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", path, { name: name.value, value: value.value }).then(render).catch(fail); } },
+          h("label", {}, "Name", h("span", {}, "Unique here; jobs name the secret by its ID, so renaming it breaks nothing."), name),
+          h("label", {}, "Value", h("span", {}, "At most 64 KiB."), value),
+          h("div", {}, h("button", { class: "button primary", type: "submit" }, "Add")))));
+      if (grants && list.length) {
+        const secret = h("select", { name: "secret" }, list.map((s) => h("option", { value: s.id }, s.name)));
+        const principal = h("select", { name: "principalId", required: true },
+          jobs.length ? h("optgroup", { label: "Jobs" }, jobs.map((j) => h("option", { value: j.principalId }, j.repo.slug + " / " + j.displayName))) : null,
+          h("optgroup", { label: "Members" }, members.map((m) => h("option", { value: m.userId }, m.displayName))),
+          keys.length ? h("optgroup", { label: "API keys" }, keys.map((k) => h("option", { value: k.id }, k.name))) : null,
+          agents.length ? h("optgroup", { label: "Agents" }, agents.map((a) => h("option", { value: a.id }, a.name))) : null);
+        sections.push(h("section", { class: "panel" }, h("h3", {}, "Grant a secret"), h("p", {}, "Grants Secret reader on the secret alone. Only a secret you may read yourself."),
+          h("form", { class: "inline with-role", onsubmit: (e) => {
+            e.preventDefault();
+            api("POST", "/orgs/" + org.slug + "/secrets/" + secret.value + "/access", { principalId: principal.value }).then(render).catch(fail);
+          } }, h("label", {}, "Secret", secret), h("label", {}, "To", principal), h("button", { class: "button primary", type: "submit" }, "Grant"))));
+      }
+      return sections;
+    }
+
     // showApiKeys renders the organization's API keys; shown is a secret just made, which this render shows once.
     async function showApiKeys(org, main, can, shown = null) {
       const manage = can("org.principals.manage");
@@ -2888,20 +3092,24 @@
 
     // showAgents renders the organization's agents, a form for a viewer holding agents.create to make one, and one for a
     // viewer holding agents.assign to assign a task. An agent's creator changes it; org.principals.manage changes and
-    // deletes any.
-    async function showAgents(org, main, can) {
-      const error = h("p", { class: "alert", hidden: true });
+    // deletes any, and picks its model and the secrets its tasks receive. problem, when given, is what went wrong in the
+    // step that drew the page again.
+    async function showAgents(org, main, can, problem = null) {
+      const error = h("p", { class: "alert", hidden: !problem }, problem || "");
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = () => showAgents(org, main, can).catch(fail);
+      // redraw draws the page again, saying what went wrong, if anything, in the step that drew it.
+      const redraw = (problem = null) => showAgents(org, main, can, problem).catch(fail);
       const manage = can("org.principals.manage");
-      const [list, repos] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
-        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
+      const [list, repos, providers] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
+        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories),
+        api("GET", "/orgs/" + org.slug + "/model-providers").then((d) => d.modelProviders)]);
       const agentPath = (a) => "/orgs/" + org.slug + "/agents/" + a.id;
       const edit = (a, row) => {
         const name = h("input", { required: true, maxlength: 100, value: a.name });
         const description = h("input", { maxlength: 1000, value: a.description });
         const instructions = h("textarea", { maxlength: 20000, rows: 6 }, a.instructions);
-        const editor = h("tr", {}, h("td", { colspan: 4 }, h("form", { onsubmit: (e) => {
+        const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: (e) => {
           e.preventDefault();
           api("PATCH", agentPath(a), { name: name.value, description: description.value, instructions: instructions.value }, { "If-Match": `"${a.version}"` })
             .then(refresh).catch(fail);
@@ -2911,23 +3119,84 @@
       };
       const agentRow = (a) => {
         const mine = a.createdBy && a.createdBy.id === me.id;
+        const named = Object.keys(a.secrets).length;
         const row = h("tr", {}, h("td", {}, a.name, a.builtIn ? [" ", h("span", { class: "chip" }, "Built-in")] : null, a.description ? h("p", {}, a.description) : null),
           h("td", {}, grantChips(a.grants)),
+          h("td", {}, a.provider ? [a.provider, " · ", h("code", {}, a.model)] : h("span", { class: "muted" }, "None"),
+            named ? h("p", {}, named === 1 ? "1 secret" : named + " secrets") : null),
           h("td", {}, a.createdBy ? a.createdBy.displayName : h("span", { class: "muted" }, a.builtIn ? "Cobranch" : "Someone since gone"), h("p", {}, when(a.createdAt))),
           h("td", { class: "actions" },
             h("a", { class: "button small", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), "data-nav": "" }, "Tasks"),
             mine || manage ? [" ", h("button", { class: "button small", type: "button", onclick: () => edit(a, row) }, "Edit")] : null,
+            manage ? [" ", h("button", { class: "button small", type: "button", onclick: () => row.replaceWith(modelEditor(org, a, providers, can, row, redraw)) }, "Model"),
+              " ", h("button", { class: "button small", type: "button", onclick: () => secretsEditor(org, a, repos, row, redraw).then((editor) => row.replaceWith(editor)).catch(fail) }, "Secrets")] : null,
             manage && !a.builtIn ? [" ", h("button", { class: "button small danger", type: "button", title: "Delete " + a.name + ", its grants and its tasks",
               onclick: () => confirm("Delete " + a.name + " with its grants and tasks?") && api("DELETE", agentPath(a), undefined, { "If-Match": `"${a.version}"` }).then(refresh).catch(fail) }, "Delete")] : null));
         return row;
       };
       const sections = [h("h1", {}, "Agents"), error, h("section", { class: "panel" },
         h("p", {}, "An agent is a principal of this organization that takes tasks, with roles of its own. A task does no more than both its agent and its assigner may, so assigning one never lends anyone more than they hold."),
-        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Roles"), h("th", {}, "Created by"), h("th", {}))), h("tbody", {}, list.map(agentRow)))
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Roles"), h("th", {}, "Model"), h("th", {}, "Created by"), h("th", {}))), h("tbody", {}, list.map(agentRow)))
           : h("p", {}, "No agents yet."))];
       if (can("agents.create")) sections.push(newAgentForm(org, repos, refresh, fail));
       if (can("agents.assign") && list.length) sections.push(assignForm(org, list, repos, fail));
       main.replaceChildren(...sections);
+    }
+
+    // modelEditor puts agent a on a model of one of the organization's providers, or on none, in place of row; it offers
+    // a viewer who manages the organization's grants to let the agent read the provider's key in the same step, which a
+    // task needs to run. done draws the page again, with what went wrong, if anything.
+    function modelEditor(org, a, providers, can, row, done) {
+      const provider = h("select", {}, h("option", { value: "" }, "None"),
+        providers.map((p) => h("option", { value: p.name, selected: p.name === a.provider }, p.name + (p.broken ? " (its key is gone)" : ""))));
+      const model = h("input", { maxlength: 200, value: a.model || "", placeholder: "As the provider names it" });
+      const grant = h("input", { type: "checkbox", checked: true });
+      const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: async (e) => {
+        e.preventDefault();
+        const picked = providers.find((p) => p.name === provider.value);
+        try {
+          await api("PUT", "/orgs/" + org.slug + "/agents/" + a.id + "/model", picked ? { provider: picked.name, model: model.value } : {}, { "If-Match": `"${a.version}"` });
+        } catch (err) {
+          return done(err.message);
+        }
+        if (!picked || !picked.secretId || !grant.checked || !can("org.grants.manage")) return done();
+        api("POST", "/orgs/" + org.slug + "/secrets/" + picked.secretId + "/access", { principalId: a.id })
+          .then(() => done(), (err) => done(err.code === "grant.exists" ? null : "The model is picked, but the agent may not read the provider's key: " + err.message));
+      } }, h("h3", {}, a.name + "'s model"),
+        providers.length ? null : h("p", {}, "The organization has no model providers yet: an admin adds one, with its key, in Settings."),
+        h("label", {}, "Provider", provider),
+        h("label", {}, "Model", h("span", {}, "Its name as the provider knows it. Cobranch doesn't check it, so a model works the day the provider ships it."), model),
+        can("org.grants.manage") ? h("label", { class: "check" }, grant, "Let the agent read the provider's key (Secret reader on it), as its tasks need") : null,
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(row) }, "Cancel")))));
+      return editor;
+    }
+
+    // secretsEditor names the secrets agent a's tasks receive, each an environment variable from one of the secrets the
+    // viewer manages, the organization's or its repositories', in place of row. done draws the page again.
+    async function secretsEditor(org, a, repos, row, done) {
+      const lists = await Promise.all([api("GET", "/orgs/" + org.slug + "/secrets").then((d) => d.secrets.map((s) => ({ id: s.id, label: s.name }))).catch(() => []),
+        ...repos.map((r) => api("GET", "/orgs/" + org.slug + "/repos/" + r.slug + "/secrets").then((d) => d.secrets.map((s) => ({ id: s.id, label: r.slug + " / " + s.name }))).catch(() => []))]);
+      const owned = lists.flat();
+      const lines = h("div");
+      const line = (name = "", id = "") => {
+        const env = h("input", { required: true, maxlength: 100, pattern: "[A-Za-z_][A-Za-z0-9_]*", value: name, placeholder: "NPM_TOKEN" });
+        const pick = h("select", { required: true }, owned.map((s) => h("option", { value: s.id, selected: s.id === id }, s.label)),
+          id && !owned.some((s) => s.id === id) ? h("option", { value: id, selected: true }, "A secret you don't manage") : null);
+        const el = h("div", { class: "row" }, env, pick, h("button", { class: "button small", type: "button", onclick: () => el.remove() }, "Remove"));
+        el.named = () => [env.value.trim(), pick.value];
+        return el;
+      };
+      lines.append(...Object.entries(a.secrets).map(([name, id]) => line(name, id)));
+      const editor = h("tr", {}, h("td", { colspan: 5 }, h("form", { onsubmit: (e) => {
+        e.preventDefault();
+        const secrets = Object.fromEntries([...lines.children].map((el) => el.named()));
+        api("PUT", "/orgs/" + org.slug + "/agents/" + a.id + "/secrets", { secrets }, { "If-Match": `"${a.version}"` }).then(() => done(), (err) => done(err.message));
+      } }, h("h3", {}, "Secrets " + a.name + "'s tasks receive"),
+        h("p", {}, "Each goes in a task's environment under the name given, if the agent may read it: grant it Secret reader on the secret. Not PATH, HOME, or a name starting COBRANCH_, GIT_ or LD_."),
+        lines,
+        h("div", {}, owned.length ? h("button", { class: "button small", type: "button", onclick: () => lines.append(line()) }, "Add a secret") : h("span", { class: "muted" }, "No secrets you manage to add.")),
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ", h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(row) }, "Cancel")))));
+      return editor;
     }
 
     // newAgentForm makes an agent with its first roles: at the organization, and perhaps one on a repository, each one
@@ -3027,11 +3296,15 @@
     }
 
     // showSettings is an organization's usage against its limits, for anyone who reads it, and, with org.manage, the
-    // form that changes its settings.
+    // form that changes its settings and its model providers.
     async function showSettings(org, main, can) {
       const usage = await api("GET", "/orgs/" + org.slug + "/usage");
       const sections = [h("h1", {}, "Settings"), usagePanel(org, usage)];
-      if (can("org.manage")) sections.push(...settingsForm(org));
+      if (can("org.manage")) {
+        const error = h("p", { class: "alert", hidden: true });
+        const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+        sections.push(...settingsForm(org), error, await providersSection(org, can, fail, () => showSettings(org, main, can)));
+      }
       main.replaceChildren(...sections);
     }
 
@@ -3100,6 +3373,53 @@
         h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
       return [error, saved, h("section", { class: "panel" }, form)];
+    }
+
+    // providersSection lists the model providers the organization added, each with the secret its API key is in, and the
+    // forms that add one the installation knows, name another key, and remove one no agent runs on. A key is one of the
+    // organization's own secrets, which a viewer who manages secrets picks; render draws the page again.
+    async function providersSection(org, can, fail, render) {
+      const path = "/orgs/" + org.slug + "/model-providers";
+      const [{ modelProviders: list, available }, keys] = await Promise.all([api("GET", path),
+        can("secrets.manage") ? api("GET", "/orgs/" + org.slug + "/secrets").then((d) => d.secrets) : []]);
+      const item = (name) => path + "/" + encodeURIComponent(name);
+      const keySelect = (selected) => h("select", { required: true }, keys.map((s) => h("option", { value: s.id, selected: s.id === selected }, s.name)));
+      const row = (p) => {
+        const tr = h("tr", {}, h("td", {}, h("code", {}, p.name)),
+          h("td", {}, p.broken ? h("span", { class: "badge tone-danger" }, icon("circle-x"), "Its key is gone") : p.secretName ? h("code", {}, p.secretName) : h("span", { class: "muted" }, "A secret you don't manage")),
+          h("td", {}, p.createdBy ? p.createdBy.displayName : h("span", { class: "muted" }, "Someone since gone"), h("p", {}, when(p.updatedAt))),
+          h("td", { class: "actions" },
+            keys.length ? h("button", { class: "button small", type: "button", onclick: () => {
+              const key = keySelect(p.secretId);
+              const editor = h("tr", {}, h("td", { colspan: 4 }, h("form", { class: "inline with-role", onsubmit: (e) => {
+                e.preventDefault();
+                api("PUT", item(p.name), { secretId: key.value }, { "If-Match": `"${p.version}"` }).then(render).catch(fail);
+              } }, h("label", {}, "Key", key), h("button", { class: "button primary", type: "submit" }, "Save"), " ",
+                h("button", { class: "button", type: "button", onclick: () => editor.replaceWith(tr) }, "Cancel"))));
+              tr.replaceWith(editor);
+            } }, "Change key") : null, " ",
+            h("button", { class: "button small danger", type: "button", title: "Remove " + p.name,
+              onclick: () => confirm("Remove " + p.name + "? Agents on it must move to another provider first.") && api("DELETE", item(p.name), undefined, { "If-Match": `"${p.version}"` }).then(render).catch(fail) }, "Remove")));
+        return tr;
+      };
+      const left = available.filter((name) => !list.some((p) => p.name === name));
+      const section = h("section", { class: "panel" }, h("h3", {}, "Model providers"),
+        h("p", {}, "The providers this organization's agents run on, each with its API key, kept as one of the organization's secrets. An agent's tasks run only while the agent may read its provider's key."),
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Provider"), h("th", {}, "Key"), h("th", {}, "Set by"), h("th", {}))), h("tbody", {}, list.map(row)))
+          : h("p", {}, "No providers yet."));
+      if (!left.length) return section;
+      if (!keys.length) {
+        section.append(h("p", { class: "muted" }, can("secrets.manage") ? ["Add a provider's API key as one of the organization's ", h("a", { href: base + org.slug + "/secrets", "data-nav": "" }, "secrets"), " to add the provider."]
+          : "Adding a provider takes picking its key among the organization's secrets, which only those who manage them see."));
+        return section;
+      }
+      const provider = h("select", { required: true }, left.map((name) => h("option", { value: name }, name)));
+      const key = keySelect();
+      section.append(h("form", { class: "inline with-role", onsubmit: (e) => {
+        e.preventDefault();
+        api("PUT", item(provider.value), { secretId: key.value }, { "If-None-Match": "*" }).then(render).catch(fail);
+      } }, h("label", {}, "Provider", provider), h("label", {}, "Key", key), h("button", { class: "button primary", type: "submit" }, "Add")));
+      return section;
     }
   </script>
 </body>

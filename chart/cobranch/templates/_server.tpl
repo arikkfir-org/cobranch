@@ -94,6 +94,8 @@ spec:
             {{- end }}
             {{- include "cobranch.providersEnv" $root | nindent 12 }}
             {{- include "cobranch.secretsKeyEnv" $root | nindent 12 }}
+            {{- else if or (eq .component "rest-server") (eq .component "graphql-server") }}
+            {{- include "cobranch.secretsKeyEnv" $root | nindent 12 }}
             {{- end }}
             {{- else }}
             {{- include "cobranch.authEnv" $root | nindent 12 }}

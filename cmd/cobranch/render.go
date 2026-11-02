@@ -75,10 +75,11 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 	if err != nil {
 		return fmt.Errorf("reading /%s: %w", git.SettingsFile, err)
 	}
-	d, err := code.ParseDelivery(content)
+	settings, err := code.ParseSettings(content)
 	if err != nil {
 		return fmt.Errorf("parsing: %w", err)
 	}
+	d := settings.Delivery
 	target, err := renderTarget(d, f)
 	if err != nil {
 		return fmt.Errorf("planning: %w", err)
@@ -104,7 +105,7 @@ func renderCheckout(ctx context.Context, args []string, stdout io.Writer) error 
 
 // renderTarget is the target f renders for: the one f names with the namespace f names, or the checkout's target of
 // that name without one.
-func renderTarget(d code.Delivery, f renderFlags) (code.Target, error) {
+func renderTarget(d code.DeliverySettings, f renderFlags) (code.Target, error) {
 	if f.namespace != "" {
 		return code.Target{Name: f.target, Namespace: f.namespace}, nil
 	}
