@@ -20,6 +20,7 @@ import (
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/runner"
 	"cobranch.dev/internal/services/secrets"
+	"cobranch.dev/internal/services/taskrunner"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
 	"cobranch.dev/internal/system/telemetry"
@@ -46,7 +47,7 @@ func runController(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing the controller wrote
-	runs, closeRuns, err := runService(ctx, cfg, pool)
+	runners, closeRuns, err := runServices(ctx, cfg, pool)
 	if err != nil {
 		return err
 	}
@@ -55,7 +56,7 @@ func runController(ctx context.Context, logs io.Writer) error {
 	worked := make(chan struct{})
 	go func() {
 		defer close(worked)
-		controller.Run(work, runs, cfg.PollInterval, cfg.SweepInterval)
+		controller.Run(work, cfg.PollInterval, cfg.SweepInterval, runners...)
 	}()
 	// The loop stops with the server, even one that failed before ctx ended, and the run in hand finishes its step
 	// before the pool closes.
@@ -64,10 +65,10 @@ func runController(ctx context.Context, logs io.Writer) error {
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
-// runService is the runs' domain over pool's database, the cluster the controller runs in, the secrets the key opens
-// and the object store, which the returned func closes.
-func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (*runner.Service, func(), error) {
-	cluster, err := jobsCluster(cfg.Jobs)
+// runServices are the domains of jobs' runs and of agents' tasks over pool's database, the cluster the controller runs
+// in, the secrets the key opens and the object store, which the returned func closes.
+func runServices(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) ([]controller.Runner, func(), error) {
+	runsCluster, tasksCluster, err := jobsCluster(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -83,28 +84,35 @@ func runService(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) 
 	j := cfg.Jobs
 	settings := runner.Settings{Pods: j.Pods, Lease: j.Lease, RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout,
 		ScriptImage: j.ScriptImage, RESTURL: j.RESTURL, GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished}
-	svc := runner.NewService(postgres.NewRunStore(pool), cluster, vault, blob.Logs{Bucket: bucket}, settings)
-	return svc, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
+	runs := runner.NewService(postgres.NewRunStore(pool), runsCluster, vault, blob.Logs{Bucket: bucket}, settings)
+	a := cfg.Agents
+	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), tasksCluster, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
+		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
+		ShellTimeout: a.ShellTimeout, MaxTokens: a.MaxTokens})
+	return []controller.Runner{runs, tasks}, func() { _ = bucket.Close() }, nil // a store closed as the controller exits has nothing left to flush
 }
 
-// jobsCluster is where runs execute: the cluster the controller runs in, through its pod's token, or, for an
-// installation that runs no pods, whose controller mounts no token, none.
-func jobsCluster(j config.Jobs) (runner.Cluster, error) {
+// jobsCluster is where runs and agents' tasks execute: the cluster the controller runs in, through its pod's token, or,
+// for an installation that runs no pods, whose controller mounts no token, none.
+func jobsCluster(cfg config.Controller) (runner.Cluster, taskrunner.Cluster, error) {
+	j := cfg.Jobs
 	if !j.Pods {
-		return runner.NoPods{}, nil
+		return runner.NoPods{}, taskrunner.NoPods{}, nil
 	}
 	kube, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
+		return nil, nil, fmt.Errorf("reaching the cluster from its pod: %w", err)
 	}
 	client, err := kubernetes.NewForConfig(kube)
 	if err != nil {
-		return nil, fmt.Errorf("making the cluster's client: %w", err)
+		return nil, nil, fmt.Errorf("making the cluster's client: %w", err)
 	}
-	return jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
+	cluster := jobcluster.New(client, jobcluster.Config{Prefix: j.NamespacePrefix, Installation: j.Installation,
 		PodSecurity: j.PodSecurity, Labels: j.NamespaceLabels.Value, Home: j.Home, Controller: j.ServiceAccount, Release: j.Release,
 		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, EgressExcept: j.EgressExcept, DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value,
-		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage}), nil
+		NodeSelector: j.NodeSelector.Value, Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage,
+		AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value, ProviderURLs: cfg.Agents.ProviderURLs.Value})
+	return cluster, cluster, nil
 }
 
 // runCheckout fetches a run's commit into its workspace, the first container of a run's pod, from the run's

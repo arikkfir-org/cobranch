@@ -66,7 +66,7 @@ func TestRun(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			r := &runner{queue: tt.queue, stop: cancel}
-			controller.Run(ctx, r, time.Hour, time.Hour)
+			controller.Run(ctx, time.Hour, time.Hour, r)
 			if r.dispatched != tt.wantFirst || r.followed != 1 || r.swept != 1 {
 				t.Errorf("one pass dispatched %d, followed %d, swept %d, want %d, 1, 1", r.dispatched, r.followed, r.swept, tt.wantFirst)
 			}
@@ -78,10 +78,25 @@ func TestRunPollsAndSweeps(t *testing.T) {
 	r := &runner{}
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
-	controller.Run(ctx, r, 10*time.Millisecond, 50*time.Millisecond)
+	controller.Run(ctx, 10*time.Millisecond, 50*time.Millisecond, r)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.followed < 5 || r.swept < 2 || r.swept >= r.followed {
 		t.Errorf("in 200ms, followed %d times and swept %d, want every 10ms and every 50ms", r.followed, r.swept)
+	}
+}
+
+func TestRunEveryRunner(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	runs, tasks := &runner{queue: []error{nil}}, &runner{queue: []error{nil, nil}, stop: cancel}
+	controller.Run(ctx, time.Hour, time.Hour, runs, tasks)
+	for _, tt := range []struct {
+		name string
+		r    *runner
+		want int
+	}{{name: "runs", r: runs, want: 2}, {name: "tasks", r: tasks, want: 3}} {
+		if tt.r.dispatched != tt.want || tt.r.followed != 1 || tt.r.swept != 1 {
+			t.Errorf("one pass of %s dispatched %d, followed %d, swept %d, want %d, 1, 1", tt.name, tt.r.dispatched, tt.r.followed, tt.r.swept, tt.want)
+		}
 	}
 }

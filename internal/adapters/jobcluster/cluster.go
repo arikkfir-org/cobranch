@@ -80,8 +80,16 @@ type Config struct {
 	NodeSelector map[string]string
 	Tolerations  []corev1.Toleration
 	Affinity     *corev1.Affinity
-	// CheckoutImage is the image whose `cobranch checkout` fetches a run's commit: Cobranch's own.
+	// CheckoutImage is the image whose `cobranch checkout` fetches a run's commit: Cobranch's own. An agent task's pod
+	// copies the cobranch binary from it, and runs its model proxy in it.
 	CheckoutImage string
+	// AgentImage is the image an agent's harness runs in, with the tools its agents use; AgentResources are its
+	// requests and limits, the namespace's defaults where it names none.
+	AgentImage     string
+	AgentResources corev1.ResourceRequirements
+	// ProviderURLs are where a task's model proxy sends its provider's requests, by provider, when not to the
+	// provider's own address.
+	ProviderURLs map[string]string
 }
 
 // Cluster is runner.Cluster on a Kubernetes cluster.

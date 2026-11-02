@@ -713,6 +713,41 @@
         }
       }
     },
+    "agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "type": "string"
+        },
+        "resources": {
+          "type": "object"
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+        },
+        "maxTurns": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "shellTimeout": {
+          "type": "string",
+          "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "providerURLs": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^https?://"
+          }
+        }
+      }
+    },
     "migrate": {
       "type": "object",
       "additionalProperties": false,
