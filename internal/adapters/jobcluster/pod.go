@@ -1,7 +1,6 @@
 package jobcluster
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kjson "sigs.k8s.io/json"
 
 	"cobranch.dev/internal/services/runner"
 )
@@ -141,10 +141,15 @@ func specOf(l runner.Launch) (corev1.PodSpec, error) {
 		return corev1.PodSpec{Containers: []corev1.Container{{Name: "main", Image: l.Image,
 			Command: []string{"bash", "-eo", "pipefail", runDir + "/script"}}}}, nil
 	}
+	// Decoded as Kubernetes decodes it, matching field names case-sensitively and refusing unknown and repeated ones:
+	// jobs checked the spec's fields by their exact names, and encoding/json would also take a field spelt otherwise,
+	// such as Env for env, past those checks.
 	var spec corev1.PodSpec
-	dec := json.NewDecoder(bytes.NewReader(l.Pod))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&spec); err != nil {
+	strict, err := kjson.UnmarshalStrict(l.Pod, &spec)
+	if err == nil {
+		err = errors.Join(strict...)
+	}
+	if err != nil {
 		return spec, fmt.Errorf("its pod isn't a pod spec: %w", err)
 	}
 	return spec, nil

@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"fmt"
+	"maps"
 	"slices"
+	"strings"
 )
 
 // forbiddenPodFields are the fields of a pod spec that would take a run out of its namespace's bounds: a
@@ -22,6 +24,9 @@ var allowedVolumeSources = []string{"emptyDir", "ephemeral"}
 // and with an image, no field of forbiddenPodFields, no volume but emptyDir and ephemeral ones, and no privileged
 // container. It answers what's wrong, naming the field, or nil. Kubernetes checks the rest when the pod is created.
 func CheckPod(spec map[string]any) error {
+	if err := checkSpelling("pod", spec); err != nil {
+		return err
+	}
 	for _, field := range forbiddenPodFields {
 		if _, ok := spec[field]; ok {
 			return fmt.Errorf("a job's pod may not set %s", field)
@@ -46,6 +51,35 @@ func CheckPod(spec map[string]any) error {
 		return fmt.Errorf("a job's pod may not set ephemeralContainers")
 	}
 	return checkVolumes(spec["volumes"])
+}
+
+// checkedNames are the names of the pod spec's fields that CheckPod reads, as Kubernetes spells them.
+var checkedNames = slices.Concat(forbiddenPodFields, namespaceSources, []string{"containers", "initContainers",
+	"ephemeralContainers", "volumes", "env", "envFrom", "valueFrom", "securityContext", "privileged"})
+
+// checkSpelling refuses a key anywhere in v, which path names, that spells one of checkedNames in another case, such as
+// Env for env: CheckPod reads each field by its exact name, as Kubernetes does, so a field spelt otherwise would pass
+// its checks unread. The controller refuses such a pod when the run starts; this says why as the job is read.
+func checkSpelling(path string, v any) error {
+	switch v := v.(type) {
+	case map[string]any:
+		for _, key := range slices.Sorted(maps.Keys(v)) {
+			i := slices.IndexFunc(checkedNames, func(name string) bool { return strings.EqualFold(key, name) })
+			if i >= 0 && key != checkedNames[i] {
+				return fmt.Errorf("%s spells %s as %s: a pod spec's field names are case-sensitive", path, checkedNames[i], key)
+			}
+			if err := checkSpelling(path+"."+key, v[key]); err != nil {
+				return err
+			}
+		}
+	case []any:
+		for i, e := range v {
+			if err := checkSpelling(fmt.Sprintf("%s[%d]", path, i), e); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // checkContainer checks the i-th container of a pod spec's list key: named, with an image, not privileged, and

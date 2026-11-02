@@ -299,8 +299,9 @@ While it runs, the REST and GraphQL servers read its pod’s logs from Kubernete
 - **`pod`** is a Kubernetes pod spec. The controller refuses what would leave the namespace's bounds: a ServiceAccount
   or its token, image pull secrets, which would pull with the installation's credentials, host namespaces, host paths,
   node names, node selectors, affinities, tolerations, priority classes, volumes other than `emptyDir` and ephemeral
-  ones, and variables read from the namespace's Secrets or ConfigMaps, which hold the other runs'. It sets what every
-  run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout, the operator's `jobs.nodeSelector`,
+  ones, and variables read from the namespace's Secrets or ConfigMaps, which hold the other runs'. Its field names count
+  only as Kubernetes spells them: one spelt in another case, or given twice, is refused. It sets what every run needs:
+  `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout, the operator's `jobs.nodeSelector`,
   `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
 - **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, which is
   Cobranch's own image, carrying Bash and Git, running the script with `bash -eo pipefail`. The script travels in the

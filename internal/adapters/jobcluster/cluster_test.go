@@ -296,6 +296,14 @@ func TestStartRefusals(t *testing.T) {
 	}{
 		{name: "a pod spec with a field pods have not", want: runner.ErrRefused, says: `unknown field "bogus"`,
 			launch: launch(func(l *runner.Launch) { l.Pod = json.RawMessage(`{"bogus":1,"containers":[]}`) })},
+		{name: "a field spelt in another case", want: runner.ErrRefused, says: `unknown field "containers[0].Env"`,
+			launch: launch(func(l *runner.Launch) {
+				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b","Env":[{"name":"K","valueFrom":{"secretKeyRef":{"name":"s","key":"k"}}}]}]}`)
+			})},
+		{name: "a field given twice", want: runner.ErrRefused, says: `duplicate field "containers"`,
+			launch: launch(func(l *runner.Launch) {
+				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b"}],"containers":[{"name":"c","image":"d"}]}`)
+			})},
 		{name: "a volume named as Cobranch's", want: runner.ErrRefused, says: "volume cobranch-run takes a name of Cobranch's own",
 			launch: launch(func(l *runner.Launch) {
 				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b"}],"volumes":[{"name":"cobranch-run","emptyDir":{}}]}`)
