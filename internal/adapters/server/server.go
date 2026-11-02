@@ -1,5 +1,6 @@
 // Package server serves one of Cobranch's APIs on a port of its own, beside the health endpoints every server answers.
-// Every API request gets a span of its trace, and every response names its request's ID.
+// Every API request gets a span of its trace and a measurement of its route's duration, and every response names its
+// request's ID and, in Server-Timing, the calls it made to Cobranch's other workloads.
 package server
 
 import (
@@ -15,13 +16,18 @@ import (
 )
 
 // Handler serves api at pattern, a path or a subtree of them, and answers /healthz while the process runs and /readyz
-// while every one of checks passes. It continues the caller's trace, or starts one, for every request but the probes.
+// while every one of checks passes. It continues the caller's trace, or starts one, and records the duration of its
+// route (http.server.request.duration), for every request but the probes.
 func Handler(pattern string, api http.Handler, checks map[string]Check) http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.Handle("GET /readyz", readyz(checks))
 	mux.Handle(pattern, api)
-	return otelhttp.NewHandler(withRequestID(mux), "server", otelhttp.WithFilter(notProbe))
+	routed := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mux.ServeHTTP(w, r)
+		LabelRoute(r)
+	})
+	return otelhttp.NewHandler(withRequestID(withTimings(routed)), "server", otelhttp.WithFilter(notProbe))
 }
 
 // notProbe reports whether r asks for something other than the server's health, which the kubelet asks every few

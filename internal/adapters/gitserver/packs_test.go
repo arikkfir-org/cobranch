@@ -123,8 +123,10 @@ func (s *stack) aGraceLater() {
 // it replaced a Grace later, in each object store: a fresh Git server and one that cached the old packs serve the
 // repository throughout, the deleted branch's commit included. In the database, no large object outlives its object.
 func TestCompactAndSweep(t *testing.T) {
+	t.Parallel()
 	for _, store := range []string{inDatabase, inFiles} {
 		t.Run(store, func(t *testing.T) {
+			t.Parallel()
 			compactAndSweep(t, newStackIn(t, store))
 		})
 	}
@@ -183,6 +185,7 @@ func compactAndSweep(t *testing.T, s *stack) {
 // compaction, and serves the copy from a Git server with an empty cache: the database alone holds the repository
 // whole, every pack included, the deleted branch's commit too.
 func TestRestoredDatabaseServesTheRepository(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	_, feature := pushPacks(t, dir)
@@ -203,6 +206,7 @@ func TestRestoredDatabaseServesTheRepository(t *testing.T) {
 // the directory over, and a Git server over the database alone then serves the repository whole. The directory keeps
 // every object: nothing deletes the old store.
 func TestMoveBetweenStores(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	s := newStackIn(t, inFiles)
 	dir := clone(t, s.websiteURL(s.base, olivia))

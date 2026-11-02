@@ -1,4 +1,5 @@
-# Task chart of .tekton/ci.yaml: build the images and install the chart on a throwaway kind cluster, in a privileged
+# Task chart of .tekton/ci.yaml: build the images while it creates a throwaway kind cluster, and install the chart
+# there, in a privileged
 # Docker daemon beside the steps; test the release, upgrade it, test it again, compact its packs and test it once more.
 # Octomaton inlines it, and the step it references, into the PipelineRun.
 apiVersion: tekton.dev/v1
@@ -17,8 +18,6 @@ spec:
     - name: docker-socket
       emptyDir: {}
     - name: docker-data
-      emptyDir: {}
-    - name: go-cache
       emptyDir: {}
   stepTemplate:
     workingDir: $(workspaces.source.path)
@@ -67,29 +66,11 @@ spec:
     - name: lint
       image: docker.io/alpine/k8s:1.37.1@sha256:712dc5385d1c1a3f83b747fa9e40f64d433a97f72ff42f9755ff7dd1f62846e4
       command: [sh, .tekton/scripts/chart-lint.sh]
-    # From its Go module, which the checksum database vouches for.
+    # Its release binary, checked against the checksum the script pins.
     - name: kind
-      image: docker.io/library/golang:1.27.1
-      env:
-        - name: GOBIN
-          value: $(workspaces.source.path)/.ci/bin
-        - name: GOCACHE
-          value: /go-cache/build
-        - name: GOMODCACHE
-          value: /go-cache/mod
-        - name: GOTOOLCHAIN
-          value: local
-        - name: GOMAXPROCS
-          value: "4"
-        - name: CGO_ENABLED
-          value: "0"
-      volumeMounts:
-        - name: go-cache
-          mountPath: /go-cache
-      command: [go, install, sigs.k8s.io/kind@v0.33.0]
-    - name: images
       image: docker.io/library/docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
-      command: [sh, .tekton/scripts/chart-images.sh]
+      command: [sh, .tekton/scripts/chart-kind.sh]
+    # Builds the images while it creates the cluster, then loads them into it.
     - name: cluster
       image: docker.io/library/docker:29.9.2-cli@sha256:5e6baf67325a79f64ed3bed6863954d5e05d0f3d4e57cbdb14809346814bbfdb
       command: [sh, .tekton/scripts/chart-cluster.sh]

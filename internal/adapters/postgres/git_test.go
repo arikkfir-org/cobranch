@@ -70,6 +70,7 @@ func (f *gitFixture) process(t *testing.T) int {
 }
 
 func TestGitStoreRecord(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	first := pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
@@ -121,6 +122,7 @@ func TestGitStoreRecord(t *testing.T) {
 }
 
 func TestGitStoreRecordStale(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	create := []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}
@@ -159,6 +161,7 @@ func TestGitStoreRecordStale(t *testing.T) {
 // TestGitStorePackAgain records pushes that bring a pack the repository lists already: the same objects, under the
 // same name, in an upload of their own.
 func TestGitStorePackAgain(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	first := pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/feature", Old: git.ZeroSHA, New: shaA}},
@@ -200,6 +203,7 @@ func TestGitStorePackAgain(t *testing.T) {
 }
 
 func TestGitStoreBranches(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	steps := []git.Push{
@@ -244,6 +248,7 @@ func TestGitStoreBranches(t *testing.T) {
 }
 
 func TestGitStorePrincipals(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	// Max also holds an old address unverified: he signs in, so a commit can't claim him by it.
@@ -298,6 +303,7 @@ func TestGitStorePrincipals(t *testing.T) {
 }
 
 func TestGitStoreLoginlessAtOnce(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	for _, repo := range []uuid.UUID{f.website.ID, f.secret.ID} {
@@ -344,6 +350,7 @@ func (f *gitFixture) recordTwo(t *testing.T) (first, second git.Push) {
 }
 
 func TestGitStoreProcessSkipsHeld(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	if n := f.process(t); n != 0 {
@@ -370,6 +377,7 @@ func TestGitStoreProcessSkipsHeld(t *testing.T) {
 }
 
 func TestGitStoreProcessRetries(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	if _, err := f.pool.Exec(ctx, "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'the disk is full'; END $$; "+
@@ -417,6 +425,7 @@ func TestGitStoreProcessRetries(t *testing.T) {
 // TestGitStoreProcessLosesARace fails a push that another push worker claims and processes once the failed
 // transaction let go of it: the push stays processed, with no failure recorded.
 func TestGitStoreProcessLosesARace(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	if _, err := f.pool.Exec(ctx, "CREATE FUNCTION refuse() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'the disk is full'; END $$; "+
@@ -440,6 +449,7 @@ func TestGitStoreProcessLosesARace(t *testing.T) {
 }
 
 func TestGitStoreProcessLinksTrace(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name      string
 		traced    bool
@@ -450,6 +460,7 @@ func TestGitStoreProcessLinksTrace(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newGitFixture(t)
 			recorder := tracetest.NewSpanRecorder()
 			tracer := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorder)).Tracer("test")
@@ -478,6 +489,7 @@ func TestGitStoreProcessLinksTrace(t *testing.T) {
 }
 
 func TestListenPushes(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -520,6 +532,7 @@ func TestLoginlessName(t *testing.T) {
 }
 
 func TestAuthStoreAdopt(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	if err := f.g.Record(ctx, pushOf(f.website.ID, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
