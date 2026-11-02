@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,7 +51,7 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Task: Task{Number: 7, Title: "Sweep", State: "running", Agent: Principal{Id: agentID, DisplayName: "Scout"},
 				AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy"),
 				Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())}})
-	case strings.Contains(r.URL.Path, "/chat/"):
+	case strings.Contains(r.URL.Path, "/chat"):
 		a.chat(w, r)
 	case r.URL.Path != "/v1/orgs/acme/tasks/7/transcript":
 		problem(w, http.StatusNotFound, "task.not_found", "No such task.")
@@ -224,6 +225,16 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.Contains(r.URL.Path, forbiddenID.String()):
 		problem(w, http.StatusForbidden, "auth.forbidden", "You may not post here.")
+	case strings.HasSuffix(r.URL.Path, "/chat"):
+		answer(w, http.StatusOK, map[string]any{"after": "c1", "threads": []any{}})
+	case strings.HasSuffix(r.URL.Path, "/chat/updates") && r.URL.Query().Get("after") == "gone":
+		problem(w, http.StatusBadRequest, "chat.cursor_invalid", "That cursor isn't one.")
+	case strings.HasSuffix(r.URL.Path, "/chat/updates"):
+		other := uuid.MustParse("0190f1b2-0000-7000-8000-000000000074")
+		answer(w, http.StatusOK, map[string]any{"after": "c2", "updates": []map[string]any{
+			{"cursor": "u1", "kind": "message.posted", "thread": map[string]any{"id": threadID}},
+			{"cursor": "u2", "kind": "message.posted", "thread": map[string]any{"id": other}},
+			{"cursor": "u3", "kind": "message.edited", "thread": map[string]any{"id": threadID}}}})
 	case r.Method == http.MethodGet:
 		at := time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC)
 		answer(w, http.StatusOK, ChatThread{Id: threadID, CreatedAt: at, Messages: &[]ChatMessage{
@@ -261,11 +272,17 @@ func TestChats(t *testing.T) {
 		!strings.Contains(err.Error(), "You may not post here.") || errors.Is(err, harness.ErrRefused) {
 		t.Errorf("Post() where it may not = %v", err)
 	}
+	checkUpdates(t, c, branch, issue)
 	want := []string{
 		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads/" + threadID.String() + " ",
 		`POST /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads {"body":"Starting.","id":"` + message.String() + `"}`,
 		"POST /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + `/messages {"body":"Swept.","id":"` + message.String() + `"}`,
 		"GET /v1/orgs/acme/issues/12/chat/threads/" + threadID.String() + " ",
+		"POST /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/threads/" + forbiddenID.String() + `/messages {"body":"Hi.","id":"` + message.String() + `"}`,
+		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat ",
+		"GET /v1/orgs/acme/issues/12/chat ",
+		"GET /v1/orgs/acme/repos/website/branches/fix%2Fheader/chat/updates ",
+		"GET /v1/orgs/acme/issues/12/chat/updates ",
 	}
 	if len(a.chats) < len(want) {
 		t.Fatalf("the API took %q", a.chats)
@@ -274,5 +291,27 @@ func TestChats(t *testing.T) {
 		if strings.TrimSpace(a.chats[i]) != strings.TrimSpace(w) {
 			t.Errorf("call %d = %q, want %q", i+1, a.chats[i], w)
 		}
+	}
+}
+
+// checkUpdates checks how the client follows a branch's chat and an issue's: a cursor from a page of one thread, and
+// the threads the updates after it changed, each once, waiting the most the REST server waits.
+func checkUpdates(t *testing.T, c *API, branch, issue harness.Chat) {
+	t.Helper()
+	ctx := context.Background()
+	for _, chat := range []harness.Chat{branch, issue} {
+		if after, err := c.ChatCursor(ctx, "acme", chat); err != nil || after != "c1" {
+			t.Errorf("ChatCursor(%+v) = %q, %v; want c1", chat, after, err)
+		}
+	}
+	other := uuid.MustParse("0190f1b2-0000-7000-8000-000000000074")
+	for _, chat := range []harness.Chat{branch, issue} {
+		changed, next, err := c.ChatUpdates(ctx, "acme", chat, "c1")
+		if err != nil || next != "c2" || !slices.Equal(changed, []uuid.UUID{threadID, other}) {
+			t.Errorf("ChatUpdates(%+v) = %v, %q, %v; want both threads once, then c2", chat, changed, next, err)
+		}
+	}
+	if _, _, err := c.ChatUpdates(ctx, "acme", branch, "gone"); err == nil || !strings.Contains(err.Error(), "That cursor isn't one.") {
+		t.Errorf("ChatUpdates(a cursor that isn't one) = %v", err)
 	}
 }

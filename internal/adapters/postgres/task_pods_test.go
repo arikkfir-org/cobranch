@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/secrets"
 	"cobranch.dev/internal/services/taskrunner"
@@ -193,5 +195,65 @@ func (f *taskPodFixture) checkFail(t *testing.T, running, queued uuid.UUID) {
 	}
 	if active, err := f.s.Active(ctx); err != nil || len(active) != 0 {
 		t.Errorf("Active() after it failed = %+v, %v; want none", active, err)
+	}
+}
+
+func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
+	t.Parallel()
+	f := newTaskPodFixture(t)
+	ctx := context.Background()
+	task := f.assigned(t, "Ask around", true, uuid.Nil)
+	f.claim(t, task.ID)
+	if _, err := f.s.MarkRunning(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped {
+		t.Errorf("Stop() while the task runs = %t, %v; want false", stopped, err)
+	}
+	chat := f.agentFixture.s
+	thread, _, err := chat.StartThread(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, v7(), v7(), nil, "Which branch?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waiting := agents.StateChange{State: agents.TaskWaiting}
+	if _, _, err := f.a.Append(ctx, f.scout.ID, task.ID, agents.Entry{Seq: 1, Kind: agents.EntryState, Body: json.RawMessage(`{"state":"waiting"}`)}, &waiting); err != nil {
+		t.Fatal(err)
+	}
+	f.checkIdle(t, "once it waits", false, 0, false)
+	for i, want := range []bool{true, false} {
+		if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped != want {
+			t.Fatalf("Stop() #%d = %t, %v, want %t", i+1, stopped, err, want)
+		}
+	}
+	f.checkIdle(t, "once its pod stopped", true, 1, false)
+	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.scout.ID, Task: task.ID}, f.feature, thread.ID, v7(), "Still here."); err != nil {
+		t.Fatal(err)
+	}
+	f.checkIdle(t, "after its own message", true, 1, false)
+	if _, _, err := chat.Post(ctx, chats.Poster{ID: f.olivia}, f.feature, thread.ID, v7(), "Main."); err != nil {
+		t.Fatal(err)
+	}
+	f.checkIdle(t, "after an answer", true, 1, true)
+	if err := f.s.Started(ctx, task.ID, 2); err != nil {
+		t.Fatal(err)
+	}
+	f.checkIdle(t, "once its next pod started", false, 1, true)
+	if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped {
+		t.Errorf("Stop() of the pod before = %t, %v; want false, its next pod having taken its place", stopped, err)
+	}
+	f.checkIdle(t, "after a stop of the pod before", false, 1, true)
+}
+
+// checkIdle checks that the store lists the one task as waiting since a moment ago, with its pod stopped or not, the
+// stops it had, and an answer or not.
+func (f *taskPodFixture) checkIdle(t *testing.T, when string, stopped bool, stops int, answered bool) {
+	t.Helper()
+	active, err := f.s.Active(context.Background())
+	if err != nil || len(active) != 1 {
+		t.Fatalf("Active() %s = %+v, %v, want one task", when, active, err)
+	}
+	a := active[0]
+	if a.State != agents.TaskWaiting || a.StateAt.Before(time.Now().Add(-time.Minute)) || a.Stopped != stopped || a.Stops != stops || a.Answered != answered {
+		t.Errorf("Active() %s = %+v, want it waiting since a moment ago, stopped %t after %d stops, answered %t", when, a, stopped, stops, answered)
 	}
 }

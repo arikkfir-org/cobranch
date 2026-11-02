@@ -1,7 +1,8 @@
 // Package taskrunner is the controller's work for agents: it takes the agents' queued tasks and starts each in a pod
 // of its organization's job namespace, with its provider's key, its agent's secrets and a token of its own; renews the
-// token while the task runs; starts a pod that died again, at most three times; and fails a task whose pods keep dying
-// or that outlives its timeout. It reaches the tasks, the cluster and the secrets only through its ports
+// token while the task runs; starts a pod that died again, at most three times; stops the pod of a task that waited
+// too long for an answer, and starts its next once one comes; and fails a task whose pods keep dying or that outlives
+// its timeout. It reaches the tasks, the cluster and the secrets only through its ports
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "The agent's pod").
 package taskrunner
 
@@ -28,7 +29,8 @@ const (
 	RenewEvery = 30 * time.Minute
 )
 
-// MaxPods is the most pods a task has: its first, and three started again after one died.
+// MaxPods is the most pods a task has, besides those started again after a stop: its first, and three started again
+// after one died.
 const MaxPods = 4
 
 // Task is a task the controller starts a pod for, and what the pod starts from.
@@ -59,6 +61,13 @@ type Active struct {
 	PodStartedAt time.Time
 	// TokenAt is when its newest token was issued.
 	TokenAt time.Time
+	// StateAt is when it last changed state: for a task that waits, when it began to.
+	StateAt time.Time
+	// Stopped says its pod stopped while it waits, and Stops how many times one did, which aren't deaths.
+	Stopped bool
+	Stops   int
+	// Answered says someone posted in its thread since StateAt.
+	Answered bool
 }
 
 // Store keeps the tasks: postgres's.
@@ -77,8 +86,11 @@ type Store interface {
 	// LeaseRestart claims a task whose newest pod is pod, for this controller alone to start its next, until leaseUntil;
 	// false when another controller holds it, or started its next pod already.
 	LeaseRestart(ctx context.Context, taskID uuid.UUID, pod int, leaseUntil time.Time) (bool, error)
-	// Started records that the task's pod numbered pod started now, and ends the lease of its restart.
+	// Started records that the task's pod numbered pod started now, which ends a stop and the lease of its restart.
 	Started(ctx context.Context, taskID uuid.UUID, pod int) error
+	// Stop records that the task's pod numbered pod stops while the task waits; false when it no longer waits, its pod
+	// stopped already, or a newer pod took its place.
+	Stop(ctx context.Context, taskID uuid.UUID, pod int) (bool, error)
 	// Fail ends a task that hasn't ended Failed, for reason, recording the change in its transcript; false when it had
 	// ended already.
 	Fail(ctx context.Context, taskID uuid.UUID, reason string) (bool, error)
@@ -139,6 +151,8 @@ type Settings struct {
 	Lease, RoomRetry time.Duration
 	// Timeout is the longest a task may run.
 	Timeout time.Duration
+	// Idle is how long a task that waits for an answer keeps its pod.
+	Idle time.Duration
 	// Vanished is how long a task's newest pod may not show before the controller counts it dead.
 	Vanished time.Duration
 	// RESTURL and GitURL are where the harness reaches the REST API and the Git server.

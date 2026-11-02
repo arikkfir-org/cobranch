@@ -62,7 +62,8 @@ func (r *run) chatTools() []Tool {
 	if _, ok := r.chat(); !ok {
 		return nil
 	}
-	return []Tool{chatTool{spec: readThreadSpec, run: r.readThread}, chatTool{spec: postMessageSpec, run: r.postMessage}}
+	return []Tool{chatTool{spec: readThreadSpec, run: r.readThread}, chatTool{spec: postMessageSpec, run: r.postMessage},
+		chatTool{spec: askSpec, run: r.askThread}}
 }
 
 // readThread answers the messages of the task's thread, the newest that fit in a result.
@@ -133,35 +134,47 @@ type postArgs struct {
 	Body string `json:"body"`
 }
 
-// postMessage posts the message to the task's thread, starting it when the task has none. The call's key names the
-// message, or the thread it starts, so a call run again after a restart posts nothing more.
+// postMessage posts the message to the task's thread, starting it when the task has none.
 func (r *run) postMessage(ctx context.Context, c Call) (string, error) {
 	var a postArgs
 	if err := decode(c.Arguments, &a); err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(a.Body) == "" {
-		return "", errors.New("the message is empty")
-	}
-	id, err := uuid.Parse(c.Key)
+	id, err := r.post(ctx, c.Key, a.Body)
 	if err != nil {
-		return "", fmt.Errorf("the call has no key to name its message: %w", err)
+		return "", err
+	}
+	if id == r.thread {
+		return "Posted, starting the task's thread.", nil
+	}
+	return "Posted.", nil
+}
+
+// post posts body to the task's thread, starting it when the task has none, and answers the ID that key names: the
+// message's, or the thread's it started. Since key names it, a call run again after a restart posts nothing more.
+func (r *run) post(ctx context.Context, key, body string) (uuid.UUID, error) {
+	if strings.TrimSpace(body) == "" {
+		return uuid.Nil, errors.New("the message is empty")
+	}
+	id, err := uuid.Parse(key)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("the call has no key to name its message: %w", err)
 	}
 	chat, _ := r.chat()
 	switch r.thread {
 	case id: // this call started the thread before a restart
-		return "Posted, starting the task's thread.", nil
+		return id, nil
 	case uuid.Nil:
-		if err := r.cobranch.StartThread(ctx, r.work.OrgSlug, chat, id, a.Body); err != nil {
-			return "", fmt.Errorf("starting the thread: %w", err)
+		if err := r.cobranch.StartThread(ctx, r.work.OrgSlug, chat, id, body); err != nil {
+			return uuid.Nil, fmt.Errorf("starting the thread: %w", err)
 		}
 		r.thread = id
-		return "Posted, starting the task's thread.", nil
+		return id, nil
 	}
-	if err := r.cobranch.Post(ctx, r.work.OrgSlug, chat, r.thread, id, a.Body); err != nil {
-		return "", fmt.Errorf("posting the message: %w", err)
+	if err := r.cobranch.Post(ctx, r.work.OrgSlug, chat, r.thread, id, body); err != nil {
+		return uuid.Nil, fmt.Errorf("posting the message: %w", err)
 	}
-	return "Posted.", nil
+	return id, nil
 }
 
 // decode reads a call's arguments into args, refusing fields it doesn't take.

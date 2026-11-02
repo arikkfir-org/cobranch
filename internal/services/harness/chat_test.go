@@ -1,6 +1,7 @@
 package harness_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"slices"
@@ -26,6 +27,8 @@ type chatCase struct {
 	turns    []harness.Turn
 	postErr  error
 	checkout *checkout
+	state    agents.TaskState
+	waits    []wait
 	// kind, when set, handles the task, of kind review.
 	kind    *kind
 	wantErr bool
@@ -51,7 +54,7 @@ func keyed(c harness.Call, key uuid.UUID) harness.Call {
 }
 
 func TestChat(t *testing.T) {
-	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases()) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases(), askCases(), askFailureCases()) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			runChat(t, tc)
@@ -248,9 +251,12 @@ func prompts(t *testing.T, m *model, want, not []string) {
 
 // runChat works tc's task with an echo tool, and checks what it leaves.
 func runChat(t *testing.T, tc chatCase) {
-	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue,
-		AgentEmail: "agent@agents.example", Task: agents.Task{Number: 7, Title: "Sweep", State: agents.TaskRunning, Agent: agents.Principal{DisplayName: "Scout"},
-			RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, waits: tc.waits, cancel: cancel,
+		work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue, AgentEmail: "agent@agents.example",
+			Task: agents.Task{Number: 7, Title: "Sweep", State: cmp.Or(tc.state, agents.TaskRunning), Agent: agents.Principal{DisplayName: "Scout"},
+				RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}
 	m := &model{turns: tc.turns}
 	h := harness.New(c, m, 0, &echo{})
 	if tc.checkout != nil {
@@ -264,7 +270,7 @@ func runChat(t *testing.T, tc chatCase) {
 			want = 0
 		}
 	}
-	if err := h.Run(context.Background()); (err != nil) != tc.wantErr {
+	if err := h.Run(ctx); (err != nil) != tc.wantErr {
 		t.Fatalf("Run() = %v, want an error: %v", err, tc.wantErr)
 	}
 	if tc.checkout != nil && (len(tc.checkout.prepared) != want || want == 1 && tc.checkout.prepared[0].Task.RepoSlug != "website") {

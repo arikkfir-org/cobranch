@@ -9,14 +9,15 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/runner"
 )
 
 // Follow keeps the running tasks' pods: it renews each task's token every RenewEvery, fails a task that outlived its
-// timeout, and starts a task's pod again when it died, vanished or ended while the task hadn't, failing the task once
-// it has had MaxPods. A task it fails to follow is followed again on the next pass; Follow goes on with the rest and
-// answers what failed.
+// timeout, starts a task's pod again when it died, vanished or ended while the task hadn't, failing the task once it
+// has had MaxPods, and stops the pod of a task that waited Idle for an answer, starting its next once one comes. A task
+// it fails to follow is followed again on the next pass; Follow goes on with the rest and answers what failed.
 func (s *Service) Follow(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(ctx, "taskrunner.Service.Follow")
 	defer span.End()
@@ -46,14 +47,17 @@ func (s *Service) Follow(ctx context.Context) (err error) {
 	return errors.Join(errs...)
 }
 
-// follow keeps a's pod, which pod reports when it is a's newest: it fails a that outlived its timeout, starts its pod
-// again when it died, and renews its token otherwise.
+// follow keeps a's pod, which pod reports when it is a's newest: it fails a that outlived its timeout, wakes a whose
+// pod stopped once it has an answer, starts its pod again when it died, stops the pod of a that waited too long for an
+// answer, and renews its token otherwise.
 func (s *Service) follow(ctx context.Context, a Active, pod Pod) error {
 	now := s.now()
 	ok := pod.Number == a.Pod
 	switch {
 	case now.Sub(a.StartedAt) > s.settings.Timeout:
 		return s.end(ctx, a, "timed out after "+s.settings.Timeout.String())
+	case a.Stopped:
+		return s.rest(ctx, a, pod.Number == a.Pod)
 	case !ok && now.Sub(a.PodStartedAt) < s.settings.Vanished:
 		return nil
 	case !ok:
@@ -62,19 +66,27 @@ func (s *Service) follow(ctx context.Context, a Active, pod Pod) error {
 		return s.restart(ctx, a, pod.Reason)
 	case pod.Outcome == runner.Succeeded:
 		return s.restart(ctx, a, "its harness exited while the task hadn't ended")
+	case a.State == agents.TaskWaiting && !a.Answered && now.Sub(a.StateAt) >= s.settings.Idle:
+		return s.stop(ctx, a)
 	case now.Sub(a.TokenAt) >= RenewEvery:
 		return s.renew(ctx, a)
 	}
 	return nil
 }
 
-// restart starts a's next pod in place of the one that died for reason, or fails a once it has had MaxPods. Every
-// controller follows every task, so it first leases the restart: of the controllers that saw the pod die, one starts
-// the next, and the others leave it be. A task that ended meanwhile leaves its pods to the sweep.
+// restart starts a's next pod in place of the one that died for reason, or fails a once it has had MaxPods, counting
+// no pod started again after a stop.
 func (s *Service) restart(ctx context.Context, a Active, reason string) error {
-	if a.Pod >= MaxPods {
-		return s.end(ctx, a, fmt.Sprintf("its pod died %d times; the last time, %s", a.Pod, reason))
+	if died := a.Pod - a.Stops; died >= MaxPods {
+		return s.end(ctx, a, fmt.Sprintf("its pod died %d times; the last time, %s", died, reason))
 	}
+	return s.replace(ctx, a)
+}
+
+// replace removes a's pods and starts its next. Every controller follows every task, so it first leases the
+// replacement: of the controllers that saw a's pod die, or a woken, one starts the next pod, and the others leave it
+// be. A task that ended meanwhile leaves its pods to the sweep.
+func (s *Service) replace(ctx context.Context, a Active) error {
 	leased, err := s.store.LeaseRestart(ctx, a.ID, a.Pod, s.now().Add(s.settings.Lease))
 	if err != nil || !leased {
 		return wrapIf(err, "leasing task "+a.ID.String()+"'s restart")
@@ -91,6 +103,33 @@ func (s *Service) restart(ctx context.Context, a Active, reason string) error {
 	}
 	_, err = s.startPod(ctx, t, a.Pod+1)
 	return err
+}
+
+// stop stops the pod of a, which waited Idle for an answer: its next starts once someone posts in its thread. It stops
+// only the pod it saw, so that a pass that read a before another controller woke it leaves the newer pod be.
+func (s *Service) stop(ctx context.Context, a Active) error {
+	stopped, err := s.store.Stop(ctx, a.ID, a.Pod)
+	switch {
+	case err != nil:
+		return fmt.Errorf("stopping task %s's pod: %w", a.ID, err)
+	case !stopped:
+		return nil
+	}
+	return wrapIf(s.cluster.RemoveTask(ctx, a.OrgID, a.ID), "removing waiting task "+a.ID.String()+"'s pod")
+}
+
+// rest keeps a, whose pod stopped while it waited: it starts a's next pod once someone answered, or a no longer waits,
+// and otherwise removes the stopped pod, when a stop left it behind (present). A newer pod, which another controller
+// started after this pass read a, is that controller's. The quota may keep the next pod waiting for room, until a
+// later pass.
+func (s *Service) rest(ctx context.Context, a Active, present bool) error {
+	switch {
+	case a.Answered || a.State != agents.TaskWaiting:
+		return s.replace(ctx, a)
+	case present:
+		return wrapIf(s.cluster.RemoveTask(ctx, a.OrgID, a.ID), "removing waiting task "+a.ID.String()+"'s pod")
+	}
+	return nil
 }
 
 // renew issues a a new token and writes it into its pod's Secret; the one it holds stays valid until it expires.

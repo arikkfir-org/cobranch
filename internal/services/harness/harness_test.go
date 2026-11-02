@@ -1,11 +1,13 @@
 package harness_test
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +28,56 @@ type cobranch struct {
 	threads map[uuid.UUID]*thread
 	// postErr fails every start and post.
 	postErr error
+	// waits are the chat's updates, one per wait for them, which fails once they run out; started is the thread the
+	// harness started, and cancel stops the harness's context.
+	waits   []wait
+	waited  int
+	started uuid.UUID
+	cancel  context.CancelFunc
+}
+
+// wait is what a wait for the chat's updates sees: nothing, a message someone posts to a thread, the task's own when
+// thread is uuid.Nil, or its pod stopping.
+type wait struct {
+	thread  uuid.UUID
+	message *harness.ChatMessage
+	stop    bool
+}
+
+func (c *cobranch) ChatCursor(_ context.Context, org string, _ harness.Chat) (string, error) {
+	if org != c.work.OrgSlug {
+		return "", errors.New("another organization")
+	}
+	return "cursor-" + strconv.Itoa(c.waited), nil
+}
+
+func (c *cobranch) ChatUpdates(ctx context.Context, _ string, chat harness.Chat, after string) ([]uuid.UUID, string, error) {
+	if after != "cursor-"+strconv.Itoa(c.waited) {
+		return nil, "", fmt.Errorf("waited after %s, %d waits in", after, c.waited)
+	}
+	if c.waited >= len(c.waits) {
+		return nil, "", errors.New("no one answered")
+	}
+	w := c.waits[c.waited]
+	c.waited++
+	next := "cursor-" + strconv.Itoa(c.waited)
+	switch {
+	case w.stop:
+		c.cancel()
+		return nil, "", fmt.Errorf("waiting: %w", ctx.Err())
+	case w.message == nil:
+		return nil, next, nil
+	}
+	id := w.thread
+	if id == uuid.Nil {
+		id = cmp.Or(c.work.Task.ThreadID, c.started)
+	}
+	t, ok := c.threads[id]
+	if !ok || t.chat != chat {
+		return nil, "", errors.New("no such thread")
+	}
+	t.messages = append(t.messages, *w.message)
+	return []uuid.UUID{id}, next, nil
 }
 
 type thread struct {
@@ -51,6 +103,7 @@ func (c *cobranch) StartThread(_ context.Context, org string, chat harness.Chat,
 	if c.threads == nil {
 		c.threads = map[uuid.UUID]*thread{}
 	}
+	c.started = id
 	if _, ok := c.threads[id]; !ok {
 		c.threads[id] = &thread{chat: chat, messages: []harness.ChatMessage{c.mine(uuid.New(), body)}}
 	}
@@ -338,7 +391,7 @@ func kindCases() []harnessCase {
 				for _, s := range m.requests[0].Tools {
 					names = append(names, s.Name)
 				}
-				if !slices.Equal(names, []string{"read_thread", "post_message", "echo", "stamp", "finish"}) ||
+				if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "echo", "stamp", "finish"}) ||
 					!strings.HasSuffix(m.requests[0].System, "Be brief.\n\nStamp it.") {
 					t.Errorf("the model is offered %v, with %q", names, m.requests[0].System)
 				}
@@ -425,7 +478,7 @@ func firstTask(t *testing.T, c *cobranch, m *model, e *echo) {
 	for _, s := range first.Tools {
 		names = append(names, s.Name)
 	}
-	if !slices.Equal(names, []string{"read_thread", "post_message", "echo", "finish"}) {
+	if !slices.Equal(names, []string{"read_thread", "post_message", "ask", "echo", "finish"}) {
 		t.Errorf("the model is offered %v", names)
 	}
 	second := m.requests[1].Messages
