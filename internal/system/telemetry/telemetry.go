@@ -1,7 +1,9 @@
-// Package telemetry sets up Cobranch's logs and traces. Logs are JSON, one object per line, inside a Kubernetes pod,
-// for whatever collects the cluster's logs, and text elsewhere, for a person. Traces follow a request across Cobranch's
-// workloads with W3C Trace Context, and go over OTLP wherever the operator points OpenTelemetry's own OTEL_ variables,
-// or nowhere. Either way, every log record written inside a request names its trace and span.
+// Package telemetry sets up Cobranch's logs, traces and metrics. Logs are JSON, one object per line, inside a Kubernetes
+// pod, for whatever collects the cluster's logs, and text elsewhere, for a person. Traces follow a request across
+// Cobranch's workloads with W3C Trace Context, and go over OTLP wherever the operator points OpenTelemetry's own OTEL_
+// variables, or nowhere. Either way, every log record written inside a request names its trace and span. Metrics go
+// where those variables say too: pushed over OTLP, served for a Prometheus scraper, or nowhere
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/monitoring.md).
 package telemetry
 
 import (
@@ -34,9 +36,9 @@ type Config struct {
 }
 
 // Setup reads the Config from the environment, installs the process-wide logger, writing to out, and the process-wide
-// tracer provider and propagator. Every record carries the workload's name and the version it was built as, and so
-// does every span, as its service. It returns a function that exports the spans still buffered, for the workload to
-// call before it exits.
+// tracer provider, meter provider and propagator. Every record carries the workload's name and the version it was
+// built as, and so does every span and metric, as its service. It returns a function that exports the spans and
+// metrics still buffered and stops serving metrics, for the workload to call before it exits.
 func Setup(ctx context.Context, out io.Writer, workload, version string) (func(context.Context) error, error) {
 	var c Config
 	if err := envconfig.Process(config.Prefix, &c); err != nil {
@@ -48,16 +50,25 @@ func Setup(ctx context.Context, out io.Writer, workload, version string) (func(c
 	}
 	slog.SetDefault(slog.New(withTrace{handler}).With("workload", workload, "version", version))
 
-	tp, err := tracerProvider(ctx, workload, version)
+	res, err := describe(ctx, workload, version)
 	if err != nil {
 		return nil, err
 	}
+	tp, err := tracerProvider(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	mp, stopMetrics, err := meterProvider(ctx, res)
+	if err != nil {
+		return nil, errors.Join(err, tp.Shutdown(ctx))
+	}
 	otel.SetTracerProvider(tp)
+	otel.SetMeterProvider(mp)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
 		slog.WarnContext(context.Background(), "OpenTelemetry failed", "error", err)
 	}))
-	return tp.Shutdown, nil
+	return func(ctx context.Context) error { return errors.Join(tp.Shutdown(ctx), stopMetrics(ctx)) }, nil
 }
 
 // logHandler writes c's format at c's level to out.
@@ -85,9 +96,8 @@ func InCluster() bool {
 	return os.Getenv("KUBERNETES_SERVICE_HOST") != ""
 }
 
-// tracerProvider makes spans for workload at version. It exports them over OTLP when Exporting, and otherwise samples
-// none: requests still get trace IDs, which name them in logs and pass on to the workloads they call.
-func tracerProvider(ctx context.Context, workload, version string) (*sdktrace.TracerProvider, error) {
+// describe is the resource of workload at version, which its spans and metrics name as their service.
+func describe(ctx context.Context, workload, version string) (*resource.Resource, error) {
 	res, err := resource.New(ctx,
 		resource.WithAttributes(semconv.ServiceNamespace("cobranch"), semconv.ServiceName(workload),
 			semconv.ServiceVersion(version)),
@@ -96,6 +106,12 @@ func tracerProvider(ctx context.Context, workload, version string) (*sdktrace.Tr
 	if err != nil && !errors.Is(err, resource.ErrPartialResource) {
 		return nil, fmt.Errorf("describing the workload to OpenTelemetry: %w", err)
 	}
+	return res, nil
+}
+
+// tracerProvider makes spans for the workload res describes. It exports them over OTLP when Exporting, and otherwise
+// samples none: requests still get trace IDs, which name them in logs and pass on to the workloads they call.
+func tracerProvider(ctx context.Context, res *resource.Resource) (*sdktrace.TracerProvider, error) {
 	if !Exporting() {
 		return sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithSampler(sdktrace.NeverSample())), nil
 	}
