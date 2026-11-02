@@ -17,9 +17,9 @@ helm install cobranch oci://me-west1-docker.pkg.dev/arikkfir/cobranch/charts/cob
 helm test cobranch --namespace cobranch
 ```
 
-Every commit of `main` is published there too, once its images are, at `0.0.0-main.<n>.g<short SHA>`: a prerelease that
-Helm installs only when asked. An installation that follows `main` installs the newest, with
-`--version '>=0.0.0-main.0, <0.0.0'`.
+Each commit of `main` that CI builds is published there too, once its images are, at `0.0.0-main.<n>.g<short SHA>`: a
+prerelease that Helm installs only when asked. A commit that a newer push overtakes while its build waits is never
+published. An installation that follows `main` installs the newest, with `--version '>=0.0.0-main.0, <0.0.0'`.
 
 Every value has a default: `values.yaml` lists them, and `values.schema.json` checks them at install.
 

@@ -106,7 +106,7 @@ to Cobranch's public repository on Artifact Registry, tagged with the commit's f
 reports as its version too. Only then does task `publish-chart` push the commit's chart beside them, as
 `charts/cobranch` at version `0.0.0-main.<n>.g<short SHA>`, where `n` counts `main`'s commits up to it, with the short
 SHA as its app version, so that its images default to those just pushed. An installation that follows `main` installs
-`main`'s newest chart (`>=0.0.0-main.0, <0.0.0`, which no version matches), so it never rolls out a commit before its
+`main`'s newest chart (`>=0.0.0-main.0, <0.0.0`, which only `main`'s charts match), so it never rolls out a commit before its
 images are there, and only the newest waiting push is built: one that a newer push overtakes while it waits publishes
 nothing, and `main`'s newest commit always gets its images and its chart.
 
