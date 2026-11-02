@@ -93,11 +93,12 @@ type ComplexityRoot struct {
 	}
 
 	BranchCheck struct {
-		Count  func(childComplexity int) int
-		Kind   func(childComplexity int) int
-		Met    func(childComplexity int) int
-		Name   func(childComplexity int) int
-		Status func(childComplexity int) int
+		Count    func(childComplexity int) int
+		Kind     func(childComplexity int) int
+		Met      func(childComplexity int) int
+		Name     func(childComplexity int) int
+		Required func(childComplexity int) int
+		Status   func(childComplexity int) int
 	}
 
 	BranchMerge struct {
@@ -113,6 +114,7 @@ type ComplexityRoot struct {
 		Message     func(childComplexity int) int
 		Parents     func(childComplexity int) int
 		Push        func(childComplexity int) int
+		Reviews     func(childComplexity int) int
 		Sha         func(childComplexity int) int
 		Signature   func(childComplexity int) int
 		Tree        func(childComplexity int) int
@@ -126,6 +128,16 @@ type ComplexityRoot struct {
 	CommitPrincipal struct {
 		DisplayName func(childComplexity int) int
 		ID          func(childComplexity int) int
+	}
+
+	DeletedBranch struct {
+		Commit    func(childComplexity int) int
+		CreatedAt func(childComplexity int) int
+		DeletedAt func(childComplexity int) int
+		DeletedBy func(childComplexity int) int
+		Head      func(childComplexity int) int
+		Merge     func(childComplexity int) int
+		Name      func(childComplexity int) int
 	}
 
 	Email struct {
@@ -181,6 +193,7 @@ type ComplexityRoot struct {
 	MergeRequirements struct {
 		Annotations   func(childComplexity int) int
 		LinearHistory func(childComplexity int) int
+		Reviews       func(childComplexity int) int
 	}
 
 	MergeResult struct {
@@ -203,6 +216,7 @@ type ComplexityRoot struct {
 		DeclineJoinRequest   func(childComplexity int, organizationID string, id string) int
 		DeleteAPIKey         func(childComplexity int, organizationID string, id string) int
 		DeleteAnnotation     func(childComplexity int, repositoryID string, sha string, name string, expectedVersion *int) int
+		DeleteBranch         func(childComplexity int, repositoryID string, branch string, expectedHead *string) int
 		DeleteRole           func(childComplexity int, organizationID string, id string) int
 		DeleteSSHKey         func(childComplexity int, id string) int
 		GrantRepositoryRole  func(childComplexity int, repositoryID string, principalID string, roleID string) int
@@ -219,6 +233,7 @@ type ComplexityRoot struct {
 		RevokeSession        func(childComplexity int, id string) int
 		RotateAPIKey         func(childComplexity int, organizationID string, id string, input *SecretInput) int
 		SetAnnotation        func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
+		SubmitReview         func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
 		UpdateOrganization   func(childComplexity int, id string, input OrganizationSettings) int
 		UpdateRepository     func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole           func(childComplexity int, organizationID string, id string, input RoleInput) int
@@ -288,12 +303,14 @@ type ComplexityRoot struct {
 		Commit            func(childComplexity int, sha string) int
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
+		DeletedBranch     func(childComplexity int, name string) int
 		Description       func(childComplexity int) int
 		History           func(childComplexity int, branch string, ref *string, parents HistoryParents, first int, after *string) int
 		ID                func(childComplexity int) int
 		Name              func(childComplexity int) int
 		ObjectFormat      func(childComplexity int) int
 		OrganizationID    func(childComplexity int) int
+		Review            func(childComplexity int, id string) int
 		Roles             func(childComplexity int) int
 		Slug              func(childComplexity int) int
 		Tags              func(childComplexity int) int
@@ -307,6 +324,20 @@ type ComplexityRoot struct {
 		Kind        func(childComplexity int) int
 		PrincipalID func(childComplexity int) int
 		Roles       func(childComplexity int) int
+	}
+
+	Review struct {
+		Body        func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Person      func(childComplexity int) int
+		Reviewer    func(childComplexity int) int
+		Sha         func(childComplexity int) int
+		State       func(childComplexity int) int
+		SubmittedAt func(childComplexity int) int
+	}
+
+	ReviewRequirements struct {
+		Approvals func(childComplexity int) int
 	}
 
 	Role struct {
@@ -386,6 +417,8 @@ type MutationResolver interface {
 	SetAnnotation(ctx context.Context, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) (*Annotation, error)
 	DeleteAnnotation(ctx context.Context, repositoryID string, sha string, name string, expectedVersion *int) (bool, error)
 	MergeBranch(ctx context.Context, repositoryID string, branch string, input *MergeInput) (*MergeResult, error)
+	DeleteBranch(ctx context.Context, repositoryID string, branch string, expectedHead *string) (bool, error)
+	SubmitReview(ctx context.Context, repositoryID string, sha string, input ReviewInput) (*Review, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -434,8 +467,10 @@ type RepositoryResolver interface {
 	Roles(ctx context.Context, obj *Repository) ([]*Role, error)
 	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
 	Branch(ctx context.Context, obj *Repository, name string) (*Branch, error)
+	DeletedBranch(ctx context.Context, obj *Repository, name string) (*DeletedBranch, error)
 	History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error)
 	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
+	Review(ctx context.Context, obj *Repository, id string) (*Review, error)
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
 	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
@@ -725,6 +760,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.BranchCheck.Name(childComplexity), true
+	case "BranchCheck.required":
+		if e.ComplexityRoot.BranchCheck.Required == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BranchCheck.Required(childComplexity), true
 	case "BranchCheck.status":
 		if e.ComplexityRoot.BranchCheck.Status == nil {
 			break
@@ -787,6 +828,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Commit.Push(childComplexity), true
+	case "Commit.reviews":
+		if e.ComplexityRoot.Commit.Reviews == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Commit.Reviews(childComplexity), true
 	case "Commit.sha":
 		if e.ComplexityRoot.Commit.Sha == nil {
 			break
@@ -831,6 +878,49 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.CommitPrincipal.ID(childComplexity), true
+
+	case "DeletedBranch.commit":
+		if e.ComplexityRoot.DeletedBranch.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.Commit(childComplexity), true
+	case "DeletedBranch.createdAt":
+		if e.ComplexityRoot.DeletedBranch.CreatedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.CreatedAt(childComplexity), true
+	case "DeletedBranch.deletedAt":
+		if e.ComplexityRoot.DeletedBranch.DeletedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.DeletedAt(childComplexity), true
+	case "DeletedBranch.deletedBy":
+		if e.ComplexityRoot.DeletedBranch.DeletedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.DeletedBy(childComplexity), true
+	case "DeletedBranch.head":
+		if e.ComplexityRoot.DeletedBranch.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.Head(childComplexity), true
+	case "DeletedBranch.merge":
+		if e.ComplexityRoot.DeletedBranch.Merge == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.Merge(childComplexity), true
+	case "DeletedBranch.name":
+		if e.ComplexityRoot.DeletedBranch.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DeletedBranch.Name(childComplexity), true
 
 	case "Email.email":
 		if e.ComplexityRoot.Email.Email == nil {
@@ -1059,6 +1149,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.MergeRequirements.LinearHistory(childComplexity), true
+	case "MergeRequirements.reviews":
+		if e.ComplexityRoot.MergeRequirements.Reviews == nil {
+			break
+		}
+
+		return e.ComplexityRoot.MergeRequirements.Reviews(childComplexity), true
 
 	case "MergeResult.base":
 		if e.ComplexityRoot.MergeResult.Base == nil {
@@ -1222,6 +1318,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["expectedVersion"].(*int)), true
+	case "Mutation.deleteBranch":
+		if e.ComplexityRoot.Mutation.DeleteBranch == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteBranch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteBranch(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["expectedHead"].(*string)), true
 	case "Mutation.deleteRole":
 		if e.ComplexityRoot.Mutation.DeleteRole == nil {
 			break
@@ -1398,6 +1505,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.SetAnnotation(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["name"].(string), args["input"].(AnnotationInput), args["expectedVersion"].(*int)), true
+	case "Mutation.submitReview":
+		if e.ComplexityRoot.Mutation.SubmitReview == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_submitReview_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.SubmitReview(childComplexity, args["repositoryId"].(string), args["sha"].(string), args["input"].(ReviewInput)), true
 	case "Mutation.updateOrganization":
 		if e.ComplexityRoot.Mutation.UpdateOrganization == nil {
 			break
@@ -1743,6 +1861,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.CreatedBy(childComplexity), true
+	case "Repository.deletedBranch":
+		if e.ComplexityRoot.Repository.DeletedBranch == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_deletedBranch_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.DeletedBranch(childComplexity, args["name"].(string)), true
 	case "Repository.description":
 		if e.ComplexityRoot.Repository.Description == nil {
 			break
@@ -1784,6 +1913,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.OrganizationID(childComplexity), true
+	case "Repository.review":
+		if e.ComplexityRoot.Repository.Review == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_review_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Review(childComplexity, args["id"].(string)), true
 	case "Repository.roles":
 		if e.ComplexityRoot.Repository.Roles == nil {
 			break
@@ -1850,6 +1990,56 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RepositoryAccess.Roles(childComplexity), true
+
+	case "Review.body":
+		if e.ComplexityRoot.Review.Body == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.Body(childComplexity), true
+	case "Review.id":
+		if e.ComplexityRoot.Review.ID == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.ID(childComplexity), true
+	case "Review.person":
+		if e.ComplexityRoot.Review.Person == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.Person(childComplexity), true
+	case "Review.reviewer":
+		if e.ComplexityRoot.Review.Reviewer == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.Reviewer(childComplexity), true
+	case "Review.sha":
+		if e.ComplexityRoot.Review.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.Sha(childComplexity), true
+	case "Review.state":
+		if e.ComplexityRoot.Review.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.State(childComplexity), true
+	case "Review.submittedAt":
+		if e.ComplexityRoot.Review.SubmittedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.SubmittedAt(childComplexity), true
+
+	case "ReviewRequirements.approvals":
+		if e.ComplexityRoot.ReviewRequirements.Approvals == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ReviewRequirements.Approvals(childComplexity), true
 
 	case "Role.builtIn":
 		if e.ComplexityRoot.Role.BuiltIn == nil {
@@ -2125,6 +2315,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("OrganizationSettings", ec.unmarshalInputOrganizationSettings),
 			graphql.NewInputUnmarshaler("PersonalTokenInput", ec.unmarshalInputPersonalTokenInput),
 			graphql.NewInputUnmarshaler("RepositoryInput", ec.unmarshalInputRepositoryInput),
+			graphql.NewInputUnmarshaler("ReviewInput", ec.unmarshalInputReviewInput),
 			graphql.NewInputUnmarshaler("RoleInput", ec.unmarshalInputRoleInput),
 			graphql.NewInputUnmarshaler("SSHKeyInput", ec.unmarshalInputSSHKeyInput),
 			graphql.NewInputUnmarshaler("SecretInput", ec.unmarshalInputSecretInput),
@@ -2209,17 +2400,24 @@ var sources = []*ast.Source{
 # trees and files, which the Git server reads
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations"); and its
+# branches' merges and deletions (the same design, "Merging" and "Deleting a branch"); and the reviews principals
+# submit of its commits (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md,
+# "Reviews").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
   branches: [Branch!]!
   "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
   branch(name: String!): Branch
+  "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
+  deletedBranch(name: String!): DeletedBranch
   "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100."
   history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
+  "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
+  review(id: ID!): Review
   "The repository's tags, by name, each with the object it names; takes repo.read."
   tags: [Tag!]!
   "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
@@ -2312,6 +2510,41 @@ extend type Mutation {
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
   "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
+  "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved); without it, the branch is deleted wherever it is, at its new head when it moves meanwhile, and refused so only once it kept moving. main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
+  deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
+  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and answers it; takes reviews.submit. A review is never changed: its reviewer submits another, and their latest is the one that counts."
+  submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
+}
+
+"The review a principal submits."
+input ReviewInput {
+  state: ReviewState!
+  "What the reviewer writes, at most 65,536 characters, which only an approval may leave blank."
+  body: String! = ""
+}
+
+"A review's verdict on a commit."
+enum ReviewState {
+  "Approves it: a person's approval counts towards a branch's required approvals."
+  APPROVED
+  "Asks for changes, which holds back a branch whose base requires reviews until its reviewer submits another."
+  CHANGES_REQUESTED
+  "Comments without a verdict, and takes back its reviewer's earlier one."
+  NEUTRAL
+}
+
+"A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed."
+type Review {
+  id: ID!
+  "The commit reviewed."
+  sha: String!
+  state: ReviewState!
+  body: String!
+  "Who submitted it; null once they are gone, when it counts no more."
+  reviewer: CommitPrincipal
+  "Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't."
+  person: Boolean!
+  submittedAt: Time!
 }
 
 "How to merge a branch into its base."
@@ -2355,7 +2588,7 @@ type Branch {
   base: String
   "Where it stands as a request to merge into its base; null for main."
   status: BranchStatus
-  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main."
+  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main."
   checks: [BranchCheck!]!
   "How many commits it has that its base lacks; null for main, and until a push works it out."
   ahead: Int
@@ -2375,6 +2608,22 @@ type BranchMerge {
   by: CommitPrincipal
   "When Cobranch recorded the push."
   at: Time!
+}
+
+"The latest deletion of a branch of a name, which keeps what it was at and its merge."
+type DeletedBranch {
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it was at when deleted."
+  head: String!
+  "The commit it was at; null while its head is no commit a push recorded."
+  commit: Commit
+  createdAt: Time!
+  deletedAt: Time!
+  "Who deleted it; null when no one was recorded, or once they are gone."
+  deletedBy: CommitPrincipal
+  "The last merge recorded of it into its base; null when none was."
+  merge: BranchMerge
 }
 
 "Where a branch stands as a request to merge into its base, the first that holds."
@@ -2397,6 +2646,10 @@ enum BranchCheckKind {
   ANNOTATION
   "No merge among its commits to merge."
   LINEAR_HISTORY
+  "People's approvals of its head, besides its author's and its pusher's."
+  APPROVALS
+  "A reviewer whose latest review of its head requests changes; never met."
+  CHANGES_REQUESTED
   "Its base's tip in it."
   UP_TO_DATE
 }
@@ -2404,12 +2657,14 @@ enum BranchCheckKind {
 "One of a branch's merge requirements and how it stands."
 type BranchCheck {
   kind: BranchCheckKind!
-  "The required annotation's name; null unless kind is ANNOTATION."
+  "The required annotation's name, for ANNOTATION; the reviewer's display name, for CHANGES_REQUESTED; null otherwise."
   name: String
   "The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION."
   status: AnnotationStatus
-  "For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION."
+  "For LINEAR_HISTORY, the merges among its commits to merge; for APPROVALS, the approvals that count; for UP_TO_DATE, the commits of its base it lacks; null otherwise."
   count: Int
+  "For APPROVALS, how many the base requires; null otherwise."
+  required: Int
   met: Boolean!
 }
 
@@ -2419,6 +2674,14 @@ type MergeRequirements {
   annotations: [String!]!
   "Whether no merge commit may come in."
   linearHistory: Boolean!
+  "The reviews a merge needs of the incoming head; null when it requires none."
+  reviews: ReviewRequirements
+}
+
+"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's."
+type ReviewRequirements {
+  "0 to 10."
+  approvals: Int!
 }
 
 "A page of history, nearest first."
@@ -2441,6 +2704,8 @@ type Commit {
   signature: String!
   "The annotations principals set on it, by name."
   annotations: [Annotation!]!
+  "The reviews submitted of it, in the order they were; each reviewer's latest is the one that counts."
+  reviews: [Review!]!
   "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
   push: Push
 }
@@ -2505,7 +2770,7 @@ type Push {
   id: ID!
   "Who pushed; null once they are gone."
   pusher: CommitPrincipal
-  "https or ssh, or api for a merge asked of Cobranch."
+  "https or ssh, or api for a merge or a deletion asked of Cobranch."
   transport: String!
   "When Cobranch recorded it."
   at: Time!
@@ -3019,6 +3284,8 @@ func (ec *executionContext) childFields_BranchCheck(ctx context.Context, field g
 		return ec.fieldContext_BranchCheck_status(ctx, field)
 	case "count":
 		return ec.fieldContext_BranchCheck_count(ctx, field)
+	case "required":
+		return ec.fieldContext_BranchCheck_required(ctx, field)
 	case "met":
 		return ec.fieldContext_BranchCheck_met(ctx, field)
 	}
@@ -3055,6 +3322,8 @@ func (ec *executionContext) childFields_Commit(ctx context.Context, field graphq
 		return ec.fieldContext_Commit_signature(ctx, field)
 	case "annotations":
 		return ec.fieldContext_Commit_annotations(ctx, field)
+	case "reviews":
+		return ec.fieldContext_Commit_reviews(ctx, field)
 	case "push":
 		return ec.fieldContext_Commit_push(ctx, field)
 	}
@@ -3079,6 +3348,26 @@ func (ec *executionContext) childFields_CommitPrincipal(ctx context.Context, fie
 		return ec.fieldContext_CommitPrincipal_displayName(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type CommitPrincipal", field.Name)
+}
+
+func (ec *executionContext) childFields_DeletedBranch(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_DeletedBranch_name(ctx, field)
+	case "head":
+		return ec.fieldContext_DeletedBranch_head(ctx, field)
+	case "commit":
+		return ec.fieldContext_DeletedBranch_commit(ctx, field)
+	case "createdAt":
+		return ec.fieldContext_DeletedBranch_createdAt(ctx, field)
+	case "deletedAt":
+		return ec.fieldContext_DeletedBranch_deletedAt(ctx, field)
+	case "deletedBy":
+		return ec.fieldContext_DeletedBranch_deletedBy(ctx, field)
+	case "merge":
+		return ec.fieldContext_DeletedBranch_merge(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DeletedBranch", field.Name)
 }
 
 func (ec *executionContext) childFields_Email(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3187,6 +3476,8 @@ func (ec *executionContext) childFields_MergeRequirements(ctx context.Context, f
 		return ec.fieldContext_MergeRequirements_annotations(ctx, field)
 	case "linearHistory":
 		return ec.fieldContext_MergeRequirements_linearHistory(ctx, field)
+	case "reviews":
+		return ec.fieldContext_MergeRequirements_reviews(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type MergeRequirements", field.Name)
 }
@@ -3329,10 +3620,14 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_branches(ctx, field)
 	case "branch":
 		return ec.fieldContext_Repository_branch(ctx, field)
+	case "deletedBranch":
+		return ec.fieldContext_Repository_deletedBranch(ctx, field)
 	case "history":
 		return ec.fieldContext_Repository_history(ctx, field)
 	case "commit":
 		return ec.fieldContext_Repository_commit(ctx, field)
+	case "review":
+		return ec.fieldContext_Repository_review(ctx, field)
 	case "tags":
 		return ec.fieldContext_Repository_tags(ctx, field)
 	case "tree":
@@ -3355,6 +3650,34 @@ func (ec *executionContext) childFields_RepositoryAccess(ctx context.Context, fi
 		return ec.fieldContext_RepositoryAccess_roles(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RepositoryAccess", field.Name)
+}
+
+func (ec *executionContext) childFields_Review(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "id":
+		return ec.fieldContext_Review_id(ctx, field)
+	case "sha":
+		return ec.fieldContext_Review_sha(ctx, field)
+	case "state":
+		return ec.fieldContext_Review_state(ctx, field)
+	case "body":
+		return ec.fieldContext_Review_body(ctx, field)
+	case "reviewer":
+		return ec.fieldContext_Review_reviewer(ctx, field)
+	case "person":
+		return ec.fieldContext_Review_person(ctx, field)
+	case "submittedAt":
+		return ec.fieldContext_Review_submittedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Review", field.Name)
+}
+
+func (ec *executionContext) childFields_ReviewRequirements(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "approvals":
+		return ec.fieldContext_ReviewRequirements_approvals(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ReviewRequirements", field.Name)
 }
 
 func (ec *executionContext) childFields_Role(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3877,6 +4200,36 @@ func (ec *executionContext) field_Mutation_deleteApiKey_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "expectedHead",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedHead"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteRole_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4285,6 +4638,36 @@ func (ec *executionContext) field_Mutation_setAnnotation_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_submitReview_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "sha",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sha"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ReviewInput, error) {
+			return ec.unmarshalNReviewInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateOrganization_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4479,6 +4862,20 @@ func (ec *executionContext) field_Repository_commit_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_deletedBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Repository_history_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4522,6 +4919,20 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["after"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_review_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["id"] = arg0
 	return args, nil
 }
 
@@ -5659,6 +6070,29 @@ func (ec *executionContext) fieldContext_BranchCheck_count(_ context.Context, fi
 	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "Int")
 }
 
+func (ec *executionContext) _BranchCheck_required(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BranchCheck_required(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Required, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BranchCheck_required(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BranchCheck", field, false, false, "Int")
+}
+
 func (ec *executionContext) _BranchCheck_met(ctx context.Context, field graphql.CollectedField, obj *BranchCheck) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -5971,6 +6405,38 @@ func (ec *executionContext) fieldContext_Commit_annotations(_ context.Context, f
 	return fc, nil
 }
 
+func (ec *executionContext) _Commit_reviews(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Commit_reviews(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reviews, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Review) graphql.Marshaler {
+			return ec.marshalNReview2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Commit_reviews(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Commit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Review(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Commit_push(ctx context.Context, field graphql.CollectedField, obj *Commit) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -6102,6 +6568,194 @@ func (ec *executionContext) _CommitPrincipal_displayName(ctx context.Context, fi
 }
 func (ec *executionContext) fieldContext_CommitPrincipal_displayName(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("CommitPrincipal", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeletedBranch_name(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletedBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeletedBranch_head(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletedBranch", field, false, false, "String")
+}
+
+func (ec *executionContext) _DeletedBranch_commit(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletedBranch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeletedBranch_createdAt(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_createdAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CreatedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletedBranch", field, false, false, "Time")
+}
+
+func (ec *executionContext) _DeletedBranch_deletedAt(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_deletedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeletedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_deletedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DeletedBranch", field, false, false, "Time")
+}
+
+func (ec *executionContext) _DeletedBranch_deletedBy(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_deletedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.DeletedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_deletedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletedBranch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _DeletedBranch_merge(ctx context.Context, field graphql.CollectedField, obj *DeletedBranch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DeletedBranch_merge(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Merge, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *BranchMerge) graphql.Marshaler {
+			return ec.marshalOBranchMerge2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBranchMerge(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DeletedBranch_merge(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "DeletedBranch",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BranchMerge(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Email_email(ctx context.Context, field graphql.CollectedField, obj *Email) (ret graphql.Marshaler) {
@@ -6964,6 +7618,38 @@ func (ec *executionContext) fieldContext_MergeRequirements_linearHistory(_ conte
 	return graphql.NewScalarFieldContext("MergeRequirements", field, false, false, "Boolean")
 }
 
+func (ec *executionContext) _MergeRequirements_reviews(ctx context.Context, field graphql.CollectedField, obj *MergeRequirements) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_MergeRequirements_reviews(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reviews, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ReviewRequirements) graphql.Marshaler {
+			return ec.marshalOReviewRequirements2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewRequirements(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_MergeRequirements_reviews(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "MergeRequirements",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ReviewRequirements(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _MergeResult_base(ctx context.Context, field graphql.CollectedField, obj *MergeResult) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -7379,6 +8065,94 @@ func (ec *executionContext) fieldContext_Mutation_mergeBranch(ctx context.Contex
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_mergeBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteBranch(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteBranch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteBranch(ctx, fc.Args["repositoryId"].(string), fc.Args["branch"].(string), fc.Args["expectedHead"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteBranch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_submitReview(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_submitReview(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().SubmitReview(ctx, fc.Args["repositoryId"].(string), fc.Args["sha"].(string), fc.Args["input"].(ReviewInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Review) graphql.Marshaler {
+			return ec.marshalNReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReview(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_submitReview(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Review(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_submitReview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -9935,6 +10709,50 @@ func (ec *executionContext) fieldContext_Repository_branch(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_deletedBranch(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_deletedBranch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().DeletedBranch(ctx, obj, fc.Args["name"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *DeletedBranch) graphql.Marshaler {
+			return ec.marshalODeletedBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeletedBranch(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_deletedBranch(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DeletedBranch(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_deletedBranch_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Repository_history(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -10017,6 +10835,50 @@ func (ec *executionContext) fieldContext_Repository_commit(ctx context.Context, 
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Repository_commit_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_review(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_review(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Review(ctx, obj, fc.Args["id"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Review) graphql.Marshaler {
+			return ec.marshalOReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReview(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_review(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Review(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_review_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -10242,6 +11104,199 @@ func (ec *executionContext) fieldContext_RepositoryAccess_roles(_ context.Contex
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Review_id(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_id(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ID, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNID2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "ID")
+}
+
+func (ec *executionContext) _Review_sha(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "String")
+}
+
+func (ec *executionContext) _Review_state(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v ReviewState) graphql.Marshaler {
+			return ec.marshalNReviewState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "ReviewState")
+}
+
+func (ec *executionContext) _Review_body(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_body(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Body, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_body(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "String")
+}
+
+func (ec *executionContext) _Review_reviewer(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_reviewer(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reviewer, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Review_reviewer(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Review",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Review_person(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_person(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Person, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_person(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _Review_submittedAt(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_submittedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.SubmittedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_submittedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ReviewRequirements_approvals(ctx context.Context, field graphql.CollectedField, obj *ReviewRequirements) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ReviewRequirements_approvals(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Approvals, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ReviewRequirements_approvals(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ReviewRequirements", field, false, false, "Int")
 }
 
 func (ec *executionContext) _Role_id(ctx context.Context, field graphql.CollectedField, obj *Role) (ret graphql.Marshaler) {
@@ -12721,6 +13776,59 @@ func UnmarshalRepositoryInput(ctx context.Context, raw any) (RepositoryInput, er
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputReviewInput(ctx context.Context, obj any) (ReviewInput, error) {
+	var it ReviewInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["body"]; !present {
+		asMap["body"] = ""
+	}
+
+	fieldsInOrder := [...]string{"state", "body"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "state":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("state"))
+			data, err := ec.unmarshalNReviewState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewState(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.State = data
+		case "body":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("body"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Body = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalReviewInput unmarshals raw into the ReviewInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalReviewInput(ctx context.Context, raw any) (ReviewInput, error) {
+	var out ReviewInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ReviewInput", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputRoleInput(ctx context.Context, obj any) (RoleInput, error) {
 	var it RoleInput
 	if obj == nil {
@@ -13244,6 +14352,11 @@ func (ec *executionContext) _BranchCheck(ctx context.Context, sel ast.SelectionS
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "required":
+			out.Values[i] = ec._BranchCheck_required(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "met":
 			out.Values[i] = ec._BranchCheck_met(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -13360,6 +14473,11 @@ func (ec *executionContext) _Commit(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "reviews":
+			out.Values[i] = ec._Commit_reviews(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "push":
 			out.Values[i] = ec._Commit_push(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
@@ -13439,6 +14557,69 @@ func (ec *executionContext) _CommitPrincipal(ctx context.Context, sel ast.Select
 		case "displayName":
 			out.Values[i] = ec._CommitPrincipal_displayName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var deletedBranchImplementors = []string{"DeletedBranch"}
+
+func (ec *executionContext) _DeletedBranch(ctx context.Context, sel ast.SelectionSet, obj *DeletedBranch) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, deletedBranchImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DeletedBranch")
+		case "name":
+			out.Values[i] = ec._DeletedBranch_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._DeletedBranch_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commit":
+			out.Values[i] = ec._DeletedBranch_commit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "createdAt":
+			out.Values[i] = ec._DeletedBranch_createdAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletedAt":
+			out.Values[i] = ec._DeletedBranch_deletedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletedBy":
+			out.Values[i] = ec._DeletedBranch_deletedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "merge":
+			out.Values[i] = ec._DeletedBranch_merge(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -13794,6 +14975,11 @@ func (ec *executionContext) _MergeRequirements(ctx context.Context, sel ast.Sele
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "reviews":
+			out.Values[i] = ec._MergeRequirements_reviews(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -13925,6 +15111,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 		case "mergeBranch":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_mergeBranch(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteBranch":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteBranch(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "submitReview":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_submitReview(ctx, field)
 			})
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
@@ -14593,6 +15793,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_branch(ctx, field, obj)
 				})
+		case "deletedBranch":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_deletedBranch(ctx, field, obj)
+				})
 		case "history":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, true,
@@ -14604,6 +15810,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_commit(ctx, field, obj)
+				})
+		case "review":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_review(ctx, field, obj)
 				})
 		case "tags":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -14668,6 +15880,102 @@ func (ec *executionContext) _RepositoryAccess(ctx context.Context, sel ast.Selec
 			}
 		case "roles":
 			out.Values[i] = ec._RepositoryAccess_roles(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var reviewImplementors = []string{"Review"}
+
+func (ec *executionContext) _Review(ctx context.Context, sel ast.SelectionSet, obj *Review) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reviewImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Review")
+		case "id":
+			out.Values[i] = ec._Review_id(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._Review_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._Review_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "body":
+			out.Values[i] = ec._Review_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reviewer":
+			out.Values[i] = ec._Review_reviewer(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "person":
+			out.Values[i] = ec._Review_person(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "submittedAt":
+			out.Values[i] = ec._Review_submittedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var reviewRequirementsImplementors = []string{"ReviewRequirements"}
+
+func (ec *executionContext) _ReviewRequirements(ctx context.Context, sel ast.SelectionSet, obj *ReviewRequirements) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, reviewRequirementsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ReviewRequirements")
+		case "approvals":
+			out.Values[i] = ec._ReviewRequirements_approvals(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
@@ -15985,6 +17293,45 @@ func (ec *executionContext) marshalNRepositoryVisibility2cobranchᚗdevᚋintern
 	return v
 }
 
+func (ec *executionContext) marshalNReview2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewᚄ(ctx context.Context, sel ast.SelectionSet, v []*Review) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReview(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReview(ctx context.Context, sel ast.SelectionSet, v *Review) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Review!")
+		return graphql.Null
+	}
+	return ec._Review(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNReviewInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewInput(ctx context.Context, v any) (ReviewInput, error) {
+	res, err := ec.unmarshalInputReviewInput(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) unmarshalNReviewState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewState(ctx context.Context, v any) (ReviewState, error) {
+	var res ReviewState
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNReviewState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewState(ctx context.Context, sel ast.SelectionSet, v ReviewState) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNRole2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRoleᚄ(ctx context.Context, sel ast.SelectionSet, v []*Role) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -16414,6 +17761,13 @@ func (ec *executionContext) marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternal
 	return ec._CommitPrincipal(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalODeletedBranch2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeletedBranch(ctx context.Context, sel ast.SelectionSet, v *DeletedBranch) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._DeletedBranch(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFile(ctx context.Context, sel ast.SelectionSet, v *File) graphql.Marshaler {
 	if v == nil {
 		return graphql.Null
@@ -16507,6 +17861,20 @@ func (ec *executionContext) marshalORepository2ᚖcobranchᚗdevᚋinternalᚋad
 		return graphql.Null
 	}
 	return ec._Repository(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOReview2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReview(ctx context.Context, sel ast.SelectionSet, v *Review) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Review(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOReviewRequirements2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐReviewRequirements(ctx context.Context, sel ast.SelectionSet, v *ReviewRequirements) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ReviewRequirements(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretInput(ctx context.Context, v any) (*SecretInput, error) {

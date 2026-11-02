@@ -28,11 +28,16 @@ type Code interface {
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
+	Reviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Review, error)
+	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
+	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
+	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 }
 
 func principal(p *code.Principal) *Principal {
@@ -46,10 +51,16 @@ func person(p code.Person) Person {
 	return Person{Name: p.Name, Email: p.Email, At: p.At.UTC(), Zone: p.Zone, Principal: principal(p.Principal)}
 }
 
-// commit is c as the API shows it, with its annotations; a list's commits come without their pushes.
+// commit is c as the API shows it, with its annotations and reviews; a list's commits come without their pushes.
 func commit(c code.Commit) Commit {
 	return Commit{Sha: c.SHA, Tree: c.Tree, Parents: nonNil(c.Parents), Message: c.Message, Author: person(c.Author),
-		Committer: person(c.Committer), Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation)}
+		Committer: person(c.Committer), Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation),
+		Reviews: mapAll(c.Reviews, review)}
+}
+
+func review(r code.Review) Review {
+	return Review{Id: r.ID, Sha: r.SHA, State: ReviewState(r.State), Body: r.Body, Reviewer: principal(r.Reviewer), Person: r.Person,
+		SubmittedAt: r.SubmittedAt.UTC()}
 }
 
 func annotation(a code.Annotation) Annotation {
@@ -79,6 +90,9 @@ func branch(b code.Branch) Branch {
 	}
 	if r := b.Requirements; r != nil {
 		out.Requirements = &MergeRequirements{Annotations: nonNil(r.Annotations), LinearHistory: r.LinearHistory}
+		if r.Reviews != nil {
+			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals}
+		}
 	}
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
@@ -96,6 +110,10 @@ func check(c code.Check) BranchCheck {
 			status := AnnotationStatus(c.Status)
 			out.Status = &status
 		}
+	case code.CheckChangesRequested:
+		out.Name = &c.Name
+	case code.CheckApprovals:
+		out.Count, out.Required = &c.Count, &c.Required
 	default:
 		out.Count = &c.Count
 	}
@@ -171,6 +189,90 @@ func (a api) MergeBranch(ctx context.Context, req MergeBranchRequestObject) (Mer
 		return nil, mergeFail(err)
 	}
 	return MergeBranch200JSONResponse(MergeResult{Base: merged.Base, Head: merged.Head, Commit: merged.Commit}), nil
+}
+
+// DeleteBranch deletes a branch for the viewer at the head If-Match names.
+func (a api) DeleteBranch(ctx context.Context, req DeleteBranchRequestObject) (DeleteBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	head, err := headIfMatch(req.Params.IfMatch)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.code.DeleteBranch(ctx, v, repo.ID, req.BranchName, head); err != nil {
+		return nil, deleteFail(err)
+	}
+	return DeleteBranch204Response{}, nil
+}
+
+// headIfMatch is the head a deletion's If-Match names: "" for *, which deletes the branch wherever it is; a refusal
+// with 428 without the header, and with 412 for a tag that names no commit, a weak one included, since If-Match
+// compares strongly.
+func headIfMatch(header *IfMatchBranch) (string, error) {
+	if header == nil || strings.TrimSpace(*header) == "" {
+		return "", refuse(http.StatusPreconditionRequired, "precondition.required",
+			"Name the head you saw in If-Match to delete the branch, quoted, or * to delete it wherever it is.")
+	}
+	tag := strings.TrimSpace(*header)
+	if tag == "*" {
+		return "", nil
+	}
+	head := strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`)
+	if code.ValidateSHA("head", head) != nil {
+		return "", refuse(http.StatusPreconditionFailed, "precondition.failed", "If-Match names no head of the branch.")
+	}
+	return head, nil
+}
+
+// deleteFail is fail for deletions: 412 for a branch that moved, 409 for a deletion Cobranch won't make, and 503
+// without a Git server.
+func deleteFail(err error) error {
+	var refused *code.DeleteError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The branch moved since you read it: read it again.")
+	case errors.As(err, &refused):
+		return refuse(http.StatusConflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(http.StatusServiceUnavailable, "git.unavailable", "This installation runs no Git server to delete with.")
+	}
+	return fail(err, "branch")
+}
+
+// GetDeletedBranch finds the latest deletion of a branch of a name.
+func (a api) GetDeletedBranch(ctx context.Context, req GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	b, err := a.code.DeletedBranch(ctx, v, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, fail(err, "branch")
+	}
+	return GetDeletedBranch200JSONResponse(deletedBranch(b)), nil
+}
+
+// deletedBranch is b as the API shows it.
+func deletedBranch(b code.DeletedBranch) DeletedBranch {
+	out := DeletedBranch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt.UTC(), DeletedAt: b.DeletedAt.UTC(), DeletedBy: principal(b.DeletedBy)}
+	if b.Commit != nil {
+		c := commit(*b.Commit)
+		out.Commit = &c
+	}
+	if m := b.Merge; m != nil {
+		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
+	}
+	return out
 }
 
 // mergeFail is fail for merges: 409 for a branch that moved and a merge Cobranch won't make, and 503 without a Git
@@ -303,6 +405,62 @@ func (a api) ListAnnotations(ctx context.Context, req ListAnnotationsRequestObje
 		return nil, fail(err, "commit")
 	}
 	return ListAnnotations200JSONResponse{Annotations: mapAll(list, annotation)}, nil
+}
+
+// ListReviews lists the reviews submitted of one of the repository's commits.
+func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (ListReviewsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	list, err := a.code.Reviews(ctx, v, repo.ID, req.SHA)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	return ListReviews200JSONResponse{Reviews: mapAll(list, review)}, nil
+}
+
+// SubmitReview submits the viewer's review of one of the repository's commits.
+func (a api) SubmitReview(ctx context.Context, req SubmitReviewRequestObject) (SubmitReviewResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	in := code.ReviewInput{State: code.ReviewState(req.Body.State)}
+	if req.Body.Body != nil {
+		in.Body = *req.Body.Body
+	}
+	r, err := a.code.SubmitReview(ctx, v, repo.ID, req.SHA, in)
+	if err != nil {
+		return nil, fail(err, "commit")
+	}
+	location := "../../reviews/" + r.ID.String()
+	return SubmitReview201JSONResponse{Body: review(r), Headers: SubmitReview201ResponseHeaders{Location: &location}}, nil
+}
+
+// GetReview answers one of the repository's reviews.
+func (a api) GetReview(ctx context.Context, req GetReviewRequestObject) (GetReviewResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	r, err := a.code.Review(ctx, v, repo.ID, req.Review)
+	if err != nil {
+		return nil, fail(err, "review")
+	}
+	return GetReview200JSONResponse(review(r)), nil
 }
 
 // SetAnnotation sets an annotation on one of the repository's commits for the viewer, or changes the viewer's own.

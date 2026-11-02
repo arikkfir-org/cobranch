@@ -18,7 +18,11 @@ type Code interface {
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
+	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
+	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
+	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
@@ -97,7 +101,27 @@ func commit(c code.Commit) *Commit {
 		parents = []string{}
 	}
 	return &Commit{Sha: c.SHA, Tree: c.Tree, Parents: parents, Message: c.Message, Author: person(c.Author), Committer: person(c.Committer),
-		Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation)}
+		Signature: c.Signature, Annotations: mapAll(c.Annotations, annotation), Reviews: mapAll(c.Reviews, review)}
+}
+
+// reviewStates maps the domain's review states to the schema's.
+var reviewStates = map[code.ReviewState]ReviewState{
+	code.ReviewApproved: ReviewStateApproved, code.ReviewChangesRequested: ReviewStateChangesRequested, code.ReviewNeutral: ReviewStateNeutral,
+}
+
+// reviewStateOf is the domain's review state that state is.
+func reviewStateOf(state ReviewState) code.ReviewState {
+	for domain, schema := range reviewStates {
+		if schema == state {
+			return domain
+		}
+	}
+	return ""
+}
+
+func review(r code.Review) *Review {
+	return &Review{ID: r.ID.String(), Sha: r.SHA, State: reviewStates[r.State], Body: r.Body, Reviewer: commitPrincipal(r.Reviewer),
+		Person: r.Person, SubmittedAt: r.SubmittedAt.UTC()}
 }
 
 // annotationStatuses maps the domain's annotation statuses to the schema's, and back.
@@ -172,6 +196,21 @@ func branch(b code.Branch) *Branch {
 			annotations = []string{}
 		}
 		out.Requirements = &MergeRequirements{Annotations: annotations, LinearHistory: r.LinearHistory}
+		if r.Reviews != nil {
+			out.Requirements.Reviews = &ReviewRequirements{Approvals: r.Reviews.Approvals}
+		}
+	}
+	if m := b.Merge; m != nil {
+		out.Merge = &BranchMerge{Head: m.Head, By: commitPrincipal(m.By), At: m.At.UTC()}
+	}
+	return out
+}
+
+// deletedBranch is b as the API shows it.
+func deletedBranch(b code.DeletedBranch) *DeletedBranch {
+	out := &DeletedBranch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt.UTC(), DeletedAt: b.DeletedAt.UTC(), DeletedBy: commitPrincipal(b.DeletedBy)}
+	if b.Commit != nil {
+		out.Commit = commit(*b.Commit)
 	}
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: commitPrincipal(m.By), At: m.At.UTC()}
@@ -187,7 +226,8 @@ var branchStatuses = map[code.BranchStatus]BranchStatus{
 
 // checkKinds maps the domain's kinds of checks to the schema's.
 var checkKinds = map[code.CheckKind]BranchCheckKind{
-	code.CheckAnnotation: BranchCheckKindAnnotation, code.CheckLinearHistory: BranchCheckKindLinearHistory, code.CheckUpToDate: BranchCheckKindUpToDate,
+	code.CheckAnnotation: BranchCheckKindAnnotation, code.CheckLinearHistory: BranchCheckKindLinearHistory, code.CheckApprovals: BranchCheckKindApprovals,
+	code.CheckChangesRequested: BranchCheckKindChangesRequested, code.CheckUpToDate: BranchCheckKindUpToDate,
 }
 
 // check is one of a branch's checks as the API shows it, each field only where its kind has it.
@@ -200,6 +240,10 @@ func check(c code.Check) *BranchCheck {
 			status := annotationStatuses[c.Status]
 			out.Status = &status
 		}
+	case code.CheckChangesRequested:
+		out.Name = &c.Name
+	case code.CheckApprovals:
+		out.Count, out.Required = &c.Count, &c.Required
 	default:
 		out.Count = &c.Count
 	}
@@ -237,4 +281,19 @@ func mergeFail(ctx context.Context, err error) error {
 		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
 	}
 	return fail(ctx, err, "branch", "merging the branch")
+}
+
+// deleteFail is fail for deletions: CONFLICT for a branch that moved and a deletion Cobranch won't make, and
+// UNAVAILABLE without a Git server.
+func deleteFail(ctx context.Context, err error) error {
+	var refused *code.DeleteError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(ctx, conflict, "branch.moved", "The branch moved since you read it: read it again.")
+	case errors.As(err, &refused):
+		return refuse(ctx, conflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
+	}
+	return fail(ctx, err, "branch", "deleting the branch")
 }

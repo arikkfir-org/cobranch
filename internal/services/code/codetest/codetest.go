@@ -14,26 +14,32 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// Store is a code.Store in memory: each repository's commits by name, branches, tags, pushes and slugs, the
-// organization's then its own, and the annotations on its commits. Fail, when set, fails every listing and every
-// change. Names names the principals who set annotations, by ID; Now is the time it records changes at.
+// Store is a code.Store in memory: each repository's commits by name, branches, deleted branches, oldest deletion
+// first, tags, pushes and slugs, the organization's then its own, and the annotations on its commits and the reviews
+// of them, in the order they were submitted. Fail, when set, fails every listing and every change. Names names the
+// principals who set annotations and submit reviews, by ID, and NotPeople holds those who aren't people; Now is the
+// time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
+	Deleted    map[uuid.UUID][]code.DeletedBranch
 	TagList    map[uuid.UUID][]code.Tag
 	Pushes     map[uuid.UUID]code.Push
 	SlugList   map[uuid.UUID][2]string
 	Notes      map[uuid.UUID]map[string][]code.Annotation
+	ReviewList map[uuid.UUID][]code.Review
 	Names      map[uuid.UUID]string
+	NotPeople  map[uuid.UUID]bool
 	Now        time.Time
 	Fail       error
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{}, TagList: map[uuid.UUID][]code.Tag{},
+	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{},
+		Deleted: map[uuid.UUID][]code.DeletedBranch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
-		Names: map[uuid.UUID]string{}}
+		ReviewList: map[uuid.UUID][]code.Review{}, Names: map[uuid.UUID]string{}, NotPeople: map[uuid.UUID]bool{}}
 }
 
 // Add records commits in the repository, as push brought them.
@@ -90,6 +96,24 @@ func (s *Store) Branch(_ context.Context, repoID uuid.UUID, name string) (code.B
 	return code.Branch{}, repos.ErrNotFound
 }
 
+// DeletedBranch finds the latest deletion of the repository's branch of name, or repos.ErrNotFound when there is none
+// or a branch of that name is live.
+func (s *Store) DeletedBranch(_ context.Context, repoID uuid.UUID, name string) (code.DeletedBranch, error) {
+	if s.Fail != nil {
+		return code.DeletedBranch{}, s.Fail
+	}
+	if slices.ContainsFunc(s.BranchList[repoID], func(b code.Branch) bool { return b.Name == name }) {
+		return code.DeletedBranch{}, repos.ErrNotFound
+	}
+	deleted := s.Deleted[repoID]
+	for i := len(deleted) - 1; i >= 0; i-- {
+		if deleted[i].Name == name {
+			return deleted[i], nil
+		}
+	}
+	return code.DeletedBranch{}, repos.ErrNotFound
+}
+
 // annotatedBranch is b with its commit's annotations.
 func (s *Store) annotatedBranch(repoID uuid.UUID, b code.Branch) code.Branch {
 	if b.Commit != nil {
@@ -99,10 +123,61 @@ func (s *Store) annotatedBranch(repoID uuid.UUID, b code.Branch) code.Branch {
 	return b
 }
 
-// annotated is c with its annotations.
+// annotated is c with its annotations and reviews.
 func (s *Store) annotated(repoID uuid.UUID, c code.Commit) code.Commit {
 	c.Annotations = slices.Clone(s.Notes[repoID][c.SHA])
+	c.Reviews = s.reviewsOf(repoID, c.SHA)
 	return c
+}
+
+// reviewsOf lists the reviews of the repository's commit, in the order they were submitted.
+func (s *Store) reviewsOf(repoID uuid.UUID, sha string) []code.Review {
+	var out []code.Review
+	for _, r := range s.ReviewList[repoID] {
+		if r.SHA == sha {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Reviews lists the reviews of the repository's commit in the order they were submitted, or repos.ErrNotFound
+// without the commit.
+func (s *Store) Reviews(_ context.Context, repoID uuid.UUID, sha string) ([]code.Review, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	if _, ok := s.Commits[repoID][sha]; !ok {
+		return nil, repos.ErrNotFound
+	}
+	return s.reviewsOf(repoID, sha), nil
+}
+
+// Review finds one of the repository's reviews, or repos.ErrNotFound.
+func (s *Store) Review(_ context.Context, repoID, id uuid.UUID) (code.Review, error) {
+	if s.Fail != nil {
+		return code.Review{}, s.Fail
+	}
+	i := slices.IndexFunc(s.ReviewList[repoID], func(r code.Review) bool { return r.ID == id })
+	if i < 0 {
+		return code.Review{}, repos.ErrNotFound
+	}
+	return s.ReviewList[repoID][i], nil
+}
+
+// SubmitReview records actor's review of the repository's commit, as code.Store does, though it works out no
+// branch's status.
+func (s *Store) SubmitReview(_ context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error) {
+	if s.Fail != nil {
+		return code.Review{}, s.Fail
+	}
+	if _, ok := s.Commits[repoID][sha]; !ok {
+		return code.Review{}, repos.ErrNotFound
+	}
+	r := code.Review{ID: uuid.New(), SHA: sha, State: in.State, Body: in.Body, Reviewer: &code.Principal{ID: actor, DisplayName: s.Names[actor]},
+		Person: !s.NotPeople[actor], SubmittedAt: s.Now}
+	s.ReviewList[repoID] = append(s.ReviewList[repoID], r)
+	return r, nil
 }
 
 // Tags lists the repository's tags in the order they were added.

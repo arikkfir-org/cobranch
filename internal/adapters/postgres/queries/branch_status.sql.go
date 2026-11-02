@@ -161,6 +161,36 @@ func (q *Queries) IncomingBranches(ctx context.Context, repoID uuid.UUID, names 
 	return items, nil
 }
 
+const liveBranchIDs = `-- name: LiveBranchIDs :many
+SELECT id, name FROM branches WHERE repo_id = $1 AND name = ANY ($2::text[]) AND deleted_at IS NULL
+`
+
+type LiveBranchIDsRow struct {
+	ID   uuid.UUID
+	Name string
+}
+
+// LiveBranchIDs finds the IDs of those of a repository's live branches that names name.
+func (q *Queries) LiveBranchIDs(ctx context.Context, repoID uuid.UUID, names []string) ([]LiveBranchIDsRow, error) {
+	rows, err := q.db.Query(ctx, liveBranchIDs, repoID, names)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []LiveBranchIDsRow
+	for rows.Next() {
+		var i LiveBranchIDsRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const lockLiveBranches = `-- name: LockLiveBranches :exec
 SELECT id FROM branches WHERE repo_id = $1 AND deleted_at IS NULL ORDER BY id FOR UPDATE
 `
@@ -173,12 +203,13 @@ func (q *Queries) LockLiveBranches(ctx context.Context, repoID uuid.UUID) error 
 }
 
 const mergeRequirementsOf = `-- name: MergeRequirementsOf :one
-SELECT annotations, linear_history FROM merge_requirements WHERE repo_id = $1 AND branch = $2
+SELECT annotations, linear_history, approvals FROM merge_requirements WHERE repo_id = $1 AND branch = $2
 `
 
 type MergeRequirementsOfRow struct {
 	Annotations   []string
 	LinearHistory bool
+	Approvals     *int32
 }
 
 // MergeRequirementsOf finds what a merge into a repository's branch needs: none when /cobranch.yaml names no such
@@ -186,7 +217,7 @@ type MergeRequirementsOfRow struct {
 func (q *Queries) MergeRequirementsOf(ctx context.Context, repoID uuid.UUID, branch string) (MergeRequirementsOfRow, error) {
 	row := q.db.QueryRow(ctx, mergeRequirementsOf, repoID, branch)
 	var i MergeRequirementsOfRow
-	err := row.Scan(&i.Annotations, &i.LinearHistory)
+	err := row.Scan(&i.Annotations, &i.LinearHistory, &i.Approvals)
 	return i, err
 }
 

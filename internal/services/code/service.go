@@ -27,6 +27,9 @@ type Store interface {
 	Branches(ctx context.Context, repoID uuid.UUID) ([]Branch, error)
 	// Branch finds one of the repository's live branches by name, with its head commit, or repos.ErrNotFound.
 	Branch(ctx context.Context, repoID uuid.UUID, name string) (Branch, error)
+	// DeletedBranch finds the latest deletion of the repository's branch of name, with its head commit, or
+	// repos.ErrNotFound when no branch of that name was deleted, or one is live.
+	DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (DeletedBranch, error)
 	// FirstParents lists at most limit of the repository's commits, from sha along each one's first parent, nearest
 	// first: none when the repository recorded no commit sha.
 	FirstParents(ctx context.Context, repoID uuid.UUID, sha string, limit int) ([]Commit, error)
@@ -48,6 +51,14 @@ type Store interface {
 	// set it or anyone is true: repos.ErrNotFound when there is none and version is 0, a *TakenError when another
 	// principal set it, and ErrAnnotationChanged when version names another than it is, or one that isn't there.
 	DeleteAnnotation(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha, name string, version int64, anyone bool) error
+	// Reviews lists the reviews on one of the repository's commits in the order they were submitted, or
+	// repos.ErrNotFound when the repository holds no such commit.
+	Reviews(ctx context.Context, repoID uuid.UUID, sha string) ([]Review, error)
+	// Review finds one of the repository's reviews, or repos.ErrNotFound.
+	Review(ctx context.Context, repoID, id uuid.UUID) (Review, error)
+	// SubmitReview records actor's review in of one of the repository's commits, works out again the status of the
+	// branches at it, and answers the review: repos.ErrNotFound when the repository holds no such commit.
+	SubmitReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in ReviewInput) (Review, error)
 	// Tags lists the repository's tags by name.
 	Tags(ctx context.Context, repoID uuid.UUID) ([]Tag, error)
 	// Slugs finds the repository's slug and its organization's, or repos.ErrNotFound.
