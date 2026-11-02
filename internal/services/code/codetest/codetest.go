@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/repos"
 )
 
@@ -35,8 +36,10 @@ type Store struct {
 	// EnvironmentList and DeliveryList hold each repository's environments and deliveries, in the order added.
 	EnvironmentList map[uuid.UUID][]code.Environment
 	DeliveryList    map[uuid.UUID][]code.Delivery
-	Now             time.Time
-	Fail            error
+	// Defined are the jobs each branch's head declares, by repository and branch.
+	Defined map[uuid.UUID]map[string][]jobs.Job
+	Now     time.Time
+	Fail    error
 	// ReviewerOff, when set, is why the organization's AI reviewer reviews nothing: a request for a review answers it.
 	// Tasks is the number of the last task a request for a review started.
 	ReviewerOff error
@@ -50,7 +53,7 @@ func NewStore() *Store {
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
 		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
-		DeliveryList: map[uuid.UUID][]code.Delivery{}}
+		DeliveryList: map[uuid.UUID][]code.Delivery{}, Defined: map[uuid.UUID]map[string][]jobs.Job{}}
 }
 
 // Add records commits in the repository, as push brought them.

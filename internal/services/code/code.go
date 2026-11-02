@@ -85,6 +85,9 @@ type Branch struct {
 	SettingsError string
 	// AIReview is the AI reviewer's latest task for its head; nil when there is none, and for the default branch.
 	AIReview *AIReview
+	// ManualJobs are the jobs the /cobranch.yaml at its head declares with a manual trigger, which a member starts on
+	// it, by name.
+	ManualJobs []string
 }
 
 // Merge is a merge of a branch into its base that a push made: the head it brought in, who pushed it, nil once they

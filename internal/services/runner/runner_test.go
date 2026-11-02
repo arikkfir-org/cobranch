@@ -31,6 +31,9 @@ type store struct {
 	fail     error
 	// ended is a run a member cancels while its pod is made: MarkRunning finds it no longer queued.
 	ended bool
+	// scheduled are the repositories with scheduled jobs; QueueSlot fails for the jobs slotFails names.
+	scheduled []runner.Scheduled
+	slotFails map[string]bool
 }
 
 func (s *store) Claim(_ context.Context, leaseUntil time.Time) (runner.Run, bool, error) {
@@ -88,6 +91,27 @@ func (s *store) Organizations(_ context.Context, ids []uuid.UUID) ([]uuid.UUID, 
 func (s *store) DropTokens(context.Context) (int64, error) {
 	s.events = append(s.events, "dropped dead tokens")
 	return 2, nil
+}
+
+func (s *store) Scheduled(context.Context) ([]runner.Scheduled, error) {
+	return s.scheduled, s.fail
+}
+
+func (s *store) QueueSlot(_ context.Context, repoID uuid.UUID, job string, slot time.Time) (bool, error) {
+	key := fmt.Sprintf("%s/%s@%s", repoID.String()[:4], job, slot.Format("15:04"))
+	if s.slotFails[job] {
+		return false, errors.New("the database refused the slot")
+	}
+	if slices.Contains(s.events, "queued "+key) {
+		return false, nil
+	}
+	s.events = append(s.events, "queued "+key)
+	return true, nil
+}
+
+func (s *store) DropSlots(_ context.Context, before time.Time) (int64, error) {
+	s.events = append(s.events, "dropped slots before "+before.Format(time.DateTime))
+	return 1, nil
 }
 
 // cluster is a runner.Cluster in memory: each organization's runs' pods, and what the Service asked of it.
@@ -411,7 +435,9 @@ func TestSweep(t *testing.T) {
 	s := &store{standing: standing, orgs: []uuid.UUID{org}}
 	c := &cluster{pods: pods()}
 	a := archive{}
-	if err := runner.NewService(s, c, vault{}, a, settings).Sweep(context.Background()); err != nil {
+	svc := runner.NewService(s, c, vault{}, a, settings)
+	svc.SetClock(func() time.Time { return now })
+	if err := svc.Sweep(context.Background()); err != nil {
 		t.Fatalf("Sweep() = %v", err)
 	}
 	// A cancelled run's pod goes, its logs kept; a pod with no run goes; a running and a queued run's stay; the gone
@@ -419,7 +445,47 @@ func TestSweep(t *testing.T) {
 	wantCluster := []string{"removed bbbb", "removed dddd", "dropped 0009"}
 	slices.Sort(c.events)
 	slices.Sort(wantCluster)
-	checkSwept(t, s, c, a, []string{"dropped dead tokens"}, wantCluster, []string{"bbbb/main"})
+	checkSwept(t, s, c, a, []string{"dropped dead tokens", "dropped slots before 2026-11-01 09:00:00"}, wantCluster, []string{"bbbb/main"})
+}
+
+func TestSchedule(t *testing.T) {
+	repo, other := id("0002"), id("0003")
+	nightly := jobs.Job{Name: "nightly", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "55 8 * * *"}}}}
+	hourly := jobs.Job{Name: "hourly", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "0 * * * *"}}}}
+	weekly := jobs.Job{Name: "weekly", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "0 9 * * 0"}}}}
+	broken := jobs.Job{Name: "broken", On: jobs.Triggers{Schedule: []jobs.Schedule{{Cron: "0 * * * *"}}}}
+	tests := []struct {
+		name    string
+		at      time.Time
+		passes  int
+		fails   map[string]bool
+		want    []string
+		wantErr bool
+	}{
+		{name: "the slots due, each once over passes", at: now, passes: 2,
+			want: []string{"queued 0002/nightly@08:55", "queued 0002/hourly@09:00", "queued 0003/hourly@09:00"}},
+		{name: "a slot past the window", at: now.Add(11 * time.Minute), passes: 1, want: nil},
+		{name: "a slot that fails doesn't hold the rest", at: now, passes: 1, fails: map[string]bool{"broken": true},
+			want: []string{"queued 0002/nightly@08:55", "queued 0002/hourly@09:00", "queued 0003/hourly@09:00"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			scheduled := []runner.Scheduled{{RepoID: repo, Jobs: []jobs.Job{nightly, hourly, weekly}}, {RepoID: other, Jobs: []jobs.Job{hourly}}}
+			if tt.fails != nil {
+				scheduled = append(scheduled, runner.Scheduled{RepoID: id("0004"), Jobs: []jobs.Job{broken}})
+			}
+			s := &store{scheduled: scheduled, slotFails: tt.fails}
+			svc := runner.NewService(s, &cluster{}, vault{}, archive{}, settings)
+			svc.SetClock(func() time.Time { return tt.at })
+			var err error
+			for range tt.passes {
+				err = errors.Join(err, svc.Schedule(context.Background()))
+			}
+			if (err != nil) != tt.wantErr || !slices.Equal(s.events, tt.want) {
+				t.Errorf("Schedule() = %v, %q, want error %v, %q", err, s.events, tt.wantErr, tt.want)
+			}
+		})
+	}
 }
 
 // TestNoPods runs an installation without pods: its controller fails a queued run of a script, fails a run left
@@ -444,7 +510,7 @@ func TestNoPods(t *testing.T) {
 			step:       func(svc *runner.Service) error { return svc.Follow(context.Background()) },
 			wantEvents: []string{"failed: its pod vanished"}},
 		{name: "a sweep", store: &store{}, step: func(svc *runner.Service) error { return svc.Sweep(context.Background()) },
-			wantEvents: []string{"dropped dead tokens"}},
+			wantEvents: []string{"dropped dead tokens", "dropped slots before 2026-11-01 09:00:00"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

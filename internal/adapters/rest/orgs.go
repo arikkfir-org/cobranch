@@ -116,6 +116,8 @@ var conflicts = map[error]string{
 	code.ErrEnvironmentPaused:    "environment.paused",
 	code.ErrEnvironmentNotPaused: "environment.not_paused",
 	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
+	code.ErrRunActive:            "run.active",
+	code.ErrNotManual:            "job.not_manual",
 }
 
 // fail maps the domain's errors to problems: kind names what wasn't found. Any other error stays one, which the

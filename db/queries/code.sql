@@ -1,11 +1,15 @@
 -- LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it,
--- each with its status as a request to merge into its base, the last merge recorded of it, what a merge into it
--- needs, when /cobranch.yaml names it, and the AI reviewer's latest task for its head.
+-- each with its status as a request to merge into its base, the last merge recorded of it, what a merge into it needs,
+-- when /cobranch.yaml names it, the jobs its head's file lets members start by hand, and the AI reviewer's latest task
+-- for its head.
 -- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
     r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
-    coalesce(f.error, '')::text AS settings_error, coalesce(rt.number, 0)::bigint AS review_task,
-    coalesce(rt.state, '')::text AS review_state, coalesce(rt.reason, '')::text AS review_reason
+    coalesce(f.error, '')::text AS settings_error,
+    (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
+     WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
+    coalesce(rt.number, 0)::bigint AS review_task, coalesce(rt.state, '')::text AS review_state,
+    coalesce(rt.reason, '')::text AS review_reason
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
@@ -17,8 +21,11 @@ ORDER BY b.name;
 -- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
     r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
-    coalesce(f.error, '')::text AS settings_error, coalesce(rt.number, 0)::bigint AS review_task,
-    coalesce(rt.state, '')::text AS review_state, coalesce(rt.reason, '')::text AS review_reason
+    coalesce(f.error, '')::text AS settings_error,
+    (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
+     WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
+    coalesce(rt.number, 0)::bigint AS review_task, coalesce(rt.state, '')::text AS review_state,
+    coalesce(rt.reason, '')::text AS review_reason
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob

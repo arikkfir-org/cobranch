@@ -1122,12 +1122,16 @@ type Run struct {
 	Trigger *RunTrigger `json:"trigger"`
 	// The number of the run whose annotation triggered it; null for any other.
 	CauseRun *int `json:"causeRun,omitempty"`
+	// Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt.
+	Attempt int `json:"attempt"`
+	// The number of the run its attempts started from; null for a first attempt.
+	RerunOf *int `json:"rerunOf,omitempty"`
 	// The job as it was declared when the run was queued.
 	Definition *Job     `json:"definition"`
 	State      RunState `json:"state"`
 	// Why it waits, failed or was cancelled; empty otherwise.
 	Reason string `json:"reason"`
-	// Who started it from WAITING; null for a run that never waited.
+	// Who started it from WAITING, or re-ran it; null for any other run.
 	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
 	QueuedAt  time.Time        `json:"queuedAt"`
 	StartedAt *time.Time       `json:"startedAt,omitempty"`
@@ -1151,7 +1155,7 @@ type RunTrigger struct {
 	Sha string `json:"sha"`
 	// The branch or tag it happened on, in full.
 	Ref string `json:"ref"`
-	// The annotation's name, or the posted event's; empty for any other.
+	// The annotation's name, the posted event's, or the job's for a schedule or a manual start; empty for any other.
 	Name string `json:"name"`
 	// The annotation's status, or the review's state; empty for any other.
 	State string `json:"state"`
@@ -1159,6 +1163,10 @@ type RunTrigger struct {
 	Actor *string `json:"actor,omitempty"`
 	// The push that caused it, for a push or a tag.
 	Push *string `json:"push,omitempty"`
+	// What a posted event carries; null for any other.
+	Data any `json:"data,omitempty"`
+	// The minute a schedule fired for; null for any other.
+	Slot *time.Time `json:"slot,omitempty"`
 }
 
 // An SSH key, as its user sees it.

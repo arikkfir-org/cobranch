@@ -302,6 +302,8 @@ type Branch {
   settingsError: String
   "The AI reviewer's latest task for its head; null when it has none, and for main, whose pushes it never reviews."
   aiReview: AIReview
+  "The jobs the /cobranch.yaml at its head declares with a manual trigger, which a member with jobs.run starts on it (runJob), by name."
+  manualJobs: [String!]!
 }
 
 "The AI reviewer's task for a branch's head, an agent task of kind review. Its review, once it submits one, is among the head's."

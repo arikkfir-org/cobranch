@@ -21,6 +21,10 @@ func run(r code.Run) (Run, error) {
 	if r.CauseRun != 0 {
 		out.CauseRun = &r.CauseRun
 	}
+	out.Attempt = max(r.Attempt, 1)
+	if r.RerunOf != 0 {
+		out.RerunOf = &r.RerunOf
+	}
 	if err := recode(r.Definition, &out.Definition); err != nil {
 		return Run{}, fmt.Errorf("encoding run #%d's definition: %w", r.Number, err)
 	}
@@ -161,8 +165,93 @@ func (a api) StartRun(ctx context.Context, req StartRunRequestObject) (StartRunR
 	if err != nil {
 		return nil, err
 	}
-	location := "/v1/orgs/" + url.PathEscape(req.Org) + "/repos/" + url.PathEscape(req.Repo) + "/runs/" + strconv.FormatInt(r.Number, 10)
-	return StartRun202JSONResponse{Body: shown, Headers: StartRun202ResponseHeaders{ETag: runTag(r), Location: location}}, nil
+	return StartRun202JSONResponse{Body: shown, Headers: StartRun202ResponseHeaders{ETag: runTag(r), Location: runURL(req.Org, req.Repo, r.Number)}}, nil
+}
+
+// RerunRun runs an ended run again as its next attempt.
+func (a api) RerunRun(ctx context.Context, req RerunRunRequestObject) (RerunRunResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	r, err := a.code.RerunRun(ctx, v, repo.ID, req.Number)
+	if err != nil {
+		return nil, fail(err, "run")
+	}
+	shown, err := run(r)
+	if err != nil {
+		return nil, err
+	}
+	return RerunRun201JSONResponse{Body: shown, Headers: RerunRun201ResponseHeaders{ETag: runTag(r), Location: runURL(req.Org, req.Repo, r.Number)}}, nil
+}
+
+// RunJob starts a manual job at its branch's head.
+func (a api) RunJob(ctx context.Context, req RunJobRequestObject) (RunJobResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	r, err := a.code.RunJob(ctx, v, repo.ID, req.BranchName, req.Job)
+	if err != nil {
+		return nil, fail(err, "job")
+	}
+	shown, err := run(r)
+	if err != nil {
+		return nil, err
+	}
+	return RunJob201JSONResponse{Body: shown, Headers: RunJob201ResponseHeaders{ETag: runTag(r), Location: runURL(req.Org, req.Repo, r.Number)}}, nil
+}
+
+// PostEvent posts an event, which queues the runs of the jobs that follow it.
+func (a api) PostEvent(ctx context.Context, req PostEventRequestObject) (PostEventResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	in := code.EventInput{Name: req.Body.Name}
+	if req.Body.Branch != nil {
+		in.Branch = *req.Body.Branch
+	}
+	if req.Body.Data != nil {
+		if in.Data, err = json.Marshal(req.Body.Data); err != nil {
+			return nil, fmt.Errorf("encoding the event's data: %w", err)
+		}
+	}
+	runs, err := a.code.PostEvent(ctx, v, repo.ID, in)
+	if err != nil {
+		return nil, fail(err, "repository")
+	}
+	out := PostedEvent{Runs: make([]Run, 0, len(runs))}
+	sha := ""
+	for _, r := range runs {
+		shown, err := run(r)
+		if err != nil {
+			return nil, err
+		}
+		out.Runs, sha = append(out.Runs, shown), r.SHA
+	}
+	location := "/v1/orgs/" + url.PathEscape(req.Org) + "/repos/" + url.PathEscape(req.Repo) + "/runs"
+	if sha != "" {
+		location += "?sha=" + sha
+	}
+	return PostEvent202JSONResponse{Body: out, Headers: PostEvent202ResponseHeaders{Location: location}}, nil
+}
+
+// runURL is the URL of a repository's run.
+func runURL(org, repo string, number int64) string {
+	return "/v1/orgs/" + url.PathEscape(org) + "/repos/" + url.PathEscape(repo) + "/runs/" + strconv.FormatInt(number, 10)
 }
 
 // utc is t in UTC, or nil without one.

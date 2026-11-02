@@ -97,6 +97,8 @@ var conflicts = map[error]string{
 	code.ErrEnvironmentPaused:    "environment.paused",
 	code.ErrEnvironmentNotPaused: "environment.not_paused",
 	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
+	code.ErrRunActive:            "run.active",
+	code.ErrNotManual:            "job.not_manual",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
