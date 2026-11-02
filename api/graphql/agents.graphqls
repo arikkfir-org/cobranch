@@ -135,12 +135,18 @@ type Task {
   transcript(after: Int, first: Int): [TranscriptEntry!]!
 }
 
-"The task a task token works, the slug of its organization, and its agent's standing instructions, which the task starts from."
+"The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in."
 type MyTask {
   organization: String!
   task: Task!
   "The standing instructions, in Markdown, of the task's agent; empty for none."
   agentInstructions: String!
+  "The email of the task's agent, verified, so that the commits that carry it are the agent's."
+  agentEmail: String!
+  "The number of the issue the task works on, whose chat it talks in; null for none."
+  issueNumber: Int
+  "The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none."
+  issueKey: String
 }
 
 "What a transcript entry records: INPUT, what the task began with or a message a person sent it since; TURN, a turn of the agent's model with the tool calls it asked for; RESULT, a tool's result; STATE, a change of the task's state."
