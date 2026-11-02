@@ -46,6 +46,16 @@ INSERT INTO roles (id, scope, name, description, permissions, built_in) VALUES
      'Receives the secrets where it is granted, in its job runs and agent tasks; reads nothing else.', '{secrets.read}', true)
 ON CONFLICT (id) DO NOTHING;
 
+-- A repository whose slug is now one of the Console's pages under its organization, secrets, or issues since issues
+-- came, moves to that slug and eight hex digits of its ID's hash, as a rename in its settings would, and the old slug
+-- keeps redirecting to it: the Console reaches it again, and its URLs and remotes keep working.
+WITH renamed AS (
+    UPDATE repositories SET slug = slug || '-' || left(md5(id::text), 8) WHERE slug IN ('issues', 'secrets')
+    RETURNING org_id, slug, id
+)
+INSERT INTO repository_slugs (org_id, slug, repo_id) SELECT org_id, slug, id FROM renamed
+ON CONFLICT (org_id, slug) DO UPDATE SET repo_id = EXCLUDED.repo_id, created_at = now();
+
 -- +goose Down
 DELETE FROM grants WHERE scope = 'secret';
 DELETE FROM roles WHERE id = '00000000-0000-7000-8000-000000000305';

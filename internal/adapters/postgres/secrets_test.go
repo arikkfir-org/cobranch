@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/secrets"
 )
 
@@ -213,5 +216,35 @@ func TestSecretStoreJobs(t *testing.T) {
 	}
 	if jobs, err := f.store.Jobs(ctx, uuid.New(), f.website.ID); err != nil || len(jobs) != 0 {
 		t.Errorf("Jobs() of another organization = %+v, %v", jobs, err)
+	}
+}
+
+func TestSecretsMigrationMovesRepositoriesOffTheConsolesPages(t *testing.T) {
+	t.Parallel()
+	f := newRepoFixture(t)
+	ctx := context.Background()
+	schema := newSchema(t, f.pool, migrations.FS, migrations.Go...)
+	if _, err := schema.provider.DownTo(ctx, 29); err != nil {
+		t.Fatalf("rolling the secrets' migration back: %v", err)
+	}
+	// Before the secrets' pages, and the issues' before them, a repository could take either slug.
+	website, secret := f.website, f.secret
+	website.Slug, secret.Slug = "secrets", "issues"
+	for _, r := range []repos.Repository{website, secret} {
+		if err := f.r.Update(ctx, f.olivia, r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := schema.provider.Up(ctx); err != nil {
+		t.Fatalf("migrating up again: %v", err)
+	}
+	for _, r := range []repos.Repository{website, secret} {
+		got, err := f.r.BySlug(ctx, f.acme.ID, r.Slug)
+		if err != nil || got.ID != r.ID || !strings.HasPrefix(got.Slug, r.Slug+"-") || repos.ValidateSlug(got.Slug) != nil {
+			t.Fatalf("BySlug(%s) = %+v, %v, want the repository it redirects to, at a slug the Console reaches", r.Slug, got, err)
+		}
+		if moved, err := f.r.BySlug(ctx, f.acme.ID, got.Slug); err != nil || moved.ID != r.ID {
+			t.Errorf("BySlug(%s) = %+v, %v, want the repository it moved", got.Slug, moved, err)
+		}
 	}
 }
