@@ -338,6 +338,42 @@ type DeletedBranch struct {
 	Merge *BranchMerge `json:"merge,omitempty"`
 }
 
+// One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+type Delivery struct {
+	ID string `json:"id"`
+	// Counts the repository's deliveries from 1.
+	Number int `json:"number"`
+	// Its environment's ID.
+	EnvironmentID string `json:"environmentId"`
+	// Its environment's target's name.
+	Target string `json:"target"`
+	// Its environment's branch.
+	Branch string       `json:"branch"`
+	Kind   DeliveryKind `json:"kind"`
+	// The commit it delivers; null for a teardown.
+	Sha     *string         `json:"sha,omitempty"`
+	Trigger DeliveryTrigger `json:"trigger"`
+	// The push that queued it; null for any other.
+	Push  *string       `json:"push,omitempty"`
+	State DeliveryState `json:"state"`
+	// Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+	// Who redelivered it, resumed its environment or started it from WAITING; null for one a push queued that never waited.
+	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
+	QueuedAt  time.Time        `json:"queuedAt"`
+	StartedAt *time.Time       `json:"startedAt,omitempty"`
+	EndedAt   *time.Time       `json:"endedAt,omitempty"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+}
+
+// A page of an environment's deliveries, newest first.
+type DeliveryPage struct {
+	Deliveries []*Delivery `json:"deliveries"`
+	// Where the next page starts, as deliveries' after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
 // A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
@@ -371,6 +407,35 @@ type DiffLine struct {
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
+}
+
+// A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+type Environment struct {
+	ID string `json:"id"`
+	// The target's principal, named as the target.
+	Target *CommitPrincipal `json:"target"`
+	// The branch's short name.
+	Branch string `json:"branch"`
+	// The ID of the secret that holds its cluster's kubeconfig; null for the installation's own cluster.
+	Cluster   *string `json:"cluster,omitempty"`
+	Namespace string  `json:"namespace"`
+	// The commit of its last successful delivery; null before one.
+	Revision *string `json:"revision,omitempty"`
+	// When a delivery last succeeded; null before one.
+	SyncedAt *time.Time        `json:"syncedAt,omitempty"`
+	Sync     EnvironmentSync   `json:"sync"`
+	Health   EnvironmentHealth `json:"health"`
+	// A paused environment takes no delivery until resumed.
+	Paused bool `json:"paused"`
+	// Its newest delivery; null before one.
+	Latest *Delivery `json:"latest,omitempty"`
+	// A page of its deliveries, newest first: from the newest, or from after, where the previous page's nextCursor says the next one starts. first is 1 to 100.
+	Deliveries *DeliveryPage `json:"deliveries"`
+	CreatedAt  time.Time     `json:"createdAt"`
+	// Counts its changes from 1.
+	Version int `json:"version"`
+	// The ID of the environment's repository, which its deliveries read.
+	RepositoryID string `json:"-"`
 }
 
 // A file or a symlink at a commit, and its text when it isn't binary.
@@ -935,6 +1000,12 @@ type Repository struct {
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
+	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	Environments []*Environment `json:"environments"`
+	// One of the repository's environments by ID: null unless it is there; takes repo.read.
+	Environment *Environment `json:"environment,omitempty"`
+	// One of the repository's deliveries by number: null unless it is there; takes repo.read.
+	Delivery *Delivery `json:"delivery,omitempty"`
 	// A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100.
 	Runs *RunPage `json:"runs"`
 	// One of the repository's runs by number: null unless it is there; takes repo.read.
@@ -1560,6 +1631,195 @@ func (e ChatUpdateKind) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// What a delivery does.
+type DeliveryKind string
+
+const (
+	// Render a commit and apply it.
+	DeliveryKindDeliver DeliveryKind = "DELIVER"
+	// Apply the last render again.
+	DeliveryKindResync DeliveryKind = "RESYNC"
+	// Delete what the environment holds.
+	DeliveryKindTeardown DeliveryKind = "TEARDOWN"
+)
+
+var AllDeliveryKind = []DeliveryKind{
+	DeliveryKindDeliver,
+	DeliveryKindResync,
+	DeliveryKindTeardown,
+}
+
+func (e DeliveryKind) IsValid() bool {
+	switch e {
+	case DeliveryKindDeliver, DeliveryKindResync, DeliveryKindTeardown:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryKind) String() string {
+	return string(e)
+}
+
+func (e *DeliveryKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryKind", str)
+	}
+	return nil
+}
+
+func (e DeliveryKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a delivery stands.
+type DeliveryState string
+
+const (
+	// It waits for a member to start it: its tip was pushed from outside the organization.
+	DeliveryStateWaiting DeliveryState = "WAITING"
+	// It waits for the controller, or for its environment's applying delivery to end.
+	DeliveryStateQueued    DeliveryState = "QUEUED"
+	DeliveryStateRendering DeliveryState = "RENDERING"
+	DeliveryStateApplying  DeliveryState = "APPLYING"
+	DeliveryStateSucceeded DeliveryState = "SUCCEEDED"
+	// It ended badly, or never started.
+	DeliveryStateFailed DeliveryState = "FAILED"
+	// It was cancelled, or superseded by a newer delivery.
+	DeliveryStateCancelled DeliveryState = "CANCELLED"
+)
+
+var AllDeliveryState = []DeliveryState{
+	DeliveryStateWaiting,
+	DeliveryStateQueued,
+	DeliveryStateRendering,
+	DeliveryStateApplying,
+	DeliveryStateSucceeded,
+	DeliveryStateFailed,
+	DeliveryStateCancelled,
+}
+
+func (e DeliveryState) IsValid() bool {
+	switch e {
+	case DeliveryStateWaiting, DeliveryStateQueued, DeliveryStateRendering, DeliveryStateApplying, DeliveryStateSucceeded, DeliveryStateFailed, DeliveryStateCancelled:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryState) String() string {
+	return string(e)
+}
+
+func (e *DeliveryState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryState", str)
+	}
+	return nil
+}
+
+func (e DeliveryState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What queued a delivery.
+type DeliveryTrigger string
+
+const (
+	DeliveryTriggerPush      DeliveryTrigger = "PUSH"
+	DeliveryTriggerRedeliver DeliveryTrigger = "REDELIVER"
+	DeliveryTriggerResume    DeliveryTrigger = "RESUME"
+)
+
+var AllDeliveryTrigger = []DeliveryTrigger{
+	DeliveryTriggerPush,
+	DeliveryTriggerRedeliver,
+	DeliveryTriggerResume,
+}
+
+func (e DeliveryTrigger) IsValid() bool {
+	switch e {
+	case DeliveryTriggerPush, DeliveryTriggerRedeliver, DeliveryTriggerResume:
+		return true
+	}
+	return false
+}
+
+func (e DeliveryTrigger) String() string {
+	return string(e)
+}
+
+func (e *DeliveryTrigger) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = DeliveryTrigger(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid DeliveryTrigger", str)
+	}
+	return nil
+}
+
+func (e DeliveryTrigger) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *DeliveryTrigger) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e DeliveryTrigger) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository.
 type EntryKind string
 
@@ -1615,6 +1875,127 @@ func (e *EntryKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e EntryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// The worst of an environment's objects' health.
+type EnvironmentHealth string
+
+const (
+	EnvironmentHealthHealthy     EnvironmentHealth = "HEALTHY"
+	EnvironmentHealthProgressing EnvironmentHealth = "PROGRESSING"
+	// Not read yet.
+	EnvironmentHealthUnknown EnvironmentHealth = "UNKNOWN"
+	// An object it should hold is gone.
+	EnvironmentHealthMissing  EnvironmentHealth = "MISSING"
+	EnvironmentHealthDegraded EnvironmentHealth = "DEGRADED"
+)
+
+var AllEnvironmentHealth = []EnvironmentHealth{
+	EnvironmentHealthHealthy,
+	EnvironmentHealthProgressing,
+	EnvironmentHealthUnknown,
+	EnvironmentHealthMissing,
+	EnvironmentHealthDegraded,
+}
+
+func (e EnvironmentHealth) IsValid() bool {
+	switch e {
+	case EnvironmentHealthHealthy, EnvironmentHealthProgressing, EnvironmentHealthUnknown, EnvironmentHealthMissing, EnvironmentHealthDegraded:
+		return true
+	}
+	return false
+}
+
+func (e EnvironmentHealth) String() string {
+	return string(e)
+}
+
+func (e *EnvironmentHealth) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EnvironmentHealth(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EnvironmentHealth", str)
+	}
+	return nil
+}
+
+func (e EnvironmentHealth) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EnvironmentHealth) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EnvironmentHealth) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Whether an environment's cluster holds its branch's newest commit.
+type EnvironmentSync string
+
+const (
+	EnvironmentSyncSynced EnvironmentSync = "SYNCED"
+	// A newer commit waits, or its last delivery failed.
+	EnvironmentSyncOutOfSync EnvironmentSync = "OUT_OF_SYNC"
+)
+
+var AllEnvironmentSync = []EnvironmentSync{
+	EnvironmentSyncSynced,
+	EnvironmentSyncOutOfSync,
+}
+
+func (e EnvironmentSync) IsValid() bool {
+	switch e {
+	case EnvironmentSyncSynced, EnvironmentSyncOutOfSync:
+		return true
+	}
+	return false
+}
+
+func (e EnvironmentSync) String() string {
+	return string(e)
+}
+
+func (e *EnvironmentSync) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = EnvironmentSync(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid EnvironmentSync", str)
+	}
+	return nil
+}
+
+func (e EnvironmentSync) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *EnvironmentSync) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e EnvironmentSync) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

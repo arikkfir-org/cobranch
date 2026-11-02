@@ -31,6 +31,14 @@ type Code interface {
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	Environments(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.Environment, error)
+	Environment(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Environment, error)
+	Deliveries(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID, before int64, limit int) (code.DeliveryPage, error)
+	Delivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
+	Redeliver(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Delivery, error)
+	PauseEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
+	ResumeEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
+	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
 	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 }
@@ -241,7 +249,7 @@ func codeRepo(ctx context.Context, repositoryID string) (code.Viewer, uuid.UUID,
 }
 
 // Branch is one of a repository's live branches as the schema shows it, with the organization and repository it is
-// of, from which its issue resolves.
+// of, from which its issue and environments resolve.
 type Branch struct {
 	Name          string             `json:"name"`
 	Head          string             `json:"head"`
@@ -260,7 +268,7 @@ type Branch struct {
 	orgID, repoID uuid.UUID
 }
 
-// of makes b the branch of repo, which its issue resolves from.
+// of makes b the branch of repo, which its issue and environments resolve from.
 func (b *Branch) of(ctx context.Context, repo *Repository) error {
 	var err error
 	if b.orgID, err = parseID(ctx, repo.OrganizationID, "organization"); err != nil {

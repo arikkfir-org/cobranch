@@ -41,7 +41,7 @@ func TestMatch(t *testing.T) {
 }
 
 func TestTargetsOf(t *testing.T) {
-	d := code.Delivery{Targets: []code.Target{
+	d := code.DeliverySettings{Targets: []code.Target{
 		{Name: "production", Branches: []string{"main"}},
 		{Name: "previews", Branches: []string{"feature/**", "main"}},
 		{Name: "staging", Branches: []string{"release-*"}},
@@ -69,7 +69,7 @@ func TestTargetsOf(t *testing.T) {
 }
 
 func TestTarget(t *testing.T) {
-	d := code.Delivery{Targets: []code.Target{{Name: "production"}, {Name: "previews"}}}
+	d := code.DeliverySettings{Targets: []code.Target{{Name: "production"}, {Name: "previews"}}}
 	if got, err := delivery.Target(d, "previews"); err != nil || got.Name != "previews" {
 		t.Errorf("Target(previews) = %+v, %v", got, err)
 	}

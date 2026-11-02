@@ -128,6 +128,81 @@ func (e ChatUpdateKind) Valid() bool {
 	}
 }
 
+// Defines values for DeliveryKind.
+const (
+	Deliver  DeliveryKind = "deliver"
+	Resync   DeliveryKind = "resync"
+	Teardown DeliveryKind = "teardown"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryKind enum.
+func (e DeliveryKind) Valid() bool {
+	switch e {
+	case Deliver:
+		return true
+	case Resync:
+		return true
+	case Teardown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryTrigger.
+const (
+	DeliveryTriggerPush      DeliveryTrigger = "push"
+	DeliveryTriggerRedeliver DeliveryTrigger = "redeliver"
+	DeliveryTriggerResume    DeliveryTrigger = "resume"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryTrigger enum.
+func (e DeliveryTrigger) Valid() bool {
+	switch e {
+	case DeliveryTriggerPush:
+		return true
+	case DeliveryTriggerRedeliver:
+		return true
+	case DeliveryTriggerResume:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeliveryState.
+const (
+	DeliveryStateApplying  DeliveryState = "applying"
+	DeliveryStateCancelled DeliveryState = "cancelled"
+	DeliveryStateFailed    DeliveryState = "failed"
+	DeliveryStateQueued    DeliveryState = "queued"
+	DeliveryStateRendering DeliveryState = "rendering"
+	DeliveryStateSucceeded DeliveryState = "succeeded"
+	DeliveryStateWaiting   DeliveryState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the DeliveryState enum.
+func (e DeliveryState) Valid() bool {
+	switch e {
+	case DeliveryStateApplying:
+		return true
+	case DeliveryStateCancelled:
+		return true
+	case DeliveryStateFailed:
+		return true
+	case DeliveryStateQueued:
+		return true
+	case DeliveryStateRendering:
+		return true
+	case DeliveryStateSucceeded:
+		return true
+	case DeliveryStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DiffLineKind.
 const (
 	DiffLineKindAdded   DiffLineKind = "added"
@@ -143,6 +218,51 @@ func (e DiffLineKind) Valid() bool {
 	case DiffLineKindContext:
 		return true
 	case DiffLineKindRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvironmentHealth.
+const (
+	Degraded    EnvironmentHealth = "degraded"
+	Healthy     EnvironmentHealth = "healthy"
+	Missing     EnvironmentHealth = "missing"
+	Progressing EnvironmentHealth = "progressing"
+	Unknown     EnvironmentHealth = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentHealth enum.
+func (e EnvironmentHealth) Valid() bool {
+	switch e {
+	case Degraded:
+		return true
+	case Healthy:
+		return true
+	case Missing:
+		return true
+	case Progressing:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EnvironmentSync.
+const (
+	OutOfSync EnvironmentSync = "out_of_sync"
+	Synced    EnvironmentSync = "synced"
+)
+
+// Valid indicates whether the value is a known member of the EnvironmentSync enum.
+func (e EnvironmentSync) Valid() bool {
+	switch e {
+	case OutOfSync:
+		return true
+	case Synced:
 		return true
 	default:
 		return false
@@ -1205,6 +1325,58 @@ type DeletedBranch struct {
 	Name string `json:"name"`
 }
 
+// Delivery One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+type Delivery struct {
+	// Branch Its environment's branch.
+	Branch  string     `json:"branch"`
+	EndedAt *time.Time `json:"endedAt,omitempty"`
+
+	// Environment Its environment's ID.
+	Environment openapi_types.UUID `json:"environment"`
+	Id          openapi_types.UUID `json:"id"`
+
+	// Kind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+	Kind DeliveryKind `json:"kind"`
+
+	// Number Counts the repository's deliveries from 1.
+	Number int64 `json:"number"`
+
+	// Push The push that queued it; absent for any other.
+	Push     *openapi_types.UUID `json:"push,omitempty"`
+	QueuedAt time.Time           `json:"queuedAt"`
+
+	// Reason Why it waits, failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+
+	// Sha The commit it delivers; absent for a teardown.
+	Sha       *string    `json:"sha,omitempty"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	StartedBy *Principal `json:"startedBy,omitempty"`
+
+	// State Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+	State DeliveryState `json:"state"`
+
+	// Target Its environment's target's name.
+	Target string `json:"target"`
+
+	// Trigger What queued it.
+	Trigger DeliveryTrigger `json:"trigger"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
+	Version int64 `json:"version"`
+}
+
+// DeliveryKind What it does. deliver renders a commit and applies it; resync applies the last render again; teardown deletes what the environment holds.
+type DeliveryKind string
+
+// DeliveryTrigger What queued it.
+type DeliveryTrigger string
+
+// DeliveryState Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
+type DeliveryState string
+
 // Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// Additions The lines it adds, in every file it changes, those it left out included.
@@ -1252,6 +1424,48 @@ type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
 }
+
+// Environment A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
+type Environment struct {
+	// Branch The branch's short name.
+	Branch string `json:"branch"`
+
+	// Cluster The ID of the secret that holds its cluster's kubeconfig; absent for the installation's own cluster.
+	Cluster   *openapi_types.UUID `json:"cluster,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+
+	// Health The worst of the environment's objects' health; unknown until a delivery reads it.
+	Health EnvironmentHealth  `json:"health"`
+	Id     openapi_types.UUID `json:"id"`
+
+	// Latest One delivery of an environment, numbered in its repository. Its target's annotation on its commit, delivery/<target>, says how it goes.
+	Latest    *Delivery `json:"latest,omitempty"`
+	Namespace string    `json:"namespace"`
+
+	// Paused A paused environment takes no delivery until resumed.
+	Paused bool `json:"paused"`
+
+	// Revision The commit of its last successful delivery; absent before one.
+	Revision *string `json:"revision,omitempty"`
+
+	// Sync Whether the environment's cluster holds its branch's newest commit.
+	Sync EnvironmentSync `json:"sync"`
+
+	// SyncedAt When a delivery last succeeded; absent before one.
+	SyncedAt *time.Time `json:"syncedAt,omitempty"`
+
+	// Target Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Target Principal `json:"target"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its newest delivery, its target's name and its revision shape too, in quotes.
+	Version int64 `json:"version"`
+}
+
+// EnvironmentHealth The worst of the environment's objects' health; unknown until a delivery reads it.
+type EnvironmentHealth string
+
+// EnvironmentSync Whether the environment's cluster holds its branch's newest commit.
+type EnvironmentSync string
 
 // File A file or a symlink at a commit, and its text when it isn't binary.
 type File struct {
@@ -2414,6 +2628,12 @@ type Name = string
 // BranchName defines model for branch.
 type BranchName = string
 
+// DeliveryNumber defines model for deliveryNumber.
+type DeliveryNumber = int64
+
+// EnvironmentId defines model for environmentId.
+type EnvironmentId = openapi_types.UUID
+
 // Id defines model for id.
 type Id = openapi_types.UUID
 
@@ -2834,6 +3054,33 @@ type ListReviewsParams struct {
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetDeliveryParams defines parameters for GetDelivery.
+type GetDeliveryParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListEnvironmentsParams defines parameters for ListEnvironments.
+type ListEnvironmentsParams struct {
+	// Branch Only the environments of this branch, by its short name.
+	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
+}
+
+// GetEnvironmentParams defines parameters for GetEnvironment.
+type GetEnvironmentParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListDeliveriesParams defines parameters for ListDeliveries.
+type ListDeliveriesParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the newest delivery when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many deliveries the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetRawParams defines parameters for GetRaw.
@@ -3411,6 +3658,30 @@ type ServerInterface interface {
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
+	GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams)
+	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
+	StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber)
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments)
+	ListEnvironments(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListEnvironmentsParams)
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
+	GetEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params GetEnvironmentParams)
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
+	ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams)
+	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
+	PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// Redeliver Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/redeliver)
+	Redeliver(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
+	ResumeEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -8191,6 +8462,442 @@ func (siw *ServerInterfaceWrapper) GetDeletedBranch(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetDelivery operation middleware
+func (siw *ServerInterfaceWrapper) GetDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetDeliveryParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDelivery(w, r, org, repo, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StartDelivery operation middleware
+func (siw *ServerInterfaceWrapper) StartDelivery(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number DeliveryNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StartDelivery(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListEnvironments operation middleware
+func (siw *ServerInterfaceWrapper) ListEnvironments(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListEnvironmentsParams
+
+	// ------------- Optional query parameter "branch" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "branch", r.URL.Query(), &params.Branch, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "branch"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListEnvironments(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) GetEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetEnvironmentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEnvironment(w, r, org, repo, environment, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDeliveries operation middleware
+func (siw *ServerInterfaceWrapper) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListDeliveriesParams
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDeliveries(w, r, org, repo, environment, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) PauseEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseEnvironment(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// Redeliver operation middleware
+func (siw *ServerInterfaceWrapper) Redeliver(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.Redeliver(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeEnvironment operation middleware
+func (siw *ServerInterfaceWrapper) ResumeEnvironment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "environment" -------------
+	var environment EnvironmentId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "environment", r.PathValue("environment"), &environment, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "environment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeEnvironment(w, r, org, repo, environment)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -10117,6 +10824,14 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}", wrapper.GetRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/cancel", wrapper.CancelRun)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/start", wrapper.StartRun)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments", wrapper.ListEnvironments)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}", wrapper.GetEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/deliveries", wrapper.ListDeliveries)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/redeliver", wrapper.Redeliver)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/pause", wrapper.PauseEnvironment)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/environments/{environment}/resume", wrapper.ResumeEnvironment)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -20171,6 +20886,797 @@ func (response GetDeletedBranchdefaultApplicationProblemPlusJSONResponse) VisitG
 	return err
 }
 
+type GetDeliveryRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+	Params GetDeliveryParams
+}
+
+type GetDeliveryResponseObject interface {
+	VisitGetDeliveryResponse(w http.ResponseWriter) error
+}
+
+type GetDelivery200ResponseHeaders struct {
+	ETag string
+}
+
+type GetDelivery200JSONResponse struct {
+	Body    Delivery
+	Headers GetDelivery200ResponseHeaders
+}
+
+func (response GetDelivery200JSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDelivery304ResponseHeaders struct {
+	ETag string
+}
+
+type GetDelivery304Response struct {
+	Headers GetDelivery304ResponseHeaders
+}
+
+func (response GetDelivery304Response) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetDelivery401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetDelivery401ApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetDelivery404ApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetDeliverydefaultApplicationProblemPlusJSONResponse) VisitGetDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeliveryRequestObject struct {
+	Org    Org            `json:"org"`
+	Repo   Repo           `json:"repo"`
+	Number DeliveryNumber `json:"number"`
+}
+
+type StartDeliveryResponseObject interface {
+	VisitStartDeliveryResponse(w http.ResponseWriter) error
+}
+
+type StartDelivery202ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type StartDelivery202JSONResponse struct {
+	Body    Delivery
+	Headers StartDelivery202ResponseHeaders
+}
+
+func (response StartDelivery202JSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response StartDelivery401ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery403ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery403ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery404ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery404ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDelivery409ApplicationProblemPlusJSONResponse Problem
+
+func (response StartDelivery409ApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type StartDeliverydefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response StartDeliverydefaultApplicationProblemPlusJSONResponse) VisitStartDeliveryResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params ListEnvironmentsParams
+}
+
+type ListEnvironmentsResponseObject interface {
+	VisitListEnvironmentsResponse(w http.ResponseWriter) error
+}
+
+type ListEnvironments200JSONResponse struct {
+	Environments []Environment `json:"environments"`
+}
+
+func (response ListEnvironments200JSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListEnvironments401ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironments404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListEnvironments404ApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListEnvironmentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListEnvironmentsdefaultApplicationProblemPlusJSONResponse) VisitListEnvironmentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+	Params      GetEnvironmentParams
+}
+
+type GetEnvironmentResponseObject interface {
+	VisitGetEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type GetEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type GetEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers GetEnvironment200ResponseHeaders
+}
+
+func (response GetEnvironment200JSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironment304ResponseHeaders struct {
+	ETag string
+}
+
+type GetEnvironment304Response struct {
+	Headers GetEnvironment304ResponseHeaders
+}
+
+func (response GetEnvironment304Response) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetEnvironment401ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetEnvironment404ApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitGetEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveriesRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+	Params      ListDeliveriesParams
+}
+
+type ListDeliveriesResponseObject interface {
+	VisitListDeliveriesResponse(w http.ResponseWriter) error
+}
+
+type ListDeliveries200ResponseHeaders struct {
+	Link *string
+}
+
+type ListDeliveries200JSONResponse struct {
+	Body struct {
+		Deliveries []Delivery `json:"deliveries"`
+	}
+	Headers ListDeliveries200ResponseHeaders
+}
+
+func (response ListDeliveries200JSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListDeliveries400ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListDeliveries401ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveries404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListDeliveries404ApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListDeliveriesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListDeliveriesdefaultApplicationProblemPlusJSONResponse) VisitListDeliveriesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type PauseEnvironmentResponseObject interface {
+	VisitPauseEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type PauseEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type PauseEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers PauseEnvironment200ResponseHeaders
+}
+
+func (response PauseEnvironment200JSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PauseEnvironment401ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment403ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment403ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment404ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironment409ApplicationProblemPlusJSONResponse Problem
+
+func (response PauseEnvironment409ApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PauseEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PauseEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitPauseEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeliverRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type RedeliverResponseObject interface {
+	VisitRedeliverResponse(w http.ResponseWriter) error
+}
+
+type Redeliver202ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type Redeliver202JSONResponse struct {
+	Body    Delivery
+	Headers Redeliver202ResponseHeaders
+}
+
+func (response Redeliver202JSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response Redeliver401ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver403ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver403ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver404ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver404ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type Redeliver409ApplicationProblemPlusJSONResponse Problem
+
+func (response Redeliver409ApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RedeliverdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RedeliverdefaultApplicationProblemPlusJSONResponse) VisitRedeliverResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironmentRequestObject struct {
+	Org         Org           `json:"org"`
+	Repo        Repo          `json:"repo"`
+	Environment EnvironmentId `json:"environment"`
+}
+
+type ResumeEnvironmentResponseObject interface {
+	VisitResumeEnvironmentResponse(w http.ResponseWriter) error
+}
+
+type ResumeEnvironment200ResponseHeaders struct {
+	ETag string
+}
+
+type ResumeEnvironment200JSONResponse struct {
+	Body    Environment
+	Headers ResumeEnvironment200ResponseHeaders
+}
+
+func (response ResumeEnvironment200JSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ResumeEnvironment401ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment403ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment403ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment404ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment404ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironment409ApplicationProblemPlusJSONResponse Problem
+
+func (response ResumeEnvironment409ApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ResumeEnvironmentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ResumeEnvironmentdefaultApplicationProblemPlusJSONResponse) VisitResumeEnvironmentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryJobsRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -23993,6 +25499,30 @@ type StrictServerInterface interface {
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
 	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
 	GetDeletedBranch(ctx context.Context, request GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error)
+	// GetDelivery One of the repository's deliveries by its number; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/deliveries/{number})
+	GetDelivery(ctx context.Context, request GetDeliveryRequestObject) (GetDeliveryResponseObject, error)
+	// StartDelivery Queues one of the repository's deliveries that waits for a member, its tip pushed from outside the organization, for the viewer; takes delivery.run. A delivery that doesn't wait answers 409 delivery.not_waiting.
+	// (POST /orgs/{org}/repos/{repo}/deliveries/{number}/start)
+	StartDelivery(ctx context.Context, request StartDeliveryRequestObject) (StartDeliveryResponseObject, error)
+	// ListEnvironments The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments)
+	ListEnvironments(ctx context.Context, request ListEnvironmentsRequestObject) (ListEnvironmentsResponseObject, error)
+	// GetEnvironment One of the repository's environments, with its newest delivery; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment})
+	GetEnvironment(ctx context.Context, request GetEnvironmentRequestObject) (GetEnvironmentResponseObject, error)
+	// ListDeliveries A page of one of the repository's environments' deliveries, newest first; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/environments/{environment}/deliveries)
+	ListDeliveries(ctx context.Context, request ListDeliveriesRequestObject) (ListDeliveriesResponseObject, error)
+	// PauseEnvironment Pauses one of the repository's environments for the viewer, which then takes no delivery until resumed, cancelling those that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/pause)
+	PauseEnvironment(ctx context.Context, request PauseEnvironmentRequestObject) (PauseEnvironmentResponseObject, error)
+	// Redeliver Queues a delivery of the head of one of the repository's environments' branch for the viewer, superseding its deliveries that haven't started applying; takes delivery.run. A paused environment answers 409 environment.paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/redeliver)
+	Redeliver(ctx context.Context, request RedeliverRequestObject) (RedeliverResponseObject, error)
+	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
+	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
+	ResumeEnvironment(ctx context.Context, request ResumeEnvironmentRequestObject) (ResumeEnvironmentResponseObject, error)
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(ctx context.Context, request ListRepositoryJobsRequestObject) (ListRepositoryJobsResponseObject, error)
@@ -27138,6 +28668,233 @@ func (sh *strictHandler) GetDeletedBranch(w http.ResponseWriter, r *http.Request
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetDeletedBranchResponseObject); ok {
 		if err := validResponse.VisitGetDeletedBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDelivery operation middleware
+func (sh *strictHandler) GetDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber, params GetDeliveryParams) {
+	var request GetDeliveryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDelivery(ctx, request.(GetDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDeliveryResponseObject); ok {
+		if err := validResponse.VisitGetDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// StartDelivery operation middleware
+func (sh *strictHandler) StartDelivery(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number DeliveryNumber) {
+	var request StartDeliveryRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.StartDelivery(ctx, request.(StartDeliveryRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "StartDelivery")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(StartDeliveryResponseObject); ok {
+		if err := validResponse.VisitStartDeliveryResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListEnvironments operation middleware
+func (sh *strictHandler) ListEnvironments(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListEnvironmentsParams) {
+	var request ListEnvironmentsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListEnvironments(ctx, request.(ListEnvironmentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListEnvironments")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListEnvironmentsResponseObject); ok {
+		if err := validResponse.VisitListEnvironmentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEnvironment operation middleware
+func (sh *strictHandler) GetEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params GetEnvironmentParams) {
+	var request GetEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEnvironment(ctx, request.(GetEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEnvironmentResponseObject); ok {
+		if err := validResponse.VisitGetEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListDeliveries operation middleware
+func (sh *strictHandler) ListDeliveries(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId, params ListDeliveriesParams) {
+	var request ListDeliveriesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListDeliveries(ctx, request.(ListDeliveriesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListDeliveries")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListDeliveriesResponseObject); ok {
+		if err := validResponse.VisitListDeliveriesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// PauseEnvironment operation middleware
+func (sh *strictHandler) PauseEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request PauseEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PauseEnvironment(ctx, request.(PauseEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PauseEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PauseEnvironmentResponseObject); ok {
+		if err := validResponse.VisitPauseEnvironmentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// Redeliver operation middleware
+func (sh *strictHandler) Redeliver(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request RedeliverRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.Redeliver(ctx, request.(RedeliverRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "Redeliver")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RedeliverResponseObject); ok {
+		if err := validResponse.VisitRedeliverResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ResumeEnvironment operation middleware
+func (sh *strictHandler) ResumeEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId) {
+	var request ResumeEnvironmentRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Environment = environment
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ResumeEnvironment(ctx, request.(ResumeEnvironmentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ResumeEnvironment")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ResumeEnvironmentResponseObject); ok {
+		if err := validResponse.VisitResumeEnvironmentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
