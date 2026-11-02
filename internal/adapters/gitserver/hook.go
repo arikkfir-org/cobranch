@@ -297,7 +297,8 @@ func (s *Server) output(ctx context.Context, env []string, stdin string, args ..
 // storePack uploads the push's pack from its quarantine to the bucket, as an upload of its own and the pack's index
 // first, and keeps it in the cache: nil when the push brought no objects. The pack is listed only once the push is
 // recorded, so a push that fails leaves files no row lists, which maintenance deletes. A pack the organization's Git
-// data limit leaves no room for isn't uploaded: storePack returns the refusal's message instead.
+// data limit leaves no room for, unless the repository lists it already, isn't uploaded: storePack returns the
+// refusal's message instead.
 func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (*git.Pack, string, error) {
 	if quarantine == "" {
 		return nil, "", nil
@@ -313,14 +314,14 @@ func (s *Server) storePack(ctx context.Context, p *pending, quarantine string) (
 	if err != nil {
 		return nil, "", fmt.Errorf("reading the pack's size: %w", err)
 	}
-	refusal, err := s.recorder.Weigh(ctx, p.repo.OrgID, info.Size())
+	name := strings.TrimSuffix(filepath.Base(found[0]), ".pack")
+	refusal, err := s.recorder.Weigh(ctx, p.repo.OrgID, p.repo.ID, name, info.Size())
 	if err != nil {
 		return nil, "", fmt.Errorf("weighing the pack: %w", err)
 	}
 	if refusal != "" {
 		return nil, refusal, nil
 	}
-	name := strings.TrimSuffix(filepath.Base(found[0]), ".pack")
 	pack, err := s.keepPack(ctx, p.repo.ID, name, func(file string) string { return filepath.Join(quarantine, "pack", file) })
 	return pack, "", err
 }

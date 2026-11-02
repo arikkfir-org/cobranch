@@ -50,7 +50,7 @@ type Snapshots interface {
 // Recorder records a push before its client returns, and weighs its pack before the server stores it: git.Service.
 type Recorder interface {
 	Record(ctx context.Context, push git.Push) (git.Answer, error)
-	Weigh(ctx context.Context, orgID uuid.UUID, size int64) (string, error)
+	Weigh(ctx context.Context, orgID, repoID uuid.UUID, pack string, size int64) (string, error)
 }
 
 // Config is how the Git server runs.

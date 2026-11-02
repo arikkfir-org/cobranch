@@ -201,9 +201,11 @@ func TestServiceRecordHoldsThePackToItsLimit(t *testing.T) {
 
 func TestServiceWeigh(t *testing.T) {
 	broken := errors.New("broken")
+	pack := "pack-" + b
 	tests := []struct {
 		name    string
 		quotas  *quotas
+		store   *store
 		size    int64
 		want    string
 		wantErr error
@@ -211,16 +213,25 @@ func TestServiceWeigh(t *testing.T) {
 		{name: "fits", quotas: &quotas{limit: 1 << 30, used: 900 << 20}, size: 100 << 20},
 		{name: "over", quotas: &quotas{limit: 1 << 30, used: 1000 << 20}, size: 100 << 20,
 			want: "This organization stores 1000 MiB of Git data, and this push adds 100 MiB: over its limit of 1 GiB. Nothing changed; an administrator can raise the limit."},
+		{name: "over, but the repository lists the pack already", quotas: &quotas{limit: 1 << 30, used: 1 << 30}, size: 100 << 20,
+			store: &store{snapshot: git.Snapshot{Packs: []git.Pack{{Name: pack, Upload: uuid.New()}}}}},
+		{name: "over, and the repository lists other packs", quotas: &quotas{limit: 1 << 30, used: 1 << 30}, size: 100 << 20,
+			store: &store{snapshot: git.Snapshot{Packs: []git.Pack{{Name: "pack-" + a, Upload: uuid.New()}}}},
+			want:  "This organization stores 1 GiB of Git data, and this push adds 100 MiB: over its limit of 1 GiB. Nothing changed; an administrator can raise the limit."},
 		{name: "no quotas", size: 1 << 40},
 		{name: "the limits can't be read", quotas: &quotas{err: broken}, size: 1, wantErr: broken},
+		{name: "the repository's packs can't be read", quotas: &quotas{limit: 1 << 30}, store: &store{err: broken}, size: 1, wantErr: broken},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			service := git.NewService(&store{})
+			if tt.store == nil {
+				tt.store = &store{}
+			}
+			service := git.NewService(tt.store)
 			if tt.quotas != nil {
 				service.WithQuotas(tt.quotas)
 			}
-			got, err := service.Weigh(t.Context(), uuid.New(), tt.size)
+			got, err := service.Weigh(t.Context(), uuid.New(), uuid.New(), pack, tt.size)
 			if got != tt.want || !errors.Is(err, tt.wantErr) {
 				t.Errorf("Weigh() = %q, %v, want %q, %v", got, err, tt.want, tt.wantErr)
 			}

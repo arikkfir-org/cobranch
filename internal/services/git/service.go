@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -76,17 +77,28 @@ func (s *Service) WithQuotas(q Quotas) *Service {
 	return s
 }
 
-// Weigh refuses a pack of size bytes that the organization's Git data limit leaves no room for, before the Git server
-// stores it: it returns the refusal's message, or nothing when the pack fits. Record weighs it again in the push's
-// transaction, which alone is sure: another push may have stored more meanwhile.
-func (s *Service) Weigh(ctx context.Context, orgID uuid.UUID, size int64) (string, error) {
+// Weigh refuses pack, of size bytes, that the organization's Git data limit leaves no room for, before the Git server
+// stores it in the repository: it returns the refusal's message, or nothing when the pack fits, or when the repository
+// lists it already, active, so it adds nothing, as Record counts it. Record weighs it again in the push's transaction,
+// which alone is sure: another push may have stored more meanwhile.
+func (s *Service) Weigh(ctx context.Context, orgID, repoID uuid.UUID, pack string, size int64) (string, error) {
 	if s.quotas == nil {
 		return "", nil
 	}
 	ctx, span := tracer.Start(ctx, "git.Service.Weigh")
 	defer span.End()
-	span.SetAttributes(attribute.String("cobranch.organization.id", orgID.String()), attribute.Int64("cobranch.push.size", size))
-	_, err := s.quotas.WeighPush(ctx, orgID, size)
+	span.SetAttributes(attribute.String("cobranch.organization.id", orgID.String()), attribute.String("cobranch.repository.id", repoID.String()),
+		attribute.Int64("cobranch.push.size", size))
+	snapshot, err := s.store.Snapshot(ctx, repoID)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "reading the repository's packs")
+		return "", fmt.Errorf("reading the packs of repository %s: %w", repoID, err)
+	}
+	if slices.ContainsFunc(snapshot.Packs, func(p Pack) bool { return p.Name == pack }) {
+		return "", nil
+	}
+	_, err = s.quotas.WeighPush(ctx, orgID, size)
 	var exceeded *limits.ExceededError
 	switch {
 	case errors.As(err, &exceeded):

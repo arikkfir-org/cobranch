@@ -81,3 +81,25 @@ func TestPushOverGitDataLimit(t *testing.T) {
 		})
 	}
 }
+
+// TestPushOfAPackListedAlready pushes objects into Acme's website again, at its Git data limit, after the branch that
+// brought them is deleted: the pack the push brings is the one the repository lists already, so it adds nothing and is
+// taken, before the Git server stores it and as the push is recorded.
+func TestPushOfAPackListedAlready(t *testing.T) {
+	s := newStackIn(t, inFiles)
+	s.quotas = limits.NewService(postgres.NewLimitStore(s.pool), limits.Settings{})
+	dir := clone(t, s.websiteURL(s.serve(t.TempDir()), olivia))
+	commit(t, dir, "README.md", "# Website\n")
+	mustGit(t, dir, "push", "-q", "origin", "HEAD:refs/heads/feature")
+	used := query[int64](t, s.pool, "SELECT coalesce(sum(size), 0)::bigint FROM packs WHERE org_id = (SELECT org_id FROM repositories WHERE id = $1) AND state = 'active'", website)
+	if _, err := s.pool.Exec(context.Background(), "UPDATE installation_settings SET git_data_per_organization = $1", used); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, dir, "push", "-q", "origin", ":refs/heads/feature")
+	if out, err := gitCmd(t, dir, "push", "origin", "HEAD:refs/heads/again"); err != nil {
+		t.Fatalf("git push of the same objects again = %v:\n%s\nwant it taken: its pack adds nothing", err, out)
+	}
+	if got := query[int](t, s.pool, "SELECT count(*) FROM packs WHERE repo_id = $1 AND state = 'active'", website); got != 1 {
+		t.Errorf("website lists %d active packs, want the one", got)
+	}
+}
