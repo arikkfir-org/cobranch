@@ -164,6 +164,36 @@ type CommitPrincipal struct {
 	DisplayName string `json:"displayName"`
 }
 
+// A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it.
+type Diff struct {
+	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+	Base *string `json:"base,omitempty"`
+	// A branch's base's tip, which its merge base is reckoned from; null for a commit.
+	BaseTip *string `json:"baseTip,omitempty"`
+	// The commit it runs to.
+	Head string `json:"head"`
+	// The files it changes, in Git's order, by path.
+	Files []*FileDiff `json:"files"`
+	// How many files it changes past the 3000 it lists.
+	FilesLeftOut int `json:"filesLeftOut"`
+	// The lines it adds, in every file it changes, those it left out included.
+	Additions int `json:"additions"`
+	// The lines it removes, in every file it changes, those it left out included.
+	Deletions int `json:"deletions"`
+}
+
+// One of a hunk's lines, without its newline.
+type DiffLine struct {
+	Kind LineKind `json:"kind"`
+	// Its number in the old file; null for an added line.
+	Old *int `json:"old,omitempty"`
+	// Its number in the new file; null for a removed line.
+	New  *int   `json:"new,omitempty"`
+	Text string `json:"text"`
+	// Whether the file ends on it without a newline.
+	NoNewline bool `json:"noNewline"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
@@ -192,6 +222,39 @@ type File struct {
 	Text *string `json:"text,omitempty"`
 	// A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file.
 	HTML *string `json:"html,omitempty"`
+}
+
+// One file's change.
+type FileDiff struct {
+	Status FileStatus `json:"status"`
+	// Its path from the repository's root; a deleted file's old one.
+	Path string `json:"path"`
+	// The path it had before, for a renamed file; null otherwise.
+	OldPath *string `json:"oldPath,omitempty"`
+	// Its mode before, as Git writes it; null for an added file.
+	OldMode *string `json:"oldMode,omitempty"`
+	// Its mode after; null for a deleted file.
+	Mode *string `json:"mode,omitempty"`
+	// Whether Git reads it as binary, which shows no lines.
+	Binary    bool `json:"binary"`
+	Additions int  `json:"additions"`
+	Deletions int  `json:"deletions"`
+	// Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay.
+	Truncated bool    `json:"truncated"`
+	Hunks     []*Hunk `json:"hunks"`
+}
+
+// One run of a file's changes, with up to three lines around them.
+type Hunk struct {
+	// Its first line in the old file, or the line before it when it spans none.
+	OldStart int `json:"oldStart"`
+	OldLines int `json:"oldLines"`
+	// Its first line in the new file, or the line before it when it spans none.
+	NewStart int `json:"newStart"`
+	NewLines int `json:"newLines"`
+	// The heading Git found above it, such as a function's; empty when it found none.
+	Section string      `json:"section"`
+	Lines   []*DiffLine `json:"lines"`
 }
 
 // An invitation to an email; only a user who holds it, verified, accepts it.
@@ -391,6 +454,10 @@ type Repository struct {
 	Tree *Tree `json:"tree,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
+	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
+	BranchDiff *Diff `json:"branchDiff,omitempty"`
+	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
+	CommitDiff *Diff `json:"commitDiff,omitempty"`
 }
 
 // A principal's grants on a repository.
@@ -811,6 +878,69 @@ func (e EntryKind) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// What a change did to a file.
+type FileStatus string
+
+const (
+	FileStatusAdded    FileStatus = "ADDED"
+	FileStatusModified FileStatus = "MODIFIED"
+	FileStatusDeleted  FileStatus = "DELETED"
+	FileStatusRenamed  FileStatus = "RENAMED"
+	// A path whose kind changed, such as a symlink that became a file.
+	FileStatusTypeChanged FileStatus = "TYPE_CHANGED"
+)
+
+var AllFileStatus = []FileStatus{
+	FileStatusAdded,
+	FileStatusModified,
+	FileStatusDeleted,
+	FileStatusRenamed,
+	FileStatusTypeChanged,
+}
+
+func (e FileStatus) IsValid() bool {
+	switch e {
+	case FileStatusAdded, FileStatusModified, FileStatusDeleted, FileStatusRenamed, FileStatusTypeChanged:
+		return true
+	}
+	return false
+}
+
+func (e FileStatus) String() string {
+	return string(e)
+}
+
+func (e *FileStatus) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = FileStatus(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid FileStatus", str)
+	}
+	return nil
+}
+
+func (e FileStatus) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *FileStatus) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e FileStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
 // Which parents of each commit a history follows.
 type HistoryParents string
 
@@ -864,6 +994,64 @@ func (e *HistoryParents) UnmarshalJSON(b []byte) error {
 }
 
 func (e HistoryParents) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What a hunk's line is.
+type LineKind string
+
+const (
+	LineKindContext LineKind = "CONTEXT"
+	LineKindAdded   LineKind = "ADDED"
+	LineKindRemoved LineKind = "REMOVED"
+)
+
+var AllLineKind = []LineKind{
+	LineKindContext,
+	LineKindAdded,
+	LineKindRemoved,
+}
+
+func (e LineKind) IsValid() bool {
+	switch e {
+	case LineKindContext, LineKindAdded, LineKindRemoved:
+		return true
+	}
+	return false
+}
+
+func (e LineKind) String() string {
+	return string(e)
+}
+
+func (e *LineKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = LineKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid LineKind", str)
+	}
+	return nil
+}
+
+func (e LineKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *LineKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e LineKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

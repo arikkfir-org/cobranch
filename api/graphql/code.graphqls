@@ -4,8 +4,8 @@
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations"); and the
-# reviews they submit of them (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md,
-# "Reviews").
+# reviews they submit of them and the diffs they review
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md, "Reviews" and "Diffs").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
@@ -24,6 +24,10 @@ extend type Repository {
   tree(ref: String! = "main", path: String! = ""): Tree
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
+  "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
+  branchDiff(name: String!): Diff
+  "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
+  commitDiff(sha: String!): Diff
 }
 
 "One of a repository's tags and the object it names, a commit or an annotated tag."
@@ -101,6 +105,86 @@ type File {
   text: String
   "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
   html: String
+}
+
+"A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it."
+type Diff {
+  "The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base."
+  base: String
+  "A branch's base's tip, which its merge base is reckoned from; null for a commit."
+  baseTip: String
+  "The commit it runs to."
+  head: String!
+  "The files it changes, in Git's order, by path."
+  files: [FileDiff!]!
+  "How many files it changes past the 3000 it lists."
+  filesLeftOut: Int!
+  "The lines it adds, in every file it changes, those it left out included."
+  additions: Int!
+  "The lines it removes, in every file it changes, those it left out included."
+  deletions: Int!
+}
+
+"What a change did to a file."
+enum FileStatus {
+  ADDED
+  MODIFIED
+  DELETED
+  RENAMED
+  "A path whose kind changed, such as a symlink that became a file."
+  TYPE_CHANGED
+}
+
+"One file's change."
+type FileDiff {
+  status: FileStatus!
+  "Its path from the repository's root; a deleted file's old one."
+  path: String!
+  "The path it had before, for a renamed file; null otherwise."
+  oldPath: String
+  "Its mode before, as Git writes it; null for an added file."
+  oldMode: String
+  "Its mode after; null for a deleted file."
+  mode: String
+  "Whether Git reads it as binary, which shows no lines."
+  binary: Boolean!
+  additions: Int!
+  deletions: Int!
+  "Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay."
+  truncated: Boolean!
+  hunks: [Hunk!]!
+}
+
+"One run of a file's changes, with up to three lines around them."
+type Hunk {
+  "Its first line in the old file, or the line before it when it spans none."
+  oldStart: Int!
+  oldLines: Int!
+  "Its first line in the new file, or the line before it when it spans none."
+  newStart: Int!
+  newLines: Int!
+  "The heading Git found above it, such as a function's; empty when it found none."
+  section: String!
+  lines: [DiffLine!]!
+}
+
+"What a hunk's line is."
+enum LineKind {
+  CONTEXT
+  ADDED
+  REMOVED
+}
+
+"One of a hunk's lines, without its newline."
+type DiffLine {
+  kind: LineKind!
+  "Its number in the old file; null for an added line."
+  old: Int
+  "Its number in the new file; null for a removed line."
+  new: Int
+  text: String!
+  "Whether the file ends on it without a newline."
+  noNewline: Boolean!
 }
 
 extend type Mutation {

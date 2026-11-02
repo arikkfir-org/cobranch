@@ -36,6 +36,8 @@ type Code interface {
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
+	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 }
 
 func principal(p *code.Principal) *Principal {

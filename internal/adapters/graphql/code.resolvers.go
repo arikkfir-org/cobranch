@@ -201,3 +201,35 @@ func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref stri
 	}
 	return file(f), nil
 }
+
+// BranchDiff is the resolver for the branchDiff field.
+func (r *repositoryResolver) BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	d, err := r.Code.BranchDiff(ctx, v, repoID, name)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, codeFail(ctx, err, "reading the branch's diff")
+	}
+	return diff(d), nil
+}
+
+// CommitDiff is the resolver for the commitDiff field.
+func (r *repositoryResolver) CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	d, err := r.Code.CommitDiff(ctx, v, repoID, sha)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, codeFail(ctx, err, "reading the commit's diff")
+	}
+	return diff(d), nil
+}

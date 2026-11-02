@@ -15,8 +15,8 @@ import (
 )
 
 // ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
-// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit; and
-// POST <ReposPath>{id}/merge, with a MergeRequest.
+// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit; /diff, with
+// ref, the head, and base and mergeBase; and POST <ReposPath>{id}/merge, with a MergeRequest.
 const ReposPath = "/internal/v1/repos/"
 
 // The headers of a raw answer, beside its Content-Length, which name what its bytes are.
@@ -84,6 +84,87 @@ func (l Log) Domain() code.Log {
 		entries = append(entries, code.LogEntry{SHA: e.SHA, Parents: e.Parents})
 	}
 	return code.Log{Commit: l.Commit, Entries: entries}
+}
+
+// DiffLine is a line of a hunk as the internal call carries it: code.DiffLine.
+type DiffLine struct {
+	Kind      string `json:"kind"`
+	Old       int    `json:"old,omitempty"`
+	New       int    `json:"new,omitempty"`
+	Text      string `json:"text"`
+	NoNewline bool   `json:"noNewline,omitempty"`
+}
+
+// Hunk is a run of a file's changes as the internal call carries it: code.Hunk.
+type Hunk struct {
+	OldStart int        `json:"oldStart"`
+	OldLines int        `json:"oldLines"`
+	NewStart int        `json:"newStart"`
+	NewLines int        `json:"newLines"`
+	Section  string     `json:"section,omitempty"`
+	Lines    []DiffLine `json:"lines"`
+}
+
+// FileDiff is a file's change as the internal call carries it: code.FileDiff.
+type FileDiff struct {
+	Status    string `json:"status"`
+	Path      string `json:"path"`
+	OldPath   string `json:"oldPath,omitempty"`
+	OldMode   string `json:"oldMode,omitempty"`
+	Mode      string `json:"mode,omitempty"`
+	Binary    bool   `json:"binary,omitempty"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+	Truncated bool   `json:"truncated,omitempty"`
+	Hunks     []Hunk `json:"hunks"`
+}
+
+// Diff is a change from one commit to another as the internal call carries it: code.Diff.
+type Diff struct {
+	Base         string     `json:"base,omitempty"`
+	BaseTip      string     `json:"baseTip,omitempty"`
+	Head         string     `json:"head"`
+	Files        []FileDiff `json:"files"`
+	FilesLeftOut int        `json:"filesLeftOut,omitempty"`
+	Additions    int        `json:"additions"`
+	Deletions    int        `json:"deletions"`
+}
+
+// DiffOf is d as the internal call carries it.
+func DiffOf(d code.Diff) Diff {
+	files := make([]FileDiff, 0, len(d.Files))
+	for _, f := range d.Files {
+		hunks := make([]Hunk, 0, len(f.Hunks))
+		for _, h := range f.Hunks {
+			lines := make([]DiffLine, 0, len(h.Lines))
+			for _, l := range h.Lines {
+				lines = append(lines, DiffLine{Kind: string(l.Kind), Old: l.Old, New: l.New, Text: l.Text, NoNewline: l.NoNewline})
+			}
+			hunks = append(hunks, Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section, Lines: lines})
+		}
+		files = append(files, FileDiff{Status: string(f.Status), Path: f.Path, OldPath: f.OldPath, OldMode: f.OldMode, Mode: f.Mode, Binary: f.Binary,
+			Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated, Hunks: hunks})
+	}
+	return Diff{Base: d.Base, BaseTip: d.BaseTip, Head: d.Head, Files: files, FilesLeftOut: d.FilesLeftOut, Additions: d.Additions, Deletions: d.Deletions}
+}
+
+// Domain is the domain's diff.
+func (d Diff) Domain() code.Diff {
+	files := make([]code.FileDiff, 0, len(d.Files))
+	for _, f := range d.Files {
+		hunks := make([]code.Hunk, 0, len(f.Hunks))
+		for _, h := range f.Hunks {
+			lines := make([]code.DiffLine, 0, len(h.Lines))
+			for _, l := range h.Lines {
+				lines = append(lines, code.DiffLine{Kind: code.LineKind(l.Kind), Old: l.Old, New: l.New, Text: l.Text, NoNewline: l.NoNewline})
+			}
+			hunks = append(hunks, code.Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section, Lines: lines})
+		}
+		files = append(files, code.FileDiff{Status: code.FileStatus(f.Status), Path: f.Path, OldPath: f.OldPath, OldMode: f.OldMode, Mode: f.Mode,
+			Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated, Hunks: hunks})
+	}
+	return code.Diff{Base: d.Base, BaseTip: d.BaseTip, Head: d.Head, Files: files, FilesLeftOut: d.FilesLeftOut, Additions: d.Additions,
+		Deletions: d.Deletions}
 }
 
 // MergeRequest is a merge the internal call asks the Git server to build and record: code.MergeRequest.

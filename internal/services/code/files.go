@@ -25,6 +25,8 @@ type Objects interface {
 	// Merge builds the merge req asks for and records it as a push of its base, answering once it is committed:
 	// ErrBranchMoved when the branch or its base moved, and a *MergeError for a merge Cobranch won't make.
 	Merge(ctx context.Context, repoID uuid.UUID, req MergeRequest) (Merged, error)
+	// Diff reads the change req asks for, up to the limits of a diff.
+	Diff(ctx context.Context, repoID uuid.UUID, req DiffRequest) (Diff, error)
 }
 
 // unavailable answers every read with ErrUnavailable, for an installation that runs no Git server.
@@ -48,6 +50,10 @@ func (unavailable) Log(context.Context, uuid.UUID, string, int, int) (Log, error
 
 func (unavailable) Merge(context.Context, uuid.UUID, MergeRequest) (Merged, error) {
 	return Merged{}, ErrUnavailable
+}
+
+func (unavailable) Diff(context.Context, uuid.UUID, DiffRequest) (Diff, error) {
+	return Diff{}, ErrUnavailable
 }
 
 // Tags lists the repository's tags by name, each with the object its ref names; it takes repo.read.

@@ -130,6 +130,24 @@ type ComplexityRoot struct {
 		ID          func(childComplexity int) int
 	}
 
+	Diff struct {
+		Additions    func(childComplexity int) int
+		Base         func(childComplexity int) int
+		BaseTip      func(childComplexity int) int
+		Deletions    func(childComplexity int) int
+		Files        func(childComplexity int) int
+		FilesLeftOut func(childComplexity int) int
+		Head         func(childComplexity int) int
+	}
+
+	DiffLine struct {
+		Kind      func(childComplexity int) int
+		New       func(childComplexity int) int
+		NoNewline func(childComplexity int) int
+		Old       func(childComplexity int) int
+		Text      func(childComplexity int) int
+	}
+
 	Email struct {
 		Email    func(childComplexity int) int
 		Verified func(childComplexity int) int
@@ -147,6 +165,28 @@ type ComplexityRoot struct {
 		Size      func(childComplexity int) int
 		Text      func(childComplexity int) int
 		Truncated func(childComplexity int) int
+	}
+
+	FileDiff struct {
+		Additions func(childComplexity int) int
+		Binary    func(childComplexity int) int
+		Deletions func(childComplexity int) int
+		Hunks     func(childComplexity int) int
+		Mode      func(childComplexity int) int
+		OldMode   func(childComplexity int) int
+		OldPath   func(childComplexity int) int
+		Path      func(childComplexity int) int
+		Status    func(childComplexity int) int
+		Truncated func(childComplexity int) int
+	}
+
+	Hunk struct {
+		Lines    func(childComplexity int) int
+		NewLines func(childComplexity int) int
+		NewStart func(childComplexity int) int
+		OldLines func(childComplexity int) int
+		OldStart func(childComplexity int) int
+		Section  func(childComplexity int) int
 	}
 
 	Invitation struct {
@@ -288,8 +328,10 @@ type ComplexityRoot struct {
 		Access            func(childComplexity int) int
 		Blob              func(childComplexity int, ref string, path string) int
 		Branch            func(childComplexity int, name string) int
+		BranchDiff        func(childComplexity int, name string) int
 		Branches          func(childComplexity int) int
 		Commit            func(childComplexity int, sha string) int
+		CommitDiff        func(childComplexity int, sha string) int
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
 		Description       func(childComplexity int) int
@@ -460,6 +502,8 @@ type RepositoryResolver interface {
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
 	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
+	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
+	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
 }
 type UserResolver interface {
 	Sessions(ctx context.Context, obj *User) ([]*Session, error)
@@ -865,6 +909,80 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.CommitPrincipal.ID(childComplexity), true
 
+	case "Diff.additions":
+		if e.ComplexityRoot.Diff.Additions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.Additions(childComplexity), true
+	case "Diff.base":
+		if e.ComplexityRoot.Diff.Base == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.Base(childComplexity), true
+	case "Diff.baseTip":
+		if e.ComplexityRoot.Diff.BaseTip == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.BaseTip(childComplexity), true
+	case "Diff.deletions":
+		if e.ComplexityRoot.Diff.Deletions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.Deletions(childComplexity), true
+	case "Diff.files":
+		if e.ComplexityRoot.Diff.Files == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.Files(childComplexity), true
+	case "Diff.filesLeftOut":
+		if e.ComplexityRoot.Diff.FilesLeftOut == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.FilesLeftOut(childComplexity), true
+	case "Diff.head":
+		if e.ComplexityRoot.Diff.Head == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Diff.Head(childComplexity), true
+
+	case "DiffLine.kind":
+		if e.ComplexityRoot.DiffLine.Kind == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffLine.Kind(childComplexity), true
+	case "DiffLine.new":
+		if e.ComplexityRoot.DiffLine.New == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffLine.New(childComplexity), true
+	case "DiffLine.noNewline":
+		if e.ComplexityRoot.DiffLine.NoNewline == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffLine.NoNewline(childComplexity), true
+	case "DiffLine.old":
+		if e.ComplexityRoot.DiffLine.Old == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffLine.Old(childComplexity), true
+	case "DiffLine.text":
+		if e.ComplexityRoot.DiffLine.Text == nil {
+			break
+		}
+
+		return e.ComplexityRoot.DiffLine.Text(childComplexity), true
+
 	case "Email.email":
 		if e.ComplexityRoot.Email.Email == nil {
 			break
@@ -944,6 +1062,104 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.File.Truncated(childComplexity), true
+
+	case "FileDiff.additions":
+		if e.ComplexityRoot.FileDiff.Additions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Additions(childComplexity), true
+	case "FileDiff.binary":
+		if e.ComplexityRoot.FileDiff.Binary == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Binary(childComplexity), true
+	case "FileDiff.deletions":
+		if e.ComplexityRoot.FileDiff.Deletions == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Deletions(childComplexity), true
+	case "FileDiff.hunks":
+		if e.ComplexityRoot.FileDiff.Hunks == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Hunks(childComplexity), true
+	case "FileDiff.mode":
+		if e.ComplexityRoot.FileDiff.Mode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Mode(childComplexity), true
+	case "FileDiff.oldMode":
+		if e.ComplexityRoot.FileDiff.OldMode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.OldMode(childComplexity), true
+	case "FileDiff.oldPath":
+		if e.ComplexityRoot.FileDiff.OldPath == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.OldPath(childComplexity), true
+	case "FileDiff.path":
+		if e.ComplexityRoot.FileDiff.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Path(childComplexity), true
+	case "FileDiff.status":
+		if e.ComplexityRoot.FileDiff.Status == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Status(childComplexity), true
+	case "FileDiff.truncated":
+		if e.ComplexityRoot.FileDiff.Truncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Truncated(childComplexity), true
+
+	case "Hunk.lines":
+		if e.ComplexityRoot.Hunk.Lines == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.Lines(childComplexity), true
+	case "Hunk.newLines":
+		if e.ComplexityRoot.Hunk.NewLines == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.NewLines(childComplexity), true
+	case "Hunk.newStart":
+		if e.ComplexityRoot.Hunk.NewStart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.NewStart(childComplexity), true
+	case "Hunk.oldLines":
+		if e.ComplexityRoot.Hunk.OldLines == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.OldLines(childComplexity), true
+	case "Hunk.oldStart":
+		if e.ComplexityRoot.Hunk.OldStart == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.OldStart(childComplexity), true
+	case "Hunk.section":
+		if e.ComplexityRoot.Hunk.Section == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Hunk.Section(childComplexity), true
 
 	case "Invitation.createdAt":
 		if e.ComplexityRoot.Invitation.CreatedAt == nil {
@@ -1764,6 +1980,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Branch(childComplexity, args["name"].(string)), true
+	case "Repository.branchDiff":
+		if e.ComplexityRoot.Repository.BranchDiff == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_branchDiff_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.BranchDiff(childComplexity, args["name"].(string)), true
 	case "Repository.branches":
 		if e.ComplexityRoot.Repository.Branches == nil {
 			break
@@ -1781,6 +2008,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Commit(childComplexity, args["sha"].(string)), true
+	case "Repository.commitDiff":
+		if e.ComplexityRoot.Repository.CommitDiff == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_commitDiff_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.CommitDiff(childComplexity, args["sha"].(string)), true
 	case "Repository.createdAt":
 		if e.ComplexityRoot.Repository.CreatedAt == nil {
 			break
@@ -2322,8 +2560,8 @@ var sources = []*ast.Source{
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations"); and the
-# reviews they submit of them (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md,
-# "Reviews").
+# reviews they submit of them and the diffs they review
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md, "Reviews" and "Diffs").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
@@ -2342,6 +2580,10 @@ extend type Repository {
   tree(ref: String! = "main", path: String! = ""): Tree
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
+  "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
+  branchDiff(name: String!): Diff
+  "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
+  commitDiff(sha: String!): Diff
 }
 
 "One of a repository's tags and the object it names, a commit or an annotated tag."
@@ -2419,6 +2661,86 @@ type File {
   text: String
   "A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load the REST API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-. Null for any other file."
   html: String
+}
+
+"A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it."
+type Diff {
+  "The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base."
+  base: String
+  "A branch's base's tip, which its merge base is reckoned from; null for a commit."
+  baseTip: String
+  "The commit it runs to."
+  head: String!
+  "The files it changes, in Git's order, by path."
+  files: [FileDiff!]!
+  "How many files it changes past the 3000 it lists."
+  filesLeftOut: Int!
+  "The lines it adds, in every file it changes, those it left out included."
+  additions: Int!
+  "The lines it removes, in every file it changes, those it left out included."
+  deletions: Int!
+}
+
+"What a change did to a file."
+enum FileStatus {
+  ADDED
+  MODIFIED
+  DELETED
+  RENAMED
+  "A path whose kind changed, such as a symlink that became a file."
+  TYPE_CHANGED
+}
+
+"One file's change."
+type FileDiff {
+  status: FileStatus!
+  "Its path from the repository's root; a deleted file's old one."
+  path: String!
+  "The path it had before, for a renamed file; null otherwise."
+  oldPath: String
+  "Its mode before, as Git writes it; null for an added file."
+  oldMode: String
+  "Its mode after; null for a deleted file."
+  mode: String
+  "Whether Git reads it as binary, which shows no lines."
+  binary: Boolean!
+  additions: Int!
+  deletions: Int!
+  "Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay."
+  truncated: Boolean!
+  hunks: [Hunk!]!
+}
+
+"One run of a file's changes, with up to three lines around them."
+type Hunk {
+  "Its first line in the old file, or the line before it when it spans none."
+  oldStart: Int!
+  oldLines: Int!
+  "Its first line in the new file, or the line before it when it spans none."
+  newStart: Int!
+  newLines: Int!
+  "The heading Git found above it, such as a function's; empty when it found none."
+  section: String!
+  lines: [DiffLine!]!
+}
+
+"What a hunk's line is."
+enum LineKind {
+  CONTEXT
+  ADDED
+  REMOVED
+}
+
+"One of a hunk's lines, without its newline."
+type DiffLine {
+  kind: LineKind!
+  "Its number in the old file; null for an added line."
+  old: Int
+  "Its number in the new file; null for a removed line."
+  new: Int
+  text: String!
+  "Whether the file ends on it without a newline."
+  noNewline: Boolean!
 }
 
 extend type Mutation {
@@ -3250,6 +3572,42 @@ func (ec *executionContext) childFields_CommitPrincipal(ctx context.Context, fie
 	return nil, fmt.Errorf("no field named %q was found under type CommitPrincipal", field.Name)
 }
 
+func (ec *executionContext) childFields_Diff(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "base":
+		return ec.fieldContext_Diff_base(ctx, field)
+	case "baseTip":
+		return ec.fieldContext_Diff_baseTip(ctx, field)
+	case "head":
+		return ec.fieldContext_Diff_head(ctx, field)
+	case "files":
+		return ec.fieldContext_Diff_files(ctx, field)
+	case "filesLeftOut":
+		return ec.fieldContext_Diff_filesLeftOut(ctx, field)
+	case "additions":
+		return ec.fieldContext_Diff_additions(ctx, field)
+	case "deletions":
+		return ec.fieldContext_Diff_deletions(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Diff", field.Name)
+}
+
+func (ec *executionContext) childFields_DiffLine(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "kind":
+		return ec.fieldContext_DiffLine_kind(ctx, field)
+	case "old":
+		return ec.fieldContext_DiffLine_old(ctx, field)
+	case "new":
+		return ec.fieldContext_DiffLine_new(ctx, field)
+	case "text":
+		return ec.fieldContext_DiffLine_text(ctx, field)
+	case "noNewline":
+		return ec.fieldContext_DiffLine_noNewline(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type DiffLine", field.Name)
+}
+
 func (ec *executionContext) childFields_Email(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "email":
@@ -3286,6 +3644,50 @@ func (ec *executionContext) childFields_File(ctx context.Context, field graphql.
 		return ec.fieldContext_File_html(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type File", field.Name)
+}
+
+func (ec *executionContext) childFields_FileDiff(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "status":
+		return ec.fieldContext_FileDiff_status(ctx, field)
+	case "path":
+		return ec.fieldContext_FileDiff_path(ctx, field)
+	case "oldPath":
+		return ec.fieldContext_FileDiff_oldPath(ctx, field)
+	case "oldMode":
+		return ec.fieldContext_FileDiff_oldMode(ctx, field)
+	case "mode":
+		return ec.fieldContext_FileDiff_mode(ctx, field)
+	case "binary":
+		return ec.fieldContext_FileDiff_binary(ctx, field)
+	case "additions":
+		return ec.fieldContext_FileDiff_additions(ctx, field)
+	case "deletions":
+		return ec.fieldContext_FileDiff_deletions(ctx, field)
+	case "truncated":
+		return ec.fieldContext_FileDiff_truncated(ctx, field)
+	case "hunks":
+		return ec.fieldContext_FileDiff_hunks(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type FileDiff", field.Name)
+}
+
+func (ec *executionContext) childFields_Hunk(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "oldStart":
+		return ec.fieldContext_Hunk_oldStart(ctx, field)
+	case "oldLines":
+		return ec.fieldContext_Hunk_oldLines(ctx, field)
+	case "newStart":
+		return ec.fieldContext_Hunk_newStart(ctx, field)
+	case "newLines":
+		return ec.fieldContext_Hunk_newLines(ctx, field)
+	case "section":
+		return ec.fieldContext_Hunk_section(ctx, field)
+	case "lines":
+		return ec.fieldContext_Hunk_lines(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Hunk", field.Name)
 }
 
 func (ec *executionContext) childFields_Invitation(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -3512,6 +3914,10 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_tree(ctx, field)
 	case "blob":
 		return ec.fieldContext_Repository_blob(ctx, field)
+	case "branchDiff":
+		return ec.fieldContext_Repository_branchDiff(ctx, field)
+	case "commitDiff":
+		return ec.fieldContext_Repository_commitDiff(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Repository", field.Name)
 }
@@ -4682,6 +5088,20 @@ func (ec *executionContext) field_Repository_blob_args(ctx context.Context, rawA
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_branchDiff_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Repository_branch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -4693,6 +5113,20 @@ func (ec *executionContext) field_Repository_branch_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["name"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_commitDiff_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "sha",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["sha"] = arg0
 	return args, nil
 }
 
@@ -6404,6 +6838,291 @@ func (ec *executionContext) fieldContext_CommitPrincipal_displayName(_ context.C
 	return graphql.NewScalarFieldContext("CommitPrincipal", field, false, false, "String")
 }
 
+func (ec *executionContext) _Diff_base(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_base(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Base, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_base(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "String")
+}
+
+func (ec *executionContext) _Diff_baseTip(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_baseTip(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.BaseTip, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_baseTip(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "String")
+}
+
+func (ec *executionContext) _Diff_head(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_head(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Head, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "String")
+}
+
+func (ec *executionContext) _Diff_files(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_files(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Files, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*FileDiff) graphql.Marshaler {
+			return ec.marshalNFileDiff2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileDiffᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_files(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Diff",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_FileDiff(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Diff_filesLeftOut(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_filesLeftOut(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.FilesLeftOut, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_filesLeftOut(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Diff_additions(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_additions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Additions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_additions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Diff_deletions(ctx context.Context, field graphql.CollectedField, obj *Diff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Diff_deletions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deletions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Diff_deletions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Diff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffLine_kind(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffLine_kind(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Kind, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v LineKind) graphql.Marshaler {
+			return ec.marshalNLineKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLineKind(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffLine_kind(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffLine", field, false, false, "LineKind")
+}
+
+func (ec *executionContext) _DiffLine_old(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffLine_old(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Old, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DiffLine_old(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffLine", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffLine_new(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffLine_new(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.New, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_DiffLine_new(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffLine", field, false, false, "Int")
+}
+
+func (ec *executionContext) _DiffLine_text(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffLine_text(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Text, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffLine_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffLine", field, false, false, "String")
+}
+
+func (ec *executionContext) _DiffLine_noNewline(ctx context.Context, field graphql.CollectedField, obj *DiffLine) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_DiffLine_noNewline(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NoNewline, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_DiffLine_noNewline(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("DiffLine", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _Email_email(ctx context.Context, field graphql.CollectedField, obj *Email) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -6701,6 +7420,392 @@ func (ec *executionContext) _File_html(ctx context.Context, field graphql.Collec
 }
 func (ec *executionContext) fieldContext_File_html(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("File", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_status(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_status(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Status, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v FileStatus) graphql.Marshaler {
+			return ec.marshalNFileStatus2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileStatus(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_status(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "FileStatus")
+}
+
+func (ec *executionContext) _FileDiff_path(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_oldPath(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_oldPath(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldPath, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_oldPath(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_oldMode(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_oldMode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldMode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_oldMode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_mode(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_mode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Mode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_mode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_binary(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_binary(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Binary, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_binary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _FileDiff_additions(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_additions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Additions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_additions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _FileDiff_deletions(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_deletions(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Deletions, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_deletions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "Int")
+}
+
+func (ec *executionContext) _FileDiff_truncated(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_truncated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Truncated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_truncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _FileDiff_hunks(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_hunks(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Hunks, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Hunk) graphql.Marshaler {
+			return ec.marshalNHunk2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHunkᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_hunks(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "FileDiff",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Hunk(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Hunk_oldStart(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_oldStart(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldStart, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_oldStart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Hunk", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Hunk_oldLines(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_oldLines(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldLines, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_oldLines(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Hunk", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Hunk_newStart(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_newStart(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewStart, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_newStart(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Hunk", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Hunk_newLines(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_newLines(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.NewLines, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_newLines(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Hunk", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Hunk_section(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_section(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Section, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_section(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Hunk", field, false, false, "String")
+}
+
+func (ec *executionContext) _Hunk_lines(ctx context.Context, field graphql.CollectedField, obj *Hunk) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Hunk_lines(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Lines, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*DiffLine) graphql.Marshaler {
+			return ec.marshalNDiffLine2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffLineᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Hunk_lines(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Hunk",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_DiffLine(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Invitation_id(ctx context.Context, field graphql.CollectedField, obj *Invitation) (ret graphql.Marshaler) {
@@ -10563,6 +11668,94 @@ func (ec *executionContext) fieldContext_Repository_blob(ctx context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_branchDiff(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_branchDiff(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().BranchDiff(ctx, obj, fc.Args["name"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Diff) graphql.Marshaler {
+			return ec.marshalODiff2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiff(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_branchDiff(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Diff(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_branchDiff_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_commitDiff(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_commitDiff(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().CommitDiff(ctx, obj, fc.Args["sha"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Diff) graphql.Marshaler {
+			return ec.marshalODiff2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiff(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_commitDiff(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Diff(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_commitDiff_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RepositoryAccess_principalId(ctx context.Context, field graphql.CollectedField, obj *RepositoryAccess) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -14134,6 +15327,122 @@ func (ec *executionContext) _CommitPrincipal(ctx context.Context, sel ast.Select
 	return out
 }
 
+var diffImplementors = []string{"Diff"}
+
+func (ec *executionContext) _Diff(ctx context.Context, sel ast.SelectionSet, obj *Diff) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, diffImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Diff")
+		case "base":
+			out.Values[i] = ec._Diff_base(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "baseTip":
+			out.Values[i] = ec._Diff_baseTip(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "head":
+			out.Values[i] = ec._Diff_head(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "files":
+			out.Values[i] = ec._Diff_files(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "filesLeftOut":
+			out.Values[i] = ec._Diff_filesLeftOut(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "additions":
+			out.Values[i] = ec._Diff_additions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletions":
+			out.Values[i] = ec._Diff_deletions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var diffLineImplementors = []string{"DiffLine"}
+
+func (ec *executionContext) _DiffLine(ctx context.Context, sel ast.SelectionSet, obj *DiffLine) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, diffLineImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("DiffLine")
+		case "kind":
+			out.Values[i] = ec._DiffLine_kind(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "old":
+			out.Values[i] = ec._DiffLine_old(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "new":
+			out.Values[i] = ec._DiffLine_new(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "text":
+			out.Values[i] = ec._DiffLine_text(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "noNewline":
+			out.Values[i] = ec._DiffLine_noNewline(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var emailImplementors = []string{"Email"}
 
 func (ec *executionContext) _Email(ctx context.Context, sel ast.SelectionSet, obj *Email) graphql.Marshaler {
@@ -14236,6 +15545,142 @@ func (ec *executionContext) _File(ctx context.Context, sel ast.SelectionSet, obj
 		case "html":
 			out.Values[i] = ec._File_html(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var fileDiffImplementors = []string{"FileDiff"}
+
+func (ec *executionContext) _FileDiff(ctx context.Context, sel ast.SelectionSet, obj *FileDiff) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, fileDiffImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("FileDiff")
+		case "status":
+			out.Values[i] = ec._FileDiff_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._FileDiff_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "oldPath":
+			out.Values[i] = ec._FileDiff_oldPath(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "oldMode":
+			out.Values[i] = ec._FileDiff_oldMode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "mode":
+			out.Values[i] = ec._FileDiff_mode(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "binary":
+			out.Values[i] = ec._FileDiff_binary(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "additions":
+			out.Values[i] = ec._FileDiff_additions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deletions":
+			out.Values[i] = ec._FileDiff_deletions(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "truncated":
+			out.Values[i] = ec._FileDiff_truncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "hunks":
+			out.Values[i] = ec._FileDiff_hunks(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var hunkImplementors = []string{"Hunk"}
+
+func (ec *executionContext) _Hunk(ctx context.Context, sel ast.SelectionSet, obj *Hunk) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, hunkImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Hunk")
+		case "oldStart":
+			out.Values[i] = ec._Hunk_oldStart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "oldLines":
+			out.Values[i] = ec._Hunk_oldLines(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newStart":
+			out.Values[i] = ec._Hunk_newStart(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "newLines":
+			out.Values[i] = ec._Hunk_newLines(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "section":
+			out.Values[i] = ec._Hunk_section(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lines":
+			out.Values[i] = ec._Hunk_lines(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -15316,6 +16761,18 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_blob(ctx, field, obj)
+				})
+		case "branchDiff":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_branchDiff(ctx, field, obj)
+				})
+		case "commitDiff":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_commitDiff(ctx, field, obj)
 				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -16457,6 +17914,30 @@ func (ec *executionContext) marshalNCommitPage2ᚖcobranchᚗdevᚋinternalᚋad
 	return ec._CommitPage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNDiffLine2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffLineᚄ(ctx context.Context, sel ast.SelectionSet, v []*DiffLine) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNDiffLine2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffLine(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNDiffLine2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiffLine(ctx context.Context, sel ast.SelectionSet, v *DiffLine) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "DiffLine!")
+		return graphql.Null
+	}
+	return ec._DiffLine(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNEmail2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEmailᚄ(ctx context.Context, sel ast.SelectionSet, v []*Email) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -16491,6 +17972,40 @@ func (ec *executionContext) marshalNEntryKind2cobranchᚗdevᚋinternalᚋadapte
 	return v
 }
 
+func (ec *executionContext) marshalNFileDiff2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileDiffᚄ(ctx context.Context, sel ast.SelectionSet, v []*FileDiff) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNFileDiff2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileDiff(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNFileDiff2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileDiff(ctx context.Context, sel ast.SelectionSet, v *FileDiff) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "FileDiff!")
+		return graphql.Null
+	}
+	return ec._FileDiff(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNFileStatus2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileStatus(ctx context.Context, v any) (FileStatus, error) {
+	var res FileStatus
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNFileStatus2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFileStatus(ctx context.Context, sel ast.SelectionSet, v FileStatus) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, v any) (HistoryParents, error) {
 	var res HistoryParents
 	err := res.UnmarshalGQL(v)
@@ -16499,6 +18014,30 @@ func (ec *executionContext) unmarshalNHistoryParents2cobranchᚗdevᚋinternal�
 
 func (ec *executionContext) marshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, sel ast.SelectionSet, v HistoryParents) graphql.Marshaler {
 	return v
+}
+
+func (ec *executionContext) marshalNHunk2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHunkᚄ(ctx context.Context, sel ast.SelectionSet, v []*Hunk) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNHunk2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHunk(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNHunk2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHunk(ctx context.Context, sel ast.SelectionSet, v *Hunk) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Hunk!")
+		return graphql.Null
+	}
+	return ec._Hunk(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNID2string(ctx context.Context, v any) (string, error) {
@@ -16604,6 +18143,16 @@ func (ec *executionContext) marshalNJoinRequest2ᚖcobranchᚗdevᚋinternalᚋa
 		return graphql.Null
 	}
 	return ec._JoinRequest(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNLineKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLineKind(ctx context.Context, v any) (LineKind, error) {
+	var res LineKind
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNLineKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐLineKind(ctx context.Context, sel ast.SelectionSet, v LineKind) graphql.Marshaler {
+	return v
 }
 
 func (ec *executionContext) marshalNMember2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐMemberᚄ(ctx context.Context, sel ast.SelectionSet, v []*Member) graphql.Marshaler {
@@ -17241,6 +18790,13 @@ func (ec *executionContext) marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternal
 		return graphql.Null
 	}
 	return ec._CommitPrincipal(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalODiff2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDiff(ctx context.Context, sel ast.SelectionSet, v *Diff) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Diff(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐFile(ctx context.Context, sel ast.SelectionSet, v *File) graphql.Marshaler {
