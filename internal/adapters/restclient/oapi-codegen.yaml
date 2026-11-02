@@ -6,5 +6,5 @@ generate:
   models: true
   client: true
 output-options:
-  include-operation-ids: [getMyTask, listTranscript, appendTranscript]
+  include-operation-ids: [getMyTask, listTranscript, appendTranscript, getBranchDiff, getBlob, getTree, listReviews, submitReview]
   nullable-type: true
