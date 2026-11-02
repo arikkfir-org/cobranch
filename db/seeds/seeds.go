@@ -24,4 +24,5 @@ var Go = []*goose.Migration{
 	goose.NewGoMigration(8, &goose.GoFunc{RunTx: issues}, nil),
 	goose.NewGoMigration(9, &goose.GoFunc{RunTx: labels}, nil),
 	goose.NewGoMigration(10, &goose.GoFunc{RunTx: issueComments}, nil),
+	goose.NewGoMigration(12, &goose.GoFunc{RunTx: reviewers}, nil),
 }

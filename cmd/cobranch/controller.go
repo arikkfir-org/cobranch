@@ -65,6 +65,9 @@ func runController(ctx context.Context, logs io.Writer) error {
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
+// The runs' domain queues the schedules' runs too, which the controller's loop asks of the runners that can.
+var _ controller.Scheduler = (*runner.Service)(nil)
+
 // runServices are the domains of jobs' runs and of agents' tasks over pool's database, the cluster the controller runs
 // in, the secrets the key opens and the object store, which the returned func closes.
 func runServices(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) ([]controller.Runner, func(), error) {

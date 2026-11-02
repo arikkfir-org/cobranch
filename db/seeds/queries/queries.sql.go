@@ -14,6 +14,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const hasReviewer = `-- name: HasReviewer :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE org_id = $1 AND purpose = 'review')
+`
+
+func (q *Queries) HasReviewer(ctx context.Context, orgID uuid.UUID) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasReviewer, orgID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const insertSeedAPIKey = `-- name: InsertSeedAPIKey :exec
 INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES ($1, 'api_key', $2, $3, $4)
 `
@@ -32,6 +43,15 @@ func (q *Queries) InsertSeedAPIKey(ctx context.Context, arg InsertSeedAPIKeyPara
 		arg.OrgID,
 		arg.CreatedBy,
 	)
+	return err
+}
+
+const insertSeedAgentPrincipal = `-- name: InsertSeedAgentPrincipal :exec
+INSERT INTO principals (id, kind, display_name, org_id) VALUES ($1, 'agent', $2, $3)
+`
+
+func (q *Queries) InsertSeedAgentPrincipal(ctx context.Context, iD uuid.UUID, name string, orgID uuid.NullUUID) error {
+	_, err := q.db.ExecContext(ctx, insertSeedAgentPrincipal, iD, name, orgID)
 	return err
 }
 
@@ -341,6 +361,27 @@ INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES ($1, $2, $3)
 
 func (q *Queries) InsertSeedRepositorySlug(ctx context.Context, orgID uuid.UUID, slug string, repoID uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, insertSeedRepositorySlug, orgID, slug, repoID)
+	return err
+}
+
+const insertSeedReviewer = `-- name: InsertSeedReviewer :exec
+INSERT INTO agents (principal_id, org_id, name, description, built_in, purpose) VALUES ($1, $2, $3, $4, true, 'review')
+`
+
+type InsertSeedReviewerParams struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Description string
+}
+
+func (q *Queries) InsertSeedReviewer(ctx context.Context, arg InsertSeedReviewerParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedReviewer,
+		arg.ID,
+		arg.OrgID,
+		arg.Name,
+		arg.Description,
+	)
 	return err
 }
 

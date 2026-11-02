@@ -79,7 +79,8 @@ func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (s
 // agent is the domain's view of an agents row, with its creator's name.
 func agent(a queries.Agent, creator *string) (agents.Agent, error) {
 	out := agents.Agent{ID: a.PrincipalID, OrgID: a.OrgID, Name: a.Name, Description: a.Description, Instructions: a.Instructions,
-		BuiltIn: a.BuiltIn, CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version, Secrets: map[string]uuid.UUID{}}
+		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version,
+		Secrets: map[string]uuid.UUID{}}
 	if a.CreatedBy != nil && creator != nil {
 		out.CreatedBy = &agents.Principal{ID: *a.CreatedBy, DisplayName: *creator}
 	}
@@ -156,36 +157,42 @@ func findAgent(ctx context.Context, q *queries.Queries, orgID, id uuid.UUID) (ag
 // CreateAgent records the agent, its principal and its grants for actor, under its organization's lock, as every
 // grant is; agents.ErrNameTaken for a name taken (agents.Store).
 func (s *AgentStore) CreateAgent(ctx context.Context, actor uuid.UUID, a agents.Agent) error {
+	err := transact(ctx, s.pool, s.q, "recording the agent", actor, func(ctx context.Context, q *queries.Queries) error {
+		return insertAgent(ctx, q, actor, a)
+	})
+	return nameTaken(err)
+}
+
+// insertAgent records the agent, its principal and its grants for actor in q's transaction, under its organization's
+// lock, as every grant is: CreateAgent's, or that of the organization a built-in agent is made with.
+func insertAgent(ctx context.Context, q *queries.Queries, actor uuid.UUID, a agents.Agent) error {
 	var creator *uuid.UUID
 	if a.CreatedBy != nil {
 		creator = &a.CreatedBy.ID
 	}
-	err := transact(ctx, s.pool, s.q, "recording the agent", actor, func(ctx context.Context, q *queries.Queries) error {
-		if _, err := q.LockOrganization(ctx, a.OrgID); err != nil {
-			return fmt.Errorf("locking the organization: %w", notFound(err))
+	if _, err := q.LockOrganization(ctx, a.OrgID); err != nil {
+		return fmt.Errorf("locking the organization: %w", notFound(err))
+	}
+	if err := q.InsertAgentPrincipal(ctx, queries.InsertAgentPrincipalParams{ID: a.ID, Name: a.Name, OrgID: &a.OrgID, CreatedBy: creator}); err != nil {
+		return fmt.Errorf("inserting the agent's principal: %w", err)
+	}
+	if err := q.InsertAgent(ctx, queries.InsertAgentParams{ID: a.ID, OrgID: a.OrgID, Name: a.Name, Description: a.Description,
+		Instructions: a.Instructions, BuiltIn: a.BuiltIn, Purpose: optional(a.Purpose), CreatedBy: creator}); err != nil {
+		return fmt.Errorf("inserting the agent: %w", err)
+	}
+	grants := make([]map[string]any, 0, len(a.Grants))
+	for _, g := range a.Grants {
+		scope, scopeID := auth.ScopeOrganization, a.OrgID
+		if g.RepoID != uuid.Nil {
+			scope, scopeID = auth.ScopeRepository, g.RepoID
 		}
-		if err := q.InsertAgentPrincipal(ctx, queries.InsertAgentPrincipalParams{ID: a.ID, Name: a.Name, OrgID: &a.OrgID, CreatedBy: creator}); err != nil {
-			return fmt.Errorf("inserting the agent's principal: %w", err)
+		if _, err := q.InsertGrant(ctx, queries.InsertGrantParams{PrincipalID: a.ID, RoleID: g.RoleID, Scope: string(scope), ScopeID: &scopeID,
+			Source: string(auth.SourceGrant)}); err != nil {
+			return fmt.Errorf("inserting the agent's grant: %w", err)
 		}
-		if err := q.InsertAgent(ctx, queries.InsertAgentParams{ID: a.ID, OrgID: a.OrgID, Name: a.Name, Description: a.Description,
-			Instructions: a.Instructions, BuiltIn: a.BuiltIn, CreatedBy: creator}); err != nil {
-			return fmt.Errorf("inserting the agent: %w", err)
-		}
-		grants := make([]map[string]any, 0, len(a.Grants))
-		for _, g := range a.Grants {
-			scope, scopeID := auth.ScopeOrganization, a.OrgID
-			if g.RepoID != uuid.Nil {
-				scope, scopeID = auth.ScopeRepository, g.RepoID
-			}
-			if _, err := q.InsertGrant(ctx, queries.InsertGrantParams{PrincipalID: a.ID, RoleID: g.RoleID, Scope: string(scope), ScopeID: &scopeID,
-				Source: string(auth.SourceGrant)}); err != nil {
-				return fmt.Errorf("inserting the agent's grant: %w", err)
-			}
-			grants = append(grants, map[string]any{"role": g.RoleID, "scope": scope, "scopeId": scopeID})
-		}
-		return orgEvent(ctx, q, &a.OrgID, actor, "agent.created", a.ID, map[string]any{"name": a.Name, "grants": grants})
-	})
-	return nameTaken(err)
+		grants = append(grants, map[string]any{"role": g.RoleID, "scope": scope, "scopeId": scopeID})
+	}
+	return orgEvent(ctx, q, &a.OrgID, actor, "agent.created", a.ID, map[string]any{"name": a.Name, "grants": grants})
 }
 
 // UpdateAgent changes one of the organization's agents for actor, at version or at any version for
@@ -288,6 +295,7 @@ func task(r taskRow) agents.Task {
 	if t.IssueID != nil {
 		out.IssueID = *t.IssueID
 	}
+	out.SHA = orEmpty(t.Sha)
 	return out
 }
 
@@ -365,7 +373,7 @@ func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task)
 		}
 		p := queries.InsertTaskParams{ID: t.ID, OrgID: t.OrgID, Number: number, AgentID: t.Agent.ID, Kind: t.Kind, Title: t.Title,
 			Instructions: t.Instructions, RepoID: idOrNil(t.RepoID), BranchID: idOrNil(t.BranchID), ThreadID: idOrNil(t.ThreadID),
-			IssueID: idOrNil(t.IssueID)}
+			IssueID: idOrNil(t.IssueID), Sha: optional(t.SHA)}
 		if t.AssignedBy != nil {
 			p.AssignedBy = &t.AssignedBy.ID
 		}
@@ -379,6 +387,14 @@ func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task)
 		return err
 	})
 	return out, err
+}
+
+// orEmpty is *s, or empty for nil.
+func orEmpty(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 // idOrNil is &id, or nil for uuid.Nil.

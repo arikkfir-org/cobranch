@@ -30,14 +30,15 @@ const (
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
 var AnonymousID = uuid.MustParse("00000000-0000-7000-8000-000000000001")
 
-// The built-in roles, by the IDs migration 2 gives them: those a sign-in grants, the organizations' and the
-// repositories'.
+// The built-in roles, by the IDs migration 2 gives them, and migration 40 RoleOrgAutomation, which the AI reviewer
+// holds: those a sign-in grants, the organizations' and the repositories'.
 var (
 	RoleInstallationAdmin = uuid.MustParse("00000000-0000-7000-8000-000000000101")
 	RoleInstallationUser  = uuid.MustParse("00000000-0000-7000-8000-000000000102")
 	RoleOwner             = uuid.MustParse("00000000-0000-7000-8000-000000000201")
 	RoleMember            = uuid.MustParse("00000000-0000-7000-8000-000000000202")
 	RoleGuest             = uuid.MustParse("00000000-0000-7000-8000-000000000203")
+	RoleOrgAutomation     = uuid.MustParse("00000000-0000-7000-8000-000000000204")
 	RoleReader            = uuid.MustParse("00000000-0000-7000-8000-000000000301")
 	RoleDeveloper         = uuid.MustParse("00000000-0000-7000-8000-000000000302")
 	RoleMaintainer        = uuid.MustParse("00000000-0000-7000-8000-000000000303")

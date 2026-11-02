@@ -5,6 +5,9 @@
 "A JSON object, such as a Kubernetes pod spec."
 scalar Map
 
+"Any JSON value: an object, an array, a string, a number, a boolean or null."
+scalar Any
+
 extend type Repository {
   "A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100."
   runs(sha: String, first: Int! = 30, after: String): RunPage!
@@ -17,6 +20,12 @@ extend type Mutation {
   cancelRun(repositoryId: ID!, number: Int!): Run!
   "Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer, and answers it as it now is; takes jobs.run. A run that doesn't wait is refused (CONFLICT, run.not_waiting)."
   startRun(repositoryId: ID!, number: Int!): Run!
+  "Runs one of the repository's ended runs again, for the viewer, as the next attempt of its definition at its commit and ref, and answers the new run; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, is refused (CONFLICT, run.active)."
+  rerunRun(repositoryId: ID!, number: Int!): Run!
+  "Starts a job that a branch's head declares with a manual trigger, at that head, for the viewer, and answers its run; takes jobs.run. A job without a manual trigger is refused (CONFLICT, job.not_manual), and one whose run at the head hasn't ended (CONFLICT, run.active)."
+  runJob(repositoryId: ID!, branch: String!, job: String!): Run!
+  "Posts an event to a repository for the viewer, which runs the default branch's jobs that follow its name at the head of the branch it names, the default branch when null, and answers the runs it queued; takes jobs.run. Its name is written as an annotation's, and data is any JSON of at most 64 KiB, which its runs read as event.json's data."
+  postEvent(repositoryId: ID!, name: String!, branch: String, data: Any): [Run!]!
 }
 
 "A page of a repository's runs, newest first."
@@ -40,12 +49,16 @@ type Run {
   trigger: RunTrigger!
   "The number of the run whose annotation triggered it; null for any other."
   causeRun: Int
+  "Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt."
+  attempt: Int!
+  "The number of the run its attempts started from; null for a first attempt."
+  rerunOf: Int
   "The job as it was declared when the run was queued."
   definition: Job!
   state: RunState!
   "Why it waits, failed or was cancelled; empty otherwise."
   reason: String!
-  "Who started it from WAITING; null for a run that never waited."
+  "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
   queuedAt: Time!
   startedAt: Time
@@ -76,7 +89,7 @@ type RunTrigger {
   sha: String!
   "The branch or tag it happened on, in full."
   ref: String!
-  "The annotation's name, or the posted event's; empty for any other."
+  "The annotation's name, the posted event's, or the job's for a schedule or a manual start; empty for any other."
   name: String!
   "The annotation's status, or the review's state; empty for any other."
   state: String!
@@ -84,6 +97,10 @@ type RunTrigger {
   actor: ID
   "The push that caused it, for a push or a tag."
   push: ID
+  "What a posted event carries; null for any other."
+  data: Any
+  "The minute a schedule fired for; null for any other."
+  slot: Time
 }
 
 "A job as /cobranch.yaml declared it."

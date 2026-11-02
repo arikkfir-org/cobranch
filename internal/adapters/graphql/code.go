@@ -41,6 +41,9 @@ type Code interface {
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
 	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
+	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
+	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
 }
 
 // unavailable is the code of the error a field answers when the installation lacks what it needs: a Git server.
@@ -264,6 +267,7 @@ type Branch struct {
 	Requirements  *MergeRequirements `json:"requirements,omitempty"`
 	Merge         *BranchMerge       `json:"merge,omitempty"`
 	SettingsError *string            `json:"settingsError,omitempty"`
+	ManualJobs    []string           `json:"manualJobs"`
 
 	orgID, repoID uuid.UUID
 }
@@ -308,6 +312,7 @@ func branch(b code.Branch) *Branch {
 	if b.SettingsError != "" {
 		out.SettingsError = &b.SettingsError
 	}
+	out.ManualJobs = append([]string{}, b.ManualJobs...)
 	return out
 }
 

@@ -12,7 +12,7 @@ import (
 )
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
@@ -40,6 +40,7 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.Provider,
 		&i.Agent.Model,
 		&i.Agent.Secrets,
+		&i.Agent.Purpose,
 		&i.CreatorName,
 	)
 	return i, err
@@ -89,7 +90,7 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, c.display_name AS creator_name
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
 WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
 `
@@ -123,6 +124,7 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.Provider,
 			&i.Agent.Model,
 			&i.Agent.Secrets,
+			&i.Agent.Purpose,
 			&i.CreatorName,
 		); err != nil {
 			return nil, err
@@ -139,7 +141,7 @@ const cancelTask = `-- name: CancelTask :one
 UPDATE agent_tasks SET state = 'cancelled', cancelled_by = $1, ended_at = now(), reason = $2
 WHERE org_id = $3 AND number = $4 AND state IN ('queued', 'running', 'waiting')
     AND ($5::bigint < 0 OR version = $5::bigint)
-RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id
+RETURNING id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, state, reason, summary, cancelled_by, created_at, started_at, ended_at, version, issue_id, sha
 `
 
 type CancelTaskParams struct {
@@ -182,6 +184,7 @@ func (q *Queries) CancelTask(ctx context.Context, arg CancelTaskParams) (AgentTa
 		&i.EndedAt,
 		&i.Version,
 		&i.IssueID,
+		&i.Sha,
 	)
 	return i, err
 }
@@ -200,8 +203,8 @@ func (q *Queries) DeleteAgentPrincipal(ctx context.Context, iD uuid.UUID, orgID 
 }
 
 const insertAgent = `-- name: InsertAgent :exec
-INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, purpose, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 `
 
 type InsertAgentParams struct {
@@ -211,10 +214,11 @@ type InsertAgentParams struct {
 	Description  string
 	Instructions string
 	BuiltIn      bool
+	Purpose      *string
 	CreatedBy    *uuid.UUID
 }
 
-// InsertAgent records an agent of its organization.
+// InsertAgent records an agent of its organization, perhaps a built-in one made for a purpose.
 func (q *Queries) InsertAgent(ctx context.Context, arg InsertAgentParams) error {
 	_, err := q.db.Exec(ctx, insertAgent,
 		arg.ID,
@@ -223,6 +227,7 @@ func (q *Queries) InsertAgent(ctx context.Context, arg InsertAgentParams) error 
 		arg.Description,
 		arg.Instructions,
 		arg.BuiltIn,
+		arg.Purpose,
 		arg.CreatedBy,
 	)
 	return err
@@ -251,9 +256,9 @@ func (q *Queries) InsertAgentPrincipal(ctx context.Context, arg InsertAgentPrinc
 }
 
 const insertTask = `-- name: InsertTask :exec
-INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id)
+INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-    $11, $12)
+    $11, $12, $13)
 `
 
 type InsertTaskParams struct {
@@ -269,6 +274,7 @@ type InsertTaskParams struct {
 	BranchID     *uuid.UUID
 	ThreadID     *uuid.UUID
 	IssueID      *uuid.UUID
+	Sha          *string
 }
 
 // InsertTask records a task, Queued.
@@ -286,6 +292,7 @@ func (q *Queries) InsertTask(ctx context.Context, arg InsertTaskParams) error {
 		arg.BranchID,
 		arg.ThreadID,
 		arg.IssueID,
+		arg.Sha,
 	)
 	return err
 }
@@ -339,7 +346,7 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 }
 
 const task = `-- name: Task :one
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
@@ -382,6 +389,7 @@ func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (Task
 		&i.AgentTask.EndedAt,
 		&i.AgentTask.Version,
 		&i.AgentTask.IssueID,
+		&i.AgentTask.Sha,
 		&i.AgentName,
 		&i.AssignerName,
 		&i.CancellerName,
@@ -410,7 +418,7 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 }
 
 const tasks = `-- name: Tasks :many
-SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
@@ -487,6 +495,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 			&i.AgentTask.EndedAt,
 			&i.AgentTask.Version,
 			&i.AgentTask.IssueID,
+			&i.AgentTask.Sha,
 			&i.AgentName,
 			&i.AssignerName,
 			&i.CancellerName,
@@ -519,7 +528,7 @@ const updateAgent = `-- name: UpdateAgent :one
 UPDATE agents SET name = coalesce($1, name), description = coalesce($2, description),
     instructions = coalesce($3, instructions), updated_at = now()
 WHERE principal_id = $4 AND org_id = $5 AND ($6::bigint < 0 OR version = $6::bigint)
-RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets
+RETURNING principal_id, org_id, name, description, instructions, built_in, created_by, created_at, updated_at, version, provider, model, secrets, purpose
 `
 
 type UpdateAgentParams struct {
@@ -557,6 +566,7 @@ func (q *Queries) UpdateAgent(ctx context.Context, arg UpdateAgentParams) (Agent
 		&i.Provider,
 		&i.Model,
 		&i.Secrets,
+		&i.Purpose,
 	)
 	return i, err
 }

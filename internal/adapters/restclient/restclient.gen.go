@@ -140,7 +140,10 @@ type Task struct {
 	// RepositoryId The repository it works in; absent for none.
 	RepositoryId   *openapi_types.UUID `json:"repositoryId,omitempty"`
 	RepositorySlug *string             `json:"repositorySlug,omitempty"`
-	StartedAt      *time.Time          `json:"startedAt,omitempty"`
+
+	// Sha The commit it works at, such as the head a review task reviews; absent for none.
+	Sha       *string    `json:"sha,omitempty"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
 
 	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
 	State TaskState `json:"state"`

@@ -33,7 +33,7 @@ func TestOrgStoreCustomRoles(t *testing.T) {
 		t.Errorf("another organization's role with the same name: error = %v", err)
 	}
 	roles, err := f.s.Roles(ctx, f.acme.ID)
-	if err != nil || len(roles) != 4 || roles[3].ID != release.ID || roles[3].OrgID != f.acme.ID || roles[3].BuiltIn {
+	if err != nil || len(roles) != 5 || roles[4].ID != release.ID || roles[4].OrgID != f.acme.ID || roles[4].BuiltIn {
 		t.Fatalf("Roles(acme) = %+v, %v, want the built-in roles then Release manager", roles, err)
 	}
 	if r, err := f.s.Role(ctx, release.ID); err != nil || r.OrgID != f.acme.ID || !slices.Equal(r.Permissions, release.Permissions) {
@@ -84,8 +84,8 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 	if got, err := f.s.Invitation(ctx, inv.ID); err != nil || got.State != orgs.StateCancelled || got.RoleName != "" {
 		t.Errorf("the deleted role's invitation = %+v, %v, want cancelled, its role's name gone", got, err)
 	}
-	if roles, _ := f.s.Roles(ctx, f.acme.ID); len(roles) != 3 {
-		t.Errorf("%d roles remain, want the built-in 3", len(roles))
+	if roles, _ := f.s.Roles(ctx, f.acme.ID); len(roles) != 4 {
+		t.Errorf("%d roles remain, want the built-in 4", len(roles))
 	}
 	inv.ID, inv.Email = uuid.New(), "late@example.com"
 	if err := f.s.Invite(ctx, f.olivia, inv); !errors.Is(err, orgs.ErrNotFound) {
@@ -94,7 +94,8 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 	if err := f.s.DeleteRole(ctx, f.olivia, f.acme.ID, auth.RoleGuest, now); !errors.Is(err, orgs.ErrNotFound) {
 		t.Errorf("DeleteRole(Guest) error = %v, want not found", err)
 	}
-	want := []string{"role.created", "org.created", "member.joined", "role.created", "role.updated", "role.granted", "role.revoked", "invitation.made", "invitation.cancelled", "role.deleted"}
+	want := []string{"role.created", "org.created", "member.joined", "agent.created", "role.created", "role.updated", "role.granted", "role.revoked", "invitation.made",
+		"invitation.cancelled", "role.deleted"}
 	if got := eventKinds(t, f.pool); len(got) < len(want) || !slices.Equal(got[len(got)-len(want):], want) {
 		t.Errorf("events = %v, want them to end with %v", got, want)
 	}

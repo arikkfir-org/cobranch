@@ -64,3 +64,12 @@ VALUES (@id, @org_id, @issue_id, @created_by, CASE WHEN sqlc.narg(resolved_by)::
 
 -- name: InsertSeedChatMessage :exec
 INSERT INTO chat_messages (id, thread_id, org_id, author_id, body) VALUES (@id, @thread_id, @org_id, @author_id, @body);
+
+-- name: InsertSeedAgentPrincipal :exec
+INSERT INTO principals (id, kind, display_name, org_id) VALUES (@id, 'agent', @name, @org_id);
+
+-- name: InsertSeedReviewer :exec
+INSERT INTO agents (principal_id, org_id, name, description, built_in, purpose) VALUES (@id, @org_id, @name, @description, true, 'review');
+
+-- name: HasReviewer :one
+SELECT EXISTS (SELECT 1 FROM agents WHERE org_id = $1 AND purpose = 'review');
