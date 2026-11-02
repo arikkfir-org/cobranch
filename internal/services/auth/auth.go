@@ -21,6 +21,8 @@ const (
 	KindAnonymous Kind = "anonymous"
 	// KindAPIKey is an API key: a principal of an organization that a script acts as, with its own grants.
 	KindAPIKey Kind = "api_key"
+	// KindJob is a job a repository declares: a principal of its organization that the job's runs act as.
+	KindJob Kind = "job"
 )
 
 // AnonymousID is the ID of Anonymous, the one built-in principal, which the first migration writes.
@@ -38,6 +40,8 @@ var (
 	RoleDeveloper         = uuid.MustParse("00000000-0000-7000-8000-000000000302")
 	RoleMaintainer        = uuid.MustParse("00000000-0000-7000-8000-000000000303")
 	RoleAutomation        = uuid.MustParse("00000000-0000-7000-8000-000000000304")
+	// RoleSecretReader holds secrets.read alone: migration 30 adds it, the one role a secret grants.
+	RoleSecretReader = uuid.MustParse("00000000-0000-7000-8000-000000000305")
 )
 
 // Source says what made a grant, so that a declarative source takes back only what it gave.

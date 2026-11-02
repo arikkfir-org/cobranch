@@ -11,6 +11,7 @@ import (
 
 	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/auth/authtest"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/chats/chatstest"
 	"cobranch.dev/internal/services/code"
@@ -22,6 +23,8 @@ import (
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/services/repos/repostest"
+	"cobranch.dev/internal/services/secrets"
+	"cobranch.dev/internal/services/secrets/secretstest"
 )
 
 // emptyOrgs returns the organizations' service over an empty store.
@@ -33,7 +36,7 @@ func emptyOrgs() *orgs.Service {
 // orgFixture is Acme, with Olivia its Owner and Max a Member, Nia outside it with a pending invitation and
 // permission to create organizations, over the organizations' service; website is Acme's repository, which Olivia
 // created, over the repositories', with main at c after a ← b ← c and feature at d on a, all pushed by Olivia, over the
-// code's.
+// code's; their secrets are over the secrets' service, which seals with authtest.Sealer.
 type orgFixture struct {
 	store            *orgstest.Store
 	service          *orgs.Service
@@ -52,6 +55,8 @@ type orgFixture struct {
 	chatStore        *chatstest.Store
 	notifier         *chatstest.Notifier
 	chats            *chats.Service
+	secretStore      *secretstest.Store
+	secrets          *secrets.Service
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -85,6 +90,7 @@ func newOrgFixture() *orgFixture {
 	}
 	f.codeStore, f.objects = codetest.NewStore(), codetest.NewObjects()
 	f.code = code.NewService(f.codeStore, f.objects, markdown.New(nil, nil), auth.NewAuthorizer(store))
+	f.setUpSecrets(store)
 	f.push = code.Push{ID: uuid.New(), Pusher: &code.Principal{ID: f.olivia.User.ID, DisplayName: "Olivia"}, Transport: git.TransportHTTPS, At: now}
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("b"), shaOf("c"))
 	f.codeStore.Line(f.website.ID, f.push, shaOf("a"), shaOf("d"))
@@ -148,6 +154,12 @@ func (f *orgFixture) addChats() {
 	f.chats = chats.NewService(f.chatStore, f.notifier, markdown.New(nil, nil), auth.NewAuthorizer(f.store))
 }
 
+// setUpSecrets gives the fixture the secrets' service, on a store that sees the organizations', sealing in plain sight.
+func (f *orgFixture) setUpSecrets(store *orgstest.Store) {
+	f.secretStore = secretstest.NewStore(store)
+	f.secrets = secrets.NewService(f.secretStore, auth.NewAuthorizer(store), authtest.Sealer{})
+}
+
 // shaOf is the object name of 40 letter's.
 func shaOf(letter string) string { return strings.Repeat(letter, 40) }
 
@@ -156,7 +168,7 @@ func (f *orgFixture) query(viewer *auth.Authenticated, document string) string {
 	req := httptest.NewRequest("POST", "/", strings.NewReader(`{"query":`+jsonString(document)+`}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", "", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", "", nil, f.service, f.repos, f.code, f.issues, f.chats, f.secrets)).ServeHTTP(rec, req)
 	return rec.Body.String()
 }
 

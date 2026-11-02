@@ -81,10 +81,17 @@ func issueKey(org orgs.Organization) string {
 // Permissions lists what principalID's roles hold at the scope, through every grant it has there: at a repository,
 // also the repository permissions of its roles at the repository's organization.
 func (s *OrgStore) Permissions(ctx context.Context, principalID uuid.UUID, scope auth.Scope, scopeID uuid.UUID) ([]string, error) {
-	if scope == auth.ScopeRepository {
+	switch scope {
+	case auth.ScopeRepository:
 		permissions, err := s.q.RepositoryPermissions(ctx, principalID, scopeID, auth.RepositoryPermissions)
 		if err != nil {
 			return nil, fmt.Errorf("reading the permissions at the repository: %w", err)
+		}
+		return permissions, nil
+	case auth.ScopeSecret:
+		permissions, err := s.q.SecretPermissions(ctx, principalID, scopeID, auth.SecretPermissions)
+		if err != nil {
+			return nil, fmt.Errorf("reading the permissions on the secret: %w", err)
 		}
 		return permissions, nil
 	}

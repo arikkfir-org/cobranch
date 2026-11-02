@@ -292,6 +292,8 @@ roles from the same permissions.
   organization or on a repository like built-in ones. Editing one changes every grant of it on the next check; one that
   is still granted cannot be deleted.
 - **Built-in roles are fixed**, and the installation has no custom roles.
+- **Jobs add a tenth, Secret reader,** a repository role holding `secrets.read` alone, granted to a job on its
+  repository or on one secret ([jobs](jobs.md#secrets)).
 
 ## How a check runs
 

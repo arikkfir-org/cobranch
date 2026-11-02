@@ -89,7 +89,8 @@ type Server struct {
 	SignUpSettings
 	// Providers are the values' identity providers, without their secrets: the Admin server's, which shows them.
 	Providers Providers `envconfig:"AUTH_PROVIDERS"`
-	// SecretsKey seals the secrets the Admin server keeps: the Back-office's providers' client secrets.
+	// SecretsKey seals the secrets the servers keep: the Back-office's providers' client secrets, the Admin server's,
+	// and the organizations' and repositories' secrets, the REST and GraphQL servers'.
 	SecretsKey string `envconfig:"SECRETS_KEY"`
 	// GitInternalURL is the Git server's internal port, where the REST and GraphQL servers read repositories' trees
 	// and files; empty, as in an installation without a Git server, those reads answer 503.
