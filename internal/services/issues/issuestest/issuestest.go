@@ -54,6 +54,17 @@ func TasksOf(kept func() []agents.Task) func(issueID, agentID uuid.UUID) *issues
 	}
 }
 
+// Named answers the key and number that name the issue of id, as an agents' fake's IssueOf takes them; "" and 0 for
+// none.
+func (s *Store) Named(id uuid.UUID) (string, int64) {
+	for _, i := range s.Issues {
+		if i.ID == id {
+			return s.Orgs.Orgs[i.OrgID].IssueKey, int64(i.Number)
+		}
+	}
+	return "", 0
+}
+
 // AddRepository makes repo one of its organization's, for the store and the authorizer.
 func (s *Store) AddRepository(repo repos.Repository) {
 	s.Repos[repo.ID], s.Orgs.Repos[repo.ID] = repo, repo.OrgID

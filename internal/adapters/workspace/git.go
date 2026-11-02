@@ -30,47 +30,70 @@ func (w *Workspace) WithGit(g Git) *Workspace {
 	return w
 }
 
-// Prepare readies the workspace for the task: Git's configuration in the home directory, which names the agent as the
-// author of its commits and gives the Git server the task's token, read from its file each time; and, when the task
-// names a repository and the workspace holds none, the repository, cloned at the task's branch, or its default one.
-// It reports whether it cloned (harness.Checkout).
-func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (bool, error) {
+// Prepare readies the workspace for the task: Git's configuration, which names the agent as the author of its
+// commits and gives the Git server the task's token, read from its file each time; and, when the task names a
+// repository and the workspace holds none, the repository, cloned on the branch the task's work goes to. A task that
+// names no branch gets one of its own, which a clone of an earlier pod of the task may have pushed already
+// (harness.Checkout).
+func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clone, error) {
 	if err := w.configure(ctx, work); err != nil {
-		return false, err
+		return harness.Clone{}, err
 	}
-	t := work.Task
-	if t.RepoSlug == "" {
-		return false, nil
+	t, branch := work.Task, work.Branch()
+	if branch == "" {
+		return harness.Clone{}, nil
 	}
 	if w.git.URL == "" {
 		slog.WarnContext(ctx, "The installation gives its agents no Git server, so the task's repository isn't cloned", "repository", t.RepoSlug)
-		return false, nil
+		return harness.Clone{}, nil
 	}
 	if _, err := os.Stat(filepath.Join(w.dir, ".git")); err == nil {
-		return false, nil
+		return harness.Clone{Branch: branch}, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		return false, fmt.Errorf("finding the workspace's clone: %w", err)
+		return harness.Clone{}, fmt.Errorf("finding the workspace's clone: %w", err)
 	}
 	args := []string{"clone", "--quiet", "--no-tags"}
 	if t.Branch != "" {
 		args = append(args, "--branch", t.Branch)
 	}
-	args = append(args, "--", w.remote(work), w.dir)
-	if err := w.run(ctx, args...); err != nil {
-		return false, fmt.Errorf("cloning repository %s: %w", t.RepoSlug, err)
+	if _, err := w.run(ctx, append(args, "--", w.remote(work), w.dir)...); err != nil {
+		return harness.Clone{}, fmt.Errorf("cloning repository %s: %w", t.RepoSlug, err)
 	}
-	slog.InfoContext(ctx, "Cloned the task's repository", "repository", t.RepoSlug, "branch", t.Branch)
-	return true, nil
+	if t.Branch == "" {
+		if err := w.own(ctx, branch); err != nil {
+			return harness.Clone{}, err
+		}
+	}
+	slog.InfoContext(ctx, "Cloned the task's repository", "repository", t.RepoSlug, "branch", branch)
+	return harness.Clone{Branch: branch, Fresh: true}, nil
 }
 
-// configure writes Git's configuration for the task: the agent as author and committer, the task's token as the Git
-// server's credential, read from its file at each request so a renewed one is used, and the workspace, which the pod's
-// volume makes and another user may own, as safe. New branches push to the remote's branch of their name.
+// own puts the clone on branch, the task's own: the Git server's, when an earlier pod of the task pushed it, or a new
+// one from the default branch's head.
+func (w *Workspace) own(ctx context.Context, branch string) error {
+	pushed, err := w.run(ctx, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/"+branch)
+	if err != nil {
+		return fmt.Errorf("finding the task's branch %s: %w", branch, err)
+	}
+	args := []string{"switch", "--quiet", "--create", branch}
+	if pushed != "" {
+		args = []string{"switch", "--quiet", branch}
+	}
+	if _, err := w.run(ctx, args...); err != nil {
+		return fmt.Errorf("switching to the task's branch %s: %w", branch, err)
+	}
+	return nil
+}
+
+// configure writes the workspace's Git configuration for the task: the agent as author and committer, the task's
+// token as the Git server's credential, read from its file at each request so a renewed one is used, and the
+// workspace, which the pod's volume makes and another user may own, as safe. New branches push to the remote's branch
+// of their name.
 func (w *Workspace) configure(ctx context.Context, work agents.Work) error {
 	settings := [][2]string{
 		{"user.name", work.Task.Agent.DisplayName},
 		{"user.email", work.AgentEmail},
-		{"safe.directory", "*"},
+		{"safe.directory", w.dir},
 		{"push.autoSetupRemote", "true"},
 	}
 	if w.git.URL != "" && w.git.TokenFile != "" {
@@ -78,7 +101,7 @@ func (w *Workspace) configure(ctx context.Context, work agents.Work) error {
 		settings = append(settings, [2]string{"credential." + strings.TrimSuffix(w.git.URL, "/") + "/.helper", helper})
 	}
 	for _, s := range settings {
-		if err := w.run(ctx, "config", "--global", "--replace-all", s[0], s[1]); err != nil {
+		if _, err := w.run(ctx, "config", "--file", w.gitConfig(), "--replace-all", s[0], s[1]); err != nil {
 			return fmt.Errorf("setting Git's %s: %w", s[0], err)
 		}
 	}
@@ -90,15 +113,16 @@ func (w *Workspace) remote(work agents.Work) string {
 	return strings.TrimSuffix(w.git.URL, "/") + "/" + work.OrgSlug + "/" + work.Task.RepoSlug + ".git"
 }
 
-// run runs git with args in the workspace, never prompting, and answers what it printed with its failure.
-func (w *Workspace) run(ctx context.Context, args ...string) error {
+// run runs git with args in the workspace, never prompting, and answers what it printed, trimmed, or that with its
+// failure.
+func (w *Workspace) run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
-	cmd.Dir, cmd.Env = w.dir, append(environment(), "GIT_TERMINAL_PROMPT=0")
+	cmd.Dir, cmd.Env = w.dir, append(w.environment(), "GIT_TERMINAL_PROMPT=0")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(string(out)))
 	}
-	return nil
+	return strings.TrimSpace(string(out)), nil
 }
 
 // quote is s quoted for sh.

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -124,15 +126,36 @@ func working(ctx context.Context, v Viewer) (uuid.UUID, bool) {
 }
 
 // Work is a task as its harness starts from it: the task, its organization's slug, which the harness's calls name, its
-// agent's standing instructions and email, and the number of its issue, whose chat it talks in.
+// agent's standing instructions and email, and its issue, whose chat it talks in.
 type Work struct {
 	Task              Task
 	OrgSlug           string
 	AgentInstructions string
 	// AgentEmail is the email the harness commits with.
 	AgentEmail string
-	// IssueNumber is the number of the issue the task works on; 0 for none.
+	// IssueKey and IssueNumber name the issue the task works on, such as ACME-42: its organization's issue key and its
+	// number; empty and 0 for none.
+	IssueKey    string
 	IssueNumber int64
+}
+
+// Branch is the branch the task's work goes to: the branch the task names, or, for a task in a repository that names
+// none, a branch of the task's own, so that its work lands on no other. An issue's task's names the issue, such as
+// acme-42-task-7, so that its first push links it to the issue
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md, "By name"); any other's is
+// tasks/7, which names no issue. Empty for a task without a repository.
+func (w Work) Branch() string {
+	t := w.Task
+	number := strconv.FormatInt(t.Number, 10)
+	switch {
+	case t.RepoSlug == "":
+		return ""
+	case t.Branch != "":
+		return t.Branch
+	case w.IssueKey != "" && w.IssueNumber != 0:
+		return strings.ToLower(w.IssueKey) + "-" + strconv.FormatInt(w.IssueNumber, 10) + "-task-" + number
+	}
+	return "tasks/" + number
 }
 
 // Work answers the task the request's task token works, for the harness to start from; auth.ErrForbidden for any

@@ -56,7 +56,7 @@ func (a api) GetMyTask(ctx context.Context, _ GetMyTaskRequestObject) (GetMyTask
 	}
 	out := GetMyTask200JSONResponse{Organization: w.OrgSlug, Task: task(w.Task), AgentInstructions: w.AgentInstructions, AgentEmail: w.AgentEmail}
 	if w.IssueNumber != 0 {
-		out.IssueNumber = &w.IssueNumber
+		out.IssueNumber, out.IssueKey = &w.IssueNumber, &w.IssueKey
 	}
 	return out, nil
 }

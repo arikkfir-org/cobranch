@@ -18,7 +18,7 @@ func TestAgentStoreTaskByID(t *testing.T) {
 	task := f.assigned(t, "Look around", true, uuid.Nil)
 	got, err := f.a.TaskByID(context.Background(), task.ID)
 	if err != nil || got.Task.ID != task.ID || got.Task.Number != task.Number || got.Task.RepoSlug != "website" ||
-		got.OrgSlug != f.acme.Slug || got.AgentInstructions != "Be brief." || got.AgentEmail != agents.Email(f.scout.ID) || got.IssueNumber != 0 {
+		got.OrgSlug != f.acme.Slug || got.AgentInstructions != "Be brief." || got.AgentEmail != agents.Email(f.scout.ID) || got.IssueNumber != 0 || got.IssueKey != "" {
 		t.Errorf("TaskByID() = %+v, %v", got, err)
 	}
 	if _, err := f.a.TaskByID(context.Background(), uuid.New()); !errors.Is(err, orgs.ErrNotFound) {

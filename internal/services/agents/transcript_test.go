@@ -198,3 +198,25 @@ func TestWork(t *testing.T) {
 		t.Errorf("Work(a person) = %v, want %v", err, auth.ErrForbidden)
 	}
 }
+
+func TestWorkBranch(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		work agents.Work
+		want string
+	}{
+		{name: "a task without a repository", work: agents.Work{Task: agents.Task{Number: 7}}},
+		{name: "a task on a branch", work: agents.Work{Task: agents.Task{Number: 7, RepoSlug: "website", Branch: "tidy"}}, want: "tidy"},
+		{name: "an issue's task", work: agents.Work{IssueKey: "ACME", IssueNumber: 42, Task: agents.Task{Number: 7, RepoSlug: "website"}},
+			want: "acme-42-task-7"},
+		{name: "an issue's task on a branch", work: agents.Work{IssueKey: "ACME", IssueNumber: 42,
+			Task: agents.Task{Number: 7, RepoSlug: "website", Branch: "acme-42-login"}}, want: "acme-42-login"},
+		{name: "a task in a repository without a branch", work: agents.Work{Task: agents.Task{Number: 7, RepoSlug: "website"}}, want: "tasks/7"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.work.Branch(); got != tt.want {
+				t.Errorf("Branch() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}

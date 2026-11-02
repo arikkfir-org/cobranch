@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,6 +23,10 @@ type Workspace struct {
 	root         *os.Root
 	shellTimeout time.Duration
 	git          Git
+	// gitDir holds the Git configuration that every git the workspace runs, the model's commands' included, reads in
+	// place of the user's own (gitConfig). It lies outside the home directory, so that running the harness by hand
+	// leaves the user's configuration as it was.
+	gitDir string
 }
 
 // New returns the Workspace of dir, whose shell commands run for at most shellTimeout each.
@@ -34,15 +39,29 @@ func New(dir string, shellTimeout time.Duration) (*Workspace, error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening the workspace %s: %w", abs, err)
 	}
-	return &Workspace{dir: abs, root: root, shellTimeout: shellTimeout}, nil
+	gitDir, err := os.MkdirTemp("", "cobranch-git-")
+	if err != nil {
+		_ = root.Close() // opened for reading only; the error that matters is the one above
+		return nil, fmt.Errorf("making a directory for the workspace's Git configuration: %w", err)
+	}
+	return &Workspace{dir: abs, root: root, shellTimeout: shellTimeout, gitDir: gitDir}, nil
 }
 
-// Close closes the workspace's directory.
+// Close closes the workspace's directory, and removes its Git configuration.
 func (w *Workspace) Close() error {
+	var errs []error
 	if err := w.root.Close(); err != nil {
-		return fmt.Errorf("closing the workspace: %w", err)
+		errs = append(errs, fmt.Errorf("closing the workspace: %w", err))
 	}
-	return nil
+	if err := os.RemoveAll(w.gitDir); err != nil {
+		errs = append(errs, fmt.Errorf("removing the workspace's Git configuration: %w", err))
+	}
+	return errors.Join(errs...)
+}
+
+// gitConfig is the file of the workspace's Git configuration, which every git it runs reads as the user's.
+func (w *Workspace) gitConfig() string {
+	return filepath.Join(w.gitDir, "config")
 }
 
 // Tools are the workspace's tools, for the harness to offer the model.

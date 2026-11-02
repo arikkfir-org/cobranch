@@ -7604,6 +7604,11 @@ components:
           type: integer
           format: int64
           description: The number of the issue the task works on, whose chat it talks in; absent for none.
+        issueKey:
+          type: string
+          description: >-
+            The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME
+            in ACME-42; absent for none.
     TranscriptEntryKind:
       type: string
       description: >-

@@ -30,16 +30,16 @@ type chatCase struct {
 	check    func(t *testing.T, c *cobranch, m *model)
 }
 
-// checkout is a harness.Checkout that clones, or fails, and remembers what it prepared.
+// checkout is a harness.Checkout that holds a clone, or fails, and remembers what it prepared.
 type checkout struct {
-	cloned   bool
+	clone    harness.Clone
 	err      error
 	prepared []agents.Work
 }
 
-func (k *checkout) Prepare(_ context.Context, w agents.Work) (bool, error) {
+func (k *checkout) Prepare(_ context.Context, w agents.Work) (harness.Clone, error) {
 	k.prepared = append(k.prepared, w)
-	return k.cloned, k.err
+	return k.clone, k.err
 }
 
 // keyed is a call with a key of its own, as the harness records it.
@@ -170,19 +170,25 @@ func containsAll(t *testing.T, answer string, wants ...string) {
 func checkoutCases() []chatCase {
 	begun := entry(nil, agents.EntryInput, `{"text":"# Sweep"}`)
 	return []chatCase{
-		{name: "a new task's clone", branch: "tidy", checkout: &checkout{cloned: true}, turns: []harness.Turn{done},
+		{name: "a new task's clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}}, turns: []harness.Turn{done},
 			check: func(t *testing.T, c *cobranch, m *model) {
 				if got := c.kinds(); !slices.Equal(got, kinds("input", "turn", "state")) {
 					t.Errorf("the transcript's entries are %v", got)
 				}
-				for _, want := range []string{"The workspace holds a clone of repository website", "as agent@agents.example", "push with git",
-					"a thread of branch tidy's chat"} {
-					if !strings.Contains(m.requests[0].System, want) {
-						t.Errorf("the system prompt %q doesn't say %q", m.requests[0].System, want)
-					}
-				}
+				prompts(t, m, []string{"The workspace holds a clone of repository website, on branch tidy", "as agent@agents.example",
+					"push branch tidy with git", "a thread of branch tidy's chat"}, []string{"push no other"})
 			}},
-		{name: "a task under way gets a fresh clone", branch: "tidy", checkout: &checkout{cloned: true}, entries: begun, turns: []harness.Turn{done},
+		{name: "a task's own branch", issue: 42, checkout: &checkout{clone: harness.Clone{Branch: "acme-42-task-7", Fresh: true}},
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"on branch acme-42-task-7", "push branch acme-42-task-7 with git", "The branch is the task's own: push no other."}, nil)
+			}},
+		{name: "a workspace without a clone", branch: "tidy", checkout: &checkout{}, turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"a thread of branch tidy's chat"}, []string{"clone", "push"})
+			}},
+		{name: "a task under way gets a fresh clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}}, entries: begun,
+			turns: []harness.Turn{done},
 			check: func(t *testing.T, c *cobranch, m *model) {
 				if got := c.kinds(); !slices.Equal(got, kinds("input", "input", "turn", "state")) {
 					t.Fatalf("the transcript's entries are %v", got)
@@ -194,7 +200,8 @@ func checkoutCases() []chatCase {
 					t.Errorf("the model reads %q", got)
 				}
 			}},
-		{name: "a task under way keeps its clone", branch: "tidy", checkout: &checkout{}, entries: begun, turns: []harness.Turn{done},
+		{name: "a task under way keeps its clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy"}}, entries: begun,
+			turns: []harness.Turn{done},
 			check: func(t *testing.T, c *cobranch, _ *model) {
 				if got := c.kinds(); !slices.Equal(got, kinds("input", "turn", "state")) {
 					t.Errorf("the transcript's entries are %v", got)
@@ -206,6 +213,22 @@ func checkoutCases() []chatCase {
 					t.Errorf("the transcript's entries are %v", c.kinds())
 				}
 			}},
+	}
+}
+
+// prompts checks that the first system prompt m was asked with says each of want, and none of not.
+func prompts(t *testing.T, m *model, want, not []string) {
+	t.Helper()
+	system := m.requests[0].System
+	for _, w := range want {
+		if !strings.Contains(system, w) {
+			t.Errorf("the system prompt %q doesn't say %q", system, w)
+		}
+	}
+	for _, n := range not {
+		if strings.Contains(system, n) {
+			t.Errorf("the system prompt %q says %q", system, n)
+		}
 	}
 }
 

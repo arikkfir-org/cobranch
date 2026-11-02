@@ -18,7 +18,7 @@ func entry(r queries.AgentTaskEntry) agents.Entry {
 }
 
 // TaskByID finds a task by its ID, with its organization's slug, its agent's standing instructions and email, and
-// its issue's number (agents.Store).
+// its issue's key and number (agents.Store).
 func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, error) {
 	r, err := s.q.TaskByID(ctx, id)
 	if err != nil {
@@ -27,7 +27,7 @@ func (s *AgentStore) TaskByID(ctx context.Context, id uuid.UUID) (agents.Work, e
 	t := task(taskRow{r.AgentTask, r.AgentName, r.AssignerName, r.CancellerName, r.RepoSlug, r.BranchName})
 	w := agents.Work{Task: t, OrgSlug: r.OrgSlug, AgentInstructions: r.AgentInstructions, AgentEmail: agents.Email(t.Agent.ID)}
 	if r.IssueNumber != nil {
-		w.IssueNumber = int64(*r.IssueNumber)
+		w.IssueKey, w.IssueNumber = r.IssueKey, int64(*r.IssueNumber)
 	}
 	return w, nil
 }

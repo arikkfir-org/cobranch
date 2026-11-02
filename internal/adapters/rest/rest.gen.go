@@ -2099,6 +2099,9 @@ type MyTask struct {
 	// AgentInstructions The standing instructions, in Markdown, of the task's agent; empty for none.
 	AgentInstructions string `json:"agentInstructions"`
 
+	// IssueKey The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; absent for none.
+	IssueKey *string `json:"issueKey,omitempty"`
+
 	// IssueNumber The number of the issue the task works on, whose chat it talks in; absent for none.
 	IssueNumber  *int64 `json:"issueNumber,omitempty"`
 	Organization string `json:"organization"`

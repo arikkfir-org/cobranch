@@ -44,9 +44,12 @@ func (r *run) where() string {
 		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, and post there with " +
 			"post_message."
 	}
-	if r.checkout != nil && r.work.Task.RepoSlug != "" {
-		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + ". Commit there, as " +
-			r.work.AgentEmail + ", and push with git: what you don't push is lost when the task ends."
+	if b := r.clone.Branch; b != "" {
+		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + ", on branch " + b + ". Commit there, as " +
+			r.work.AgentEmail + ", and push branch " + b + " with git: what you don't push is lost when the task ends."
+		if r.work.Task.Branch == "" {
+			out += " The branch is the task's own: push no other."
+		}
 	}
 	return out
 }

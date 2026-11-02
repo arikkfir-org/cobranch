@@ -50,8 +50,10 @@ type Store struct {
 	entries   map[uuid.UUID][]agents.Entry
 	// OrgSlugs are the organizations' slugs, by ID.
 	OrgSlugs map[uuid.UUID]string
-	Events   []string
-	Now      time.Time
+	// IssueOf answers the key and number that name an issue a task works on, by its ID; nil names none.
+	IssueOf func(issueID uuid.UUID) (key string, number int64)
+	Events  []string
+	Now     time.Time
 }
 
 var _ agents.Store = (*Store)(nil)
@@ -269,17 +271,23 @@ func (s *Store) Task(_ context.Context, orgID uuid.UUID, number int64) (agents.T
 	return s.tasks[i], nil
 }
 
-// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs and its agent's instructions and email.
+// TaskByID finds a task by its ID, with its organization's slug from OrgSlugs, its agent's instructions and email, and
+// its issue's key and number from IssueOf.
 func (s *Store) TaskByID(_ context.Context, id uuid.UUID) (agents.Work, error) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	i := slices.IndexFunc(s.tasks, func(t agents.Task) bool { return t.ID == id })
 	if i < 0 {
+		s.mu.Unlock()
 		return agents.Work{}, orgs.ErrNotFound
 	}
 	t := s.tasks[i]
-	return agents.Work{Task: t, OrgSlug: s.OrgSlugs[t.OrgID], AgentInstructions: s.agents[t.Agent.ID].Instructions,
-		AgentEmail: agents.Email(t.Agent.ID)}, nil
+	w := agents.Work{Task: t, OrgSlug: s.OrgSlugs[t.OrgID], AgentInstructions: s.agents[t.Agent.ID].Instructions,
+		AgentEmail: agents.Email(t.Agent.ID)}
+	s.mu.Unlock() // IssueOf may read the issues' fake, which reads this store's tasks
+	if t.IssueID != uuid.Nil && s.IssueOf != nil {
+		w.IssueKey, w.IssueNumber = s.IssueOf(t.IssueID)
+	}
+	return w, nil
 }
 
 // Entries lists at most limit of a task's entries numbered above after.

@@ -87,6 +87,8 @@ type run struct {
 	thread uuid.UUID
 	// offered are the tools the model may call besides finish: its chat's, when the task has one, then the Harness's.
 	offered []Tool
+	// clone is the clone of the task's repository that its workspace holds.
+	clone Clone
 }
 
 // prepare readies the task's workspace, and tells the model when a task under way got a fresh one, as it does when
@@ -95,11 +97,12 @@ func (r *run) prepare(ctx context.Context) error {
 	if r.checkout == nil {
 		return nil
 	}
-	cloned, err := r.checkout.Prepare(ctx, r.work)
+	clone, err := r.checkout.Prepare(ctx, r.work)
 	if err != nil {
 		return fmt.Errorf("preparing the workspace: %w", err)
 	}
-	if !cloned || len(r.entries) == 0 {
+	r.clone = clone
+	if !clone.Fresh || len(r.entries) == 0 {
 		return nil
 	}
 	return r.append(ctx, agents.EntryInput, input{Text: freshWorkspace, By: byHarness})

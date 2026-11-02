@@ -73,9 +73,18 @@ type ChatMessage struct {
 // Checkout readies the task's workspace before the harness works it.
 type Checkout interface {
 	// Prepare readies the workspace for the task: Git's identity, the agent's, and its credentials; and, when the task
-	// names a repository that the workspace doesn't hold yet, the repository, cloned at the task's branch, or its
-	// default one. It reports whether it cloned.
-	Prepare(ctx context.Context, w agents.Work) (bool, error)
+	// names a repository that the workspace doesn't hold yet, the repository, cloned on the branch its work goes to
+	// (agents.Work.Branch). It answers the clone the workspace holds.
+	Prepare(ctx context.Context, w agents.Work) (Clone, error)
+}
+
+// Clone is the clone of the task's repository that its workspace holds.
+type Clone struct {
+	// Branch is the branch the clone is on, which the task's work goes to; empty when the workspace holds no clone,
+	// for a task without a repository or an installation without a Git server.
+	Branch string
+	// Fresh is whether Prepare just made the clone.
+	Fresh bool
 }
 
 // Model is the agent's model, behind its provider's adapter.
