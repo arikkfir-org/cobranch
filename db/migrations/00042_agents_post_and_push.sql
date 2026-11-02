@@ -11,12 +11,14 @@ CREATE INDEX chat_messages_task ON chat_messages (task_id) WHERE task_id IS NOT 
 -- +goose StatementBegin
 -- agent_email gives a new agent its email, <agent ID>@agents.cobranch.invalid, verified: a name under a top-level
 -- domain that never resolves, so no mail goes anywhere, and the same whatever the installation's host. Every way an
--- agent is made, the agents store's, a migration's or a seed's, gets it.
+-- agent is made, the agents store's, a migration's or a seed's, gets it. The address is the agent's whoever held it:
+-- only a push's login-less user, which a commit naming the address made, or an identity provider claiming a mailbox
+-- that can't exist, could hold it first, and leaving it to them would credit the agent's commits to them.
 CREATE FUNCTION agent_email() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
     INSERT INTO principal_emails (email, principal_id, verified)
     VALUES (NEW.principal_id::text || '@agents.cobranch.invalid', NEW.principal_id, true)
-    ON CONFLICT (email) DO NOTHING;
+    ON CONFLICT (email) DO UPDATE SET principal_id = EXCLUDED.principal_id, verified = true;
     RETURN NULL;
 END;
 $$;
@@ -25,7 +27,7 @@ CREATE TRIGGER agent_email AFTER INSERT ON agents FOR EACH ROW EXECUTE FUNCTION 
 
 INSERT INTO principal_emails (email, principal_id, verified)
 SELECT principal_id::text || '@agents.cobranch.invalid', principal_id, true FROM agents
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE SET principal_id = EXCLUDED.principal_id, verified = true;
 
 -- +goose Down
 DROP TRIGGER agent_email ON agents;

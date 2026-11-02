@@ -45,16 +45,46 @@ func TestAgentEmail(t *testing.T) {
 	if got := emailsOf(t, f, f.scout.ID); len(got) != 0 {
 		t.Errorf("Scout holds %v after rolling back, want none", got)
 	}
+	// A push's login-less user takes the address meanwhile, as a commit naming it makes one; the migration takes it back.
+	pusher := loginlessHolding(t, f, agents.Email(f.scout.ID))
 	if _, err := schema.provider.Up(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if got := emailsOf(t, f, f.scout.ID); len(got) != 1 || got[0] != agents.Email(f.scout.ID) {
 		t.Errorf("Scout holds %v after the migration ran again", got)
 	}
-	finder := f.created(t, "Finder")
-	if got := emailsOf(t, f, finder.ID); len(got) != 1 || got[0] != agents.Email(finder.ID) {
+	if got := emailsOf(t, f, pusher); len(got) != 0 {
+		t.Errorf("the login-less user holds %v, want none", got)
+	}
+	// So does a new agent whose address a login-less user took before the agent was made.
+	id := v7()
+	pusher = loginlessHolding(t, f, agents.Email(id))
+	if _, err := f.pool.Exec(ctx, "INSERT INTO principals (id, kind, display_name, org_id) VALUES ($1, 'agent', 'Finder', $2)", id, f.acme.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(ctx, "INSERT INTO agents (principal_id, org_id, name) VALUES ($1, $2, 'Finder')", id, f.acme.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got := emailsOf(t, f, id); len(got) != 1 || got[0] != agents.Email(id) {
 		t.Errorf("a new agent holds %v", got)
 	}
+	if got := emailsOf(t, f, pusher); len(got) != 0 {
+		t.Errorf("the login-less user holds %v once the agent is made, want none", got)
+	}
+}
+
+// loginlessHolding makes a login-less user holding email unverified, as a push whose commit names it does, and
+// answers its ID.
+func loginlessHolding(t *testing.T, f *agentFixture, email string) uuid.UUID {
+	t.Helper()
+	id := v7()
+	if _, err := f.pool.Exec(context.Background(), "INSERT INTO principals (id, kind, display_name) VALUES ($1, 'user', 'someone')", id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.pool.Exec(context.Background(), "INSERT INTO principal_emails (email, principal_id, verified) VALUES ($1, $2, false)", email, id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 func TestAgentTaskPosts(t *testing.T) {
