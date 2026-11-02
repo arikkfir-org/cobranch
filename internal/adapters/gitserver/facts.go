@@ -23,19 +23,23 @@ const maxSettings = 1 << 20
 // branches it was counted from.
 type pushFacts struct {
 	requirements []git.Requirements
-	facts        []git.Facts
-	tips         map[string]string
-	brought      []git.Brought
-	settings     []git.TipSettings
-	peeled       map[string]string
+	// reviewSettings are the AI reviewer's settings when the push moves the default branch; nil otherwise.
+	reviewSettings *git.ReviewSettings
+	facts          []git.Facts
+	tips           map[string]string
+	brought        []git.Brought
+	settings       []git.TipSettings
+	peeled         map[string]string
 }
 
 // branchFacts works out what the push's transaction stores of the repository's branches once the push applies: the
-// merge requirements of /cobranch.yaml at the default branch's new tip when the push moves that branch, and, when it
+// merge requirements of /cobranch.yaml and the AI reviewer's settings of /cobranch-review.yaml at the default branch's
+// new tip when the push moves that branch, and, when it
 // moves any branch, every other live branch's facts against the default branch, with the tips they were counted from
 // (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Graph facts"), and what
 // each move brings into its branch; the /cobranch.yaml at each branch tip it moves; and the commit each tag it moves
-// names. A /cobranch.yaml that doesn't parse at the default branch's new tip refuses the push: refusal says why.
+// names. A /cobranch.yaml or a /cobranch-review.yaml that doesn't parse at the default branch's new tip refuses the
+// push: refusal says why.
 func (s *Server) branchFacts(ctx context.Context, dir string, env []string, updates []git.RefUpdate) (out pushFacts, refusal string, err error) {
 	if out.peeled, err = s.peelTags(ctx, dir, env, updates); err != nil {
 		return pushFacts{}, "", err
@@ -53,8 +57,15 @@ func (s *Server) branchFacts(ctx context.Context, dir string, env []string, upda
 		return pushFacts{}, "", err
 	}
 	head, hasDefault := tips[git.DefaultBranch]
+	movesDefault := git.Push{Updates: updates}.MovesDefault()
 	if hasDefault {
-		out.requirements, refusal, err = s.settings(ctx, dir, env, head, git.Push{Updates: updates}.MovesDefault())
+		out.requirements, refusal, err = s.settings(ctx, dir, env, head, movesDefault)
+		if refusal != "" || err != nil {
+			return pushFacts{}, refusal, err
+		}
+	}
+	if movesDefault {
+		out.reviewSettings, refusal, err = s.reviewSettings(ctx, dir, env, head, hasDefault)
 		if refusal != "" || err != nil {
 			return pushFacts{}, refusal, err
 		}
@@ -362,41 +373,68 @@ func (s *Server) branchTips(ctx context.Context, dir string, updates []git.RefUp
 // settingsAt reads /cobranch.yaml at commit: its blob and what it says, the defaults and no blob without the file, and
 // a *code.SettingsError when it doesn't parse, with its object's name.
 func (s *Server) settingsAt(ctx context.Context, dir string, env []string, commit string) (string, code.Settings, error) {
-	path := commit + ":" + git.SettingsFile
+	blob, content, err := s.fileAt(ctx, dir, env, commit, git.SettingsFile)
+	if err != nil {
+		return blob, code.Settings{}, err
+	}
+	settings, err := code.ParseSettings(content)
+	if err != nil {
+		return blob, code.Settings{}, fmt.Errorf("reading %s:%s: %w", commit, git.SettingsFile, err)
+	}
+	return blob, settings, nil
+}
+
+// fileAt reads a settings file of Cobranch's at commit: its blob and what it holds, no blob and nothing without the
+// file, and a *code.SettingsError naming it when it is no file or is larger than maxSettings.
+func (s *Server) fileAt(ctx context.Context, dir string, env []string, commit, file string) (string, []byte, error) {
+	path := commit + ":" + file
 	checked, err := s.output(ctx, env, path+"\n", "--git-dir="+dir, "cat-file", "--batch-check")
 	if err != nil {
-		return "", code.Settings{}, err
+		return "", nil, err
 	}
 	fields := strings.Fields(checked)
 	switch {
 	case len(fields) == 2 && fields[1] == "missing":
-		settings, err := code.ParseSettings(nil)
-		if err != nil {
-			return "", code.Settings{}, fmt.Errorf("reading the defaults of a commit without %s: %w", git.SettingsFile, err)
-		}
-		return "", settings, nil
+		return "", nil, nil
 	case len(fields) != 3:
-		return "", code.Settings{}, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
+		return "", nil, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
 	case fields[1] != "blob":
-		return fields[0], code.Settings{}, &code.SettingsError{Message: "it must be a file"}
+		return fields[0], nil, &code.SettingsError{File: file, Message: "it must be a file"}
 	}
 	blob := fields[0]
 	size, err := strconv.Atoi(fields[2])
 	if err != nil {
-		return "", code.Settings{}, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
+		return "", nil, fmt.Errorf("git cat-file printed %q for %s", strings.TrimSpace(checked), path)
 	}
 	if size > maxSettings {
-		return blob, code.Settings{}, &code.SettingsError{Message: "it must be at most 1 MiB"}
+		return blob, nil, &code.SettingsError{File: file, Message: "it must be at most 1 MiB"}
 	}
 	content, err := s.output(ctx, env, "", "--git-dir="+dir, "cat-file", "blob", blob)
 	if err != nil {
-		return "", code.Settings{}, err
+		return "", nil, err
 	}
-	settings, err := code.ParseSettings([]byte(content))
-	if err != nil {
-		return blob, code.Settings{}, fmt.Errorf("reading %s: %w", path, err)
+	return blob, []byte(content), nil
+}
+
+// reviewSettings reads the AI reviewer's settings of /cobranch-review.yaml at the default branch's tip, head, for a
+// push that moves that branch: the defaults when the push deletes it, live false. One that doesn't parse refuses the
+// push, saying why.
+func (s *Server) reviewSettings(ctx context.Context, dir string, env []string, head string, live bool) (*git.ReviewSettings, string, error) {
+	if !live {
+		settings := git.DefaultReviewSettings()
+		return &settings, "", nil
 	}
-	return blob, settings, nil
+	_, content, err := s.fileAt(ctx, dir, env, head, git.ReviewSettingsFile)
+	if err == nil {
+		var settings git.ReviewSettings
+		if settings, err = code.ParseReviewSettings(content); err == nil {
+			return &settings, "", nil
+		}
+	}
+	if bad := (*code.SettingsError)(nil); errors.As(err, &bad) {
+		return nil, bad.Error(), nil
+	}
+	return nil, "", fmt.Errorf("reading %s:%s: %w", head, git.ReviewSettingsFile, err)
 }
 
 // aheadBehind counts every live branch but the default against its tip, head, in one walk, as git for-each-ref's

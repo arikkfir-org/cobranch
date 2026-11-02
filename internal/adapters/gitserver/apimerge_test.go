@@ -1,6 +1,7 @@
 package gitserver_test
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"net/http/httptest"
@@ -28,15 +29,17 @@ type apiMergeCase struct {
 	settings    string
 	annotate    bool
 	featureFile string
-	mainFile    string
-	method      code.MergeMethod
-	head        func(feature string) string
-	bypass      bool
-	perms       []string
-	anonymous   bool
-	someoneElse bool
-	wantErr     error
-	wantParents int
+	// featureContent is what feature's commit writes to featureFile, when set.
+	featureContent string
+	mainFile       string
+	method         code.MergeMethod
+	head           func(feature string) string
+	bypass         bool
+	perms          []string
+	anonymous      bool
+	someoneElse    bool
+	wantErr        error
+	wantParents    int
 }
 
 func apiMergeCases() []apiMergeCase {
@@ -152,7 +155,7 @@ func apiMergeRepo(t *testing.T, tt apiMergeCase) (*stack, *gitinternal.Client, s
 	s, dir, feature := branchToMerge(t, mergeCase{settings: tt.settings, annotate: tt.annotate})
 	if tt.featureFile != "" {
 		mustGit(t, dir, "reset", "-q", "--hard", "HEAD~1")
-		feature = commit(t, dir, tt.featureFile, "the feature's\n")
+		feature = commit(t, dir, tt.featureFile, cmp.Or(tt.featureContent, "the feature's\n"))
 		mustGit(t, dir, "push", "-q", "--force", "origin", "feature")
 	}
 	if tt.mainFile != "" {
