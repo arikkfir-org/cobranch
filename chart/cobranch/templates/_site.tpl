@@ -1,7 +1,8 @@
 {{/*
 Pages that Caddy serves, their Deployment, Service and budget: the Console's or the Back-office's. Pass a dict of the
-root context, the component, its values, its image, and env: what tells its pages where each workload answers, as
-COBRANCH_<name>_URL by name, an empty URL left out.
+root context, the component, its values, its image, env: what tells its pages where each workload answers, as
+COBRANCH_<name>_URL by name, an empty URL left out, and release: true when the pages load their files by release, which
+COBRANCH_RELEASE names as the image's tag.
 */}}
 {{- define "cobranch.site" -}}
 {{- $root := .root }}
@@ -62,11 +63,15 @@ spec:
           {{- $_ := set $urls $var $url }}
           {{- end }}
           {{- end }}
-          {{- with $urls }}
+          {{- if or $urls .release }}
           env:
-            {{- range $var, $url := . }}
+            {{- range $var, $url := $urls }}
             - name: COBRANCH_{{ $var }}_URL
               value: {{ $url | trimSuffix "/" | quote }}
+            {{- end }}
+            {{- if .release }}
+            - name: COBRANCH_RELEASE
+              value: {{ .image.tag | default $root.Chart.AppVersion | quote }}
             {{- end }}
           {{- end }}
           livenessProbe:

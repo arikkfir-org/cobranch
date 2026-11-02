@@ -8,8 +8,9 @@ import { showCard } from "./lib/layout.js";
 import { show } from "./lib/router.js";
 import { setBase, setConfig, setMe, setOrgs, setPermissions } from "./lib/state.js";
 
-// start draws the Console from config.json's answer (a promise), at root, the Console's root.
-export function start(loaded, root) {
+// start draws the Console from config.json's answer (a promise), at root, the Console's root; when its pages don't
+// load, again() loads the Console again, or answers false once it tried enough.
+export function start(loaded, root, again) {
   setBase(root);
   const assets = load().then(() => true, () => false);
   return loaded.then(async (c) => {
@@ -22,7 +23,7 @@ export function start(loaded, root) {
     } catch (err) {
       if (err.status !== 401) throw err;
     }
-    if (!(await assets)) return showCard(h("span", { class: "status" }, "Console unavailable"), h("p", {}, "The Console couldn't load its pages. Try again in a moment."));
+    if (!(await assets)) return again() || showCard(h("span", { class: "status" }, "Console unavailable"), h("p", {}, "The Console couldn't load its pages. Try again in a moment."));
     show("load");
   }).catch(() => showCard(h("span", { class: "status" }, "REST API unreachable"), h("p", {}, "The Console couldn't reach this installation's REST API. Try again in a moment.")));
 }

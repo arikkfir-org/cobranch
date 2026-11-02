@@ -3,8 +3,9 @@
 # server does (COBRANCH_AUTH_URL; empty, sign-in isn't set up), where the Console itself does (COBRANCH_CONSOLE_URL,
 # whose path is the pages' root when a route mounts it at a prefix; empty, the root of their own host) and where Git
 # clients reach the Git server (COBRANCH_GIT_URL over HTTPS and COBRANCH_GIT_SSH_URL over SSH, which clone URLs start
-# with; empty, there are none). The pages route in the browser, so a page at any depth asks for config.json beside
-# itself, and every directory answers it. The operator's routes bring the domain and TLS.
+# with; empty, there are none), and names the release of the Console's files this server holds (COBRANCH_RELEASE;
+# empty, none). The pages route in the browser, so a page at any depth asks for config.json beside itself, and every
+# directory answers it. The operator's routes bring the domain and TLS.
 {
 	admin off
 	auto_https off
@@ -27,12 +28,17 @@
 	handle @config {
 		header Content-Type application/json
 		header Cache-Control no-store
-		respond `\{"restUrl":"{env.COBRANCH_REST_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}","gitUrl":"{env.COBRANCH_GIT_URL}","gitSshUrl":"{env.COBRANCH_GIT_SSH_URL}"\}` 200
+		respond `\{"restUrl":"{env.COBRANCH_REST_URL}","authUrl":"{env.COBRANCH_AUTH_URL}","consoleUrl":"{env.COBRANCH_CONSOLE_URL}","gitUrl":"{env.COBRANCH_GIT_URL}","gitSshUrl":"{env.COBRANCH_GIT_SSH_URL}","release":"{env.COBRANCH_RELEASE}"\}` 200
 	}
-	# The Console's modules and stylesheets, under a path no organization takes. The directories it reads list their
-	# files, as JSON when asked, which is how the Console finds its pages and styles: by their files' names
-	# (assets/lib/assets.js); no other directory is listed. Browsers check every file again before they use it
-	# (no-cache), so a release reaches each one on its next load, all at once.
+	# The Console's modules and stylesheets, under a path no organization takes. A load asks for them under the release
+	# config.json named, /assets/@<release>/, and a try's number after it when it loads again (~2): a server serves only
+	# its own release's, so while a rollout runs two releases, a load never takes one release's modules into another's,
+	# and one that reaches the other release's servers fails and loads again under paths no browser cached
+	# (index.html). The directories it reads list their files, as JSON when asked, which is how the Console finds its
+	# pages and styles: by their files' names (assets/lib/assets.js); no other directory is listed. Browsers check every
+	# file again before they use it (no-cache).
+	@release expression path_regexp('release', '^/assets/@([^/~]*)(?:~[0-9]+)?(/.*)$') && {re.release.1} == {env.COBRANCH_RELEASE}
+	rewrite @release /assets{re.release.2}
 	@listed path /assets/lib/ /assets/pages/ /assets/pages/org/ /assets/pages/repo/
 	handle @listed {
 		root * /srv

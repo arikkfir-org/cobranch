@@ -6,21 +6,45 @@
   <title>Cobranch</title>
   <!-- The Console: sign in, the welcome page (create, join, invitations), an organization's pages under its slug, its
        repositories' pages under theirs, and the viewer's own settings, routed in the browser. Caddy serves this page
-       for every path; its modules and stylesheets are under assets/ at the Console's root, a page of an organization
-       or a repository a module of its own (assets/lib/assets.js). The design system's colours
+       for every path; its modules and stylesheets are under assets/@<release>/ at the Console's root, a page of an
+       organization or a repository a module of its own (assets/lib/assets.js). The design system's colours
        (docs/cobranch/designs/design-system), the REST API at the URL config.json names, the Auth server at the other
        URL it names, and the Git server, whose URLs, over HTTPS and SSH, a repository's clone URLs start with, when it
        names them. -->
   <script type="module">
     // config.json sits beside the page's directory, for the Console's root without a trailing slash too, and names the
-    // Console's root, where its modules are; a page at any depth knows it only from there.
+    // Console's root, where its modules are, and their release; a page at any depth knows them only from there.
+    const app = document.getElementById("app");
     const loaded = fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json());
-    const root = await loaded.then((c) => c.consoleUrl ? new URL(c.consoleUrl).pathname.replace(/\/?$/, "/") : "/", () => "/");
+    const config = await loaded.catch(() => ({}));
+    const root = config.consoleUrl ? new URL(config.consoleUrl).pathname.replace(/\/?$/, "/") : "/";
+    // A rollout runs two releases at once for a moment, and a load that reaches the other release's servers for a
+    // module fails (Caddyfile): the Console loads again, three times at most and later each time, every try under paths
+    // of its own, so a browser that cached what the other release answered doesn't take it again.
+    let tries = 3, retried = false;
     try {
-      (await import(root + "assets/console.js")).start(loaded, root);
+      tries = Number(sessionStorage.getItem("cobranch.console.tries")) || 0;
+    } catch {}
+    const again = () => {
+      if (tries >= 3) return false;
+      try {
+        sessionStorage.setItem("cobranch.console.tries", String(tries + 1));
+      } catch {
+        return false;
+      }
+      retried = true;
+      app.textContent = "Loading the Console again…";
+      setTimeout(() => location.reload(), 1000 * 3 ** tries);
+      return true;
+    };
+    try {
+      await (await import(root + "assets/@" + (config.release || "") + (tries ? "~" + tries : "") + "/console.js")).start(loaded, root, again);
     } catch {
-      document.getElementById("app").textContent = "The Console couldn't load. Try again in a moment.";
+      if (!again()) app.textContent = "The Console couldn't load. Try again in a moment.";
     }
+    try {
+      if (!retried) sessionStorage.removeItem("cobranch.console.tries");
+    } catch {}
   </script>
 </head>
 <body class="centered">
