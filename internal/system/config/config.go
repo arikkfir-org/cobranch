@@ -385,7 +385,8 @@ type Agent struct {
 	REST URL `envconfig:"REST_URL"`
 	// TokenFile holds the task's token, which the controller renews in place.
 	TokenFile string `envconfig:"TOKEN_FILE"`
-	// ModelProvider and Model name the agent's model, and ModelKeyFile holds its provider's API key.
+	// ModelProvider and Model name the agent's model, and ModelKeyFile holds its provider's API key, which a proxy at
+	// ModelURL adds in its place: the task's pod holds the key in its model proxy alone.
 	ModelProvider string `envconfig:"MODEL_PROVIDER"`
 	Model         string `envconfig:"MODEL"`
 	ModelKeyFile  string `envconfig:"MODEL_KEY_FILE"`
@@ -409,7 +410,7 @@ func LoadAgent() (Agent, error) {
 	}
 	var missing []string
 	for name, value := range map[string]bool{"REST_URL": c.REST.URL != nil, "TOKEN_FILE": c.TokenFile != "", "MODEL_PROVIDER": c.ModelProvider != "",
-		"MODEL": c.Model != "", "MODEL_KEY_FILE": c.ModelKeyFile != ""} {
+		"MODEL": c.Model != "", "MODEL_KEY_FILE": c.ModelKeyFile != "" || c.ModelURL.URL != nil} {
 		if !value {
 			missing = append(missing, Prefix+"_"+name)
 		}
@@ -420,6 +421,29 @@ func LoadAgent() (Agent, error) {
 	}
 	if c.ModelMaxTokens < 1 || c.MaxTurns < 1 || c.ShellTimeout <= 0 {
 		return Agent{}, errors.New("COBRANCH_MODEL_MAX_TOKENS, COBRANCH_MAX_TURNS and COBRANCH_SHELL_TIMEOUT are more than 0")
+	}
+	return c, nil
+}
+
+// ModelProxy configures model-proxy, which runs beside the harness in a task's pod and sends its model's requests on to
+// the provider with the provider's key, so that the key stays out of the harness's container.
+type ModelProxy struct {
+	// HTTPAddr is where it listens: in the pod alone.
+	HTTPAddr string `envconfig:"HTTP_ADDR" default:"127.0.0.1:8090"`
+	// ModelProvider names the provider, and ModelKeyFile holds its API key.
+	ModelProvider string `envconfig:"MODEL_PROVIDER" required:"true"`
+	ModelKeyFile  string `envconfig:"MODEL_KEY_FILE" required:"true"`
+	// ModelURL is where the provider's API is when not at its own address; empty for its own.
+	ModelURL URL `envconfig:"MODEL_URL"`
+	// ShutdownTimeout is how long it finishes the requests in flight once told to stop.
+	ShutdownTimeout time.Duration `envconfig:"SHUTDOWN_TIMEOUT" default:"5s"`
+}
+
+// LoadModelProxy reads the model proxy's configuration from the environment.
+func LoadModelProxy() (ModelProxy, error) {
+	var c ModelProxy
+	if err := envconfig.Process(Prefix, &c); err != nil {
+		return ModelProxy{}, fmt.Errorf("reading the model proxy's configuration from the COBRANCH_ variables: %w", err)
 	}
 	return c, nil
 }

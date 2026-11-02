@@ -42,6 +42,9 @@ func TestProviders(t *testing.T) {
 			t.Errorf("New(%s) = %v", p, err)
 		}
 	}
+	if _, err := New(Settings{Provider: "openai", Model: "test-model", URL: "http://127.0.0.1:8090"}); err != nil {
+		t.Errorf("New(behind a proxy, without a key) = %v", err)
+	}
 	for _, s := range []Settings{{Provider: "acme", Model: "test-model", Key: "test-key"}, {Provider: "openai", Key: "test-key"}, {Provider: "openai", Model: "test-model"}} {
 		if _, err := New(s); err == nil {
 			t.Errorf("New(%+v) = nil, want an error", s)

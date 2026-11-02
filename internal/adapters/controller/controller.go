@@ -1,8 +1,9 @@
-// Package controller is the controller's loop, which it runs for its runs and for its deliveries alike: on each poll it
-// starts every queued one it can claim, then follows those that work to their end; every minute it queues the
-// schedules' runs, and every sweep it cleans up after what ended otherwise. Any number of replicas may run it: each
-// claims under a lease, and ending one twice ends it once
-// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's life", and
+// Package controller is the controller's loop, which it runs for its runs, its agents' tasks and its deliveries alike:
+// on each poll it starts every queued one it can claim, then follows those that work to their end; every minute it
+// queues the schedules' runs, and every sweep it cleans up after what ended otherwise. Any number of replicas may run
+// it: each claims under a lease, and ending one twice ends it once
+// (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "A run's life",
+// https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "The agent's pod", and
 // https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "A delivery's life").
 package controller
 
@@ -19,7 +20,8 @@ const maxStarts = 50
 // scheduleEvery is how often the loop queues the schedules' runs: a schedule fires on whole minutes.
 const scheduleEvery = time.Minute
 
-// Runner starts, follows and sweeps the runs, or the deliveries: runner.Service, deliverer.Service.
+// Runner starts, follows and sweeps the runs, the agents' tasks or the deliveries: runner.Service, taskrunner.Service,
+// deliverer.Service.
 type Runner interface {
 	Dispatch(ctx context.Context) (bool, error)
 	Follow(ctx context.Context) error

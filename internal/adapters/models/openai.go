@@ -72,7 +72,7 @@ func (o openAI) chat(ctx context.Context, r harness.Request) (harness.Turn, answ
 		req.Tools = append(req.Tools, openAITool{Type: "function", Function: openAIFunction{Name: t.Name, Description: t.Description, Parameters: t.Parameters}})
 	}
 	var resp openAIResponse
-	if err := o.post(ctx, o.url+"/chat/completions", map[string]string{"Authorization": "Bearer " + o.settings.Key}, req, &resp); err != nil {
+	if err := o.post(ctx, o.url+"/chat/completions", keyHeader(o.settings.Provider, o.settings.Key), req, &resp); err != nil {
 		return harness.Turn{}, answered{}, err
 	}
 	meta := answered{model: resp.Model, input: resp.Usage.PromptTokens, output: resp.Usage.CompletionTokens}

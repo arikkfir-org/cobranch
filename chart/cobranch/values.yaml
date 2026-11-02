@@ -15,6 +15,8 @@ images:
     repository: me-west1-docker.pkg.dev/arikkfir/cobranch/cobranch-back-office
     tag: ""
     pullPolicy: IfNotPresent
+# Secrets in the release's namespace that pull these images and agents.image: the chart's pods name them, and the
+# controller copies them into each job namespace, whose agents' pods name them too.
 imagePullSecrets: []
 
 # Where you mount each workload, all under one parent domain: a host each, or paths on one host. Every workload serves
@@ -392,6 +394,26 @@ jobs:
   # and its RoleBindings there to its own roles and ServiceAccounts, and keep the delivery account off an environment's
   # guards. Off only where your cluster's own policies hold them so.
   admissionPolicy: true
+
+# Agents' tasks: each runs in a pod of its organization's job namespace, as runs do, with the job namespaces' egress,
+# quota and node placement. Without jobs.pods, a task fails as it starts.
+agents:
+  # The image the harness runs in, with the tools your agents use: Git, a shell, your languages' toolchains. Any image
+  # will do, since the pod copies the cobranch binary into it, and runs as user 65532. Empty: the cobranch image.
+  image: ""
+  # The harness's requests and memory limit. Empty: jobs.resources.
+  resources: {}
+  # The longest a task may run, after which it fails.
+  timeout: 24h
+  # The most turns of its model a task takes, the longest one shell command of it may run, and the most tokens of one
+  # turn's answer.
+  maxTurns: 200
+  shellTimeout: 10m
+  maxTokens: 8192
+  # Where the pod's model proxy sends a provider's requests, by provider, when not to the provider's own address: a
+  # gateway of yours that speaks its protocol, such as {anthropic: https://llm-gateway.example.com/anthropic}. Pods
+  # reach it only outside jobs.egress.except.
+  providerURLs: {}
 
 # Deliveries of branches to their targets' environments
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "The chart"). Each renders in a

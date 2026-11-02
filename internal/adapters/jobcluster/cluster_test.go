@@ -168,6 +168,36 @@ func checkPrepared(t *testing.T, client *fake.Clientset) {
 	}
 }
 
+func TestPreparePullSecrets(t *testing.T) {
+	ctx := context.Background()
+	registry := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "registry", Namespace: "cobranch"}, Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{corev1.DockerConfigJsonKey: []byte(`{"auths":{}}`)}}
+	stale := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "old-registry", Namespace: ns, Labels: map[string]string{labelPullSecret: "true"}}}
+	runSecret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: runs.name(run), Namespace: ns, Labels: map[string]string{labelRun: run.String()}}}
+	client := installed(registry, stale, runSecret)
+	cfg := config()
+	cfg.ImagePullSecrets = []string{"registry"}
+	if err := New(client, cfg).Prepare(ctx, org); err != nil {
+		t.Fatalf("Prepare() = %v", err)
+	}
+	copied, err := client.CoreV1().Secrets(ns).Get(ctx, "registry", metav1.GetOptions{})
+	if err != nil || copied.Type != corev1.SecretTypeDockerConfigJson || string(copied.Data[corev1.DockerConfigJsonKey]) != `{"auths":{}}` ||
+		copied.Labels[labelPullSecret] != "true" || copied.Labels[labelManagedBy] != "cobranch" {
+		t.Errorf("the copy = %+v, %v", copied, err)
+	}
+	if _, err := client.CoreV1().Secrets(ns).Get(ctx, stale.Name, metav1.GetOptions{}); !apierrors.IsNotFound(err) {
+		t.Errorf("the copy the installation no longer names: error = %v, want not found", err)
+	}
+	if _, err := client.CoreV1().Secrets(ns).Get(ctx, runSecret.Name, metav1.GetOptions{}); err != nil {
+		t.Errorf("a run's Secret: %v, want it kept", err)
+	}
+	cfg.ImagePullSecrets = []string{"registry", "missing"}
+	err = New(installed(registry), cfg).Prepare(ctx, org)
+	if err == nil || !strings.Contains(err.Error(), "image pull secret missing in namespace cobranch") {
+		t.Errorf("Prepare() naming a missing Secret = %v, want it named", err)
+	}
+}
+
 func TestPrepareBindsNoServersWithoutALogsRole(t *testing.T) {
 	ctx := context.Background()
 	client := installed()
@@ -257,6 +287,23 @@ func TestStart(t *testing.T) {
 	}
 }
 
+func TestStartWithoutPullSecrets(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	l := launch(func(l *runner.Launch) {
+		l.Script, l.Pod = "", json.RawMessage(`{"imagePullSecrets":[{"name":"registry"}],"containers":[{"name":"a","image":"b"}]}`)
+	})
+	cfg := config()
+	cfg.ImagePullSecrets = []string{"registry"}
+	if err := New(client, cfg).Start(ctx, l); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	pod, err := client.CoreV1().Pods(ns).Get(ctx, "run-"+run.String(), metav1.GetOptions{})
+	if err != nil || len(pod.Spec.ImagePullSecrets) != 0 {
+		t.Errorf("pod's image pull secrets = %+v, %v; want none: a run never pulls with the installation's", pod.Spec.ImagePullSecrets, err)
+	}
+}
+
 func TestStartRefusals(t *testing.T) {
 	quota := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "run", errors.New(`exceeded quota: cobranch-quota, requested: pods=1`))
 	security := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "run", errors.New(`violates PodSecurity "restricted:latest": privileged`))
@@ -269,6 +316,14 @@ func TestStartRefusals(t *testing.T) {
 	}{
 		{name: "a pod spec with a field pods have not", want: runner.ErrRefused, says: `unknown field "bogus"`,
 			launch: launch(func(l *runner.Launch) { l.Pod = json.RawMessage(`{"bogus":1,"containers":[]}`) })},
+		{name: "a field spelt in another case", want: runner.ErrRefused, says: `unknown field "containers[0].Env"`,
+			launch: launch(func(l *runner.Launch) {
+				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b","Env":[{"name":"K","valueFrom":{"secretKeyRef":{"name":"s","key":"k"}}}]}]}`)
+			})},
+		{name: "a field given twice", want: runner.ErrRefused, says: `duplicate field "containers"`,
+			launch: launch(func(l *runner.Launch) {
+				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b"}],"containers":[{"name":"c","image":"d"}]}`)
+			})},
 		{name: "a volume named as Cobranch's", want: runner.ErrRefused, says: "volume cobranch-run takes a name of Cobranch's own",
 			launch: launch(func(l *runner.Launch) {
 				l.Pod = json.RawMessage(`{"containers":[{"name":"a","image":"b"}],"volumes":[{"name":"cobranch-run","emptyDir":{}}]}`)

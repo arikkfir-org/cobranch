@@ -5,6 +5,10 @@
 {{- $jobs := .Values.jobs }}
 {{- $image := include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
 {{- $rest := $jobs.urls.rest | default (printf "http://%s-rest-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) }}
+{{- $pullSecrets := list }}
+{{- range .Values.imagePullSecrets }}
+{{- $pullSecrets = append $pullSecrets .name }}
+{{- end }}
 {{- $git := $jobs.urls.git | default (ternary (printf "http://%s-git-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) "" (not (empty .Values.urls.git))) }}
 {{- $env := dict
   "PODS" (toString $jobs.pods)
@@ -33,9 +37,10 @@
   "NODE_SELECTOR" (toJson $jobs.nodeSelector)
   "TOLERATIONS" (toJson $jobs.tolerations)
   "AFFINITY" (toJson $jobs.affinity)
+  "IMAGE_PULL_SECRETS" (join "," $pullSecrets)
   "WEBHOOKS_ALLOWED_CIDRS" (join "," (dig "webhooks" "allowedCIDRs" list $jobs)) }}
-{{- /* An upgrade with --reuse-values keeps an older version's values, which have no delivery: the controller's
-defaults stand in for what is unset. */}}
+{{- /* An upgrade with --reuse-values keeps an older version's values, which have no delivery or agents: the
+controller's defaults stand in for what is unset. */}}
 {{- $delivery := .Values.delivery | default dict }}
 {{- $render := $delivery.render | default dict }}
 {{- $deliveryInCluster := $delivery.inCluster | default dict }}
@@ -57,9 +62,23 @@ defaults stand in for what is unset. */}}
   "RESOURCES" (toJson $deliveryInCluster.resources)
   "QUOTA" (toJson $deliveryInCluster.quota)) }}
 {{- end }}
+{{- $agents := .Values.agents | default dict }}
+{{- $agentsEnv := dict
+  "IMAGE" ($agents.image | default $image)
+  "RESOURCES" (toJson $agents.resources)
+  "TIMEOUT" $agents.timeout
+  "MAX_TURNS" (toString $agents.maxTurns)
+  "SHELL_TIMEOUT" $agents.shellTimeout
+  "MODEL_MAX_TOKENS" (toString $agents.maxTokens)
+  "PROVIDER_URLS" (toJson $agents.providerURLs) }}
 {{- $vars := list }}
 {{- range $name, $value := $env }}
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
+{{- range $name, $value := $agentsEnv }}
+{{- if not (has (toString $value) (list "" "null" "<nil>")) }}
+{{- $vars = append $vars (printf "- name: COBRANCH_AGENTS_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
 {{- end }}
 {{- range $name, $value := $deliveryEnv }}
 {{- if not (has (toString $value) (list "" "null" "<nil>")) }}
@@ -128,6 +147,38 @@ subjects:
   - kind: ServiceAccount
     name: {{ $controller }}
     namespace: {{ .Release.Namespace }}
+{{- with $pullSecrets }}
+---
+# In its own namespace, the controller reads the image pull secrets alone, to copy them into its job namespaces, whose
+# agents' task pods pull Cobranch's and the agents' images with them.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $controller }}-image-pull-secrets
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get]
+    resourceNames:
+      {{- toYaml . | nindent 6 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $controller }}-image-pull-secrets
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $controller }}-image-pull-secrets
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
 ---
 # What the controller does in a job namespace, where it binds itself to this role: runs' pods, their logs and Secrets,
 # and the namespace's policies, defaults and quota. Never bind, escalate or exec.

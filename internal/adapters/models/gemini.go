@@ -100,7 +100,7 @@ func (g gemini) chat(ctx context.Context, r harness.Request) (harness.Turn, answ
 	}
 	var resp geminiResponse
 	endpoint := g.url + "/v1beta/models/" + url.PathEscape(g.settings.Model) + ":generateContent"
-	if err := g.post(ctx, endpoint, map[string]string{"x-goog-api-key": g.settings.Key}, req, &resp); err != nil {
+	if err := g.post(ctx, endpoint, keyHeader(g.settings.Provider, g.settings.Key), req, &resp); err != nil {
 		return harness.Turn{}, answered{}, err
 	}
 	meta := answered{model: resp.ModelVersion, input: resp.UsageMetadata.PromptTokenCount, output: resp.UsageMetadata.CandidatesTokenCount}

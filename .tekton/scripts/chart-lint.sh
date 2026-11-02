@@ -4,8 +4,9 @@
 # traces, metrics for Prometheus and delivery into the cluster, and with an external database, packs moving from the
 # database into an S3 bucket,
 # one host with a path per workload, SSH with the operator's host key, another provider, an autoscaled push worker, no
-# traces, its own limits, the demo data with its seed Job, and job pods placed, bounded by a quota and held by the
-# cluster's own policies. Writes the bundled PostgreSQL's image to .ci/postgresql-image, for the cluster to load.
+# traces, its own limits, the demo data with its seed Job, job pods placed, bounded by a quota and held by the
+# cluster's own policies, and agents in an image of their own, pulled with a pull secret. Writes the bundled
+# PostgreSQL's image to .ci/postgresql-image, for the cluster to load.
 set -eu
 chart=chart/cobranch
 out=.ci/manifests
@@ -43,6 +44,8 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranc
   --set jobs.admissionPolicy=false --set jobs.quota.pods=10 --set-string 'jobs.namespaceLabels.example\.com/jobs=true' \
   --set jobs.nodeSelector.pool=jobs --set-json 'jobs.tolerations=[{"key":"pool","value":"jobs","effect":"NoSchedule"}]' \
   --set-json 'jobs.egress.dns=[{"namespaceSelector":{},"podSelector":{"matchLabels":{"k8s-app":"kube-dns"}}}]' \
+  --set agents.image=registry.example.com/agents:1.0 --set-json 'agents.resources={"requests":{"cpu":"1","memory":"2Gi"}}' \
+  --set agents.maxTurns=100 --set 'imagePullSecrets[0].name=registry' \
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' >"$out/external.yaml"
 kubeconform -strict -summary -kubernetes-version 1.37.0 -schema-location default \
   -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \

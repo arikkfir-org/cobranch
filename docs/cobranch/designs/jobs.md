@@ -281,7 +281,8 @@ namespace names the installation’s controller ClusterRole as its owner, so uni
   to every address outside `jobs.egress.except`, which lists the private, link-local and shared ranges, cloud metadata
   servers included), a LimitRange whose defaults are `jobs.resources`, an optional ResourceQuota from `jobs.quota`, and
   RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other lets the REST and GraphQL
-  servers read their pods, logs and Secrets.
+  servers read their pods, logs and Secrets. Copies of the installation's `imagePullSecrets` sit beside them, for
+  [agents' pods](agents.md#the-agents-pod) alone: a job's pod may not name them.
 - **It goes with the organization,** whose deletion deletes it, **and with the installation:** it names the
   installation's controller ClusterRole as its owner, so uninstalling the chart, which deletes that role, has
   Kubernetes's garbage collector delete the namespace and every run in it, with no controller left to clean up.
@@ -296,10 +297,12 @@ The controller polls every 5 seconds. A timeout deletes the pod and fails the ru
 While it runs, the REST and GraphQL servers read its pod’s logs from Kubernetes, masked as the archive is.
 
 - **`pod`** is a Kubernetes pod spec. The controller refuses what would leave the namespace's bounds: a ServiceAccount
-  or its token, host namespaces, host paths, node names, node selectors, affinities, tolerations, priority classes,
-  volumes other than `emptyDir` and ephemeral ones, and variables read from the namespace's Secrets or ConfigMaps, which
-  hold the other runs'. It sets what every run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout,
-  the operator's `jobs.nodeSelector`, `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
+  or its token, image pull secrets, which would pull with the installation's credentials, host namespaces, host paths,
+  node names, node selectors, affinities, tolerations, priority classes, volumes other than `emptyDir` and ephemeral
+  ones, and variables read from the namespace's Secrets or ConfigMaps, which hold the other runs'. Its field names count
+  only as Kubernetes spells them: one spelt in another case, or given twice, is refused. It sets what every run needs:
+  `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout, the operator's `jobs.nodeSelector`,
+  `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
 - **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, which is
   Cobranch's own image, carrying Bash and Git, running the script with `bash -eo pipefail`. The script travels in the
   run's Secret, never in the pod's command line.
@@ -386,6 +389,7 @@ job namespaces name the controller’s role as their owner, so uninstalling dele
 | --- | --- |
 | Deployment `<release>-controller` | 2 replicas, a disruption budget of one, rolling out by surging; the only workload with Kubernetes write access |
 | ClusterRole and binding `<namespace>-<release>-controller` | Create and delete namespaces, which name this role as their owner; create RoleBindings, and `bind` only the ClusterRoles below; read itself |
+| Role and binding `<release>-controller-image-pull-secrets` | Read only the Secrets `imagePullSecrets` names, in the release's namespace, to copy them into each job namespace; rendered only when it names any |
 | ClusterRole `<namespace>-<release>-jobs-runner` | Pods, their logs, Secrets, NetworkPolicies, LimitRanges and ResourceQuotas, bound to the controller in each job namespace |
 | ClusterRole `<namespace>-<release>-jobs-logs` | Read pods, their logs and Secrets, the last for the values the logs mask, bound to the servers' ServiceAccount in each job namespace, whose token the REST and GraphQL servers mount |
 | ValidatingAdmissionPolicy `<namespace>-<release>-jobs` | Holds the controller to namespaces carrying its prefix and installation label, and its RoleBindings to the runner role for itself and the logs role for the servers |

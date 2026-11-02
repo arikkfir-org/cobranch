@@ -44,7 +44,26 @@ type Controller struct {
 	PollInterval  time.Duration `envconfig:"JOBS_POLL_INTERVAL" default:"5s"`
 	SweepInterval time.Duration `envconfig:"JOBS_SWEEP_INTERVAL" default:"5m"`
 	Jobs
+	Agents Agents
 	Delivery
+}
+
+// Agents are the installation's settings for agents' tasks, from the chart's agents values, in the COBRANCH_AGENTS_
+// variables: their pods run in the job namespaces, as runs' do.
+type Agents struct {
+	// Image runs the harness, with the tools agents use; empty for Cobranch's own, CheckoutImage.
+	Image string `envconfig:"IMAGE"`
+	// Resources are the harness's requests and limits.
+	Resources JSON[corev1.ResourceRequirements] `envconfig:"RESOURCES"`
+	// Timeout is the longest a task may run.
+	Timeout time.Duration `envconfig:"TIMEOUT" default:"24h"`
+	// MaxTurns, ShellTimeout and MaxTokens bound the harness: its model's turns, a shell command, and a turn's tokens.
+	MaxTurns     int           `envconfig:"MAX_TURNS" default:"200"`
+	ShellTimeout time.Duration `envconfig:"SHELL_TIMEOUT" default:"10m"`
+	MaxTokens    int           `envconfig:"MODEL_MAX_TOKENS" default:"8192"`
+	// ProviderURLs are where the model proxy sends a provider's requests, by provider, when not to its own address: a
+	// gateway of the operator's that speaks its protocol.
+	ProviderURLs JSON[map[string]string] `envconfig:"PROVIDER_URLS"`
 }
 
 // Delivery are the installation's settings for deliveries, from the chart's delivery values: each renders in a pod of
@@ -133,6 +152,9 @@ type Namespaces struct {
 	NodeSelector JSON[map[string]string]   `envconfig:"JOBS_NODE_SELECTOR"`
 	Tolerations  JSON[[]corev1.Toleration] `envconfig:"JOBS_TOLERATIONS"`
 	Affinity     JSON[*corev1.Affinity]    `envconfig:"JOBS_AFFINITY"`
+	// ImagePullSecrets name the Secrets in Home that pull the images the agents' tasks run, which the controller copies
+	// into every job namespace.
+	ImagePullSecrets []string `envconfig:"JOBS_IMAGE_PULL_SECRETS"`
 }
 
 // LoadController reads controller's configuration from the environment.
@@ -148,12 +170,23 @@ func LoadController() (Controller, error) {
 		return Controller{}, fmt.Errorf("COBRANCH_JOBS_TIMEOUT is %s and COBRANCH_JOBS_MAX_TIMEOUT %s: a run's default must be positive and within the most", c.Timeout, c.MaxTimeout)
 	case c.LogsMaxBytes <= 0:
 		return Controller{}, errors.New("COBRANCH_JOBS_LOGS_MAX_BYTES must be positive")
+	case c.Agents.Timeout <= 0 || c.Agents.MaxTurns <= 0 || c.Agents.ShellTimeout <= 0 || c.Agents.MaxTokens <= 0:
+		return Controller{}, errors.New("COBRANCH_AGENTS_TIMEOUT, COBRANCH_AGENTS_MAX_TURNS, COBRANCH_AGENTS_SHELL_TIMEOUT and COBRANCH_AGENTS_MODEL_MAX_TOKENS must be positive")
 	case c.RenderTimeout <= 0 || c.HealthInterval <= 0:
 		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT and COBRANCH_DELIVERY_HEALTH_INTERVAL must be positive")
 	case c.RendersKeep < 1:
 		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDERS_KEEP must be positive: an environment keeps the render it delivered")
 	case c.InCluster && (c.Account == "" || c.DeliveryRole == "" || c.FenceRole == ""):
 		return Controller{}, errors.New("delivering into this installation's cluster needs COBRANCH_DELIVERY_ACCOUNT, COBRANCH_DELIVERY_ROLE and COBRANCH_DELIVERY_FENCE_ROLE")
+	}
+	if c.Agents.Image == "" {
+		c.Agents.Image = c.CheckoutImage
+	}
+	for provider, raw := range c.Agents.ProviderURLs.Value {
+		var u URL
+		if err := u.Decode(raw); err != nil || u.URL == nil {
+			return Controller{}, fmt.Errorf("COBRANCH_AGENTS_PROVIDER_URLS names %s at %q, not an absolute http or https URL", provider, raw)
+		}
 	}
 	return c, nil
 }

@@ -24,13 +24,14 @@ import (
 	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/runner"
 	"cobranch.dev/internal/services/secrets"
+	"cobranch.dev/internal/services/taskrunner"
 	"cobranch.dev/internal/system/buildinfo"
 	"cobranch.dev/internal/system/config"
 	"cobranch.dev/internal/system/telemetry"
 )
 
-// runController runs the jobs' runs in the cluster it runs in, delivers the deliveries, and serves the health
-// endpoints, until ctx ends.
+// runController runs the jobs' runs and the agents' tasks in the cluster it runs in, delivers the deliveries, and
+// serves the health endpoints, until ctx ends.
 func runController(ctx context.Context, logs io.Writer) error {
 	flush, err := telemetry.Setup(ctx, logs, "controller", buildinfo.Version())
 	if err != nil {
@@ -61,16 +62,16 @@ func runController(ctx context.Context, logs io.Writer) error {
 	for what, r := range loops {
 		worked.Go(func() { controller.Run(work, what, r, cfg.PollInterval, cfg.SweepInterval) })
 	}
-	// The loops stop with the server, even one that failed before ctx ended, and the run or delivery in hand finishes
-	// its step before the pool closes.
+	// The loops stop with the server, even one that failed before ctx ended, and the run, task or delivery in hand
+	// finishes its step before the pool closes.
 	defer func() { stop(); worked.Wait() }()
 	return serve(ctx, cfg.HTTPAddr, cfg.ShutdownTimeout, schema, server.Handler("/", http.NotFoundHandler(),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 }
 
-// controllerLoops are the runs' domain and the deliveries' over pool's database, the cluster the controller runs in,
-// the secrets the key opens, the object store, which the returned func closes, and the webhooks' receivers, by what
-// each works through.
+// controllerLoops are the runs' domain, the agents' tasks' and the deliveries' over pool's database, the cluster the
+// controller runs in, the secrets the key opens, the object store, which the returned func closes, and the webhooks'
+// receivers, by what each works through.
 func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.Pool) (map[string]controller.Runner, func(), error) {
 	c, err := clusterOf(cfg)
 	if err != nil {
@@ -94,17 +95,22 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 	runs := runner.NewService(postgres.NewRunStore(pool), c.runs, vault, archive, poster, runner.Settings{Pods: j.Pods, Lease: j.Lease,
 		RoomRetry: j.RoomRetry, DefaultTimeout: j.Timeout, MaxTimeout: j.MaxTimeout, ScriptImage: j.ScriptImage, RESTURL: j.RESTURL,
 		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
+	a := cfg.Agents
+	tasks := taskrunner.NewService(postgres.NewTaskPodStore(pool), c.tasks, vault, taskrunner.Settings{Pods: j.Pods, Lease: j.Lease,
+		RoomRetry: j.RoomRetry, Timeout: a.Timeout, Vanished: j.Vanished, RESTURL: j.RESTURL, GitURL: j.GitURL, MaxTurns: a.MaxTurns,
+		ShellTimeout: a.ShellTimeout, MaxTokens: a.MaxTokens})
 	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
 		Lease: j.Lease, RoomRetry: j.RoomRetry, Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL,
 		LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished, HealthEvery: d.HealthInterval, KeepRenders: d.RendersKeep})
 	// A store closed as the controller exits has nothing left to flush.
-	return map[string]controller.Runner{"runs": runs, "deliveries": deliveries}, func() { _ = bucket.Close() }, nil
+	return map[string]controller.Runner{"runs": runs, "tasks": tasks, "deliveries": deliveries}, func() { _ = bucket.Close() }, nil
 }
 
-// kube is what the controller reaches the cluster it runs in through: the job namespaces, where runs and renders
-// execute, and the environments' namespaces, where deliveries apply.
+// kube is what the controller reaches the cluster it runs in through: the job namespaces, where runs, agents' tasks
+// and renders execute, and the environments' namespaces, where deliveries apply.
 type kube struct {
 	runs    runner.Cluster
+	tasks   taskrunner.Cluster
 	renders deliverer.Pods
 	target  deliverer.Target
 }
@@ -114,7 +120,7 @@ type kube struct {
 func clusterOf(cfg config.Controller) (kube, error) {
 	j := cfg.Jobs
 	if !j.Pods {
-		return kube{runs: runner.NoPods{}, renders: deliverer.NoPods{}}, nil
+		return kube{runs: runner.NoPods{}, tasks: taskrunner.NoPods{}, renders: deliverer.NoPods{}}, nil
 	}
 	rc, client, err := inClusterConfig()
 	if err != nil {
@@ -125,8 +131,9 @@ func clusterOf(cfg config.Controller) (kube, error) {
 		RunnerRole: j.RunnerRole, OwnerRole: j.OwnerRole, LogsRole: j.LogsRole, LogsReader: j.LogsReader, EgressExcept: j.EgressExcept,
 		DNS: j.EgressDNS.Value, Resources: j.Resources.Value, Quota: j.Quota.Value, NodeSelector: j.NodeSelector.Value,
 		Tolerations: j.Tolerations.Value, Affinity: j.Affinity.Value, CheckoutImage: j.CheckoutImage,
-		RenderResources: cfg.RenderResources.Value})
-	k := kube{runs: jobs, renders: jobs}
+		RenderResources: cfg.RenderResources.Value, AgentImage: cfg.Agents.Image, AgentResources: cfg.Agents.Resources.Value,
+		ImagePullSecrets: j.ImagePullSecrets, ProviderURLs: cfg.Agents.ProviderURLs.Value})
+	k := kube{runs: jobs, tasks: jobs, renders: jobs}
 	if !cfg.InCluster {
 		return k, nil
 	}

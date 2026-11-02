@@ -62,8 +62,8 @@ func New(s Settings) (harness.Model, error) {
 	if !slices.Contains(Providers(), s.Provider) {
 		return nil, fmt.Errorf("%q is not a model provider Cobranch knows: one of %s", s.Provider, strings.Join(Providers(), ", "))
 	}
-	if s.Model == "" || s.Key == "" {
-		return nil, fmt.Errorf("a model of %s takes its name and an API key", s.Provider)
+	if s.Model == "" || (s.Key == "" && s.URL == "") {
+		return nil, fmt.Errorf("a model of %s takes its name, and an API key unless a proxy at its URL adds one", s.Provider)
 	}
 	if s.MaxTokens <= 0 {
 		s.MaxTokens = DefaultMaxTokens
@@ -75,17 +75,38 @@ func New(s Settings) (harness.Model, error) {
 		s.Client = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()))}
 	}
 	c := caller{provider: s.Provider, client: s.Client, backoff: s.backoff}
+	url := base(s.URL, addresses[s.Provider])
 	switch s.Provider {
 	case "anthropic":
-		return model{anthropic{caller: c, url: base(s.URL, "https://api.anthropic.com"), settings: s}, s}, nil
+		return model{anthropic{caller: c, url: url, settings: s}, s}, nil
 	case "google":
-		return model{gemini{caller: c, url: base(s.URL, "https://generativelanguage.googleapis.com"), settings: s}, s}, nil
-	case "deepseek":
-		return model{openAI{caller: c, url: base(s.URL, "https://api.deepseek.com"), settings: s}, s}, nil
-	case "xai":
-		return model{openAI{caller: c, url: base(s.URL, "https://api.x.ai/v1"), settings: s}, s}, nil
+		return model{gemini{caller: c, url: url, settings: s}, s}, nil
 	default:
-		return model{openAI{caller: c, url: base(s.URL, "https://api.openai.com/v1"), settings: s}, s}, nil
+		return model{openAI{caller: c, url: url, settings: s}, s}, nil
+	}
+}
+
+// addresses are the providers' own APIs' addresses.
+var addresses = map[string]string{
+	"anthropic": "https://api.anthropic.com",
+	"google":    "https://generativelanguage.googleapis.com",
+	"deepseek":  "https://api.deepseek.com",
+	"xai":       "https://api.x.ai/v1",
+	"openai":    "https://api.openai.com/v1",
+}
+
+// keyHeader is the header that carries key to provider, as the provider names it; none without a key, which a proxy
+// adds.
+func keyHeader(provider, key string) map[string]string {
+	switch {
+	case key == "":
+		return map[string]string{}
+	case provider == "anthropic":
+		return map[string]string{"x-api-key": key}
+	case provider == "google":
+		return map[string]string{"x-goog-api-key": key}
+	default:
+		return map[string]string{"Authorization": "Bearer " + key}
 	}
 }
 

@@ -90,10 +90,21 @@ type Config struct {
 	Tolerations  []corev1.Toleration
 	Affinity     *corev1.Affinity
 	// CheckoutImage is the image whose `cobranch checkout` fetches a run's commit, and whose `cobranch render` renders
-	// a delivery's: Cobranch's own.
+	// a delivery's: Cobranch's own. An agent task's pod copies the cobranch binary from it, and runs its model proxy in
+	// it.
 	CheckoutImage string
 	// RenderResources are a render pod's container's requests and limits.
 	RenderResources corev1.ResourceRequirements
+	// AgentImage is the image an agent's harness runs in, with the tools its agents use; AgentResources are its
+	// requests and limits, the namespace's defaults where it names none.
+	AgentImage     string
+	AgentResources corev1.ResourceRequirements
+	// ImagePullSecrets name the Secrets in Home that pull the agents' and Cobranch's images, which Prepare copies into
+	// every job namespace and an agent task's pod names.
+	ImagePullSecrets []string
+	// ProviderURLs are where a task's model proxy sends its provider's requests, by provider, when not to the
+	// provider's own address.
+	ProviderURLs map[string]string
 }
 
 // workload is what a pod the controller starts in a job namespace is: a run, or a delivery's render. Each names its
