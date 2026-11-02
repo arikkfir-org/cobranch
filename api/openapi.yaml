@@ -2182,7 +2182,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Environment"
         "304":
-          description: The environment is still the version If-None-Match names.
+          description: Neither the environment nor its newest delivery changed since the ETag If-None-Match names.
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
@@ -3758,7 +3758,7 @@ components:
         version:
           type: integer
           format: int64
-          description: Counts its changes from 1. Its ETag is this number in quotes.
+          description: Counts its changes from 1. Its ETag is this number, then its newest delivery's number and version, dot-separated in quotes (`"1.2.1"`), or this number alone in quotes before its first delivery, since the newest delivery changes without the environment.
     EnvironmentSync:
       type: string
       description: Whether the environment's cluster holds its branch's newest commit.

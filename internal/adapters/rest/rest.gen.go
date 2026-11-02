@@ -1018,7 +1018,7 @@ type Environment struct {
 	// Target Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Target Principal `json:"target"`
 
-	// Version Counts its changes from 1. Its ETag is this number in quotes.
+	// Version Counts its changes from 1. Its ETag is this number, then its newest delivery's number and version, dot-separated in quotes (`"1.2.1"`), or this number alone in quotes before its first delivery, since the newest delivery changes without the environment.
 	Version int64 `json:"version"`
 }
 
