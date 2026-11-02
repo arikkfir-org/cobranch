@@ -1278,6 +1278,63 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteBranch
+      summary: >-
+        Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes
+        its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge
+        stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the
+        viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch
+        recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and
+        a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an
+        installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifMatchBranch"
+      responses:
+        "204":
+          description: Deleted.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/deleted-branches/{branch}:
+    get:
+      operationId: getDeletedBranch
+      summary: The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "200":
+          description: The deleted branch.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletedBranch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/merge:
     post:
       operationId: mergeBranch
@@ -1834,6 +1891,12 @@ components:
       description: The ETag of the annotation the change was made from, which refuses with 412 one made meanwhile, or one that isn't there; * names whichever is there.
       schema:
         type: string
+    ifMatchBranch:
+      name: If-Match
+      in: header
+      description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
+      schema:
+        type: string
     ifNoneMatchAnnotation:
       name: If-None-Match
       in: header
@@ -2256,6 +2319,29 @@ components:
           type: string
           format: date-time
           description: When Cobranch recorded the push.
+    DeletedBranch:
+      type: object
+      description: The latest deletion of a branch of a name, which keeps what it was at and its merge.
+      required: [name, head, createdAt, deletedAt]
+      properties:
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        head:
+          type: string
+          description: The object it was at when deleted.
+        commit:
+          $ref: "#/components/schemas/Commit"
+        createdAt:
+          type: string
+          format: date-time
+        deletedAt:
+          type: string
+          format: date-time
+        deletedBy:
+          $ref: "#/components/schemas/Principal"
+        merge:
+          $ref: "#/components/schemas/BranchMerge"
     MergeInput:
       type: object
       description: How to merge a branch into its base.
@@ -2400,7 +2486,7 @@ components:
           $ref: "#/components/schemas/Principal"
     Principal:
       type: object
-      description: Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+      description: Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
       required: [id, displayName]
       properties:
         id:
@@ -2420,7 +2506,7 @@ components:
           $ref: "#/components/schemas/Principal"
         transport:
           type: string
-          description: How the push came; api for a merge asked of Cobranch.
+          description: How the push came; api for a merge or a branch deletion asked of Cobranch.
           enum: [https, ssh, api]
         at:
           type: string

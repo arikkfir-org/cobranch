@@ -75,11 +75,25 @@ func (q *Queries) CrowdedRepositories(ctx context.Context, threshold int64) ([]u
 }
 
 const deleteBranch = `-- name: DeleteBranch :execrows
-UPDATE branches SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz WHERE repo_id = $2 AND name = $3 AND deleted_at IS NULL
+UPDATE branches SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz, deleted_by = $2
+WHERE repo_id = $3 AND name = $4 AND deleted_at IS NULL
 `
 
-func (q *Queries) DeleteBranch(ctx context.Context, at time.Time, repoID uuid.UUID, name string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteBranch, at, repoID, name)
+type DeleteBranchParams struct {
+	At        time.Time
+	DeletedBy *uuid.UUID
+	RepoID    uuid.UUID
+	Name      string
+}
+
+// DeleteBranch deletes a live branch for the principal who pushed its deletion, keeping its row.
+func (q *Queries) DeleteBranch(ctx context.Context, arg DeleteBranchParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteBranch,
+		arg.At,
+		arg.DeletedBy,
+		arg.RepoID,
+		arg.Name,
+	)
 	if err != nil {
 		return 0, err
 	}

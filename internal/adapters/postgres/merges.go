@@ -16,17 +16,41 @@ import (
 	"cobranch.dev/internal/services/git"
 )
 
-// headJSON is how a push's row keeps a branch whose head it merged into the default branch.
+// headJSON is how a push's row keeps a branch whose head it merged into the default branch. ID is the branch's, as
+// the push's transaction found it live: the push worker records the merge on that branch even once it is deleted, as
+// a merge pushed with the branch's deletion, or followed by it at once, leaves it. A push recorded before pushes kept
+// it has none.
 type headJSON struct {
-	Branch string `json:"branch"`
-	SHA    string `json:"sha"`
+	Branch string     `json:"branch"`
+	SHA    string     `json:"sha"`
+	ID     *uuid.UUID `json:"id,omitempty"`
 }
 
-// mergedJSON is what a push's row keeps of the merges it made, [] for none.
-func mergedJSON(push git.Push) ([]byte, error) {
-	heads := make([]headJSON, 0, len(push.Merges()))
-	for _, h := range push.Merges() {
-		heads = append(heads, headJSON{Branch: h.Branch, SHA: h.SHA})
+// mergedJSON is what a push's row keeps of the merges it made, [] for none, with the IDs of the live branches merged,
+// which the push's transaction has locked.
+func mergedJSON(ctx context.Context, q *queries.Queries, push git.Push) ([]byte, error) {
+	merges := push.Merges()
+	heads := make([]headJSON, 0, len(merges))
+	ids := map[string]uuid.UUID{}
+	if len(merges) > 0 {
+		names := make([]string, 0, len(merges))
+		for _, h := range merges {
+			names = append(names, h.Branch)
+		}
+		rows, err := q.LiveBranchIDs(ctx, push.RepoID, names)
+		if err != nil {
+			return nil, fmt.Errorf("finding the branches merged: %w", err)
+		}
+		for _, r := range rows {
+			ids[r.Name] = r.ID
+		}
+	}
+	for _, h := range merges {
+		head := headJSON{Branch: h.Branch, SHA: h.SHA}
+		if id, ok := ids[h.Branch]; ok {
+			head.ID = &id
+		}
+		heads = append(heads, head)
 	}
 	encoded, err := json.Marshal(heads)
 	if err != nil {
@@ -147,7 +171,7 @@ func recordBypasses(ctx context.Context, q *queries.Queries, orgID uuid.UUID, pu
 }
 
 // recordMerges records, in the push worker's transaction, the merges the claimed push made into the default branch:
-// each branch it merged keeps the head merged, its pusher and when the push was recorded.
+// each branch it merged, deleted since or not, keeps the head merged, its pusher and when the push was recorded.
 func recordMerges(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	var heads []headJSON
 	if err := json.Unmarshal(claimed.Merged, &heads); err != nil {
@@ -159,7 +183,7 @@ func recordMerges(ctx context.Context, q *queries.Queries, claimed queries.Claim
 	rows := make([]queries.RecordMergeParams, 0, len(heads))
 	for _, h := range heads {
 		rows = append(rows, queries.RecordMergeParams{Head: h.SHA, MergedBy: claimed.PusherID, MergedAt: claimed.CommittedAt,
-			RepoID: claimed.RepoID, Name: h.Branch})
+			RepoID: claimed.RepoID, ID: h.ID, Name: h.Branch})
 	}
 	var failed error
 	q.RecordMerge(ctx, rows).Exec(func(i int, err error) {
