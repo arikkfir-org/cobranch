@@ -289,7 +289,7 @@ type ComplexityRoot struct {
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
 		Description       func(childComplexity int) int
-		History           func(childComplexity int, branch string, first int, after *string) int
+		History           func(childComplexity int, branch string, ref *string, parents HistoryParents, first int, after *string) int
 		ID                func(childComplexity int) int
 		Name              func(childComplexity int) int
 		ObjectFormat      func(childComplexity int) int
@@ -434,7 +434,7 @@ type RepositoryResolver interface {
 	Roles(ctx context.Context, obj *Repository) ([]*Role, error)
 	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
 	Branch(ctx context.Context, obj *Repository, name string) (*Branch, error)
-	History(ctx context.Context, obj *Repository, branch string, first int, after *string) (*CommitPage, error)
+	History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error)
 	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
 	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
@@ -1759,7 +1759,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["first"].(int), args["after"].(*string)), true
+		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["ref"].(*string), args["parents"].(HistoryParents), args["first"].(int), args["after"].(*string)), true
 	case "Repository.id":
 		if e.ComplexityRoot.Repository.ID == nil {
 			break
@@ -2204,8 +2204,8 @@ func newExecutionContext(
 }
 
 var sources = []*ast.Source{
-	{Name: "../../../api/graphql/code.graphqls", Input: `# A repository's code as pushes recorded it: its branches, a branch's first-parent history and its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"); its tags,
+	{Name: "../../../api/graphql/code.graphqls", Input: `# A repository's code as pushes recorded it: its branches, its history and its commits
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/git-hosting.md, "The Console"); and its tags,
 # trees and files, which the Git server reads
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
@@ -2216,8 +2216,8 @@ extend type Repository {
   branches: [Branch!]!
   "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
   branch(name: String!): Branch
-  "A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100."
-  history(branch: String! = "main", first: Int! = 30, after: String): CommitPage!
+  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100."
+  history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
   "The repository's tags, by name, each with the object it names; takes repo.read."
@@ -2248,6 +2248,14 @@ type Tree {
   entries: [TreeEntry!]!
   "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
   readme: File
+}
+
+"Which parents of each commit a history follows."
+enum HistoryParents {
+  "The first alone: a branch's line of merges."
+  FIRST
+  "Every one: a merge's other lines too."
+  ALL
 }
 
 "What a tree's entry is: a directory, a file, a symlink, or a submodule, which pins a commit of another repository."
@@ -2413,7 +2421,7 @@ type MergeRequirements {
   linearHistory: Boolean!
 }
 
-"A page of a branch's history, nearest first."
+"A page of history, nearest first."
 type CommitPage {
   commits: [Commit!]!
   "Where the next page starts, as history's after; null after the last page."
@@ -2424,7 +2432,7 @@ type CommitPage {
 type Commit {
   sha: String!
   tree: String!
-  "Its parents' names, the first of which its branch's history follows."
+  "Its parents' names, in Git's order: history follows all of them, or the first alone, as asked."
   parents: [String!]!
   message: String!
   author: Person!
@@ -4482,22 +4490,38 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["branch"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (int, error) {
-			return ec.unmarshalNInt2int(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["first"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg2
+	args["ref"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "parents",
+		func(ctx context.Context, v any) (HistoryParents, error) {
+			return ec.unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parents"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg4
 	return args, nil
 }
 
@@ -9921,7 +9945,7 @@ func (ec *executionContext) _Repository_history(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["first"].(int), fc.Args["after"].(*string))
+			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["ref"].(*string), fc.Args["parents"].(HistoryParents), fc.Args["first"].(int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *CommitPage) graphql.Marshaler {
@@ -15674,6 +15698,16 @@ func (ec *executionContext) unmarshalNEntryKind2cobranchᚗdevᚋinternalᚋadap
 }
 
 func (ec *executionContext) marshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx context.Context, sel ast.SelectionSet, v EntryKind) graphql.Marshaler {
+	return v
+}
+
+func (ec *executionContext) unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, v any) (HistoryParents, error) {
+	var res HistoryParents
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, sel ast.SelectionSet, v HistoryParents) graphql.Marshaler {
 	return v
 }
 

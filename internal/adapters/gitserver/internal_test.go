@@ -64,7 +64,10 @@ func newBrowsed(t *testing.T) *browsed {
 	}
 	mustGit(t, b.dir, "add", "-A")
 	mustGit(t, b.dir, "update-index", "--add", "--cacheinfo", "160000,"+strings.Repeat("ab", 20)+",vendor/lib")
-	mustGit(t, b.dir, "commit", "-q", "-m", "First")
+	// The first commit's clock ran years ahead of its children's: history still shows it beneath them.
+	if out, err := gitCmdAt(t, b.dir, "2031-01-01T00:00:00Z", "commit", "-q", "-m", "First"); err != nil {
+		t.Fatalf("git commit: %v\n%s", err, out)
+	}
 	b.first = strings.TrimSpace(mustGit(t, b.dir, "rev-parse", "HEAD"))
 	b.logoSHA = strings.TrimSpace(mustGit(t, b.dir, "rev-parse", "HEAD:logo.png"))
 	mustGit(t, b.dir, "tag", "-a", "v1", "-m", "Version 1")
@@ -211,6 +214,74 @@ func TestInternalRaw(t *testing.T) {
 	if _, err := b.client.Raw(b.ctx(t), website, "main", "docs"); !errors.Is(err, code.ErrNotBlob) {
 		t.Errorf("Raw() of a directory: %v", err)
 	}
+}
+
+func TestInternalLog(t *testing.T) {
+	b := newBrowsed(t)
+	all, err := b.client.Log(b.ctx(t), website, "main", 0, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, e := range all.Entries {
+		names = append(names, e.SHA)
+	}
+	if all.Commit != b.merge || !slices.Equal(names, []string{b.merge, b.feature, b.first}) || !slices.Equal(all.Entries[0].Parents, []string{b.first, b.feature}) {
+		t.Fatalf("Log(main) = %+v, want the merge with both its parents, then feature's commit, then the first, whose clock ran ahead", all)
+	}
+	tests := []struct {
+		name, ref   string
+		skip, limit int
+		wantCommit  string
+		want        []code.LogEntry
+		wantErr     error
+	}{
+		{name: "after a skip, at most the limit", ref: "main", skip: 1, limit: 1, wantCommit: "merge", want: all.Entries[1:2]},
+		{name: "past the end", ref: "main", skip: 3, limit: 10, wantCommit: "merge"},
+		{name: "no commits, only the ref resolved", ref: "main", limit: 0, wantCommit: "merge"},
+		{name: "an annotated tag, peeled", ref: "v1", limit: 10, wantCommit: "first", want: []code.LogEntry{{SHA: b.first, Parents: []string{}}}},
+		{name: "a commit's full name", ref: "feature", limit: 10, wantCommit: "feature",
+			want: []code.LogEntry{{SHA: b.feature, Parents: []string{b.first}}, {SHA: b.first, Parents: []string{}}}},
+		{name: "a ref that names nothing", ref: "gone", limit: 10, wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log, err := b.client.Log(b.ctx(t), website, b.named(tt.ref), tt.skip, tt.limit)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Log() error = %v, want %v", err, tt.wantErr)
+			}
+			if err == nil && (log.Commit != b.named(tt.wantCommit) || !sameLog(log.Entries, tt.want)) {
+				t.Errorf("Log() = %+v, want %v at %s", log, tt.want, tt.wantCommit)
+			}
+		})
+	}
+	for _, query := range []string{"skip=-1&limit=1", "skip=0&limit=1001", "skip=x&limit=1", "skip=0"} {
+		if status := b.status(t, "/log?ref=main&"+query); status != http.StatusBadRequest {
+			t.Errorf("log?%s answered %d, want %d", query, status, http.StatusBadRequest)
+		}
+	}
+}
+
+// sameLog reports whether got and want name the same commits with the same parents, in the same order.
+func sameLog(got, want []code.LogEntry) bool {
+	return slices.EqualFunc(got, want, func(a, b code.LogEntry) bool { return a.SHA == b.SHA && slices.Equal(a.Parents, b.Parents) })
+}
+
+// status is the status the internal call answers a read of the website repository with, path and query included, when
+// it sends the reader's token.
+func (b *browsed) status(t *testing.T, read string) int {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, b.internal+gitinternal.ReposPath+website.String()+read, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+b.reader)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
 }
 
 func TestInternalViewer(t *testing.T) {

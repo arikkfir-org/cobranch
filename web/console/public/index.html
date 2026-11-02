@@ -202,6 +202,15 @@
     section.panel.notice code { word-break: break-all; }
     .commits td { vertical-align: top; }
     .commits td.sha { text-align: right; white-space: nowrap; }
+    .commits td.graph { position: relative; padding: 0; }
+    .commits td.graph svg { position: absolute; top: 0; left: 0; height: 100%; overflow: visible; }
+    .commits td.graph line { stroke-width: 2; }
+    .lane-0 { stroke: var(--color-accent); fill: var(--color-accent); }
+    .lane-1 { stroke: var(--color-status-success-fg); fill: var(--color-status-success-fg); }
+    .lane-2 { stroke: var(--color-status-warning-fg); fill: var(--color-status-warning-fg); }
+    .lane-3 { stroke: var(--color-status-danger-fg); fill: var(--color-status-danger-fg); }
+    .lane-4 { stroke: var(--color-fg-muted); fill: var(--color-fg-muted); }
+    .scroll { overflow-x: auto; }
     .commits a.subject { color: var(--color-fg-default); font-weight: 500; text-decoration: none; }
     .commits a.subject:hover { color: var(--color-accent); }
     pre.message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--font-mono); font-size: 13px; color: var(--color-fg-default); }
@@ -553,13 +562,14 @@
       main.replaceChildren(heading, error, ...sections);
     }
 
-    // repoLinks makes the links of a repository's code: to a branch's history and its page, to a commit, to a directory or a file at
-    // a ref, and to a file's bytes, which the REST API serves.
+    // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
+    // parents, to a branch's page, to a commit, to a directory or a file at a ref, and to a file's bytes, which the REST
+    // API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
       return {
-        branch: (name) => root + "/commits/" + parts(name),
+        history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
         branchPage: (name) => root + "/branches/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
@@ -728,11 +738,10 @@
         return unreadable(err, ref, dir);
       }
       const latest = await api("GET", path + "/commits/" + tree.commit).catch(() => null);
-      const branch = branches.find((b) => b.name === ref);
       const head = h("div", { class: "row" }, latest ? h("div", {}, h("a", { class: "subject", href: at.commit(latest.sha), "data-nav": "" }, subject(latest.message)),
         h("p", {}, who(latest.author), " · ", whenExactly(latest.author.at))) : h("p", {}, "At ", h("code", {}, shortSha(tree.commit))),
         h("div", { class: "row" }, h("a", { href: at.commit(tree.commit), "data-nav": "" }, h("code", {}, shortSha(tree.commit))),
-          branch ? h("a", { class: "button small", href: at.branch(branch.name), "data-nav": "" }, "History") : null));
+          h("a", { class: "button small", href: at.history(ref), "data-nav": "" }, "History")));
       const row = (e) => {
         const name = e.kind === "tree" ? h("a", { href: at.tree(ref, e.path), "data-nav": "" }, e.name + "/")
           : e.kind === "submodule" ? [e.name, " ", h("span", { class: "muted" }, "@ " + shortSha(e.sha))]
@@ -874,25 +883,29 @@
       return h("div", { class: "row" }, h("span", { class: "chip" }, name), code, copy);
     }
 
-    // repositoryHistory is a branch's first-parent history, nearest first, a page at a time, under a picker of the
-    // repository's branches. A merge's second line stays out until the full graph view arrives.
-    async function repositoryHistory(path, at, branch, fail) {
-      const branches = (await api("GET", path + "/branches")).branches;
-      const panel = h("section", { class: "panel" });
+    // repositoryHistory is the history of a branch, a tag or a commit, nearest first, a page at a time, under a picker of
+    // the repository's branches and tags: through every parent beside a graph of its lines, or along first parents
+    // alone, which an installation without a Git server falls back to.
+    async function repositoryHistory(path, at, ref, fail) {
+      const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
       if (!branches.length) return h("section", { class: "panel" }, h("h3", {}, "History"), h("p", {}, "Nothing has been pushed yet: push ", h("code", {}, "main"), " to start its history."));
-      const live = branches.find((b) => b.name === branch);
-      const picker = h("select", { "aria-label": "Branch", onchange: (e) => go(at.branch(e.target.value).slice(base.length - 1)) },
-        branches.map((b) => h("option", { value: b.name, selected: b.name === branch }, b.name)), live ? null : h("option", { selected: true, disabled: true }, branch));
-      panel.append(h("div", { class: "row" }, h("h3", {}, "History"), h("div", {}, picker)));
-      if (!live || !live.commit) {
-        panel.append(live ? h("p", {}, "Its head, ", h("code", {}, shortSha(live.head)), ", is no commit a push recorded.")
-          : h("p", {}, "There is no branch ", h("code", {}, branch), " any more."));
-        return panel;
-      }
-      const row = commitRow(at);
+      let first = new URLSearchParams(location.search).get("parents") === "first";
+      const panel = h("section", { class: "panel" });
+      const pressed = (on, label, firstOnly) => h("button", { class: "button small", type: "button", "aria-pressed": String(on),
+        onclick: () => go(at.history(ref, firstOnly).slice(base.length - 1)) }, label);
+      const toggle = h("div", { class: "tabs", role: "group", "aria-label": "Parents" }, pressed(!first, "Every parent", false), pressed(first, "First parent", true));
+      panel.append(h("div", { class: "row" }, h("h3", {}, "History"), h("span", { class: "spacer" }), toggle,
+        refPicker(branches, tags, ref, (r) => go(at.history(r, first).slice(base.length - 1)))));
+      let draw = first ? null : historyGraph();
+      const row = (c) => {
+        const lines = draw ? draw(c) : null;
+        return h("tr", {}, lines ? h("td", { class: "graph", style: "width:" + lines.width + "px", "aria-hidden": "true" }, lines.svg) : null,
+          h("td", {}, h("a", { class: "subject", href: at.commit(c.sha), "data-nav": "" }, subject(c.message)),
+            h("p", {}, who(c.author), " · ", whenExactly(c.author.at))), h("td", { class: "sha" }, annotationIcons(c.annotations), h("a", { href: at.commit(c.sha), "data-nav": "" }, h("code", {}, shortSha(c.sha)))));
+      };
       const rows = h("tbody");
       let next = null;
-      const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "Older commits");
+      const older = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next).catch(fail) }, "Older commits");
       async function load(from) {
         older.disabled = true;
         try {
@@ -900,15 +913,80 @@
           rows.append(...page.data.commits.map(row));
           next = page.next;
           older.hidden = !next;
-        } catch (err) {
-          fail(err);
+          return page.data.commits.length;
         } finally {
           older.disabled = false;
         }
       }
-      await load(path + "/commits?branch=" + encodeURIComponent(branch));
-      panel.append(h("table", { class: "commits" }, rows), h("div", {}, older));
+      const start = (firstOnly) => path + "/commits?" + new URLSearchParams({ ref, parents: firstOnly ? "first" : "all" });
+      let shown;
+      const needsGit = () => panel.append(h("p", {}, "A tag's history needs the Git server too: pick a branch or a commit."));
+      try {
+        shown = await load(start(first));
+      } catch (err) {
+        if (err.code === "git.unavailable" && !first) {
+          first = true;
+          draw = null;
+          toggle.hidden = true;
+          panel.append(h("p", {}, "This installation runs no Git server, so history follows first parents alone."));
+          try {
+            shown = await load(start(true));
+          } catch (again) {
+            if (again.code !== "git.unavailable") throw again;
+            needsGit();
+            return panel;
+          }
+        } else if (err.code === "git.unavailable") {
+          needsGit();
+          return panel;
+        } else if (err.code === "ref.not_found" || err.code === "ref.invalid" || err.code === "branch.not_found") {
+          panel.append(h("p", {}, "This repository has no branch, tag or commit ", h("code", {}, ref), "."));
+          return panel;
+        } else throw err;
+      }
+      if (!shown && !next) panel.append(h("p", {}, "Nothing to show yet: ", h("code", {}, /^[0-9a-f]{40,64}$/.test(ref) ? shortSha(ref) : ref), " is at no commit a push recorded."));
+      panel.append(h("div", { class: "scroll" }, h("table", { class: "commits" }, rows)), h("div", {}, older));
       return panel;
+    }
+
+    // historyGraph draws the lines of history beside each commit of its pages, in order, a lane per line, keeping its
+    // lanes from page to page: each lane waits for a commit, whose dot sits in the first lane that waited for it while
+    // the others join it; its first parent continues that lane, and its other parents join the lanes that wait for them
+    // or open new ones. A commit no page shows leaves its lane running on.
+    function historyGraph() {
+      const step = 14, x = (i) => i * step + step / 2, ns = "http://www.w3.org/2000/svg";
+      let lanes = [];
+      const svg = (tag, attrs) => { const el = document.createElementNS(ns, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); return el; };
+      const line = (i, x1, y1, x2, y2) => svg("line", { class: "lane-" + (i % 5), x1, y1, x2, y2 });
+      return (c) => {
+        const before = lanes;
+        const waited = before.flatMap((s, i) => (s === c.sha ? [i] : []));
+        let col = waited.length ? waited[0] : before.indexOf(null);
+        if (col < 0) col = before.length;
+        const after = before.map((s) => (s === c.sha ? null : s));
+        after[col] = c.parents[0] || null;
+        const opened = c.parents.slice(1).map((p) => {
+          let j = after.indexOf(p);
+          if (j < 0) {
+            j = after.indexOf(null);
+            if (j < 0) j = after.length;
+            after[j] = p;
+          }
+          return j;
+        });
+        while (after.length && after[after.length - 1] === null) after.pop();
+        lanes = after;
+        const parts = [];
+        before.forEach((s, i) => { if (s !== null && s !== c.sha) parts.push(line(i, x(i), 0, x(i), "100%")); });
+        waited.forEach((i) => parts.push(line(i, x(i), 0, x(col), "50%")));
+        if (after[col]) parts.push(line(col, x(col), "50%", x(col), "100%"));
+        opened.forEach((j) => parts.push(line(j, x(col), "50%", x(j), "100%")));
+        parts.push(svg("circle", { class: "lane-" + (col % 5), cx: x(col), cy: "50%", r: 4 }));
+        const width = Math.max(before.length, after.length, col + 1) * step;
+        const el = svg("svg", { width, height: "100%" });
+        el.append(...parts);
+        return { svg: el, width };
+      };
     }
 
     // commitRow makes a history row of a commit: its subject, author and time, and its annotations' icons by its name.
@@ -962,7 +1040,7 @@
         return [h("section", { class: "panel" }, h("h3", {}, "Branch"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
-        h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "History"));
+        h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       // A Merged branch has nothing left to check or to merge.
@@ -1032,7 +1110,7 @@
       const limit = Math.min(b.ahead, 100);
       const page = await apiPage(path + "/commits?" + new URLSearchParams({ branch: b.name, limit }));
       panel.append(h("table", { class: "commits" }, h("tbody", {}, page.data.commits.map(commitRow(at)))));
-      if (b.ahead > limit) panel.append(h("div", {}, h("a", { class: "button small", href: at.branch(b.name), "data-nav": "" }, "All its history")));
+      if (b.ahead > limit) panel.append(h("div", {}, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "All its history")));
       return panel;
     }
 
@@ -1076,7 +1154,8 @@
 
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,
     // the push that first brought it, with its pusher, and the annotations principals set on it, each deletable by a
-    // viewer who may: its principal with annotations.write, anyone with annotations.delete_any.
+    // viewer who may: its principal with annotations.write, anyone with annotations.delete_any. It links its files and
+    // the history that leads to it.
     async function repositoryCommit(path, at, sha, can, fail) {
       let c;
       try {
@@ -1097,7 +1176,9 @@
         h("dt", {}, "Committer"), h("dd", {}, person(c.committer)),
         h("dt", {}, "Pushed"), h("dd", {}, "By " + pusher + " over " + c.push.transport.toUpperCase() + ", " + whenExactly(c.push.at)),
         c.signature ? [h("dt", {}, "Signature"), h("dd", {}, "Signed. Cobranch doesn't check signatures yet.")] : null);
-      return [h("section", { class: "panel" }, h("h2", {}, first || "(no message)"), body ? h("pre", { class: "message" }, body) : null, facts),
+      const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
+        h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
+      return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
         commitAnnotations(path, c, can, fail)];
     }
 

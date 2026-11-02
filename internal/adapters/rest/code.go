@@ -2,7 +2,11 @@ package rest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,7 +23,7 @@ import (
 type Code interface {
 	Branches(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Branch, error)
 	Branch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.Branch, error)
-	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, cursor string, limit int) (code.Page, error)
+	History(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.HistoryQuery) (code.Page, error)
 	Commit(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Commit, code.Push, error)
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
@@ -184,7 +188,7 @@ func mergeFail(err error) error {
 	return fail(err, "branch")
 }
 
-// ListCommits lists a page of a branch's first-parent history, and links the next.
+// ListCommits lists a page of history, links the next, and answers 304 while the caller holds the page.
 func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (ListCommitsResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -194,31 +198,75 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 	if err != nil {
 		return nil, err
 	}
-	name, cursor, limit := git.DefaultBranch, "", 0
-	if p := req.Params; p.Branch != nil {
-		name = *p.Branch
-	}
-	if p := req.Params; p.Cursor != nil {
-		cursor = *p.Cursor
-	}
-	if p := req.Params; p.Limit != nil {
-		limit = *p.Limit
-	}
-	page, err := a.code.History(ctx, v, repo.ID, name, cursor, limit)
-	if err != nil {
+	q := historyQuery(req.Params)
+	page, err := a.code.History(ctx, v, repo.ID, q)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
 		return nil, fail(err, "branch")
+	case err != nil:
+		return nil, codeFail(err)
 	}
 	out := ListCommits200JSONResponse{}
 	out.Body.Commits = mapAll(page.Commits, commit)
 	if page.Next != "" {
-		next := url.Values{"branch": {name}, "cursor": {page.Next}}
-		if limit != 0 {
-			next.Set("limit", strconv.Itoa(limit))
+		next := url.Values{"branch": {q.Branch}, "cursor": {page.Next}}
+		if q.Ref != "" {
+			next.Set("ref", q.Ref)
+		}
+		if q.Parents != "" {
+			next.Set("parents", string(q.Parents))
+		}
+		if q.Limit != 0 {
+			next.Set("limit", strconv.Itoa(q.Limit))
 		}
 		link := `<?` + next.Encode() + `>; rel="next"`
 		out.Headers.Link = &link
 	}
+	tag, err := pageTag(out)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return ListCommits304Response{Headers: ListCommits304ResponseHeaders{ETag: tag}}, nil
+	}
+	out.Headers.ETag = tag
 	return out, nil
+}
+
+// historyQuery is the history a listing's parameters ask for: main's when they name no branch.
+func historyQuery(p ListCommitsParams) code.HistoryQuery {
+	q := code.HistoryQuery{Branch: git.DefaultBranch}
+	if p.Branch != nil {
+		q.Branch = *p.Branch
+	}
+	if p.Ref != nil {
+		q.Ref = *p.Ref
+	}
+	if p.Parents != nil {
+		q.Parents = code.Parents(*p.Parents)
+	}
+	if p.Cursor != nil {
+		q.Cursor = *p.Cursor
+	}
+	if p.Limit != nil {
+		q.Limit = *p.Limit
+	}
+	return q
+}
+
+// pageTag is the strong entity tag of a page of history: its commits, with the names of the principals behind them,
+// and its next page's link fix it, so nothing cheaper than the page itself can.
+func pageTag(page ListCommits200JSONResponse) (string, error) {
+	body, err := json.Marshal(page.Body)
+	if err != nil {
+		return "", fmt.Errorf("tagging a page of history: %w", err)
+	}
+	link := ""
+	if page.Headers.Link != nil {
+		link = *page.Headers.Link
+	}
+	sum := sha256.Sum256([]byte("history\x00" + string(body) + "\x00" + link))
+	return `"` + hex.EncodeToString(sum[:16]) + `"`, nil
 }
 
 // GetCommit answers one of the repository's commits, with the push that first brought it.

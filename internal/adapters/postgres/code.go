@@ -47,7 +47,7 @@ func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Bran
 		out = append(out, b)
 		heads = append(heads, r.Head)
 	}
-	commits, err := s.commitsAt(ctx, repoID, heads)
+	commits, err := s.CommitsAt(ctx, repoID, heads)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (
 	if err != nil {
 		return code.Branch{}, err
 	}
-	commits, err := s.commitsAt(ctx, repoID, []string{r.Head})
+	commits, err := s.CommitsAt(ctx, repoID, []string{r.Head})
 	if err != nil {
 		return code.Branch{}, err
 	}
@@ -140,8 +140,8 @@ func (s *CodeStore) Slugs(ctx context.Context, repoID uuid.UUID) (org, repo stri
 	return row.Org, row.Repo, nil
 }
 
-// commitsAt finds those of the repository's commits that shas name, with their annotations, by name.
-func (s *CodeStore) commitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
+// CommitsAt finds those of the repository's commits that shas name, with their annotations, by name (code.Store).
+func (s *CodeStore) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string) (map[string]code.Commit, error) {
 	if len(shas) == 0 {
 		return nil, nil
 	}
@@ -189,7 +189,7 @@ func (s *CodeStore) FirstParents(ctx context.Context, repoID uuid.UUID, sha stri
 // Commit finds one of the repository's commits with the push that first brought it, or repos.ErrNotFound
 // (code.Store).
 func (s *CodeStore) Commit(ctx context.Context, repoID uuid.UUID, sha string) (code.Commit, code.Push, error) {
-	commits, err := s.commitsAt(ctx, repoID, []string{sha})
+	commits, err := s.CommitsAt(ctx, repoID, []string{sha})
 	if err != nil {
 		return code.Commit{}, code.Push{}, err
 	}

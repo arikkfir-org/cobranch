@@ -85,18 +85,24 @@ func (r *repositoryResolver) Branch(ctx context.Context, obj *Repository, name s
 }
 
 // History is the resolver for the history field.
-func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, first int, after *string) (*CommitPage, error) {
+func (r *repositoryResolver) History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error) {
 	v, repoID, err := repoOf(ctx, obj)
 	if err != nil {
 		return nil, err
 	}
-	cursor := ""
-	if after != nil {
-		cursor = *after
+	q := code.HistoryQuery{Branch: branch, Parents: historyParents[parents], Limit: first}
+	if ref != nil {
+		q.Ref = *ref
 	}
-	page, err := r.Code.History(ctx, v, repoID, branch, cursor, first)
-	if err != nil {
+	if after != nil {
+		q.Cursor = *after
+	}
+	page, err := r.Code.History(ctx, v, repoID, q)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
 		return nil, fail(ctx, err, "branch", "listing the history")
+	case err != nil:
+		return nil, codeFail(ctx, err, "listing the history")
 	}
 	out := &CommitPage{Commits: mapAll(page.Commits, commit)}
 	if page.Next != "" {
