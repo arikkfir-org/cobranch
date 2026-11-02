@@ -12,6 +12,7 @@ import (
 
 func TestPatchRead(t *testing.T) {
 	long := strings.Repeat("y", code.MaxDiffLineBytes+1) // with its "+", as long as the reader's buffer
+	wide := strings.Repeat("w", 60000)                   // 17 of them fit in a file's text, and 4 such files in a diff's
 	tests := []struct {
 		name string
 		// patch is each file's lines added, a nil one for a binary file, which has no hunks.
@@ -28,6 +29,16 @@ func TestPatchRead(t *testing.T) {
 			want: []string{"left out", "1 lines"}},
 		{name: "the rest of a long line read as a line's, not a patch's start", patch: [][]string{{long + "diff --git a/z b/z"}, {"one"}},
 			want: []string{"left out", "1 lines"}},
+		{name: "lines past the diff's in all", wantStopped: true,
+			patch: [][]string{repeatLines(4500, "x"), repeatLines(4500, "x"), repeatLines(4500, "x"), repeatLines(4500, "x"),
+				repeatLines(4999, strings.Repeat("x", 100)), {"one"}},
+			want: []string{"4500 lines", "4500 lines", "4500 lines", "4500 lines", "left out", "left out"}},
+		{name: "a file past its text, then one within", patch: [][]string{repeatLines(18, wide), {"one"}},
+			want: []string{"left out", "1 lines"}},
+		{name: "text past the diff's in all, in lines within every other limit", wantStopped: true,
+			patch: [][]string{repeatLines(17, wide), repeatLines(17, wide), repeatLines(17, wide), repeatLines(17, wide),
+				repeatLines(17, wide), {"one"}},
+			want: []string{"17 lines", "17 lines", "17 lines", "17 lines", "left out", "left out"}},
 		{name: "skipping no further than its budget", wantStopped: true,
 			patch: [][]string{repeatLines(code.MaxFileDiffLines+maxSkippedBytes/1000+1000, strings.Repeat("x", 1000)), {"one"}, nil},
 			want:  []string{"left out", "left out", "binary"}},

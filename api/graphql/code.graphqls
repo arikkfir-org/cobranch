@@ -110,7 +110,7 @@ type File {
   html: String
 }
 
-"A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it."
+"A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it."
 type Diff {
   "The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base."
   base: String
@@ -153,7 +153,7 @@ type FileDiff {
   binary: Boolean!
   additions: Int!
   deletions: Int!
-  "Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay."
+  "Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay."
   truncated: Boolean!
   hunks: [Hunk!]!
 }

@@ -182,7 +182,7 @@ type DeletedBranch struct {
 	Merge *BranchMerge `json:"merge,omitempty"`
 }
 
-// A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it.
+// A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Null when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
 	Base *string `json:"base,omitempty"`
@@ -257,7 +257,7 @@ type FileDiff struct {
 	Binary    bool `json:"binary"`
 	Additions int  `json:"additions"`
 	Deletions int  `json:"deletions"`
-	// Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay.
+	// Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay.
 	Truncated bool    `json:"truncated"`
 	Hunks     []*Hunk `json:"hunks"`
 }

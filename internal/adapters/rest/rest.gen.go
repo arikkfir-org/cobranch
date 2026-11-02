@@ -734,7 +734,7 @@ type DeletedBranch struct {
 	Name string `json:"name"`
 }
 
-// Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines of hunks in all, 5000 in one file and 64 KiB in one line. Past them it lists what it left out rather than show it.
+// Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
 type Diff struct {
 	// Additions The lines it adds, in every file it changes, those it left out included.
 	Additions int `json:"additions"`
@@ -841,7 +841,7 @@ type FileDiff struct {
 	// Status What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
 	Status FileDiffStatus `json:"status"`
 
-	// Truncated Whether its hunks were left out: it passes 5000 lines or holds a line past 64 KiB, or the diff passed 20000 lines before it. Its counts stay.
+	// Truncated Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay.
 	Truncated bool `json:"truncated"`
 }
 

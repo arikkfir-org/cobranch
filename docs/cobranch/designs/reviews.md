@@ -224,12 +224,13 @@ adds them to it.
   commit's** is against its first parent, or the empty tree for a root commit.
 - **Built by the Git server** on code browsing's internal call, in a throwaway repository of one snapshot: `git diff`
   with renames found, each file's status, its old and new paths, and its hunks.
-- **Up to limits:** 3,000 files, and 20,000 lines in all, past which the answer says what it left out; a file past 5,000
-  lines or with a line past 64 KiB, or binary, is listed with its counts but without hunks. The limits bound the Git
-  server's work as well as the answer: it reads `git diff`'s listing of files as Git prints it, only as far as the files
-  it lists while counting the rest, and the patch only as far as the limits, going through no more than 4 MiB of the
-  files it leaves out before it leaves out the rest. An answer's ETag is the pair of commits, which never change, so a
-  client revalidates rather than reads it again.
+- **Up to limits:** 3,000 files, and 20,000 lines and 4 MiB of their text in all, past which the answer says what it
+  left out; a file past 5,000 lines or 1 MiB, or with a line past 64 KiB, or binary, is listed with its counts but
+  without hunks. The limits bound the Git server's work and memory, and the API servers', as well as the answer: it
+  reads `git diff`'s listing of files as Git prints it, only as far as the files it lists while counting the rest, and
+  the patch only as far as the limits, going through no more than 4 MiB of the files it leaves out before it leaves out
+  the rest. An answer's ETag is the pair of commits, which never change, so a client revalidates rather than reads it
+  again.
 
 ## Jobs on reviews
 

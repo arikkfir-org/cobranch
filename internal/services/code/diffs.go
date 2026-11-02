@@ -20,6 +20,11 @@ const (
 	MaxFileDiffLines = 5000
 	// MaxDiffLineBytes is the longest line a hunk holds; a file with a longer line is listed without its hunks.
 	MaxDiffLineBytes = 64 << 10
+	// MaxDiffBytes is the most text a diff's hunk lines hold in all, which bounds the memory a diff takes to read and
+	// answer where the line limits alone multiply to gigabytes; the files past it are listed without their hunks.
+	MaxDiffBytes = 4 << 20
+	// MaxFileDiffBytes is the most text one file's hunk lines hold; a file past it is listed without its hunks.
+	MaxFileDiffBytes = 1 << 20
 )
 
 // FileStatus is what a diff did to a file.
@@ -68,7 +73,8 @@ type Hunk struct {
 
 // FileDiff is one file's change: its path, and the one it had before when it was renamed; its modes, "" where it is
 // absent; how many lines it adds and removes, 0 for a binary file; and its hunks, none for a binary file and when
-// Truncated, when it passes MaxFileDiffLines or MaxDiffLineBytes, or the diff passed MaxDiffLines before it.
+// Truncated, when it passes MaxFileDiffLines, MaxFileDiffBytes or MaxDiffLineBytes, or the diff passed MaxDiffLines or
+// MaxDiffBytes before it.
 type FileDiff struct {
 	Status    FileStatus
 	Path      string

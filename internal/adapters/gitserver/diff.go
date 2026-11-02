@@ -326,7 +326,7 @@ func (s *Server) diffHunks(ctx context.Context, dir, from, to string, files []co
 }
 
 // patch reads git diff's patch into its files' hunks: the file it reads, how many of its patches remain, how many lines
-// it and all the files before it hold, and whether the rest is left out.
+// and how much text it and all the files before it hold, and whether the rest is left out.
 type patch struct {
 	files   []code.FileDiff
 	current int
@@ -334,20 +334,23 @@ type patch struct {
 	patches int
 	lines   int
 	total   int
-	hunk    *code.Hunk
-	old     int
-	new     int
+	// text is how many bytes of text the current file's hunk lines hold, and totalText the files' before it.
+	text      int
+	totalText int
+	hunk      *code.Hunk
+	old       int
+	new       int
 	// skip drops the current file's hunks, once it passed a limit.
 	skip bool
-	// done stops the reading, once the files listed are read, the diff passed MaxDiffLines or the reading skipped
-	// maxSkippedBytes.
+	// done stops the reading, once the files listed are read, the diff passed MaxDiffLines or MaxDiffBytes, or the
+	// reading skipped maxSkippedBytes.
 	done bool
 	// skipped is how many bytes of the patch the reading went through without keeping them.
 	skipped int
 }
 
 // maxSkippedBytes bounds how much of the patch the reading goes through past the hunks it leaves out, looking for the
-// next file's: past it, the reading stops and the files after are left out, as past code.MaxDiffLines, so one file
+// next file's: past it, the reading stops and the files after are left out, as past code.MaxDiffBytes, so one file
 // too large to show doesn't have the Git server read all of it.
 const maxSkippedBytes = 4 << 20
 
@@ -416,7 +419,7 @@ func (p *patch) startPatch() {
 		p.done = true
 		return
 	}
-	p.patches, p.lines, p.skip = 0, 0, false
+	p.patches, p.lines, p.text, p.skip = 0, 0, 0, false
 	if p.files[p.current].Status == code.FileTypeChanged {
 		p.patches = 1
 	}
@@ -478,8 +481,15 @@ func (p *patch) hunkLine(line string) {
 		p.old++
 	}
 	p.hunk.Lines = append(p.hunk.Lines, l)
-	if p.lines++; p.lines > code.MaxFileDiffLines {
+	p.lines++
+	p.text += len(l.Text)
+	switch {
+	case p.lines > code.MaxFileDiffLines || p.text > code.MaxFileDiffBytes:
 		p.drop()
+	case p.total+p.lines > code.MaxDiffLines || p.totalText+p.text > code.MaxDiffBytes:
+		// The diff can't hold this file, and holds nothing after it: the reading stops before it holds more.
+		p.drop()
+		p.done = true
 	}
 }
 
@@ -492,17 +502,13 @@ func (p *patch) drop() {
 	p.hunk, p.skip = nil, true
 }
 
-// endFile counts the current file's lines towards the diff's, and stops the reading once they pass MaxDiffLines.
+// endFile counts the current file's lines and text towards the diff's, once it kept them.
 func (p *patch) endFile() {
 	if p.current < 0 || p.current >= len(p.files) || p.skip {
 		return
 	}
-	if p.total+p.lines > code.MaxDiffLines {
-		p.drop()
-		p.done = true
-		return
-	}
 	p.total += p.lines
+	p.totalText += p.text
 }
 
 // leaveOut marks the files the reading never reached, once it stopped early, as left out, but those with no lines to
