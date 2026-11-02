@@ -442,7 +442,7 @@
       if (page === "new") return "organization.new-repository";
       if (orgPages.includes(page)) return "organization." + page;
       if (sub === "branches") return rest.length ? "repository.branch" : "repository.branches";
-      const tabs = { tree: "code", blob: "file", commits: "commits", commit: "commit", access: "access", settings: "settings" };
+      const tabs = { tree: "code", blob: "file", commits: "commits", commit: "commit", changes: "changes", access: "access", settings: "settings" };
       return "repository." + (tabs[sub] || "code");
     }
     // reportViews sends the views kept so far, 20 at a time, with keepalive so a tab that closes still sends them, and

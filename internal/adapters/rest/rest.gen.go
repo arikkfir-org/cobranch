@@ -299,6 +299,7 @@ const (
 	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
 	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
 	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
+	PageViewPageRepositoryChanges         PageViewPage = "repository.changes"
 	PageViewPageRepositoryCode            PageViewPage = "repository.code"
 	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
 	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
@@ -331,6 +332,8 @@ func (e PageViewPage) Valid() bool {
 	case PageViewPageRepositoryBranch:
 		return true
 	case PageViewPageRepositoryBranches:
+		return true
+	case PageViewPageRepositoryChanges:
 		return true
 	case PageViewPageRepositoryCode:
 		return true
