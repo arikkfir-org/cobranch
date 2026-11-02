@@ -101,8 +101,9 @@ the Back-office counts against nobody and is never refused by the limit.
   the limit, and an organization's creation its creator's, transaction-scoped advisory locks, so two creations at once
   can't both pass on the same count.
 - **Refused with 409,** problem codes `limit.repositories` and `limit.organizations`, whose detail names the limit:
-  `This organization holds 100 repositories, the most it may hold. An administrator can raise its limit.` and
-  `You created 5 organizations, the most a user may create here. An administrator can create more for you.` GraphQL
+  `This organization holds 100 repositories, and it may hold at most 100. An administrator can raise its limit.` and
+  `You created 5 organizations, and a user may create at most 5 here. An administrator can create more for you.`, which
+  name what there is and the limit, so they stay true when an administrator lowers a limit below what there is. GraphQL
   refuses with `CONFLICT` and the same codes as reasons. The Console shows the detail where it shows any refusal.
 - **The Back-office creates past the limit.** An organization an administrator creates for a user counts against nobody,
   so the limit stays a guard against self-serve sign-ups filling the installation, and an administrator who wants a user

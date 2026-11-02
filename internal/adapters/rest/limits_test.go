@@ -26,9 +26,9 @@ func TestLimitRefusals(t *testing.T) {
 		name, path, body, wantCode, wantDetail string
 	}{
 		{name: "an organization over the user's limit", path: "/v1/orgs", body: `{"slug":"initech","name":"Initech"}`, wantCode: "limit.organizations",
-			wantDetail: "You created 1 organization, the most a user may create here. An administrator can create more for you."},
+			wantDetail: "You created 1 organization, and a user may create at most 1 here. An administrator can create more for you."},
 		{name: "a repository over the organization's limit", path: "/v1/orgs/acme/repos", body: `{"slug":"tools"}`, wantCode: "limit.repositories",
-			wantDetail: "This organization holds 1 repository, the most it may hold. An administrator can raise its limit."},
+			wantDetail: "This organization holds 1 repository, and it may hold at most 1. An administrator can raise its limit."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

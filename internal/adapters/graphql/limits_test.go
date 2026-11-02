@@ -29,10 +29,10 @@ func TestLimitRefusals(t *testing.T) {
 	}{
 		{name: "an organization over the user's limit", document: func(*orgFixture) string {
 			return `mutation { createOrganization(slug: "initech", name: "Initech") { id } }`
-		}, want: []string{`"code":"CONFLICT"`, `"reason":"limit.organizations"`, "You created 1 organization, the most a user may create here."}},
+		}, want: []string{`"code":"CONFLICT"`, `"reason":"limit.organizations"`, "You created 1 organization, and a user may create at most 1 here."}},
 		{name: "a repository over the organization's limit", document: func(f *orgFixture) string {
 			return `mutation { createRepository(organizationId: "` + f.acme.ID.String() + `", input: {slug: "tools"}) { id } }`
-		}, want: []string{`"code":"CONFLICT"`, `"reason":"limit.repositories"`, "This organization holds 1 repository, the most it may hold."}},
+		}, want: []string{`"code":"CONFLICT"`, `"reason":"limit.repositories"`, "This organization holds 1 repository, and it may hold at most 1."}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

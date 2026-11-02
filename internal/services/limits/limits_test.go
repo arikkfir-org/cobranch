@@ -86,13 +86,17 @@ func TestExceededErrorMessage(t *testing.T) {
 		want string
 	}{
 		{name: "organizations", err: limits.ExceededError{Kind: limits.KindOrganizations, Limit: 5, Used: 5, Adding: 1},
-			want: "You created 5 organizations, the most a user may create here. An administrator can create more for you."},
+			want: "You created 5 organizations, and a user may create at most 5 here. An administrator can create more for you."},
 		{name: "repositories", err: limits.ExceededError{Kind: limits.KindRepositories, Limit: 100, Used: 100, Adding: 1},
-			want: "This organization holds 100 repositories, the most it may hold. An administrator can raise its limit."},
+			want: "This organization holds 100 repositories, and it may hold at most 100. An administrator can raise its limit."},
 		{name: "one organization", err: limits.ExceededError{Kind: limits.KindOrganizations, Limit: 1, Used: 1, Adding: 1},
-			want: "You created 1 organization, the most a user may create here. An administrator can create more for you."},
+			want: "You created 1 organization, and a user may create at most 1 here. An administrator can create more for you."},
 		{name: "one repository", err: limits.ExceededError{Kind: limits.KindRepositories, Limit: 1, Used: 1, Adding: 1},
-			want: "This organization holds 1 repository, the most it may hold. An administrator can raise its limit."},
+			want: "This organization holds 1 repository, and it may hold at most 1. An administrator can raise its limit."},
+		{name: "over a lowered organizations limit", err: limits.ExceededError{Kind: limits.KindOrganizations, Limit: 5, Used: 9, Adding: 1},
+			want: "You created 9 organizations, and a user may create at most 5 here. An administrator can create more for you."},
+		{name: "over a lowered repositories limit", err: limits.ExceededError{Kind: limits.KindRepositories, Limit: 100, Used: 150, Adding: 1},
+			want: "This organization holds 150 repositories, and it may hold at most 100. An administrator can raise its limit."},
 		{name: "Git data", err: limits.ExceededError{Kind: limits.KindGitData, Limit: 1 << 30, Used: 980 << 20, Adding: 50 << 20},
 			want: "This organization stores 980 MiB of Git data, and this push adds 50 MiB: over its limit of 1 GiB. Nothing changed; an administrator can raise the limit."},
 	}

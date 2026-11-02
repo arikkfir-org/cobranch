@@ -70,6 +70,7 @@ func TestOrgStoreCreateHeldToLimit(t *testing.T) {
 	}{
 		{name: "under the limit", limit: 2, created: 1},
 		{name: "at the limit", limit: 2, created: 2, want: &limits.ExceededError{Kind: limits.KindOrganizations, Limit: 2, Used: 2, Adding: 1}},
+		{name: "over a limit lowered below what she created", limit: 1, created: 3, want: &limits.ExceededError{Kind: limits.KindOrganizations, Limit: 1, Used: 3, Adding: 1}},
 		{name: "those an administrator created count against nobody", limit: 1, byAnAdmin: 2},
 		{name: "no limit", limit: 0, created: 3},
 	}
@@ -125,6 +126,7 @@ func TestRepoStoreCreateHeldToLimit(t *testing.T) {
 	}{
 		{name: "under the limit", limit: 3},
 		{name: "at the limit", limit: 2, want: &limits.ExceededError{Kind: limits.KindRepositories, Limit: 2, Used: 2, Adding: 1}},
+		{name: "over a limit lowered below what Acme holds", limit: 1, want: &limits.ExceededError{Kind: limits.KindRepositories, Limit: 1, Used: 2, Adding: 1}},
 		{name: "no limit", limit: 0},
 	}
 	for _, tt := range tests {

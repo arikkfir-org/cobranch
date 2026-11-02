@@ -95,11 +95,11 @@ type ExceededError struct {
 func (e *ExceededError) Error() string {
 	switch e.Kind {
 	case KindOrganizations:
-		return fmt.Sprintf("You created %s, the most a user may create here. An administrator can create more for you.",
-			count(e.Used, "organization", "organizations"))
+		return fmt.Sprintf("You created %s, and a user may create at most %d here. An administrator can create more for you.",
+			count(e.Used, "organization", "organizations"), e.Limit)
 	case KindRepositories:
-		return fmt.Sprintf("This organization holds %s, the most it may hold. An administrator can raise its limit.",
-			count(e.Used, "repository", "repositories"))
+		return fmt.Sprintf("This organization holds %s, and it may hold at most %d. An administrator can raise its limit.",
+			count(e.Used, "repository", "repositories"), e.Limit)
 	default:
 		return fmt.Sprintf("This organization stores %s of Git data, and this push adds %s: over its limit of %s. Nothing changed; an administrator can raise the limit.",
 			Bytes(e.Used), Bytes(e.Adding), Bytes(e.Limit))
