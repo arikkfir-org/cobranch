@@ -24,6 +24,8 @@ type ChatThread {
   anchor: ChatAnchor
   "Whether the branch has moved on from the commit its anchor names; false without an anchor."
   outdated: Boolean!
+  "The review the thread is a comment of, which opened it; null for a thread started in the chat, and once its review is gone."
+  reviewId: ID
   "Who started it; null once they are gone."
   startedBy: CommitPrincipal
   createdAt: Time!

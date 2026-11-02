@@ -64,6 +64,33 @@ func TestSubmitReviewAPI(t *testing.T) {
 	})
 }
 
+func TestSubmitReviewCommentsAPI(t *testing.T) {
+	comment := func(sha string) string {
+		return `{"anchor":{"sha":"` + sha + `","path":"src/main.go","startLine":3,"endLine":4},"body":"Rename this"}`
+	}
+	review := func(branch string, comments ...string) string {
+		return `{"state":"changes_requested","branch":"` + branch + `","comments":[` + strings.Join(comments, ",") + `]}`
+	}
+	runOrgCases(t, []orgCase{
+		{name: "changes requested in comments", viewer: maxDeveloping, method: http.MethodPost, path: fixed(reviewsPath),
+			body: review("feature", comment(shaOf("c")), comment(shaOf("a"))), wantStatus: 201, check: func(t *testing.T, f *orgFixture, body []byte) {
+				r := decode[Review](t, body)
+				in := f.codeStore.Submitted[r.Id]
+				want := code.ReviewComment{Anchor: code.Anchor{SHA: shaOf("a"), Path: "src/main.go", StartLine: 3, EndLine: 4}, Body: "Rename this"}
+				if r.State != "changes_requested" || in.Branch != "feature" || len(in.Comments) != 2 || in.Comments[0].Anchor.SHA != shaOf("c") ||
+					in.Comments[1] != want {
+					t.Errorf("review = %s, submitted %+v", body, in)
+				}
+			}},
+		{name: "comments on a branch the repository doesn't have", viewer: maxDeveloping, method: http.MethodPost, path: fixed(reviewsPath),
+			body: review("nowhere", comment(shaOf("c"))), wantStatus: 400, wantCode: "branch.unknown"},
+		{name: "a comment on a commit the repository doesn't hold", viewer: maxDeveloping, method: http.MethodPost, path: fixed(reviewsPath),
+			body: review("feature", comment(shaOf("e"))), wantStatus: 400, wantCode: "anchor.commit_not_found"},
+		{name: "a token that may review but not post to the chat", viewer: oliviaToken("repo.read", "reviews.submit"), method: http.MethodPost,
+			path: fixed(reviewsPath), body: review("feature", comment(shaOf("c"))), wantStatus: 403, wantCode: "auth.forbidden"},
+	})
+}
+
 func TestSubmitReviewLocation(t *testing.T) {
 	f := newOrgFixture(t)
 	rec := f.callWith(maxDeveloping(f), http.MethodPost, reviewsPath, `{"state":"approved"}`, nil)

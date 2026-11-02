@@ -63,10 +63,11 @@ SELECT sqlc.embed(m), a.display_name AS author_name, d.display_name AS deleter_n
 FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN principals d ON d.id = m.deleted_by
 WHERE m.id = ANY (@ids::uuid[]);
 
--- InsertChatThread starts a thread: none when one of its ID is there already.
+-- InsertChatThread starts a thread, perhaps a comment of a review: none when one of its ID is there already.
 -- name: InsertChatThread :one
-INSERT INTO chat_threads (id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by)
-VALUES (@id, @org_id, @repo_id, @branch_id, sqlc.narg(sha), sqlc.narg(path), sqlc.narg(start_line), sqlc.narg(end_line), @created_by)
+INSERT INTO chat_threads (id, org_id, repo_id, branch_id, sha, path, start_line, end_line, created_by, review_id)
+VALUES (@id, @org_id, @repo_id, @branch_id, sqlc.narg(sha), sqlc.narg(path), sqlc.narg(start_line), sqlc.narg(end_line), @created_by,
+    sqlc.narg(review_id))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 

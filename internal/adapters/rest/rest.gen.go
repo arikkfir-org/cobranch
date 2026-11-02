@@ -829,6 +829,9 @@ type ChatThread struct {
 	// ResolvedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	ResolvedBy *Principal `json:"resolvedBy,omitempty"`
 
+	// ReviewId The review the thread is a comment of, which opened it; absent for a thread started in the chat, and once its review is gone.
+	ReviewId *openapi_types.UUID `json:"reviewId,omitempty"`
+
 	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	StartedBy *Principal `json:"startedBy,omitempty"`
 
@@ -1535,10 +1538,25 @@ type Review struct {
 	SubmittedAt time.Time   `json:"submittedAt"`
 }
 
+// ReviewComment A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff, or its base's.
+type ReviewComment struct {
+	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+	Anchor ChatAnchor `json:"anchor"`
+
+	// Body The comment's Markdown, at most 20,000 characters, not blank.
+	Body string `json:"body"`
+}
+
 // ReviewInput The review a principal submits.
 type ReviewInput struct {
-	// Body What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
+	// Body What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may leave blank.
 	Body *string `json:"body,omitempty"`
+
+	// Branch The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments needs none.
+	Branch *string `json:"branch,omitempty"`
+
+	// Comments The review's comments on lines of files, each a thread of the branch's chat that the review's transaction opens, anchored there, its first message the comment.
+	Comments *[]ReviewComment `json:"comments,omitempty"`
 
 	// State A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
 	State ReviewState `json:"state"`
@@ -2343,7 +2361,7 @@ type ServerInterface interface {
 	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, params ListReviewsParams)
-	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
@@ -13419,6 +13437,20 @@ func (response SubmitReview404ApplicationProblemPlusJSONResponse) VisitSubmitRev
 	return err
 }
 
+type SubmitReview409ApplicationProblemPlusJSONResponse Problem
+
+func (response SubmitReview409ApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type SubmitReviewdefaultApplicationProblemPlusJSONResponse struct {
 	Body       Problem
 	StatusCode int
@@ -14936,7 +14968,7 @@ type StrictServerInterface interface {
 	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
 	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	ListReviews(ctx context.Context, request ListReviewsRequestObject) (ListReviewsResponseObject, error)
-	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(ctx context.Context, request SubmitReviewRequestObject) (SubmitReviewResponseObject, error)
 	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.

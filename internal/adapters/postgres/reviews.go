@@ -10,6 +10,7 @@ import (
 
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
 )
@@ -49,8 +50,10 @@ func (s *CodeStore) Review(ctx context.Context, repoID, id uuid.UUID) (code.Revi
 	return reviewOf(row.Review, row.ReviewerDisplayName, row.ReviewerKind), nil
 }
 
-// SubmitReview records actor's review of the repository's commit in one transaction that acts for actor: it appends
-// event review.submitted and works out again the status of the branches at the commit (code.Store).
+// SubmitReview records actor's review of the repository's commit in one transaction that acts for actor: it opens the
+// review's comments as threads of the chat of the branch it names, appends event review.submitted and works out again
+// the status of the branches at the commit (code.Store). A branch deleted since the service found it is
+// chats.ErrBranchDeleted.
 func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error) {
 	var out code.Review
 	err := transact(ctx, s.pool, s.q, "submitting the review", actor, func(ctx context.Context, q *queries.Queries) error {
@@ -69,6 +72,9 @@ func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uu
 			State: string(in.State), Body: in.Body}); err != nil {
 			return fmt.Errorf("recording the review: %w", err)
 		}
+		if err := openComments(ctx, q, actor, repoID, id, in); err != nil {
+			return err
+		}
 		row, err := q.ReviewOf(ctx, repoID, id)
 		if err != nil {
 			return fmt.Errorf("reading review %s back: %w", id, err)
@@ -81,6 +87,43 @@ func (s *CodeStore) SubmitReview(ctx context.Context, actor uuid.UUID, repoID uu
 		return restatusAt(ctx, q, repoID, sha)
 	})
 	return out, err
+}
+
+// openComments opens the comments of the review reviewID names as threads of the chat of the repository's branch that
+// in names, which it holds for the rest of the transaction, each anchored with its first message, and appends their
+// events. A branch that is gone is chats.ErrBranchDeleted.
+func openComments(ctx context.Context, q *queries.Queries, actor, repoID, reviewID uuid.UUID, in code.ReviewInput) error {
+	if len(in.Comments) == 0 {
+		return nil
+	}
+	row, err := q.ChatSubject(ctx, repoID, in.Branch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return chats.ErrBranchDeleted
+	}
+	if err != nil {
+		return fmt.Errorf("finding branch %s: %w", in.Branch, err)
+	}
+	subj := chatSubjectOf(row)
+	if err := holdChat(ctx, q, subj.BranchID); err != nil {
+		return err
+	}
+	for _, c := range in.Comments {
+		id, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("naming the comment's thread: %w", err)
+		}
+		messageID, err := uuid.NewV7()
+		if err != nil {
+			return fmt.Errorf("naming the comment's message: %w", err)
+		}
+		if _, err := insertThread(ctx, q, actor, subj, id, messageID, &c.Anchor, &reviewID, c.Body); err != nil {
+			return err
+		}
+		if err := chatChanged(ctx, q, actor, subj, chats.ThreadStarted, chatEvent{Thread: id, Message: &messageID}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // reviewsAt lists the reviews on those of the repository's commits that shas name, by commit, each commit's in the

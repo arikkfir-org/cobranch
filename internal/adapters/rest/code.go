@@ -471,16 +471,31 @@ func (a api) SubmitReview(ctx context.Context, req SubmitReviewRequestObject) (S
 	if err != nil {
 		return nil, err
 	}
-	in := code.ReviewInput{State: code.ReviewState(req.Body.State)}
-	if req.Body.Body != nil {
-		in.Body = *req.Body.Body
-	}
-	r, err := a.code.SubmitReview(ctx, v, repo.ID, req.SHA, in)
+	r, err := a.code.SubmitReview(ctx, v, repo.ID, req.SHA, reviewInput(req.Body))
 	if err != nil {
 		return nil, fail(err, "commit")
 	}
 	location := "../../reviews/" + r.ID.String()
 	return SubmitReview201JSONResponse{Body: review(r), Headers: SubmitReview201ResponseHeaders{Location: &location}}, nil
+}
+
+// reviewInput is the review a request submits.
+func reviewInput(body *SubmitReviewJSONRequestBody) code.ReviewInput {
+	in := code.ReviewInput{State: code.ReviewState(body.State)}
+	if body.Body != nil {
+		in.Body = *body.Body
+	}
+	if body.Branch != nil {
+		in.Branch = *body.Branch
+	}
+	if body.Comments != nil {
+		in.Comments = make([]code.ReviewComment, len(*body.Comments))
+		for i, c := range *body.Comments {
+			in.Comments[i] = code.ReviewComment{Anchor: code.Anchor{SHA: c.Anchor.Sha, Path: c.Anchor.Path, StartLine: c.Anchor.StartLine,
+				EndLine: c.Anchor.EndLine}, Body: c.Body}
+		}
+	}
+	return in
 }
 
 // GetReview answers one of the repository's reviews, or 304 while the caller holds it.
