@@ -299,6 +299,8 @@ type JobRun struct {
 	StartedAt  *time.Time
 	EndedAt    *time.Time
 	Version    int64
+	Attempt    int32
+	RerunOf    *uuid.UUID
 }
 
 type JoinRequest struct {

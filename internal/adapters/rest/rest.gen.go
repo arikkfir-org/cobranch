@@ -1087,6 +1087,9 @@ type Branch struct {
 	// Issue The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
 	Issue *BranchIssue `json:"issue,omitempty"`
 
+	// ManualJobs The jobs the /cobranch.yaml at its head declares with a manual trigger, which a member with jobs.run starts on it, by name.
+	ManualJobs *[]string `json:"manualJobs,omitempty"`
+
 	// Merge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
 	Merge *BranchMerge `json:"merge,omitempty"`
 
@@ -1466,6 +1469,18 @@ type EnvironmentHealth string
 
 // EnvironmentSync Whether the environment's cluster holds its branch's newest commit.
 type EnvironmentSync string
+
+// EventInput An event to post to a repository.
+type EventInput struct {
+	// Branch The live branch whose head its runs run at; the default branch when left out.
+	Branch *string `json:"branch,omitempty"`
+
+	// Data Any JSON of at most 64 KiB, which its runs read as event.json's data and its webhooks receive.
+	Data interface{} `json:"data,omitempty"`
+
+	// Name Written as an annotation's name, such as deploy/requested.
+	Name string `json:"name"`
+}
 
 // File A file or a symlink at a commit, and its text when it isn't binary.
 type File struct {
@@ -2104,6 +2119,11 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
+// PostedEvent What a posted event queued.
+type PostedEvent struct {
+	Runs []Run `json:"runs"`
+}
+
 // Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
@@ -2304,6 +2324,9 @@ type RoleInput struct {
 
 // Run One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.
 type Run struct {
+	// Attempt Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt.
+	Attempt int32 `json:"attempt"`
+
 	// CauseRun The number of the run whose annotation triggered it; absent for any other.
 	CauseRun *int64 `json:"causeRun,omitempty"`
 
@@ -2323,11 +2346,14 @@ type Run struct {
 	Reason string `json:"reason"`
 
 	// Ref The branch or tag it runs on, in full.
-	Ref       string     `json:"ref"`
+	Ref string `json:"ref"`
+
+	// RerunOf The number of the run its attempts started from; absent for a first attempt.
+	RerunOf   *int64     `json:"rerunOf,omitempty"`
 	Sha       string     `json:"sha"`
 	StartedAt *time.Time `json:"startedAt,omitempty"`
 
-	// StartedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	// StartedBy Who started it from Waiting, or re-ran it; absent for any other run.
 	StartedBy *Principal `json:"startedBy,omitempty"`
 
 	// State Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
@@ -2347,15 +2373,21 @@ type RunState string
 type RunTrigger struct {
 	// Actor Who caused it.
 	Actor *openapi_types.UUID `json:"actor,omitempty"`
-	Kind  RunTriggerKind      `json:"kind"`
 
-	// Name The annotation's name, or the posted event's.
+	// Data What a posted event carries, any JSON; a run reads it in event.json.
+	Data interface{}    `json:"data,omitempty"`
+	Kind RunTriggerKind `json:"kind"`
+
+	// Name The annotation's name, the posted event's, or the job's, for a schedule or a manual start.
 	Name *string `json:"name,omitempty"`
 
 	// Push The push that caused it, for a push or a tag.
 	Push *openapi_types.UUID `json:"push,omitempty"`
 	Ref  string              `json:"ref"`
 	Sha  string              `json:"sha"`
+
+	// Slot The minute a schedule fired for.
+	Slot *time.Time `json:"slot,omitempty"`
 
 	// State The annotation's status, or the review's state.
 	State *string `json:"state,omitempty"`
@@ -2675,6 +2707,9 @@ type IfNoneMatchAnnotation = string
 
 // IfNoneMatchModelProvider defines model for ifNoneMatchModelProvider.
 type IfNoneMatchModelProvider = string
+
+// JobName defines model for jobName.
+type JobName = string
 
 // KeyID defines model for key.
 type KeyID = openapi_types.UUID
@@ -3329,6 +3364,9 @@ type SetAnnotationJSONRequestBody = AnnotationInput
 // SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
 type SubmitReviewJSONRequestBody = ReviewInput
 
+// PostEventJSONRequestBody defines body for PostEvent for application/json ContentType.
+type PostEventJSONRequestBody = EventInput
+
 // CreateRepositorySecretJSONRequestBody defines body for CreateRepositorySecret for application/json ContentType.
 type CreateRepositorySecretJSONRequestBody = NewSecret
 
@@ -3631,6 +3669,9 @@ type ServerInterface interface {
 	// LinkBranch Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
 	// (PUT /orgs/{org}/repos/{repo}/branches/{branch}/issue)
 	LinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// RunJob Starts a job that the branch's head declares with a manual trigger, at that head, for the viewer; takes jobs.run. A job without a manual trigger answers 409 job.not_manual, and one whose run at the head hasn't ended 409 run.active.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs)
+	RunJob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, job JobName)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -3688,6 +3729,9 @@ type ServerInterface interface {
 	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
 	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
 	ResumeEnvironment(w http.ResponseWriter, r *http.Request, org Org, repo Repo, environment EnvironmentId)
+	// PostEvent Posts an event to the repository for the viewer, which runs the default branch's jobs that follow its name at the head of the branch it names, the default branch when it names none; takes jobs.run. An outside system posts them with an API key holding jobs.run.
+	// (POST /orgs/{org}/repos/{repo}/events)
+	PostEvent(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -3709,6 +3753,9 @@ type ServerInterface interface {
 	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/rerun)
+	RerunRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
@@ -7789,6 +7836,59 @@ func (siw *ServerInterfaceWrapper) LinkBranch(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// RunJob operation middleware
+func (siw *ServerInterfaceWrapper) RunJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "job" -------------
+	var job JobName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "job", r.PathValue("job"), &job, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "job", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunJob(w, r, org, repo, branchName, job)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MergeBranch operation middleware
 func (siw *ServerInterfaceWrapper) MergeBranch(w http.ResponseWriter, r *http.Request) {
 
@@ -8948,6 +9048,41 @@ func (siw *ServerInterfaceWrapper) ResumeEnvironment(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// PostEvent operation middleware
+func (siw *ServerInterfaceWrapper) PostEvent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostEvent(w, r, org, repo)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositoryJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositoryJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -9364,6 +9499,50 @@ func (siw *ServerInterfaceWrapper) CancelRun(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CancelRun(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RerunRun operation middleware
+func (siw *ServerInterfaceWrapper) RerunRun(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RerunRun(w, r, org, repo, number)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10883,6 +11062,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}", wrapper.GetDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/start", wrapper.StartDelivery)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deliveries/{number}/manifests", wrapper.UploadManifests)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/rerun", wrapper.RerunRun)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs", wrapper.RunJob)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/events", wrapper.PostEvent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -19804,6 +19986,116 @@ func (response LinkBranchdefaultApplicationProblemPlusJSONResponse) VisitLinkBra
 	return err
 }
 
+type RunJobRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Job        JobName    `json:"job"`
+}
+
+type RunJobResponseObject interface {
+	VisitRunJobResponse(w http.ResponseWriter) error
+}
+
+type RunJob201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type RunJob201JSONResponse struct {
+	Body    Run
+	Headers RunJob201ResponseHeaders
+}
+
+func (response RunJob201JSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunJob401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RunJob401ApplicationProblemPlusJSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunJob403ApplicationProblemPlusJSONResponse Problem
+
+func (response RunJob403ApplicationProblemPlusJSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunJob404ApplicationProblemPlusJSONResponse Problem
+
+func (response RunJob404ApplicationProblemPlusJSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunJob409ApplicationProblemPlusJSONResponse Problem
+
+func (response RunJob409ApplicationProblemPlusJSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RunJobdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RunJobdefaultApplicationProblemPlusJSONResponse) VisitRunJobResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type MergeBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
@@ -21842,6 +22134,113 @@ func (response ResumeEnvironmentdefaultApplicationProblemPlusJSONResponse) Visit
 	return err
 }
 
+type PostEventRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	Body *PostEventJSONRequestBody
+}
+
+type PostEventResponseObject interface {
+	VisitPostEventResponse(w http.ResponseWriter) error
+}
+
+type PostEvent202ResponseHeaders struct {
+	Location string
+}
+
+type PostEvent202JSONResponse struct {
+	Body    PostedEvent
+	Headers PostEvent202ResponseHeaders
+}
+
+func (response PostEvent202JSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(202)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostEvent400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response PostEvent400ApplicationProblemPlusJSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostEvent401ApplicationProblemPlusJSONResponse Problem
+
+func (response PostEvent401ApplicationProblemPlusJSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostEvent403ApplicationProblemPlusJSONResponse Problem
+
+func (response PostEvent403ApplicationProblemPlusJSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostEvent404ApplicationProblemPlusJSONResponse Problem
+
+func (response PostEvent404ApplicationProblemPlusJSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type PostEventdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response PostEventdefaultApplicationProblemPlusJSONResponse) VisitPostEventResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoryJobsRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -22521,6 +22920,115 @@ type CancelRundefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response CancelRundefaultApplicationProblemPlusJSONResponse) VisitCancelRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRunRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+}
+
+type RerunRunResponseObject interface {
+	VisitRerunRunResponse(w http.ResponseWriter) error
+}
+
+type RerunRun201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type RerunRun201JSONResponse struct {
+	Body    Run
+	Headers RerunRun201ResponseHeaders
+}
+
+func (response RerunRun201JSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response RerunRun401ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun403ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun403ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun404ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun404ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRun409ApplicationProblemPlusJSONResponse Problem
+
+func (response RerunRun409ApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type RerunRundefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response RerunRundefaultApplicationProblemPlusJSONResponse) VisitRerunRunResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -25634,6 +26142,9 @@ type StrictServerInterface interface {
 	// LinkBranch Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
 	// (PUT /orgs/{org}/repos/{repo}/branches/{branch}/issue)
 	LinkBranch(ctx context.Context, request LinkBranchRequestObject) (LinkBranchResponseObject, error)
+	// RunJob Starts a job that the branch's head declares with a manual trigger, at that head, for the viewer; takes jobs.run. A job without a manual trigger answers 409 job.not_manual, and one whose run at the head hasn't ended 409 run.active.
+	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs)
+	RunJob(ctx context.Context, request RunJobRequestObject) (RunJobResponseObject, error)
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
@@ -25691,6 +26202,9 @@ type StrictServerInterface interface {
 	// ResumeEnvironment Resumes one of the repository's paused environments for the viewer and queues a delivery of its branch's head; takes delivery.run. One that isn't paused answers 409 environment.not_paused.
 	// (POST /orgs/{org}/repos/{repo}/environments/{environment}/resume)
 	ResumeEnvironment(ctx context.Context, request ResumeEnvironmentRequestObject) (ResumeEnvironmentResponseObject, error)
+	// PostEvent Posts an event to the repository for the viewer, which runs the default branch's jobs that follow its name at the head of the branch it names, the default branch when it names none; takes jobs.run. An outside system posts them with an API key holding jobs.run.
+	// (POST /orgs/{org}/repos/{repo}/events)
+	PostEvent(ctx context.Context, request PostEventRequestObject) (PostEventResponseObject, error)
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(ctx context.Context, request ListRepositoryJobsRequestObject) (ListRepositoryJobsResponseObject, error)
@@ -25712,6 +26226,9 @@ type StrictServerInterface interface {
 	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
 	CancelRun(ctx context.Context, request CancelRunRequestObject) (CancelRunResponseObject, error)
+	// RerunRun Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
+	// (POST /orgs/{org}/repos/{repo}/runs/{number}/rerun)
+	RerunRun(ctx context.Context, request RerunRunRequestObject) (RerunRunResponseObject, error)
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(ctx context.Context, request StartRunRequestObject) (StartRunResponseObject, error)
@@ -28533,6 +29050,35 @@ func (sh *strictHandler) LinkBranch(w http.ResponseWriter, r *http.Request, org 
 	}
 }
 
+// RunJob operation middleware
+func (sh *strictHandler) RunJob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, job JobName) {
+	var request RunJobRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Job = job
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RunJob(ctx, request.(RunJobRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RunJob")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RunJobResponseObject); ok {
+		if err := validResponse.VisitRunJobResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // MergeBranch operation middleware
 func (sh *strictHandler) MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
 	var request MergeBranchRequestObject
@@ -29100,6 +29646,40 @@ func (sh *strictHandler) ResumeEnvironment(w http.ResponseWriter, r *http.Reques
 	}
 }
 
+// PostEvent operation middleware
+func (sh *strictHandler) PostEvent(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
+	var request PostEventRequestObject
+
+	request.Org = org
+	request.Repo = repo
+
+	var body PostEventJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.PostEvent(ctx, request.(PostEventRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "PostEvent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(PostEventResponseObject); ok {
+		if err := validResponse.VisitPostEventResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ListRepositoryJobs operation middleware
 func (sh *strictHandler) ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo) {
 	var request ListRepositoryJobsRequestObject
@@ -29289,6 +29869,34 @@ func (sh *strictHandler) CancelRun(w http.ResponseWriter, r *http.Request, org O
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(CancelRunResponseObject); ok {
 		if err := validResponse.VisitCancelRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// RerunRun operation middleware
+func (sh *strictHandler) RerunRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+	var request RerunRunRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.RerunRun(ctx, request.(RerunRunRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "RerunRun")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(RerunRunResponseObject); ok {
+		if err := validResponse.VisitRerunRunResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

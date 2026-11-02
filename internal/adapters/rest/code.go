@@ -53,6 +53,9 @@ type Code interface {
 	ResumeEnvironment(ctx context.Context, v code.Viewer, repoID, environmentID uuid.UUID) (code.Environment, error)
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
 	UploadRender(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64, manifests []byte) error
+	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
+	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
 }
 
 func principal(p *code.Principal) *Principal {
@@ -111,6 +114,9 @@ func branch(b code.Branch) Branch {
 	}
 	if m := b.Merge; m != nil {
 		out.Merge = &BranchMerge{Head: m.Head, By: principal(m.By), At: m.At.UTC()}
+	}
+	if len(b.ManualJobs) > 0 {
+		out.ManualJobs = &b.ManualJobs
 	}
 	if b.SettingsError != "" {
 		out.SettingsError = &b.SettingsError

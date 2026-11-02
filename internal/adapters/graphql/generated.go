@@ -121,6 +121,7 @@ type ComplexityRoot struct {
 		Environments  func(childComplexity int) int
 		Head          func(childComplexity int) int
 		Issue         func(childComplexity int) int
+		ManualJobs    func(childComplexity int) int
 		Merge         func(childComplexity int) int
 		Name          func(childComplexity int) int
 		Requirements  func(childComplexity int) int
@@ -537,11 +538,13 @@ type ComplexityRoot struct {
 		MergeBranch            func(childComplexity int, repositoryID string, branch string, input *MergeInput) int
 		PauseEnvironment       func(childComplexity int, repositoryID string, environmentID string) int
 		PostChatMessage        func(childComplexity int, repositoryID string, branch string, thread string, input ChatMessageInput) int
+		PostEvent              func(childComplexity int, repositoryID string, name string, branch *string, data any) int
 		PostIssueChatMessage   func(childComplexity int, organizationID string, number int, thread string, input ChatMessageInput) int
 		Redeliver              func(childComplexity int, repositoryID string, environmentID string) int
 		RemoveMember           func(childComplexity int, organizationID string, userID string) int
 		RemoveModelProvider    func(childComplexity int, organizationID string, provider string, expectedVersion *int) int
 		RequestToJoin          func(childComplexity int, slug string, note *string) int
+		RerunRun               func(childComplexity int, repositoryID string, number int) int
 		ResolveChatThread      func(childComplexity int, repositoryID string, branch string, thread string, resolved bool, expectedVersion *int) int
 		ResolveIssueChatThread func(childComplexity int, organizationID string, number int, thread string, resolved bool, expectedVersion *int) int
 		ResumeEnvironment      func(childComplexity int, repositoryID string, environmentID string) int
@@ -552,6 +555,7 @@ type ComplexityRoot struct {
 		RevokeSecret           func(childComplexity int, organizationID string, id string, principalID string) int
 		RevokeSession          func(childComplexity int, id string) int
 		RotateAPIKey           func(childComplexity int, organizationID string, id string, input *SecretInput) int
+		RunJob                 func(childComplexity int, repositoryID string, branch string, job string) int
 		SetAgentModel          func(childComplexity int, organizationID string, id string, provider *string, model *string, expectedVersion *int) int
 		SetAgentSecrets        func(childComplexity int, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) int
 		SetAnnotation          func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
@@ -722,6 +726,7 @@ type ComplexityRoot struct {
 	}
 
 	Run struct {
+		Attempt    func(childComplexity int) int
 		CauseRun   func(childComplexity int) int
 		Definition func(childComplexity int) int
 		EndedAt    func(childComplexity int) int
@@ -731,6 +736,7 @@ type ComplexityRoot struct {
 		QueuedAt   func(childComplexity int) int
 		Reason     func(childComplexity int) int
 		Ref        func(childComplexity int) int
+		RerunOf    func(childComplexity int) int
 		Sha        func(childComplexity int) int
 		StartedAt  func(childComplexity int) int
 		StartedBy  func(childComplexity int) int
@@ -746,11 +752,13 @@ type ComplexityRoot struct {
 
 	RunTrigger struct {
 		Actor func(childComplexity int) int
+		Data  func(childComplexity int) int
 		Kind  func(childComplexity int) int
 		Name  func(childComplexity int) int
 		Push  func(childComplexity int) int
 		Ref   func(childComplexity int) int
 		Sha   func(childComplexity int) int
+		Slot  func(childComplexity int) int
 		State func(childComplexity int) int
 	}
 
@@ -936,6 +944,9 @@ type MutationResolver interface {
 	UnlinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string) (bool, error)
 	CancelRun(ctx context.Context, repositoryID string, number int) (*Run, error)
 	StartRun(ctx context.Context, repositoryID string, number int) (*Run, error)
+	RerunRun(ctx context.Context, repositoryID string, number int) (*Run, error)
+	RunJob(ctx context.Context, repositoryID string, branch string, job string) (*Run, error)
+	PostEvent(ctx context.Context, repositoryID string, name string, branch *string, data any) ([]*Run, error)
 	CreateRepository(ctx context.Context, organizationID string, input RepositoryInput) (*Repository, error)
 	UpdateRepository(ctx context.Context, id string, input RepositoryInput) (*Repository, error)
 	GrantRepositoryRole(ctx context.Context, repositoryID string, principalID string, roleID string) (bool, error)
@@ -1390,6 +1401,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Branch.Issue(childComplexity), true
+	case "Branch.manualJobs":
+		if e.ComplexityRoot.Branch.ManualJobs == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Branch.ManualJobs(childComplexity), true
 	case "Branch.merge":
 		if e.ComplexityRoot.Branch.Merge == nil {
 			break
@@ -3404,6 +3421,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PostChatMessage(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["thread"].(string), args["input"].(ChatMessageInput)), true
+	case "Mutation.postEvent":
+		if e.ComplexityRoot.Mutation.PostEvent == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_postEvent_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PostEvent(childComplexity, args["repositoryId"].(string), args["name"].(string), args["branch"].(*string), args["data"].(any)), true
 	case "Mutation.postIssueChatMessage":
 		if e.ComplexityRoot.Mutation.PostIssueChatMessage == nil {
 			break
@@ -3459,6 +3487,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RequestToJoin(childComplexity, args["slug"].(string), args["note"].(*string)), true
+	case "Mutation.rerunRun":
+		if e.ComplexityRoot.Mutation.RerunRun == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_rerunRun_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RerunRun(childComplexity, args["repositoryId"].(string), args["number"].(int)), true
 	case "Mutation.resolveChatThread":
 		if e.ComplexityRoot.Mutation.ResolveChatThread == nil {
 			break
@@ -3569,6 +3608,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.RotateAPIKey(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(*SecretInput)), true
+	case "Mutation.runJob":
+		if e.ComplexityRoot.Mutation.RunJob == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_runJob_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.RunJob(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["job"].(string)), true
 	case "Mutation.setAgentModel":
 		if e.ComplexityRoot.Mutation.SetAgentModel == nil {
 			break
@@ -4534,6 +4584,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Role.Permissions(childComplexity), true
 
+	case "Run.attempt":
+		if e.ComplexityRoot.Run.Attempt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.Attempt(childComplexity), true
 	case "Run.causeRun":
 		if e.ComplexityRoot.Run.CauseRun == nil {
 			break
@@ -4588,6 +4644,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.Ref(childComplexity), true
+	case "Run.rerunOf":
+		if e.ComplexityRoot.Run.RerunOf == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.RerunOf(childComplexity), true
 	case "Run.sha":
 		if e.ComplexityRoot.Run.Sha == nil {
 			break
@@ -4644,6 +4706,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RunTrigger.Actor(childComplexity), true
+	case "RunTrigger.data":
+		if e.ComplexityRoot.RunTrigger.Data == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunTrigger.Data(childComplexity), true
 	case "RunTrigger.kind":
 		if e.ComplexityRoot.RunTrigger.Kind == nil {
 			break
@@ -4674,6 +4742,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RunTrigger.Sha(childComplexity), true
+	case "RunTrigger.slot":
+		if e.ComplexityRoot.RunTrigger.Slot == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunTrigger.Slot(childComplexity), true
 	case "RunTrigger.state":
 		if e.ComplexityRoot.RunTrigger.State == nil {
 			break
@@ -6033,6 +6107,8 @@ type Branch {
   merge: BranchMerge
   "Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it does. Null when it parses, or there is none."
   settingsError: String
+  "The jobs the /cobranch.yaml at its head declares with a manual trigger, which a member with jobs.run starts on it (runJob), by name."
+  manualJobs: [String!]!
 }
 
 "A merge of a branch into its base that a push made."
@@ -6646,6 +6722,9 @@ extend type Mutation {
 "A JSON object, such as a Kubernetes pod spec."
 scalar Map
 
+"Any JSON value: an object, an array, a string, a number, a boolean or null."
+scalar Any
+
 extend type Repository {
   "A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100."
   runs(sha: String, first: Int! = 30, after: String): RunPage!
@@ -6658,6 +6737,12 @@ extend type Mutation {
   cancelRun(repositoryId: ID!, number: Int!): Run!
   "Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer, and answers it as it now is; takes jobs.run. A run that doesn't wait is refused (CONFLICT, run.not_waiting)."
   startRun(repositoryId: ID!, number: Int!): Run!
+  "Runs one of the repository's ended runs again, for the viewer, as the next attempt of its definition at its commit and ref, and answers the new run; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, is refused (CONFLICT, run.active)."
+  rerunRun(repositoryId: ID!, number: Int!): Run!
+  "Starts a job that a branch's head declares with a manual trigger, at that head, for the viewer, and answers its run; takes jobs.run. A job without a manual trigger is refused (CONFLICT, job.not_manual), and one whose run at the head hasn't ended (CONFLICT, run.active)."
+  runJob(repositoryId: ID!, branch: String!, job: String!): Run!
+  "Posts an event to a repository for the viewer, which runs the default branch's jobs that follow its name at the head of the branch it names, the default branch when null, and answers the runs it queued; takes jobs.run. Its name is written as an annotation's, and data is any JSON of at most 64 KiB, which its runs read as event.json's data."
+  postEvent(repositoryId: ID!, name: String!, branch: String, data: Any): [Run!]!
 }
 
 "A page of a repository's runs, newest first."
@@ -6681,12 +6766,16 @@ type Run {
   trigger: RunTrigger!
   "The number of the run whose annotation triggered it; null for any other."
   causeRun: Int
+  "Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt."
+  attempt: Int!
+  "The number of the run its attempts started from; null for a first attempt."
+  rerunOf: Int
   "The job as it was declared when the run was queued."
   definition: Job!
   state: RunState!
   "Why it waits, failed or was cancelled; empty otherwise."
   reason: String!
-  "Who started it from WAITING; null for a run that never waited."
+  "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
   queuedAt: Time!
   startedAt: Time
@@ -6717,7 +6806,7 @@ type RunTrigger {
   sha: String!
   "The branch or tag it happened on, in full."
   ref: String!
-  "The annotation's name, or the posted event's; empty for any other."
+  "The annotation's name, the posted event's, or the job's for a schedule or a manual start; empty for any other."
   name: String!
   "The annotation's status, or the review's state; empty for any other."
   state: String!
@@ -6725,6 +6814,10 @@ type RunTrigger {
   actor: ID
   "The push that caused it, for a push or a tag."
   push: ID
+  "What a posted event carries; null for any other."
+  data: Any
+  "The minute a schedule fired for; null for any other."
+  slot: Time
 }
 
 "A job as /cobranch.yaml declared it."
@@ -7421,6 +7514,8 @@ func (ec *executionContext) childFields_Branch(ctx context.Context, field graphq
 		return ec.fieldContext_Branch_merge(ctx, field)
 	case "settingsError":
 		return ec.fieldContext_Branch_settingsError(ctx, field)
+	case "manualJobs":
+		return ec.fieldContext_Branch_manualJobs(ctx, field)
 	case "environments":
 		return ec.fieldContext_Branch_environments(ctx, field)
 	case "issue":
@@ -8459,6 +8554,10 @@ func (ec *executionContext) childFields_Run(ctx context.Context, field graphql.C
 		return ec.fieldContext_Run_trigger(ctx, field)
 	case "causeRun":
 		return ec.fieldContext_Run_causeRun(ctx, field)
+	case "attempt":
+		return ec.fieldContext_Run_attempt(ctx, field)
+	case "rerunOf":
+		return ec.fieldContext_Run_rerunOf(ctx, field)
 	case "definition":
 		return ec.fieldContext_Run_definition(ctx, field)
 	case "state":
@@ -8505,6 +8604,10 @@ func (ec *executionContext) childFields_RunTrigger(ctx context.Context, field gr
 		return ec.fieldContext_RunTrigger_actor(ctx, field)
 	case "push":
 		return ec.fieldContext_RunTrigger_push(ctx, field)
+	case "data":
+		return ec.fieldContext_RunTrigger_data(ctx, field)
+	case "slot":
+		return ec.fieldContext_RunTrigger_slot(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RunTrigger", field.Name)
 }
@@ -10025,6 +10128,44 @@ func (ec *executionContext) field_Mutation_postChatMessage_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_postEvent_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "name",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["name"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "data",
+		func(ctx context.Context, v any) (any, error) {
+			return ec.unmarshalOAny2interface(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["data"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_postIssueChatMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10156,6 +10297,28 @@ func (ec *executionContext) field_Mutation_requestToJoin_args(ctx context.Contex
 		return nil, err
 	}
 	args["note"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_rerunRun_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "number",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["number"] = arg1
 	return args, nil
 }
 
@@ -10448,6 +10611,36 @@ func (ec *executionContext) field_Mutation_rotateApiKey_args(ctx context.Context
 		return nil, err
 	}
 	args["input"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_runJob_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "job",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["job"] = arg2
 	return args, nil
 }
 
@@ -13059,6 +13252,29 @@ func (ec *executionContext) _Branch_settingsError(ctx context.Context, field gra
 	)
 }
 func (ec *executionContext) fieldContext_Branch_settingsError(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Branch", field, false, false, "String")
+}
+
+func (ec *executionContext) _Branch_manualJobs(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Branch_manualJobs(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ManualJobs, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Branch_manualJobs(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Branch", field, false, false, "String")
 }
 
@@ -21140,6 +21356,144 @@ func (ec *executionContext) fieldContext_Mutation_startRun(ctx context.Context, 
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_rerunRun(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_rerunRun(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RerunRun(ctx, fc.Args["repositoryId"].(string), fc.Args["number"].(int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Run) graphql.Marshaler {
+			return ec.marshalNRun2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRun(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_rerunRun(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Run(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_rerunRun_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_runJob(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_runJob(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().RunJob(ctx, fc.Args["repositoryId"].(string), fc.Args["branch"].(string), fc.Args["job"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Run) graphql.Marshaler {
+			return ec.marshalNRun2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRun(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_runJob(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Run(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_runJob_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_postEvent(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_postEvent(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PostEvent(ctx, fc.Args["repositoryId"].(string), fc.Args["name"].(string), fc.Args["branch"].(*string),
+				func() any {
+					if fc.Args["data"] == nil {
+						return nil
+					}
+					return fc.Args["data"].(any)
+				}())
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Run) graphql.Marshaler {
+			return ec.marshalNRun2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_postEvent(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Run(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_postEvent_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_createRepository(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -25908,6 +26262,52 @@ func (ec *executionContext) fieldContext_Run_causeRun(_ context.Context, field g
 	return graphql.NewScalarFieldContext("Run", field, false, false, "Int")
 }
 
+func (ec *executionContext) _Run_attempt(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_attempt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Attempt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Run_attempt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Run", field, false, false, "Int")
+}
+
+func (ec *executionContext) _Run_rerunOf(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_rerunOf(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.RerunOf, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Run_rerunOf(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Run", field, false, false, "Int")
+}
+
 func (ec *executionContext) _Run_definition(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26324,6 +26724,52 @@ func (ec *executionContext) _RunTrigger_push(ctx context.Context, field graphql.
 }
 func (ec *executionContext) fieldContext_RunTrigger_push(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("RunTrigger", field, false, false, "ID")
+}
+
+func (ec *executionContext) _RunTrigger_data(ctx context.Context, field graphql.CollectedField, obj *RunTrigger) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunTrigger_data(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Data, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v any) graphql.Marshaler {
+			return ec.marshalOAny2interface(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunTrigger_data(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunTrigger", field, false, false, "Any")
+}
+
+func (ec *executionContext) _RunTrigger_slot(ctx context.Context, field graphql.CollectedField, obj *RunTrigger) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunTrigger_slot(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Slot, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunTrigger_slot(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunTrigger", field, false, false, "Time")
 }
 
 func (ec *executionContext) _SSHKey_id(ctx context.Context, field graphql.CollectedField, obj *SSHKey) (ret graphql.Marshaler) {
@@ -31584,6 +32030,11 @@ func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "manualJobs":
+			out.Values[i] = ec._Branch_manualJobs(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "environments":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, true,
@@ -34294,6 +34745,27 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "rerunRun":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_rerunRun(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "runJob":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_runJob(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postEvent":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_postEvent(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "createRepository":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_createRepository(ctx, field)
@@ -35561,6 +36033,16 @@ func (ec *executionContext) _Run(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "attempt":
+			out.Values[i] = ec._Run_attempt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "rerunOf":
+			out.Values[i] = ec._Run_rerunOf(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "definition":
 			out.Values[i] = ec._Run_definition(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -35699,6 +36181,16 @@ func (ec *executionContext) _RunTrigger(ctx context.Context, sel ast.SelectionSe
 			}
 		case "push":
 			out.Values[i] = ec._RunTrigger_push(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "data":
+			out.Values[i] = ec._RunTrigger_data(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "slot":
+			out.Values[i] = ec._RunTrigger_slot(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -38728,6 +39220,24 @@ func (ec *executionContext) marshalOAnnotationStatus2ᚖcobranchᚗdevᚋinterna
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOAny2interface(ctx context.Context, v any) (any, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := graphql.UnmarshalAny(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOAny2interface(ctx context.Context, sel ast.SelectionSet, v any) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalAny(v)
+	return res
 }
 
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {

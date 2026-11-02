@@ -3,11 +3,12 @@ package jobs
 import (
 	"slices"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
-// Matches reports whether the job's triggers fire for e. A schedule's slots are the controller's to match: any
-// schedule event matches a job with a schedule.
+// Matches reports whether the job's triggers fire for e. A schedule's slots are the controller's to match (DueSlot):
+// a schedule event matches the job it names, when the job has a schedule.
 func (j Job) Matches(e Event) bool {
 	on := j.On
 	branch, isBranch := strings.CutPrefix(e.Ref, "refs/heads/")
@@ -25,11 +26,54 @@ func (j Job) Matches(e Event) bool {
 	case EventPosted:
 		return on.Event != nil && slices.Contains(on.Event.Names, e.Name)
 	case EventSchedule:
+		return len(on.Schedule) > 0 && e.Name == j.Name
+	case EventManual:
+		return on.Manual != nil && e.Name == j.Name && isBranch
+	}
+	return false
+}
+
+// Follows reports whether the job has a trigger for events of kind at all, whatever they say: a change that may
+// trigger it asks first, so that one no job follows needn't take the repository's run queue.
+func (j Job) Follows(kind EventKind) bool {
+	on := j.On
+	switch kind {
+	case EventPush:
+		return on.Push != nil
+	case EventTag:
+		return on.Tag != nil
+	case EventAnnotation:
+		return on.Annotation != nil
+	case EventReview:
+		return on.Review != nil
+	case EventPosted:
+		return on.Event != nil
+	case EventSchedule:
 		return len(on.Schedule) > 0
 	case EventManual:
 		return on.Manual != nil
 	}
 	return false
+}
+
+// DueSlot is the latest minute within late of now, now included, that one of the job's schedules fires at, and true;
+// false when none fires then. A controller that queues each slot once, on a pass at least every late, so misses none,
+// and one that was down longer skips the slots it missed.
+func (j Job) DueSlot(now time.Time, late time.Duration) (time.Time, bool) {
+	var due time.Time
+	for _, s := range j.On.Schedule {
+		c, err := ParseCron(s.Cron)
+		if err != nil {
+			continue // the file's parser refused it already; a definition kept from before then fires never
+		}
+		// Next skips the minute its time falls in: from a nanosecond earlier, a slot exactly late ago counts.
+		for slot := c.Next(now.Add(-late - time.Nanosecond)); !slot.IsZero() && !slot.After(now); slot = c.Next(slot) {
+			if slot.After(due) {
+				due = slot
+			}
+		}
+	}
+	return due, !due.IsZero()
 }
 
 // anyMatch reports whether name matches one of patterns, or whether there are none, which matches every name.

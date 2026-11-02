@@ -65,6 +65,20 @@ type Store interface {
 	// DropTokens deletes the tokens of runs that ended without the controller (a member cancelled them, a newer run
 	// superseded them), and the tokens that expired, and answers how many.
 	DropTokens(ctx context.Context) (int64, error)
+	// Scheduled lists the repositories whose default branch's /cobranch.yaml declares jobs with schedules, with those
+	// jobs.
+	Scheduled(ctx context.Context) ([]Scheduled, error)
+	// QueueSlot queues the run that a slot of the schedule of the repository's job fires, at its default branch's head,
+	// unless a controller queued that slot already: false then.
+	QueueSlot(ctx context.Context, repoID uuid.UUID, job string, slot time.Time) (bool, error)
+	// DropSlots deletes the slots queued before a time, and answers how many.
+	DropSlots(ctx context.Context, before time.Time) (int64, error)
+}
+
+// Scheduled is a repository whose default branch declares jobs with schedules: those jobs.
+type Scheduled struct {
+	RepoID uuid.UUID
+	Jobs   []jobs.Job
 }
 
 // Standing is where a run stands, and its repository.

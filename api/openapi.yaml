@@ -4498,6 +4498,109 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/rerun:
+    post:
+      operationId: rerunRun
+      summary: Runs one of the repository's ended runs again, as the next attempt of its definition at its commit and ref, for the viewer; takes jobs.run. It supersedes nothing. A run that hasn't ended, or another run of its job at its commit that hasn't, answers 409 run.active.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "201":
+          description: The new run; Location names it.
+          headers:
+            Location:
+              description: The new run's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs:
+    post:
+      operationId: runJob
+      summary: Starts a job that the branch's head declares with a manual trigger, at that head, for the viewer; takes jobs.run. A job without a manual trigger answers 409 job.not_manual, and one whose run at the head hasn't ended 409 run.active.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/jobName"
+      responses:
+        "201":
+          description: The run, queued; Location names it.
+          headers:
+            Location:
+              description: The run's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Run"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/events:
+    post:
+      operationId: postEvent
+      summary: Posts an event to the repository for the viewer, which runs the default branch's jobs that follow its name at the head of the branch it names, the default branch when it names none; takes jobs.run. An outside system posts them with an API key holding jobs.run.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventInput"
+      responses:
+        "202":
+          description: The runs the event queued, none when no job follows it; Location lists the runs at the branch's head.
+          headers:
+            Location:
+              description: The URL of the runs at the commit the event's runs run at.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostedEvent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags
@@ -4704,6 +4807,13 @@ components:
         type: integer
         format: int64
         minimum: 1
+    jobName:
+      name: job
+      in: path
+      required: true
+      description: The job's name in /cobranch.yaml, a slash in it escaped, as ci%2Fbuild.
+      schema:
+        type: string
     number:
       name: number
       in: path
@@ -5324,6 +5434,11 @@ components:
           description: >-
             Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it
             does. Left out when it parses, or there is none.
+        manualJobs:
+          type: array
+          items:
+            type: string
+          description: The jobs the /cobranch.yaml at its head declares with a manual trigger, which a member with jobs.run starts on it, by name.
     BranchIssue:
       type: object
       description: >-
@@ -6037,7 +6152,7 @@ components:
     Run:
       type: object
       description: One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.
-      required: [id, number, job, sha, ref, trigger, definition, state, reason, queuedAt, version]
+      required: [id, number, job, sha, ref, trigger, attempt, definition, state, reason, queuedAt, version]
       properties:
         id:
           type: string
@@ -6059,6 +6174,14 @@ components:
           type: integer
           format: int64
           description: The number of the run whose annotation triggered it; absent for any other.
+        attempt:
+          type: integer
+          format: int32
+          description: Counts the runs of its definition at its commit, from 1 for the run its trigger queued; a re-run is the next attempt.
+        rerunOf:
+          type: integer
+          format: int64
+          description: The number of the run its attempts started from; absent for a first attempt.
         definition:
           $ref: "#/components/schemas/Job"
         state:
@@ -6067,7 +6190,9 @@ components:
           type: string
           description: Why it waits, failed or was cancelled; empty otherwise.
         startedBy:
-          $ref: "#/components/schemas/Principal"
+          description: Who started it from Waiting, or re-ran it; absent for any other run.
+          allOf:
+            - $ref: "#/components/schemas/Principal"
         queuedAt:
           type: string
           format: date-time
@@ -6081,6 +6206,28 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number in quotes.
+    EventInput:
+      type: object
+      description: An event to post to a repository.
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Written as an annotation's name, such as deploy/requested.
+        branch:
+          type: string
+          description: The live branch whose head its runs run at; the default branch when left out.
+        data:
+          description: Any JSON of at most 64 KiB, which its runs read as event.json's data and its webhooks receive.
+    PostedEvent:
+      type: object
+      description: What a posted event queued.
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Run"
     RunState:
       type: string
       description: Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
@@ -6099,7 +6246,7 @@ components:
           type: string
         name:
           type: string
-          description: The annotation's name, or the posted event's.
+          description: The annotation's name, the posted event's, or the job's, for a schedule or a manual start.
         state:
           type: string
           description: The annotation's status, or the review's state.
@@ -6111,6 +6258,12 @@ components:
           type: string
           format: uuid
           description: The push that caused it, for a push or a tag.
+        data:
+          description: What a posted event carries, any JSON; a run reads it in event.json.
+        slot:
+          type: string
+          format: date-time
+          description: The minute a schedule fired for.
     Job:
       type: object
       description: A job as /cobranch.yaml declared it.

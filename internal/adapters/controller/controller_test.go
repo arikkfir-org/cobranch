@@ -12,9 +12,9 @@ import (
 
 // runner answers Dispatch from its queue, a step each call, and counts its calls.
 type runner struct {
-	mu                          sync.Mutex
-	queue                       []error
-	dispatched, followed, swept int
+	mu                                     sync.Mutex
+	queue                                  []error
+	dispatched, followed, swept, scheduled int
 	// stop, when set, ends Run once it has followed the runs.
 	stop context.CancelFunc
 }
@@ -51,6 +51,13 @@ func (r *runner) Sweep(context.Context) error {
 	return nil
 }
 
+func (r *runner) Schedule(context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.scheduled++
+	return errors.New("one repository's settings don't decode")
+}
+
 func TestRun(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -67,8 +74,9 @@ func TestRun(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 			r := &runner{queue: tt.queue, stop: cancel}
 			controller.Run(ctx, "runs", r, time.Hour, time.Hour)
-			if r.dispatched != tt.wantFirst || r.followed != 1 || r.swept != 1 {
-				t.Errorf("one pass dispatched %d, followed %d, swept %d, want %d, 1, 1", r.dispatched, r.followed, r.swept, tt.wantFirst)
+			if r.dispatched != tt.wantFirst || r.followed != 1 || r.swept != 1 || r.scheduled != 1 {
+				t.Errorf("one pass dispatched %d, followed %d, swept %d, scheduled %d, want %d, 1, 1, 1", r.dispatched, r.followed, r.swept,
+					r.scheduled, tt.wantFirst)
 			}
 		})
 	}
@@ -81,7 +89,25 @@ func TestRunPollsAndSweeps(t *testing.T) {
 	controller.Run(ctx, "runs", r, 10*time.Millisecond, 50*time.Millisecond)
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.followed < 5 || r.swept < 2 || r.swept >= r.followed {
-		t.Errorf("in 200ms, followed %d times and swept %d, want every 10ms and every 50ms", r.followed, r.swept)
+	if r.followed < 5 || r.swept < 2 || r.swept >= r.followed || r.scheduled != 1 {
+		t.Errorf("in 200ms, followed %d times, swept %d and scheduled %d, want every 10ms, every 50ms and once a minute", r.followed,
+			r.swept, r.scheduled)
+	}
+}
+
+// plain is a runner that queues no schedules, as the deliverer.
+type plain struct{ r *runner }
+
+func (p plain) Dispatch(ctx context.Context) (bool, error) { return p.r.Dispatch(ctx) }
+func (p plain) Follow(ctx context.Context) error           { return p.r.Follow(ctx) }
+func (p plain) Sweep(ctx context.Context) error            { return p.r.Sweep(ctx) }
+
+func TestRunWithoutSchedules(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &runner{queue: []error{nil}, stop: cancel}
+	controller.Run(ctx, "deliveries", plain{r}, time.Hour, time.Hour)
+	if r.dispatched != 2 || r.followed != 1 || r.swept != 1 || r.scheduled != 0 {
+		t.Errorf("one pass dispatched %d, followed %d, swept %d, scheduled %d, want 2, 1, 1, 0", r.dispatched, r.followed, r.swept,
+			r.scheduled)
 	}
 }

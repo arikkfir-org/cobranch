@@ -32,7 +32,7 @@ RETURNING r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger
 UPDATE job_runs r SET lease_until = @until::timestamptz, reason = @reason
 FROM jobs j
 WHERE r.id = @id AND r.state = 'queued' AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 
 -- MarkRunRunning marks a queued run running, as its pod starts, and answers its commit and its job's name; no row when
 -- the run is no longer queued.
@@ -40,7 +40,7 @@ RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 UPDATE job_runs r SET state = 'running', reason = '', started_at = now(), lease_until = NULL
 FROM jobs j
 WHERE r.id = @id AND r.state = 'queued' AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 
 -- InsertRunToken records a run's token, replacing the one a controller that failed partway made.
 -- name: InsertRunToken :exec
@@ -54,7 +54,7 @@ ON CONFLICT (run_id) DO UPDATE SET token_hash = excluded.token_hash, hint = excl
 UPDATE job_runs r SET state = @state::text, reason = @reason, ended_at = now(), lease_until = NULL
 FROM jobs j
 WHERE r.id = @id AND r.state IN ('queued', 'running') AND j.principal_id = r.job_id
-RETURNING r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
+RETURNING r.id, r.org_id, r.repo_id, r.job_id, r.sha, j.name AS job;
 
 -- DeleteRunToken deletes a run's token: the run ended.
 -- name: DeleteRunToken :exec
