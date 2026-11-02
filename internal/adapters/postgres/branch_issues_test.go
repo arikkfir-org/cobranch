@@ -92,6 +92,7 @@ func created(name, sha string) git.RefUpdate {
 }
 
 func TestBranchLinksByName(t *testing.T) {
+	t.Parallel()
 	f := newLinkFixture(t)
 	ctx := context.Background()
 	f.push(t, []git.RefUpdate{created("main", shaA), created("acme-1-login", shaA), created("alice/ACME-3", shaA), created("feature", shaA)})
@@ -128,6 +129,7 @@ func TestBranchLinksByName(t *testing.T) {
 }
 
 func TestBranchLinksByHand(t *testing.T) {
+	t.Parallel()
 	f := newLinkFixture(t)
 	ctx := context.Background()
 	f.push(t, []git.RefUpdate{created("main", shaA), created("acme-1-login", shaA), created("feature", shaA)})
@@ -180,6 +182,7 @@ func TestBranchLinksByHand(t *testing.T) {
 }
 
 func TestBranchLinksMerge(t *testing.T) {
+	t.Parallel()
 	f := newLinkFixture(t)
 	f.push(t, []git.RefUpdate{created("main", shaA), created("acme-1-login", shaB), created("acme-2-sign-up", shaB)})
 	canceled := f.issue(t, f.second.ID)
