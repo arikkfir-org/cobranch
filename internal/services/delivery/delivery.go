@@ -80,7 +80,7 @@ func Match(pattern, branch string) bool {
 }
 
 // TargetsOf is the targets whose patterns match branch, in the order d declares them: those it has an environment in.
-func TargetsOf(d code.Delivery, branch string) []code.Target {
+func TargetsOf(d code.DeliverySettings, branch string) []code.Target {
 	var out []code.Target
 	for _, t := range d.Targets {
 		if slices.ContainsFunc(t.Branches, func(p string) bool { return Match(p, branch) }) {
@@ -91,7 +91,7 @@ func TargetsOf(d code.Delivery, branch string) []code.Target {
 }
 
 // Target is the target d names name, or ErrInvalid.
-func Target(d code.Delivery, name string) (code.Target, error) {
+func Target(d code.DeliverySettings, name string) (code.Target, error) {
 	for _, t := range d.Targets {
 		if t.Name == name {
 			return t, nil

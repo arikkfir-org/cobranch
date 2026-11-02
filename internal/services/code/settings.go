@@ -31,23 +31,25 @@ func (e *SettingsError) Error() string {
 }
 
 // Settings are what a SettingsFile says: of the repository, read from the default branch's only; the branches' merge
-// requirements, read from the default branch's only; and the jobs, read from the file at the tip an event happened
-// on. The JSON a store keeps of them leaves the merge requirements out, which it keeps on their own.
+// requirements, read from the default branch's only; the jobs, read from the file at the tip an event happened on; and
+// the delivery, whose targets are read from the default branch's and roots from the tip being delivered. The JSON a
+// store keeps of them leaves the merge requirements out, which it keeps on their own.
 type Settings struct {
 	Repository jobs.RepositorySettings `json:"repository"`
 	Branches   []git.Requirements      `json:"-"`
 	// Jobs are by name.
-	Jobs []jobs.Job `json:"jobs"`
+	Jobs     []jobs.Job       `json:"jobs"`
+	Delivery DeliverySettings `json:"delivery"`
 }
 
-// SettingsKeys are the top-level keys a SettingsFile may have, each read by what it configures: repository, branches
-// and jobs by ParseSettings, delivery by ParseDelivery. A key that configures something new joins them.
+// SettingsKeys are the top-level keys a SettingsFile may have, each read by ParseSettings. A key that configures
+// something new joins them.
 var SettingsKeys = []string{"repository", "branches", "jobs", "delivery"}
 
 // ParseSettings reads a SettingsFile, or answers a *SettingsError naming the line at fault: its top-level keys are
-// SettingsKeys, and every key under repository, branches and jobs is checked, so a misspelt key, requirement or trigger
-// refuses the file rather than requiring or running nothing. delivery's keys are ParseDelivery's to check. An empty
-// file says nothing: the repository's defaults, no requirements and no jobs.
+// SettingsKeys, and every key under them is checked, so a misspelt key, requirement or trigger refuses the file rather
+// than requiring or running nothing. An empty file says nothing: the repository's defaults, no requirements, no jobs
+// and no delivery.
 func ParseSettings(content []byte) (Settings, error) {
 	out := Settings{Repository: jobs.DefaultRepositorySettings, Jobs: []jobs.Job{}}
 	var doc yaml.Node
@@ -75,6 +77,9 @@ func ParseSettings(content []byte) (Settings, error) {
 		return Settings{}, err
 	}
 	if out.Jobs, err = parseJobs(valueOf(root, "jobs")); err != nil {
+		return Settings{}, err
+	}
+	if out.Delivery, err = parseDelivery(valueOf(root, "delivery")); err != nil {
 		return Settings{}, err
 	}
 	return out, nil
