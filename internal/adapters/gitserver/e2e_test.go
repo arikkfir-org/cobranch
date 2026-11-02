@@ -308,6 +308,7 @@ func query[T any](t *testing.T, pool *pgxpool.Pool, sql string, args ...any) T {
 }
 
 func TestStatusCodes(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	reader, narrow := s.token(gwen), s.token(olivia, "repo.read")
 	tests := []struct {

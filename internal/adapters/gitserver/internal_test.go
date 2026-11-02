@@ -93,6 +93,7 @@ func write(t *testing.T, dir, name, content string) {
 }
 
 func TestInternalTree(t *testing.T) {
+	t.Parallel()
 	b := newBrowsed(t)
 	tests := []struct {
 		name, ref, path string
@@ -155,6 +156,7 @@ func (b *browsed) named(name string) string {
 }
 
 func TestInternalBlob(t *testing.T) {
+	t.Parallel()
 	b := newBrowsed(t)
 	tests := []struct {
 		name, path    string
@@ -193,6 +195,7 @@ func TestInternalBlob(t *testing.T) {
 }
 
 func TestInternalRaw(t *testing.T) {
+	t.Parallel()
 	b := newBrowsed(t)
 	raw, err := b.client.Raw(b.ctx(t), website, "v1", "logo.png")
 	if err != nil {
@@ -217,6 +220,7 @@ func TestInternalRaw(t *testing.T) {
 }
 
 func TestInternalLog(t *testing.T) {
+	t.Parallel()
 	b := newBrowsed(t)
 	all, err := b.client.Log(b.ctx(t), website, "main", 0, 10)
 	if err != nil {
@@ -285,6 +289,7 @@ func (b *browsed) status(t *testing.T, read string) int {
 }
 
 func TestInternalViewer(t *testing.T) {
+	t.Parallel()
 	b := newBrowsed(t)
 	session, err := auth.NewService(postgres.NewAuthStore(b.stack.pool), nil, auth.Settings{Seed: true}).SignInSeeded(t.Context(), "guest", "/", auth.Client{})
 	if err != nil {

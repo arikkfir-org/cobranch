@@ -193,6 +193,7 @@ func sshClone(t *testing.T, client, url string) (string, string, error) {
 // TestSSH pushes main over SSH as Acme website's maintainer, then has keys clone it and push to it: its reader's, for
 // it and a repository she can't read, and a key nobody added.
 func TestSSH(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	base, hostKey := s.serveSSH(t.TempDir())
 	head := s.pushOverSSH(base, s.sshClient(olivia, hostKey))

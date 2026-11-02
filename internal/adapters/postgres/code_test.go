@@ -57,6 +57,7 @@ func names(commits []code.Commit) []string {
 }
 
 func TestCodeStoreBranches(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	got, err := f.c.Branches(ctx, f.website.ID)
@@ -88,6 +89,7 @@ func TestCodeStoreBranches(t *testing.T) {
 }
 
 func TestCodeStoreFirstParents(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	tests := []struct {
 		name  string
@@ -114,6 +116,7 @@ func TestCodeStoreFirstParents(t *testing.T) {
 }
 
 func TestCodeStoreCommit(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	c, p, err := f.c.Commit(ctx, f.website.ID, f.shaD)
@@ -142,6 +145,7 @@ func TestCodeStoreCommit(t *testing.T) {
 }
 
 func TestCodeStoreTags(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	for _, tag := range []struct{ name, sha string }{{"v2", shaB}, {"V3", f.shaD}, {"v1.0", shaA}} {
@@ -164,6 +168,7 @@ func TestCodeStoreTags(t *testing.T) {
 }
 
 func TestCodeStoreCommitsAt(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	got, err := f.c.CommitsAt(ctx, f.website.ID, []string{f.shaD, f.shaE, shaA})
@@ -179,6 +184,7 @@ func TestCodeStoreCommitsAt(t *testing.T) {
 }
 
 func TestCodeStoreSlugs(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	org, repo, err := f.c.Slugs(ctx, f.website.ID)

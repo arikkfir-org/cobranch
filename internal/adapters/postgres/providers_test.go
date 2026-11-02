@@ -13,6 +13,7 @@ import (
 )
 
 func TestIdentityProviders(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	okta := auth.StoredProvider{ID: "okta", Name: "Okta", Issuer: "https://acme.okta.com", ClientID: "o", SealedSecret: []byte{1, 2, 3}}

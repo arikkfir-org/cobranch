@@ -75,6 +75,10 @@
 
 - Every change needs table-driven tests. Before finishing, run `go vet ./... && go test -race ./...` and
   `golangci-lint run ./...`; CI runs the same, then builds `cmd/cobranch` and runs `cobranch version`.
+- A test that sets up a database or a Git server stack of its own (`postgrestest.Database`, `newStack`) calls
+  `t.Parallel()`, and so does each of its subtests that sets up its own; subtests that share their parent's state, or
+  depend on each other's order, run in order. Each such setup costs seconds: run in order, they made CI's tests its
+  longest step.
 
 ## Docs
 

@@ -134,6 +134,7 @@ func TestNewSchema(t *testing.T) {
 }
 
 func TestSchemaMigrate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		sqlFiles     fs.FS
@@ -156,6 +157,7 @@ func TestSchemaMigrate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			pool := testDatabase(t)
 			errs := migrateAtOnce(t, pool, tt.jobs, tt.sqlFiles, tt.goMigrations...)
 			if failed := slices.ContainsFunc(errs, func(err error) bool { return err != nil }); failed != tt.wantErr {
@@ -216,6 +218,7 @@ func migrateAtOnce(t *testing.T, pool *pgxpool.Pool, jobs int, sqlFiles fs.FS, g
 }
 
 func TestSchemaCheck(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		reach    bool
@@ -231,6 +234,7 @@ func TestSchemaCheck(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			pool := migratedDatabase(t, tt.reach, tt.migrated)
 			s := newSchema(t, pool, tt.needs)
 			if err := s.Check(context.Background()); (err != nil) != tt.wantErr {
@@ -284,6 +288,7 @@ func TestSchemaCheckOnceMigrated(t *testing.T) {
 }
 
 func TestSchemaMigrateUntilDone(t *testing.T) {
+	t.Parallel()
 	broken := fstest.MapFS{"00001_a.sql": {Data: []byte("-- +goose Up\nCREATE TABLE;\n")}}
 	tests := []struct {
 		name         string
@@ -299,6 +304,7 @@ func TestSchemaMigrateUntilDone(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			pool := unreachableDatabase(t)
 			if tt.reach {
 				pool = testDatabase(t)
@@ -352,6 +358,7 @@ func TestPing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			pool := unreachableDatabase(t)
 			if tt.reach {
 				pool = testDatabase(t)
@@ -442,6 +449,7 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 }
 
 func TestSeedsMigrate(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name string
 		// runs are the seeds of each build that seeds the database, in order: a preview upgraded in place.
@@ -463,6 +471,7 @@ func TestSeedsMigrate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			schema, wantSchemaVersion := tt.schema, int64(2) // columnB's
 			if schema == nil {
 				schema = columnB
