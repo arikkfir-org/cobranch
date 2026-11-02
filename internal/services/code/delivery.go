@@ -331,11 +331,19 @@ func values(node *yaml.Node) (map[string]any, error) {
 	return v, nil
 }
 
-// checkValues reports a string anywhere under node that names an unknown variable.
+// checkValues reports a string anywhere under node that names an unknown variable, or a key that names or writes one
+// at all: only values are expanded.
 func checkValues(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode && node.Tag == "!!str" {
 		if err := checkVariables(node.Value, false); err != nil {
 			return &SettingsError{Line: node.Line, Message: err.Error()}
+		}
+	}
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i < len(node.Content); i += 2 {
+			if key := node.Content[i]; variable.MatchString(key.Value) {
+				return &SettingsError{Line: key.Line, Message: fmt.Sprintf("values' keys take no variables: %q", key.Value)}
+			}
 		}
 	}
 	for _, n := range node.Content {
