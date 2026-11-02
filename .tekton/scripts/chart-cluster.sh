@@ -7,10 +7,12 @@ set -eu
 kind=.ci/bin/kind
 "$kind" create cluster --name cobranch --kubeconfig "$KUBECONFIG" --wait 3m >.ci/kind.log 2>&1 &
 cluster=$!
-sh .tekton/scripts/chart-images.sh
+images=0
+sh .tekton/scripts/chart-images.sh || images=$?
 status=0
 wait "$cluster" || status=$?
 cat .ci/kind.log
+[ "$images" -eq 0 ] || { echo "Building the images failed with status $images" >&2; exit "$images"; }
 [ "$status" -eq 0 ] || { echo "Creating the cluster failed with status $status" >&2; exit "$status"; }
 docker save --platform "$(docker version --format '{{.Server.Os}}/{{.Server.Arch}}')" --output .ci/images.tar \
   "cobranch:$VERSION" "cobranch-console:$VERSION" "cobranch-back-office:$VERSION" "$(cat .ci/postgresql-image)"
