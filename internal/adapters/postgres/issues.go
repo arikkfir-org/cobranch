@@ -81,15 +81,8 @@ func (s *IssueStore) List(ctx context.Context, orgID uuid.UUID, q issues.Query) 
 	for _, st := range q.States {
 		states = append(states, string(st))
 	}
-	number, below := q.Number, q.Below
-	if number < 1 || number > maxInt32 {
-		number = 0 // no issue has it
-	}
-	if below < 1 || below > maxInt32 {
-		below = 0 // every issue is below it
-	}
 	rows, err := s.q.ListIssues(ctx, queries.ListIssuesParams{OrgID: orgID, States: states, AssigneeID: q.AssigneeID, RepoID: q.RepositoryID,
-		Pattern: pattern(q.Text), Number: int32(number), Below: int32(below), Lim: int32(q.Limit + 1)})
+		Pattern: pattern(q.Text), Number: narrow(q.Number), Below: narrow(q.Below), Lim: int32(q.Limit + 1)})
 	if err != nil {
 		return nil, false, fmt.Errorf("listing the issues: %w", err)
 	}
@@ -102,6 +95,15 @@ func (s *IssueStore) List(ctx context.Context, orgID uuid.UUID, q issues.Query) 
 		out = append(out, issueOf(queries.IssueByNumberRow(r)))
 	}
 	return out, more, nil
+}
+
+// narrow is a number of the list's query as the query's integer, or 0 when it is no issue's number: a text's number
+// then matches no issue, and a cursor's sets no bound, as every issue is below it.
+func narrow(n int) int32 {
+	if n < 1 || n > maxInt32 {
+		return 0
+	}
+	return int32(n)
 }
 
 // pattern is an ILIKE pattern that matches text anywhere, its own wildcards escaped; "" for no text.
