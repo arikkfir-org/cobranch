@@ -107,6 +107,7 @@ func (f *jobsFixture) note(t *testing.T, repoID uuid.UUID, sha, name string) str
 }
 
 func TestGitStoreQueuesRuns(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	repo := f.website.ID
 	shaD, shaE := strings.Repeat("d", 40), strings.Repeat("e", 40)
@@ -187,6 +188,7 @@ func withPeeled(p git.Push, ref, sha string) git.Push {
 }
 
 func TestGitStoreRunsCeiling(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	repo := f.website.ID
 	file := "repository:\n  outsidePushes: run\njobs:\n  pusher:\n    on: {push: }\n    script: git push\n    permissions: [repo.push]\n"
@@ -204,6 +206,7 @@ func TestGitStoreRunsCeiling(t *testing.T) {
 }
 
 func TestGitStoreRunsTakenAnnotation(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	repo := f.website.ID
 	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))))
@@ -220,6 +223,7 @@ func TestGitStoreRunsTakenAnnotation(t *testing.T) {
 // TestGitStoreQueuesTagRunsOfItsLatestPush processes two pushes that move a tag out of order, as two push workers
 // can: the later push's run stands, and the earlier one, whose tag moved on, queues nothing.
 func TestGitStoreQueuesTagRunsOfItsLatestPush(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	repo := f.website.ID
 	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
@@ -249,6 +253,7 @@ func TestGitStoreQueuesTagRunsOfItsLatestPush(t *testing.T) {
 // TestGitStoreQueuesRunsOneRepositoryAtATime has two push workers process two pushes of a commit at once, while the
 // repository's runs are locked: both wait, and then one run of the job is queued there, not two.
 func TestGitStoreQueuesRunsOneRepositoryAtATime(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	ctx := context.Background()
 	repo := f.website.ID
@@ -310,6 +315,7 @@ func (f *jobsFixture) pushTwoRuns(t *testing.T) {
 }
 
 func TestCodeStoreStartAndCancelRuns(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	ctx := context.Background()
 	repo := f.website.ID
@@ -343,6 +349,7 @@ func TestCodeStoreStartAndCancelRuns(t *testing.T) {
 }
 
 func TestCodeStoreReadsRuns(t *testing.T) {
+	t.Parallel()
 	f := newJobsFixture(t)
 	ctx := context.Background()
 	repo := f.website.ID
