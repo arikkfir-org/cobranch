@@ -91,6 +91,7 @@ func TestCodeStoreBranches(t *testing.T) {
 // TestCodeStoreDeletedBranch runs its cases in order over one codeFixture, each pushing updates first: the latest
 // deletion of a name answers, and none does while a branch of that name is live.
 func TestCodeStoreDeletedBranch(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	tests := []struct {

@@ -53,8 +53,10 @@ func apiDeleteCases() []apiDeleteCase {
 }
 
 func TestDeleteBranchByAPI(t *testing.T) {
+	t.Parallel()
 	for _, tt := range apiDeleteCases() {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, client, feature := apiDeleteRepo(t, tt)
 			head := feature
 			if tt.head != nil {

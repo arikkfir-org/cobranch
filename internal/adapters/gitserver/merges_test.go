@@ -173,6 +173,7 @@ func TestMergeByPush(t *testing.T) {
 // TestMergeOfADeletedBranch checks that a merge into main keeps its record on its branch once the branch is deleted
 // before the push worker records the merge, as a deletion pushed right after the merge leaves it.
 func TestMergeOfADeletedBranch(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name   string
 		pushes [][]string
@@ -182,6 +183,7 @@ func TestMergeOfADeletedBranch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, dir, feature := branchToMerge(t, mergeCase{})
 			mustGit(t, dir, "checkout", "-q", "-b", "merged", "main")
 			mustGit(t, dir, "merge", "-q", "--no-ff", "-m", "Merge feature", "feature")
