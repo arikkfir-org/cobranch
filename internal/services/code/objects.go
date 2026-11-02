@@ -80,6 +80,19 @@ type File struct {
 	HTML      string
 }
 
+// LogEntry is a commit as a walk of history names it: its name and its parents', the first first.
+type LogEntry struct {
+	SHA     string
+	Parents []string
+}
+
+// Log is a page of a walk of history, as the Git server reads it: the commit its ref resolved to, and the commits the
+// page holds, reachable from it with every parent followed, newest first.
+type Log struct {
+	Commit  string
+	Entries []LogEntry
+}
+
 // Tag is one of a repository's tags and the object its ref names: a commit, or an annotated tag that names one.
 type Tag struct {
 	Name   string

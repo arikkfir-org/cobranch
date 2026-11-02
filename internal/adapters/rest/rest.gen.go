@@ -226,6 +226,24 @@ func (e TreeEntryKind) Valid() bool {
 	}
 }
 
+// Defines values for ListCommitsParamsParents.
+const (
+	All   ListCommitsParamsParents = "all"
+	First ListCommitsParamsParents = "first"
+)
+
+// Valid indicates whether the value is a known member of the ListCommitsParamsParents enum.
+func (e ListCommitsParamsParents) Valid() bool {
+	switch e {
+	case All:
+		return true
+	case First:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ListPermissionsParamsScope.
 const (
 	ListPermissionsParamsScopeOrganization ListPermissionsParamsScope = "organization"
@@ -428,7 +446,7 @@ type Commit struct {
 	Committer Person `json:"committer"`
 	Message   string `json:"message"`
 
-	// Parents Its parents' names, the first of which its branch's history follows.
+	// Parents Its parents' names, in Git's order: history follows all of them, or the first alone, as asked.
 	Parents []string `json:"parents"`
 
 	// Push The push that first brought a commit; getCommit alone answers it.
@@ -980,15 +998,27 @@ type GetBlobParams struct {
 
 // ListCommitsParams defines parameters for ListCommits.
 type ListCommitsParams struct {
-	// Branch The branch whose history the page lists, without refs/heads/.
+	// Branch The branch whose history the page lists, without refs/heads/, unless ref names another start.
 	Branch *string `form:"branch,omitempty" json:"branch,omitempty"`
 
-	// Cursor Where the page starts, as the previous page's Link names it; the branch's head when left out. Opaque.
+	// Ref Where the history starts instead of branch: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *string `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Parents Which parents of each commit the history follows, the first alone or every one.
+	Parents *ListCommitsParamsParents `form:"parents,omitempty" json:"parents,omitempty"`
+
+	// Cursor Where the page starts, as the previous page's Link names it, in place of branch and ref; the start's commit when left out. Opaque: every parent's cursor holds the commit the first page started from, so later pages hold still while the branch moves on.
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 
 	// Limit How many commits the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
+
+// ListCommitsParamsParents defines parameters for ListCommits.
+type ListCommitsParamsParents string
 
 // DeleteAnnotationParams defines parameters for DeleteAnnotation.
 type DeleteAnnotationParams struct {
@@ -1236,7 +1266,7 @@ type ServerInterface interface {
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
-	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -2662,6 +2692,32 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Optional query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "parents" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "parents", r.URL.Query(), &params.Parents, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "parents"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "parents", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "cursor" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -2686,6 +2742,27 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
 		}
 		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -7364,6 +7441,7 @@ type ListCommitsResponseObject interface {
 }
 
 type ListCommits200ResponseHeaders struct {
+	ETag string
 	Link *string
 }
 
@@ -7381,12 +7459,27 @@ func (response ListCommits200JSONResponse) VisitListCommitsResponse(w http.Respo
 		return err
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
 	if response.Headers.Link != nil {
 		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
 	}
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type ListCommits304ResponseHeaders struct {
+	ETag string
+}
+
+type ListCommits304Response struct {
+	Headers ListCommits304ResponseHeaders
+}
+
+func (response ListCommits304Response) VisitListCommitsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type ListCommits400ApplicationProblemPlusJSONResponse struct {
@@ -7429,6 +7522,20 @@ func (response ListCommits404ApplicationProblemPlusJSONResponse) VisitListCommit
 	}
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListCommits503ApplicationProblemPlusJSONResponse Problem
+
+func (response ListCommits503ApplicationProblemPlusJSONResponse) VisitListCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -8993,7 +9100,7 @@ type StrictServerInterface interface {
 	// MergeBranch Merges the branch into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch merged once the push worker processes it; takes repo.merge for a ready branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, answers 409 branch.moved; a branch with nothing to merge, one that isn't ready, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse answer 409 with codes of their own. It builds the merge on the Git server: an installation without one answers 503.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/merge)
 	MergeBranch(ctx context.Context, request MergeBranchRequestObject) (MergeBranchResponseObject, error)
-	// ListCommits A page of a branch's first-parent history, nearest first, as git log --first-parent lists it; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.

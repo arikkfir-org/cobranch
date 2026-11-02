@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
+	gocloudblob "gocloud.dev/blob"
 	"golang.org/x/crypto/ssh"
 
+	"cobranch.dev/internal/adapters/blob"
+	"cobranch.dev/internal/adapters/postgres"
 	"cobranch.dev/internal/adapters/postgres/postgrestest"
 )
 
@@ -133,6 +136,12 @@ func TestWorkloadsStopWhenTheyCantServe(t *testing.T) {
 		{name: "a Git server with a host key that isn't one", run: runGitServer,
 			env:     map[string]string{"COBRANCH_HTTP_ADDR": freeAddr(t), "COBRANCH_GIT_SSH_ADDR": freeAddr(t), "COBRANCH_GIT_SSH_HOST_KEY": "nope"},
 			wantErr: "reading COBRANCH_GIT_SSH_HOST_KEY"},
+		{name: "a Git server moving its store to itself", run: runGitServer,
+			env:     map[string]string{"COBRANCH_HTTP_ADDR": freeAddr(t), "COBRANCH_BLOB_URL": "", "COBRANCH_BLOB_MOVE_FROM": "postgres://"},
+			wantErr: "objects can't move from the database to itself"},
+		{name: "maintenance moving its store to itself", run: runMaintenance,
+			env:     map[string]string{"COBRANCH_BLOB_URL": "postgres://", "COBRANCH_BLOB_MOVE_FROM": "postgres://"},
+			wantErr: "objects can't move from the database to itself"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -161,5 +170,40 @@ func checkStops(t *testing.T, run func(ctx context.Context, logs io.Writer) erro
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("the workload didn't return")
+	}
+}
+
+// TestRunMaintenanceMoves runs maintenance while packs move from a directory into the database: it copies them over
+// and leaves the directory as it was.
+func TestRunMaintenanceMoves(t *testing.T) {
+	ctx := context.Background()
+	databaseURL := postgrestest.Database(t)
+	t.Setenv("COBRANCH_DATABASE_URL", databaseURL)
+	if err := runMigrate(ctx, io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	old, err := blob.Open(ctx, "file://"+dir, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = old.Close() }()
+	if err := old.WriteAll(ctx, "git/repo/upload/pack-1.pack", []byte("PACK"), nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("COBRANCH_BLOB_MOVE_FROM", "file://"+dir)
+	t.Setenv("COBRANCH_GIT_DATA_DIR", t.TempDir())
+	if err := runMaintenance(ctx, io.Discard); err != nil {
+		t.Fatalf("runMaintenance() = %v", err)
+	}
+	pool, err := postgres.Connect(ctx, databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	for name, store := range map[string]*gocloudblob.Bucket{"the database": postgres.Bucket(pool), "the directory": old} {
+		if got, err := store.ReadAll(ctx, "git/repo/upload/pack-1.pack"); string(got) != "PACK" || err != nil {
+			t.Errorf("%s holds %q, %v; want PACK", name, got, err)
+		}
 	}
 }

@@ -243,8 +243,8 @@ An organization’s own pages (members, roles, API keys, settings) keep their pa
 - **An organization's home** lists the repositories the viewer reaches, and offers a new one to members with
   `repos.create`.
 - **A repository's page** shows its clone URL with how to make a personal token, its branches, and the default branch's
-  history: first-parent, from PostgreSQL, a page at a time. Its **Access** page lists and changes its grants; its
-  **Settings** page renames it.
+  history: first-parent, from PostgreSQL, a page at a time, until [code browsing](code-browsing.md#history) follows
+  every parent. Its **Access** page lists and changes its grants; its **Settings** page renames it.
 - **A commit's page** shows its message, author and committer with the principals behind them, its parents, and the push
   that first brought it, with its pusher.
 - **As soon as the push returns.** The push's transaction committed before Git returned, so the next page load shows it;
@@ -366,7 +366,8 @@ Nothing of an installation is in the product: an operator routes the Git server 
   the pack's size come later, as the architecture deferred them.
 - **The Git server runs `git` on what clients send.** It checks every object, caps the pack, runs as a non-root user
   with no Kubernetes token, and cleans each throwaway repository when its request ends.
-- **First-parent history** hides a merge's second line in the Console's list until the full graph view arrives.
+- **First-parent history** hides a merge's second line in the Console's list until the full graph view arrives, which
+  [code browsing](code-browsing.md#history) brings.
 - **Login-less users accumulate,** one per unknown email; they hold nothing and sign in nowhere, so they cost only rows.
 - **Principals lag a push** while no push worker runs, or while its pushes fail; the commits and branches are there, and
   each push's error and attempts say why. An operator's autoscaler counts

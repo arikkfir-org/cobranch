@@ -134,7 +134,7 @@ type BranchMerge struct {
 type Commit struct {
 	Sha  string `json:"sha"`
 	Tree string `json:"tree"`
-	// Its parents' names, the first of which its branch's history follows.
+	// Its parents' names, in Git's order: history follows all of them, or the first alone, as asked.
 	Parents   []string `json:"parents"`
 	Message   string   `json:"message"`
 	Author    *Person  `json:"author"`
@@ -147,7 +147,7 @@ type Commit struct {
 	Push *Push `json:"push,omitempty"`
 }
 
-// A page of a branch's history, nearest first.
+// A page of history, nearest first.
 type CommitPage struct {
 	Commits []*Commit `json:"commits"`
 	// Where the next page starts, as history's after; null after the last page.
@@ -373,7 +373,7 @@ type Repository struct {
 	Branches []*Branch `json:"branches"`
 	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
 	Branch *Branch `json:"branch,omitempty"`
-	// A page of a branch's first-parent history, nearest first, as git log --first-parent lists it: from the branch's head, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. A merge's second line stays out, and a branch at no commit a push recorded has none. first is 1 to 100.
+	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`
@@ -765,6 +765,64 @@ func (e *EntryKind) UnmarshalJSON(b []byte) error {
 }
 
 func (e EntryKind) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Which parents of each commit a history follows.
+type HistoryParents string
+
+const (
+	// The first alone: a branch's line of merges.
+	HistoryParentsFirst HistoryParents = "FIRST"
+	// Every one: a merge's other lines too.
+	HistoryParentsAll HistoryParents = "ALL"
+)
+
+var AllHistoryParents = []HistoryParents{
+	HistoryParentsFirst,
+	HistoryParentsAll,
+}
+
+func (e HistoryParents) IsValid() bool {
+	switch e {
+	case HistoryParentsFirst, HistoryParentsAll:
+		return true
+	}
+	return false
+}
+
+func (e HistoryParents) String() string {
+	return string(e)
+}
+
+func (e *HistoryParents) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = HistoryParents(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid HistoryParents", str)
+	}
+	return nil
+}
+
+func (e HistoryParents) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *HistoryParents) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e HistoryParents) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

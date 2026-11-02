@@ -31,13 +31,14 @@ const (
 )
 
 // InternalHandler serves the internal call (package gitinternal): the REST and GraphQL servers' reads of a
-// repository's trees and files, each from one snapshot, and their merges. Its callers send on their viewer's token,
-// and it serves only what that viewer may read or merge, as Git's own port does, so it holds up whoever calls it.
+// repository's trees, files and history, each from one snapshot, and their merges. Its callers send on their viewer's
+// token, and it serves only what that viewer may read or merge, as Git's own port does, so it holds up whoever calls it.
 func (s *Server) InternalHandler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/tree", s.internal("tree", s.readTree))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blob", s.internal("blob", s.readBlob))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal("raw", s.readRaw))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/log", s.internal("log", s.readLog))
 	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/merge", s.mergeHandler())
 	return mux
 }
@@ -209,6 +210,39 @@ func (s *Server) readRaw(w http.ResponseWriter, r *http.Request, o objects) erro
 	if err := cmd.Run(); err != nil && ctx.Err() == nil {
 		slog.ErrorContext(ctx, "Streaming a file's bytes failed", "error", err, "stderr", strings.TrimSpace(stderr.String()))
 	}
+	return nil
+}
+
+// maxLog is the most commits one page of a walk of history may ask for.
+const maxLog = 1000
+
+// readLog answers the commits reachable from the commit the request's ref resolved to, every parent followed, in
+// git rev-list --date-order: no commit before its children, and among those the graph leaves free, the newest first,
+// so a commit whose clock ran ahead stays beneath the ones that build on it; after skipping as many as the request
+// asks, each with its parents.
+func (s *Server) readLog(w http.ResponseWriter, r *http.Request, o objects) error {
+	skip, skipErr := strconv.Atoi(r.URL.Query().Get("skip"))
+	limit, limitErr := strconv.Atoi(r.URL.Query().Get("limit"))
+	if skipErr != nil || limitErr != nil || skip < 0 || limit < 0 || limit > maxLog {
+		problem(w, http.StatusBadRequest, gitinternal.Problem{Message: "skip must be a number of commits, and limit one up to 1000"})
+		return nil
+	}
+	log := code.Log{Commit: o.commit, Entries: []code.LogEntry{}}
+	if limit > 0 {
+		out, err := s.read(r.Context(), o.dir, nil, "rev-list", "--date-order", "--parents", "--skip="+strconv.Itoa(skip), "--max-count="+strconv.Itoa(limit), o.commit, "--")
+		if err != nil {
+			return err
+		}
+		for line := range strings.Lines(string(out)) {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				return fmt.Errorf("walking the history of %s: git rev-list printed %q", o.commit, line)
+			}
+			log.Entries = append(log.Entries, code.LogEntry{SHA: fields[0], Parents: fields[1:]})
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(gitinternal.LogOf(log)) // a caller gone away gets nothing more
 	return nil
 }
 

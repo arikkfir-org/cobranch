@@ -250,11 +250,18 @@ func (s *stack) url(base, secret, path string) string {
 // combined output and error.
 func gitCmd(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
+	return gitCmdAt(t, dir, "2026-10-31T12:30:00+02:00", args...)
+}
+
+// gitCmdAt is gitCmd with the committer's clock reading committed, so a test can make a commit whose clock ran ahead
+// of its children's.
+func gitCmdAt(t *testing.T, dir, committed string, args ...string) (string, error) {
+	t.Helper()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "HOME="+dir, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_TERMINAL_PROMPT=0",
 		"GIT_AUTHOR_NAME=Ada Author", "GIT_AUTHOR_EMAIL=Ada@Example.com", "GIT_COMMITTER_NAME=Olivia Owner", "GIT_COMMITTER_EMAIL=olivia@cobranch.example",
-		"GIT_AUTHOR_DATE=2026-10-31T12:00:00+02:00", "GIT_COMMITTER_DATE=2026-10-31T12:30:00+02:00")
+		"GIT_AUTHOR_DATE=2026-10-31T12:00:00+02:00", "GIT_COMMITTER_DATE="+committed)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
