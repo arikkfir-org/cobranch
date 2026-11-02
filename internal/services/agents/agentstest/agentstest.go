@@ -72,6 +72,13 @@ func (s *Store) AddAgent(a agents.Agent) agents.Agent {
 	return a
 }
 
+// KeptTasks answers every task it keeps, of every organization, oldest first.
+func (s *Store) KeptTasks() []agents.Task {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.tasks)
+}
+
 // SetState moves the organization's task of number to state, as the controller would.
 func (s *Store) SetState(orgID uuid.UUID, number int64, state agents.TaskState) {
 	s.mu.Lock()

@@ -2148,11 +2148,12 @@
       return name.length <= 60 ? name : name.slice(0, 61).replace(/-[^-]*$/, "");
     }
     // issueChoices are whom an issue may be assigned to, what it may be about and what it may carry: the
-    // organization's members, the repositories the viewer reads, and the organization's labels.
+    // organization's members and agents, the repositories the viewer reads, and the organization's labels.
     async function issueChoices(org) {
-      const [members, repositories, labels] = await Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
+      const [members, agents, repositories, labels] = await Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
+        api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
         api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories), api("GET", "/orgs/" + org.slug + "/labels").then((d) => d.labels)]);
-      return { members, repositories, labels };
+      return { members, agents, repositories, labels };
     }
     // A label's colour is one of the design system's tones, so it reads in both themes.
     const labelTones = { gray: "neutral", blue: "info", green: "success", yellow: "warning", red: "danger" };
@@ -2166,11 +2167,15 @@
     const colorSelect = (value) => h("select", { name: "color", "aria-label": "Colour" }, Object.entries(labelColors).map(([c, word]) => h("option", { value: c, selected: c === value }, word)));
     const stateSelect = (value) => h("select", { name: "state" }, Object.entries(issueStates).map(([s, { word }]) => h("option", { value: s, selected: s === value }, word)));
     const prioritySelect = (value) => h("select", { name: "priority" }, Object.entries(issuePriorities).map(([p, { word }]) => h("option", { value: p, selected: p === value }, word)));
-    // assigneeSelect picks one of the members, or nobody; an assignee who is no member any more stays its choice.
-    function assigneeSelect(members, current) {
-      const gone = current && !members.some((m) => m.userId === current.id);
+    // assigneeSelect picks one of the members, one of the agents for a viewer who assigns them (assign), or nobody;
+    // an assignee who is neither any more stays its choice. Assigning an agent hands it the issue as its task.
+    function assigneeSelect(members, agents, assign, current) {
+      const picked = (id) => !!current && id === current.id;
+      const gone = current && !members.some((m) => m.userId === current.id) && !agents.some((a) => a.id === current.id);
+      const offered = agents.filter((a) => assign || picked(a.id));
       return h("select", { name: "assigneeId" }, h("option", { value: "" }, "Nobody"),
-        members.map((m) => h("option", { value: m.userId, selected: current && m.userId === current.id }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
+        members.map((m) => h("option", { value: m.userId, selected: picked(m.userId) }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
+        offered.length ? h("optgroup", { label: "Agents, which take it as a task" }, offered.map((a) => h("option", { value: a.id, selected: picked(a.id) }, a.name))) : null,
         gone ? h("option", { value: current.id, selected: true }, current.displayName) : null);
     }
     const repositorySelect = (repositories, current) => h("select", { name: "repositoryId" }, h("option", { value: "" }, "None"),
@@ -2179,7 +2184,7 @@
     // showIssues is the Issues page's: the list, the form that creates one, the labels, or an issue's page, by what
     // follows issues/.
     function showIssues(org, main, can, sub) {
-      if (sub === "new" && can("issues.write")) return showNewIssue(org, main);
+      if (sub === "new" && can("issues.write")) return showNewIssue(org, main, can);
       if (sub === "labels") return showLabels(org, main, can);
       if (sub && sub !== "new") return showIssue(org, main, can, sub);
       return showIssueList(org, main, can);
@@ -2189,7 +2194,7 @@
     // assignee, the repository, a label and a text that the page's query names; a switch adds the closed ones.
     async function showIssueList(org, main, can) {
       const params = new URLSearchParams(location.search);
-      const { members, repositories, labels } = await issueChoices(org);
+      const { members, agents, repositories, labels } = await issueChoices(org);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const filter = (name, value) => {
@@ -2199,7 +2204,8 @@
       };
       const assignee = h("select", { "aria-label": "Assignee", onchange: (e) => filter("assignee", e.target.value) }, h("option", { value: "" }, "Anyone"),
         h("option", { value: me.id }, "Me"), h("option", { value: "none" }, "Nobody"),
-        members.filter((m) => m.userId !== me.id).map((m) => h("option", { value: m.userId }, m.displayName)));
+        members.filter((m) => m.userId !== me.id).map((m) => h("option", { value: m.userId }, m.displayName)),
+        agents.length ? h("optgroup", { label: "Agents" }, agents.map((a) => h("option", { value: a.id }, a.name))) : null);
       assignee.value = params.get("assignee") || "";
       const repository = h("select", { "aria-label": "Repository", onchange: (e) => filter("repository", e.target.value) }, h("option", { value: "" }, "Any repository"),
         h("option", { value: "none" }, "No repository"), repositories.map((r) => h("option", { value: r.id }, r.slug)));
@@ -2258,13 +2264,13 @@
       h("td", { class: "when muted" }, when(i.updatedAt)));
 
     // showNewIssue asks for a title, then the rest, as an issue's side column does, and creates the issue.
-    async function showNewIssue(org, main) {
-      const { members, repositories, labels } = await issueChoices(org);
+    async function showNewIssue(org, main, can) {
+      const { members, agents, repositories, labels } = await issueChoices(org);
       const error = h("p", { class: "alert", hidden: true });
       const title = h("input", { name: "title", required: true, maxlength: 200, placeholder: "Show pushes before the client returns" });
       const picks = labelPicks(labels, []);
       const description = h("textarea", { name: "description", rows: 8, maxlength: 65536, placeholder: "What it is and why, in Markdown" });
-      const state = stateSelect("backlog"), priority = prioritySelect("none"), assignee = assigneeSelect(members, null), repository = repositorySelect(repositories, null);
+      const state = stateSelect("backlog"), priority = prioritySelect("none"), assignee = assigneeSelect(members, agents, can("agents.assign"), null), repository = repositorySelect(repositories, null);
       const create = h("button", { class: "button primary", type: "submit" }, "Create");
       main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / new"), h("h1", {}, "New issue")),
         error, h("section", { class: "panel" }, h("form", { onsubmit: (e) => {
@@ -2361,7 +2367,10 @@
       return h("aside", { class: "side" },
         field("State", choices && stateSelect(issue.state), (v) => ({ state: v }), issueBadge(issue.state)),
         field("Priority", choices && prioritySelect(issue.priority), (v) => ({ priority: v }), [priorityIcon(issue.priority), " ", issuePriorities[issue.priority].word]),
-        field("Assignee", choices && assigneeSelect(choices.members, issue.assignee), (v) => ({ assigneeId: v || null }), issue.assignee ? issue.assignee.displayName : "Nobody"),
+        field("Assignee", choices && assigneeSelect(choices.members, choices.agents, can("agents.assign"), issue.assignee), (v) => ({ assigneeId: v || null }),
+          issue.assignee ? issue.assignee.displayName : "Nobody"),
+        issue.task ? h("div", { class: "field" }, h("strong", {}, "Its task"), h("a", { class: "row", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: issue.assignee.id }),
+          "data-nav": "", title: "The agent's tasks" }, h("span", {}, "#" + issue.task.number), taskBadge(issue.task.state))) : null,
         field("Repository", choices && repositorySelect(choices.repositories, issue.repository), (v) => ({ repositoryId: v || null }), issue.repository ? h("code", {}, issue.repository.slug) : "None"),
         issueLabelsField(org, issue, choices, save),
         h("dl", { class: "facts" }, h("dt", {}, "Created by"), h("dd", {}, issue.createdBy ? issue.createdBy.displayName : "Someone since gone"),

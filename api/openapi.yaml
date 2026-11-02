@@ -4203,6 +4203,8 @@ components:
           $ref: "#/components/schemas/IssuePriority"
         assignee:
           $ref: "#/components/schemas/Principal"
+        task:
+          $ref: "#/components/schemas/IssueTask"
         repository:
           $ref: "#/components/schemas/IssueRepository"
         labels:
@@ -4226,6 +4228,16 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1; its ETag.
+    IssueTask:
+      type: object
+      description: The task an issue's agent assignee works on it in, the newest its assignment gave the agent, by its number among the organization's tasks; absent when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+      required: [number, state]
+      properties:
+        number:
+          type: integer
+          format: int64
+        state:
+          $ref: "#/components/schemas/TaskState"
     IssueRepository:
       type: object
       description: The repository an issue is about; absent for none, and for a viewer who doesn't read it.
@@ -4256,7 +4268,7 @@ components:
         assigneeId:
           type: string
           format: uuid
-          description: One of the organization's members.
+          description: One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads.
         repositoryId:
           type: string
           format: uuid
@@ -4282,7 +4294,7 @@ components:
         assigneeId:
           type: [string, "null"]
           format: uuid
-          description: One of the organization's members, or null for nobody.
+          description: One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads; or null for nobody. Moving the issue from an agent cancels the agent's task, unless it has ended.
         repositoryId:
           type: [string, "null"]
           format: uuid

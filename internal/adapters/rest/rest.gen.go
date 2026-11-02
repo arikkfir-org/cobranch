@@ -1304,7 +1304,10 @@ type Issue struct {
 	Repository *IssueRepository `json:"repository,omitempty"`
 
 	// State Where an issue stands; done and canceled close it.
-	State     IssueState `json:"state"`
+	State IssueState `json:"state"`
+
+	// Task The task an issue's agent assignee works on it in, the newest its assignment gave the agent, by its number among the organization's tasks; absent when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+	Task      *IssueTask `json:"task,omitempty"`
 	Title     string     `json:"title"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 
@@ -1374,7 +1377,7 @@ type IssueEventBranch struct {
 
 // IssueInput What creates an issue.
 type IssueInput struct {
-	// AssigneeId One of the organization's members.
+	// AssigneeId One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads.
 	AssigneeId *openapi_types.UUID `json:"assigneeId,omitempty"`
 
 	// Description Markdown, at most 65536 characters.
@@ -1406,7 +1409,7 @@ type IssueLabel struct {
 
 // IssuePatch What changes an issue, as a merge patch; a field left out keeps its value.
 type IssuePatch struct {
-	// AssigneeId One of the organization's members, or null for nobody.
+	// AssigneeId One of the organization's members, or one of its agents, which takes agents.assign too and gives the agent a task of the issue, in its repository, which the viewer then reads; or null for nobody. Moving the issue from an agent cancels the agent's task, unless it has ended.
 	AssigneeId  nullable.Nullable[openapi_types.UUID] `json:"assigneeId,omitempty"`
 	Description *string                               `json:"description,omitempty"`
 
@@ -1436,6 +1439,14 @@ type IssueRepository struct {
 
 // IssueState Where an issue stands; done and canceled close it.
 type IssueState string
+
+// IssueTask The task an issue's agent assignee works on it in, the newest its assignment gave the agent, by its number among the organization's tasks; absent when no agent is assigned, and for a viewer who doesn't read the repository the task works in.
+type IssueTask struct {
+	Number int64 `json:"number"`
+
+	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+	State TaskState `json:"state"`
+}
 
 // Job A job as /cobranch.yaml declared it.
 type Job struct {

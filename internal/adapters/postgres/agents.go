@@ -267,6 +267,9 @@ func task(r taskRow) agents.Task {
 	if t.ThreadID != nil {
 		out.ThreadID = *t.ThreadID
 	}
+	if t.IssueID != nil {
+		out.IssueID = *t.IssueID
+	}
 	return out
 }
 
@@ -340,7 +343,8 @@ func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task)
 			return fmt.Errorf("numbering the task: %w", err)
 		}
 		p := queries.InsertTaskParams{ID: t.ID, OrgID: t.OrgID, Number: number, AgentID: t.Agent.ID, Kind: t.Kind, Title: t.Title,
-			Instructions: t.Instructions, RepoID: idOrNil(t.RepoID), BranchID: idOrNil(t.BranchID), ThreadID: idOrNil(t.ThreadID)}
+			Instructions: t.Instructions, RepoID: idOrNil(t.RepoID), BranchID: idOrNil(t.BranchID), ThreadID: idOrNil(t.ThreadID),
+			IssueID: idOrNil(t.IssueID)}
 		if t.AssignedBy != nil {
 			p.AssignedBy = &t.AssignedBy.ID
 		}

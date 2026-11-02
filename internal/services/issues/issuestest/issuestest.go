@@ -10,13 +10,16 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/internal/services/agents"
 	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
 )
 
 // Store is an issues.Store in memory. Repos are the repositories issues may be about, by ID, Live their live branches,
-// by ID, each with its link, and Labels the organizations' labels, by ID. Fail, when set, fails every write.
+// by ID, each with its link, and Labels the organizations' labels, by ID. Agents are the organizations' agents, whom
+// issues may be assigned to too, by ID, each with its organization, and TaskOf, when set, finds the task an agent works
+// on an issue in. Fail, when set, fails every write.
 type Store struct {
 	Orgs   *orgstest.Store
 	Repos  map[uuid.UUID]repos.Repository
@@ -24,6 +27,8 @@ type Store struct {
 	Events map[uuid.UUID][]issues.Event
 	Live   map[uuid.UUID]issues.Branch
 	Kept   map[uuid.UUID]issues.Label
+	Agents map[uuid.UUID]uuid.UUID
+	TaskOf func(issueID, agentID uuid.UUID) *issues.Task
 	last   map[uuid.UUID]int
 	Fail   error
 }
@@ -33,7 +38,20 @@ var _ issues.Store = (*Store)(nil)
 // NewStore returns an empty Store over o.
 func NewStore(o *orgstest.Store) *Store {
 	return &Store{Orgs: o, Repos: map[uuid.UUID]repos.Repository{}, Events: map[uuid.UUID][]issues.Event{},
-		Live: map[uuid.UUID]issues.Branch{}, Kept: map[uuid.UUID]issues.Label{}, last: map[uuid.UUID]int{}}
+		Live: map[uuid.UUID]issues.Branch{}, Kept: map[uuid.UUID]issues.Label{}, Agents: map[uuid.UUID]uuid.UUID{}, last: map[uuid.UUID]int{}}
+}
+
+// TasksOf is a TaskOf over the tasks kept answers, oldest first, as an agents' fake keeps them: the newest task the
+// agent works on the issue in.
+func TasksOf(kept func() []agents.Task) func(issueID, agentID uuid.UUID) *issues.Task {
+	return func(issueID, agentID uuid.UUID) *issues.Task {
+		for _, t := range slices.Backward(kept()) {
+			if t.IssueID == issueID && t.Agent.ID == agentID {
+				return &issues.Task{Number: t.Number, State: t.State, RepoID: t.RepoID}
+			}
+		}
+		return nil
+	}
 }
 
 // AddRepository makes repo one of its organization's, for the store and the authorizer.
@@ -55,8 +73,12 @@ func (s *Store) filled(issue issues.Issue) issues.Issue {
 	issue.OrgSlug, issue.Key = org.Slug, org.IssueKey
 	for _, p := range []**issues.Principal{&issue.Assignee, &issue.CreatedBy} {
 		if *p != nil {
-			*p = &issues.Principal{ID: (*p).ID, DisplayName: s.Orgs.Names[(*p).ID]}
+			*p = &issues.Principal{ID: (*p).ID, DisplayName: s.Orgs.Names[(*p).ID], Agent: s.Agents[(*p).ID] != uuid.Nil}
 		}
+	}
+	issue.Task = nil
+	if a := issue.Assignee; a != nil && a.Agent && s.TaskOf != nil {
+		issue.Task = s.TaskOf(issue.ID, a.ID)
 	}
 	if issue.Repository != nil {
 		r := s.Repos[issue.Repository.ID]
@@ -199,12 +221,23 @@ func (s *Store) Activity(_ context.Context, issueID uuid.UUID) ([]issues.Event, 
 	return slices.Clone(s.Events[issueID]), nil
 }
 
-// Member finds one of the organization's members.
-func (s *Store) Member(_ context.Context, orgID, principalID uuid.UUID) (issues.Principal, error) {
-	if !slices.Contains(s.Orgs.Memberships[orgID], principalID) {
+// Assignee finds one of the organization's members or agents.
+func (s *Store) Assignee(_ context.Context, orgID, principalID uuid.UUID) (issues.Principal, error) {
+	agent := s.Agents[principalID] == orgID
+	if !agent && !slices.Contains(s.Orgs.Memberships[orgID], principalID) {
 		return issues.Principal{}, issues.ErrNotFound
 	}
-	return issues.Principal{ID: principalID, DisplayName: s.Orgs.Names[principalID]}, nil
+	return issues.Principal{ID: principalID, DisplayName: s.Orgs.Names[principalID], Agent: agent}, nil
+}
+
+// Transact runs fn, and puts the issues back as they were when it fails.
+func (s *Store) Transact(ctx context.Context, _ uuid.UUID, fn func(ctx context.Context) error) error {
+	kept := slices.Clone(s.Issues)
+	if err := fn(ctx); err != nil {
+		s.Issues = kept
+		return err
+	}
+	return nil
 }
 
 // Repository finds one of the organization's repositories.

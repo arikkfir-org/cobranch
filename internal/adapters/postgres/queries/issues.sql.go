@@ -74,11 +74,35 @@ func (q *Queries) InsertIssue(ctx context.Context, arg InsertIssueParams) error 
 	return err
 }
 
+const issueAssignee = `-- name: IssueAssignee :one
+SELECT p.id, p.display_name, p.kind FROM principals p
+WHERE p.id = $1
+  AND (EXISTS (SELECT 1 FROM memberships m WHERE m.org_id = $2 AND m.user_id = p.id)
+       OR EXISTS (SELECT 1 FROM agents ag WHERE ag.org_id = $2 AND ag.principal_id = p.id))
+`
+
+type IssueAssigneeRow struct {
+	ID          uuid.UUID
+	DisplayName string
+	Kind        string
+}
+
+// IssueAssignee finds whom an organization's issue may be assigned to, by their principal, with their display name and
+// kind: one of its members, or one of its agents.
+func (q *Queries) IssueAssignee(ctx context.Context, principalID uuid.UUID, orgID uuid.UUID) (IssueAssigneeRow, error) {
+	row := q.db.QueryRow(ctx, issueAssignee, principalID, orgID)
+	var i IssueAssigneeRow
+	err := row.Scan(&i.ID, &i.DisplayName, &i.Kind)
+	return i, err
+}
+
 const issueByNumber = `-- name: IssueByNumber :one
-SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name,
+SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
+       c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
-        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
+       (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -92,14 +116,17 @@ type IssueByNumberRow struct {
 	OrgSlug      string
 	IssueKey     string
 	AssigneeName *string
+	AssigneeKind *string
 	CreatorName  *string
 	RepoSlug     *string
 	RepoName     *string
 	Labels       []byte
+	Task         []byte
 }
 
 // IssueByNumber finds one of an organization's issues, with its organization's slug and issue key, the names of who it
-// is assigned to, who created it and the repository it is about, and its labels by name.
+// is assigned to, who created it and the repository it is about, and its labels by name, and its assignee's newest
+// task on it when its assignee is an agent.
 func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int32) (IssueByNumberRow, error) {
 	row := q.db.QueryRow(ctx, issueByNumber, orgID, number)
 	var i IssueByNumberRow
@@ -121,10 +148,12 @@ func (q *Queries) IssueByNumber(ctx context.Context, orgID uuid.UUID, number int
 		&i.OrgSlug,
 		&i.IssueKey,
 		&i.AssigneeName,
+		&i.AssigneeKind,
 		&i.CreatorName,
 		&i.RepoSlug,
 		&i.RepoName,
 		&i.Labels,
+		&i.Task,
 	)
 	return i, err
 }
@@ -174,10 +203,12 @@ func (q *Queries) IssueEvents(ctx context.Context, issueID *uuid.UUID) ([]IssueE
 }
 
 const listIssues = `-- name: ListIssues :many
-SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, c.display_name AS creator_name,
-       r.slug AS repo_slug, r.name AS repo_name,
+SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
+       c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,
        (SELECT coalesce(jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) ORDER BY lower(l.name), l.id), '[]')
-        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels
+        FROM issue_labels il JOIN labels l ON l.id = il.label_id WHERE il.issue_id = i.id)::jsonb AS labels,
+       (SELECT jsonb_build_object('number', t.number, 'state', t.state, 'repo', t.repo_id) FROM agent_tasks t
+        WHERE t.issue_id = i.id AND t.agent_id = i.assignee_id ORDER BY t.created_at DESC, t.id DESC LIMIT 1)::jsonb AS task
 FROM issues i
     JOIN organizations o ON o.id = i.org_id
     LEFT JOIN principals a ON a.id = i.assignee_id
@@ -213,10 +244,12 @@ type ListIssuesRow struct {
 	OrgSlug      string
 	IssueKey     string
 	AssigneeName *string
+	AssigneeKind *string
 	CreatorName  *string
 	RepoSlug     *string
 	RepoName     *string
 	Labels       []byte
+	Task         []byte
 }
 
 // ListIssues lists a page of an organization's issues, newest first, as IssueByNumber answers each: those in the
@@ -260,10 +293,12 @@ func (q *Queries) ListIssues(ctx context.Context, arg ListIssuesParams) ([]ListI
 			&i.OrgSlug,
 			&i.IssueKey,
 			&i.AssigneeName,
+			&i.AssigneeKind,
 			&i.CreatorName,
 			&i.RepoSlug,
 			&i.RepoName,
 			&i.Labels,
+			&i.Task,
 		); err != nil {
 			return nil, err
 		}
@@ -288,23 +323,6 @@ func (q *Queries) NextIssueNumber(ctx context.Context, orgID uuid.UUID) (int32, 
 	var last int32
 	err := row.Scan(&last)
 	return last, err
-}
-
-const organizationMember = `-- name: OrganizationMember :one
-SELECT p.id, p.display_name FROM memberships m JOIN principals p ON p.id = m.user_id WHERE m.org_id = $1 AND m.user_id = $2
-`
-
-type OrganizationMemberRow struct {
-	ID          uuid.UUID
-	DisplayName string
-}
-
-// OrganizationMember finds one of an organization's members, by their principal, with their display name.
-func (q *Queries) OrganizationMember(ctx context.Context, orgID uuid.UUID, userID uuid.UUID) (OrganizationMemberRow, error) {
-	row := q.db.QueryRow(ctx, organizationMember, orgID, userID)
-	var i OrganizationMemberRow
-	err := row.Scan(&i.ID, &i.DisplayName)
-	return i, err
 }
 
 const organizationRepository = `-- name: OrganizationRepository :one

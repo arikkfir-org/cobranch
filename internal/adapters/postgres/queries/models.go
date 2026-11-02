@@ -44,6 +44,7 @@ type AgentTask struct {
 	StartedAt    *time.Time
 	EndedAt      *time.Time
 	Version      int64
+	IssueID      *uuid.UUID
 }
 
 type Annotation struct {
