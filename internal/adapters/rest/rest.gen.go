@@ -45,15 +45,21 @@ func (e AnnotationStatus) Valid() bool {
 
 // Defines values for BranchCheckKind.
 const (
-	BranchCheckKindAnnotation    BranchCheckKind = "annotation"
-	BranchCheckKindLinearHistory BranchCheckKind = "linear_history"
-	BranchCheckKindUpToDate      BranchCheckKind = "up_to_date"
+	BranchCheckKindAnnotation       BranchCheckKind = "annotation"
+	BranchCheckKindApprovals        BranchCheckKind = "approvals"
+	BranchCheckKindChangesRequested BranchCheckKind = "changes_requested"
+	BranchCheckKindLinearHistory    BranchCheckKind = "linear_history"
+	BranchCheckKindUpToDate         BranchCheckKind = "up_to_date"
 )
 
 // Valid indicates whether the value is a known member of the BranchCheckKind enum.
 func (e BranchCheckKind) Valid() bool {
 	switch e {
 	case BranchCheckKindAnnotation:
+		return true
+	case BranchCheckKindApprovals:
+		return true
+	case BranchCheckKindChangesRequested:
 		return true
 	case BranchCheckKindLinearHistory:
 		return true
@@ -283,6 +289,27 @@ func (e RepositoryAccessKind) Valid() bool {
 	}
 }
 
+// Defines values for ReviewState.
+const (
+	ReviewStateApproved         ReviewState = "approved"
+	ReviewStateChangesRequested ReviewState = "changes_requested"
+	ReviewStateNeutral          ReviewState = "neutral"
+)
+
+// Valid indicates whether the value is a known member of the ReviewState enum.
+func (e ReviewState) Valid() bool {
+	switch e {
+	case ReviewStateApproved:
+		return true
+	case ReviewStateChangesRequested:
+		return true
+	case ReviewStateNeutral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TreeEntryKind.
 const (
 	TreeEntryKindBlob      TreeEntryKind = "blob"
@@ -366,7 +393,7 @@ type Annotation struct {
 	Link string `json:"link"`
 	Name string `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// StartedAt When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
@@ -483,21 +510,24 @@ type Branch struct {
 
 // BranchCheck One of a branch's merge requirements and how it stands.
 type BranchCheck struct {
-	// Count For linear_history, the merges among its commits to merge; for up_to_date, the commits of its base it lacks.
+	// Count For linear_history, the merges among its commits to merge; for approvals, the approvals that count; for up_to_date, the commits of its base it lacks.
 	Count *int `json:"count,omitempty"`
 
-	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; up_to_date, its base's tip in it.
+	// Kind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
 	Kind BranchCheckKind `json:"kind"`
 	Met  bool            `json:"met"`
 
-	// Name The required annotation's name; only for annotation.
+	// Name The required annotation's name, for annotation; the reviewer's display name, for changes_requested.
 	Name *string `json:"name,omitempty"`
+
+	// Required For approvals, how many the base requires.
+	Required *int `json:"required,omitempty"`
 
 	// Status Where an annotation stands, in any order its principal sets them.
 	Status *AnnotationStatus `json:"status,omitempty"`
 }
 
-// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; up_to_date, its base's tip in it.
+// BranchCheckKind annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested, a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
 type BranchCheckKind string
 
 // BranchMerge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
@@ -505,7 +535,7 @@ type BranchMerge struct {
 	// At When Cobranch recorded the push.
 	At time.Time `json:"at"`
 
-	// By Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// By Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 	By *Principal `json:"by,omitempty"`
 
 	// Head The head it brought into the base.
@@ -531,8 +561,11 @@ type Commit struct {
 	Parents []string `json:"parents"`
 
 	// Push The push that first brought a commit; getCommit alone answers it.
-	Push *Push  `json:"push,omitempty"`
-	Sha  string `json:"sha"`
+	Push *Push `json:"push,omitempty"`
+
+	// Reviews The reviews submitted of it, in the order they were; each reviewer's latest is the one that counts.
+	Reviews []Review `json:"reviews"`
+	Sha     string   `json:"sha"`
 
 	// Signature Its signature as written, not checked yet; empty for an unsigned commit.
 	Signature string `json:"signature"`
@@ -635,6 +668,9 @@ type MergeRequirements struct {
 
 	// LinearHistory Whether no merge commit may come in.
 	LinearHistory bool `json:"linearHistory"`
+
+	// Reviews The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+	Reviews *ReviewRequirements `json:"reviews,omitempty"`
 }
 
 // MergeResult A merge Cobranch recorded as a push of its base.
@@ -712,7 +748,7 @@ type Person struct {
 	Email string    `json:"email"`
 	Name  string    `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Zone The zone the commit wrote its time in, such as +0200.
@@ -757,7 +793,7 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
-// Principal Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
@@ -790,7 +826,7 @@ type Push struct {
 	At time.Time          `json:"at"`
 	Id openapi_types.UUID `json:"id"`
 
-	// Pusher Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+	// Pusher Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
 	Pusher *Principal `json:"pusher,omitempty"`
 
 	// Transport How the push came; api for a merge asked of Cobranch.
@@ -860,6 +896,42 @@ type RepositorySettings struct {
 	Name        *string `json:"name,omitempty"`
 	Slug        *string `json:"slug,omitempty"`
 }
+
+// Review A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
+type Review struct {
+	Body string             `json:"body"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Person Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.
+	Person bool `json:"person"`
+
+	// Reviewer Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	Reviewer *Principal `json:"reviewer,omitempty"`
+
+	// Sha The commit reviewed.
+	Sha string `json:"sha"`
+
+	// State A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+	State       ReviewState `json:"state"`
+	SubmittedAt time.Time   `json:"submittedAt"`
+}
+
+// ReviewInput The review a principal submits.
+type ReviewInput struct {
+	// Body What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
+	Body *string `json:"body,omitempty"`
+
+	// State A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+	State ReviewState `json:"state"`
+}
+
+// ReviewRequirements The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's.
+type ReviewRequirements struct {
+	Approvals int `json:"approvals"`
+}
+
+// ReviewState A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+type ReviewState string
 
 // Role A role granted at the organization, built in or its own.
 type Role struct {
@@ -1230,6 +1302,9 @@ type MergeBranchJSONRequestBody = MergeInput
 // SetAnnotationJSONRequestBody defines body for SetAnnotation for application/json ContentType.
 type SetAnnotationJSONRequestBody = AnnotationInput
 
+// SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
+type SubmitReviewJSONRequestBody = ReviewInput
+
 // CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
 type CreateRoleJSONRequestBody = RoleInput
 
@@ -1391,9 +1466,18 @@ type ServerInterface interface {
 	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA, name Name, params SetAnnotationParams)
+	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
+	ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
+	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
+	// GetReview One of the repository's reviews; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/reviews/{review})
+	GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -3150,6 +3234,94 @@ func (siw *ServerInterfaceWrapper) SetAnnotation(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// ListReviews operation middleware
+func (siw *ServerInterfaceWrapper) ListReviews(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListReviews(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SubmitReview operation middleware
+func (siw *ServerInterfaceWrapper) SubmitReview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "sha" -------------
+	var sha SHA
+
+	err = runtime.BindStyledParameterWithOptions("simple", "sha", r.PathValue("sha"), &sha, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sha", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SubmitReview(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRaw operation middleware
 func (siw *ServerInterfaceWrapper) GetRaw(w http.ResponseWriter, r *http.Request) {
 
@@ -3239,6 +3411,50 @@ func (siw *ServerInterfaceWrapper) GetRaw(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetRaw(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReview operation middleware
+func (siw *ServerInterfaceWrapper) GetReview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "review" -------------
+	var review openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "review", r.PathValue("review"), &review, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "review", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReview(w, r, org, repo, review)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3797,6 +4013,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations", wrapper.ListAnnotations)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.DeleteAnnotation)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name}", wrapper.SetAnnotation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/reviews", wrapper.ListReviews)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}/reviews", wrapper.SubmitReview)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/reviews/{review}", wrapper.GetReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
@@ -8132,6 +8351,203 @@ func (response SetAnnotationdefaultApplicationProblemPlusJSONResponse) VisitSetA
 	return err
 }
 
+type ListReviewsRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	SHA  SHA  `json:"sha"`
+}
+
+type ListReviewsResponseObject interface {
+	VisitListReviewsResponse(w http.ResponseWriter) error
+}
+
+type ListReviews200JSONResponse struct {
+	Reviews []Review `json:"reviews"`
+}
+
+func (response ListReviews200JSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReviews400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListReviews400ApplicationProblemPlusJSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReviews401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListReviews401ApplicationProblemPlusJSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReviews404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListReviews404ApplicationProblemPlusJSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListReviewsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListReviewsdefaultApplicationProblemPlusJSONResponse) VisitListReviewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReviewRequestObject struct {
+	Org  Org  `json:"org"`
+	Repo Repo `json:"repo"`
+	SHA  SHA  `json:"sha"`
+	Body *SubmitReviewJSONRequestBody
+}
+
+type SubmitReviewResponseObject interface {
+	VisitSubmitReviewResponse(w http.ResponseWriter) error
+}
+
+type SubmitReview201ResponseHeaders struct {
+	Location *string
+}
+
+type SubmitReview201JSONResponse struct {
+	Body    Review
+	Headers SubmitReview201ResponseHeaders
+}
+
+func (response SubmitReview201JSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Location != nil {
+		w.Header().Set("Location", fmt.Sprint(*response.Headers.Location))
+	}
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReview400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response SubmitReview400ApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReview401ApplicationProblemPlusJSONResponse Problem
+
+func (response SubmitReview401ApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReview403ApplicationProblemPlusJSONResponse Problem
+
+func (response SubmitReview403ApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReview404ApplicationProblemPlusJSONResponse Problem
+
+func (response SubmitReview404ApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type SubmitReviewdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response SubmitReviewdefaultApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRawRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -8261,6 +8677,91 @@ type GetRawdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response GetRawdefaultApplicationProblemPlusJSONResponse) VisitGetRawResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReviewRequestObject struct {
+	Org    Org                `json:"org"`
+	Repo   Repo               `json:"repo"`
+	Review openapi_types.UUID `json:"review"`
+}
+
+type GetReviewResponseObject interface {
+	VisitGetReviewResponse(w http.ResponseWriter) error
+}
+
+type GetReview200JSONResponse Review
+
+func (response GetReview200JSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReview400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetReview400ApplicationProblemPlusJSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReview401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetReview401ApplicationProblemPlusJSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReview404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetReview404ApplicationProblemPlusJSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetReviewdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetReviewdefaultApplicationProblemPlusJSONResponse) VisitGetReviewResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9292,9 +9793,18 @@ type StrictServerInterface interface {
 	// SetAnnotation Sets an annotation on one of the repository's commits for the viewer, or changes the one the viewer set there before; takes annotations.write. An annotation of that name that another principal set is refused, naming them, until it is deleted. A change names the ETag it was made from in If-Match, and a new annotation If-None-Match *; without either, the answer is 428.
 	// (PUT /orgs/{org}/repos/{repo}/commits/{sha}/annotations/{name})
 	SetAnnotation(ctx context.Context, request SetAnnotationRequestObject) (SetAnnotationResponseObject, error)
+	// ListReviews The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	// (GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
+	ListReviews(ctx context.Context, request ListReviewsRequestObject) (ListReviewsResponseObject, error)
+	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
+	SubmitReview(ctx context.Context, request SubmitReviewRequestObject) (SubmitReviewResponseObject, error)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(ctx context.Context, request GetRawRequestObject) (GetRawResponseObject, error)
+	// GetReview One of the repository's reviews; takes repo.read.
+	// (GET /orgs/{org}/repos/{repo}/reviews/{review})
+	GetReview(ctx context.Context, request GetReviewRequestObject) (GetReviewResponseObject, error)
 	// ListRepositoryRoles The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/roles)
 	ListRepositoryRoles(ctx context.Context, request ListRepositoryRolesRequestObject) (ListRepositoryRolesResponseObject, error)
@@ -10805,6 +11315,69 @@ func (sh *strictHandler) SetAnnotation(w http.ResponseWriter, r *http.Request, o
 	}
 }
 
+// ListReviews operation middleware
+func (sh *strictHandler) ListReviews(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+	var request ListReviewsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListReviews(ctx, request.(ListReviewsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListReviews")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListReviewsResponseObject); ok {
+		if err := validResponse.VisitListReviewsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// SubmitReview operation middleware
+func (sh *strictHandler) SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA) {
+	var request SubmitReviewRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.SHA = sha
+
+	var body SubmitReviewJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.SubmitReview(ctx, request.(SubmitReviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "SubmitReview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(SubmitReviewResponseObject); ok {
+		if err := validResponse.VisitSubmitReviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetRaw operation middleware
 func (sh *strictHandler) GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams) {
 	var request GetRawRequestObject
@@ -10826,6 +11399,34 @@ func (sh *strictHandler) GetRaw(w http.ResponseWriter, r *http.Request, org Org,
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetRawResponseObject); ok {
 		if err := validResponse.VisitGetRawResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetReview operation middleware
+func (sh *strictHandler) GetReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, review openapi_types.UUID) {
+	var request GetReviewRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Review = review
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetReview(ctx, request.(GetReviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetReview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetReviewResponseObject); ok {
+		if err := validResponse.VisitGetReviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

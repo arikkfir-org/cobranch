@@ -145,13 +145,24 @@ func (p Push) MovesDefault() bool {
 const SettingsFile = "cobranch.yaml"
 
 // Requirements are what a merge into a branch needs, as SettingsFile names them under branches: the annotations the
-// incoming head must carry, Successful, and whether history stays linear. A branch named there has requirements even
-// when they list nothing.
+// incoming head must carry, Successful, whether history stays linear, and the reviews of the incoming head it needs,
+// nil when it requires none. A branch named there has requirements even when they list nothing.
 type Requirements struct {
 	Branch        string
 	Annotations   []string
 	LinearHistory bool
+	Reviews       *ReviewRequirements
 }
+
+// ReviewRequirements are the reviews a merge into a branch needs of the incoming head: no reviewer's latest review of
+// it requesting changes, and at least Approvals people's latest reviews approving it, besides its author's and its
+// pusher's.
+type ReviewRequirements struct {
+	Approvals int
+}
+
+// MaxApprovals is the most approvals a branch's requirements name.
+const MaxApprovals = 10
 
 // Facts are what Git's objects say of a live branch against the default branch: how many commits it has that the
 // default branch lacks (Ahead), how many the default branch has that it lacks (Behind), and how many of those it has

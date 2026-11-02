@@ -3,7 +3,9 @@
 # trees and files, which the Git server reads
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations"); and the
+# reviews they submit of them (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/reviews.md,
+# "Reviews").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
@@ -14,6 +16,8 @@ extend type Repository {
   history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
+  "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
+  review(id: ID!): Review
   "The repository's tags, by name, each with the object it names; takes repo.read."
   tags: [Tag!]!
   "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
@@ -106,6 +110,39 @@ extend type Mutation {
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
   "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
+  "Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and answers it; takes reviews.submit. A review is never changed: its reviewer submits another, and their latest is the one that counts."
+  submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
+}
+
+"The review a principal submits."
+input ReviewInput {
+  state: ReviewState!
+  "What the reviewer writes, at most 65,536 characters, which only an approval may leave blank."
+  body: String! = ""
+}
+
+"A review's verdict on a commit."
+enum ReviewState {
+  "Approves it: a person's approval counts towards a branch's required approvals."
+  APPROVED
+  "Asks for changes, which holds back a branch whose base requires reviews until its reviewer submits another."
+  CHANGES_REQUESTED
+  "Comments without a verdict, and takes back its reviewer's earlier one."
+  NEUTRAL
+}
+
+"A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed."
+type Review {
+  id: ID!
+  "The commit reviewed."
+  sha: String!
+  state: ReviewState!
+  body: String!
+  "Who submitted it; null once they are gone, when it counts no more."
+  reviewer: CommitPrincipal
+  "Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't."
+  person: Boolean!
+  submittedAt: Time!
 }
 
 "How to merge a branch into its base."
@@ -149,7 +186,7 @@ type Branch {
   base: String
   "Where it stands as a request to merge into its base; null for main."
   status: BranchStatus
-  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history when required, and being up to date. Empty for main."
+  "How it meets its base's merge requirements, as its status last worked them out: each required annotation, linear history and reviews when required, and being up to date. Empty for main."
   checks: [BranchCheck!]!
   "How many commits it has that its base lacks; null for main, and until a push works it out."
   ahead: Int
@@ -191,6 +228,10 @@ enum BranchCheckKind {
   ANNOTATION
   "No merge among its commits to merge."
   LINEAR_HISTORY
+  "People's approvals of its head, besides its author's and its pusher's."
+  APPROVALS
+  "A reviewer whose latest review of its head requests changes; never met."
+  CHANGES_REQUESTED
   "Its base's tip in it."
   UP_TO_DATE
 }
@@ -198,12 +239,14 @@ enum BranchCheckKind {
 "One of a branch's merge requirements and how it stands."
 type BranchCheck {
   kind: BranchCheckKind!
-  "The required annotation's name; null unless kind is ANNOTATION."
+  "The required annotation's name, for ANNOTATION; the reviewer's display name, for CHANGES_REQUESTED; null otherwise."
   name: String
   "The required annotation's status on the head; null while it carries none, and unless kind is ANNOTATION."
   status: AnnotationStatus
-  "For LINEAR_HISTORY, the merges among its commits to merge; for UP_TO_DATE, the commits of its base it lacks; null for ANNOTATION."
+  "For LINEAR_HISTORY, the merges among its commits to merge; for APPROVALS, the approvals that count; for UP_TO_DATE, the commits of its base it lacks; null otherwise."
   count: Int
+  "For APPROVALS, how many the base requires; null otherwise."
+  required: Int
   met: Boolean!
 }
 
@@ -213,6 +256,14 @@ type MergeRequirements {
   annotations: [String!]!
   "Whether no merge commit may come in."
   linearHistory: Boolean!
+  "The reviews a merge needs of the incoming head; null when it requires none."
+  reviews: ReviewRequirements
+}
+
+"The reviews a merge needs of the incoming head: no reviewer's latest review requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its pusher's."
+type ReviewRequirements {
+  "0 to 10."
+  approvals: Int!
 }
 
 "A page of history, nearest first."
@@ -235,6 +286,8 @@ type Commit {
   signature: String!
   "The annotations principals set on it, by name."
   annotations: [Annotation!]!
+  "The reviews submitted of it, in the order they were; each reviewer's latest is the one that counts."
+  reviews: [Review!]!
   "The push that first brought it; Repository.commit alone answers it, and null elsewhere."
   push: Push
 }

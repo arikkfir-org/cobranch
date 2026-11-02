@@ -53,7 +53,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Delivery](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd) | The built-in GitOps controller: delivery roots in /cobranch.yaml, an environment per branch, apply, prune and health. | Proposed |
 | [Monitoring](monitoring.md) | Metrics for page-view times, code reads and the pack cache, exported over OpenTelemetry. | Proposed |
 | [Agents](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4) | Agents as principals, tasks, the agent pod and its harness, and branch chats. | Proposed |
-| [Reviews](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys) | Reviews on commits, required approvals, and the built-in AI reviewer. | Proposed |
+| [Reviews](reviews.md) | Reviews on commits, required approvals, and the built-in AI reviewer. | Proposed |
 | [Quotas](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
 | [Issues](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
@@ -156,7 +156,7 @@ Google's Gemini, xAI's Grok, OpenAI's GPT and DeepSeek. One organization can run
 refactoring agent on another and an agent for small tasks on a third
 ([models](architecture.md#settings-secrets-and-models)). Agents, their tasks, pods and branch chats are in
 [Agents](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4); reviews, required approvals and the built-in reviewer in
-[Reviews and AI review](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys).
+[Reviews and AI review](reviews.md).
 
 ### Delivery
 
@@ -246,13 +246,13 @@ slice after the ones it waits for. Where it stands:
   [design](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y)); operators' metrics for page views, code reads and caches
   ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)); agents and branch chats
   ([ENG-215](https://linear.app/arikkfir/issue/ENG-215), [design](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4));
-  reviews and the built-in AI reviewer ([ENG-216](https://linear.app/arikkfir/issue/ENG-216),
-  [design](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys)); issues linked to branches
-  ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n));
-  delivery through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
-  [design](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd)); deleting a branch from the Console and the APIs once it
-  has merged ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)); and
-  storage and push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
+  reviews and the built-in AI reviewer ([ENG-216](https://linear.app/arikkfir/issue/ENG-216), [design](reviews.md));
+  issues linked to branches ([ENG-217](https://linear.app/arikkfir/issue/ENG-217),
+  [design](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n)); delivery through the built-in GitOps controller
+  ([ENG-218](https://linear.app/arikkfir/issue/ENG-218), [design](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd));
+  deleting a branch from the Console and the APIs once it has merged
+  ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)); and storage and
+  push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
   [design](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6)), brought forward from phase 2 because an installation
   open to sign-up needs them. The designs are Proposed and each slice builds on them while they are reviewed; each
   builds first on what is already on `main` and on the others' agreed seams.

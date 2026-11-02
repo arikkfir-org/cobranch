@@ -3,7 +3,7 @@
 -- needs, when /cobranch.yaml names it.
 -- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 WHERE b.repo_id = $1 AND b.deleted_at IS NULL
@@ -11,7 +11,7 @@ ORDER BY b.name;
 
 -- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
 WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
