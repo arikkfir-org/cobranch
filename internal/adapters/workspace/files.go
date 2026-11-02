@@ -1,15 +1,18 @@
 package workspace
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Limits of the file tools.
@@ -17,6 +20,10 @@ const (
 	maxListed   = 1000
 	maxDepth    = 5
 	defaultRead = 2000
+	// maxLine is the most of a line read_file shows; the rest is cut.
+	maxLine = 2000
+	// maxEdited is the largest file edit_file reads whole.
+	maxEdited = 8 << 20
 	// sniffed is how much of a file's start is looked at to tell text from binary.
 	sniffed = 8 << 10
 )
@@ -78,7 +85,7 @@ func (w *Workspace) list(_ context.Context, a listArgs) (string, error) {
 }
 
 var readSpec = spec("read_file", "Reads a text file of the workspace, its lines numbered for reference: the numbers and the tab after them "+
-	"are not part of the file. 2000 lines unless given; read on from a line with offset.",
+	"are not part of the file. 2000 lines unless given, each cut at 2000 bytes; read on from a line with offset.",
 	`"path":{"type":"string","description":"The file, relative to the workspace"},`+
 		`"offset":{"type":"integer","description":"The first line to read, from 1"},`+
 		`"limit":{"type":"integer","description":"How many lines to read"}`, "path")
@@ -89,42 +96,91 @@ type readArgs struct {
 	Limit  int    `json:"limit"`
 }
 
-// read reads lines of a text file, numbered.
+// read reads lines of a text file, numbered. It reads the file as it goes, keeping only the lines it shows, each cut at
+// maxLine bytes, so a file of any size costs no more than that; the rest of it is only counted.
 func (w *Workspace) read(_ context.Context, a readArgs) (string, error) {
-	data, file, err := w.text(a.Path)
+	file, err := w.rel(a.Path)
 	if err != nil {
 		return "", err
 	}
-	if len(data) == 0 {
-		return "(empty file)", nil
+	f, err := w.root.Open(file)
+	if err != nil {
+		return "", fmt.Errorf("reading %s: %w", file, err)
 	}
-	lines := strings.SplitAfter(string(data), "\n")
-	if lines[len(lines)-1] == "" {
-		lines = lines[:len(lines)-1]
+	defer func() { _ = f.Close() }() // only read
+	r := bufio.NewReaderSize(f, sniffed)
+	head, err := r.Peek(sniffed)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	if binary(head) {
+		return "", fmt.Errorf("%s is binary, not text", file)
 	}
 	first, limit := max(a.Offset, 1), a.Limit
 	if limit <= 0 {
 		limit = defaultRead
 	}
-	if first > len(lines) {
-		return "", fmt.Errorf("%s has %d lines", file, len(lines))
-	}
-	last := min(first-1+limit, len(lines))
 	var b strings.Builder
-	for i := first - 1; i < last; i++ {
-		b.WriteString(fmt.Sprintf("%6d\t%s", i+1, strings.TrimSuffix(lines[i], "\n")) + "\n")
+	n := 0
+	for ; ; n++ {
+		keep := 0
+		if n+1 >= first && n+1 < first+limit {
+			keep = maxLine + utf8.UTFMax
+		}
+		line, ok, err := nextLine(r, keep)
+		if err != nil {
+			return "", fmt.Errorf("reading %s: %w", file, err)
+		}
+		if !ok {
+			break
+		}
+		if keep > 0 {
+			b.WriteString(fmt.Sprintf("%6d\t%s", n+1, cut(line, maxLine)) + "\n")
+		}
 	}
-	if last < len(lines) {
-		b.WriteString("[" + strconv.Itoa(len(lines)-last) + " more lines: read on from line " + strconv.Itoa(last+1) + "]\n")
+	switch last := first - 1 + limit; {
+	case n == 0:
+		return "(empty file)", nil
+	case first > n:
+		return "", fmt.Errorf("%s has %d lines", file, n)
+	case last < n:
+		b.WriteString("[" + strconv.Itoa(n-last) + " more lines: read on from line " + strconv.Itoa(last+1) + "]\n")
 	}
 	return b.String(), nil
 }
 
-// text reads a text file of the workspace, and answers its path relative to it.
+// nextLine reads r's next line, and answers its first keep bytes without its newline; ok is false past r's last line.
+func nextLine(r *bufio.Reader, keep int) (string, bool, error) {
+	var kept []byte
+	read := false
+	for {
+		chunk, err := r.ReadSlice('\n')
+		read = read || len(chunk) > 0
+		kept = append(kept, chunk[:min(len(chunk), keep-len(kept))]...)
+		switch {
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			return strings.TrimSuffix(string(kept), "\n"), read, nil
+		case err != nil:
+			return "", false, fmt.Errorf("reading a line: %w", err)
+		}
+		return strings.TrimSuffix(string(kept), "\n"), true, nil
+	}
+}
+
+// text reads a text file of the workspace whole, and answers its path relative to it; a file over maxEdited it refuses.
 func (w *Workspace) text(p string) ([]byte, string, error) {
 	file, err := w.rel(p)
 	if err != nil {
 		return nil, "", err
+	}
+	info, err := w.root.Stat(file)
+	if err != nil {
+		return nil, "", fmt.Errorf("reading %s: %w", file, err)
+	}
+	if info.Size() > maxEdited {
+		return nil, "", fmt.Errorf("%s holds %d bytes, over the %d MiB edit_file takes: change it with shell", file, info.Size(), maxEdited>>20)
 	}
 	data, err := w.root.ReadFile(file)
 	if err != nil {
