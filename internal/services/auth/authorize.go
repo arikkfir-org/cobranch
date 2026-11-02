@@ -49,15 +49,40 @@ func NewAuthorizer(grants Grants) *Authorizer {
 }
 
 // Holds lists the permissions principalID holds at the scope, sorted: under a personal token of theirs, only those the
-// token lists too.
+// token lists too; under a run's token of theirs, also what the run may do there.
 func (a *Authorizer) Holds(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID) ([]string, error) {
 	permissions, err := a.grants.Permissions(ctx, principalID, scope, scopeID)
 	if err != nil {
 		return nil, fmt.Errorf("reading %s's permissions: %w", principalID, err)
 	}
-	permissions = narrowed(ctx, principalID, permissions)
+	permissions = widened(ctx, principalID, scope, scopeID, narrowed(ctx, principalID, permissions))
 	slices.Sort(permissions)
-	return permissions, nil
+	return slices.Compact(permissions), nil
+}
+
+// runToken is the run's token the request comes with, when it acts as principalID.
+func runToken(ctx context.Context, principalID uuid.UUID) (Credential, bool) {
+	v, ok := Viewer(ctx)
+	if !ok || v.Credential.Kind != CredentialRunToken || v.User.ID != principalID {
+		return Credential{}, false
+	}
+	return v.Credential, true
+}
+
+// widened is held and what a run's token of principalID's lets it do at the scope besides: read the run's
+// organization, and do what its job declared on the run's repository. A job holds no role but Secret reader; the rest
+// it may do only while a run of it runs, there.
+func widened(ctx context.Context, principalID uuid.UUID, scope Scope, scopeID uuid.UUID, held []string) []string {
+	run, ok := runToken(ctx, principalID)
+	switch {
+	case !ok:
+		return held
+	case scope == ScopeOrganization && scopeID == run.OrgID:
+		return append(slices.Clone(held), "org.read")
+	case scope == ScopeRepository && scopeID == run.RepoID:
+		return append(slices.Clone(held), run.Permissions...)
+	}
+	return held
 }
 
 // narrowed is what of held principalID may use under the request's credential: all of it, unless the request comes
@@ -84,7 +109,7 @@ func (a *Authorizer) Can(ctx context.Context, principalID uuid.UUID, permission 
 
 // Repositories lists the IDs of the organization's repositories where principalID holds permission: every one of
 // them when one of its roles at the organization holds it, and otherwise those its grants on them give it; none under
-// a personal token of theirs that doesn't list it.
+// a personal token of theirs that doesn't list it, and its run's repository under a run's token that may.
 func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.UUID, permission string) ([]uuid.UUID, error) {
 	if len(narrowed(ctx, principalID, []string{permission})) == 0 {
 		return nil, nil
@@ -92,6 +117,10 @@ func (a *Authorizer) Repositories(ctx context.Context, principalID, orgID uuid.U
 	ids, err := a.grants.Repositories(ctx, principalID, orgID, permission)
 	if err != nil {
 		return nil, fmt.Errorf("listing the repositories where %s holds %s: %w", principalID, permission, err)
+	}
+	if run, ok := runToken(ctx, principalID); ok && run.OrgID == orgID && slices.Contains(run.Permissions, permission) &&
+		!slices.Contains(ids, run.RepoID) {
+		ids = append(ids, run.RepoID)
 	}
 	return ids, nil
 }

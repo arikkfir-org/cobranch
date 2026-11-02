@@ -70,3 +70,10 @@ every render makes a new one.
 {{- end }}
 {{- end }}
 {{- end }}
+{{- if .Values.jobs.pods }}
+
+The controller runs jobs' pods and scripts in a namespace per organization, named {{ include "cobranch.jobsPrefix" . }}<organization ID>.
+Their NetworkPolicies isolate runs only where your network plugin enforces NetworkPolicies: on a cluster whose plugin
+doesn't, a run reaches every Service in the cluster. Place job pods apart from your own workloads with
+jobs.nodeSelector and jobs.tolerations, and bound each organization with jobs.quota.
+{{- end }}

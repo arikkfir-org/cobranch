@@ -1,0 +1,220 @@
+package jobcluster
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"maps"
+	"net/netip"
+	"time"
+
+	"github.com/google/uuid"
+	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	corev1ac "k8s.io/client-go/applyconfigurations/core/v1"
+	metav1ac "k8s.io/client-go/applyconfigurations/meta/v1"
+	networkingv1ac "k8s.io/client-go/applyconfigurations/networking/v1"
+	rbacv1ac "k8s.io/client-go/applyconfigurations/rbac/v1"
+)
+
+// The objects the controller keeps in every job namespace, by name.
+const (
+	policyDenyIngress = "cobranch-deny-ingress"
+	policyEgress      = "cobranch-egress"
+	limitRange        = "cobranch-defaults"
+	resourceQuota     = "cobranch-quota"
+)
+
+// serverComponents are the installation's servers a run may call: the REST and GraphQL servers with its token, and
+// the Git server for its checkout.
+var serverComponents = []string{"rest-server", "graphql-server", "git-server"}
+
+// serverPort is the port the servers listen on.
+const serverPort = 8080
+
+// How long Prepare waits for its RoleBinding to take effect, and how often it tries meanwhile.
+const (
+	bindWait  = 10 * time.Second
+	bindRetry = 250 * time.Millisecond
+)
+
+// Prepare makes the organization's job namespace ready for runs, creating or updating it and what it holds, unless it
+// did so lately (runner.Cluster).
+func (c *Cluster) Prepare(ctx context.Context, orgID uuid.UUID) (err error) {
+	ctx, span := tracer.Start(ctx, "jobcluster.Cluster.Prepare", orgAttr(orgID))
+	defer span.End()
+	defer func() { record(span, err) }()
+	if c.fresh(orgID) {
+		return nil
+	}
+	ns, apply := c.namespace(orgID), metav1.ApplyOptions{FieldManager: fieldManager, Force: true}
+	core, rbac, networking := c.client.CoreV1(), c.client.RbacV1(), c.client.NetworkingV1()
+	if _, err := core.Namespaces().Apply(ctx, c.namespaceOf(orgID), apply); err != nil {
+		return fmt.Errorf("applying namespace %s: %w", ns, err)
+	}
+	if _, err := rbac.RoleBindings(ns).Apply(ctx, c.binding(ns), apply); err != nil {
+		return fmt.Errorf("binding the controller in namespace %s: %w", ns, err)
+	}
+	egress, err := c.egress(ns)
+	if err != nil {
+		return err
+	}
+	// The binding takes a moment to reach the API server's authorizer: until it does, the first write is forbidden.
+	err = c.untilBound(ctx, func() error {
+		_, err := networking.NetworkPolicies(ns).Apply(ctx, denyIngress(ns), apply)
+		return err //nolint:wrapcheck // wrapped below, once retries are over
+	})
+	if err != nil {
+		return fmt.Errorf("applying NetworkPolicy %s in namespace %s: %w", policyDenyIngress, ns, err)
+	}
+	if _, err := networking.NetworkPolicies(ns).Apply(ctx, egress, apply); err != nil {
+		return fmt.Errorf("applying NetworkPolicy %s in namespace %s: %w", policyEgress, ns, err)
+	}
+	if _, err := core.LimitRanges(ns).Apply(ctx, c.limits(ns), apply); err != nil {
+		return fmt.Errorf("applying the defaults in namespace %s: %w", ns, err)
+	}
+	if err := c.quota(ctx, ns, apply); err != nil {
+		return err
+	}
+	c.remember(orgID)
+	return nil
+}
+
+// namespaceOf is the organization's job namespace: labelled as the installation's and the organization's, enforcing
+// the installation's Pod Security level, with the operator's labels.
+func (c *Cluster) namespaceOf(orgID uuid.UUID) *corev1ac.NamespaceApplyConfiguration {
+	labels := maps.Clone(c.cfg.Labels)
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	maps.Copy(labels, map[string]string{
+		labelManagedBy: "cobranch", labelInstallation: c.cfg.Installation, labelOrganization: orgID.String(),
+		"pod-security.kubernetes.io/enforce": c.cfg.PodSecurity, "pod-security.kubernetes.io/enforce-version": "latest",
+	})
+	return corev1ac.Namespace(c.namespace(orgID)).WithLabels(labels)
+}
+
+// binding grants the controller the runner role in namespace ns.
+func (c *Cluster) binding(ns string) *rbacv1ac.RoleBindingApplyConfiguration {
+	return rbacv1ac.RoleBinding(c.cfg.RunnerRole, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithRoleRef(rbacv1ac.RoleRef().WithAPIGroup("rbac.authorization.k8s.io").WithKind("ClusterRole").WithName(c.cfg.RunnerRole)).
+		WithSubjects(rbacv1ac.Subject().WithKind("ServiceAccount").WithNamespace(c.cfg.Home).WithName(c.cfg.Controller))
+}
+
+// denyIngress admits nothing to the namespace's pods.
+func denyIngress(ns string) *networkingv1ac.NetworkPolicyApplyConfiguration {
+	return networkingv1ac.NetworkPolicy(policyDenyIngress, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithSpec(networkingv1ac.NetworkPolicySpec().WithPodSelector(metav1ac.LabelSelector()).WithPolicyTypes("Ingress"))
+}
+
+// egress lets the namespace's pods reach DNS, every address outside EgressExcept, and the installation's servers.
+func (c *Cluster) egress(ns string) (*networkingv1ac.NetworkPolicyApplyConfiguration, error) {
+	blocks, err := ipBlocks(c.cfg.EgressExcept)
+	if err != nil {
+		return nil, err
+	}
+	dns := networkingv1ac.NetworkPolicyEgressRule().WithPorts(
+		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolUDP).WithPort(intstr.FromInt32(53)),
+		networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolTCP).WithPort(intstr.FromInt32(53)))
+	for _, peer := range c.cfg.DNS {
+		applied, err := peerOf(peer)
+		if err != nil {
+			return nil, err
+		}
+		dns = dns.WithTo(applied)
+	}
+	internet := networkingv1ac.NetworkPolicyEgressRule().WithTo(blocks...)
+	servers := networkingv1ac.NetworkPolicyEgressRule().
+		WithTo(networkingv1ac.NetworkPolicyPeer().
+			WithNamespaceSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"kubernetes.io/metadata.name": c.cfg.Home})).
+			WithPodSelector(metav1ac.LabelSelector().WithMatchLabels(map[string]string{"app.kubernetes.io/instance": c.cfg.Release}).
+				WithMatchExpressions(metav1ac.LabelSelectorRequirement().WithKey("app.kubernetes.io/component").
+					WithOperator(metav1.LabelSelectorOpIn).WithValues(serverComponents...)))).
+		WithPorts(networkingv1ac.NetworkPolicyPort().WithProtocol(corev1.ProtocolTCP).WithPort(intstr.FromInt32(serverPort)))
+	return networkingv1ac.NetworkPolicy(policyEgress, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithSpec(networkingv1ac.NetworkPolicySpec().WithPodSelector(metav1ac.LabelSelector()).WithPolicyTypes("Egress").
+			WithEgress(dns, internet, servers)), nil
+}
+
+// ipBlocks are every IPv4 and IPv6 address but except's ranges, each family's block excepting its own.
+func ipBlocks(except []string) ([]*networkingv1ac.NetworkPolicyPeerApplyConfiguration, error) {
+	var v4, v6 []string
+	for _, cidr := range except {
+		prefix, err := netip.ParsePrefix(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("jobs' egress excepts %q, which is no address range: %w", cidr, err)
+		}
+		if prefix.Addr().Is4() {
+			v4 = append(v4, prefix.Masked().String())
+		} else {
+			v6 = append(v6, prefix.Masked().String())
+		}
+	}
+	return []*networkingv1ac.NetworkPolicyPeerApplyConfiguration{
+		networkingv1ac.NetworkPolicyPeer().WithIPBlock(networkingv1ac.IPBlock().WithCIDR("0.0.0.0/0").WithExcept(v4...)),
+		networkingv1ac.NetworkPolicyPeer().WithIPBlock(networkingv1ac.IPBlock().WithCIDR("::/0").WithExcept(v6...)),
+	}, nil
+}
+
+// limits gives the namespace's containers the installation's defaults.
+func (c *Cluster) limits(ns string) *corev1ac.LimitRangeApplyConfiguration {
+	item := corev1ac.LimitRangeItem().WithType(corev1.LimitTypeContainer)
+	if len(c.cfg.Resources.Limits) > 0 {
+		item = item.WithDefault(c.cfg.Resources.Limits)
+	}
+	if len(c.cfg.Resources.Requests) > 0 {
+		item = item.WithDefaultRequest(c.cfg.Resources.Requests)
+	}
+	return corev1ac.LimitRange(limitRange, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithSpec(corev1ac.LimitRangeSpec().WithLimits(item))
+}
+
+// quota applies the installation's quota to namespace ns, or deletes the one there when it has none.
+func (c *Cluster) quota(ctx context.Context, ns string, apply metav1.ApplyOptions) error {
+	quotas := c.client.CoreV1().ResourceQuotas(ns)
+	if len(c.cfg.Quota) == 0 {
+		if err := quotas.Delete(ctx, resourceQuota, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("deleting the quota in namespace %s: %w", ns, err)
+		}
+		return nil
+	}
+	q := corev1ac.ResourceQuota(resourceQuota, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithSpec(corev1ac.ResourceQuotaSpec().WithHard(c.cfg.Quota))
+	if _, err := quotas.Apply(ctx, q, apply); err != nil {
+		return fmt.Errorf("applying the quota in namespace %s: %w", ns, err)
+	}
+	return nil
+}
+
+// peerOf is a NetworkPolicy peer as an apply configuration, which has its JSON.
+func peerOf(peer networkingv1.NetworkPolicyPeer) (*networkingv1ac.NetworkPolicyPeerApplyConfiguration, error) {
+	encoded, err := json.Marshal(peer)
+	if err != nil {
+		return nil, fmt.Errorf("encoding a DNS peer: %w", err)
+	}
+	var applied networkingv1ac.NetworkPolicyPeerApplyConfiguration
+	if err := json.Unmarshal(encoded, &applied); err != nil {
+		return nil, fmt.Errorf("decoding a DNS peer: %w", err)
+	}
+	return &applied, nil
+}
+
+// untilBound calls write until the controller's new binding lets it, as RBAC's caches take the binding in: again while
+// it is forbidden, every bindRetry, for bindWait at most.
+func (c *Cluster) untilBound(ctx context.Context, write func() error) error {
+	deadline := c.now().Add(bindWait)
+	for {
+		err := write()
+		if !apierrors.IsForbidden(err) || !c.now().Before(deadline) {
+			return err
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("waiting for the controller's binding: %w", ctx.Err())
+		case <-time.After(bindRetry):
+		}
+	}
+}

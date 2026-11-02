@@ -302,8 +302,11 @@ pushWorker:
 
 # The controller (cobranch controller), which runs the jobs repositories declare in /cobranch.yaml, each
 # organization's in a namespace of its own that it creates
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "The chart"). The workload comes
-# with a later version; these values and jobs below are its placement, which an installation sets ahead of it.
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "The chart"). It is the only
+# workload that calls the Kubernetes API, through a ServiceAccount of its own: cluster-wide, it creates and deletes its
+# job namespaces and binds itself there, and in each it runs pods; jobs.pods false renders none of it. It keeps ended
+# runs' logs in the object store, as the Git server keeps packs: a bucket the servers reach through serviceAccount's
+# identity needs the controller's ServiceAccount, <release>-controller, granted too.
 controller:
   replicas: 2
   resources:
@@ -319,9 +322,57 @@ controller:
 
 # The organizations' job namespaces and the pods jobs run in.
 jobs:
+  # Whether runs execute pods at all. False renders no controller, no cluster-wide RBAC and no admission policy, for a
+  # cluster that can't grant them: runs of pods and scripts fail with "this installation runs no pods".
+  pods: true
+  # Starts each job namespace's name, which the organization's ID ends. Empty: the release's namespace and -jobs-,
+  # such as cobranch-jobs-0193a8c0-....
+  namespacePrefix: ""
   # Labels for every job namespace, beside Cobranch's own and its Pod Security level's: your cluster's policies may
   # look for some.
   namespaceLabels: {}
+  # The Pod Security Standard the job namespaces enforce: restricted, baseline or privileged.
+  podSecurity: restricted
+  egress:
+    # The address ranges jobs may not reach: private, loopback, link-local (cloud metadata servers among them) and
+    # shared ones. They reach the rest of the internet, DNS, and this installation's REST, GraphQL and Git servers.
+    except:
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 100.64.0.0/10
+      - 127.0.0.0/8
+      - 169.254.0.0/16
+      - fc00::/7
+      - fe80::/10
+      - ::1/128
+    # Where jobs may ask DNS, as NetworkPolicy peers, on port 53: empty, any address on that port, which reaches the
+    # cluster's DNS however it is set up. Such as [{namespaceSelector: {}, podSelector: {matchLabels: {k8s-app: kube-dns}}}].
+    dns: []
+  # A container's requests and memory limit when its job names none.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 2Gi
+  # The most one organization's runs take at once, as a ResourceQuota's hard limits, such as {pods: "10",
+  # requests.cpu: "8"}; a run the quota refuses waits for room. Empty: none.
+  quota: {}
+  script:
+    # The image a script runs in, with Bash, when its job names none. Empty: the cobranch image.
+    image: ""
+  timeout:
+    # A run's timeout when its job names none, and the most any job's may be, 24h at most.
+    default: 1h
+    max: 24h
+  logs:
+    # The most of each container's log the controller keeps as a run ends.
+    maxBytes: 10Mi
+  # Where runs reach this installation's REST API and Git server. Empty: their Services, in the cluster, over HTTP.
+  urls:
+    rest: ""
+    git: ""
   # Where job pods run: a pool for code anyone with push access wrote, apart from your own workloads.
   nodeSelector: {}
   tolerations: []

@@ -1,0 +1,160 @@
+{{- if .Values.jobs.pods }}
+{{- include "cobranch.checkDatabase" . }}
+{{- $cluster := include "cobranch.cluster" . }}
+{{- $controller := include "cobranch.controller" . }}
+{{- $component := dict "root" . "component" "controller" }}
+{{- $jobs := .Values.jobs }}
+{{- $image := include "cobranch.image" (dict "root" . "image" .Values.images.cobranch) }}
+{{- $rest := $jobs.urls.rest | default (ternary (printf "http://%s-rest-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) "" (not (empty .Values.urls.rest))) }}
+{{- $git := $jobs.urls.git | default (ternary (printf "http://%s-git-server.%s.svc" (include "cobranch.fullname" .) .Release.Namespace) "" (not (empty .Values.urls.git))) }}
+{{- $env := dict
+  "SCRIPT_IMAGE" ($jobs.script.image | default $image)
+  "CHECKOUT_IMAGE" $image
+  "REST_URL" $rest
+  "GIT_URL" $git
+  "TIMEOUT" $jobs.timeout.default
+  "MAX_TIMEOUT" $jobs.timeout.max
+  "LOGS_MAX_BYTES" (toString $jobs.logs.maxBytes)
+  "NAMESPACE_PREFIX" (include "cobranch.jobsPrefix" .)
+  "INSTALLATION" $cluster
+  "POD_SECURITY" $jobs.podSecurity
+  "NAMESPACE_LABELS" (toJson $jobs.namespaceLabels)
+  "HOME" .Release.Namespace
+  "SERVICE_ACCOUNT" $controller
+  "RELEASE" .Release.Name
+  "RUNNER_ROLE" (printf "%s-jobs-runner" $cluster)
+  "EGRESS_EXCEPT" (join "," $jobs.egress.except)
+  "EGRESS_DNS" (toJson $jobs.egress.dns)
+  "RESOURCES" (toJson $jobs.resources)
+  "QUOTA" (toJson $jobs.quota)
+  "NODE_SELECTOR" (toJson $jobs.nodeSelector)
+  "TOLERATIONS" (toJson $jobs.tolerations)
+  "AFFINITY" (toJson $jobs.affinity) }}
+{{- $vars := list }}
+{{- range $name, $value := $env }}
+{{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
+{{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" $controller "env" (join "\n" $vars)) }}
+---
+# The controller's own ServiceAccount, the only one whose token a pod of the release mounts.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $controller }}
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+# Cluster-wide, the controller makes and deletes its job namespaces and binds itself there to the runner role alone.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $cluster }}-controller
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [rolebindings]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [rbac.authorization.k8s.io]
+    resources: [clusterroles]
+    verbs: [get, bind]
+    resourceNames: [{{ $cluster }}-jobs-runner]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $cluster }}-controller
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $cluster }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ $controller }}
+    namespace: {{ .Release.Namespace }}
+---
+# What the controller does in a job namespace, where it binds itself to this role: runs' pods, their logs and Secrets,
+# and the namespace's policies, defaults and quota. Never bind, escalate or exec.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $cluster }}-jobs-runner
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: [pods, secrets, limitranges, resourcequotas]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get]
+  - apiGroups: [networking.k8s.io]
+    resources: [networkpolicies]
+    verbs: [get, list, watch, create, update, patch, delete]
+{{- if $jobs.admissionPolicy }}
+---
+# Holds the controller to its own job namespaces, labelled as this release's, and its RoleBindings there to the
+# runner role and its own ServiceAccount, whatever RBAC grants it.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: {{ $cluster }}-jobs
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [namespaces]
+      - apiGroups: [rbac.authorization.k8s.io]
+        apiVersions: [v1]
+        operations: [CREATE, UPDATE, DELETE]
+        resources: [rolebindings]
+  matchConditions:
+    - name: controller
+      expression: {{ printf "request.userInfo.username == 'system:serviceaccount:%s:%s'" .Release.Namespace $controller | quote }}
+  variables:
+    - name: prefix
+      expression: {{ include "cobranch.jobsPrefix" . | squote | quote }}
+    - name: name
+      expression: "request.operation == 'DELETE' ? oldObject.metadata.name : object.metadata.name"
+  validations:
+    - expression: "request.resource.resource != 'namespaces' || variables.name.startsWith(variables.prefix)"
+      messageExpression: "'The controller creates, changes and deletes only its own job namespaces, ' + variables.prefix + '….'"
+    - expression: >-
+        request.resource.resource != 'namespaces' || request.operation == 'DELETE'
+        || (has(object.metadata.labels) && 'cobranch.dev/installation' in object.metadata.labels
+          && object.metadata.labels['cobranch.dev/installation'] == {{ $cluster | squote }})
+      message: The controller's job namespaces carry its installation's label.
+    - expression: "request.resource.resource != 'rolebindings' || request.namespace.startsWith(variables.prefix)"
+      messageExpression: "'The controller binds roles only in its own job namespaces, ' + variables.prefix + '….'"
+    - expression: >-
+        request.resource.resource != 'rolebindings' || request.operation == 'DELETE'
+        || (object.roleRef.kind == 'ClusterRole' && object.roleRef.name == {{ printf "%s-jobs-runner" $cluster | squote }}
+          && has(object.subjects) && size(object.subjects) > 0 && object.subjects.all(s, s.kind == 'ServiceAccount'
+            && has(s.namespace) && s.namespace == {{ .Release.Namespace | squote }} && s.name == {{ $controller | squote }}))
+      message: The controller binds, in its job namespaces, only the runner role, and only to itself.
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: {{ $cluster }}-jobs
+  labels:
+    {{- include "cobranch.labels" $component | nindent 4 }}
+spec:
+  policyName: {{ $cluster }}-jobs
+  validationActions: [Deny]
+{{- end }}
+{{- end }}

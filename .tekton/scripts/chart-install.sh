@@ -46,7 +46,7 @@ upgrade)
     --set-string "console.podAnnotations.ci/rolled=$now" --set-string "migrate.podAnnotations.ci/rolled=$now" \
     --set-string "authServer.podAnnotations.ci/rolled=$now" --set-string "adminServer.podAnnotations.ci/rolled=$now" \
     --set-string "backOffice.podAnnotations.ci/rolled=$now" --set-string "gitServer.podAnnotations.ci/rolled=$now" \
-    --set-string "pushWorker.podAnnotations.ci/rolled=$now"
+    --set-string "pushWorker.podAnnotations.ci/rolled=$now" --set-string "controller.podAnnotations.ci/rolled=$now"
   [ "$(password)" = "$before" ] || { echo "The upgrade changed the database's password" >&2; exit 1; }
   [ "$(hostKey)" = "$key" ] || { echo "The upgrade changed the Git server's SSH host key" >&2; exit 1; }
   jobs=$(kubectl -n "$ns" get jobs -l app.kubernetes.io/component=migrate -o name)
