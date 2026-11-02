@@ -94,8 +94,10 @@ func branchStatusCases() []branchStatusCase {
 }
 
 func TestBranchStatus(t *testing.T) {
+	t.Parallel()
 	for _, tt := range branchStatusCases() {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := newStack(t)
 			dir := clone(t, s.websiteURL(s.base, olivia))
 			mustGit(t, dir, "checkout", "-q", "-b", "main")
@@ -124,6 +126,7 @@ func TestBranchStatus(t *testing.T) {
 }
 
 func TestSettingsFile(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name     string
 		settings string
@@ -137,6 +140,7 @@ func TestSettingsFile(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := newStack(t)
 			dir := clone(t, s.websiteURL(s.base, olivia))
 			commit(t, dir, "README.md", "# Website\n")
@@ -153,6 +157,7 @@ func TestSettingsFile(t *testing.T) {
 }
 
 func TestRequirementsFollowMain(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	commit(t, dir, "README.md", "# Website\n")
@@ -204,6 +209,7 @@ type raceCase struct {
 }
 
 func TestRacingPushes(t *testing.T) {
+	t.Parallel()
 	const during = " moved while Cobranch took your push; nothing changed, so push again"
 	tests := []raceCase{
 		{name: "a branch another push moved keeps the facts that push counted", outer: "feature-a", other: "feature-b",
@@ -213,6 +219,7 @@ func TestRacingPushes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, dir := raceRepo(t, tt)
 			out, err := gitCmd(t, dir, "push", "origin", tt.outer)
 			if tt.refusal != "" {

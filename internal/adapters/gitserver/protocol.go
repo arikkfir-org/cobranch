@@ -45,7 +45,7 @@ func (s *Server) infoRefs(w http.ResponseWriter, r *http.Request, req request) {
 		return
 	}
 	env := s.protocolEnv(r, service)
-	dir, remove, ok := s.serveWorkspace(w, r, req)
+	dir, remove, ok := s.serveWorkspace(w, r, req, opInfoRefs)
 	if !ok {
 		return
 	}
@@ -66,7 +66,7 @@ func (s *Server) uploadPack(w http.ResponseWriter, r *http.Request, req request)
 		return
 	}
 	env := s.protocolEnv(r, uploadPack)
-	dir, remove, ok := s.serveWorkspace(w, r, req)
+	dir, remove, ok := s.serveWorkspace(w, r, req, opUploadPack)
 	if !ok {
 		return
 	}
@@ -93,7 +93,7 @@ func (s *Server) receivePack(w http.ResponseWriter, r *http.Request, req request
 		http.Error(w, "the push could not start", http.StatusInternalServerError)
 		return
 	}
-	dir, remove, ok := s.serveWorkspace(w, r, req)
+	dir, remove, ok := s.serveWorkspace(w, r, req, opRecvPack)
 	if !ok {
 		return
 	}
@@ -115,9 +115,9 @@ func mayPush(w http.ResponseWriter, req request) bool {
 	return false
 }
 
-// serveWorkspace builds the request's throwaway repository from a snapshot read now, or answers 500.
-func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req request) (string, func(), bool) {
-	dir, remove, err := s.snapshotWorkspace(r.Context(), req.repo.ID)
+// serveWorkspace builds the request's throwaway repository for op from a snapshot read now, or answers 500.
+func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req request, op string) (string, func(), bool) {
+	dir, remove, err := s.snapshotWorkspace(r.Context(), req.repo.ID, op)
 	if err != nil {
 		slog.ErrorContext(r.Context(), "Building a repository failed", "repository", req.repo.ID, "error", err)
 		http.Error(w, "the repository could not be read", http.StatusInternalServerError)
@@ -126,9 +126,10 @@ func (s *Server) serveWorkspace(w http.ResponseWriter, r *http.Request, req requ
 	return dir, remove, true
 }
 
-// snapshotWorkspace builds a throwaway repository of the repository from a snapshot read now. The cache then drops
-// the repository's packs the snapshot no longer lists.
-func (s *Server) snapshotWorkspace(ctx context.Context, repoID uuid.UUID) (string, func(), error) {
+// snapshotWorkspace builds a throwaway repository of the repository from a snapshot read now, for op, which its
+// metrics name. The cache then drops the repository's packs the snapshot no longer lists. Removing it records the disk
+// it took.
+func (s *Server) snapshotWorkspace(ctx context.Context, repoID uuid.UUID, op string) (string, func(), error) {
 	read := time.Now()
 	snapshot, err := s.snaps.Snapshot(ctx, repoID)
 	if err != nil {
@@ -138,8 +139,13 @@ func (s *Server) snapshotWorkspace(ctx context.Context, repoID uuid.UUID) (strin
 	if err != nil {
 		return "", nil, err
 	}
+	s.metrics.built(ctx, op, read)
 	s.cache.retain(repoID, snapshot.Packs, read)
-	return dir, remove, nil
+	measured := func() {
+		s.metrics.removed(context.WithoutCancel(ctx), op, dir)
+		remove()
+	}
+	return dir, measured, nil
 }
 
 // protocolEnv passes the client's Git-Protocol header on to git upload-pack, which reads it from GIT_PROTOCOL, when

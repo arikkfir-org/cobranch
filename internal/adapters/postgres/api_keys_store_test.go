@@ -27,6 +27,7 @@ func deployKey(t *testing.T, f *orgFixture) (orgs.APIKey, []byte) {
 }
 
 func TestOrgStoreAPIKeys(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	key, hash := deployKey(t, f)
@@ -121,6 +122,7 @@ func testSecrets(t *testing.T, f *orgFixture, key orgs.APIKey) {
 
 // TestOrgStoreRotateAtOnce rotates a key with one live secret twice at once: exactly one rotation makes the second.
 func TestOrgStoreRotateAtOnce(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	key, _ := deployKey(t, f)

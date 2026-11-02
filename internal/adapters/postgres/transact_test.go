@@ -24,6 +24,7 @@ func insertPrincipal(ctx context.Context, q *queries.Queries, id uuid.UUID) erro
 // for the outer actor, and its failure rolls back its own changes alone. The pool has one connection, so a second
 // transaction would deadlock rather than join.
 func TestTransactNested(t *testing.T) {
+	t.Parallel()
 	_, shared := authStore(t)
 	cfg := shared.Config().Copy()
 	cfg.MaxConns = 1

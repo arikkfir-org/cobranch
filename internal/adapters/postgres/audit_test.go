@@ -143,8 +143,10 @@ var auditCases = []struct {
 }
 
 func TestAudit(t *testing.T) {
+	t.Parallel()
 	for _, tc := range auditCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			s, pool := authStore(t)
 			principal := tc.do(t, s, pool)
 			got := auditLog(t, pool, tc.table)
@@ -201,6 +203,7 @@ func checkAuditRow(t *testing.T, i int, row, want auditRow, table string, princi
 // TestAuditPrincipalIsLocal checks that a transaction's principal never outlives it on the connection it used: the
 // pool has one connection, so the transaction and the check share it.
 func TestAuditPrincipalIsLocal(t *testing.T) {
+	t.Parallel()
 	_, shared := authStore(t)
 	cfg := shared.Config().Copy()
 	cfg.MaxConns = 1

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/metric"
 	"gocloud.dev/blob"
 
 	"cobranch.dev/internal/services/auth"
@@ -67,6 +68,8 @@ type Config struct {
 	Hook []string
 	// Git is the git CLI's path; "git" finds it on the PATH.
 	Git string
+	// Meter makes the server's metrics; nil takes the process's meter provider.
+	Meter metric.MeterProvider
 }
 
 // The variables a push's hook reads to call back into its Git server.
@@ -92,6 +95,7 @@ type Server struct {
 	recorder Recorder
 	bucket   *blob.Bucket
 	cache    *cache
+	metrics  *metrics
 
 	hookURL string
 	hooks   *http.Server
@@ -110,6 +114,11 @@ func New(ctx context.Context, cfg Config, a Authenticator, r Repositories, s Sna
 	}
 	srv := &Server{cfg: cfg, auth: a, repos: r, snaps: s, recorder: recorder, bucket: bucket, pushes: map[string]*pending{},
 		cache: newCache(filepath.Join(cfg.DataDir, cacheDir), cfg.CacheSize, bucket)}
+	m, err := newMetrics(cfg.Meter, srv.cache)
+	if err != nil {
+		return nil, err
+	}
+	srv.metrics, srv.cache.metrics = m, m
 	if err := srv.prepare(); err != nil {
 		return nil, err
 	}

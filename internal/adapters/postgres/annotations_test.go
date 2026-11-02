@@ -27,6 +27,7 @@ func from(version int64, in code.AnnotationInput) code.AnnotationInput {
 }
 
 func TestCodeStoreSetAnnotation(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	first, err := f.c.SetAnnotation(ctx, f.max, f.website.ID, f.shaD, annotation("ci/build", code.AnnotationInProgress))
@@ -79,6 +80,7 @@ func TestCodeStoreSetAnnotation(t *testing.T) {
 }
 
 func TestCodeStoreSetAnnotationVersions(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	if _, err := f.c.SetAnnotation(ctx, f.max, f.website.ID, f.shaD, annotation("ci/build", code.AnnotationPending)); err != nil {
@@ -109,6 +111,7 @@ func TestCodeStoreSetAnnotationVersions(t *testing.T) {
 }
 
 func TestCodeStoreSetAnnotationRace(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	who := []uuid.UUID{f.olivia, f.max, f.nia}
@@ -137,6 +140,7 @@ func TestCodeStoreSetAnnotationRace(t *testing.T) {
 }
 
 func TestCodeStoreAnnotations(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	for _, in := range []code.AnnotationInput{annotation("ci/test", code.AnnotationFailed), annotation("ci/build", code.AnnotationSuccessful)} {
@@ -181,6 +185,7 @@ func TestCodeStoreAnnotations(t *testing.T) {
 }
 
 func TestCodeStoreDeleteAnnotation(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		actor   func(*codeFixture) uuid.UUID
@@ -202,6 +207,7 @@ func TestCodeStoreDeleteAnnotation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newCodeFixture(t)
 			ctx := context.Background()
 			if _, err := f.c.SetAnnotation(ctx, f.max, f.website.ID, f.shaD, annotation("ci/build", code.AnnotationFailed)); err != nil {
@@ -247,6 +253,7 @@ func (f *codeFixture) checkDeleted(t *testing.T, actor uuid.UUID, deleted bool) 
 // TestCodeStoreSetAnnotationRacesDelete sets an annotation the moment another principal's of its name is there and
 // being deleted: the set waits for the deletion, then sets its own.
 func TestCodeStoreSetAnnotationRacesDelete(t *testing.T) {
+	t.Parallel()
 	f := newCodeFixture(t)
 	ctx := context.Background()
 	// Nia's insert waits, before it meets the annotation there, for the advisory lock that gate holds.

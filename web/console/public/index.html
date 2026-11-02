@@ -301,6 +301,7 @@
         options.body = JSON.stringify(body);
       }
       const r = await fetch(config.restUrl + "/v1" + path, options);
+      countReads(r);
       if (r.status === 204) return null;
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
@@ -311,6 +312,7 @@
     async function apiPage(pathOrUrl) {
       const url = new URL(pathOrUrl.startsWith("/") ? config.restUrl + "/v1" + pathOrUrl : pathOrUrl, location.href).href;
       const r = await fetch(url, { credentials: "include", headers: { Accept: "application/json" } });
+      countReads(r);
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(data.detail || data.title || r.statusText), { status: r.status, code: data.code });
       const next = /<([^>]*)>\s*;\s*rel="next"/.exec(r.headers.get("Link") || "");
@@ -332,8 +334,68 @@
     // go navigates within the Console; render draws the page for the path.
     function go(path, replace) {
       history[replace ? "replaceState" : "pushState"](null, "", base + path.replace(/^\//, ""));
-      render();
+      show("route");
     }
+
+    // The page views the Console times for the installation's metrics: how long each page took to show and how many
+    // Git reads its API calls took, as their answers' Server-Timing names them. Nothing names who viewed what. view is
+    // the one in flight; drawing numbers the renders, so only the last one of a view, after any redirect, ends it.
+    let view = null;
+    let drawing = 0;
+    const views = [];
+    // show draws the page for the path as a page view: timed from the browser's navigation start for the Console's
+    // first load, from now for a move inside it. A move that starts while another is in flight, as a redirect does,
+    // continues that one's wait. A page that fails to draw reports nothing.
+    function show(navigation) {
+      const v = view || (view = { navigation, started: navigation === "load" ? 0 : performance.now(), reads: 0 });
+      const n = ++drawing;
+      let drawn;
+      try {
+        drawn = Promise.resolve(render());
+      } catch (err) {
+        drawn = Promise.reject(err);
+      }
+      drawn.then(() => {
+        if (n !== drawing) return;
+        view = null;
+        const durationMs = Math.round(performance.now() - v.started);
+        if (durationMs > 600000) return; // a tab left in the background
+        views.push({ page: pageOf(route()), navigation: v.navigation, durationMs, gitReads: v.reads });
+        if (views.length >= 20) reportViews();
+      }, (err) => {
+        if (n === drawing) view = null;
+        throw err;
+      });
+    }
+    // countReads adds the Git reads an answer names in Server-Timing to the view in flight.
+    function countReads(r) {
+      const timing = view && r.headers.get("Server-Timing");
+      if (timing) view.reads += timing.split(",").filter((entry) => entry.split(";")[0].trim() === "git").length;
+    }
+    // pageOf names the page at the route's parts, as the REST API's page views do.
+    function pageOf(parts) {
+      if (!me) return "sign-in";
+      const [org, page = "", sub = "", ...rest] = parts;
+      if (org === "settings") return "settings";
+      if (!org || reserved.includes(org)) return "welcome";
+      if (!page || page === "repos") return "organization";
+      if (page === "new") return "organization.new-repository";
+      if (orgPages.includes(page)) return "organization." + page;
+      if (sub === "branches") return rest.length ? "repository.branch" : "repository.branches";
+      const tabs = { tree: "code", blob: "file", commits: "commits", commit: "commit", access: "access", settings: "settings" };
+      return "repository." + (tabs[sub] || "code");
+    }
+    // reportViews sends the views kept so far, 20 at a time, with keepalive so a tab that closes still sends them, and
+    // without the session's cookie, which the route doesn't take. A report that fails is dropped: the numbers are a
+    // sample.
+    function reportViews() {
+      while (views.length) {
+        const body = JSON.stringify({ views: views.splice(0, 20) });
+        fetch(config.restUrl + "/v1/page-views", { method: "POST", credentials: "omit", keepalive: true, headers: { "Content-Type": "application/json" }, body }).catch(() => {});
+      }
+    }
+    setInterval(reportViews, 30000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") reportViews(); });
     // route is the page's path under the Console's root: [] for its home, [slug] or [slug, page] for an organization's,
     // [slug, repository] or [slug, repository, page, ...what it shows] for a repository's, each part decoded.
     function route() {
@@ -341,7 +403,7 @@
       const decode = (part) => { try { return decodeURIComponent(part); } catch { return part; } };
       return rest ? rest.split("/").map(decode) : [];
     }
-    window.addEventListener("popstate", render);
+    window.addEventListener("popstate", () => show("route"));
     document.addEventListener("click", (e) => {
       const a = e.target.closest("a[data-nav]");
       if (a && !e.metaKey && !e.ctrlKey) {
@@ -361,7 +423,7 @@
       } catch (err) {
         if (err.status !== 401) throw err;
       }
-      render();
+      show("load");
     }).catch(() => showCard(h("span", { class: "status" }, "REST API unreachable"), h("p", {}, "The Console couldn't reach this installation's REST API. Try again in a moment.")));
 
     function showCard(...children) {
