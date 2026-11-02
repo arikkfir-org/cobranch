@@ -11,8 +11,10 @@ import (
 
 	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/adapters/adminapi"
+	"cobranch.dev/internal/adapters/blob"
 	"cobranch.dev/internal/adapters/gitinternal"
 	"cobranch.dev/internal/adapters/graphql"
+	"cobranch.dev/internal/adapters/jobcluster"
 	"cobranch.dev/internal/adapters/markdown"
 	"cobranch.dev/internal/adapters/models"
 	"cobranch.dev/internal/adapters/postgres"
@@ -46,6 +48,8 @@ type api struct {
 	handler func(version, pages string, s services) http.Handler
 	// follows is whether the API follows chats live, which takes a connection of its own listening for their changes.
 	follows bool
+	// logs is whether the API reads runs' logs, which takes the object store and, where runs execute pods, the cluster.
+	logs bool
 }
 
 // services are the domain's services an API serves: sign-in's for the viewer's sessions, the organizations', the
@@ -68,12 +72,12 @@ func backOffice(u config.URLs) config.URL { return u.BackOffice }
 
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
-	restServer = api{workload: "rest-server", pattern: "/", pages: console, follows: true, handler: func(version, _ string, s services) http.Handler {
+	restServer = api{workload: "rest-server", pattern: "/", pages: console, follows: true, logs: true, handler: func(version, _ string, s services) http.Handler {
 		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents, s.secrets)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
-	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, handler: func(version, pages string, s services) http.Handler {
+	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, follows: true, logs: true, handler: func(version, pages string, s services) http.Handler {
 		return graphql.NewHandler(version, pages, s.sessions, s.organizations, s.repositories, s.code, s.issues, s.chats, s.agents, s.secrets)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
@@ -110,29 +114,11 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 		return fmt.Errorf("reading the schema's version: %w", err)
 	}
 	defer func() { _ = schema.Close() }() // holds nothing a server wrote
-	// The servers only read sessions: no provider, and settings that matter at sign-in alone. The Admin server shows
-	// the sign-up settings and providers the values give.
-	sessions := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
-	orgStore := postgres.NewOrgStore(pool)
-	authorizer := auth.NewAuthorizer(orgStore)
-	administration, err := adminService(cfg, orgStore, authorizer)
+	domain, closeDomain, err := newServices(ctx, a, cfg, pool)
 	if err != nil {
 		return err
 	}
-	box, err := sealer(cfg.SecretsKey)
-	if err != nil {
-		return fmt.Errorf("configuring: %w", err)
-	}
-	quotas := limitsService(pool, cfg.Limits)
-	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
-	agentStore := postgres.NewAgentStore(pool)
-	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...)
-	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
-		issues:  issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
-		chats:   chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer),
-		agents:  agentService,
-		secrets: secrets.NewService(postgres.NewSecretStore(pool), authorizer, box), administration: administration}
+	defer closeDomain()
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
@@ -140,13 +126,48 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	}
 	pages := a.pages(cfg.URLs).Origin()
 	handler := server.AllowOrigin([]string{pages}, server.Handler(a.pattern,
-		server.Authenticate(cookie.Name, sessions, pages, a.handler(version, pages, domain)),
+		server.Authenticate(cookie.Name, domain.sessions, pages, a.handler(version, pages, domain)),
 		map[string]server.Check{"schema": schema.Check, "database": postgres.Ping(pool)}))
 	slog.InfoContext(ctx, "Starting the server", "schemaVersion", schema.Version(), "sessionCookie", cookie.Name)
 	if err := server.Serve(ctx, ln, handler, cfg.ShutdownTimeout); err != nil {
 		return fmt.Errorf("serving: %w", err)
 	}
 	return nil
+}
+
+// newServices builds the domain's services a serves over pool, as cfg configures them, and answers what closes what
+// they hold beside pool.
+func newServices(ctx context.Context, a api, cfg config.Server, pool *pgxpool.Pool) (services, func(), error) {
+	// The servers only read sessions: no provider, and settings that matter at sign-in alone. The Admin server shows
+	// the sign-up settings and providers the values give.
+	sessions := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
+	orgStore := postgres.NewOrgStore(pool)
+	authorizer := auth.NewAuthorizer(orgStore)
+	administration, err := adminService(cfg, orgStore, authorizer)
+	if err != nil {
+		return services{}, nil, err
+	}
+	box, err := sealer(cfg.SecretsKey)
+	if err != nil {
+		return services{}, nil, fmt.Errorf("configuring: %w", err)
+	}
+	quotas := limitsService(pool, cfg.Limits)
+	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
+	codeService := code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer)
+	closeLogs := func() {}
+	if a.logs {
+		if closeLogs, err = withRunLogs(ctx, codeService, cfg.RunLogs, pool); err != nil {
+			return services{}, nil, err
+		}
+	}
+	agentStore := postgres.NewAgentStore(pool)
+	agentService := agents.NewService(agentStore, authorizer).WithProviders(models.Providers()...)
+	return services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas),
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: codeService,
+		issues:  issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer).WithAgents(agentService, agentStore),
+		chats:   chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer),
+		agents:  agentService,
+		secrets: secrets.NewService(postgres.NewSecretStore(pool), authorizer, box), administration: administration}, closeLogs, nil
 }
 
 // hub is the hub of the chats' followers when a follows them, listening on a connection outside pool until ctx ends;
@@ -165,6 +186,27 @@ func objects(cfg config.Server) code.Objects {
 		return nil
 	}
 	return gitinternal.NewClient(cfg.GitInternalURL.URL)
+}
+
+// withRunLogs has svc read ended runs' logs from the object store and, where runs execute pods, running runs' from the
+// cluster the server runs in, and answers what closes the store.
+func withRunLogs(ctx context.Context, svc *code.Service, cfg config.RunLogs, pool *pgxpool.Pool) (func(), error) {
+	bucket, err := blob.Open(ctx, cfg.BlobURL, pool)
+	if err != nil {
+		return nil, fmt.Errorf("opening the object store: %w", err)
+	}
+	closeBucket := func() { _ = bucket.Close() } // the servers only read it: nothing to flush
+	if !cfg.JobsPods {
+		svc.WithRunLogs(blob.Logs{Bucket: bucket}, nil, int64(cfg.JobsLogsMaxBytes))
+		return closeBucket, nil
+	}
+	client, err := inCluster()
+	if err != nil {
+		closeBucket()
+		return nil, fmt.Errorf("reading running runs' logs: %w", err)
+	}
+	svc.WithRunLogs(blob.Logs{Bucket: bucket}, jobcluster.New(client, jobcluster.Config{Prefix: cfg.JobsNamespacePrefix}), int64(cfg.JobsLogsMaxBytes))
+	return closeBucket, nil
 }
 
 // sessionCookie names the session cookie from the workloads' public URLs: host-only when they share one host (or

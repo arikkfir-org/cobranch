@@ -64,8 +64,13 @@ func (c *Cluster) Prepare(ctx context.Context, orgID uuid.UUID) (err error) {
 	if _, err := core.Namespaces().Apply(ctx, c.namespaceOf(orgID).WithOwnerReferences(owner), apply); err != nil {
 		return fmt.Errorf("applying namespace %s: %w", ns, err)
 	}
-	if _, err := rbac.RoleBindings(ns).Apply(ctx, c.binding(ns), apply); err != nil {
+	if _, err := rbac.RoleBindings(ns).Apply(ctx, c.binding(ns, c.cfg.RunnerRole, c.cfg.Controller), apply); err != nil {
 		return fmt.Errorf("binding the controller in namespace %s: %w", ns, err)
+	}
+	if c.cfg.LogsRole != "" {
+		if _, err := rbac.RoleBindings(ns).Apply(ctx, c.binding(ns, c.cfg.LogsRole, c.cfg.LogsReader), apply); err != nil {
+			return fmt.Errorf("binding the servers in namespace %s: %w", ns, err)
+		}
 	}
 	egress, err := c.egress(ns)
 	if err != nil {
@@ -122,11 +127,11 @@ func (c *Cluster) owner(ctx context.Context) (*metav1ac.OwnerReferenceApplyConfi
 		WithName(role.Name).WithUID(role.UID), nil
 }
 
-// binding grants the controller the runner role in namespace ns.
-func (c *Cluster) binding(ns string) *rbacv1ac.RoleBindingApplyConfiguration {
-	return rbacv1ac.RoleBinding(c.cfg.RunnerRole, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
-		WithRoleRef(rbacv1ac.RoleRef().WithAPIGroup("rbac.authorization.k8s.io").WithKind("ClusterRole").WithName(c.cfg.RunnerRole)).
-		WithSubjects(rbacv1ac.Subject().WithKind("ServiceAccount").WithNamespace(c.cfg.Home).WithName(c.cfg.Controller))
+// binding grants the installation's ServiceAccount account the ClusterRole role in namespace ns, named as the role.
+func (c *Cluster) binding(ns, role, account string) *rbacv1ac.RoleBindingApplyConfiguration {
+	return rbacv1ac.RoleBinding(role, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+		WithRoleRef(rbacv1ac.RoleRef().WithAPIGroup("rbac.authorization.k8s.io").WithKind("ClusterRole").WithName(role)).
+		WithSubjects(rbacv1ac.Subject().WithKind("ServiceAccount").WithNamespace(c.cfg.Home).WithName(account))
 }
 
 // denyIngress admits nothing to the namespace's pods.

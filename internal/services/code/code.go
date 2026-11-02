@@ -83,6 +83,8 @@ type Branch struct {
 	// SettingsError is why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing
 	// until it does. "" when it parses, or there is none.
 	SettingsError string
+	// AIReview is the AI reviewer's latest task for its head; nil when there is none, and for the default branch.
+	AIReview *AIReview
 	// ManualJobs are the jobs the /cobranch.yaml at its head declares with a manual trigger, which a member starts on
 	// it, by name.
 	ManualJobs []string

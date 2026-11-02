@@ -7,7 +7,7 @@
 **Status**: Proposed 2026-11-02 · [ENG-216](https://linear.app/arikkfir/issue/ENG-216) · Builds the [product’s AI
 review](product.md#agents-and-ai-review) on [branch status](branch-status.md) and the agents of
 [ENG-215](https://linear.app/arikkfir/issue/ENG-215) · Adds no workload and no chart value · Built by
-[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in seven pull requests
+[ENG-216](https://linear.app/arikkfir/issue/ENG-216), in eight pull requests
 
 People and agents review commits, and `main`’s `/cobranch.yaml` can require approvals before a branch merges. Every push
 of a branch gets a review from the organization’s built-in AI reviewer, an agent whose model an admin picks and whose
@@ -156,8 +156,8 @@ kind, `review`, and names the repository, the branch and the head.
   reviewer itself: a task Cobranch starts runs on its agent's own grants. Its harness gets two tools of this slice
   beside its own: read the branch's diff, and submit the review; its comments go with the review.
 - **Outside pushes wait.** A head pushed from outside the organization doesn't spend the organization's model on its
-  own: when `main`'s `repository.jobs.outsidePushes` keeps [jobs waiting](jobs.md#the-outside-push-gate), the review
-  task waits too, until a member with `repo.push` starts it.
+  own: when `main`'s `repository.outsidePushes` keeps [jobs waiting](jobs.md#the-outside-push-gate), the review task
+  waits too, until a member with `repo.push` starts it with **Start review**.
 - **Review again.** A member with `repo.push` asks for another review of the head at any time, which supersedes the open
   one: after a failure, or once a discussion in the chat settled a comment.
 - **Its timeout** is 30 minutes. A task that fails or times out leaves no review, and the reason on the branch.
@@ -279,7 +279,7 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 
 - **A branch's page** shows each reviewer's latest verdict on the head, earlier heads' reviews folded, and the AI
   review's state: Waiting, Queued, Running, Failed with its reason, or its review. **Review** opens the Changes tab
-  ready to review; **Review again** asks the reviewer for another.
+  ready to review; **Review again** asks the reviewer for another, and **Start review** starts one that waits.
 - **The Changes tab** (`…/changes/<branch>`, since a branch's name may hold `/changes`) shows the branch's diff against
   `main`, file by file, with the reviews of its head beneath; a reviewer drafts comments on lines, then submits Approve,
   Request changes or Comment with a body.
@@ -315,9 +315,9 @@ history is Git’s. Every new row carries `org_id`.
 
 ## Rollout
 
-**Seven pull requests, each with its tests and its Console pages**
+**Eight pull requests, each with its tests and its Console pages**
 
-![Seven pull requests, each with its tests and its Console pages](reviews/rollout.svg)
+![Eight pull requests, each with its tests and its Console pages](reviews/rollout.svg)
 
 Nothing changes for an operator: no workload and no chart value is added. A repository opts into required reviews
 through its own `/cobranch.yaml`, and an organization into AI review by giving its reviewer a model.
@@ -325,12 +325,12 @@ through its own `/cobranch.yaml`, and an organization into AI review by giving i
 - **Each pull request keeps `main` working** and is Part of [ENG-216](https://linear.app/arikkfir/issue/ENG-216); the
   last closes it. The first, second and fourth need nothing of the slices beside it; the third stacks on
   [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s chats and merges after them.
-- **The reviewer comes in three pull requests.** The first makes it: the reviewer in every organization, Automation at
-  an organization, and review tasks' kind and head, on [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s agents and
-  tasks. The second queues a review on every push, supersedes the open one, asks for another and adds the `ai`
-  requirement, once [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s models land; its migration first runs the
-  first's backfill again, for the organizations that servers still on older code created while the first rolled out. The
-  third gives its harness the two tools and renders bodies as Markdown, on
+- **The reviewer comes in four pull requests.** The first makes it: the reviewer in every organization, Automation at an
+  organization, and review tasks' kind and head, on [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s agents and
+  tasks. The second queues a review task on every push, supersedes the open one, waits on outside pushes, asks for
+  another, and shows the AI review on a branch's page; its migration first runs the first's backfill again, for the
+  organizations that servers still on older code created while the first rolled out. The third adds the `ai`
+  requirement. The fourth gives the harness the two tools and renders bodies as Markdown, on
   [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s runtime, and closes
   [ENG-216](https://linear.app/arikkfir/issue/ENG-216).
 - **The settings come before the reviewer.** The fourth reads `main`'s `/cobranch-review.yaml` on every push that moves

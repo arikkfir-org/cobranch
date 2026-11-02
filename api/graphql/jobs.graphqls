@@ -65,6 +65,21 @@ type Run {
   endedAt: Time
   "Counts its changes from 1."
   version: Int!
+  """
+  Its logs, the checkout's first and then by container, with the values the run masks hidden: as the controller kept
+  them once it ended, from its pod while it runs, when they are live and grow. None for a run that never started a pod,
+  such as a webhook's.
+  """
+  logs: [RunLog!]!
+}
+
+"One of a run's containers' logs, with the values the run masks hidden."
+type RunLog {
+  container: String!
+  "The log, its bytes that aren't UTF-8 replaced."
+  text: String!
+  "Whether it was read from the running pod, and grows until the run ends."
+  live: Boolean!
 }
 
 "Where a run stands."

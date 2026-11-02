@@ -3202,6 +3202,42 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/review:
+    post:
+      operationId: requestReview
+      summary: >-
+        Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the
+        branch's open review task and queues a new one, which starts even for a head pushed from outside the
+        organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers
+        409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409
+        reviewer.suspended.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "202":
+          description: The review, queued; Location names its task.
+          headers:
+            Location:
+              description: The review task's URL.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIReview"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/deleted-branches/{branch}:
     get:
       operationId: getDeletedBranch
@@ -4494,6 +4530,65 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/logs:
+    get:
+      operationId: getRunLogs
+      summary: >-
+        One of the repository's runs' logs, the checkout's first and then by container, with the values the run masks
+        hidden: as the controller kept them once it ended, from its pod while it runs, when they are live and grow;
+        takes repo.read. A run that never started a pod, such as a webhook's, has none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "200":
+          description: The run's logs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunLogs"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/logs/{container}:
+    get:
+      operationId: getRunLog
+      summary: >-
+        One of a run's containers' logs as text, with the values the run masks hidden and bytes that aren't UTF-8 read as
+        U+FFFD, as getRunLogs reads them; takes repo.read. A container that hasn't logged answers 404.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+        - name: container
+          in: path
+          required: true
+          description: The container's name, such as main for a script's, or cobranch-checkout for the checkout's.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The log.
+          headers:
+            X-Content-Type-Options:
+              description: nosniff, so no browser takes the log for another type.
+              required: true
+              schema:
+                type: string
+          content:
+            "text/plain; charset=utf-8":
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs:
     post:
       operationId: runJob
@@ -5397,11 +5492,34 @@ components:
           description: >-
             Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it
             does. Left out when it parses, or there is none.
+        aiReview:
+          $ref: "#/components/schemas/AIReview"
         manualJobs:
           type: array
           items:
             type: string
           description: The jobs the /cobranch.yaml at its head declares with a manual trigger, which a member with jobs.run starts on it, by name.
+    AIReview:
+      type: object
+      description: >-
+        The AI reviewer's latest task for a branch's head, an agent task of kind review; left out of a branch it has
+        none for, and of main, whose pushes it never reviews. Its review, once it submits one, is among the head's.
+      required: [task, state]
+      properties:
+        task:
+          type: integer
+          format: int64
+          description: The task's number among its organization's tasks.
+        state:
+          type: string
+          description: >-
+            waiting, for a member to ask for it, when the head was pushed from outside the organization; queued;
+            running; succeeded, with its review submitted; failed, without one, for its reason; cancelled, superseded
+            by a newer push, the branch's deletion or a request for another review.
+          enum: [waiting, queued, running, succeeded, failed, cancelled]
+        reason:
+          type: string
+          description: Why it waits, failed or was cancelled; left out otherwise.
     BranchIssue:
       type: object
       description: >-
@@ -6112,6 +6230,27 @@ components:
           type: integer
           format: int64
           description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+    RunLogs:
+      type: object
+      required: [logs]
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunLog"
+    RunLog:
+      type: object
+      description: One of a run's containers' logs, with the values the run masks hidden.
+      required: [container, text, live]
+      properties:
+        container:
+          type: string
+        text:
+          type: string
+          description: The log, its bytes that aren't UTF-8 replaced.
+        live:
+          type: boolean
+          description: Whether it was read from the running pod, and grows until the run ends.
     Run:
       type: object
       description: One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.

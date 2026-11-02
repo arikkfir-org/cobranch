@@ -40,6 +40,10 @@ type Store struct {
 	Defined map[uuid.UUID]map[string][]jobs.Job
 	Now     time.Time
 	Fail    error
+	// ReviewerOff, when set, is why the organization's AI reviewer reviews nothing: a request for a review answers it.
+	// Tasks is the number of the last task a request for a review started.
+	ReviewerOff error
+	Tasks       int64
 }
 
 // NewStore returns an empty Store.
@@ -197,6 +201,25 @@ func (s *Store) SubmitReview(_ context.Context, actor uuid.UUID, repoID uuid.UUI
 		Person: !s.NotPeople[actor], SubmittedAt: s.Now}
 	s.ReviewList[repoID] = append(s.ReviewList[repoID], r)
 	s.Submitted[r.ID] = in
+	return r, nil
+}
+
+// RequestReview starts the next task for the head of the repository's live branch, Queued, and names it on the branch,
+// as its latest; ReviewerOff when it is set, and repos.ErrNotFound without the branch.
+func (s *Store) RequestReview(_ context.Context, _ uuid.UUID, repoID uuid.UUID, branch string) (code.AIReview, error) {
+	if s.Fail != nil {
+		return code.AIReview{}, s.Fail
+	}
+	i := slices.IndexFunc(s.BranchList[repoID], func(b code.Branch) bool { return b.Name == branch })
+	if i < 0 {
+		return code.AIReview{}, repos.ErrNotFound
+	}
+	if s.ReviewerOff != nil {
+		return code.AIReview{}, s.ReviewerOff
+	}
+	s.Tasks++
+	r := code.AIReview{Task: s.Tasks, State: code.ReviewQueued}
+	s.BranchList[repoID][i].AIReview = &r
 	return r, nil
 }
 

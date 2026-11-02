@@ -316,7 +316,7 @@ job and the minute, so a schedule fires once however many replicas run.
 ![An agent pod that dies resumes from its saved transcript](architecture/agent-task.svg)
 
 The AI reviewer is a built-in agent of every organization, configured by each repository’s `/cobranch-review.yaml`; the
-controller gives it a review task on every push.
+push worker gives it a review task on every push.
 
 - **Live updates.** A client that reconnects passes the last event ID it saw, and the GraphQL server replays from
   `events`.

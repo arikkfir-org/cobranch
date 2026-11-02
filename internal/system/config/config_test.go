@@ -18,7 +18,7 @@ var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "BLOB_MOVE_FROM", 
 	"JOBS_POLL_INTERVAL", "JOBS_SWEEP_INTERVAL", "JOBS_PODS", "JOBS_LEASE", "JOBS_ROOM_RETRY", "JOBS_TIMEOUT", "JOBS_MAX_TIMEOUT", "JOBS_VANISHED",
 	"JOBS_SCRIPT_IMAGE", "JOBS_CHECKOUT_IMAGE", "JOBS_REST_URL", "JOBS_GIT_URL", "JOBS_LOGS_MAX_BYTES", "JOBS_NAMESPACE_PREFIX",
 	"JOBS_INSTALLATION", "JOBS_POD_SECURITY", "JOBS_NAMESPACE_LABELS", "JOBS_HOME", "JOBS_SERVICE_ACCOUNT", "JOBS_RELEASE",
-	"JOBS_RUNNER_ROLE", "JOBS_OWNER_ROLE", "JOBS_EGRESS_EXCEPT", "JOBS_EGRESS_DNS", "JOBS_RESOURCES", "JOBS_QUOTA", "JOBS_NODE_SELECTOR", "JOBS_TOLERATIONS", "JOBS_AFFINITY",
+	"JOBS_RUNNER_ROLE", "JOBS_OWNER_ROLE", "JOBS_LOGS_ROLE", "JOBS_LOGS_READER", "JOBS_LOGS_RETENTION", "JOBS_WEBHOOKS_ALLOWED_CIDRS", "JOBS_EGRESS_EXCEPT", "JOBS_EGRESS_DNS", "JOBS_RESOURCES", "JOBS_QUOTA", "JOBS_NODE_SELECTOR", "JOBS_TOLERATIONS", "JOBS_AFFINITY",
 	"JOBS_IMAGE_PULL_SECRETS", "GIT_URL", "TOKEN", "SHA", "WORKSPACE", "TOKEN_FILE", "MODEL_PROVIDER", "MODEL", "MODEL_KEY_FILE", "MODEL_URL",
 	"MODEL_MAX_TOKENS", "MAX_TURNS", "SHELL_TIMEOUT", "AGENTS_IMAGE", "AGENTS_RESOURCES", "AGENTS_TIMEOUT", "AGENTS_MAX_TURNS",
 	"AGENTS_SHELL_TIMEOUT", "AGENTS_MODEL_MAX_TOKENS", "AGENTS_PROVIDER_URLS"}
@@ -44,6 +44,11 @@ func mustURL(t *testing.T, s string) URL {
 	return u
 }
 
+// serverDefaults is the server's configuration when no variable is set.
+func serverDefaults(*testing.T) Server {
+	return Server{HTTPAddr: ":8080", ShutdownTimeout: 20 * time.Second, RunLogs: RunLogs{JobsLogsMaxBytes: 10 << 20}}
+}
+
 func TestLoadServer(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -51,9 +56,7 @@ func TestLoadServer(t *testing.T) {
 		want    func(t *testing.T) Server
 		wantErr bool
 	}{
-		{name: "defaults", env: map[string]string{}, want: func(*testing.T) Server {
-			return Server{HTTPAddr: ":8080", ShutdownTimeout: 20 * time.Second}
-		}},
+		{name: "defaults", env: map[string]string{}, want: serverDefaults},
 		{
 			name: "every variable",
 			env: map[string]string{
@@ -72,6 +75,10 @@ func TestLoadServer(t *testing.T) {
 				"COBRANCH_AUTH_PROVIDERS":           `[{"id":"google","name":"Google","preset":"google","clientId":"c1"}]`,
 				"COBRANCH_SECRETS_KEY":              "a secrets key of at least 32 characters",
 				"COBRANCH_GIT_INTERNAL_URL":         "http://cobranch-git-server-internal",
+				"COBRANCH_BLOB_URL":                 "gs://objects",
+				"COBRANCH_JOBS_PODS":                "true",
+				"COBRANCH_JOBS_NAMESPACE_PREFIX":    "cobranch-jobs-",
+				"COBRANCH_JOBS_LOGS_MAX_BYTES":      "1Mi",
 			},
 			want: func(t *testing.T) Server {
 				return Server{
@@ -82,12 +89,11 @@ func TestLoadServer(t *testing.T) {
 					SignUpSettings: SignUpSettings{SignUp: "domains", SignUpDomains: []string{"example.com"}, SelfServe: &no},
 					Providers:      Providers{{ID: "google", Name: "Google", Preset: "google", ClientID: "c1"}}, SecretsKey: "a secrets key of at least 32 characters",
 					GitInternalURL: mustURL(t, "http://cobranch-git-server-internal"),
+					RunLogs:        RunLogs{BlobURL: "gs://objects", JobsPods: true, JobsNamespacePrefix: "cobranch-jobs-", JobsLogsMaxBytes: 1 << 20},
 				}
 			},
 		},
-		{name: "the Console set empty", env: map[string]string{"COBRANCH_CONSOLE_URL": ""}, want: func(*testing.T) Server {
-			return Server{HTTPAddr: ":8080", ShutdownTimeout: 20 * time.Second}
-		}},
+		{name: "the Console set empty", env: map[string]string{"COBRANCH_CONSOLE_URL": ""}, want: serverDefaults},
 		{name: "the Console without a scheme", env: map[string]string{"COBRANCH_CONSOLE_URL": "console"}, wantErr: true},
 		{name: "bad duration", env: map[string]string{"COBRANCH_SHUTDOWN_TIMEOUT": "soon"}, wantErr: true},
 	}
@@ -322,6 +328,9 @@ func TestLoadMaintenance(t *testing.T) {
 			want: Maintenance{BlobURL: "gs://objects", GitDataDir: "/data", CompactAt: 4}},
 		{name: "the packs moving into the database", env: map[string]string{"COBRANCH_BLOB_MOVE_FROM": "gs://objects", "COBRANCH_GIT_COMPACT_AT": "8"},
 			want: Maintenance{BlobMoveFrom: "gs://objects", GitDataDir: "/var/lib/cobranch/git", CompactAt: 8}},
+		{name: "logs kept 30 days", env: map[string]string{"COBRANCH_JOBS_LOGS_RETENTION": "720h"},
+			want: Maintenance{GitDataDir: "/var/lib/cobranch/git", LogsRetention: 720 * time.Hour}},
+		{name: "a retention below 0", env: map[string]string{"COBRANCH_JOBS_LOGS_RETENTION": "-1h"}, wantErr: true},
 		{name: "a threshold that compacts nothing", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "1"}, wantErr: true},
 		{name: "a threshold that isn't a number", env: map[string]string{"COBRANCH_GIT_COMPACT_AT": "eight"}, wantErr: true},
 	}

@@ -328,8 +328,8 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 
 // followPush does, in the push worker's transaction, what the claimed push brings once its commits are attributed:
 // takes the repository's delivery queue when it delivers and then its run queue, before it locks a branch, links its
-// branches to their issues, records its merges and finishes their issues, queues its jobs' runs and deliveries, and
-// works out the status of the branches waiting on it.
+// branches to their issues, records its merges and finishes their issues, queues its jobs' runs and deliveries and its
+// heads' reviews, and works out the status of the branches waiting on it.
 func followPush(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
 	if err := lockDeliveries(ctx, q, claimed.RepoID); err != nil {
 		return err
@@ -337,7 +337,8 @@ func followPush(ctx context.Context, q *queries.Queries, claimed queries.ClaimPu
 	if err := q.LockRunQueue(ctx, claimed.RepoID); err != nil {
 		return fmt.Errorf("locking the repository's runs: %w", err)
 	}
-	for _, step := range []func(context.Context, *queries.Queries, queries.ClaimPushRow) error{linkPushed, recordMerges, finishMerged, queuePushRuns} {
+	for _, step := range []func(context.Context, *queries.Queries, queries.ClaimPushRow) error{linkPushed, recordMerges, finishMerged, queuePushRuns,
+		queueReviews} {
 		if err := step(ctx, q, claimed); err != nil {
 			return err
 		}

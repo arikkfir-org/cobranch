@@ -98,6 +98,20 @@ type Server struct {
 	GitInternalURL URL `envconfig:"GIT_INTERNAL_URL"`
 	// Limits are the organizations, repositories and Git data the values allow.
 	Limits
+	// RunLogs are where the REST and GraphQL servers read runs' logs.
+	RunLogs
+}
+
+// RunLogs are where the REST and GraphQL servers read runs' logs: an ended run's from the object store, where the
+// controller keeps them, a running run's from its pod.
+type RunLogs struct {
+	// BlobURL names the object store, as the controller's does.
+	BlobURL string `envconfig:"BLOB_URL"`
+	// JobsPods is whether runs execute pods, whose logs the servers then read from the cluster they run in, in the job
+	// namespaces JobsNamespacePrefix starts; JobsLogsMaxBytes is the most of each container's log they read.
+	JobsPods            bool   `envconfig:"JOBS_PODS"`
+	JobsNamespacePrefix string `envconfig:"JOBS_NAMESPACE_PREFIX"`
+	JobsLogsMaxBytes    Size   `envconfig:"JOBS_LOGS_MAX_BYTES" default:"10Mi"`
 }
 
 // Limits are the limits the chart's values set: nil where they set none, which leaves it to the Back-office, else to
@@ -267,6 +281,8 @@ type Maintenance struct {
 	// CompactAt is how many active packs make a repository due for compaction, 2 or more; 0, unset, leaves every pack
 	// alone, as in an installation whose Git servers each keep their packs on a disk of their own.
 	CompactAt int `envconfig:"GIT_COMPACT_AT"`
+	// LogsRetention is how long the store keeps runs' logs after the controller archived them; 0, unset, keeps them.
+	LogsRetention time.Duration `envconfig:"JOBS_LOGS_RETENTION"`
 }
 
 // LoadMaintenance reads the maintenance CronJob's configuration from the environment.
@@ -277,6 +293,9 @@ func LoadMaintenance() (Maintenance, error) {
 	}
 	if c.CompactAt != 0 && c.CompactAt < 2 {
 		return Maintenance{}, fmt.Errorf("COBRANCH_GIT_COMPACT_AT is %d: compacting takes 2 packs or more", c.CompactAt)
+	}
+	if c.LogsRetention < 0 {
+		return Maintenance{}, fmt.Errorf("COBRANCH_JOBS_LOGS_RETENTION is %s: a retention is 0, to keep the logs, or more", c.LogsRetention)
 	}
 	return c, nil
 }

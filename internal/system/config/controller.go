@@ -83,6 +83,8 @@ type Jobs struct {
 	GitURL  string `envconfig:"JOBS_GIT_URL"`
 	// LogsMaxBytes is the most of each container's log the controller keeps.
 	LogsMaxBytes Size `envconfig:"JOBS_LOGS_MAX_BYTES" default:"10Mi"`
+	// WebhooksAllowedCIDRs are ranges of EgressExcept that webhooks may reach all the same: a private receiver's.
+	WebhooksAllowedCIDRs []string `envconfig:"JOBS_WEBHOOKS_ALLOWED_CIDRS"`
 	Namespaces
 }
 
@@ -102,6 +104,10 @@ type Namespaces struct {
 	Release        string `envconfig:"JOBS_RELEASE" required:"true"`
 	RunnerRole     string `envconfig:"JOBS_RUNNER_ROLE" required:"true"`
 	OwnerRole      string `envconfig:"JOBS_OWNER_ROLE" required:"true"`
+	// LogsRole is the ClusterRole it binds the servers' ServiceAccount, LogsReader, to in each namespace, so that the
+	// REST and GraphQL servers read the runs' logs; none without it.
+	LogsRole   string `envconfig:"JOBS_LOGS_ROLE"`
+	LogsReader string `envconfig:"JOBS_LOGS_READER"`
 	// EgressExcept are the address ranges runs may not reach; EgressDNS the NetworkPolicy peers they may ask DNS, on
 	// port 53, any address without them.
 	EgressExcept []string                               `envconfig:"JOBS_EGRESS_EXCEPT"`

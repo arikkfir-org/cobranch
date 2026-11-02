@@ -89,6 +89,19 @@ func (r *mutationResolver) SubmitReview(ctx context.Context, repositoryID string
 	return review(submitted), nil
 }
 
+// RequestReview is the resolver for the requestReview field.
+func (r *mutationResolver) RequestReview(ctx context.Context, repositoryID string, branch string) (*AIReview, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	requested, err := r.Code.RequestReview(ctx, v, repoID, branch)
+	if err != nil {
+		return nil, fail(ctx, err, "branch", "requesting a review")
+	}
+	return aiReview(requested), nil
+}
+
 // Branches is the resolver for the branches field.
 func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*Branch, error) {
 	list, err := resolveRepo(ctx, obj, r.Code.Branches, "listing the branches")
