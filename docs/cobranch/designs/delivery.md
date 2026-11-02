@@ -148,8 +148,8 @@ same way; a resync re-applies the last render without rendering again.
   controller, its name and the environment's namespace, which `main`'s grants (`--target`, `--namespace`), since the
   commit's own targets count for nothing; it renders each root in order, and uploads the manifests with
   `POST /v1/orgs/{org}/repos/{repo}/deliveries/{n}/manifests`, using a token scoped to that one delivery, `cbd_…`, valid
-  for the render's timeout, 10 minutes by default. The REST server keeps the render once, while the delivery renders,
-  in the database beside the delivery, at most 16 MiB; it never prints it, since it may hold Secrets.
+  for the render's timeout, 10 minutes by default. The REST server keeps the render once, while the delivery renders, in
+  the database beside the delivery, at most 16 MiB; it never prints it, since it may hold Secrets.
 - **Helm** renders the chart at `path` as `helm template` would, release `release`, namespace the environment's, its
   values from `valuesFiles` (relative to `path`, in order) then `values`. `.Capabilities` are the target cluster's: the
   controller reads its version and API groups before the render and passes them in, so charts that check for an API
@@ -269,8 +269,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
 - **A target is a principal,** one per name in a repository, so the audit log reads "target `production` of `acme/api`".
 - **It holds no role**, only Secret reader on the secret its `cluster` names, granted by a principal with
   `org.grants.manage`. A delivery whose target may not read its secret fails before rendering, naming the secret.
-- **Its token** `cbd_…` reads its repository, to check the commit out, and uploads its delivery's manifests, once:
-  the render pod can't set annotations, read another repository or call any other API.
+- **Its token** `cbd_…` reads its repository, to check the commit out, and uploads its delivery's manifests, once: the
+  render pod can't set annotations, read another repository or call any other API.
 
 ## Clusters
 
@@ -294,13 +294,13 @@ renders none of it.
 - **It applies as `<release>-delivery`,** a ServiceAccount it impersonates, bound in each environment namespace to the
   ClusterRole of the same name (`admin`'s rules but NetworkPolicy writes, and `delivery.inCluster.rules` for the
   cluster's CRDs), so a render can do only what a namespace's admin can, there. A render that holds a NetworkPolicy,
-  LimitRange or ResourceQuota is refused, since it would widen the fence, and the admission policy keeps the account
-  off them and off the controller's RoleBindings there, whatever the role grants.
+  LimitRange or ResourceQuota is refused, since it would widen the fence, and the admission policy keeps the account off
+  them and off the controller's RoleBindings there, whatever the role grants.
 - **Namespaces outlive an uninstall:** an environment's namespace is the environment's, not the release's, and its
   teardown deletes it.
 - **`delivery.inCluster.enabled: false`,** the default, renders none of it, and targets without a `cluster` fail with
-  `this installation delivers to no cluster of its own`. An installation that hosts many organizations, such as a
-  hosted service, leaves it off: any organization's target could then make namespaces of any free name.
+  `this installation delivers to no cluster of its own`. An installation that hosts many organizations, such as a hosted
+  service, leaves it off: any organization's target could then make namespaces of any free name.
 
 ### Other clusters
 
@@ -399,10 +399,10 @@ grants the chart’s delivery RBAC.
   members list, redeliver, pause, resume and start through the APIs and the Console. A push into `main` that adds a
   target or widens its `branches` makes the other branches' environments from the fifth on; until then, from each
   branch's next push.
-- **The fourth delivers into this installation's cluster, with the operator's consent:** the controller renders, applies,
-  prunes and follows health, and `delivery.inCluster.enabled: true` grants it namespaces, `bind` on the delivery roles
-  and impersonation. Off, the default, those deliveries fail, saying so, and targets with a `cluster` wait for the
-  fifth.
+- **The fourth delivers into this installation's cluster, with the operator's consent:** the controller renders,
+  applies, prunes and follows health, and `delivery.inCluster.enabled: true` grants it namespaces, `bind` on the
+  delivery roles and impersonation. Off, the default, those deliveries fail, saying so, and targets with a `cluster`
+  wait for the fifth.
 - **A repository adopts delivery** by pushing a `delivery` key into `main`.
 
 ## Risks
