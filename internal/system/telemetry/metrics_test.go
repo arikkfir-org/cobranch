@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 )
 
@@ -88,10 +89,17 @@ func TestSetupServesPrometheus(t *testing.T) {
 		t.Fatal(err)
 	}
 	countOne(t)
+	served := otelhttp.NewHandler(http.NotFoundHandler(), "test")
+	served.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest("GET", "http://anything.example:8443/", nil))
 	url := "http://" + net.JoinHostPort("127.0.0.1", port) + "/metrics"
 	body := scrape(t, url)
-	if want := `cobranch_test_calls_total{`; !strings.Contains(body, want) {
-		t.Errorf("/metrics lacks %s:\n%s", want, body)
+	for _, want := range []string{`cobranch_test_calls_total{`, `http_server_request_duration_seconds_count{`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("/metrics lacks %s:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, "anything.example") || strings.Contains(body, "8443") {
+		t.Errorf("/metrics names the host a request chose:\n%s", body)
 	}
 	if want := `service_name="rest-server"`; !strings.Contains(body, want) {
 		t.Errorf("/metrics lacks the workload's %s:\n%s", want, body)

@@ -18,6 +18,7 @@ import (
 	otelprometheus "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 )
 
 // The exporters OTEL_METRICS_EXPORTER names, as OpenTelemetry's specification does.
@@ -34,6 +35,11 @@ var (
 	// SizeBuckets are powers of four, in bytes, from 4 KiB to 1 GiB.
 	SizeBuckets = []float64{1 << 12, 1 << 14, 1 << 16, 1 << 18, 1 << 20, 1 << 22, 1 << 24, 1 << 26, 1 << 28, 1 << 30}
 )
+
+// requestHosts drops the host a request named from the HTTP servers' metrics: its client chooses it, so each new one
+// would add a series. The route, the method and the status say which requests they were.
+var requestHosts = sdkmetric.WithView(sdkmetric.NewView(sdkmetric.Instrument{Name: "http.server.*"},
+	sdkmetric.Stream{AttributeFilter: attribute.NewDenyKeysFilter(semconv.ServerAddressKey, semconv.ServerPortKey)}))
 
 // MetricsExporter is the exporter the operator chose with OpenTelemetry's variables: OTEL_METRICS_EXPORTER, or, when
 // it is unset, otlp once an OTLP endpoint is set, as traces do, and none otherwise. OTEL_SDK_DISABLED turns it off.
@@ -57,14 +63,14 @@ func MetricsExporter() string {
 func meterProvider(ctx context.Context, res *resource.Resource) (*sdkmetric.MeterProvider, func(context.Context) error, error) {
 	switch e := MetricsExporter(); e {
 	case metricsNone:
-		mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res))
+		mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), requestHosts)
 		return mp, mp.Shutdown, nil
 	case metricsOTLP:
 		exporter, err := otlpmetrichttp.New(ctx) // reads OTEL_EXPORTER_OTLP_*: endpoint, headers, temporality and the rest
 		if err != nil {
 			return nil, nil, fmt.Errorf("creating the OTLP metric exporter: %w", err)
 		}
-		mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)))
+		mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter)), requestHosts)
 		return mp, mp.Shutdown, nil
 	case metricsPrometheus:
 		return prometheusProvider(ctx, res)
@@ -105,7 +111,7 @@ func prometheusProvider(ctx context.Context, res *resource.Resource) (*sdkmetric
 			slog.ErrorContext(logCtx, "Serving metrics failed", "error", err)
 		}
 	}()
-	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(exporter))
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithResource(res), sdkmetric.WithReader(exporter), requestHosts)
 	stop := func(ctx context.Context) error {
 		return errors.Join(srv.Shutdown(ctx), mp.Shutdown(ctx))
 	}
