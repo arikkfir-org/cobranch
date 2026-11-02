@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/orgs/orgstest"
 	"cobranch.dev/internal/services/repos"
@@ -53,10 +54,19 @@ func (s *Store) shown(ctx context.Context, repo repos.Repository) repos.Reposito
 	return repo
 }
 
-// Create records the repository with its creator as Maintainer.
-func (s *Store) Create(_ context.Context, _ uuid.UUID, repo repos.Repository) error {
+// Create records the repository with its creator as Maintainer, unless its organization holds limit repositories.
+func (s *Store) Create(_ context.Context, _ uuid.UUID, repo repos.Repository, limit int64) error {
 	if s.Fail != nil {
 		return s.Fail
+	}
+	held := int64(0)
+	for _, r := range s.Repos {
+		if r.OrgID == repo.OrgID {
+			held++
+		}
+	}
+	if limits.Exceeds(limit, held, 1) {
+		return &limits.ExceededError{Kind: limits.KindRepositories, Limit: limit, Used: held, Adding: 1}
 	}
 	for _, r := range s.Repos {
 		if r.OrgID == repo.OrgID && r.Slug == repo.Slug {

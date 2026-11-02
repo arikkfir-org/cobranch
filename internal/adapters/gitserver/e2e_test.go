@@ -69,6 +69,8 @@ type stack struct {
 	store     git.Store
 	// record, when set, stands between the Git server's domain and its store's Record.
 	record func(ctx context.Context, push git.Push, next git.Store) error
+	// quotas, when set, hold the pushes of the servers served after to their organizations' Git data limits.
+	quotas git.Quotas
 	// meter, when set, makes the metrics of the Git servers the stack starts from then on.
 	meter metric.MeterProvider
 }
@@ -165,6 +167,9 @@ func (s *stack) server(dataDir string) *gitserver.Server {
 	}
 	orgStore := postgres.NewOrgStore(s.pool)
 	domain := git.NewService(hookedStore{s})
+	if s.quotas != nil {
+		domain.WithQuotas(s.quotas)
+	}
 	srv, err := gitserver.New(context.Background(), gitserver.Config{DataDir: dataDir, CacheSize: 1 << 30, MaxPushSize: 1 << 30, Hook: []string{"env", hookEnv + "=1", self}, Meter: s.meter},
 		auth.NewService(postgres.NewAuthStore(s.pool), nil, auth.Settings{}), repos.NewService(postgres.NewRepoStore(s.pool), auth.NewAuthorizer(orgStore)),
 		domain, domain, s.bucket)

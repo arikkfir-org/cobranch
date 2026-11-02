@@ -11,7 +11,8 @@ import (
 var every = []string{"HTTP_ADDR", "DATABASE_URL", "BLOB_URL", "BLOB_MOVE_FROM", "SHUTDOWN_TIMEOUT", "CONSOLE_URL", "REST_URL", "GRAPHQL_URL",
 	"AUTH_URL", "ADMIN_URL", "BACK_OFFICE_URL", "AUTH_PROVIDERS", "AUTH_SIGN_UP", "AUTH_SIGN_UP_DOMAINS", "AUTH_ADMINS", "ORGANIZATIONS_SELF_SERVE", "SEED", "SECRETS_KEY",
 	"AUTH_CLIENT_SECRET_GOOGLE", "AUTH_CLIENT_SECRET_MY_IDP", "PUSH_POLL_INTERVAL", "GIT_DATA_DIR", "GIT_CACHE_SIZE",
-	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "GIT_SSH_ADDR", "GIT_SSH_HOST_KEY", "HOOK_URL", "HOOK_TOKEN"}
+	"GIT_MAX_PUSH_SIZE", "GIT_COMPACT_AT", "GIT_SSH_ADDR", "GIT_SSH_HOST_KEY", "HOOK_URL", "HOOK_TOKEN",
+	"LIMITS_ORGANIZATIONS_PER_USER", "LIMITS_REPOSITORIES_PER_ORGANIZATION", "LIMITS_GIT_DATA_PER_ORGANIZATION"}
 
 // clean unsets every variable, then sets env.
 func clean(t *testing.T, env map[string]string) {
@@ -90,6 +91,35 @@ func TestLoadServer(t *testing.T) {
 			}
 			if want := tt.want; err == nil && !reflect.DeepEqual(got, want(t)) {
 				t.Errorf("LoadServer() = %+v, want %+v", got, want(t))
+			}
+		})
+	}
+}
+
+func TestLoadServerLimits(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    Limits
+		wantErr bool
+	}{
+		{name: "none", env: map[string]string{}},
+		{name: "every limit", env: map[string]string{"COBRANCH_LIMITS_ORGANIZATIONS_PER_USER": "3", "COBRANCH_LIMITS_REPOSITORIES_PER_ORGANIZATION": "0",
+			"COBRANCH_LIMITS_GIT_DATA_PER_ORGANIZATION": "5Gi"},
+			want: Limits{OrganizationsPerUser: ptr[int64](3), RepositoriesPerOrganization: ptr[int64](0), GitDataPerOrganization: Quota{Bytes: ptr[int64](5 << 30)}}},
+		{name: "no Git data limit", env: map[string]string{"COBRANCH_LIMITS_GIT_DATA_PER_ORGANIZATION": "0"},
+			want: Limits{GitDataPerOrganization: Quota{Bytes: ptr[int64](0)}}},
+		{name: "a limit below 0", env: map[string]string{"COBRANCH_LIMITS_ORGANIZATIONS_PER_USER": "-1"}, wantErr: true},
+		{name: "a repositories' limit below 0", env: map[string]string{"COBRANCH_LIMITS_REPOSITORIES_PER_ORGANIZATION": "-5"}, wantErr: true},
+		{name: "a limit that isn't a number", env: map[string]string{"COBRANCH_LIMITS_REPOSITORIES_PER_ORGANIZATION": "many"}, wantErr: true},
+		{name: "a Git data limit that isn't a size", env: map[string]string{"COBRANCH_LIMITS_GIT_DATA_PER_ORGANIZATION": "1GB"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadServer()
+			if (err != nil) != tt.wantErr || (err == nil && !reflect.DeepEqual(got.Limits, tt.want)) {
+				t.Errorf("LoadServer() = %+v, %v, want limits %+v", got.Limits, err, tt.want)
 			}
 		})
 	}
@@ -342,12 +372,16 @@ func TestLoadGitServer(t *testing.T) {
 		{name: "packs moving from a bucket", env: with(map[string]string{"COBRANCH_BLOB_MOVE_FROM": "gs://objects"}),
 			want: GitServer{HTTPAddr: ":8080", BlobMoveFrom: "gs://objects",
 				DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081", ShutdownTimeout: 20 * time.Second}},
+		{name: "a Git data limit", env: with(map[string]string{"COBRANCH_LIMITS_GIT_DATA_PER_ORGANIZATION": "512Mi"}),
+			want: GitServer{HTTPAddr: ":8080", DataDir: "/var/lib/cobranch/git", CacheSize: 10 << 30, MaxPushSize: 2 << 30, InternalAddr: ":8081",
+				ShutdownTimeout: 20 * time.Second, Limits: Limits{GitDataPerOrganization: Quota{Bytes: ptr[int64](512 << 20)}}}},
+		{name: "a limit below 0", env: with(map[string]string{"COBRANCH_LIMITS_ORGANIZATIONS_PER_USER": "-1"}), wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			clean(t, tt.env)
 			got, err := LoadGitServer()
-			if (err != nil) != tt.wantErr || got != tt.want {
+			if (err != nil) != tt.wantErr || !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("LoadGitServer() = %+v, %v, want %+v", got, err, tt.want)
 			}
 		})
@@ -415,3 +449,29 @@ func TestSizeDecode(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotaDecode(t *testing.T) {
+	tests := []struct {
+		value   string
+		want    *int64
+		wantErr bool
+	}{
+		{value: "0", want: ptr[int64](0)},
+		{value: " 0 ", want: ptr[int64](0)},
+		{value: "1Gi", want: ptr[int64](1 << 30)},
+		{value: "1073741824", want: ptr[int64](1 << 30)},
+		{value: "-1", wantErr: true},
+		{value: "0Gi", wantErr: true},
+		{value: "1GB", wantErr: true},
+		{value: "", wantErr: true},
+	}
+	for _, tt := range tests {
+		var got Quota
+		if err := got.Decode(tt.value); (err != nil) != tt.wantErr || !reflect.DeepEqual(got.Bytes, tt.want) {
+			t.Errorf("Decode(%q) = %v, %v, want %v", tt.value, got.Bytes, err, tt.want)
+		}
+	}
+}
+
+// ptr points at v.
+func ptr[T any](v T) *T { return &v }

@@ -113,9 +113,10 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
+	quotas := limitsService(pool, cfg.Limits)
 	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
-	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
+	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer).WithLimits(quotas),
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer).WithLimits(quotas), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
 		issues: issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer),
 		chats:  chats.NewService(postgres.NewChatStore(pool), hub(ctx, a, pool), renderer, authorizer), administration: administration}
 

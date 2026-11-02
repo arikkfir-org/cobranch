@@ -17,7 +17,7 @@ UPDATE installation_settings
 SET sign_up = $1, sign_up_domains = $2, self_serve = $3,
     updated_at = $4, updated_by = $5
 WHERE version = $6
-RETURNING id, sign_up, sign_up_domains, self_serve, version, updated_at, updated_by
+RETURNING id, sign_up, sign_up_domains, self_serve, version, updated_at, updated_by, organizations_per_user, repositories_per_organization, git_data_per_organization
 `
 
 type ChangeInstallationSettingsParams struct {
@@ -49,13 +49,16 @@ func (q *Queries) ChangeInstallationSettings(ctx context.Context, arg ChangeInst
 		&i.Version,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.OrganizationsPerUser,
+		&i.RepositoriesPerOrganization,
+		&i.GitDataPerOrganization,
 	)
 	return i, err
 }
 
 const installationSettings = `-- name: InstallationSettings :one
 
-SELECT id, sign_up, sign_up_domains, self_serve, version, updated_at, updated_by FROM installation_settings
+SELECT id, sign_up, sign_up_domains, self_serve, version, updated_at, updated_by, organizations_per_user, repositories_per_organization, git_data_per_organization FROM installation_settings
 `
 
 // The installation's settings, one row: sign-up reads them, and the Back-office changes them.
@@ -71,6 +74,9 @@ func (q *Queries) InstallationSettings(ctx context.Context) (InstallationSetting
 		&i.Version,
 		&i.UpdatedAt,
 		&i.UpdatedBy,
+		&i.OrganizationsPerUser,
+		&i.RepositoriesPerOrganization,
+		&i.GitDataPerOrganization,
 	)
 	return i, err
 }
