@@ -229,16 +229,17 @@ func (s *Store) ThreadBranch(_ context.Context, threadID uuid.UUID) (uuid.UUID, 
 	return b, nil
 }
 
-// Tasks lists at most limit of the organization's tasks, newest first, that match f and name no repository or one of
-// readable.
-func (s *Store) Tasks(_ context.Context, orgID uuid.UUID, f agents.TaskFilter, readable []uuid.UUID, limit int) ([]agents.Task, error) {
+// Tasks lists at most limit of the organization's tasks, newest first, that match f, name no repository or one of
+// readable, and are of none of the kinds in hidden.
+func (s *Store) Tasks(_ context.Context, orgID uuid.UUID, f agents.TaskFilter, readable []uuid.UUID, hidden []string, limit int) ([]agents.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	var out []agents.Task
 	for _, t := range slices.Backward(s.tasks) {
 		match := t.OrgID == orgID && (f.AgentID == uuid.Nil || t.Agent.ID == f.AgentID) &&
 			(len(f.States) == 0 || slices.Contains(f.States, t.State)) && (f.RepoID == uuid.Nil || t.RepoID == f.RepoID) &&
-			(t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && (f.Before == 0 || t.Number < f.Before)
+			(t.RepoID == uuid.Nil || slices.Contains(readable, t.RepoID)) && !slices.Contains(hidden, t.Kind) &&
+			(f.Before == 0 || t.Number < f.Before)
 		if match && len(out) < limit {
 			out = append(out, t)
 		}

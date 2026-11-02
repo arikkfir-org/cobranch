@@ -20,9 +20,11 @@ import (
 const KindTask = "issue"
 
 // Agents is the agents service, as the issues hand one of theirs to an agent: Prepare checks that the viewer may
-// assign the agent the task and answers it, to record.
+// assign the agent the task and answers it, to record, and Guard shows tasks of a kind only to viewers who hold a
+// permission.
 type Agents interface {
 	Prepare(ctx context.Context, v Viewer, orgID, agentID uuid.UUID, in agents.TaskInput) (agents.Task, error)
+	Guard(kind, permission string)
 }
 
 // Tasks is the agents' store, as the issues record the tasks they give agents: called with the context of the
@@ -33,8 +35,10 @@ type Tasks interface {
 }
 
 // WithAgents has the service hand issues to agents through a and t, and answers it. Without them, an issue assigned
-// to an agent gives it no task.
+// to an agent gives it no task. A task of an issue carries its title and description, so a shows it only to viewers
+// who hold issues.read, as the issue itself.
 func (s *Service) WithAgents(a Agents, t Tasks) *Service {
+	a.Guard(KindTask, PermRead)
 	s.agents, s.tasks = a, t
 	return s
 }

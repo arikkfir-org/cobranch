@@ -73,8 +73,8 @@ VALUES (@id, @org_id, @number, @agent_id, @kind, sqlc.narg(assigned_by), @title,
     sqlc.narg(thread_id), sqlc.narg(issue_id));
 
 -- Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
--- agent, the states and the repository when they're given, and naming no repository or one of readable, with the
--- names of their agents, assigners, cancellers, repositories and branches.
+-- agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
+-- the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches.
 -- name: Tasks :many
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name
@@ -86,6 +86,7 @@ WHERE t.org_id = @org_id
     AND (cardinality(@states::text[]) = 0 OR t.state = ANY (@states::text[]))
     AND (sqlc.narg(repo_id)::uuid IS NULL OR t.repo_id = sqlc.narg(repo_id)::uuid)
     AND (t.repo_id IS NULL OR t.repo_id = ANY (@readable::uuid[]))
+    AND NOT (t.kind = ANY (@hidden::text[]))
     AND (sqlc.narg(before)::bigint IS NULL OR t.number < sqlc.narg(before)::bigint)
 ORDER BY t.number DESC LIMIT @lim;
 

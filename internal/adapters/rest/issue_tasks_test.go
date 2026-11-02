@@ -10,15 +10,27 @@ import (
 	"cobranch.dev/internal/services/issues"
 )
 
-// withScoutsIssue is withIssues with ACME-1 assigned to Scout by Max, which gives Scout task 4.
+// withScoutsIssue is withIssues with ACME-1, about website, assigned to Scout by Max, which gives Scout task 4.
 func withScoutsIssue(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return withScoutOn(1, viewer)
+}
+
+// withScoutOn is withIssues with the issue of number assigned to Scout by Max, which gives Scout task 4.
+func withScoutOn(number int, viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
 	return withIssues(func(f *orgFixture) *auth.Authenticated {
 		scout := f.scout.ID
-		if _, err := f.issues.Update(context.Background(), f.max.User, f.acme.ID, 1, issues.Patch{AssigneeID: &scout}); err != nil {
+		if _, err := f.issues.Update(context.Background(), f.max.User, f.acme.ID, number, issues.Patch{AssigneeID: &scout}); err != nil {
 			panic(err)
 		}
 		return viewer(f)
 	})
+}
+
+// guestReader is Nia as a guest of acme who reads website, with no issues.read.
+func guestReader(f *orgFixture) *auth.Authenticated {
+	f.store.AddMember(f.acme.ID, f.nia.User.ID, auth.RoleGuest)
+	f.store.Grant(f.nia.User.ID, auth.RoleReader, auth.ScopeRepository, f.website.ID)
+	return &f.nia
 }
 
 func TestAssignIssueToAgentAPI(t *testing.T) {
@@ -57,6 +69,14 @@ func TestAssignIssueToAgentAPI(t *testing.T) {
 					t.Errorf("task = %+v, %v; want cancelled", task, err)
 				}
 			}},
+		{name: "a guest who reads the repository lists no task of an issue", viewer: withScoutsIssue(guestReader), method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/tasks"), wantStatus: 200, check: wantTasks(3, 2, 1)},
+		{name: "nor finds it", viewer: withScoutsIssue(guestReader), method: http.MethodGet, path: fixed("/v1/orgs/acme/tasks/4"),
+			wantStatus: 404, wantCode: "task.not_found"},
+		{name: "nor that of an issue about no repository", viewer: withScoutOn(3, guestReader), method: http.MethodGet,
+			path: fixed("/v1/orgs/acme/tasks"), wantStatus: 200, check: wantTasks(3, 2, 1)},
+		{name: "which a member lists", viewer: withScoutOn(3, maxim), method: http.MethodGet, path: fixed("/v1/orgs/acme/tasks"),
+			wantStatus: 200, check: wantTasks(4, 3, 2, 1)},
 		{name: "a principal of no organization's", viewer: withIssues(maxim), method: http.MethodPatch, path: fixed("/v1/orgs/acme/issues/1"),
 			bodyOf: func(f *orgFixture) string { return `{"assigneeId":"` + f.nia.User.ID.String() + `"}` }, header: mergePatchAt("*"),
 			wantStatus: 400, wantCode: "assignee.invalid"},

@@ -1234,8 +1234,8 @@ paths:
     get:
       operationId: listTasks
       summary: >-
-        A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read;
-        takes org.read.
+        A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read,
+        and those of issues without issues.read; takes org.read.
       parameters:
         - $ref: "#/components/parameters/org"
         - name: agent
@@ -1339,7 +1339,9 @@ paths:
   /orgs/{org}/tasks/{number}:
     get:
       operationId: getTask
-      summary: One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+      summary: >-
+        One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and
+        issues.read for an issue's task.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/taskNumber"

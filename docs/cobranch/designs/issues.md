@@ -232,6 +232,10 @@ work as in a branch chat, once agents follow mentions.
   task is of kind `issue`; its title is the issue's identifier and title, its instructions the description, cut to the
   20,000 characters a task holds with a line that says so. The task row names its issue (`agent_tasks.issue_id`), and
   the issue shows the task's number and state beside the agent, to viewers who read its repository.
+- **Its task reads as the issue does.** The task carries the issue's title and description, so the agents service shows
+  a task of kind `issue` only to viewers who hold `issues.read`, beside `repo.read` on the repository it names: a Guest
+  who reads the repository finds neither the issue nor its task, and nobody without `issues.read` finds the task of an
+  issue about no repository.
 - **Reassigning cancels it.** Moving the issue to another assignee, or nobody, cancels the agent's open task in the same
   transaction, for whoever moved it; a task that has ended stays as it ended. Done or Canceled leaves a running task to
   finish its turn and record it. Deleting the issue cancels its task too, which then names no issue.

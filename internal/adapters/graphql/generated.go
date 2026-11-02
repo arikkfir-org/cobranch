@@ -4424,9 +4424,9 @@ extend type Organization {
   agents: [Agent!]!
   "One of the organization's agents by ID: null unless it is there; takes org.read."
   agent(id: ID!): Agent
-  "A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
+  "A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read: only agent's, those in states and those in repositoryId when they are given, from the newest or from after, where the previous page's nextCursor says the next one starts; takes org.read. first is 1 to 100."
   tasks(agent: ID, states: [TaskState!], repositoryId: ID, first: Int! = 30, after: String): TaskPage!
-  "One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read."
+  "One of the organization's tasks by number: null unless it is there, the viewer reads the repository it names, and, for an issue's task, holds issues.read; takes org.read."
   task(number: Int!): Task
 }
 

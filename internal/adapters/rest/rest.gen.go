@@ -3017,13 +3017,13 @@ type ServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(w http.ResponseWriter, r *http.Request, org Org, roleID RoleID)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
 	// (POST /orgs/{org}/tasks)
 	AssignTask(w http.ResponseWriter, r *http.Request, org Org)
-	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.
 	// (GET /orgs/{org}/tasks/{number})
 	GetTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params GetTaskParams)
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
@@ -18577,13 +18577,13 @@ type StrictServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(ctx context.Context, request UpdateRoleRequestObject) (UpdateRoleResponseObject, error)
-	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read, and those of issues without issues.read; takes org.read.
 	// (GET /orgs/{org}/tasks)
 	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
 	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
 	// (POST /orgs/{org}/tasks)
 	AssignTask(ctx context.Context, request AssignTaskRequestObject) (AssignTaskResponseObject, error)
-	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// GetTask One of the organization's tasks by its number; takes org.read, repo.read on the repository it names, and issues.read for an issue's task.
 	// (GET /orgs/{org}/tasks/{number})
 	GetTask(ctx context.Context, request GetTaskRequestObject) (GetTaskResponseObject, error)
 	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.

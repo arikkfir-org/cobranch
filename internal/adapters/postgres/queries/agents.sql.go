@@ -414,8 +414,9 @@ WHERE t.org_id = $1
     AND (cardinality($3::text[]) = 0 OR t.state = ANY ($3::text[]))
     AND ($4::uuid IS NULL OR t.repo_id = $4::uuid)
     AND (t.repo_id IS NULL OR t.repo_id = ANY ($5::uuid[]))
-    AND ($6::bigint IS NULL OR t.number < $6::bigint)
-ORDER BY t.number DESC LIMIT $7
+    AND NOT (t.kind = ANY ($6::text[]))
+    AND ($7::bigint IS NULL OR t.number < $7::bigint)
+ORDER BY t.number DESC LIMIT $8
 `
 
 type TasksParams struct {
@@ -424,6 +425,7 @@ type TasksParams struct {
 	States   []string
 	RepoID   *uuid.UUID
 	Readable []uuid.UUID
+	Hidden   []string
 	Before   *int64
 	Lim      int32
 }
@@ -438,8 +440,8 @@ type TasksRow struct {
 }
 
 // Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
-// agent, the states and the repository when they're given, and naming no repository or one of readable, with the
-// names of their agents, assigners, cancellers, repositories and branches.
+// agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
+// the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches.
 func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error) {
 	rows, err := q.db.Query(ctx, tasks,
 		arg.OrgID,
@@ -447,6 +449,7 @@ func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error
 		arg.States,
 		arg.RepoID,
 		arg.Readable,
+		arg.Hidden,
 		arg.Before,
 		arg.Lim,
 	)

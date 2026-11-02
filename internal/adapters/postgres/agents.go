@@ -289,12 +289,15 @@ func zero(at *time.Time) time.Time {
 	return *at
 }
 
-// Tasks lists a page of at most limit of the organization's tasks, newest first, that match the filter and either name
-// no repository or one of readable (agents.Store).
-func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFilter, readable []uuid.UUID, limit int) ([]agents.Task, error) {
-	p := queries.TasksParams{OrgID: orgID, States: make([]string, 0, len(f.States)), Readable: readable, Lim: int32(min(limit, agents.MaxPage+1))} //nolint:gosec // a page is small
+// Tasks lists a page of at most limit of the organization's tasks, newest first, that match the filter, either name
+// no repository or one of readable, and are of none of the kinds in hidden (agents.Store).
+func (s *AgentStore) Tasks(ctx context.Context, orgID uuid.UUID, f agents.TaskFilter, readable []uuid.UUID, hidden []string, limit int) ([]agents.Task, error) {
+	p := queries.TasksParams{OrgID: orgID, States: make([]string, 0, len(f.States)), Readable: readable, Hidden: hidden, Lim: int32(min(limit, agents.MaxPage+1))} //nolint:gosec // a page is small
 	if p.Readable == nil {
 		p.Readable = []uuid.UUID{}
+	}
+	if p.Hidden == nil {
+		p.Hidden = []string{}
 	}
 	if f.AgentID != uuid.Nil {
 		p.AgentID = &f.AgentID
