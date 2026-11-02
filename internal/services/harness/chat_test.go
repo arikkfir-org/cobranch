@@ -26,8 +26,10 @@ type chatCase struct {
 	turns    []harness.Turn
 	postErr  error
 	checkout *checkout
-	wantErr  bool
-	check    func(t *testing.T, c *cobranch, m *model)
+	// kind, when set, handles the task, of kind review.
+	kind    *kind
+	wantErr bool
+	check   func(t *testing.T, c *cobranch, m *model)
 }
 
 // checkout is a harness.Checkout that holds a clone, or fails, and remembers what it prepared.
@@ -183,6 +185,18 @@ func checkoutCases() []chatCase {
 			check: func(t *testing.T, _ *cobranch, m *model) {
 				prompts(t, m, []string{"on branch acme-42-task-7", "push branch acme-42-task-7 with git", "The branch is the task's own: push no other."}, nil)
 			}},
+		{name: "a task at a commit", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Commit: "0123abcd", Fresh: true}},
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"a clone of repository website at commit 0123abcd of branch tidy", "push nothing"}, []string{"Commit there", "push branch"})
+			}},
+		{name: "a task its kind ends gets no clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}},
+			kind: &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Nothing to do."}}},
+			check: func(t *testing.T, c *cobranch, m *model) {
+				if got := c.kinds(); !slices.Equal(got, kinds("input", "state")) || len(m.requests) != 0 {
+					t.Errorf("the transcript's entries are %v, after %d requests", got, len(m.requests))
+				}
+			}},
 		{name: "a workspace without a clone", branch: "tidy", checkout: &checkout{}, turns: []harness.Turn{done},
 			check: func(t *testing.T, _ *cobranch, m *model) {
 				prompts(t, m, []string{"a thread of branch tidy's chat"}, []string{"clone", "push"})
@@ -242,11 +256,19 @@ func runChat(t *testing.T, tc chatCase) {
 	if tc.checkout != nil {
 		h.WithCheckout(tc.checkout)
 	}
+	want := 1
+	if tc.kind != nil {
+		c.work.Task.Kind = "review"
+		h.Handle("review", tc.kind)
+		if tc.kind.kit.End != nil {
+			want = 0
+		}
+	}
 	if err := h.Run(context.Background()); (err != nil) != tc.wantErr {
 		t.Fatalf("Run() = %v, want an error: %v", err, tc.wantErr)
 	}
-	if tc.checkout != nil && (len(tc.checkout.prepared) != 1 || tc.checkout.prepared[0].Task.RepoSlug != "website") {
-		t.Errorf("prepared %+v", tc.checkout.prepared)
+	if tc.checkout != nil && (len(tc.checkout.prepared) != want || want == 1 && tc.checkout.prepared[0].Task.RepoSlug != "website") {
+		t.Errorf("prepared %+v, want %d", tc.checkout.prepared, want)
 	}
 	tc.check(t, c, m)
 }

@@ -2371,7 +2371,11 @@ type RepositoryUsage struct {
 
 // Review A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
 type Review struct {
-	Body string             `json:"body"`
+	// Body Its Markdown.
+	Body string `json:"body"`
+
+	// Html Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the files of the commit it reviewed; empty when it has no body, or where the installation renders no Markdown.
+	Html string             `json:"html"`
 	Id   openapi_types.UUID `json:"id"`
 
 	// Person Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.

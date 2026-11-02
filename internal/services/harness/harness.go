@@ -83,6 +83,9 @@ type Clone struct {
 	// Branch is the branch the clone is on, which the task's work goes to; empty when the workspace holds no clone,
 	// for a task without a repository or an installation without a Git server.
 	Branch string
+	// Commit is the commit the clone is at, detached, for a task that works at one, such as a review; empty for a clone
+	// on Branch's head.
+	Commit string
 	// Fresh is whether Prepare just made the clone.
 	Fresh bool
 }
@@ -99,6 +102,30 @@ type Tool interface {
 	Spec() Spec
 	// Run runs the call and answers its output for the model. An error is shown to the model as the call's failure.
 	Run(ctx context.Context, c Call) (string, error)
+}
+
+// Kind fits the harness to one kind of task, such as the AI reviewer's reviews: what its tasks get beside the agent's
+// own tools and instructions, and what one must have done before it succeeds.
+type Kind interface {
+	// Prepare readies the task w, as each pod starts it, and answers the kit it works with; or, through Kit.End, how it
+	// ends without asking the model at all. An error is one a restart may get past.
+	Prepare(ctx context.Context, w agents.Work) (Kit, error)
+}
+
+// Kit is what a Kind gives a task.
+type Kit struct {
+	// Tools are offered beside the agent's own.
+	Tools []Tool
+	// Instructions follow the agent's own in the system prompt.
+	Instructions string
+	// End, when set, ends the task as it says before the model is asked: its kind did the task itself.
+	End *agents.StateChange
+	// Unfinished answers what the task still has to do before it may succeed, empty once nothing; finish's succeeded
+	// outcome is refused until it is. An error is one a restart may get past. Nil for nothing.
+	Unfinished func(ctx context.Context) (string, error)
+	// Timeout is how long the task may run from its start, after which it fails; 0 for as long as the controller lets
+	// its pod run.
+	Timeout time.Duration
 }
 
 // Spec describes a tool to the model: its name, what it does, and the JSON Schema of the object its arguments are.

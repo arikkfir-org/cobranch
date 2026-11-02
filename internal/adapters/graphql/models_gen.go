@@ -1071,7 +1071,10 @@ type Review struct {
 	// The commit reviewed.
 	Sha   string      `json:"sha"`
 	State ReviewState `json:"state"`
-	Body  string      `json:"body"`
+	// Its Markdown.
+	Body string `json:"body"`
+	// Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the files of the commit it reviewed; empty when it has no body, or where the installation renders no Markdown.
+	HTML string `json:"html"`
 	// Who submitted it; null once they are gone, when it counts no more.
 	Reviewer *CommitPrincipal `json:"reviewer,omitempty"`
 	// Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.

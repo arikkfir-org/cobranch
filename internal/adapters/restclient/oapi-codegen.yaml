@@ -7,5 +7,5 @@ generate:
   client: true
 output-options:
   include-operation-ids: [getMyTask, listTranscript, appendTranscript, getChatThread, startChatThread, postChatMessage,
-    getIssueChatThread, startIssueChatThread, postIssueChatMessage]
+    getIssueChatThread, startIssueChatThread, postIssueChatMessage, getBranchDiff, getBlob, getTree, listReviews, submitReview]
   nullable-type: true

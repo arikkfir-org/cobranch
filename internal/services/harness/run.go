@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -22,6 +24,7 @@ type Harness struct {
 	tools    []Tool
 	maxTurns int
 	checkout Checkout
+	kinds    map[string]Kind
 }
 
 // New returns a Harness that works through c, asks m for its turns, offers it the tools and finish, and fails a task
@@ -30,7 +33,13 @@ func New(c Cobranch, m Model, maxTurns int, tools ...Tool) *Harness {
 	if maxTurns <= 0 {
 		maxTurns = DefaultMaxTurns
 	}
-	return &Harness{cobranch: c, model: m, tools: tools, maxTurns: maxTurns}
+	return &Harness{cobranch: c, model: m, tools: tools, maxTurns: maxTurns, kinds: map[string]Kind{}}
+}
+
+// Handle has k prepare the tasks of kind, and answers h.
+func (h *Harness) Handle(kind string, k Kind) *Harness {
+	h.kinds[kind] = k
+	return h
 }
 
 // WithCheckout has the Harness ready the task's workspace with c before it works the task, and answers it.
@@ -72,29 +81,44 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading the transcript: %w", err)
 	}
-	slog.InfoContext(ctx, "Working the task", "entries", len(entries))
-	r := &run{Harness: h, work: w, entries: entries, thread: w.Task.ThreadID}
-	r.offered = append(r.chatTools(), h.tools...)
+	var kit Kit
+	if k, ok := h.kinds[w.Task.Kind]; ok {
+		if kit, err = k.Prepare(ctx, w); err != nil {
+			return nil, fmt.Errorf("preparing the %s task: %w", w.Task.Kind, err)
+		}
+	}
+	slog.InfoContext(ctx, "Working the task", "entries", len(entries), "kind", w.Task.Kind)
+	r := &run{Harness: h, work: w, entries: entries, kit: kit, thread: w.Task.ThreadID}
+	r.toolset = slices.Concat(r.chatTools(), h.tools, kit.Tools)
+	// A task its kind ended has no deadline: it ends as its kind said, however late it resumed.
+	if start := w.Task.StartedAt; kit.Timeout > 0 && kit.End == nil {
+		if start.IsZero() {
+			start = time.Now()
+		}
+		r.deadline = start.Add(kit.Timeout)
+	}
 	return r, r.prepare(ctx)
 }
 
-// run is a task the harness works, and its transcript so far.
+// run is a task the harness works, and its transcript so far: the kit its kind gave it, the tools it offers, its
+// chat's, the agent's and its kind's, and when it must have ended, zero for no deadline of its own.
 type run struct {
 	*Harness
-	work    agents.Work
-	entries []agents.Entry
+	work     agents.Work
+	entries  []agents.Entry
+	kit      Kit
+	toolset  []Tool
+	deadline time.Time
 	// thread is the thread of its chat the task talks in; uuid.Nil until it has one.
 	thread uuid.UUID
-	// offered are the tools the model may call besides finish: its chat's, when the task has one, then the Harness's.
-	offered []Tool
 	// clone is the clone of the task's repository that its workspace holds.
 	clone Clone
 }
 
-// prepare readies the task's workspace, and tells the model when a task under way got a fresh one, as it does when
-// its pod starts again: what it didn't push is gone.
+// prepare readies the task's workspace, unless its kind ended it, and tells the model when a task under way got a
+// fresh one, as it does when its pod starts again: what it didn't push is gone.
 func (r *run) prepare(ctx context.Context) error {
-	if r.checkout == nil {
+	if r.checkout == nil || r.kit.End != nil {
 		return nil
 	}
 	clone, err := r.checkout.Prepare(ctx, r.work)
@@ -108,19 +132,34 @@ func (r *run) prepare(ctx context.Context) error {
 	return r.append(ctx, agents.EntryInput, input{Text: freshWorkspace, By: byHarness})
 }
 
-// loop takes the task's steps until it ends.
+// loop takes the task's steps until it ends, and fails it once it runs past its deadline: a step the deadline cuts
+// short fails it too.
 func (r *run) loop(ctx context.Context) error {
+	sctx := ctx
+	if !r.deadline.IsZero() {
+		var cancel context.CancelFunc
+		sctx, cancel = context.WithDeadline(ctx, r.deadline)
+		defer cancel()
+	}
 	for {
-		done, err := r.step(ctx)
-		if err != nil || done {
+		if r.overdue() {
+			return r.fail(ctx, "Timed out after "+r.kit.Timeout.String()+".")
+		}
+		done, err := r.step(sctx)
+		if done || err != nil && !r.overdue() {
 			return err
 		}
 	}
 }
 
+// overdue reports whether the task ran past its deadline.
+func (r *run) overdue() bool {
+	return !r.deadline.IsZero() && !time.Now().Before(r.deadline)
+}
+
 // step takes the task's next step, as its transcript says it is, and reports whether the task has ended: it begins
-// the transcript, runs the calls of the last turn that have no result yet, nudges a model that ended its turn without
-// one, fails a task that took its last turn, or asks the model for its next turn.
+// the transcript, ends a task its kind ended, runs the calls of the last turn that have no result yet, nudges a model
+// that ended its turn without one, fails a task that took its last turn, or asks the model for its next turn.
 func (r *run) step(ctx context.Context) (bool, error) {
 	s, err := read(r.entries)
 	switch {
@@ -130,6 +169,9 @@ func (r *run) step(ctx context.Context) (bool, error) {
 		return true, nil
 	case len(r.entries) == 0:
 		return false, r.begin(ctx)
+	case r.kit.End != nil:
+		slog.InfoContext(ctx, "The task's kind ended it", "state", r.kit.End.State)
+		return true, r.append(ctx, agents.EntryState, *r.kit.End)
 	case len(s.pending) > 0:
 		return false, r.call(ctx, s.pending)
 	case s.idle:

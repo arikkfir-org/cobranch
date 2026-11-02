@@ -33,8 +33,8 @@ func (w *Workspace) WithGit(g Git) *Workspace {
 // Prepare readies the workspace for the task: Git's configuration, which names the agent as the author of its
 // commits and gives the Git server the task's token, read from its file each time; and, when the task names a
 // repository and the workspace holds none, the repository, cloned on the branch the task's work goes to. A task that
-// names no branch gets one of its own, which a clone of an earlier pod of the task may have pushed already
-// (harness.Checkout).
+// names no branch gets one of its own, which a clone of an earlier pod of the task may have pushed already; one that
+// works at a commit, such as a review, gets the clone at that commit, detached (harness.Checkout).
 func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clone, error) {
 	if err := w.configure(ctx, work); err != nil {
 		return harness.Clone{}, err
@@ -48,7 +48,7 @@ func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clon
 		return harness.Clone{}, nil
 	}
 	if _, err := os.Stat(filepath.Join(w.dir, ".git")); err == nil {
-		return harness.Clone{Branch: branch}, nil
+		return harness.Clone{Branch: branch, Commit: t.SHA}, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return harness.Clone{}, fmt.Errorf("finding the workspace's clone: %w", err)
 	}
@@ -59,13 +59,20 @@ func (w *Workspace) Prepare(ctx context.Context, work agents.Work) (harness.Clon
 	if _, err := w.run(ctx, append(args, "--", w.remote(work), w.dir)...); err != nil {
 		return harness.Clone{}, fmt.Errorf("cloning repository %s: %w", t.RepoSlug, err)
 	}
-	if t.Branch == "" {
-		if err := w.own(ctx, branch); err != nil {
-			return harness.Clone{}, err
+	var err error
+	switch {
+	case t.SHA != "":
+		if _, err = w.run(ctx, "switch", "--quiet", "--detach", t.SHA); err != nil {
+			err = fmt.Errorf("checking out commit %s: %w", t.SHA, err)
 		}
+	case t.Branch == "":
+		err = w.own(ctx, branch)
 	}
-	slog.InfoContext(ctx, "Cloned the task's repository", "repository", t.RepoSlug, "branch", branch)
-	return harness.Clone{Branch: branch, Fresh: true}, nil
+	if err != nil {
+		return harness.Clone{}, err
+	}
+	slog.InfoContext(ctx, "Cloned the task's repository", "repository", t.RepoSlug, "branch", branch, "commit", t.SHA)
+	return harness.Clone{Branch: branch, Commit: t.SHA, Fresh: true}, nil
 }
 
 // own puts the clone on branch, the task's own: the Git server's, when an earlier pod of the task pushed it, or a new

@@ -55,10 +55,12 @@ func work(repo, branch string) agents.Work {
 
 // prepareCase is a task's workspace to prepare, from a Git server's URL, and what it should hold.
 type prepareCase struct {
-	name         string
-	url, branch  string
-	repo         string
-	issue        bool
+	name        string
+	url, branch string
+	repo        string
+	issue       bool
+	// at is the commit the task works at, by its subject on the server; empty for none.
+	at           string
 	wantClone    harness.Clone
 	wantErr      string
 	wantSubject  string
@@ -76,6 +78,7 @@ func (tc prepareCase) work() agents.Work {
 
 func TestPrepare(t *testing.T) {
 	url := server(t)
+	first := gitIn(t, strings.TrimPrefix(url, "file://")+"/acme/website.git", "rev-parse", "main~1")
 	tt := []prepareCase{
 		{name: "the task's branch", url: url, repo: "website", branch: "tidy", wantClone: harness.Clone{Branch: "tidy", Fresh: true},
 			wantSubject: "First", wantBranches: "tidy"},
@@ -83,6 +86,8 @@ func TestPrepare(t *testing.T) {
 			wantClone: harness.Clone{Branch: "acme-42-task-7", Fresh: true}, wantSubject: "Second", wantBranches: "acme-42-task-7\nmain"},
 		{name: "a task's own branch, which an earlier pod pushed", url: url, repo: "website",
 			wantClone: harness.Clone{Branch: "tasks/7", Fresh: true}, wantSubject: "First", wantBranches: "main\ntasks/7"},
+		{name: "a task at a commit, behind its branch's head", url: url, repo: "website", branch: "main", at: first,
+			wantClone: harness.Clone{Branch: "main", Commit: first, Fresh: true}, wantSubject: "First", wantBranches: "(HEAD detached at " + first[:7] + ")\nmain"},
 		{name: "a task without a repository", url: url},
 		{name: "an installation without a Git server", repo: "website"},
 		{name: "a branch the repository lacks", url: url, repo: "website", branch: "gone", wantErr: "cloning repository website"},
@@ -97,7 +102,9 @@ func TestPrepare(t *testing.T) {
 			}
 			defer func() { _ = w.Close() }()
 			w.WithGit(Git{URL: tc.url, TokenFile: "/run/token"})
-			clone, err := w.Prepare(context.Background(), tc.work())
+			work := tc.work()
+			work.Task.SHA = tc.at
+			clone, err := w.Prepare(context.Background(), work)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("Prepare() = %v, want %q", err, tc.wantErr)
@@ -135,8 +142,10 @@ func checkPrepared(t *testing.T, w *Workspace, tc prepareCase) {
 	if got := gitIn(t, w.dir, "branch", "--format=%(refname:short)"); got != tc.wantBranches {
 		t.Errorf("the clone's branches are %q, want %q", got, tc.wantBranches)
 	}
-	if again, err := w.Prepare(context.Background(), tc.work()); err != nil || again != (harness.Clone{Branch: tc.wantClone.Branch}) {
-		t.Errorf("Prepare() again = %+v, %v, want the clone it holds", again, err)
+	again := tc.work()
+	again.Task.SHA = tc.at
+	if got, err := w.Prepare(context.Background(), again); err != nil || got != (harness.Clone{Branch: tc.wantClone.Branch, Commit: tc.at}) {
+		t.Errorf("Prepare() again = %+v, %v, want the clone it holds", got, err)
 	}
 }
 

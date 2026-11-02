@@ -293,8 +293,9 @@ adapters stay the same.
   first turn, on the branch its work goes to: the task's, or else one of its own, `acme-42-task-7` for an issue's task
   and `tasks/7` for any other, made from `main` unless an earlier pod of the task pushed it. The model commits as the
   agent, with its name and email, which a Git configuration of the workspace's own holds, read by every `git` the pod
-  runs in place of the user's, and is told to push that branch and no other. A pod that starts again clones afresh, and
-  the harness tells the model that what it hadn't pushed is gone.
+  runs in place of the user's, and is told to push that branch and no other. A task that works at a commit, such as a
+  review, gets its clone at that commit, detached, and is told to push nothing; one its kind ends before the model gets
+  none. A pod that starts again clones afresh, and the harness tells the model that what it hadn't pushed is gone.
 - **The thread.** A task talks in its thread: the one it was assigned from, or else the first it starts in its branch's
   chat, or its issue's for an issue's task, which becomes its thread, so a pod that starts again posts there.
   `post_message` names its message, or the thread it starts, by its call's key; `read_thread` shows the newest messages

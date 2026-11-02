@@ -6662,7 +6662,7 @@ components:
     Review:
       type: object
       description: A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
-      required: [id, sha, state, body, person, submittedAt]
+      required: [id, sha, state, body, html, person, submittedAt]
       properties:
         id:
           type: string
@@ -6674,6 +6674,12 @@ components:
           $ref: "#/components/schemas/ReviewState"
         body:
           type: string
+          description: Its Markdown.
+        html:
+          type: string
+          description: >-
+            Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the
+            files of the commit it reviewed; empty when it has no body, or where the installation renders no Markdown.
         reviewer:
           $ref: "#/components/schemas/Principal"
         person:

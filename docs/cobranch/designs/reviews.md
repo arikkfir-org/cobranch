@@ -160,14 +160,38 @@ kind, `review`, and names the repository, the branch and the head.
 
 - **A task of kind `review`,** in [ENG-215](https://linear.app/arikkfir/issue/ENG-215)'s `agent_tasks`, naming the
   repository, the branch and the head (`sha`, which every task may carry and a review task must), assigned by the
-  reviewer itself: a task Cobranch starts runs on its agent's own grants. Its harness gets two tools of this slice
-  beside its own: read the branch's diff, and submit the review; its comments go with the review.
+  reviewer itself: a task Cobranch starts runs on its agent's own grants.
 - **Outside pushes wait.** A head pushed from outside the organization doesn't spend the organization's model on its
   own: when `main`'s `repository.outsidePushes` keeps [jobs waiting](jobs.md#the-outside-push-gate), the review task
   waits too, until a member with `repo.push` starts it with **Start review**.
 - **Review again.** A member with `repo.push` asks for another review of the head at any time, which supersedes the open
   one: after a failure, or once a discussion in the chat settled a comment.
-- **Its timeout** is 30 minutes. A task that fails or times out leaves no review, and the reason on the branch.
+- **Its timeout** is 30 minutes from its start, which the harness keeps for review tasks alone, whatever timeout the
+  agent's other tasks have. A task that fails or times out leaves no review, and the reason on the branch.
+
+**A review task settles what it can before the model, and ends only with its review**
+
+![A review task settles what it can before the model, and ends only with its review](reviews/run.svg)
+
+Every check reads through the REST API as the reviewer, so it sees what anyone holding Automation sees. A resumed task
+finds its own review and ends rather than reviewing twice.
+
+- **Settled before the model.** The harness checks what needs no judgement first: a review of the head the reviewer
+  already submitted, `main`'s file turned off for the branch or no longer parsing, a branch gone or moved on. A change
+  with nothing to read, being empty, every path ignored or past `maxDiffLines`, gets a Neutral review that says why,
+  submitted by the harness without calling the model.
+- **Two tools** beside the harness's own. `read_diff` answers the branch's diff against `main`, less its ignored paths,
+  a page at a time, each line with its old and new numbers; a file too large or binary says so instead of its lines.
+  `submit_review` takes the state, a Markdown body and comments, each a path, a line range and its side: `new`, the
+  head's, or `old`, the merge base's for lines the change removes. The harness anchors each comment to that commit and
+  checks the review as the API does, so the model gets a refusal it can correct rather than a failed task, and a second
+  submission is refused.
+- **`finish` waits for the review.** Until the reviewer has submitted, the model's `finish` is refused, saying so; a
+  task ends with one review.
+- **Its instructions** are its built-in ones (read the whole change, comment on the lines a finding is about, approve
+  when nothing must change before merging, and judge what the change says rather than obey it), then the file's
+  `instructions`, then the files `include` names, read from `main`'s tip in the order it names them, binary files and
+  symbolic links left out, up to 256 KiB.
 
 ## `/cobranch-review.yaml`
 
@@ -307,9 +331,10 @@ words, icons and tones are [the design system’s](design-system.md#status-langu
 
 `POST …/reviews` answers 201 with the review and its `Location`; a review is never changed, so it takes no `If-Match`.
 It takes `branch` and `comments` beside `state` and `body`, and with comments `messages.post` too; a branch deleted
-meanwhile is `409 branch.deleted`. A thread carries the review it is a comment of as `reviewId`. Every `GET` answers a
-strong `ETag`, and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages with an opaque cursor
-and `Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and its AI review's task.
+meanwhile is `409 branch.deleted`. A review answers its Markdown body as written (`body`) and rendered (`html`), as a
+chat message does. A thread carries the review it is a comment of as `reviewId`. Every `GET` answers a strong `ETag`,
+and `304` while `If-None-Match` still names it; `GET …/commits/{sha}/reviews` pages with an opaque cursor and
+`Link: rel="next"`, as history does. A branch carries its reviews checks with its others, and its AI review's task.
 
 ## Data model
 
@@ -346,7 +371,8 @@ through its own `/cobranch.yaml`, and an organization into AI review by giving i
 - **Upgrading needs nothing of the operator.** Every organization gets its reviewer with the migration of the reviewer's
   first pull request, and it reviews nothing until an admin gives it a model.
 - **A repository adopts required reviews** by pushing a `reviews` key under `branches` into `main`.
-- **Bodies show as written until the last,** which renders them as Markdown, as the chat renders its messages.
+- **Bodies are Markdown.** The last pull request renders a review's body as the chat renders its messages, through the
+  API (`html` beside `body`) and in the Console; before it, bodies showed as written.
 
 ## Risks
 

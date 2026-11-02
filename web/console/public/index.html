@@ -2143,9 +2143,9 @@
       return panel;
     }
 
-    // commitReviews lists a commit's reviews: each reviewer's latest, the one that counts, in the order they first
-    // reviewed it, with their earlier ones folded beneath; and, for a viewer holding reviews.submit, a form to submit one,
-    // with the comments drafting holds.
+    // commitReviews lists a commit's reviews, their bodies rendered as Markdown: each reviewer's latest, the one that
+    // counts, in the order they first reviewed it, with their earlier ones folded beneath; and, for a viewer holding
+    // reviews.submit, a form to submit one, with the comments drafting holds.
     function commitReviews(path, c, can, fail, drafting) {
       const latest = [];
       for (const r of c.reviews) {
@@ -2158,7 +2158,8 @@
         h("div", { class: "who" }, reviewBadge(r.state), h("strong", {}, r.reviewer ? r.reviewer.displayName : "A principal since gone"),
           r.person ? null : h("span", { class: "chip", title: "Only people's approvals count towards required approvals" }, "not a person"),
           h("span", { class: "muted" }, whenExactly(r.submittedAt))),
-        r.body ? h("pre", { class: "message" }, r.body) : null);
+        r.html ? h("div", { class: "message" }, h("div", { class: "body" }, messageBody(r.html)))
+          : r.body ? h("pre", { class: "message" }, r.body) : null);
       const panel = h("section", { class: "panel" }, h("h3", {}, "Reviews"));
       if (!c.reviews.length) panel.append(h("p", {}, "No reviews yet."));
       else panel.append(h("ul", { class: "reviews" }, latest.map((r) => item(r))));

@@ -18,6 +18,93 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for DiffLineKind.
+const (
+	DiffLineKindAdded   DiffLineKind = "added"
+	DiffLineKindContext DiffLineKind = "context"
+	DiffLineKindRemoved DiffLineKind = "removed"
+)
+
+// Valid indicates whether the value is a known member of the DiffLineKind enum.
+func (e DiffLineKind) Valid() bool {
+	switch e {
+	case DiffLineKindAdded:
+		return true
+	case DiffLineKindContext:
+		return true
+	case DiffLineKindRemoved:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileKind.
+const (
+	FileKindBlob    FileKind = "blob"
+	FileKindSymlink FileKind = "symlink"
+)
+
+// Valid indicates whether the value is a known member of the FileKind enum.
+func (e FileKind) Valid() bool {
+	switch e {
+	case FileKindBlob:
+		return true
+	case FileKindSymlink:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for FileDiffStatus.
+const (
+	FileDiffStatusAdded       FileDiffStatus = "added"
+	FileDiffStatusDeleted     FileDiffStatus = "deleted"
+	FileDiffStatusModified    FileDiffStatus = "modified"
+	FileDiffStatusRenamed     FileDiffStatus = "renamed"
+	FileDiffStatusTypeChanged FileDiffStatus = "type_changed"
+)
+
+// Valid indicates whether the value is a known member of the FileDiffStatus enum.
+func (e FileDiffStatus) Valid() bool {
+	switch e {
+	case FileDiffStatusAdded:
+		return true
+	case FileDiffStatusDeleted:
+		return true
+	case FileDiffStatusModified:
+		return true
+	case FileDiffStatusRenamed:
+		return true
+	case FileDiffStatusTypeChanged:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ReviewState.
+const (
+	Approved         ReviewState = "approved"
+	ChangesRequested ReviewState = "changes_requested"
+	Neutral          ReviewState = "neutral"
+)
+
+// Valid indicates whether the value is a known member of the ReviewState enum.
+func (e ReviewState) Valid() bool {
+	switch e {
+	case Approved:
+		return true
+	case ChangesRequested:
+		return true
+	case Neutral:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TaskState.
 const (
 	Cancelled TaskState = "cancelled"
@@ -66,6 +153,30 @@ func (e TranscriptEntryKind) Valid() bool {
 	case State:
 		return true
 	case Turn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for TreeEntryKind.
+const (
+	TreeEntryKindBlob      TreeEntryKind = "blob"
+	TreeEntryKindSubmodule TreeEntryKind = "submodule"
+	TreeEntryKindSymlink   TreeEntryKind = "symlink"
+	TreeEntryKindTree      TreeEntryKind = "tree"
+)
+
+// Valid indicates whether the value is a known member of the TreeEntryKind enum.
+func (e TreeEntryKind) Valid() bool {
+	switch e {
+	case TreeEntryKindBlob:
+		return true
+	case TreeEntryKindSubmodule:
+		return true
+	case TreeEntryKindSymlink:
+		return true
+	case TreeEntryKindTree:
 		return true
 	default:
 		return false
@@ -168,6 +279,130 @@ type ChatThreadInput struct {
 	Id *openapi_types.UUID `json:"id,omitempty"`
 }
 
+// Diff A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left out rather than show it.
+type Diff struct {
+	// Additions The lines it adds, in every file it changes, those it left out included.
+	Additions int `json:"additions"`
+
+	// Base The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+	Base *string `json:"base,omitempty"`
+
+	// BaseTip A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+	BaseTip *string `json:"baseTip,omitempty"`
+
+	// Deletions The lines it removes, in every file it changes, those it left out included.
+	Deletions int `json:"deletions"`
+
+	// Files The files it changes, in Git's order, by path.
+	Files []FileDiff `json:"files"`
+
+	// FilesLeftOut How many files it changes past the 3000 it lists.
+	FilesLeftOut int `json:"filesLeftOut"`
+
+	// Head The commit it runs to.
+	Head string `json:"head"`
+}
+
+// DiffLine One of a hunk's lines, without its newline.
+type DiffLine struct {
+	Kind DiffLineKind `json:"kind"`
+
+	// New Its number in the new file; absent for a removed line.
+	New *int `json:"new,omitempty"`
+
+	// NoNewline Present and true when the file ends on it without a newline.
+	NoNewline *bool `json:"noNewline,omitempty"`
+
+	// Old Its number in the old file; absent for an added line.
+	Old  *int   `json:"old,omitempty"`
+	Text string `json:"text"`
+}
+
+// DiffLineKind defines model for DiffLine.Kind.
+type DiffLineKind string
+
+// File A file or a symlink at a commit, and its text when it isn't binary.
+type File struct {
+	// Binary Whether it is binary, as Git judges a file (a NUL in its first 8000 bytes), or not UTF-8.
+	Binary bool `json:"binary"`
+
+	// Commit The commit the ref resolved to.
+	Commit string `json:"commit"`
+
+	// Html A Markdown file's text rendered as GitHub-flavoured Markdown, sanitized: no scripts, styles, frames, forms or event handlers. Its relative links open the Console's pages at the same ref, its relative images load this API's raw bytes at the commit, images from elsewhere stay at their URLs for the browser to load, and its ids start with user-content-.
+	Html *string  `json:"html,omitempty"`
+	Kind FileKind `json:"kind"`
+
+	// Mode Its mode as Git writes it, such as 100644 or 120000.
+	Mode string `json:"mode"`
+	Name string `json:"name"`
+
+	// Path Its path from the repository's root.
+	Path string `json:"path"`
+
+	// Sha Its blob's object.
+	Sha string `json:"sha"`
+
+	// Size Its size in bytes.
+	Size int64 `json:"size"`
+
+	// Text Its text, up to 1 MiB, when it isn't binary; a symlink's is its target.
+	Text *string `json:"text,omitempty"`
+
+	// Truncated Whether its text stops at 1 MiB, short of its size.
+	Truncated bool `json:"truncated"`
+}
+
+// FileKind defines model for File.Kind.
+type FileKind string
+
+// FileDiff One file's change.
+type FileDiff struct {
+	Additions int `json:"additions"`
+
+	// Binary Whether Git reads it as binary, which shows no lines.
+	Binary    bool   `json:"binary"`
+	Deletions int    `json:"deletions"`
+	Hunks     []Hunk `json:"hunks"`
+
+	// Mode Its mode after; absent for a deleted file.
+	Mode *string `json:"mode,omitempty"`
+
+	// OldMode Its mode before, as Git writes it; absent for an added file.
+	OldMode *string `json:"oldMode,omitempty"`
+
+	// OldPath The path it had before, for a renamed file.
+	OldPath *string `json:"oldPath,omitempty"`
+
+	// Path Its path from the repository's root; a deleted file's old one.
+	Path string `json:"path"`
+
+	// Status What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+	Status FileDiffStatus `json:"status"`
+
+	// Truncated Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the diff passed 20000 lines or 4 MiB before it. Its counts stay.
+	Truncated bool `json:"truncated"`
+}
+
+// FileDiffStatus What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+type FileDiffStatus string
+
+// Hunk One run of a file's changes, with up to three lines around them.
+type Hunk struct {
+	Lines    []DiffLine `json:"lines"`
+	NewLines int        `json:"newLines"`
+
+	// NewStart Its first line in the new file, or the line before it when it spans none.
+	NewStart int `json:"newStart"`
+	OldLines int `json:"oldLines"`
+
+	// OldStart Its first line in the old file, or the line before it when it spans none.
+	OldStart int `json:"oldStart"`
+
+	// Section The heading Git found above it, such as a function's; empty when it found none.
+	Section string `json:"section"`
+}
+
 // MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
 type MyTask struct {
 	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
@@ -213,6 +448,56 @@ type Problem struct {
 	// Type A URI that names the problem's type; "about:blank" when the status says it all.
 	Type string `json:"type"`
 }
+
+// Review A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
+type Review struct {
+	// Body Its Markdown.
+	Body string `json:"body"`
+
+	// Html Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the files of the commit it reviewed; empty when it has no body, or where the installation renders no Markdown.
+	Html string             `json:"html"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// Person Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.
+	Person bool `json:"person"`
+
+	// Reviewer Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Reviewer *Principal `json:"reviewer,omitempty"`
+
+	// Sha The commit reviewed.
+	Sha string `json:"sha"`
+
+	// State A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+	State       ReviewState `json:"state"`
+	SubmittedAt time.Time   `json:"submittedAt"`
+}
+
+// ReviewComment A review's comment on lines of a file at a commit the repository holds: the reviewed commit's side of its diff, or its base's.
+type ReviewComment struct {
+	// Anchor Points a thread at lines startLine to endLine of the file at path of a commit; it stays there when the branch moves on.
+	Anchor ChatAnchor `json:"anchor"`
+
+	// Body The comment's Markdown, at most 20,000 characters, not blank.
+	Body string `json:"body"`
+}
+
+// ReviewInput The review a principal submits.
+type ReviewInput struct {
+	// Body What the reviewer writes, at most 65,536 characters, which only an approval, or a review with comments, may leave blank.
+	Body *string `json:"body,omitempty"`
+
+	// Branch The live branch in whose chat the comments open their threads, without refs/heads/; a review without comments needs none.
+	Branch *string `json:"branch,omitempty"`
+
+	// Comments The review's comments on lines of files, each a thread of the branch's chat that the review's transaction opens, anchored there, its first message the comment.
+	Comments *[]ReviewComment `json:"comments,omitempty"`
+
+	// State A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+	State ReviewState `json:"state"`
+}
+
+// ReviewState A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+type ReviewState string
 
 // Task A task of one of the organization's agents, which the organization numbers.
 type Task struct {
@@ -290,6 +575,46 @@ type TranscriptEntryInput struct {
 // TranscriptEntryKind What an entry records: input, what the task began with or a message a person sent it since; turn, a turn of the agent's model with the tool calls it asked for; result, a tool's result; state, a change of the task's state.
 type TranscriptEntryKind string
 
+// Tree A directory at a commit.
+type Tree struct {
+	// Commit The commit the ref resolved to, which every link to the directory's files may pin.
+	Commit string `json:"commit"`
+
+	// Entries Its directories and submodules first, then its files and symlinks, each by name.
+	Entries []TreeEntry `json:"entries"`
+
+	// Path Its path from the repository's root; empty for the root.
+	Path string `json:"path"`
+
+	// Readme Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
+	Readme *File `json:"readme,omitempty"`
+
+	// Sha Its tree's object.
+	Sha string `json:"sha"`
+}
+
+// TreeEntry One of a directory's entries.
+type TreeEntry struct {
+	// Kind A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+	Kind TreeEntryKind `json:"kind"`
+
+	// Mode Its mode as Git writes it, such as 100644, 100755 or 040000.
+	Mode string `json:"mode"`
+	Name string `json:"name"`
+
+	// Path Its path from the repository's root.
+	Path string `json:"path"`
+
+	// Sha The object it names; a submodule's is the commit it pins.
+	Sha string `json:"sha"`
+
+	// Size A file's or a symlink's size in bytes.
+	Size *int64 `json:"size,omitempty"`
+}
+
+// TreeEntryKind A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
+type TreeEntryKind string
+
 // BranchName defines model for branch.
 type BranchName = string
 
@@ -302,8 +627,17 @@ type Number = int
 // Org defines model for org.
 type Org = string
 
+// Path defines model for path.
+type Path = string
+
+// Ref defines model for ref.
+type Ref = string
+
 // Repo defines model for repo.
 type Repo = string
+
+// SHA defines model for sha.
+type SHA = string
 
 // TaskNumber defines model for taskNumber.
 type TaskNumber = int64
@@ -317,8 +651,50 @@ type GetIssueChatThreadParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetBlobParams defines parameters for GetBlob.
+type GetBlobParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Path The file's path from the repository's root, as names separated by /.
+	Path string `form:"path" json:"path"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetChatThreadParams defines parameters for GetChatThread.
 type GetChatThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetBranchDiffParams defines parameters for GetBranchDiff.
+type GetBranchDiffParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// ListReviewsParams defines parameters for ListReviews.
+type ListReviewsParams struct {
+	// Cursor Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many reviews the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetTreeParams defines parameters for GetTree.
+type GetTreeParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Path The directory's path from the repository's root, as names separated by /; empty for the root.
+	Path *Path `form:"path,omitempty" json:"path,omitempty"`
+
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
@@ -343,6 +719,9 @@ type StartChatThreadJSONRequestBody = ChatThreadInput
 
 // PostChatMessageJSONRequestBody defines body for PostChatMessage for application/json ContentType.
 type PostChatMessageJSONRequestBody = ChatMessageInput
+
+// SubmitReviewJSONRequestBody defines body for SubmitReview for application/json ContentType.
+type SubmitReviewJSONRequestBody = ReviewInput
 
 // AppendTranscriptJSONRequestBody defines body for AppendTranscript for application/json ContentType.
 type AppendTranscriptJSONRequestBody = TranscriptEntryInput
@@ -459,6 +838,11 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages (the `PostIssueChatMessage` operationId).
 	PostIssueChatMessage(ctx context.Context, org Org, number Number, threadID ThreadID, body PostIssueChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
+	GetBlob(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartChatThreadWithBody Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
 	// Takes any type of body and a specified content type.
@@ -491,6 +875,35 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 	PostChatMessage(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
+	GetBranchDiff(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
+	ListReviews(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubmitReviewWithBody Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+	SubmitReviewWithBody(ctx context.Context, org Org, repo Repo, sha SHA, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+	SubmitReview(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
+	GetTree(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListTranscript The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
 	//
@@ -610,6 +1023,21 @@ func (c *Client) PostIssueChatMessage(ctx context.Context, org Org, number Numbe
 	return c.Client.Do(req)
 }
 
+// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
+func (c *Client) GetBlob(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBlobRequest(c.Server, org, repo, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // StartChatThreadWithBody Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 //
 // Takes any type of body and a specified content type.
@@ -683,6 +1111,85 @@ func (c *Client) PostChatMessageWithBody(ctx context.Context, org Org, repo Repo
 // Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 func (c *Client) PostChatMessage(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostChatMessageRequest(c.Server, org, repo, branchName, threadID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
+func (c *Client) GetBranchDiff(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBranchDiffRequest(c.Server, org, repo, branchName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ListReviews A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
+func (c *Client) ListReviews(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListReviewsRequest(c.Server, org, repo, sha, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubmitReviewWithBody Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+func (c *Client) SubmitReviewWithBody(ctx context.Context, org Org, repo Repo, sha SHA, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitReviewRequestWithBody(c.Server, org, repo, sha, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+func (c *Client) SubmitReview(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSubmitReviewRequest(c.Server, org, repo, sha, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
+func (c *Client) GetTree(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetTreeRequest(c.Server, org, repo, params)
 	if err != nil {
 		return nil, err
 	}
@@ -947,6 +1454,97 @@ func NewPostIssueChatMessageRequestWithBody(server string, org Org, number Numbe
 	return req, nil
 }
 
+// NewGetBlobRequest constructs an http.Request for the GetBlob method
+func NewGetBlobRequest(server string, org Org, repo Repo, params *GetBlobParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/blob", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Ref != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ref", *params.Ref, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "path", params.Path, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
 // NewStartChatThreadRequest calls the generic StartChatThread builder with application/json body
 func NewStartChatThreadRequest(server string, org Org, repo Repo, branchName BranchName, body StartChatThreadJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -1142,6 +1740,327 @@ func NewPostChatMessageRequestWithBody(server string, org Org, repo Repo, branch
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetBranchDiffRequest constructs an http.Request for the GetBranchDiff method
+func NewGetBranchDiffRequest(server string, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "branch", branchName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/branches/%s/diff", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewListReviewsRequest constructs an http.Request for the ListReviews method
+func NewListReviewsRequest(server string, org Org, repo Repo, sha SHA, params *ListReviewsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "sha", sha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/commits/%s/reviews", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
+
+	return req, nil
+}
+
+// NewSubmitReviewRequest calls the generic SubmitReview builder with application/json body
+func NewSubmitReviewRequest(server string, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSubmitReviewRequestWithBody(server, org, repo, sha, "application/json", bodyReader)
+}
+
+// NewSubmitReviewRequestWithBody constructs an http.Request for the SubmitReview method, with any body, and a specified content type
+func NewSubmitReviewRequestWithBody(server string, org Org, repo Repo, sha SHA, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "sha", sha, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/commits/%s/reviews", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetTreeRequest constructs an http.Request for the GetTree method
+func NewGetTreeRequest(server string, org Org, repo Repo, params *GetTreeParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "repo", repo, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/repos/%s/tree", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Ref != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "ref", *params.Ref, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Path != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "path", *params.Path, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+
+		if params.IfNoneMatch != nil {
+			var headerParam0 string
+
+			headerParam0, err = runtime.StyleParamWithOptions("simple", false, "If-None-Match", *params.IfNoneMatch, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationHeader, Type: "string", Format: ""})
+			if err != nil {
+				return nil, err
+			}
+
+			req.Header.Set("If-None-Match", headerParam0)
+		}
+
+	}
 
 	return req, nil
 }
@@ -1366,6 +2285,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/issues/{number}/chat/threads/{thread}/messages (the `PostIssueChatMessage` operationId).
 	PostIssueChatMessageWithResponse(ctx context.Context, org Org, number Number, threadID ThreadID, body PostIssueChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostIssueChatMessageResponse, error)
 
+	// GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
+	GetBlobWithResponse(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*GetBlobResponse, error)
+
 	// StartChatThreadWithBodyWithResponse Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -1400,6 +2326,41 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages (the `PostChatMessage` operationId).
 	PostChatMessageWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, threadID ThreadID, body PostChatMessageJSONRequestBody, reqEditors ...RequestEditorFn) (*PostChatMessageResponse, error)
+
+	// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
+	GetBranchDiffWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*GetBranchDiffResponse, error)
+
+	// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
+	ListReviewsWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error)
+
+	// SubmitReviewWithBodyWithResponse Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+	SubmitReviewWithBodyWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitReviewResponse, error)
+
+	// SubmitReviewWithResponse Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+	SubmitReviewWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitReviewResponse, error)
+
+	// GetTreeWithResponse The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
+	GetTreeWithResponse(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*GetTreeResponse, error)
 
 	// ListTranscriptWithResponse The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
 	//
@@ -1750,6 +2711,96 @@ func (r PostIssueChatMessageResponse) ContentType() string {
 	return ""
 }
 
+// GetBlobResponse200Headers the declared response headers of an HTTP 200 response for GetBlob
+type GetBlobResponse200Headers struct {
+	ETag string
+}
+
+// GetBlobResponse304Headers the declared response headers of an HTTP 304 response for GetBlob
+type GetBlobResponse304Headers struct {
+	ETag string
+}
+
+type GetBlobResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *File
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetBlobResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetBlobResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetBlobResponse) GetJSON200() *File {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetBlobResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetBlobResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetBlobResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetBlobResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetBlobResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetBlobResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBlobResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBlobResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetBlobResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // StartChatThreadResponse201Headers the declared response headers of an HTTP 201 response for StartChatThread
 type StartChatThreadResponse201Headers struct {
 	ETag     string
@@ -2002,6 +3053,364 @@ func (r PostChatMessageResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PostChatMessageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetBranchDiffResponse200Headers the declared response headers of an HTTP 200 response for GetBranchDiff
+type GetBranchDiffResponse200Headers struct {
+	ETag string
+}
+
+// GetBranchDiffResponse304Headers the declared response headers of an HTTP 304 response for GetBranchDiff
+type GetBranchDiffResponse304Headers struct {
+	ETag string
+}
+
+type GetBranchDiffResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Diff
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetBranchDiffResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetBranchDiffResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetBranchDiffResponse) GetJSON200() *Diff {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetBranchDiffResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetBranchDiffResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetBranchDiffResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetBranchDiffResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetBranchDiffResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetBranchDiffResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBranchDiffResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBranchDiffResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetBranchDiffResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// ListReviewsResponse200Headers the declared response headers of an HTTP 200 response for ListReviews
+type ListReviewsResponse200Headers struct {
+	ETag string
+	Link *string
+}
+
+// ListReviewsResponse304Headers the declared response headers of an HTTP 304 response for ListReviews
+type ListReviewsResponse304Headers struct {
+	ETag string
+}
+
+type ListReviewsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Reviews []Review `json:"reviews"`
+	}
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *ListReviewsResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *ListReviewsResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r ListReviewsResponse) GetJSON200() *struct {
+	Reviews []Review `json:"reviews"`
+} {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r ListReviewsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r ListReviewsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r ListReviewsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r ListReviewsResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r ListReviewsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ListReviewsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListReviewsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ListReviewsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// SubmitReviewResponse201Headers the declared response headers of an HTTP 201 response for SubmitReview
+type SubmitReviewResponse201Headers struct {
+	Location *string
+}
+
+type SubmitReviewResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Review
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers201 the parsed response headers for an HTTP 201 response
+	Headers201 *SubmitReviewResponse201Headers
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r SubmitReviewResponse) GetJSON201() *Review {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r SubmitReviewResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r SubmitReviewResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r SubmitReviewResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SubmitReviewResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r SubmitReviewResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetTreeResponse200Headers the declared response headers of an HTTP 200 response for GetTree
+type GetTreeResponse200Headers struct {
+	ETag string
+}
+
+// GetTreeResponse304Headers the declared response headers of an HTTP 304 response for GetTree
+type GetTreeResponse304Headers struct {
+	ETag string
+}
+
+type GetTreeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Tree
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON503 the response for an HTTP 503 `application/problem+json` response
+	ApplicationproblemJSON503 *Problem
+	// ApplicationproblemJSONDefault the response for an HTTP default `application/problem+json` response
+	ApplicationproblemJSONDefault *Problem
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetTreeResponse200Headers
+	// Headers304 the parsed response headers for an HTTP 304 response
+	Headers304 *GetTreeResponse304Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetTreeResponse) GetJSON200() *Tree {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetTreeResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetTreeResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetTreeResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON503 returns the response for an HTTP 503 `application/problem+json` response
+func (r GetTreeResponse) GetApplicationproblemJSON503() *Problem {
+	return r.ApplicationproblemJSON503
+}
+
+// GetApplicationproblemJSONDefault returns the response for an HTTP default `application/problem+json` response
+func (r GetTreeResponse) GetApplicationproblemJSONDefault() *Problem {
+	return r.ApplicationproblemJSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetTreeResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetTreeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetTreeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetTreeResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -2278,6 +3687,19 @@ func (c *ClientWithResponses) PostIssueChatMessageWithResponse(ctx context.Conte
 	return ParsePostIssueChatMessageResponse(rsp)
 }
 
+// GetBlobWithResponse The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/blob (the `GetBlob` operationId).
+func (c *ClientWithResponses) GetBlobWithResponse(ctx context.Context, org Org, repo Repo, params *GetBlobParams, reqEditors ...RequestEditorFn) (*GetBlobResponse, error) {
+	rsp, err := c.GetBlob(ctx, org, repo, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBlobResponse(rsp)
+}
+
 // StartChatThreadWithBodyWithResponse Starts a thread on the branch's chat for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread answers 409.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -2341,6 +3763,71 @@ func (c *ClientWithResponses) PostChatMessageWithResponse(ctx context.Context, o
 		return nil, err
 	}
 	return ParsePostChatMessageResponse(rsp)
+}
+
+// GetBranchDiffWithResponse The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/branches/{branch}/diff (the `GetBranchDiff` operationId).
+func (c *ClientWithResponses) GetBranchDiffWithResponse(ctx context.Context, org Org, repo Repo, branchName BranchName, params *GetBranchDiffParams, reqEditors ...RequestEditorFn) (*GetBranchDiffResponse, error) {
+	rsp, err := c.GetBranchDiff(ctx, org, repo, branchName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBranchDiffResponse(rsp)
+}
+
+// ListReviewsWithResponse A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `ListReviews` operationId).
+func (c *ClientWithResponses) ListReviewsWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, params *ListReviewsParams, reqEditors ...RequestEditorFn) (*ListReviewsResponse, error) {
+	rsp, err := c.ListReviews(ctx, org, repo, sha, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListReviewsResponse(rsp)
+}
+
+// SubmitReviewWithBodyWithResponse Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+func (c *ClientWithResponses) SubmitReviewWithBodyWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SubmitReviewResponse, error) {
+	rsp, err := c.SubmitReviewWithBody(ctx, org, repo, sha, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubmitReviewResponse(rsp)
+}
+
+// SubmitReviewWithResponse Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it, and opens its comments as threads of the chat of the branch it names; takes reviews.submit, and messages.post with comments. A review is never changed; its reviewer submits another, and their latest is the one that counts. A branch deleted meanwhile is 409 branch.deleted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews (the `SubmitReview` operationId).
+func (c *ClientWithResponses) SubmitReviewWithResponse(ctx context.Context, org Org, repo Repo, sha SHA, body SubmitReviewJSONRequestBody, reqEditors ...RequestEditorFn) (*SubmitReviewResponse, error) {
+	rsp, err := c.SubmitReview(ctx, org, repo, sha, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSubmitReviewResponse(rsp)
+}
+
+// GetTreeWithResponse The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/repos/{repo}/tree (the `GetTree` operationId).
+func (c *ClientWithResponses) GetTreeWithResponse(ctx context.Context, org Org, repo Repo, params *GetTreeParams, reqEditors ...RequestEditorFn) (*GetTreeResponse, error) {
+	rsp, err := c.GetTree(ctx, org, repo, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetTreeResponse(rsp)
 }
 
 // ListTranscriptWithResponse The entries of one of the organization's tasks, in order, numbered above after. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others get 403, or 404 when they may not see the task.
@@ -2685,6 +4172,93 @@ func ParsePostIssueChatMessageResponse(rsp *http.Response) (*PostIssueChatMessag
 	return response, nil
 }
 
+// ParseGetBlobResponse parses an HTTP response from a GetBlobWithResponse call
+func ParseGetBlobResponse(rsp *http.Response) (*GetBlobResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBlobResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest File
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetBlobResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetBlobResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
 // ParseStartChatThreadResponse parses an HTTP response from a StartChatThreadWithResponse call
 func ParseStartChatThreadResponse(rsp *http.Response) (*StartChatThreadResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -2929,6 +4503,350 @@ func ParsePostChatMessageResponse(rsp *http.Response) (*PostChatMessageResponse,
 			headers.Location = value
 		}
 		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetBranchDiffResponse parses an HTTP response from a GetBranchDiffWithResponse call
+func ParseGetBranchDiffResponse(rsp *http.Response) (*GetBranchDiffResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBranchDiffResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Diff
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetBranchDiffResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetBranchDiffResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseListReviewsResponse parses an HTTP response from a ListReviewsWithResponse call
+func ParseListReviewsResponse(rsp *http.Response) (*ListReviewsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListReviewsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Reviews []Review `json:"reviews"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers ListReviewsResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		if values := rsp.Header.Values("Link"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Link", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Link = &value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers ListReviewsResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseSubmitReviewResponse parses an HTTP response from a SubmitReviewWithResponse call
+func ParseSubmitReviewResponse(rsp *http.Response) (*SubmitReviewResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SubmitReviewResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Review
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 201:
+		var headers SubmitReviewResponse201Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers201 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetTreeResponse parses an HTTP response from a GetTreeWithResponse call
+func ParseGetTreeResponse(rsp *http.Response) (*GetTreeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetTreeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Tree
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case rsp.StatusCode == 304:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON503 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetTreeResponse200Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers200 = &headers
+	case rsp.StatusCode == 304:
+		var headers GetTreeResponse304Headers
+		if values := rsp.Header.Values("ETag"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "ETag", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.ETag = value
+		}
+		response.Headers304 = &headers
 	}
 
 	return response, nil

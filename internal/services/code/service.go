@@ -122,6 +122,9 @@ func (s *Service) Branches(ctx context.Context, v Viewer, repoID uuid.UUID) ([]B
 		return nil, failed(span, "reading the branches", err)
 	}
 	branches, err := s.store.Branches(ctx, repoID)
+	if err == nil {
+		err = s.renderCommits(ctx, repoID, headsOf(branches...))
+	}
 	if err != nil {
 		return nil, failed(span, "reading the branches", err)
 	}
@@ -141,10 +144,24 @@ func (s *Service) Branch(ctx context.Context, v Viewer, repoID uuid.UUID, name s
 		return Branch{}, failed(span, "reading the branch", err)
 	}
 	b, err := s.store.Branch(ctx, repoID, name)
+	if err == nil {
+		err = s.renderCommits(ctx, repoID, headsOf(b))
+	}
 	if err != nil {
 		return Branch{}, failed(span, "reading the branch", err)
 	}
 	return b, nil
+}
+
+// headsOf lists the commits branches are at, those a push recorded.
+func headsOf(branches ...Branch) []Commit {
+	var out []Commit
+	for _, b := range branches {
+		if b.Commit != nil {
+			out = append(out, *b.Commit)
+		}
+	}
+	return out
 }
 
 // rank puts the default branch before the others.
@@ -168,6 +185,9 @@ func (s *Service) Commit(ctx context.Context, v Viewer, repoID uuid.UUID, sha st
 		return Commit{}, Push{}, err
 	}
 	commit, push, err := s.store.Commit(ctx, repoID, sha)
+	if err == nil {
+		err = s.renderCommits(ctx, repoID, []Commit{commit})
+	}
 	if err != nil {
 		return Commit{}, Push{}, failed(span, "reading the commit", err)
 	}
