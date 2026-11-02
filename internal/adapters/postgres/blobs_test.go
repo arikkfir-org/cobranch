@@ -45,6 +45,7 @@ func (h blobHarness) SupportsNonSlashDelimiters() bool { return true }
 func (h blobHarness) Close()                           {}
 
 func TestBlobStoreConformance(t *testing.T) {
+	t.Parallel()
 	pool := blobDatabase(t)
 	drivertest.RunConformanceTests(t, func(context.Context, *testing.T) (drivertest.Harness, error) {
 		return blobHarness{pool: pool}, nil
@@ -125,6 +126,7 @@ func copyPack(ctx context.Context, t *testing.T, b *blob.Bucket, large []byte) [
 }
 
 func TestBlobStoreLargeObjects(t *testing.T) {
+	t.Parallel()
 	large := randomBytes(t, 2*blobChunk+blobChunk/2)
 	tests := []struct {
 		name        string
@@ -140,6 +142,7 @@ func TestBlobStoreLargeObjects(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			checkPackAct(context.Background(), t, blobDatabase(t), large, tt.act, tt.wantObjects)
 		})
 	}
@@ -167,6 +170,7 @@ func checkPackAct(ctx context.Context, t *testing.T, pool *pgxpool.Pool, large [
 }
 
 func TestBlobStoreRangeAcrossChunks(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	b := Bucket(blobDatabase(t))
 	content := randomBytes(t, 3*blobChunk)
@@ -199,6 +203,7 @@ func TestBlobStoreRangeAcrossChunks(t *testing.T) {
 }
 
 func TestBlobStoreReadDeleted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	b := Bucket(blobDatabase(t))
 	if err := b.WriteAll(ctx, "pack", randomBytes(t, 2*blobChunk), nil); err != nil {

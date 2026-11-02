@@ -52,7 +52,8 @@ var _ StrictServerInterface = api{}
 
 // NewHandler serves the API under BaseURL, for a server built as version, over the administration's service. Every
 // other path answers 404, and a request the API can't read 400, both as problem details. A GET's answer is the
-// viewer's, and revalidated each time (Cache-Control: private, no-cache).
+// viewer's, and revalidated each time (Cache-Control: private, no-cache). Each request's duration is recorded by its
+// route.
 func NewHandler(version string, administration Administration) http.Handler {
 	strict := NewStrictHandlerWithOptions(api{version: version, admin: administration}, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
@@ -68,6 +69,7 @@ func NewHandler(version string, administration Administration) http.Handler {
 			w.Header().Set("Cache-Control", "private, no-cache")
 		}
 		mux.ServeHTTP(w, r)
+		server.LabelRoute(r)
 	})
 }
 

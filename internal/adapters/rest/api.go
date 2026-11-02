@@ -27,6 +27,8 @@ type api struct {
 	repos Repositories
 	// code is the service of the repositories' code.
 	code Code
+	// pages records the Console's page views.
+	pages pageMetrics
 }
 
 // GetVersion answers the version the server was built as.
@@ -37,9 +39,14 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 // NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's,
 // organizations and repositories for theirs, and code for the repositories' branches, commits and files. Every other
 // path answers 404, and a request the API can't read 400, both as problem details. A GET's answer is the viewer's, and
-// revalidated each time (Cache-Control: private, no-cache).
-func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code) http.Handler {
-	strict := NewStrictHandlerWithOptions(api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code}, nil, StrictHTTPServerOptions{
+// revalidated each time (Cache-Control: private, no-cache). Each request's duration is recorded by its route.
+func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, opts ...Option) http.Handler {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+	a := api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code, pages: newPageMetrics(o.meter)}
+	strict := NewStrictHandlerWithOptions(a, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,
 	})
@@ -52,7 +59,11 @@ func NewHandler(version string, sessions Sessions, organizations Organizations, 
 		if r.Method == http.MethodGet || r.Method == http.MethodHead {
 			w.Header().Set("Cache-Control", "private, no-cache")
 		}
+		if r.URL.Path == BaseURL+"/page-views" {
+			r.Body = http.MaxBytesReader(w, r.Body, maxPageViewsBody) // anyone may report, within bounds
+		}
 		mux.ServeHTTP(w, r)
+		server.LabelRoute(r)
 	})
 }
 

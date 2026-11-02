@@ -11,6 +11,7 @@ import (
 )
 
 func TestInstallationSettings(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	auths := NewAuthStore(f.pool)

@@ -1,7 +1,7 @@
 # The Cobranch repository
 
 > **Snapshot.** This design lives in its [repository page](https://claude.ai/artifact/7G9yg4LyjYGGJWCkXEoDVu), linked
-> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-01, and synced again
+> with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced again
 > once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · [ENG-192](https://linear.app/arikkfir/issue/ENG-192) · Lays out the [architecture’s
@@ -35,36 +35,43 @@ the full table as the layout grows.
 
 ## Continuous integration
 
-Pipeline `ci` runs two tasks side by side, each in a pod of its own, and reports check `Continuous Integration`, which
-fails when either does. Task `ci` tests the Go module. `generated` fails when `go generate` changes the checkout, so the
-REST and GraphQL stubs match `api/` and the queries match `db/`. `lint` runs golangci-lint's standard linters, the house
-rules' (errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and
-gofmt. `test` runs against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach
-it. Go Cloud's drivers bring the AWS, Azure and Google Cloud SDKs: on a cold cache lint peaks near 1.5Gi, hence the
-task's size.
+Pipeline `ci` runs four tasks side by side, each in a pod of its own, and reports check `Continuous Integration`, which
+fails when any does: the check takes as long as its longest task, `chart`, about seven and a half minutes on a busy
+pool. Task `build` checks and builds the Go module. `generated` fails when `go generate` changes the checkout, so the
+REST and GraphQL stubs match `api/` and the queries match `db/`; `build` builds the binaries and `version` runs one.
+Task `lint` runs golangci-lint's standard linters, the house rules' (errcheck, wrapcheck, contextcheck, sloglint,
+spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt, then `go vet`. Task `test` runs the tests with
+the race detector against the PostgreSQL sidecar, and with `CI` set a test fails rather than skip when it can't reach
+it. A test that sets up a database or a Git server of its own runs in parallel with the others: one at a time, the Git
+server's took four minutes. Go Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiles on
+its own cold cache: its steps keep about two cores busy and peak near 2.1Gi (`generated`) or 1.5Gi (`lint`, `test`),
+hence the tasks' sizes.
 
-**Task ci runs seven steps in one pod, beside a PostgreSQL sidecar**
+**Pipeline ci runs four tasks side by side, each in a pod of its own**
 
-![Task ci runs seven steps in one pod, beside a PostgreSQL sidecar](repository/ci.svg)
+![Pipeline ci runs four tasks side by side, each in a pod of its own](repository/ci.svg)
 
-Every image is pinned to a version, and the steps set `GOMAXPROCS=4`, so their memory doesn’t grow with the node’s CPUs.
-The clone is anonymous: the repository is public, so the run holds no token.
+Every image is pinned to a version, and the steps set `GOMAXPROCS=4`, so their memory doesn’t grow with the node’s CPUs;
+each task requests the cores and memory its steps were measured to use. The clone is anonymous: the repository is
+public, so the run holds no token.
 
 Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
 throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
-lints the chart and validates what it renders, both with a host per workload and with paths on one host. `images` builds
-`cobranch`, `cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, and `cluster` creates
-the cluster there and loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits for the
-migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, the Console
-and the Back-office serve their pages and the APIs' URLs, a seeded user clones a repository over HTTPS, pushes to it and
-finds the push, and the Git server's SSH Service answers. `upgrade` rolls every pod, and fails if the generated database
-password or the SSH host key changed or its migrate Job applied anything; `retest` tests again. `maintenance` runs the
-maintenance CronJob once, which must compact the two packs the tests pushed, and `test-compacted` tests on the compacted
-pack. Both tasks clone the commit with one StepAction.
+lints the chart and validates what it renders, both with a host per workload and with paths on one host. `kind` fetches
+kind's release binary and checks it against the checksum its script pins. `cluster` builds `cobranch`,
+`cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, while it creates the cluster there,
+which needs none of them, then loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits
+for the migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, the
+Console and the Back-office serve their pages and the APIs' URLs, a seeded user clones a repository over HTTPS, pushes
+to it and finds the push, and the Git server's SSH Service answers. `upgrade` rolls every pod, and fails if the
+generated database password or the SSH host key changed or its migrate Job applied anything; `retest` tests again.
+`maintenance` runs the maintenance CronJob once, which must compact the two packs the tests pushed, and `test-compacted`
+tests on the compacted pack. Every task clones the commit with one StepAction.
 
-**Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps**
+**Task chart builds the images while it creates a throwaway kind cluster, and installs the chart there, in a Docker
+daemon beside its steps**
 
-![Task chart builds the images and installs the chart on a throwaway kind cluster, in a Docker daemon beside its steps](repository/chart.svg)
+![Task chart builds the images while it creates a throwaway kind cluster, and installs the chart there, in a Docker daemon beside its steps](repository/chart.svg)
 
 Every image is pinned to a version. The cluster’s pods count against the daemon’s resources, not the steps’, and nothing
 outlives the run: the clone is anonymous, and the task holds no token and no cloud role.
@@ -88,6 +95,12 @@ head commit and pushes them to repository `cobranch-previews`, tagged the same w
 hub installs that preview from the chart at the head commit, with those images and Cobranch's demo data (`db/seeds/`,
 `seed.enabled`), at a host of its own ([Cobranch's previews](../../delivery/designs/cobranch-previews.md)). A newer push
 supersedes the build of the one before; it is no required check, since the pull request's own checks are `ci`'s.
+
+A run of `ci`, `preview` or `main` whose pod the cluster took away (a Spot node reclaimed, an upgrade, an eviction) runs
+again, up to twice, while its check stays pending, so a merge queue entry keeps its place ([Octomaton's disruption
+reruns](https://github.com/arikkfir-org/octomaton#pipeline-settings)). No task retries: Tekton leaves a failed attempt's
+sidecars running, and `publish`'s privileged Docker daemon would hold its 2 CPUs and 3Gi on a node until the run is
+pruned.
 
 **Pipeline preview publishes the images of every pull request’s head commit, for its preview**
 
@@ -151,12 +164,16 @@ A missing check blocks the merge queue and never merges unchecked; the admin byp
 | Public, under the MIT License | Cobranch is a product anyone may install, and its source is open with it | Internal until a license was chosen |
 | An anonymous clone | A public repository needs no token, so the run holds none | Octomaton's installation token |
 | golangci-lint from the first commit | The house rules' linters hold from the first line, instead of a cleanup later | Adding them later |
+| Four tasks side by side, each sized as measured | The check takes as long as its longest task, about seven and a half minutes, instead of the sum of seven steps (10 to 17 minutes); requests below what the steps used let runs pack onto one node, where the same step ran two to three times slower | One pod for every Go step, sharing one cold cache but adding up their times |
+| The Git server's and the stores' tests in parallel | Each sets up a database, and the Git server's a server and clones, which in order took four and two minutes; each test's state is its own, and subtests that share their parent's still run in order | Sharding the packages over pods |
+| kind's release binary, checked against its pinned checksum | The same assurance as its module's checksum, without compiling kind in every run | `go install` from its module |
+| A disrupted run runs again; no task retries | Octomaton reruns a run the cluster disrupted, keeping a merge queue entry's place; a Tekton retry leaves the failed attempt's sidecars running | Tekton's `retries` |
 | The chart installed on kind in every run | Each pull request proves the install and the upgrade end to end, on a cluster nobody else uses, and a failure shows the pods' events and logs | A namespace on a shared cluster, which would need its credentials and outlive a failed run |
 | A version retags `main`'s images of the commit | A version is the very image `main` published, with no second build to diverge, in seconds | Rebuilding at the tag, so the binary reports the version |
 | The chart beside the images, in repository `cobranch`, as OCI | One public repository, one grant and one cleanup for all of Cobranch's releases; Helm installs OCI charts directly | GitHub's container registry; a chart repository's `index.yaml` in a bucket |
 | One version, `1.2.3`, for the chart, its app version and the image tags; `v1.2.3` for the Git tag | A chart's version is SemVer without the `v`, and the chart's images default to its app version, so the images carry the same string | Octomaton's `v1.2.3` image tags, a second spelling beside the chart's |
 | `tag` runs `main`'s scripts on the tagged commit's chart | A tag can name any commit; only `main`'s files are reviewed | Running the tagged commit's checkout |
-| No persistent Go cache yet | A cold run takes about eight minutes since Go Cloud's SDKs came in, which the foundations' few pull requests can afford; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
+| No persistent Go cache yet | With the tasks side by side a cold run takes about seven and a half minutes, building the images in task `chart` its longest part; a cache needs a bucket and an identity of its own | Octomaton's bucket-backed caches now, worth it once pull requests come often |
 
 ## Security and failure modes
 
@@ -198,6 +215,6 @@ grants applied, check Docs failed for want of its roles.
 | Question | Status | Where it stands |
 | --- | --- | --- |
 | Module path | Decided | `cobranch.dev`, decided on 2026-10-30 with the rename from DevHub ([ENG-221](https://linear.app/arikkfir/issue/ENG-221)); the hub's `go-import` serves it, as it serves Octomaton's `octomaton.dev`. The GitHub path held until then, so 0.0.1 keeps it |
-| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci` or join its steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is task `chart`, of its own since its daemon runs privileged |
+| CI for the rest | Decided | The web apps, the chart and the SDKs add steps to `ci`'s tasks or join their steps, decided on 2026-10-27: `lint` runs golangci-lint and the web linters, `test` both suites. Installing the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) on a throwaway cluster is task `chart`, of its own since its daemon runs privileged |
 
 Cobranch is a Kfirs project, created by Arik Kfir.
