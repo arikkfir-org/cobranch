@@ -6,7 +6,7 @@
 
 **Status**: Proposed 2026-11-02 · [ENG-214](https://linear.app/arikkfir/issue/ENG-214) · Builds the [product’s
 jobs](product.md#jobs) on [branch status](branch-status.md) · Adds the controller workload · Built by
-[ENG-214](https://linear.app/arikkfir/issue/ENG-214), in four pull requests
+[ENG-214](https://linear.app/arikkfir/issue/ENG-214), in six pull requests
 
 A repository declares jobs in `/cobranch.yaml`; pushes, tags, annotations, reviews, events, schedules and members
 trigger them; each run executes as its job’s own principal, in a pod in its organization’s job namespace or as a signed
@@ -382,6 +382,8 @@ The chart adds one workload and the Kubernetes access it needs.
 | `jobs.resources` | Requests 250m, 512Mi; memory limit 2Gi | The LimitRange's defaults and maximums |
 | `jobs.quota` | None | A ResourceQuota per job namespace |
 | `jobs.nodeSelector`, `tolerations`, `affinity` | None | Where job pods run |
+| `jobs.namespaceLabels` | None | Labels on every job namespace, for the cluster's own policies |
+| `jobs.admissionPolicy` | `true` | Whether the chart's admission policy holds the controller; off where the cluster's own policies do |
 | `jobs.script.image` | A pinned Bash image | `script`'s default image |
 | `jobs.timeout.default`, `max` | 1h, 24h | Runs' timeouts |
 | `jobs.logs.maxBytes`, `retention` | 10 MiB, 30 days | Archived logs |
@@ -426,22 +428,28 @@ so they don’t. Every new row carries `org_id`.
 
 ## Rollout
 
-**Four pull requests, each keeping main working**
+**Six pull requests, each keeping main working**
 
-![Four pull requests, each keeping main working](jobs/rollout.svg)
+![Six pull requests, each keeping main working](jobs/rollout.svg)
 
-Upgrading to the third needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
+Upgrading to the fourth needs Kubernetes 1.30 for the admission policy, or `jobs.pods: false`.
 
 - **Each pull request keeps `main` working** and is Part of [ENG-214](https://linear.app/arikkfir/issue/ENG-214); the
-  fourth closes it. Runs queued by the first wait for the controller the third brings; nothing requires a job's
+  sixth closes it. Runs queued by the first wait for the controller the fourth brings; nothing requires a job's
   annotation until a repository says so in its own `/cobranch.yaml`.
 - **The first** records each tip's `/cobranch.yaml`, makes job principals and queues runs from pushes and tags, with the
   gate, the ceiling and supersession, and lists, starts and cancels runs through the APIs and the Console. Re-runs and
-  manual starts come with the fourth, beside the other triggers.
+  manual starts come with the fifth, beside the other triggers.
 - **The second** keeps secrets in organization and repository settings, adds Secret reader, and manages and grants them
   through the APIs and the Console, so jobs can be granted theirs before the controller runs them.
-- **The third needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy.
-  An operator who can't grant them sets `jobs.pods: false`.
+- **The third declares the chart's `controller` and `jobs` values,** which place nothing, so an operator sets the values
+  their cluster needs before the controller arrives: the values schema refuses keys the chart doesn't know.
+- **The fourth needs the operator's consent:** the chart starts installing cluster-scoped RBAC and an admission policy,
+  and the controller runs pods and scripts, with the checkout, secrets and archived logs. An operator who can't grant
+  them sets `jobs.pods: false`.
+- **The fifth brings the remaining triggers:** annotations, reviews, posted events, manual starts and schedules, and
+  re-runs, through the APIs and the Console.
+- **The sixth** delivers webhooks and adds the logs API, with its `jobs-logs` role, and the archived logs' retention.
 - **A repository adopts jobs** by pushing a `jobs` key into `main`, and requires them by naming their annotations under
   `branches`.
 

@@ -300,6 +300,36 @@ pushWorker:
   affinity: {}
   podAnnotations: {}
 
+# The controller (cobranch controller), which runs the jobs repositories declare in /cobranch.yaml, each
+# organization's in a namespace of its own that it creates
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/jobs.md, "The chart"). The workload comes
+# with a later version; these values and jobs below are its placement, which an installation sets ahead of it.
+controller:
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+# The organizations' job namespaces and the pods jobs run in.
+jobs:
+  # Labels for every job namespace, beside Cobranch's own and its Pod Security level's: your cluster's policies may
+  # look for some.
+  namespaceLabels: {}
+  # Where job pods run: a pool for code anyone with push access wrote, apart from your own workloads.
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # The ValidatingAdmissionPolicy that holds the controller to its job namespaces, and its RoleBindings there to its
+  # own roles and ServiceAccounts. Off only where your cluster's own policies hold it so.
+  admissionPolicy: true
+
 # The Job that migrates the database before the servers of a new version roll out.
 migrate:
   # How long it may wait for the database and migrate, after which it fails.

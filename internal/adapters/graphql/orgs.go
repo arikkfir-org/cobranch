@@ -88,6 +88,10 @@ var conflicts = map[error]string{
 	agents.ErrBuiltIn:       "agent.built_in",
 	agents.ErrEnded:         "task.ended",
 	agents.ErrProviderInUse: "model_provider.in_use",
+
+	code.ErrEnvironmentPaused:    "environment.paused",
+	code.ErrEnvironmentNotPaused: "environment.not_paused",
+	code.ErrDeliveryNotWaiting:   "delivery.not_waiting",
 }
 
 // refuse is a field's error with a code and, when reason is set, a stable reason beside it.
