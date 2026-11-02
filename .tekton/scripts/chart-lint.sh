@@ -1,9 +1,10 @@
 #!/bin/sh
 # Lints chart/cobranch with its defaults, packs in the database included, and validates what it renders: with the
-# bundled database, packs in a Google Cloud Storage bucket, a host per workload, SSH behind a load balancer, Google and
-# traces, and with an external database, packs moving from the database into an S3 bucket, one host with a path per
-# workload, SSH with the operator's host key, another provider, an autoscaled push worker, no traces and the demo data
-# with its seed Job. Writes the bundled PostgreSQL's image to .ci/postgresql-image, for the cluster to load.
+# bundled database, packs in a Google Cloud Storage bucket, a host per workload, SSH behind a load balancer, Google,
+# traces and metrics for Prometheus, and with an external database, packs moving from the database into an S3 bucket,
+# one host with a path per workload, SSH with the operator's host key, another provider, an autoscaled push worker, no
+# traces and the demo data with its seed Job. Writes the bundled PostgreSQL's image to .ci/postgresql-image, for the
+# cluster to load.
 set -eu
 chart=chart/cobranch
 out=.ci/manifests
@@ -21,7 +22,7 @@ helm template cobranch "$chart" --namespace cobranch --set blob.url=gs://cobranc
   --set httpRoute.enabled=true --set 'httpRoute.parentRefs[0].name=gateway' \
   --set telemetry.traces.endpoint=http://otel-collector.observability:4318 --set telemetry.traces.headersSecret=otlp \
   --set-json telemetry.traces.sampleRatio=0.25 --set telemetry.env.OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=ci \
-  >"$out/routes.yaml"
+  --set telemetry.metrics.exporter=prometheus >"$out/routes.yaml"
 helm template cobranch "$chart" --namespace cobranch --set blob.url=s3://cobranch-objects --set blob.moveFrom=postgres:// \
   --set postgresql.enabled=false --set externalDatabase.existingSecret=cobranch-database \
   --set urls.console=https://cobranch.example.com --set urls.rest=https://cobranch.example.com/api \

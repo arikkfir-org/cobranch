@@ -15,6 +15,7 @@ import (
 // the role's scope, the Owner holds every organization and repository permission, and the Maintainer every
 // repository one.
 func TestBuiltInRoles(t *testing.T) {
+	t.Parallel()
 	_, pool := authStore(t)
 	type role struct {
 		ID          uuid.UUID

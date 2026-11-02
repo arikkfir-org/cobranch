@@ -22,7 +22,12 @@ const maxSubscription = time.Hour
 // branches' chats. Subscriptions run over WebSocket (graphql-transport-ws), for the API's own pages, from origin pages,
 // and for clients that send no Origin; each closes after an hour. A mutation runs over POST and WebSocket alone: GET's
 // transport refuses it, so a cross-site navigation changes nothing, and a page from another origin opens no WebSocket.
-func NewHandler(version, pages string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, chats Chats) http.Handler {
+// It times each root field of a query or a mutation.
+func NewHandler(version, pages string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, chats Chats, opts ...Option) http.Handler {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
 	srv := handler.New(NewExecutableSchema(Config{Resolvers: &Resolver{Version: version, Sessions: sessions, Orgs: organizations, Repos: repositories,
 		Code: code, Chats: chats}}))
 	srv.AddTransport(transport.GET{})
@@ -38,6 +43,7 @@ func NewHandler(version, pages string, sessions Sessions, organizations Organiza
 		MissingPongOk:         true,
 	})
 	srv.Use(extension.Introspection{})
+	srv.Use(newFieldTimer(o.meter))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Upgrade") != "" {
 			ctx, cancel := context.WithTimeout(r.Context(), maxSubscription)

@@ -64,8 +64,10 @@ func apiMergeCases() []apiMergeCase {
 }
 
 func TestMergeByAPI(t *testing.T) {
+	t.Parallel()
 	for _, tt := range apiMergeCases() {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, client, feature, before := apiMergeRepo(t, tt)
 			head := feature
 			if tt.head != nil {

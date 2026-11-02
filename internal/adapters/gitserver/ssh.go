@@ -191,7 +191,7 @@ func (s *Server) runSSHCommand(ctx context.Context, viewer auth.Authenticated, c
 	if service == receivePack && !slices.Contains(held, repos.PermPush) {
 		return tell(ch, "You may read this repository, but not push to it")
 	}
-	dir, remove, err := s.snapshotWorkspace(ctx, repo.ID)
+	dir, remove, err := s.snapshotWorkspace(ctx, repo.ID, strings.TrimPrefix(service, "git-"))
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 		slog.ErrorContext(ctx, "Building a repository failed", "repository", repo.ID, "error", err)

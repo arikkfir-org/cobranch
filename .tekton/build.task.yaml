@@ -1,0 +1,54 @@
+# Task build of .tekton/ci.yaml: check out the commit, check its generated code, then build it and run the binary it
+# built. Octomaton inlines it, and the step it references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  volumes:
+    - name: go-cache
+      emptyDir: {}
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: GOCACHE
+        value: /go-cache/build
+      - name: GOMODCACHE
+        value: /go-cache/mod
+      - name: GOTOOLCHAIN
+        value: local
+      - name: GOFLAGS
+        value: -mod=readonly
+      # Compiles run this many at once, whatever the node's CPUs: their memory, which ci.yaml reserves, grows with it.
+      - name: GOMAXPROCS
+        value: "4"
+    volumeMounts:
+      - name: go-cache
+        mountPath: /go-cache
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+    - name: generated
+      image: docker.io/library/golang:1.27.1
+      command: [sh, .tekton/scripts/generated.sh]
+    - name: build
+      image: docker.io/library/golang:1.27.1
+      env:
+        - name: CGO_ENABLED
+          value: "0"
+      command: [go, build, -trimpath, -o, .ci/bin/, ./cmd/...]
+    - name: version
+      image: docker.io/library/golang:1.27.1
+      command: [$(workspaces.source.path)/.ci/bin/cobranch, version]

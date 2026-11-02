@@ -15,6 +15,7 @@ import (
 )
 
 func TestOrgStoreCustomRoles(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	release := orgs.Role{ID: uuid.New(), Name: "Release manager", Description: "Merges.", Permissions: []string{"org.read", "repo.merge"}, OrgID: f.acme.ID}
@@ -103,6 +104,7 @@ func testGrantsAndDeletion(t *testing.T, f *orgFixture, release orgs.Role) {
 }
 
 func TestOrgStoreRevokeKeepsAnOwner(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	if err := f.s.RevokeRole(ctx, f.olivia, f.acme.ID, f.olivia, auth.RoleOwner); !errors.Is(err, orgs.ErrLastOwner) {
@@ -139,6 +141,7 @@ func TestOrgStoreRevokeKeepsAnOwner(t *testing.T) {
 // organization's lock orders them, so either the grant lands and the deletion is refused, or the deletion lands and
 // the grant finds no role. A grant that lands and then vanishes with the role is the failure.
 func TestOrgStoreDeleteRoleAgainstGrant(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	for i := range 10 {
@@ -163,6 +166,7 @@ func TestOrgStoreDeleteRoleAgainstGrant(t *testing.T) {
 // TestCustomRolesRollback rolls the custom roles' migration back over a database that holds one, granted and set as
 // the membership role, then applies it again.
 func TestCustomRolesRollback(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t)
 	ctx := context.Background()
 	release := orgs.Role{ID: uuid.New(), Name: "Release manager", Permissions: []string{"org.read", "repo.merge"}, OrgID: f.acme.ID}

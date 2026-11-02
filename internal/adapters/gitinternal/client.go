@@ -16,7 +16,11 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/system/telemetry"
 )
+
+// TimingName names each internal call in the Server-Timing header of the request that made it.
+const TimingName = "git"
 
 // Client reads a repository's trees, files and history from the Git server, and has it build merges, over the internal
 // call: code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it sends the
@@ -120,8 +124,10 @@ func (c *Client) get(ctx context.Context, repoID uuid.UUID, read string, query u
 }
 
 // do asks the Git server for op of the repository, and returns its answer when it is 200; the domain's error when it
-// is a 404 with one of answers' codes, a 403, or a 409 of a merge; or an error naming what it said.
+// is a 404 with one of answers' codes, a 403, or a 409 of a merge; or an error naming what it said. The request that
+// asks names the call in its answer's Server-Timing, timed to the Git server's answer.
 func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op string, query url.Values, body io.Reader) (*http.Response, error) {
+	defer telemetry.Time(ctx, TimingName)()
 	u := c.base.JoinPath(ReposPath, repoID.String(), op)
 	u.RawQuery = query.Encode()
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), body)
