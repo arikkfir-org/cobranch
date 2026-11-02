@@ -76,8 +76,9 @@ func TestCommitReviews(t *testing.T) {
 			`") { state body reviewer { displayName } } } } }`
 	}
 	runOrgCases(t, []orgCase{
-		{name: "a commit's", viewer: reviewedByOlivia(olivia), document: repo(`commit(sha: "` + shaOf("c") + `") { reviews { state body reviewer { displayName } } }`),
-			want: []string{`"reviews":[{"state":"CHANGES_REQUESTED","body":"Rename the handler","reviewer":{"displayName":"Olivia"}}]`}},
+		{name: "a commit's", viewer: reviewedByOlivia(olivia),
+			document: repo(`commit(sha: "` + shaOf("c") + `") { reviews { state body html reviewer { displayName } } }`),
+			want:     []string{`"reviews":[{"state":"CHANGES_REQUESTED","body":"Rename the handler","html":"\u003cp\u003eRename the handler\u003c/p\u003e\n","reviewer":{"displayName":"Olivia"}}]`}},
 		{name: "a branch head's", viewer: reviewedByOlivia(olivia), document: repo(`branches { name commit { reviews { state } } }`),
 			want: []string{`{"name":"main","commit":{"reviews":[{"state":"CHANGES_REQUESTED"}]}}`, `{"name":"feature","commit":{"reviews":[]}}`}},
 		{name: "one by its ID", viewer: reviewedByOlivia(olivia), document: reviewOf,

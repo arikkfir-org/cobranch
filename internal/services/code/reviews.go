@@ -52,6 +52,9 @@ type Review struct {
 	SHA   string
 	State ReviewState
 	Body  string
+	// HTML is Body rendered as Markdown, its relative links leading to the files of the commit; empty when it has no
+	// body, or the service no Renderer.
+	HTML string
 	// Reviewer is who submitted it; nil once they are gone, when it counts no more.
 	Reviewer *Principal
 	// Person reports whether its reviewer is a person: only people's approvals count towards a branch's required
@@ -149,6 +152,9 @@ func (s *Service) Reviews(ctx context.Context, v Viewer, repoID uuid.UUID, sha s
 	if len(list) > size {
 		page.Reviews, page.Next = list[:size], encodeReviewCursor(list[size-1].ID)
 	}
+	if err := s.renderReviews(ctx, repoID, page.Reviews); err != nil {
+		return ReviewPage{}, failed(span, "reading the reviews", err)
+	}
 	return page, nil
 }
 
@@ -188,6 +194,9 @@ func (s *Service) Review(ctx context.Context, v Viewer, repoID, id uuid.UUID) (R
 		return Review{}, failed(span, "reading the review", err)
 	}
 	r, err := s.store.Review(ctx, repoID, id)
+	if err == nil {
+		r, err = s.renderReview(ctx, repoID, r)
+	}
 	if err != nil {
 		return Review{}, failed(span, "reading the review", err)
 	}
@@ -226,6 +235,9 @@ func (s *Service) SubmitReview(ctx context.Context, v Viewer, repoID uuid.UUID, 
 	if err != nil {
 		return Review{}, failed(span, "submitting the review", err)
 	}
+	if r, err = s.renderReview(ctx, repoID, r); err != nil {
+		return Review{}, failed(span, "submitting the review", err)
+	}
 	return r, nil
 }
 
@@ -235,4 +247,46 @@ func permsToReview(in ReviewInput) []string {
 		return []string{PermReview, PermPostMessages}
 	}
 	return []string{PermReview}
+}
+
+// renderReview is r with its body rendered as Markdown, as renderReviews renders it.
+func (s *Service) renderReview(ctx context.Context, repoID uuid.UUID, r Review) (Review, error) {
+	one := []Review{r}
+	err := s.renderReviews(ctx, repoID, one)
+	return one[0], err
+}
+
+// renderReviews renders the bodies of the reviews in each of groups, of the repository's commits, as Markdown, in
+// place: their relative links lead to the files of the commit each reviewed.
+func (s *Service) renderReviews(ctx context.Context, repoID uuid.UUID, groups ...[]Review) error {
+	said := func(reviews []Review) bool {
+		return slices.ContainsFunc(reviews, func(r Review) bool { return r.Body != "" })
+	}
+	if s.markdown == nil || !slices.ContainsFunc(groups, said) {
+		return nil
+	}
+	org, repo, err := s.store.Slugs(ctx, repoID)
+	if err != nil {
+		return fmt.Errorf("reading where the reviews are: %w", err)
+	}
+	for _, reviews := range groups {
+		for i, r := range reviews {
+			if r.Body == "" {
+				continue
+			}
+			if reviews[i].HTML, err = s.markdown.Render(ctx, []byte(r.Body), Document{Org: org, Repo: repo, Ref: r.SHA, Commit: r.SHA}); err != nil {
+				return fmt.Errorf("rendering review %s: %w", r.ID, err)
+			}
+		}
+	}
+	return nil
+}
+
+// renderCommits renders the bodies of the reviews of commits, the repository's, as renderReviews does.
+func (s *Service) renderCommits(ctx context.Context, repoID uuid.UUID, commits []Commit) error {
+	groups := make([][]Review, 0, len(commits))
+	for _, c := range commits {
+		groups = append(groups, c.Reviews)
+	}
+	return s.renderReviews(ctx, repoID, groups...)
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/code/codetest"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 )
@@ -302,6 +304,53 @@ func TestLatest(t *testing.T) {
 				if got[i].ID != tt.want[i].ID {
 					t.Errorf("Latest()[%d] = %+v, want %+v", i, got[i], tt.want[i])
 				}
+			}
+		})
+	}
+}
+
+func TestReviewsMarkdown(t *testing.T) {
+	tests := []struct {
+		name    string
+		fail    error
+		read    func(f *annotators, submitted code.Review) (code.Review, error)
+		wantErr bool
+	}{
+		{name: "as submitted", read: func(_ *annotators, r code.Review) (code.Review, error) { return r, nil }},
+		{name: "as read", read: func(f *annotators, r code.Review) (code.Review, error) {
+			return f.service.Review(t.Context(), f.rae, f.repo, r.ID)
+		}},
+		{name: "as listed", read: func(f *annotators, _ code.Review) (code.Review, error) {
+			page, err := f.service.Reviews(t.Context(), f.rae, f.repo, sha(3), code.ReviewQuery{})
+			if err != nil || len(page.Reviews) != 2 {
+				return code.Review{}, fmt.Errorf("listed %d: %w", len(page.Reviews), err)
+			}
+			if page.Reviews[0].HTML != "" {
+				return code.Review{}, fmt.Errorf("a review without a body renders as %q", page.Reviews[0].HTML)
+			}
+			return page.Reviews[1], nil
+		}},
+		{name: "a renderer that fails", fail: errors.New("broken"), wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newAnnotators()
+			f.store.SlugList[f.repo] = [2]string{"acme", "website"}
+			f.service = code.NewService(f.store, nil, &codetest.Renderer{Fail: tt.fail}, auth.NewAuthorizer(f.orgs))
+			if _, err := f.service.SubmitReview(t.Context(), f.dev, f.repo, sha(3), code.ReviewInput{State: code.ReviewApproved}); err != nil {
+				t.Fatal(err)
+			}
+			submitted, err := f.service.SubmitReview(t.Context(), f.mia, f.repo, sha(3), code.ReviewInput{State: code.ReviewNeutral, Body: "See [the docs](docs/a.md)."})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("SubmitReview() error = %v, want an error: %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			got, err := tt.read(f, submitted)
+			want := `<div data-doc="acme/website@` + sha(3) + `:` + sha(3) + `:">See [the docs](docs/a.md).</div>`
+			if err != nil || got.HTML != want || got.Body != "See [the docs](docs/a.md)." {
+				t.Errorf("the review = %+v, %v; want its body rendered as %s", got, err, want)
 			}
 		})
 	}

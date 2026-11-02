@@ -65,6 +65,9 @@ func (s *Service) History(ctx context.Context, v Viewer, repoID uuid.UUID, q His
 	default:
 		return Page{}, &orgs.ValidationError{Field: "parents", Code: "parents.invalid", Message: "first or all"}
 	}
+	if err == nil {
+		err = s.renderCommits(ctx, repoID, page.Commits)
+	}
 	if err != nil {
 		return Page{}, failed(span, "reading the history", err)
 	}

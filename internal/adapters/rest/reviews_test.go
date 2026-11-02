@@ -36,14 +36,14 @@ func TestSubmitReviewAPI(t *testing.T) {
 		{name: "a Developer approves", viewer: maxDeveloping, method: http.MethodPost, path: fixed(reviewsPath), body: `{"state":"approved","body":"Looks good"}`,
 			wantStatus: 201, check: func(t *testing.T, f *orgFixture, body []byte) {
 				r := decode[Review](t, body)
-				if r.State != "approved" || r.Body != "Looks good" || r.Sha != shaOf("c") || r.Reviewer == nil || r.Reviewer.Id != f.max.User.ID ||
-					r.Reviewer.DisplayName != "Max" || !r.Person {
+				if r.State != "approved" || r.Body != "Looks good" || r.Html != "<p>Looks good</p>\n" || r.Sha != shaOf("c") || r.Reviewer == nil ||
+					r.Reviewer.Id != f.max.User.ID || r.Reviewer.DisplayName != "Max" || !r.Person {
 					t.Errorf("review = %s", body)
 				}
 			}},
 		{name: "an approval with its state alone", viewer: maxDeveloping, method: http.MethodPost, path: fixed(reviewsPath), body: `{"state":"approved"}`, wantStatus: 201,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if r := decode[Review](t, body); r.State != "approved" || r.Body != "" {
+				if r := decode[Review](t, body); r.State != "approved" || r.Body != "" || r.Html != "" {
 					t.Errorf("review = %s", body)
 				}
 			}},
@@ -215,7 +215,8 @@ func TestCommitsCarryReviews(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "a commit with its reviews", viewer: oliviaReviewed, method: http.MethodGet, path: fixed("/v1/orgs/acme/repos/website/commits/" + shaOf("c")),
 			wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if c := decode[Commit](t, body); len(c.Reviews) != 1 || c.Reviews[0].State != "changes_requested" {
+				if c := decode[Commit](t, body); len(c.Reviews) != 1 || c.Reviews[0].State != "changes_requested" ||
+					c.Reviews[0].Html != "<p>Rename the handler</p>\n" {
 					t.Errorf("commit = %s", body)
 				}
 			}},

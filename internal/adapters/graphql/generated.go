@@ -715,6 +715,7 @@ type ComplexityRoot struct {
 
 	Review struct {
 		Body        func(childComplexity int) int
+		HTML        func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Person      func(childComplexity int) int
 		Reviewer    func(childComplexity int) int
@@ -4574,6 +4575,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Review.Body(childComplexity), true
+	case "Review.html":
+		if e.ComplexityRoot.Review.HTML == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Review.HTML(childComplexity), true
 	case "Review.id":
 		if e.ComplexityRoot.Review.ID == nil {
 			break
@@ -6150,7 +6157,10 @@ type Review {
   "The commit reviewed."
   sha: String!
   state: ReviewState!
+  "Its Markdown."
   body: String!
+  "Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the files of the commit it reviewed; empty when it has no body, or where the installation renders no Markdown."
+  html: String!
   "Who submitted it; null once they are gone, when it counts no more."
   reviewer: CommitPrincipal
   "Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't."
@@ -8702,6 +8712,8 @@ func (ec *executionContext) childFields_Review(ctx context.Context, field graphq
 		return ec.fieldContext_Review_state(ctx, field)
 	case "body":
 		return ec.fieldContext_Review_body(ctx, field)
+	case "html":
+		return ec.fieldContext_Review_html(ctx, field)
 	case "reviewer":
 		return ec.fieldContext_Review_reviewer(ctx, field)
 	case "person":
@@ -26273,6 +26285,29 @@ func (ec *executionContext) fieldContext_Review_body(_ context.Context, field gr
 	return graphql.NewScalarFieldContext("Review", field, false, false, "String")
 }
 
+func (ec *executionContext) _Review_html(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Review_html(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.HTML, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Review_html(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Review", field, false, false, "String")
+}
+
 func (ec *executionContext) _Review_reviewer(ctx context.Context, field graphql.CollectedField, obj *Review) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -36479,6 +36514,11 @@ func (ec *executionContext) _Review(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "body":
 			out.Values[i] = ec._Review_body(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "html":
+			out.Values[i] = ec._Review_html(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}

@@ -198,7 +198,7 @@ func reviewStateOf(state ReviewState) code.ReviewState {
 }
 
 func review(r code.Review) *Review {
-	return &Review{ID: r.ID.String(), Sha: r.SHA, State: reviewStates[r.State], Body: r.Body, Reviewer: commitPrincipal(r.Reviewer),
+	return &Review{ID: r.ID.String(), Sha: r.SHA, State: reviewStates[r.State], Body: r.Body, HTML: r.HTML, Reviewer: commitPrincipal(r.Reviewer),
 		Person: r.Person, SubmittedAt: r.SubmittedAt.UTC()}
 }
 
