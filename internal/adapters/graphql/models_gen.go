@@ -494,7 +494,7 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
-	// A page of the chat of one of the repository's live branches, by name without refs/heads/: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless the branch is there; takes repo.read. first is 1 to 100.
+	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
 	Chat *ChatPage `json:"chat,omitempty"`
 	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	Branches []*Branch `json:"branches"`

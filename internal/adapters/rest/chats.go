@@ -2,6 +2,10 @@ package rest
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -74,10 +78,30 @@ func chatUpdate(u chats.Update) ChatUpdate {
 	return out
 }
 
-// chatTag is the ETag of a thread or a message at version, read on a branch at head, quoted: the head shapes how it
-// reads (whether a thread is outdated, which commit a message's links lead to), so a push changes the tag too.
-func chatTag(version int64, head string) string {
-	return `"` + strconv.FormatInt(version, 10) + "-" + head + `"`
+// chatTag is the ETag of a thread or a message at version as body shows it, quoted: the version, then a digest of
+// body. More than its own changes shape how it reads (the branch's head, the slugs its links name, its people's
+// names), so the digest changes with any of them, and the version leads for If-Match.
+func chatTag(version int64, body any) (string, error) {
+	shown, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("digesting version %d: %w", version, err)
+	}
+	sum := sha256.Sum256(shown)
+	return `"` + strconv.FormatInt(version, 10) + "-" + hex.EncodeToString(sum[:12]) + `"`, nil
+}
+
+// taggedThread is t as the API shows it, with its ETag.
+func taggedThread(t chats.Thread) (ChatThread, string, error) {
+	body := chatThread(t)
+	tag, err := chatTag(t.Version, body)
+	return body, tag, err
+}
+
+// taggedMessage is m as the API shows it, with its ETag.
+func taggedMessage(m chats.Message) (ChatMessage, string, error) {
+	body := chatMessage(m)
+	tag, err := chatTag(m.Version, body)
+	return body, tag, err
 }
 
 // chatPath is the path of the subject's chat from the API's base, by the current slugs, with the parts that follow.
@@ -155,8 +179,11 @@ func (a api) StartChatThread(ctx context.Context, req StartChatThreadRequestObje
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return StartChatThread201JSONResponse{Body: chatThread(t), Headers: StartChatThread201ResponseHeaders{ETag: chatTag(t.Version, subj.Head),
-		Location: chatPath(subj, "threads", t.ID.String())}}, nil
+	body, tag, err := taggedThread(t)
+	if err != nil {
+		return nil, err
+	}
+	return StartChatThread201JSONResponse{Body: body, Headers: StartChatThread201ResponseHeaders{ETag: tag, Location: chatPath(subj, "threads", t.ID.String())}}, nil
 }
 
 // GetChatThread answers one of a branch's chat threads with its messages.
@@ -169,11 +196,14 @@ func (a api) GetChatThread(ctx context.Context, req GetChatThreadRequestObject) 
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	tag := chatTag(t.Version, subj.Head)
+	body, tag, err := taggedThread(t)
+	if err != nil {
+		return nil, err
+	}
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetChatThread304Response{Headers: GetChatThread304ResponseHeaders{ETag: tag}}, nil
 	}
-	return GetChatThread200JSONResponse{Body: chatThread(t), Headers: GetChatThread200ResponseHeaders{ETag: tag}}, nil
+	return GetChatThread200JSONResponse{Body: body, Headers: GetChatThread200ResponseHeaders{ETag: tag}}, nil
 }
 
 // UpdateChatThread resolves one of a branch's chat threads, or opens it again.
@@ -190,7 +220,11 @@ func (a api) UpdateChatThread(ctx context.Context, req UpdateChatThreadRequestOb
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return UpdateChatThread200JSONResponse{Body: chatThread(t), Headers: UpdateChatThread200ResponseHeaders{ETag: chatTag(t.Version, subj.Head)}}, nil
+	body, tag, err := taggedThread(t)
+	if err != nil {
+		return nil, err
+	}
+	return UpdateChatThread200JSONResponse{Body: body, Headers: UpdateChatThread200ResponseHeaders{ETag: tag}}, nil
 }
 
 // PostChatMessage posts a message to one of a branch's chat threads for the viewer.
@@ -207,7 +241,11 @@ func (a api) PostChatMessage(ctx context.Context, req PostChatMessageRequestObje
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return PostChatMessage201JSONResponse{Body: chatMessage(m), Headers: PostChatMessage201ResponseHeaders{ETag: chatTag(m.Version, subj.Head),
+	body, tag, err := taggedMessage(m)
+	if err != nil {
+		return nil, err
+	}
+	return PostChatMessage201JSONResponse{Body: body, Headers: PostChatMessage201ResponseHeaders{ETag: tag,
 		Location: chatPath(subj, "threads", req.ThreadID.String(), "messages", m.ID.String())}}, nil
 }
 
@@ -221,11 +259,14 @@ func (a api) GetChatMessage(ctx context.Context, req GetChatMessageRequestObject
 	if err != nil {
 		return nil, fail(err, "message")
 	}
-	tag := chatTag(m.Version, subj.Head)
+	body, tag, err := taggedMessage(m)
+	if err != nil {
+		return nil, err
+	}
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetChatMessage304Response{Headers: GetChatMessage304ResponseHeaders{ETag: tag}}, nil
 	}
-	return GetChatMessage200JSONResponse{Body: chatMessage(m), Headers: GetChatMessage200ResponseHeaders{ETag: tag}}, nil
+	return GetChatMessage200JSONResponse{Body: body, Headers: GetChatMessage200ResponseHeaders{ETag: tag}}, nil
 }
 
 // EditChatMessage changes the body of one of the viewer's messages.
@@ -242,7 +283,11 @@ func (a api) EditChatMessage(ctx context.Context, req EditChatMessageRequestObje
 	if err != nil {
 		return nil, fail(err, "message")
 	}
-	return EditChatMessage200JSONResponse{Body: chatMessage(m), Headers: EditChatMessage200ResponseHeaders{ETag: chatTag(m.Version, subj.Head)}}, nil
+	body, tag, err := taggedMessage(m)
+	if err != nil {
+		return nil, err
+	}
+	return EditChatMessage200JSONResponse{Body: body, Headers: EditChatMessage200ResponseHeaders{ETag: tag}}, nil
 }
 
 // DeleteChatMessage deletes a message, keeping its place in its thread.

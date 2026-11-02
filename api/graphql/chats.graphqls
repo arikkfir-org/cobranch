@@ -3,7 +3,7 @@
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Branch chats").
 
 extend type Repository {
-  "A page of the chat of one of the repository's live branches, by name without refs/heads/: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless the branch is there; takes repo.read. first is 1 to 100."
+  "A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100."
   chat(branch: String!, first: Int! = 30, after: String): ChatPage
 }
 
@@ -121,7 +121,7 @@ input ChatMessageInput {
 }
 
 extend type Mutation {
-  "Starts a thread on the chat of one of the repository's live branches for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread is refused (CONFLICT, chat.id_taken)."
+  "Starts a thread on the chat of one of the repository's live branches for the viewer, with its first message, perhaps anchored to lines of a file at one of the repository's commits; takes messages.post. A deleted branch's chat is refused (CONFLICT, branch.deleted), as is every change to it. Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread is refused (CONFLICT, chat.id_taken)."
   startChatThread(repositoryId: ID!, branch: String!, input: ChatThreadInput!): ChatThread!
   "Posts a message to one of the threads of a branch's chat for the viewer; takes messages.post. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message is refused (CONFLICT, chat.id_taken)."
   postChatMessage(repositoryId: ID!, branch: String!, thread: ID!, input: ChatMessageInput!): ChatMessage!
@@ -134,6 +134,6 @@ extend type Mutation {
 }
 
 type Subscription {
-  "The changes to the chat of one of the repository's live branches after cursor after, as a chat page's after or an update's cursor names it, in order, as they come; takes repo.read, checked at every read, and ends once the viewer no longer reads the repository. Over WebSocket (graphql-transport-ws)."
+  "The changes to the chat of one of the repository's branches after cursor after, the live one or else the one of that name deleted last, which has none, as a chat page's after or an update's cursor names it, in order, as they come; takes repo.read, checked at every read, and ends once the viewer no longer reads the repository. Over WebSocket (graphql-transport-ws)."
   chatUpdates(repositoryId: ID!, branch: String!, after: String!): ChatUpdate!
 }
