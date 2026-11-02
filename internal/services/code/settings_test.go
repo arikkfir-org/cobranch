@@ -18,7 +18,7 @@ func TestParseSettings(t *testing.T) {
 	}{
 		{name: "an empty file", settings: ""},
 		{name: "only comments", settings: "# nothing yet\n"},
-		{name: "no branches", settings: "jobs:\n  build: {}\n"},
+		{name: "no branches", settings: "repository:\n"},
 		{name: "branches of none", settings: "branches:\n"},
 		{name: "the design's example", settings: "branches:\n  main:\n    requires:\n      annotations: [ci/build, ci/test]\n      linearHistory: true\n",
 			want: []git.Requirements{{Branch: "main", Annotations: []string{"ci/build", "ci/test"}, LinearHistory: true}}},
@@ -26,7 +26,12 @@ func TestParseSettings(t *testing.T) {
 			want: []git.Requirements{{Branch: "release"}, {Branch: "main"}}},
 		{name: "linear history alone", settings: "branches:\n  main:\n    requires:\n      linearHistory: false\n",
 			want: []git.Requirements{{Branch: "main"}}},
-		{name: "keys for others left alone", settings: "jobs: [whatever]\nbranches:\n  main:\n    requires:\n      annotations: [ai-review]\n",
+		{name: "beside a key another reader owns", settings: "delivery:\n  targets: {}\nbranches:\n  main:\n    requires:\n      annotations: [ci/build]\n",
+			want: []git.Requirements{{Branch: "main", Annotations: []string{"ci/build"}}}},
+		{name: "an unknown key", settings: "branches:\nprotect: [main]\n", wantErr: `/cobranch.yaml: line 2: the settings takes no "protect"`},
+		{name: "a misspelt jobs key", settings: "job:\n  build:\n", wantErr: `/cobranch.yaml: line 1: the settings takes no "job"`},
+		{name: "a top-level key named twice", settings: "branches:\nbranches:\n", wantErr: `/cobranch.yaml: line 2: the settings names "branches" twice`},
+		{name: "beside jobs", settings: "jobs:\nbranches:\n  main:\n    requires:\n      annotations: [ai-review]\n",
 			want: []git.Requirements{{Branch: "main", Annotations: []string{"ai-review"}}}},
 		{name: "not a mapping", settings: "- main\n", wantErr: "/cobranch.yaml: line 1: the settings must be a mapping"},
 		{name: "branches as a list", settings: "branches: [main]\n", wantErr: "/cobranch.yaml: line 1: branches must map branch names to their settings"},
@@ -92,7 +97,7 @@ func checkSettings(t *testing.T, settings string, want []git.Requirements, wantE
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ParseSettings() = %+v, want %+v", got, want)
+	if !reflect.DeepEqual(got.Branches, want) {
+		t.Errorf("ParseSettings() = %+v, want %+v", got.Branches, want)
 	}
 }

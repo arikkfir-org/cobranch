@@ -16,9 +16,9 @@ import (
 
 // Store is a code.Store in memory: each repository's commits by name, branches, deleted branches, oldest deletion
 // first, tags, pushes and slugs, the organization's then its own, and the annotations on its commits and the reviews
-// of them, in the order they were submitted. Fail, when set, fails every listing and every change. Names names the
-// principals who set annotations and submit reviews, by ID, and NotPeople holds those who aren't people; Now is the
-// time it records changes at.
+// of them, in the order they were submitted, and its runs, oldest first. Fail, when set, fails every listing and every
+// change. Names names the principals who set annotations and submit reviews, by ID, and NotPeople holds those who
+// aren't people; Now is the time it records changes at.
 type Store struct {
 	Commits    map[uuid.UUID]map[string]code.Commit
 	BranchList map[uuid.UUID][]code.Branch
@@ -30,6 +30,7 @@ type Store struct {
 	ReviewList map[uuid.UUID][]code.Review
 	Names      map[uuid.UUID]string
 	NotPeople  map[uuid.UUID]bool
+	RunList    map[uuid.UUID][]code.Run
 	Now        time.Time
 	Fail       error
 }
@@ -39,7 +40,7 @@ func NewStore() *Store {
 	return &Store{Commits: map[uuid.UUID]map[string]code.Commit{}, BranchList: map[uuid.UUID][]code.Branch{},
 		Deleted: map[uuid.UUID][]code.DeletedBranch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
-		ReviewList: map[uuid.UUID][]code.Review{}, Names: map[uuid.UUID]string{}, NotPeople: map[uuid.UUID]bool{}}
+		ReviewList: map[uuid.UUID][]code.Review{}, Names: map[uuid.UUID]string{}, NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}}
 }
 
 // Add records commits in the repository, as push brought them.

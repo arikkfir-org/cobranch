@@ -99,6 +99,8 @@ var conflicts = map[error]string{
 	chats.ErrIDTaken:       "chat.id_taken",
 	chats.ErrDeleted:       "message.deleted",
 	chats.ErrBranchDeleted: "branch.deleted",
+	code.ErrRunEnded:       "run.ended",
+	code.ErrRunNotWaiting:  "run.not_waiting",
 }
 
 // fail maps the domain's errors to problems: kind names what wasn't found. Any other error stays one, which the

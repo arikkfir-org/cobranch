@@ -184,9 +184,11 @@ func (q *Queries) FirstParents(ctx context.Context, repoID uuid.UUID, sha string
 
 const liveBranch = `-- name: LiveBranch :one
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    coalesce(f.error, '')::text AS settings_error
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
+LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
 WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL
 `
 
@@ -208,6 +210,7 @@ type LiveBranchRow struct {
 	MergedBy            *uuid.UUID
 	MergedByName        *string
 	MergedAt            *time.Time
+	SettingsError       string
 }
 
 func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string) (LiveBranchRow, error) {
@@ -231,15 +234,18 @@ func (q *Queries) LiveBranch(ctx context.Context, repoID uuid.UUID, name string)
 		&i.MergedBy,
 		&i.MergedByName,
 		&i.MergedAt,
+		&i.SettingsError,
 	)
 	return i, err
 }
 
 const liveBranches = `-- name: LiveBranches :many
 SELECT b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
-    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    coalesce(f.error, '')::text AS settings_error
 FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
 LEFT JOIN principals m ON m.id = b.merged_by
+LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
 WHERE b.repo_id = $1 AND b.deleted_at IS NULL
 ORDER BY b.name
 `
@@ -262,6 +268,7 @@ type LiveBranchesRow struct {
 	MergedBy            *uuid.UUID
 	MergedByName        *string
 	MergedAt            *time.Time
+	SettingsError       string
 }
 
 // LiveBranches lists a repository's live branches, by name: what people browse of its code, as pushes recorded it,
@@ -294,6 +301,7 @@ func (q *Queries) LiveBranches(ctx context.Context, repoID uuid.UUID) ([]LiveBra
 			&i.MergedBy,
 			&i.MergedByName,
 			&i.MergedAt,
+			&i.SettingsError,
 		); err != nil {
 			return nil, err
 		}

@@ -61,3 +61,5 @@ models:
       tree: { resolver: true }
       blob: { resolver: true }
       chat: { resolver: true }
+      runs: { resolver: true }
+      run: { resolver: true }

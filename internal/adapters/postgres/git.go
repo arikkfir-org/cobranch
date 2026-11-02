@@ -108,6 +108,9 @@ func (s *GitStore) apply(ctx context.Context, q *queries.Queries, orgID uuid.UUI
 	if err := moveRefs(ctx, q, orgID, push); err != nil {
 		return err
 	}
+	if err := recordSettings(ctx, q, orgID, push); err != nil {
+		return err
+	}
 	if err := recordFacts(ctx, q, orgID, push); err != nil {
 		return err
 	}
@@ -221,9 +224,14 @@ func (s *GitStore) insertPush(ctx context.Context, q *queries.Queries, orgID uui
 	if err != nil {
 		return err
 	}
+	peeled, err := json.Marshal(nonNilMap(push.Peeled))
+	if err != nil {
+		return fmt.Errorf("encoding the push's tags: %w", err)
+	}
 	if err := q.InsertPush(ctx, queries.InsertPushParams{
 		ID: push.ID, OrgID: orgID, RepoID: push.RepoID, PusherID: &push.PusherID, Transport: string(push.Transport),
 		RefUpdates: updates, Pack: pack, ReceivedAt: push.ReceivedAt, Traceparent: traceparent(ctx), Merged: merged,
+		Peeled: peeled,
 	}); err != nil {
 		return fmt.Errorf("recording the push: %w", err)
 	}
@@ -301,6 +309,9 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 			return err
 		}
 		if err := recordMerges(ctx, q, claimed); err != nil {
+			return err
+		}
+		if err := queuePushRuns(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
@@ -503,6 +514,14 @@ func updatesJSON(updates []git.RefUpdate) []refUpdateJSON {
 		out = append(out, refUpdateJSON(u))
 	}
 	return out
+}
+
+// nonNilMap is m, or an empty map for a nil one.
+func nonNilMap(m map[string]string) map[string]string {
+	if m == nil {
+		return map[string]string{}
+	}
+	return m
 }
 
 // nonNil is s, or an empty slice for a nil one: a root commit's parents are none, not unknown.
