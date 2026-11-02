@@ -8,13 +8,18 @@ package graphql
 import (
 	"context"
 	"errors"
-	"strconv"
 
-	"cobranch.dev/internal/services/chats"
-	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
-	"github.com/google/uuid"
 )
+
+// Chat is the resolver for the chat field.
+func (r *issueResolver) Chat(ctx context.Context, obj *Issue, first int, after *string) (*ChatPage, error) {
+	v, subj, err := r.issueChatOf(ctx, obj.OrganizationID, obj.Number)
+	if err != nil {
+		return nil, err
+	}
+	return r.chatPage(ctx, v, subj, first, after)
+}
 
 // StartChatThread is the resolver for the startChatThread field.
 func (r *mutationResolver) StartChatThread(ctx context.Context, repositoryID string, branch string, input ChatThreadInput) (*ChatThread, error) {
@@ -22,15 +27,7 @@ func (r *mutationResolver) StartChatThread(ctx context.Context, repositoryID str
 	if err != nil {
 		return nil, err
 	}
-	in, err := chatInput(ctx, input)
-	if err != nil {
-		return nil, err
-	}
-	t, err := r.Chats.StartThread(ctx, v, subj, in)
-	if err != nil {
-		return nil, fail(ctx, err, "thread", "starting the thread")
-	}
-	return chatThread(t), nil
+	return r.startThread(ctx, v, subj, input)
 }
 
 // PostChatMessage is the resolver for the postChatMessage field.
@@ -39,21 +36,7 @@ func (r *mutationResolver) PostChatMessage(ctx context.Context, repositoryID str
 	if err != nil {
 		return nil, err
 	}
-	threadID, err := parseID(ctx, thread, "thread")
-	if err != nil {
-		return nil, err
-	}
-	in := chats.MessageInput{Body: input.Body}
-	if input.ID != nil {
-		if in.ID, err = pickedID(ctx, *input.ID); err != nil {
-			return nil, err
-		}
-	}
-	m, err := r.Chats.Post(ctx, v, subj, threadID, in)
-	if err != nil {
-		return nil, fail(ctx, err, "thread", "posting the message")
-	}
-	return chatMessage(m), nil
+	return r.postMessage(ctx, v, subj, thread, input)
 }
 
 // EditChatMessage is the resolver for the editChatMessage field.
@@ -62,15 +45,7 @@ func (r *mutationResolver) EditChatMessage(ctx context.Context, repositoryID str
 	if err != nil {
 		return nil, err
 	}
-	threadID, messageID, version, err := chatTarget(ctx, thread, message, expectedVersion)
-	if err != nil {
-		return nil, err
-	}
-	m, err := r.Chats.Edit(ctx, v, subj, threadID, messageID, body, version)
-	if err != nil {
-		return nil, fail(ctx, err, "message", "editing the message")
-	}
-	return chatMessage(m), nil
+	return r.editMessage(ctx, v, subj, thread, message, body, expectedVersion)
 }
 
 // DeleteChatMessage is the resolver for the deleteChatMessage field.
@@ -79,14 +54,7 @@ func (r *mutationResolver) DeleteChatMessage(ctx context.Context, repositoryID s
 	if err != nil {
 		return false, err
 	}
-	threadID, messageID, version, err := chatTarget(ctx, thread, message, expectedVersion)
-	if err != nil {
-		return false, err
-	}
-	if err := r.Chats.Delete(ctx, v, subj, threadID, messageID, version); err != nil {
-		return false, fail(ctx, err, "message", "deleting the message")
-	}
-	return true, nil
+	return r.deleteMessage(ctx, v, subj, thread, message, expectedVersion)
 }
 
 // ResolveChatThread is the resolver for the resolveChatThread field.
@@ -95,19 +63,52 @@ func (r *mutationResolver) ResolveChatThread(ctx context.Context, repositoryID s
 	if err != nil {
 		return nil, err
 	}
-	threadID, err := parseID(ctx, thread, "thread")
+	return r.resolveThread(ctx, v, subj, thread, resolved, expectedVersion)
+}
+
+// StartIssueChatThread is the resolver for the startIssueChatThread field.
+func (r *mutationResolver) StartIssueChatThread(ctx context.Context, organizationID string, number int, input ChatThreadInput) (*ChatThread, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
 	if err != nil {
 		return nil, err
 	}
-	version, err := chatVersion(ctx, expectedVersion)
+	return r.startThread(ctx, v, subj, input)
+}
+
+// PostIssueChatMessage is the resolver for the postIssueChatMessage field.
+func (r *mutationResolver) PostIssueChatMessage(ctx context.Context, organizationID string, number int, thread string, input ChatMessageInput) (*ChatMessage, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
 	if err != nil {
 		return nil, err
 	}
-	t, err := r.Chats.Resolve(ctx, v, subj, threadID, resolved, version)
+	return r.postMessage(ctx, v, subj, thread, input)
+}
+
+// EditIssueChatMessage is the resolver for the editIssueChatMessage field.
+func (r *mutationResolver) EditIssueChatMessage(ctx context.Context, organizationID string, number int, thread string, message string, body string, expectedVersion *int) (*ChatMessage, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
 	if err != nil {
-		return nil, fail(ctx, err, "thread", "resolving the thread")
+		return nil, err
 	}
-	return chatThread(t), nil
+	return r.editMessage(ctx, v, subj, thread, message, body, expectedVersion)
+}
+
+// DeleteIssueChatMessage is the resolver for the deleteIssueChatMessage field.
+func (r *mutationResolver) DeleteIssueChatMessage(ctx context.Context, organizationID string, number int, thread string, message string, expectedVersion *int) (bool, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
+	if err != nil {
+		return false, err
+	}
+	return r.deleteMessage(ctx, v, subj, thread, message, expectedVersion)
+}
+
+// ResolveIssueChatThread is the resolver for the resolveIssueChatThread field.
+func (r *mutationResolver) ResolveIssueChatThread(ctx context.Context, organizationID string, number int, thread string, resolved bool, expectedVersion *int) (*ChatThread, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
+	if err != nil {
+		return nil, err
+	}
+	return r.resolveThread(ctx, v, subj, thread, resolved, expectedVersion)
 }
 
 // Chat is the resolver for the chat field.
@@ -123,22 +124,7 @@ func (r *repositoryResolver) Chat(ctx context.Context, obj *Repository, branch s
 	case err != nil:
 		return nil, fail(ctx, err, "branch", "reading the chat")
 	}
-	before := uuid.Nil
-	if after != nil && *after != "" {
-		if before, err = uuid.Parse(*after); err != nil {
-			return nil, fail(ctx, &orgs.ValidationError{Field: "after", Code: "cursor.invalid", Message: "after names no page of this chat"}, "", "")
-		}
-	}
-	page, err := r.Chats.Threads(ctx, v, subj, before, first)
-	if err != nil {
-		return nil, fail(ctx, err, "branch", "reading the chat")
-	}
-	out := &ChatPage{Threads: mapAll(page.Threads, chatThread), After: strconv.FormatInt(page.After, 10)}
-	if page.Next != uuid.Nil {
-		next := page.Next.String()
-		out.NextCursor = &next
-	}
-	return out, nil
+	return r.chatPage(ctx, v, subj, first, after)
 }
 
 // ChatUpdates is the resolver for the chatUpdates field.
@@ -147,15 +133,16 @@ func (r *subscriptionResolver) ChatUpdates(ctx context.Context, repositoryID str
 	if err != nil {
 		return nil, err
 	}
-	from, err := cursor(ctx, after)
+	return r.followChat(ctx, v, subj, after)
+}
+
+// IssueChatUpdates is the resolver for the issueChatUpdates field.
+func (r *subscriptionResolver) IssueChatUpdates(ctx context.Context, organizationID string, number int, after string) (<-chan *ChatUpdate, error) {
+	v, subj, err := r.issueChatOf(ctx, organizationID, number)
 	if err != nil {
 		return nil, err
 	}
-	updates, err := r.Chats.Follow(ctx, v, subj, from)
-	if err != nil {
-		return nil, fail(ctx, err, "branch", "following the chat")
-	}
-	return follow(ctx, updates), nil
+	return r.followChat(ctx, v, subj, after)
 }
 
 // Subscription returns SubscriptionResolver implementation.

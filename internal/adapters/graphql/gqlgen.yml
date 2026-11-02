@@ -48,6 +48,7 @@ models:
     fields:
       activity: { resolver: true }
       branches: { resolver: true }
+      chat: { resolver: true }
   # code.go's, which knows the repository its issue resolves from.
   Branch:
     model: cobranch.dev/internal/adapters/graphql.Branch

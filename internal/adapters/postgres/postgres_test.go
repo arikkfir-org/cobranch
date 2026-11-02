@@ -506,6 +506,9 @@ func checkSeeded(t *testing.T, pool *pgxpool.Pool, cobranch bool, wantRows int) 
 		if n := countRows(t, pool, "SELECT count(*) FROM grants WHERE scope = 'repository'"); n != 5 {
 			t.Errorf("seeded repository grants = %d, want each creator's Maintainer, and Max's and Gwen's on website", n)
 		}
+		if n := countRows(t, pool, "SELECT count(*) FROM chat_threads t JOIN chat_messages m ON m.thread_id = t.id JOIN events e ON e.details->>'message' = m.id::text AND e.subject_id = t.issue_id"); n != 4 {
+			t.Errorf("seeded issue comments = %d, want four messages on two issues' threads, each with its event", n)
+		}
 		return
 	}
 	if rows := countRows(t, pool, "SELECT count(*) FROM a WHERE b = 'seeded'"); rows != wantRows {

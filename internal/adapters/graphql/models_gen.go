@@ -412,6 +412,8 @@ type Issue struct {
 	Activity []*IssueEvent `json:"activity"`
 	// The branches linked to it, by their names or by hand, the live ones first, by repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
 	Branches []*IssueBranch `json:"branches"`
+	// A page of its chat, its comments: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes issues.read. first is 1 to 100.
+	Chat *ChatPage `json:"chat"`
 }
 
 // A branch linked to an issue: the commit it is at, its status as a request to merge, and how it was linked. A deleted branch stays linked.
