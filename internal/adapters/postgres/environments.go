@@ -38,7 +38,10 @@ func (s *CodeStore) Environment(ctx context.Context, repoID, id uuid.UUID) (code
 		return code.Environment{}, fmt.Errorf("finding environment %s: %w", id, err)
 	}
 	out := []code.Environment{environmentView(row.Environment, row.Target)}
-	return out[0], s.withLatest(ctx, out)
+	if err := s.withLatest(ctx, out); err != nil {
+		return code.Environment{}, err
+	}
+	return out[0], nil
 }
 
 // withLatest sets each environment's newest delivery.
@@ -211,7 +214,8 @@ func (s *CodeStore) StartDelivery(ctx context.Context, actor uuid.UUID, repoID u
 
 // deliverHead queues, for actor, a delivery of the head of the environment's branch, superseding every one of its
 // deliveries that hasn't started applying, and works out the status of the branches at the head again; it answers the
-// delivery's number. A branch that is gone is repos.ErrNotFound.
+// delivery's number. A head whose /cobranch.yaml doesn't parse fails its delivery with the file's error, as a push
+// of it does. A branch that is gone is repos.ErrNotFound.
 func deliverHead(ctx context.Context, q *queries.Queries, row queries.EnvironmentForUpdateRow, actor uuid.UUID, trigger code.DeliveryTrigger) (int64, error) {
 	env := row.Environment
 	head, err := tipOf(ctx, q, env.RepoID, env.Branch)
@@ -224,8 +228,12 @@ func deliverHead(ctx context.Context, q *queries.Queries, row queries.Environmen
 	if err := q.LockDeliveryQueue(ctx, env.RepoID); err != nil {
 		return 0, fmt.Errorf("locking the repository's deliveries: %w", err)
 	}
+	state, reason := code.DeliveryQueued, ""
+	if head.broken != "" {
+		state, reason = code.DeliveryFailed, head.broken
+	}
 	number, err := enqueue(ctx, q, queuedDelivery{env: env, target: row.Target, sha: head.head, trigger: trigger,
-		startedBy: &actor, state: code.DeliveryQueued})
+		startedBy: &actor, state: state, reason: reason})
 	if err != nil {
 		return 0, err
 	}

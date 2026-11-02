@@ -221,6 +221,41 @@ func TestCodeStoreStartAndRedeliver(t *testing.T) {
 	}
 }
 
+func TestCodeStoreRedeliversABrokenTip(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	repo := f.website.ID
+	broken := tip(t, "feature/broken", "blob-2", "delivery: [x]\n")
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
+		tip(t, "main", "blob-1", deliveryFile))
+	f.push(t, pushOf(repo, f.max, "pack-2", []git.RefUpdate{{Name: "refs/heads/feature/broken", Old: git.ZeroSHA, New: shaB}}, commit(shaB, person("Max", "max@example.com"), shaA)),
+		broken)
+	envs, err := f.c.Environments(ctx, repo, "feature/broken")
+	if err != nil || len(envs) != 1 {
+		t.Fatalf("Environments(feature/broken) = %+v, %v", envs, err)
+	}
+	preview := envs[0].ID
+	if _, err := f.c.Redeliver(ctx, f.max, repo, preview); err != nil {
+		t.Fatalf("Redeliver() = %v", err)
+	}
+	if _, err := f.c.PauseEnvironment(ctx, f.max, repo, preview); err != nil {
+		t.Fatalf("PauseEnvironment() = %v", err)
+	}
+	if _, err := f.c.ResumeEnvironment(ctx, f.max, repo, preview); err != nil {
+		t.Fatalf("ResumeEnvironment() = %v", err)
+	}
+	failed := "failed: " + broken.Error
+	want := []string{"#1 production main@a queued", "#2 previews feature/broken@b " + failed, "#3 previews feature/broken@b " + failed,
+		"#4 previews feature/broken@b " + failed}
+	if got := f.deliveries(t, repo); !slices.Equal(got, want) {
+		t.Errorf("deliveries = %q, want %q", got, want)
+	}
+	if got, want := f.note(t, repo, shaB, "delivery/previews"), "failed: /cobranch.yaml: line 1: delivery must be a mapping by previews"; got != want {
+		t.Errorf("the broken tip's annotation = %q, want %q", got, want)
+	}
+}
+
 func TestCodeStorePauseAndResume(t *testing.T) {
 	t.Parallel()
 	f := newJobsFixture(t)

@@ -41,6 +41,16 @@ func versionTag(version int64) string {
 	return `"` + strconv.FormatInt(version, 10) + `"`
 }
 
+// environmentTag is the ETag of an environment as it is answered: its version, and its newest delivery's number and
+// version, which change without the environment's row changing.
+func environmentTag(e code.Environment) string {
+	if e.Latest == nil {
+		return versionTag(e.Version)
+	}
+	return `"` + strconv.FormatInt(e.Version, 10) + "." + strconv.FormatInt(e.Latest.Number, 10) + "." +
+		strconv.FormatInt(e.Latest.Version, 10) + `"`
+}
+
 // deliveryLocation is the URL of the repository's delivery numbered number.
 func deliveryLocation(org, repo string, number int64) string {
 	return "/v1/orgs/" + url.PathEscape(org) + "/repos/" + url.PathEscape(repo) + "/deliveries/" + strconv.FormatInt(number, 10)
@@ -85,7 +95,7 @@ func (a api) GetEnvironment(ctx context.Context, req GetEnvironmentRequestObject
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	tag := versionTag(e.Version)
+	tag := environmentTag(e)
 	if matches(req.Params.IfNoneMatch, tag) {
 		return GetEnvironment304Response{Headers: GetEnvironment304ResponseHeaders{ETag: tag}}, nil
 	}
@@ -164,7 +174,7 @@ func (a api) PauseEnvironment(ctx context.Context, req PauseEnvironmentRequestOb
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	return PauseEnvironment200JSONResponse{Body: environment(e), Headers: PauseEnvironment200ResponseHeaders{ETag: versionTag(e.Version)}}, nil
+	return PauseEnvironment200JSONResponse{Body: environment(e), Headers: PauseEnvironment200ResponseHeaders{ETag: environmentTag(e)}}, nil
 }
 
 // ResumeEnvironment resumes one of the repository's paused environments for the viewer.
@@ -181,7 +191,7 @@ func (a api) ResumeEnvironment(ctx context.Context, req ResumeEnvironmentRequest
 	if err != nil {
 		return nil, fail(err, "environment")
 	}
-	return ResumeEnvironment200JSONResponse{Body: environment(e), Headers: ResumeEnvironment200ResponseHeaders{ETag: versionTag(e.Version)}}, nil
+	return ResumeEnvironment200JSONResponse{Body: environment(e), Headers: ResumeEnvironment200ResponseHeaders{ETag: environmentTag(e)}}, nil
 }
 
 // GetDelivery answers one of the repository's deliveries, or 304 while the caller holds its version.

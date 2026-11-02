@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 	"testing"
 	"time"
@@ -88,13 +89,15 @@ func TestListEnvironmentsAPI(t *testing.T) {
 func TestEnvironmentAPI(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "one by ID", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(productionPath), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantHeader: http.Header{"Etag": {`"1.2.1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); e.Id != productionID || e.Latest == nil || e.Latest.Number != 2 {
 					t.Errorf("environment = %s", body)
 				}
 			}},
 		{name: "one the caller holds", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(productionPath),
-			header: http.Header{"If-None-Match": {`"1"`}}, wantStatus: 304, wantHeader: http.Header{"Etag": {`"1"`}}},
+			header: http.Header{"If-None-Match": {`"1.2.1"`}}, wantStatus: 304, wantHeader: http.Header{"Etag": {`"1.2.1"`}}},
+		{name: "one whose newest delivery changed since", viewer: withEnvironments(started(maxReading)), method: http.MethodGet, path: fixed(previewPath),
+			header: http.Header{"If-None-Match": {`"1.3.1"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"1.3.2"`}}},
 		{name: "one that isn't there", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(environmentsPath + "/" + uuid.NewString()),
 			wantStatus: 404, wantCode: "environment.not_found"},
 		{name: "an ID that isn't one", viewer: withEnvironments(maxReading), method: http.MethodGet, path: fixed(environmentsPath + "/production"), wantStatus: 400},
@@ -144,7 +147,7 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 			}},
 		{name: "a Reader may not redeliver", viewer: withEnvironments(maxReading), method: http.MethodPost, path: fixed(productionPath + "/redeliver"), wantStatus: 403},
 		{name: "a Developer pauses one", viewer: withEnvironments(maxDeveloping), method: http.MethodPost, path: fixed(productionPath + "/pause"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantHeader: http.Header{"Etag": {`"2.2.2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); !e.Paused || e.Latest == nil || e.Latest.State != "cancelled" || e.Latest.Reason != "paused by Max" {
 					t.Errorf("environment = %s", body)
 				}
@@ -154,7 +157,7 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 		{name: "pausing a paused one", viewer: withEnvironments(paused(maxDeveloping)), method: http.MethodPost, path: fixed(productionPath + "/pause"),
 			wantStatus: 409, wantCode: "environment.paused"},
 		{name: "a Developer resumes one", viewer: withEnvironments(paused(maxDeveloping)), method: http.MethodPost, path: fixed(productionPath + "/resume"), wantStatus: 200,
-			wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
+			wantHeader: http.Header{"Etag": {`"2.4.1"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if e := decode[Environment](t, body); e.Paused || e.Latest == nil || e.Latest.Number != 4 || e.Latest.Trigger != "resume" {
 					t.Errorf("environment = %s", body)
 				}
@@ -164,6 +167,17 @@ func TestEnvironmentActionsAPI(t *testing.T) {
 		{name: "a Reader may not pause", viewer: withEnvironments(maxReading), method: http.MethodPost, path: fixed(productionPath + "/pause"), wantStatus: 403},
 		{name: "someone who can't read it", viewer: withEnvironments(nia), method: http.MethodPost, path: fixed(previewPath + "/pause"), wantStatus: 404},
 	})
+}
+
+// started starts website's delivery #3, its preview's newest, which changes the delivery and not the environment,
+// before the viewer's setup.
+func started(viewer func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		if _, err := f.codeStore.StartDelivery(context.Background(), uuid.New(), f.website.ID, 3); err != nil {
+			panic(err)
+		}
+		return viewer(f)
+	}
 }
 
 // paused pauses website's production environment before the viewer's setup.

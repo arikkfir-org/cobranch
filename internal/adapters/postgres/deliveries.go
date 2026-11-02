@@ -112,8 +112,9 @@ type pushDelivery struct {
 }
 
 // queuePushDelivery queues one delivery of a push, unless its environment has one at the same commit that hasn't
-// ended: one waiting for a member gives way to one that doesn't, which supersedes it. An environment whose cluster's namespace another
-// environment holds is refused, and a paused one takes none; either way its target's annotation on the commit says so.
+// ended: one waiting for a member gives way to one that doesn't, which supersedes it. An environment whose cluster's
+// namespace another environment holds is refused, and a paused one takes none; either way its target's annotation on
+// the commit says so.
 func queuePushDelivery(ctx context.Context, q *queries.Queries, d pushDelivery) error {
 	name := code.DeliveryAnnotation(d.target.Name)
 	targetID, err := targetPrincipal(ctx, q, d.orgID, d.event.RepoID, d.target.Name)
@@ -221,7 +222,8 @@ type queuedDelivery struct {
 }
 
 // enqueue numbers and records a delivery, superseding the environment's deliveries that haven't started applying, and
-// sets the target's annotation on the commit, failing it, and the delivery, when another principal holds it there. The environment turns Out of sync. It answers the delivery's number.
+// sets the target's annotation on the commit, failing it, and the delivery, when another principal holds it there. The
+// environment turns Out of sync. It answers the delivery's number.
 func enqueue(ctx context.Context, q *queries.Queries, d queuedDelivery) (int64, error) {
 	number, err := q.NextDeliveryNumber(ctx, d.env.RepoID)
 	if err != nil {
