@@ -32,17 +32,7 @@ func TestAppend(t *testing.T) {
 	task, other := f.assign(t, f.mel, scout, "Tidy up", uuid.Nil), f.assign(t, f.mel, scout, "Sweep", uuid.Nil)
 	mine, theirs := working(context.Background(), task), working(context.Background(), other)
 	agent := agentViewer(task)
-	tests := []struct {
-		name string
-		ctx  context.Context
-		v    agents.Viewer
-		// running moves the task to Running first, as the controller would.
-		running     bool
-		entry       agents.Entry
-		want        error
-		wantCreated bool
-		wantState   agents.TaskState
-	}{
+	tests := []appendCase{
 		{name: "the first entry", ctx: mine, v: agent, entry: agents.Entry{Seq: 1, Kind: agents.EntryInput, Body: json.RawMessage(`{"text":"Tidy up"}`)},
 			wantCreated: true, wantState: agents.TaskQueued},
 		{name: "a repeat answers the entry there", ctx: mine, v: agent, entry: agents.Entry{Seq: 1, Kind: agents.EntryTurn, Body: json.RawMessage(`{}`)},
@@ -73,28 +63,45 @@ func TestAppend(t *testing.T) {
 			want: agents.ErrEnded},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.running {
-				f.store.SetState(f.org, task.Number, agents.TaskRunning)
-			}
-			e, created, err := f.service.Append(tt.ctx, tt.v, f.org, task.Number, tt.entry)
-			if !is(err, tt.want) {
-				t.Fatalf("Append() = %v, want %v", err, tt.want)
-			}
-			if err != nil {
-				return
-			}
-			if created != tt.wantCreated || e.Seq != tt.entry.Seq {
-				t.Errorf("Append() = %+v, created %t, want #%d, created %t", e, created, tt.entry.Seq, tt.wantCreated)
-			}
-			got, err := f.service.Task(context.Background(), f.mel, f.org, task.Number)
-			if err != nil || got.State != tt.wantState {
-				t.Fatalf("Task() = %s, %v, want %s", got.State, err, tt.wantState)
-			}
-			if got.State == agents.TaskSucceeded && (got.Summary != "Tidied" || got.EndedAt.IsZero()) {
-				t.Errorf("Task() = %+v, want the summary and its end", got)
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { tt.check(t, f, task) })
+	}
+}
+
+// appendCase is an append in TestAppend, in order, as v with ctx's credential.
+type appendCase struct {
+	name string
+	ctx  context.Context
+	v    agents.Viewer
+	// running moves the task to Running first, as the controller would.
+	running     bool
+	entry       agents.Entry
+	want        error
+	wantCreated bool
+	wantState   agents.TaskState
+}
+
+// check makes the case's append to task and checks what it answers and the state it leaves the task in.
+func (tt appendCase) check(t *testing.T, f *fixture, task agents.Task) {
+	t.Helper()
+	if tt.running {
+		f.store.SetState(f.org, task.Number, agents.TaskRunning)
+	}
+	e, created, err := f.service.Append(tt.ctx, tt.v, f.org, task.Number, tt.entry)
+	if !is(err, tt.want) {
+		t.Fatalf("Append() = %v, want %v", err, tt.want)
+	}
+	if err != nil {
+		return
+	}
+	if created != tt.wantCreated || e.Seq != tt.entry.Seq {
+		t.Errorf("Append() = %+v, created %t, want #%d, created %t", e, created, tt.entry.Seq, tt.wantCreated)
+	}
+	got, err := f.service.Task(context.Background(), f.mel, f.org, task.Number)
+	if err != nil || got.State != tt.wantState {
+		t.Fatalf("Task() = %s, %v, want %s", got.State, err, tt.wantState)
+	}
+	if got.State == agents.TaskSucceeded && (got.Summary != "Tidied" || got.EndedAt.IsZero()) {
+		t.Errorf("Task() = %+v, want the summary and its end", got)
 	}
 }
 

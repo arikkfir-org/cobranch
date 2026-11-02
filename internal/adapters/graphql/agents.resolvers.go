@@ -222,7 +222,7 @@ func (r *mutationResolver) AppendTranscriptEntry(ctx context.Context, organizati
 	if err != nil {
 		return nil, err
 	}
-	e, _, err := r.Resolver.Agents.Append(ctx, v.User, orgID, int64(number), in)
+	e, _, err := r.Agents.Append(ctx, v.User, orgID, int64(number), in)
 	if err != nil {
 		return nil, fail(ctx, err, "task", "appending to the transcript")
 	}
@@ -317,7 +317,7 @@ func (r *queryResolver) MyTask(ctx context.Context) (*MyTask, error) {
 	if err != nil {
 		return nil, err
 	}
-	t, slug, err := r.Resolver.Agents.Work(ctx, v.User)
+	t, slug, err := r.Agents.Work(ctx, v.User)
 	if err != nil {
 		return nil, fail(ctx, err, "task", "finding the task")
 	}
@@ -341,7 +341,7 @@ func (r *taskResolver) Transcript(ctx context.Context, obj *Task, after *int, fi
 	if first != nil {
 		limit = *first
 	}
-	entries, err := r.Resolver.Agents.Transcript(ctx, v.User, orgID, int64(obj.Number), from, limit)
+	entries, err := r.Agents.Transcript(ctx, v.User, orgID, int64(obj.Number), from, limit)
 	if err != nil {
 		return nil, fail(ctx, err, "task", "reading the transcript")
 	}

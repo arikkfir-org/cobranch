@@ -15,15 +15,7 @@ import (
 func TestTaskTokens(t *testing.T) {
 	agent := auth.Principal{ID: uuid.New(), Kind: auth.KindAgent, DisplayName: "Scout"}
 	grant := auth.TaskGrant{ID: uuid.New(), OrgID: uuid.New(), AssignerID: uuid.New()}
-	tests := []struct {
-		name string
-		// change changes the store once the token is issued.
-		change    func(*authtest.Store)
-		at        time.Time
-		token     string // instead of the issued one
-		wantErr   error
-		wantSwept int64
-	}{
+	tests := []taskTokenCase{
 		{name: "a fresh token acts as the agent, for its task", at: now},
 		{name: "a token near its end still acts", at: now.Add(auth.TaskTokenLifetime - time.Second)},
 		{name: "a token at its end", at: now.Add(auth.TaskTokenLifetime), wantErr: auth.ErrUnauthenticated},
@@ -36,33 +28,48 @@ func TestTaskTokens(t *testing.T) {
 		{name: "a personal token's shape", token: auth.NewSecret(auth.PrefixPersonalToken), at: now, wantErr: auth.ErrUnauthenticated},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			s, store, _ := newService(auth.Settings{}, alice)
-			store.Tasks[grant.ID] = &authtest.Task{Grant: grant, Agent: agent}
-			secret, expiresAt, err := s.IssueTaskToken(ctx, grant.ID)
-			if err != nil || !auth.ValidSecret(auth.PrefixTaskToken, secret) || !expiresAt.Equal(now.Add(auth.TaskTokenLifetime)) {
-				t.Fatalf("IssueTaskToken() = %q, %v, %v", secret, expiresAt, err)
-			}
-			if tt.change != nil {
-				tt.change(store)
-			}
-			s.SetClock(func() time.Time { return tt.at })
-			if tt.token != "" {
-				secret = tt.token
-			}
-			got, err := s.Authenticate(ctx, secret)
-			if !errors.Is(err, tt.wantErr) {
-				t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
-			}
-			if err == nil && (got.User.ID != agent.ID || got.Credential.Kind != auth.CredentialTaskToken || got.Credential.Task != grant ||
-				got.Session.ID != uuid.Nil) {
-				t.Errorf("Authenticate() = %+v", got)
-			}
-			if swept, err := s.DeleteExpiredTaskTokens(ctx); err != nil || swept != tt.wantSwept {
-				t.Errorf("DeleteExpiredTaskTokens() = %d, %v, want %d", swept, err, tt.wantSwept)
-			}
-		})
+		t.Run(tt.name, func(t *testing.T) { tt.check(t, agent, grant) })
+	}
+}
+
+// taskTokenCase is a task token of TestTaskTokens, issued for a task its agent works, then presented at a time.
+type taskTokenCase struct {
+	name string
+	// change changes the store once the token is issued.
+	change    func(*authtest.Store)
+	at        time.Time
+	token     string // instead of the issued one
+	wantErr   error
+	wantSwept int64
+}
+
+// check issues a token for grant's task, presents it, or the case's own, at the case's time, and sweeps.
+func (tt taskTokenCase) check(t *testing.T, agent auth.Principal, grant auth.TaskGrant) {
+	t.Helper()
+	ctx := context.Background()
+	s, store, _ := newService(auth.Settings{}, alice)
+	store.Tasks[grant.ID] = &authtest.Task{Grant: grant, Agent: agent}
+	secret, expiresAt, err := s.IssueTaskToken(ctx, grant.ID)
+	if err != nil || !auth.ValidSecret(auth.PrefixTaskToken, secret) || !expiresAt.Equal(now.Add(auth.TaskTokenLifetime)) {
+		t.Fatalf("IssueTaskToken() = %q, %v, %v", secret, expiresAt, err)
+	}
+	if tt.change != nil {
+		tt.change(store)
+	}
+	s.SetClock(func() time.Time { return tt.at })
+	if tt.token != "" {
+		secret = tt.token
+	}
+	got, err := s.Authenticate(ctx, secret)
+	if !errors.Is(err, tt.wantErr) {
+		t.Fatalf("Authenticate() error = %v, want %v", err, tt.wantErr)
+	}
+	if err == nil && (got.User.ID != agent.ID || got.Credential.Kind != auth.CredentialTaskToken || got.Credential.Task != grant ||
+		got.Session.ID != uuid.Nil) {
+		t.Errorf("Authenticate() = %+v", got)
+	}
+	if swept, err := s.DeleteExpiredTaskTokens(ctx); err != nil || swept != tt.wantSwept {
+		t.Errorf("DeleteExpiredTaskTokens() = %d, %v, want %d", swept, err, tt.wantSwept)
 	}
 }
 
