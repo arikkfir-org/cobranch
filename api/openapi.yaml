@@ -6617,8 +6617,8 @@ components:
           description: The commit it delivers; absent for a teardown.
         trigger:
           type: string
-          description: What queued it.
-          enum: [push, redeliver, resume]
+          description: What queued it. schedule is the controller's own, which resyncs each environment every while and tears down one whose branch is gone.
+          enum: [push, redeliver, resume, schedule]
         push:
           type: string
           format: uuid
@@ -6645,8 +6645,8 @@ components:
           description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the names of its target and of who started it shape too, in quotes.
     DeliveryState:
       type: string
-      description: Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A superseded one is cancelled, saying by which.
-      enum: [waiting, queued, rendering, applying, succeeded, failed, cancelled]
+      description: Where a delivery stands. Waiting deliveries wait for a member to start them; queued ones for the controller. A teardown is deleting until what its environment held is gone. A superseded one is cancelled, saying by which.
+      enum: [waiting, queued, rendering, applying, deleting, succeeded, failed, cancelled]
     AnnotationStatus:
       type: string
       description: Where an annotation stands, in any order its principal sets them.

@@ -30,9 +30,9 @@ const (
 	noGit     = "this installation serves no Git over HTTPS to check the commit out from"
 )
 
-// Dispatch claims the queued delivery that waited longest and starts its render pod, and reports whether one waited.
-// A delivery that can't render fails, naming why; one the quota refuses waits for room; one that fails on the way is
-// taken again once its claim lapses.
+// Dispatch claims the queued delivery that waited longest and starts it, and reports whether one waited: a commit's
+// render pod, a resync's apply, or a teardown's deleting. A delivery that can't render fails, naming why; one the quota
+// refuses waits for room; one that fails on the way is taken again once its claim lapses.
 func (s *Service) Dispatch(ctx context.Context) (_ bool, err error) {
 	ctx, span := tracer.Start(ctx, "deliverer.Service.Dispatch")
 	defer span.End()
@@ -45,23 +45,40 @@ func (s *Service) Dispatch(ctx context.Context) (_ bool, err error) {
 		return false, nil
 	}
 	span.SetAttributes(deliveryAttrs(d.ID, d.OrgID, d.RepoID, d.Number)...)
-	span.SetAttributes(attribute.String("cobranch.delivery.target", d.Target), attribute.String("cobranch.environment.id", d.EnvironmentID.String()))
+	span.SetAttributes(attribute.String("cobranch.delivery.target", d.Target), attribute.String("cobranch.delivery.kind", string(d.Kind)),
+		attribute.String("cobranch.environment.id", d.EnvironmentID.String()))
+	switch d.Kind {
+	case code.Resync:
+		_, err := s.apply(ctx, Working{ID: d.ID, OrgID: d.OrgID, RepoID: d.RepoID, Number: d.Number, Kind: d.Kind, State: code.DeliveryQueued})
+		return true, err
+	case code.Teardown:
+		return true, s.startTeardown(ctx, d)
+	}
 	return true, s.start(ctx, d)
 }
 
-// start renders a claimed delivery: it reads what the cluster serves, prepares the organization's job namespace, and
-// starts the delivery's render pod.
+// start renders a claimed delivery of a commit: it reads what the environment's cluster serves, prepares the
+// organization's job namespace, and starts the delivery's render pod.
 func (s *Service) start(ctx context.Context, d Delivery) error {
 	switch {
 	case !s.settings.Pods:
 		return s.fail(ctx, d.ID, noPods)
-	case s.target == nil:
-		return s.fail(ctx, d.ID, noCluster)
 	case s.settings.GitURL == "":
 		return s.fail(ctx, d.ID, noGit)
 	}
-	version, apis, err := s.target.Capabilities(ctx)
-	if err != nil {
+	target, why, err := s.open(ctx, d.environment())
+	switch {
+	case err != nil:
+		return err
+	case why != "":
+		return s.fail(ctx, d.ID, why)
+	}
+	version, apis, err := target.Capabilities(ctx)
+	switch {
+	case err != nil && d.Cluster != nil:
+		// Another cluster that doesn't answer is the target's to fix, not the controller's to wait for.
+		return s.fail(ctx, d.ID, "reaching the cluster failed: "+err.Error())
+	case err != nil:
 		return fmt.Errorf("reading what the cluster serves for delivery %s: %w", d.ID, err)
 	}
 	render, err := s.render(ctx, d, version, apis)

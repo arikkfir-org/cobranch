@@ -77,7 +77,7 @@ func (t *Target) namespace(ctx context.Context, env deliverer.Environment) error
 	case err != nil:
 		return fmt.Errorf("reading namespace %s: %w", env.Namespace, err)
 	}
-	if l := existing.Labels; l[labelInstallation] != t.cfg.Installation || l[cluster.EnvironmentLabel] != env.ID.String() {
+	if l := existing.Labels; l[cluster.InstallationLabel] != t.cfg.Installation || l[cluster.EnvironmentLabel] != env.ID.String() {
 		return fmt.Errorf("%w: namespace %s exists, and isn't this environment's: Cobranch delivers only into namespaces it made",
 			deliverer.ErrRefused, env.Namespace)
 	}
@@ -101,7 +101,7 @@ func (t *Target) labels(env deliverer.Environment) map[string]string {
 		labels = map[string]string{}
 	}
 	maps.Copy(labels, map[string]string{
-		labelManagedBy: "cobranch", labelInstallation: t.cfg.Installation, labelOrganization: env.OrgID.String(),
+		cluster.ManagedByLabel: "cobranch", cluster.InstallationLabel: t.cfg.Installation, cluster.OrganizationLabel: env.OrgID.String(),
 		cluster.EnvironmentLabel:             env.ID.String(),
 		"pod-security.kubernetes.io/enforce": t.cfg.PodSecurity, "pod-security.kubernetes.io/enforce-version": "latest",
 	})
@@ -111,7 +111,7 @@ func (t *Target) labels(env deliverer.Environment) map[string]string {
 // binding grants the ServiceAccount account of the installation's namespace the ClusterRole role in namespace ns, in
 // a RoleBinding named after the role.
 func (t *Target) binding(ns, role, account string) *rbacv1ac.RoleBindingApplyConfiguration {
-	return rbacv1ac.RoleBinding(role, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+	return rbacv1ac.RoleBinding(role, ns).WithLabels(map[string]string{cluster.ManagedByLabel: "cobranch"}).
 		WithRoleRef(rbacv1ac.RoleRef().WithAPIGroup("rbac.authorization.k8s.io").WithKind("ClusterRole").WithName(role)).
 		WithSubjects(rbacv1ac.Subject().WithKind("ServiceAccount").WithNamespace(t.cfg.Home).WithName(account))
 }
@@ -154,7 +154,7 @@ func (t *Target) ingress(ns string) (*networkingv1ac.NetworkPolicyApplyConfigura
 		}
 		rule = rule.WithFrom(peer)
 	}
-	return networkingv1ac.NetworkPolicy(policyIngress, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+	return networkingv1ac.NetworkPolicy(policyIngress, ns).WithLabels(map[string]string{cluster.ManagedByLabel: "cobranch"}).
 		WithSpec(networkingv1ac.NetworkPolicySpec().WithPodSelector(metav1ac.LabelSelector()).WithPolicyTypes("Ingress").
 			WithIngress(rule)), nil
 }
@@ -170,7 +170,7 @@ func (t *Target) egress(ns string) (*networkingv1ac.NetworkPolicyApplyConfigurat
 		return nil, fmt.Errorf("environments' %w", err)
 	}
 	own := networkingv1ac.NetworkPolicyEgressRule().WithTo(networkingv1ac.NetworkPolicyPeer().WithPodSelector(metav1ac.LabelSelector()))
-	return networkingv1ac.NetworkPolicy(policyEgress, ns).WithLabels(map[string]string{labelManagedBy: "cobranch"}).
+	return networkingv1ac.NetworkPolicy(policyEgress, ns).WithLabels(map[string]string{cluster.ManagedByLabel: "cobranch"}).
 		WithSpec(networkingv1ac.NetworkPolicySpec().WithPodSelector(metav1ac.LabelSelector()).WithPolicyTypes("Egress").
 			WithEgress(own, dns, internet)), nil
 }

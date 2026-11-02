@@ -45,12 +45,12 @@ UPDATE environments SET sync = 'out_of_sync' WHERE id = @id AND sync <> 'out_of_
 -- name: SetEnvironmentPaused :exec
 UPDATE environments SET paused = @paused WHERE id = @id;
 
--- SupersedeDeliveries cancels an environment's deliveries that haven't started applying, with the reason, and answers
--- the commit of each.
+-- SupersedeDeliveries cancels an environment's deliveries that haven't started applying, with the reason, but its
+-- queued teardown unless @teardowns, and answers the kind and commit of each.
 -- name: SupersedeDeliveries :many
 UPDATE deliveries SET state = 'cancelled', reason = @reason, ended_at = now(), lease_until = NULL
-WHERE environment_id = @environment_id AND state IN ('waiting', 'queued', 'rendering')
-RETURNING id, sha;
+WHERE environment_id = @environment_id AND state IN ('waiting', 'queued', 'rendering') AND (kind <> 'teardown' OR @teardowns::boolean)
+RETURNING id, kind, sha;
 
 -- ActiveDeliveryAt finds an environment's newest delivery of a commit that hasn't ended, locked until the transaction
 -- ends.
@@ -59,6 +59,24 @@ SELECT id, state FROM deliveries
 WHERE environment_id = @environment_id AND sha = @sha AND state IN ('waiting', 'queued', 'rendering', 'applying')
 ORDER BY number DESC LIMIT 1
 FOR UPDATE;
+
+-- HasActiveDelivery reports whether any of an environment's deliveries hasn't ended.
+-- name: HasActiveDelivery :one
+SELECT EXISTS (SELECT 1 FROM deliveries WHERE environment_id = @environment_id
+    AND state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting'))::boolean;
+
+-- HasActiveTeardown reports whether an environment's teardown is queued or deleting.
+-- name: HasActiveTeardown :one
+SELECT EXISTS (SELECT 1 FROM deliveries WHERE environment_id = @environment_id AND kind = 'teardown'
+    AND state IN ('queued', 'deleting'))::boolean;
+
+-- HasLiveEnvironments reports whether a repository has a live environment.
+-- name: HasLiveEnvironments :one
+SELECT EXISTS (SELECT 1 FROM environments WHERE repo_id = @repo_id AND deleted_at IS NULL)::boolean;
+
+-- LiveBranchHeads lists a repository's live branches and their heads, by name.
+-- name: LiveBranchHeads :many
+SELECT name, head FROM branches WHERE repo_id = @repo_id AND deleted_at IS NULL ORDER BY name;
 
 -- name: InsertDelivery :exec
 INSERT INTO deliveries (id, org_id, repo_id, number, environment_id, kind, sha, trigger, push_id, state, reason, started_by, ended_at)

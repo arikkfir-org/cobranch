@@ -1869,6 +1869,8 @@ const (
 	DeliveryStateQueued    DeliveryState = "QUEUED"
 	DeliveryStateRendering DeliveryState = "RENDERING"
 	DeliveryStateApplying  DeliveryState = "APPLYING"
+	// A teardown deletes what its environment held, until it is gone.
+	DeliveryStateDeleting  DeliveryState = "DELETING"
 	DeliveryStateSucceeded DeliveryState = "SUCCEEDED"
 	// It ended badly, or never started.
 	DeliveryStateFailed DeliveryState = "FAILED"
@@ -1881,6 +1883,7 @@ var AllDeliveryState = []DeliveryState{
 	DeliveryStateQueued,
 	DeliveryStateRendering,
 	DeliveryStateApplying,
+	DeliveryStateDeleting,
 	DeliveryStateSucceeded,
 	DeliveryStateFailed,
 	DeliveryStateCancelled,
@@ -1888,7 +1891,7 @@ var AllDeliveryState = []DeliveryState{
 
 func (e DeliveryState) IsValid() bool {
 	switch e {
-	case DeliveryStateWaiting, DeliveryStateQueued, DeliveryStateRendering, DeliveryStateApplying, DeliveryStateSucceeded, DeliveryStateFailed, DeliveryStateCancelled:
+	case DeliveryStateWaiting, DeliveryStateQueued, DeliveryStateRendering, DeliveryStateApplying, DeliveryStateDeleting, DeliveryStateSucceeded, DeliveryStateFailed, DeliveryStateCancelled:
 		return true
 	}
 	return false
@@ -1936,17 +1939,20 @@ const (
 	DeliveryTriggerPush      DeliveryTrigger = "PUSH"
 	DeliveryTriggerRedeliver DeliveryTrigger = "REDELIVER"
 	DeliveryTriggerResume    DeliveryTrigger = "RESUME"
+	// The controller's own: it resyncs each environment every while, and tears down one whose branch is gone.
+	DeliveryTriggerSchedule DeliveryTrigger = "SCHEDULE"
 )
 
 var AllDeliveryTrigger = []DeliveryTrigger{
 	DeliveryTriggerPush,
 	DeliveryTriggerRedeliver,
 	DeliveryTriggerResume,
+	DeliveryTriggerSchedule,
 }
 
 func (e DeliveryTrigger) IsValid() bool {
 	switch e {
-	case DeliveryTriggerPush, DeliveryTriggerRedeliver, DeliveryTriggerResume:
+	case DeliveryTriggerPush, DeliveryTriggerRedeliver, DeliveryTriggerResume, DeliveryTriggerSchedule:
 		return true
 	}
 	return false

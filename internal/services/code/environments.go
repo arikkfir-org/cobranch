@@ -64,7 +64,8 @@ const (
 	Teardown      DeliveryKind = "teardown"
 )
 
-// DeliveryTrigger is what queued a delivery: a push to its branch, a member's redelivery, or resuming its environment.
+// DeliveryTrigger is what queued a delivery: a push to its branch or into the default branch, a member's redelivery,
+// resuming its environment, or the controller's schedule, which resyncs environments and tries failed teardowns again.
 type DeliveryTrigger string
 
 // The triggers of deliveries.
@@ -72,18 +73,21 @@ const (
 	TriggeredByPush      DeliveryTrigger = "push"
 	TriggeredByRedeliver DeliveryTrigger = "redeliver"
 	TriggeredByResume    DeliveryTrigger = "resume"
+	TriggeredBySchedule  DeliveryTrigger = "schedule"
 )
 
 // DeliveryState is where a delivery stands (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/
 // delivery.md, "A delivery's life").
 type DeliveryState string
 
-// The states of a delivery. A superseded one is Cancelled, saying by which.
+// The states of a delivery. A superseded one is Cancelled, saying by which; a teardown is Deleting while it waits for
+// what it deleted to go.
 const (
 	DeliveryWaiting   DeliveryState = "waiting"
 	DeliveryQueued    DeliveryState = "queued"
 	DeliveryRendering DeliveryState = "rendering"
 	DeliveryApplying  DeliveryState = "applying"
+	DeliveryDeleting  DeliveryState = "deleting"
 	DeliverySucceeded DeliveryState = "succeeded"
 	DeliveryFailed    DeliveryState = "failed"
 	DeliveryCancelled DeliveryState = "cancelled"
@@ -91,7 +95,7 @@ const (
 
 // Active reports whether a delivery in state s hasn't ended.
 func (s DeliveryState) Active() bool {
-	return s == DeliveryWaiting || s == DeliveryQueued || s == DeliveryRendering || s == DeliveryApplying
+	return s == DeliveryWaiting || s == DeliveryQueued || s == DeliveryRendering || s == DeliveryApplying || s == DeliveryDeleting
 }
 
 // Environment is a target and a live branch: where the branch delivers, and what the target's cluster holds of it.

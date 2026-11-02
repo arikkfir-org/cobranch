@@ -123,12 +123,13 @@ none.
   widens its `branches`: the push worker's transaction makes the environment and queues its first delivery.
 - **One namespace, one environment.** Two environments may not share a cluster and namespace: the second fails, naming
   the first. Two targets naming the same secret count as one cluster.
-- **Its namespace is set when it is made,** and kept for its life, so `namespace` takes no `${commit}`,
-  `${commit.short}` or `${namespace}`.
+- **Its cluster and namespace are set when it is made,** and kept for its life, so `namespace` takes no `${commit}`,
+  `${commit.short}` or `${namespace}`. A target whose `cluster` changes keeps delivering its environments where they
+  are; to move them, rename the target, and `main`'s push tears the old environments down and makes new ones.
 - **Each target is a principal,** created on first use, kind `target`, owned by the repository, never signing in, as
   each job name is ([Who delivers](#who-delivers)).
 - **Ends with its branch,** with its target, or when `main` stops matching the branch: its teardown deletes what it
-  created ([Teardown](#teardown)).
+  created, and the environment ends with it ([Teardown](#teardown)).
 
 ## Roots and rendering
 
@@ -193,17 +194,21 @@ objects that still carry the environment’s label, and never a CRD.
   order, if they still carry the label and the UID it recorded. An apply that fails partway adds what it applied to the
   previous inventory and prunes nothing, so nothing it applied is forgotten. CRDs are never pruned: deleting one deletes
   every object of its kind in the cluster.
-- **Resync.** Every `delivery.resync` (10 minutes by default) the controller re-applies each environment's last render
-  and reads its health again, so a change made by hand is put back. A resync renders nothing and reports no annotation.
+- **Resync.** Every `delivery.resync` (10 minutes by default) the controller's schedule queues a resync of each
+  environment no delivery works on, whose last delivery ended that long ago, unless it is paused or holds no revision. A
+  resync applies the render of the environment's last delivery of a commit to succeed, which the controller's sweep
+  always keeps, prunes against the inventory, and reads its health again, so a change made by hand is put back. It
+  renders nothing, reports no annotation, and a push supersedes it as it supersedes any queued delivery.
 
 ## A delivery's life
 
-**A delivery waits, queues, renders, applies and ends; a newer one supersedes it on the way**
+**A delivery waits, queues, renders, applies and ends; a teardown deletes instead; a newer one supersedes them on the
+way**
 
-![A delivery waits, queues, renders, applies and ends; a newer one supersedes it on the way](delivery/life.svg)
+![A delivery waits, queues, renders, applies and ends; a teardown deletes instead; a newer one supersedes them on the way](delivery/life.svg)
 
-Applying is never interrupted: a newer delivery waits for it, then applies over it. A teardown goes from Queued to
-Deleting and ends Succeeded with its environment.
+Applying and Deleting are never interrupted: a newer delivery waits for them. A resync and a teardown report no
+annotation, since neither delivers a commit.
 
 | Delivery | `delivery/<target>` | When |
 | --- | --- | --- |
@@ -211,6 +216,7 @@ Deleting and ends Succeeded with its environment.
 | Queued | Pending | Waiting for the controller, or for the environment's running delivery to end |
 | Rendering | In progress | Its render pod runs |
 | Applying | In progress | The controller applies, prunes and records |
+| Deleting | None | A teardown deletes what its environment holds, looking again until it is gone |
 | Succeeded | In progress until Healthy, then Successful | Applied and pruned; the environment is Synced at the commit |
 | Failed | Failed, with the reason | A render that failed or timed out, an object refused, an apply the cluster refused, a secret the target may not read |
 | Superseded | Failed: `superseded by #n` | A newer delivery of the same environment was queued while it waited, queued or rendered |
@@ -225,6 +231,9 @@ Deleting and ends Succeeded with its environment.
 - **What a tip holds decides what it delivers.** A tip whose `/cobranch.yaml` doesn't parse fails its deliveries with
   the file's error; a tip without the file, or without `roots`, renders nothing, so its environments hold nothing.
 - **Each delivery has a number** in its repository, `#17`, for the Console and the reasons.
+- **Three kinds.** A delivery of a commit renders and applies it, and reports on it; a resync applies the last render
+  again, and a teardown deletes; neither of those reports an annotation, since neither delivers a commit. What queued
+  each is its trigger: a push, a member's redeliver or resume, or the controller's schedule.
 
 ## Teardown
 
@@ -234,14 +243,26 @@ Deleting and ends Succeeded with its environment.
 
 ![Deleting a branch deletes everything its environments created](delivery/teardown.svg)
 
-A target `main` drops, or a branch it no longer matches, tears down the same way. Teardown deletes only what still
-carries the environment’s label, and never a CRD.
+A target `main` drops, or a branch it no longer matches, tears down the same way, and the schedule tears down any
+environment left without its branch. Teardown deletes only what still carries the environment’s label, and never a CRD;
+one that times out fails, naming what remains.
 
-- **What it deletes:** every object of the inventory still carrying the environment's label, in reverse install order,
-  and then the namespace if Cobranch created it. It waits until each is gone, so finalizers run, up to
-  `delivery.teardownTimeout` (10 minutes), then fails with what remains.
-- **What it keeps:** CRDs, objects someone relabelled, and the environment's history: its deliveries, renders until the
-  controller deletes them, and its last inventory.
+- **Queued with the change.** The push that deletes a branch queues a teardown of each of its environments, superseding
+  what they had queued; `main`'s push that drops a target, or stops matching a branch, queues those of the environments
+  it no longer gives. The controller's schedule, every `delivery.resync`, queues one for any environment left without
+  its branch or its target, such as one made before teardowns, or one whose teardown failed.
+- **What it deletes:** every object of the inventory still carrying the environment's label and the UID it recorded, in
+  reverse install order, and then the namespace if Cobranch created it, which carries the environment's label. It looks
+  again every `delivery.healthInterval` until each is gone, so finalizers run, up to `delivery.teardownTimeout` (10
+  minutes from its start), then fails naming what remains; the environment then stays, Out of sync and holding what
+  remains, for the schedule to tear down again. One whose cluster can no longer be opened fails at once, saying why.
+- **What it keeps:** CRDs, objects someone relabelled or recreated, and the environment's history: its deliveries,
+  renders until the controller deletes them, and its last inventory.
+- **A branch that comes back** while its environment deletes queues a delivery that waits for the teardown, as any
+  delivery waits for its environment's apply. The environment then lives on, holding nothing, and the delivery makes its
+  namespace anew.
+- **Pausing** holds back what a branch delivers, not its teardown: a paused environment whose branch is gone is torn
+  down all the same.
 - **A merged branch** keeps its environment until it is deleted, as it keeps its other state.
 
 ## Health and revision
@@ -310,15 +331,23 @@ renders none of it.
 ![Another cluster is a kubeconfig in a secret, opened only for the target it is granted to](delivery/remote.svg)
 
 A branch can’t point a target at another secret: targets come from `main`. A target whose principal may not read its
-secret fails each delivery, naming the secret.
+secret, or a kubeconfig the controller refuses, fails each delivery, saying why; `delivery.clusters.allowedCIDRs` admits
+a private cluster’s range.
 
-- **A kubeconfig of one context**, with a token or a client certificate; exec plugins and auth providers are refused,
-  since the controller would run them. The other cluster's RBAC is the boundary: give the kubeconfig's identity what the
-  target's namespace needs, and nothing more.
-- **The namespace** is created when missing, if the kubeconfig may, and labelled as the in-cluster one is; teardown
-  deletes it only if Cobranch created it.
-- **Reaching it** is the controller's, never a job pod's: the operator lets the controller's pods reach the clusters'
-  API servers.
+- **A kubeconfig of one context:** an `https` server with its CA given inline, and a token or a client certificate and
+  key given inline. The controller refuses exec plugins and auth providers, which it would run; files
+  (`certificate-authority`, `tokenFile`, `client-certificate`, `client-key`), which it would read from its own disk;
+  `insecure-skip-tls-verify`; proxies; and basic authentication. A refused kubeconfig fails the delivery, saying why.
+  The other cluster's RBAC is the boundary: give the kubeconfig's identity what the target's namespace needs, and
+  nothing more.
+- **Opened with the installation's secrets key,** as jobs' secrets are, for the target alone, and kept open for the next
+  delivery to the same kubeconfig: a changed secret is a new cluster.
+- **The namespace** is created when missing, if the kubeconfig may, and labelled as the in-cluster one is; one that
+  carries another environment's label is refused, and teardown deletes it only if Cobranch created it.
+- **Reaching it** is the controller's, never a job pod's, and only outside `jobs.egress.except`, checked at each address
+  the controller dials, through no proxy: a kubeconfig can't point the controller at the installation's own network or
+  the cloud's metadata server. `delivery.clusters.allowedCIDRs` admits a private cluster's control plane, and the
+  operator lets the controller's pods reach the clusters' API servers.
 
 ## Nothing lost
 
@@ -372,8 +401,9 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 | `delivery.inCluster.rules` | None | More rules for the delivery role: the kinds of the cluster's CRDs renders may hold |
 | `delivery.render.timeout`, `resources` | 10m; requests 100m, 256Mi, memory limit 1Gi | Render pods |
 | `delivery.healthInterval` | 15s | How often a Progressing environment's health is read again |
-| `delivery.resync` | 10m | How often each environment is re-applied and its health read |
+| `delivery.resync` | 10m | How often each environment no delivery works on is re-applied, or torn down once its branch or target is gone |
 | `delivery.teardownTimeout` | 10m | How long a teardown waits for objects to go |
+| `delivery.clusters.allowedCIDRs` | None | Ranges of `jobs.egress.except` where other clusters' API servers may be all the same |
 | `delivery.renders.keep` | 10 per environment | Renders kept; the controller deletes older ones, but those of deliveries still working and the environment's last to succeed |
 
 ## Data model
@@ -404,6 +434,11 @@ grants the chart’s delivery RBAC.
   applies, prunes and follows health, and `delivery.inCluster.enabled: true` grants it namespaces, `bind` on the
   delivery roles and impersonation. Off, the default, those deliveries fail, saying so, and targets with a `cluster`
   wait for the fifth.
+- **The fifth delivers into other clusters, tears down and resyncs,** and closes
+  [ENG-218](https://linear.app/arikkfir/issue/ENG-218): targets with a `cluster` deliver through their kubeconfigs;
+  deleting a branch, or `main` dropping a target, tears its environments down; and the schedule re-applies every
+  environment and tears down those an earlier version left behind. Migration `00047` adds the Deleting state and the
+  schedule's trigger.
 - **A repository adopts delivery** by pushing a `delivery` key into `main`.
 
 ## Risks
@@ -432,13 +467,17 @@ grants the chart’s delivery RBAC.
 | Health by kstatus' rules; the environment takes the worst | Rules Kubernetes' tools already share, for every kind | Proposed |
 | Each delivery reports `delivery/<target>` on its commit, as the target's principal | Merge requirements and job triggers can follow delivery, with no new mechanism | Proposed |
 | One principal per target, holding only Secret reader on its cluster's secret | The jobs model: least privilege, audit by name | Proposed |
-| Other clusters through a kubeconfig secret, exec plugins refused | No new credential store; the other cluster's RBAC bounds it | Proposed |
+| Other clusters through a kubeconfig secret: `https` with an inline CA, a token or a client certificate given inline; no exec plugins, auth providers, files, insecure TLS or proxies; dialled only outside `jobs.egress.except` | No new credential store; the other cluster's RBAC bounds it; the controller runs nothing, reads nothing of its own disk, and reaches nothing of the installation's network for a repository | Proposed |
+| An environment's cluster, as its namespace, is fixed when it is made | Moving objects between clusters takes a teardown in one and a delivery in the other; renaming the target does both | Proposed |
 | This installation's cluster in namespaces the controller makes, fences and applies to as an impersonated, namespace-bound account, off by default | Grants renders nothing cluster-wide; off until an operator consents, since any organization's target can then make a namespace of any free name | Agreed: off by default, a reversible default (Open question 3) |
 | Renders kept in the database, beside the delivery, rather than in the object store | The REST server, which takes the upload, holds no object store; a render is at most 16 MiB, and the controller's sweep deletes old ones | Proposed |
 | The upload is a `POST` of a delivery's number, creating its render once | The API's routes name deliveries by number, and a `PUT` would need `If-Match` for a resource the token can't read | Proposed |
 | The render pod's token also reads its repository | The checkout fetches the commit with it, as a run's token does; one token per pod | Proposed |
 | A failed render's reason is the last line its failed container logged | `cobranch render` and the checkout end with their error, which then reads on the commit's annotation | Proposed |
 | Resync re-applies the last render every 10 minutes | Self-healing, as GitOps promises, without rendering again | Proposed |
+| Teardowns queued by the push that deletes a branch or drops a target, and by the schedule for any environment left without one | Queued with the change, as every reaction is; the schedule catches environments made before teardowns, and retries a failed teardown | Proposed |
+| A teardown whose branch came back ends with its environment live and empty, and the new delivery waits for it | Nothing the new delivery applies is deleted, and its namespace is made anew | Proposed |
+| Pausing holds back deliveries, never a teardown | A paused environment whose branch is gone still deletes what it created | Proposed |
 | Deliveries are their own queue, claimed under a lease, one at a time per environment | The jobs model; an apply is never interleaved with another | Proposed |
 | Waves, hooks, promotion, charts from registries, secrets in manifests, cloud identities, several namespaces and diffs come later | Keeps this slice to its issue | Proposed |
 

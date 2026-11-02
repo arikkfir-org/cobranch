@@ -42,16 +42,19 @@ type targeted struct {
 
 // annotate sets the delivery's target's annotation on its commit to in, as the target, and works out the status of
 // the branches there again. Another principal holding the annotation changes nothing: the delivery failed as it was
-// queued then.
+// queued then. A teardown has no commit to annotate.
 func annotate(ctx context.Context, q *queries.Queries, d targeted, in code.AnnotationInput) error {
+	if d.Sha == "" {
+		return nil
+	}
 	if _, err := setJobAnnotation(ctx, q, d.OrgID, d.TargetID, d.RepoID, d.Sha, code.DeliveryAnnotation(d.Target), in); err != nil {
 		return err
 	}
 	return restatusAt(ctx, q, d.RepoID, d.Sha)
 }
 
-// Claim claims the queued delivery of a commit to this installation's cluster that waited longest, that no controller
-// holds and whose environment isn't applying another, until leaseUntil (deliverer.Store).
+// Claim claims the queued delivery that waited longest, that no controller holds and whose environment isn't applying
+// or deleting another, until leaseUntil (deliverer.Store).
 func (s *DeliveryStore) Claim(ctx context.Context, leaseUntil time.Time) (deliverer.Delivery, bool, error) {
 	row, err := s.q.ClaimDelivery(ctx, leaseUntil)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -61,8 +64,8 @@ func (s *DeliveryStore) Claim(ctx context.Context, leaseUntil time.Time) (delive
 		return deliverer.Delivery{}, false, fmt.Errorf("claiming a queued delivery: %w", err)
 	}
 	return deliverer.Delivery{ID: row.ID, OrgID: row.OrgID, RepoID: row.RepoID, EnvironmentID: row.EnvironmentID, TargetID: row.TargetID,
-		Number: row.Number, Target: row.Target, Branch: row.Branch, SHA: row.Sha, OrgSlug: row.OrgSlug, RepoSlug: row.RepoSlug,
-		Namespace: row.Namespace}, true, nil
+		Number: row.Number, Kind: code.DeliveryKind(row.Kind), Target: row.Target, Branch: row.Branch, SHA: row.Sha, OrgSlug: row.OrgSlug,
+		RepoSlug: row.RepoSlug, Cluster: row.Cluster, Namespace: row.Namespace}, true, nil
 }
 
 // Token records the delivery's token by its hash and hint, until expiresAt, replacing one made before
@@ -103,7 +106,17 @@ func (s *DeliveryStore) MarkRendering(ctx context.Context, deliveryID uuid.UUID)
 	return marked, err
 }
 
-// Working lists the deliveries that render, and those whose apply a controller left (deliverer.Store).
+// MarkDeleting marks a queued teardown deleting (deliverer.Store).
+func (s *DeliveryStore) MarkDeleting(ctx context.Context, deliveryID uuid.UUID) (bool, error) {
+	n, err := s.q.MarkDeliveryDeleting(ctx, deliveryID)
+	if err != nil {
+		return false, fmt.Errorf("marking teardown %s deleting: %w", deliveryID, err)
+	}
+	return n > 0, nil
+}
+
+// Working lists the deliveries that render, those whose apply a controller left, and the teardowns no controller holds
+// (deliverer.Store).
 func (s *DeliveryStore) Working(ctx context.Context) ([]deliverer.Working, error) {
 	rows, err := s.q.WorkingDeliveries(ctx)
 	if err != nil {
@@ -111,14 +124,15 @@ func (s *DeliveryStore) Working(ctx context.Context) ([]deliverer.Working, error
 	}
 	out := make([]deliverer.Working, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, deliverer.Working{ID: r.ID, OrgID: r.OrgID, RepoID: r.RepoID, Number: r.Number,
+		out = append(out, deliverer.Working{ID: r.ID, OrgID: r.OrgID, RepoID: r.RepoID, Number: r.Number, Kind: code.DeliveryKind(r.Kind),
 			State: code.DeliveryState(r.State), StartedAt: r.StartedAt, Rendered: r.Rendered})
 	}
 	return out, nil
 }
 
-// TakeApply marks a delivery that rendered, or whose apply a controller left, applying until leaseUntil and its
-// target's annotation to match, and answers its render and what its environment holds (deliverer.Store).
+// TakeApply marks a delivery that rendered, a queued resync, or a delivery whose apply a controller left, applying until
+// leaseUntil and, for a commit's, its target's annotation to match, and answers its render and what its environment
+// holds (deliverer.Store).
 func (s *DeliveryStore) TakeApply(ctx context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Apply, bool, error) {
 	var a deliverer.Apply
 	taken := false
@@ -130,27 +144,52 @@ func (s *DeliveryStore) TakeApply(ctx context.Context, deliveryID uuid.UUID, lea
 		if err != nil {
 			return fmt.Errorf("taking delivery %s's apply: %w", deliveryID, err)
 		}
-		manifests, err := q.DeliveryRender(ctx, deliveryID)
+		kind := code.DeliveryKind(row.Kind)
+		manifests, rendered, err := renderOf(ctx, q, kind, deliveryID, row.EnvironmentID)
 		if err != nil {
-			return fmt.Errorf("reading delivery %s's render: %w", deliveryID, err)
+			return err
 		}
 		inventory, err := objectsOf(ctx, q, row.EnvironmentID)
 		if err != nil {
 			return err
 		}
 		a = deliverer.Apply{ID: row.ID, OrgID: row.OrgID, RepoID: row.RepoID, EnvironmentID: row.EnvironmentID, TargetID: row.TargetID,
-			Number: row.Number, Target: row.Target, SHA: row.Sha, Namespace: row.Namespace, Revision: derefString(row.Revision),
-			Health: code.Health(row.EnvironmentHealth), Manifests: manifests, Inventory: inventory}
+			Number: row.Number, Kind: kind, Target: row.Target, SHA: row.Sha, Namespace: row.Namespace, Cluster: row.Cluster,
+			Revision: derefString(row.Revision), Health: code.Health(row.EnvironmentHealth), Manifests: manifests, Rendered: rendered,
+			Inventory: inventory}
 		taken = true
+		if kind != code.DeliverCommit {
+			return nil
+		}
 		return annotate(ctx, q, targeted{OrgID: row.OrgID, RepoID: row.RepoID, Sha: row.Sha, TargetID: row.TargetID, Target: row.Target},
 			deliveryAnnotation(code.DeliveryApplying, ""))
 	})
 	return a, taken, err
 }
 
+// renderOf is what a delivery of kind applies: its own render, or for a resync its environment's last delivery of a
+// commit to succeed; false when a resync finds none.
+func renderOf(ctx context.Context, q *queries.Queries, kind code.DeliveryKind, deliveryID, environmentID uuid.UUID) ([]byte, bool, error) {
+	if kind != code.Resync {
+		manifests, err := q.DeliveryRender(ctx, deliveryID)
+		if err != nil {
+			return nil, false, fmt.Errorf("reading delivery %s's render: %w", deliveryID, err)
+		}
+		return manifests, true, nil
+	}
+	manifests, err := q.LastRender(ctx, environmentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("reading environment %s's last render: %w", environmentID, err)
+	}
+	return manifests, true, nil
+}
+
 // Record records how an apply ended, in one transaction: the delivery's end and its token's; the environment's
 // inventory; for one that succeeded the environment's revision, health and sync, and for one that failed Out of sync;
-// and the target's annotation (deliverer.Store). A delivery that ended already, as another controller took its apply
+// and, for a commit's, the target's annotation (deliverer.Store). A delivery that ended already, as another controller took its apply
 // when its lease lapsed, records nothing more: the environment's inventory may be a newer delivery's by then.
 func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 	a := o.Apply
@@ -177,7 +216,68 @@ func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 		if err != nil {
 			return fmt.Errorf("recording environment %s's delivery: %w", a.EnvironmentID, err)
 		}
+		if a.Kind != code.DeliverCommit {
+			return nil
+		}
 		return annotate(ctx, q, targeted{OrgID: row.OrgID, RepoID: row.RepoID, Sha: row.Sha, TargetID: row.TargetID, Target: row.Target}, o.Report)
+	})
+}
+
+// TakeTeardown holds a teardown that deletes until leaseUntil, once no controller holds it, and answers what its
+// environment holds (deliverer.Store).
+func (s *DeliveryStore) TakeTeardown(ctx context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (deliverer.Teardown, bool, error) {
+	row, err := s.q.TakeTeardown(ctx, leaseUntil, deliveryID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return deliverer.Teardown{}, false, nil
+	}
+	if err != nil {
+		return deliverer.Teardown{}, false, fmt.Errorf("taking teardown %s: %w", deliveryID, err)
+	}
+	inventory, err := objectsOf(ctx, s.q, row.EnvironmentID)
+	if err != nil {
+		return deliverer.Teardown{}, false, err
+	}
+	env := deliverer.Environment{ID: row.EnvironmentID, OrgID: row.OrgID, RepoID: row.RepoID, TargetID: row.TargetID, Target: row.Target,
+		Cluster: row.Cluster, Namespace: row.Namespace}
+	return deliverer.Teardown{ID: row.ID, OrgID: row.OrgID, RepoID: row.RepoID, Number: row.Number, Environment: env, Inventory: inventory,
+		StartedAt: row.StartedAt}, true, nil
+}
+
+// LookAgain holds a teardown that deletes until at (deliverer.Store).
+func (s *DeliveryStore) LookAgain(ctx context.Context, deliveryID uuid.UUID, at time.Time) error {
+	return wrapIf(s.q.LeaseTeardown(ctx, at, deliveryID), "holding teardown "+deliveryID.String())
+}
+
+// EndTeardown ends a teardown in state with reason, in one transaction (deliverer.Store). One that succeeded ends its
+// environment, keeping its last inventory as its history, unless a newer delivery of it waits, as its branch came back:
+// that environment then holds nothing and has no revision. One that failed leaves the environment holding remaining,
+// Out of sync, for the schedule to tear down again.
+func (s *DeliveryStore) EndTeardown(ctx context.Context, t deliverer.Teardown, remaining []deliverer.Object, state code.DeliveryState,
+	reason string) error {
+	envID := t.Environment.ID
+	return transact(ctx, s.pool, s.q, "ending the teardown", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.FinishDelivery(ctx, string(state), reason, t.ID); errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("ending teardown %s: %w", t.ID, err)
+		}
+		if state != code.DeliverySucceeded {
+			if err := setInventory(ctx, q, envID, t.ID, remaining); err != nil {
+				return err
+			}
+			return wrapIf(q.MarkOutOfSync(ctx, envID), "marking environment "+envID.String()+" out of sync")
+		}
+		ended, err := q.EndEnvironment(ctx, envID, t.ID)
+		switch {
+		case err != nil:
+			return fmt.Errorf("ending environment %s: %w", envID, err)
+		case ended > 0:
+			return nil
+		}
+		if err := setInventory(ctx, q, envID, t.ID, nil); err != nil {
+			return err
+		}
+		return wrapIf(q.EmptyEnvironment(ctx, envID), "emptying environment "+envID.String())
 	})
 }
 
@@ -199,6 +299,9 @@ func (s *DeliveryStore) Finish(ctx context.Context, deliveryID uuid.UUID, state 
 		finished = true
 		if err := q.MarkOutOfSync(ctx, row.EnvironmentID); err != nil {
 			return fmt.Errorf("marking environment %s out of sync: %w", row.EnvironmentID, err)
+		}
+		if code.DeliveryKind(row.Kind) != code.DeliverCommit {
+			return nil
 		}
 		return annotate(ctx, q, targeted{OrgID: row.OrgID, RepoID: row.RepoID, Sha: row.Sha, TargetID: row.TargetID, Target: row.Target},
 			deliveryAnnotation(state, reason))
@@ -235,8 +338,7 @@ func (s *DeliveryStore) DropRenders(ctx context.Context, keep int) (int64, error
 	return n, nil
 }
 
-// Progressing lists the live environments of this installation's cluster whose health is Progressing
-// (deliverer.Store).
+// Progressing lists the live environments whose health is Progressing (deliverer.Store).
 func (s *DeliveryStore) Progressing(ctx context.Context) ([]deliverer.Environment, error) {
 	rows, err := s.q.ProgressingEnvironments(ctx)
 	if err != nil {
@@ -244,7 +346,8 @@ func (s *DeliveryStore) Progressing(ctx context.Context) ([]deliverer.Environmen
 	}
 	out := make([]deliverer.Environment, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, deliverer.Environment{ID: r.ID, OrgID: r.OrgID, RepoID: r.RepoID, Namespace: r.Namespace})
+		out = append(out, deliverer.Environment{ID: r.ID, OrgID: r.OrgID, RepoID: r.RepoID, TargetID: r.TargetID, Target: r.Target,
+			Cluster: r.Cluster, Namespace: r.Namespace})
 	}
 	return out, nil
 }

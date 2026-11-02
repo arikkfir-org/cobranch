@@ -20,10 +20,10 @@ import (
 // itself: the pod's own deadline counts from when its node takes it, and one never scheduled has none.
 const lateSlack = 5 * time.Minute
 
-// Follow applies the renders that render pods uploaded, and the applies a controller left, and fails the deliveries
-// whose render pods failed, vanished or outlived their timeouts, keeping their logs and removing their pods; then it
-// reads the health of the environments that are Progressing. A delivery it fails to follow is followed again on the
-// next pass; Follow goes on with the rest and answers what failed.
+// Follow applies the renders that render pods uploaded, and the applies a controller left, follows the teardowns that
+// delete, and fails the deliveries whose render pods failed, vanished or outlived their timeouts, keeping their logs and
+// removing their pods; then it reads the health of the environments that are Progressing. A delivery it fails to
+// follow is followed again on the next pass; Follow goes on with the rest and answers what failed.
 func (s *Service) Follow(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(ctx, "deliverer.Service.Follow")
 	defer span.End()
@@ -33,11 +33,21 @@ func (s *Service) Follow(ctx context.Context) (err error) {
 		return fmt.Errorf("listing the deliveries that render and apply: %w", err)
 	}
 	span.SetAttributes(attribute.Int("cobranch.deliveries.count", len(working)))
+	var errs []error
 	byOrg := map[uuid.UUID][]Working{}
 	for _, w := range working {
-		byOrg[w.OrgID] = append(byOrg[w.OrgID], w)
+		switch {
+		case w.State == code.DeliveryDeleting:
+			// A teardown has no render pod to look at.
+			errs = append(errs, s.tearDown(ctx, w.ID))
+		case w.Kind == code.Resync:
+			// Neither has a resync: it only applies, and one a controller left is applied again.
+			_, err := s.apply(ctx, w)
+			errs = append(errs, err)
+		default:
+			byOrg[w.OrgID] = append(byOrg[w.OrgID], w)
+		}
 	}
-	var errs []error
 	for orgID, ws := range byOrg {
 		pods, err := s.pods.Renders(ctx, orgID)
 		if err != nil {
@@ -61,9 +71,6 @@ func (s *Service) Follow(ctx context.Context) (err error) {
 func (s *Service) follow(ctx context.Context, w Working, pod runner.Pod, ok bool) error {
 	ran := s.now().Sub(w.StartedAt)
 	switch {
-	case s.target == nil:
-		// The installation stopped delivering into its cluster since this delivery started.
-		return s.end(ctx, w, because(noCluster))
 	case w.Rendered || w.State == code.DeliveryApplying:
 		_, err := s.apply(ctx, w)
 		return err
