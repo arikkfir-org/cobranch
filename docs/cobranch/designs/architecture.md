@@ -495,8 +495,9 @@ The probes are not traced. Webhooks carry `traceparent` too, so a receiver that 
 
 ![The operator decides where logs, traces and metrics go](architecture/telemetry.svg)
 
-With no OTLP endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT`, no span leaves the pod, and metrics leave it only when
-`OTEL_METRICS_EXPORTER` serves them at `/metrics`; trace IDs still name every request in the logs.
+With no OTLP endpoint set, neither in `OTEL_EXPORTER_OTLP_ENDPOINT` nor in the traces’ or metrics’ own, nothing leaves
+the pod over OTLP, and metrics leave it only when `OTEL_METRICS_EXPORTER=prometheus` serves them at `/metrics`; trace
+IDs still name every request in the logs.
 
 OpenTelemetry's own variables, unchanged, say where traces go, and the chart sets them from its values:
 `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_EXPORTER_OTLP_HEADERS` for a vendor's key, `OTEL_TRACES_SAMPLER` and its argument,
