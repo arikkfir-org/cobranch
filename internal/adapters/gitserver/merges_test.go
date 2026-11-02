@@ -147,8 +147,10 @@ func otherBranchCases() []mergeCase {
 }
 
 func TestMergeByPush(t *testing.T) {
+	t.Parallel()
 	for _, tt := range mergeCases() {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s, dir, feature := branchToMerge(t, tt)
 			out, err := tt.push(t, s, dir)
 			if tt.refusal != "" {
@@ -231,6 +233,7 @@ func annotate(t *testing.T, s *stack, sha string, status code.AnnotationStatus) 
 }
 
 func TestBypassEvent(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	commit(t, dir, "README.md", "# Website\n")
@@ -256,6 +259,7 @@ func TestBypassEvent(t *testing.T) {
 }
 
 func TestMergedBranchMovesOn(t *testing.T) {
+	t.Parallel()
 	s := newStack(t)
 	dir := clone(t, s.websiteURL(s.base, olivia))
 	mustGit(t, dir, "checkout", "-q", "-b", "main")

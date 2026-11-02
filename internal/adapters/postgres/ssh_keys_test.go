@@ -19,6 +19,7 @@ func sshKey(userID uuid.UUID, name string, at time.Time) auth.Credential {
 }
 
 func TestAuthStoreSSHKeys(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)
@@ -77,6 +78,7 @@ func checkSSHKeyRecords(t *testing.T, s *AuthStore, userID uuid.UUID) {
 }
 
 func TestAuthStoreSSHKeyTaken(t *testing.T) {
+	t.Parallel()
 	s, _ := authStore(t)
 	ctx := context.Background()
 	up, other := alice(t, s), signUp("https://idp.example.com", "2", "bob@example.com", true)
@@ -103,6 +105,7 @@ func TestAuthStoreSSHKeyTaken(t *testing.T) {
 }
 
 func TestAuthStoreSSHKeyConstraints(t *testing.T) {
+	t.Parallel()
 	s, pool := authStore(t)
 	ctx := context.Background()
 	up := alice(t, s)

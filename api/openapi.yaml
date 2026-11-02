@@ -24,6 +24,26 @@ paths:
                 $ref: "#/components/schemas/Version"
         default:
           $ref: "#/components/responses/Problem"
+  /page-views:
+    post:
+      operationId: reportPageViews
+      summary: >-
+        Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics
+        (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page
+        reports too. Records nothing about who viewed what.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PageViews"
+      responses:
+        "204":
+          description: Recorded.
+        "400":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me:
     get:
       operationId: getMe
@@ -1898,6 +1918,42 @@ components:
           schema:
             $ref: "#/components/schemas/Problem"
   schemas:
+    PageViews:
+      type: object
+      required: [views]
+      properties:
+        views:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/PageView"
+    PageView:
+      type: object
+      description: One view of a Console page, from the wait's start to the page drawn.
+      required: [page, navigation, durationMs, gitReads]
+      properties:
+        page:
+          type: string
+          description: The Console's page.
+          enum: [sign-in, welcome, settings, organization, organization.members, organization.roles,
+            organization.api-keys, organization.settings, organization.new-repository, repository.code,
+            repository.file, repository.commits, repository.commit, repository.branches, repository.branch,
+            repository.access, repository.settings]
+        navigation:
+          type: string
+          description: load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
+          enum: [load, route]
+        durationMs:
+          type: number
+          description: How long the page took to show, in milliseconds.
+          minimum: 0
+          maximum: 600000
+        gitReads:
+          type: integer
+          description: How many Git reads the page's API calls took, as their answers' Server-Timing named them.
+          minimum: 0
+          maximum: 1000
     Version:
       type: object
       required: [version]

@@ -1,0 +1,51 @@
+# Task lint of .tekton/ci.yaml: check out the commit, then lint and vet it. Octomaton inlines it, and the step it
+# references, into the PipelineRun.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: lint
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+  workspaces:
+    - name: source
+  volumes:
+    - name: go-cache
+      emptyDir: {}
+  stepTemplate:
+    workingDir: $(workspaces.source.path)
+    env:
+      - name: GOCACHE
+        value: /go-cache/build
+      - name: GOMODCACHE
+        value: /go-cache/mod
+      - name: GOLANGCI_LINT_CACHE
+        value: /go-cache/lint
+      - name: GOTOOLCHAIN
+        value: local
+      - name: GOFLAGS
+        value: -mod=readonly
+      # Compiles and lint run this many at once, whatever the node's CPUs: their memory, which ci.yaml reserves, grows
+      # with it.
+      - name: GOMAXPROCS
+        value: "4"
+    volumeMounts:
+      - name: go-cache
+        mountPath: /go-cache
+  steps:
+    - name: clone
+      ref: {name: clone} # clone.step.yaml
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+    - name: lint
+      image: docker.io/golangci/golangci-lint:v2.15.0
+      command: [golangci-lint, run, ./...]
+    - name: vet
+      image: docker.io/library/golang:1.27.1
+      command: [go, vet, ./...]

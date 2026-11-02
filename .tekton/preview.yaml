@@ -35,9 +35,6 @@ spec:
       - name: source
     tasks:
       - name: publish
-        # A lost node (an upgrade or a repair, or a Spot node reclaimed) kills the build: the preview waits for its
-        # images, so try again. Pushing the same tags twice is harmless.
-        retries: 2
         params:
           - name: repo-url
             value: $(params.repo-url)

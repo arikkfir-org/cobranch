@@ -74,7 +74,7 @@ func (s *Server) internal(read string, next func(w http.ResponseWriter, r *http.
 			answer(ctx, w, span, read, err)
 			return
 		}
-		dir, remove, err := s.snapshotWorkspace(ctx, id)
+		dir, remove, err := s.snapshotWorkspace(ctx, id, read)
 		if err != nil {
 			answer(ctx, w, span, read, err)
 			return

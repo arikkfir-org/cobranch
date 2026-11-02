@@ -127,6 +127,87 @@ func (e MergeMethod) Valid() bool {
 	}
 }
 
+// Defines values for PageViewNavigation.
+const (
+	Load  PageViewNavigation = "load"
+	Route PageViewNavigation = "route"
+)
+
+// Valid indicates whether the value is a known member of the PageViewNavigation enum.
+func (e PageViewNavigation) Valid() bool {
+	switch e {
+	case Load:
+		return true
+	case Route:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PageViewPage.
+const (
+	PageViewPageOrganization              PageViewPage = "organization"
+	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
+	PageViewPageOrganizationMembers       PageViewPage = "organization.members"
+	PageViewPageOrganizationNewRepository PageViewPage = "organization.new-repository"
+	PageViewPageOrganizationRoles         PageViewPage = "organization.roles"
+	PageViewPageOrganizationSettings      PageViewPage = "organization.settings"
+	PageViewPageRepositoryAccess          PageViewPage = "repository.access"
+	PageViewPageRepositoryBranch          PageViewPage = "repository.branch"
+	PageViewPageRepositoryBranches        PageViewPage = "repository.branches"
+	PageViewPageRepositoryCode            PageViewPage = "repository.code"
+	PageViewPageRepositoryCommit          PageViewPage = "repository.commit"
+	PageViewPageRepositoryCommits         PageViewPage = "repository.commits"
+	PageViewPageRepositoryFile            PageViewPage = "repository.file"
+	PageViewPageRepositorySettings        PageViewPage = "repository.settings"
+	PageViewPageSettings                  PageViewPage = "settings"
+	PageViewPageSignIn                    PageViewPage = "sign-in"
+	PageViewPageWelcome                   PageViewPage = "welcome"
+)
+
+// Valid indicates whether the value is a known member of the PageViewPage enum.
+func (e PageViewPage) Valid() bool {
+	switch e {
+	case PageViewPageOrganization:
+		return true
+	case PageViewPageOrganizationApiKeys:
+		return true
+	case PageViewPageOrganizationMembers:
+		return true
+	case PageViewPageOrganizationNewRepository:
+		return true
+	case PageViewPageOrganizationRoles:
+		return true
+	case PageViewPageOrganizationSettings:
+		return true
+	case PageViewPageRepositoryAccess:
+		return true
+	case PageViewPageRepositoryBranch:
+		return true
+	case PageViewPageRepositoryBranches:
+		return true
+	case PageViewPageRepositoryCode:
+		return true
+	case PageViewPageRepositoryCommit:
+		return true
+	case PageViewPageRepositoryCommits:
+		return true
+	case PageViewPageRepositoryFile:
+		return true
+	case PageViewPageRepositorySettings:
+		return true
+	case PageViewPageSettings:
+		return true
+	case PageViewPageSignIn:
+		return true
+	case PageViewPageWelcome:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PushTransport.
 const (
 	Api   PushTransport = "api"
@@ -617,6 +698,32 @@ type OrganizationSettings struct {
 	// Providers The identity providers members may sign in with, by ID. Empty, all of the installation's; left out or null, as before.
 	Providers *[]string `json:"providers,omitempty"`
 	Slug      *string   `json:"slug,omitempty"`
+}
+
+// PageView One view of a Console page, from the wait's start to the page drawn.
+type PageView struct {
+	// DurationMs How long the page took to show, in milliseconds.
+	DurationMs float32 `json:"durationMs"`
+
+	// GitReads How many Git reads the page's API calls took, as their answers' Server-Timing named them.
+	GitReads int `json:"gitReads"`
+
+	// Navigation load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
+	Navigation PageViewNavigation `json:"navigation"`
+
+	// Page The Console's page.
+	Page PageViewPage `json:"page"`
+}
+
+// PageViewNavigation load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
+type PageViewNavigation string
+
+// PageViewPage The Console's page.
+type PageViewPage string
+
+// PageViews defines model for PageViews.
+type PageViews struct {
+	Views []PageView `json:"views"`
 }
 
 // Person A commit's author or committer as the commit writes them.
@@ -1158,6 +1265,9 @@ type CreateRoleJSONRequestBody = RoleInput
 // UpdateRoleJSONRequestBody defines body for UpdateRole for application/json ContentType.
 type UpdateRoleJSONRequestBody = RoleChanges
 
+// ReportPageViewsJSONRequestBody defines body for ReportPageViews for application/json ContentType.
+type ReportPageViewsJSONRequestBody = PageViews
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
 	// GetMe Who the request's credential signs in.
@@ -1340,6 +1450,9 @@ type ServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(w http.ResponseWriter, r *http.Request, org Org, roleID RoleID)
+	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
+	// (POST /page-views)
+	ReportPageViews(w http.ResponseWriter, r *http.Request)
 	// ListPermissions The permissions a role granted at a scope may hold, from the catalog.
 	// (GET /permissions)
 	ListPermissions(w http.ResponseWriter, r *http.Request, params ListPermissionsParams)
@@ -3559,6 +3672,20 @@ func (siw *ServerInterfaceWrapper) UpdateRole(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ReportPageViews operation middleware
+func (siw *ServerInterfaceWrapper) ReportPageViews(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportPageViews(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPermissions operation middleware
 func (siw *ServerInterfaceWrapper) ListPermissions(w http.ResponseWriter, r *http.Request) {
 
@@ -3760,6 +3887,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/version", wrapper.GetVersion)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/page-views", wrapper.ReportPageViews)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.GetMe)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me/sessions", wrapper.ListMySessions)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/me/sessions/{id}", wrapper.RevokeMySession)
@@ -9167,6 +9295,55 @@ func (response UpdateRoledefaultApplicationProblemPlusJSONResponse) VisitUpdateR
 	return err
 }
 
+type ReportPageViewsRequestObject struct {
+	Body *ReportPageViewsJSONRequestBody
+}
+
+type ReportPageViewsResponseObject interface {
+	VisitReportPageViewsResponse(w http.ResponseWriter) error
+}
+
+type ReportPageViews204Response struct {
+}
+
+func (response ReportPageViews204Response) VisitReportPageViewsResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type ReportPageViews400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ReportPageViews400ApplicationProblemPlusJSONResponse) VisitReportPageViewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ReportPageViewsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ReportPageViewsdefaultApplicationProblemPlusJSONResponse) VisitReportPageViewsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListPermissionsRequestObject struct {
 	Params ListPermissionsParams
 }
@@ -9515,6 +9692,9 @@ type StrictServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(ctx context.Context, request UpdateRoleRequestObject) (UpdateRoleResponseObject, error)
+	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
+	// (POST /page-views)
+	ReportPageViews(ctx context.Context, request ReportPageViewsRequestObject) (ReportPageViewsResponseObject, error)
 	// ListPermissions The permissions a role granted at a scope may hold, from the catalog.
 	// (GET /permissions)
 	ListPermissions(ctx context.Context, request ListPermissionsRequestObject) (ListPermissionsResponseObject, error)
@@ -11281,6 +11461,37 @@ func (sh *strictHandler) UpdateRole(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ReportPageViews operation middleware
+func (sh *strictHandler) ReportPageViews(w http.ResponseWriter, r *http.Request) {
+	var request ReportPageViewsRequestObject
+
+	var body ReportPageViewsJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ReportPageViews(ctx, request.(ReportPageViewsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ReportPageViews")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ReportPageViewsResponseObject); ok {
+		if err := validResponse.VisitReportPageViewsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

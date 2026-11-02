@@ -1,31 +1,47 @@
-# Cobranch's CI, two tasks side by side: ci lints, vets, tests (with the race detector) and builds the Go module
-# (ci.task.yaml); chart builds the images and installs, tests and upgrades the chart on a throwaway kind cluster
+# Cobranch's CI, four tasks side by side, each in a pod of its own: build checks the generated code and builds the Go
+# module (build.task.yaml), lint lints and vets it (lint.task.yaml), test tests it with the race detector
+# (test.task.yaml), and chart builds the images and installs, tests and upgrades the chart on a throwaway kind cluster
 # (chart.task.yaml). A plain Tekton PipelineRun; Octomaton sets the params.
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
   generateName: cobranch-ci-
 spec:
-  # Reserved once for all of the task's steps (step-level requests would add up as if the steps ran at once). With
-  # Go Cloud's drivers (the AWS, Azure and Google Cloud SDKs), lint peaks near 1.5Gi and the compiles near 1Gi on a cold
-  # cache, measured at GOMAXPROCS=4 (ci.task.yaml); size them again from real runs as the code grows.
+  # Reserved once for all of a task's steps (step-level requests would add up as if the steps ran at once), measured
+  # on the runs of 2026-11-01 at GOMAXPROCS=4 on a cold cache, with Go Cloud's drivers (the AWS, Azure and Google Cloud
+  # SDKs): the compiles, lint and tests each keep about two cores busy and burst to four, and peak near 2.1Gi
+  # (generated), 1.5Gi (lint, test) and 1.4Gi (build). Size them again from real runs as the code grows.
   taskRunSpecs:
-    - pipelineTaskName: ci
+    - pipelineTaskName: build
       computeResources:
         requests:
-          cpu: "1"
+          cpu: "2"
+          memory: 2Gi
+        limits:
+          memory: 3Gi
+    - pipelineTaskName: lint
+      computeResources:
+        requests:
+          cpu: "2"
           memory: 1536Mi
         limits:
           memory: 3Gi
-    # The steps only drive the Docker daemon and the cluster, which its sidecar holds, with resources of its own;
-    # building kind is their peak.
+    - pipelineTaskName: test
+      computeResources:
+        requests:
+          cpu: "2"
+          memory: 1536Mi
+        limits:
+          memory: 3Gi
+    # The steps only drive the Docker daemon and the cluster, which its sidecar holds, with resources of its own; helm
+    # and kubectl are their peak, under 100Mi.
     - pipelineTaskName: chart
       computeResources:
         requests:
-          cpu: 500m
-          memory: 1Gi
+          cpu: 100m
+          memory: 256Mi
         limits:
-          memory: 2Gi
+          memory: 512Mi
   workspaces:
     - name: source
       emptyDir: {}
@@ -40,7 +56,7 @@ spec:
     workspaces:
       - name: source
     tasks:
-      - name: ci
+      - name: build
         params:
           - name: repo-url
             value: $(params.repo-url)
@@ -50,7 +66,29 @@ spec:
           - name: source
             workspace: source
         taskRef:
-          name: ci # .tekton/ci.task.yaml
+          name: build # .tekton/build.task.yaml
+      - name: lint
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: lint # .tekton/lint.task.yaml
+      - name: test
+        params:
+          - name: repo-url
+            value: $(params.repo-url)
+          - name: revision
+            value: $(params.revision)
+        workspaces:
+          - name: source
+            workspace: source
+        taskRef:
+          name: test # .tekton/test.task.yaml
       - name: chart
         params:
           - name: repo-url

@@ -50,6 +50,8 @@ type cache struct {
 	limit  int64
 	bucket *blob.Bucket
 	flight singleflight.Group
+	// metrics counts its lookups; nil counts nothing.
+	metrics *metrics
 
 	mu    sync.Mutex
 	size  int64
@@ -82,6 +84,13 @@ func newCache(dir string, limit int64, bucket *blob.Bucket) *cache {
 	return &cache{dir: dir, limit: limit, bucket: bucket, repos: map[uuid.UUID]*cachedRepo{}}
 }
 
+// usage is how many bytes of packs the cache holds.
+func (c *cache) usage() int64 {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.size
+}
+
 func (c *cache) path(repoID uuid.UUID, file string) string {
 	return filepath.Join(c.dir, repoID.String(), file)
 }
@@ -111,16 +120,19 @@ func linkFiles(from func(file string) string, pack, dir string) error {
 	return nil
 }
 
-// ensure makes the cache hold pack, downloading it once however many requests want it at once.
+// ensure makes the cache hold pack, downloading it once however many requests want it at once. Each call is a lookup:
+// a hit when the cache held the pack, a miss when it downloaded it or waited on another request's download.
 func (c *cache) ensure(ctx context.Context, repoID uuid.UUID, pack git.Pack) error {
 	c.mu.Lock()
 	r := c.repos[repoID]
 	if r.holds(pack.Name) {
 		r.used = time.Now()
 		c.mu.Unlock()
+		c.metrics.lookedUp(ctx, true)
 		return nil
 	}
 	c.mu.Unlock()
+	c.metrics.lookedUp(ctx, false)
 	_, err, _ := c.flight.Do(repoID.String()+"/"+pack.Name, func() (any, error) {
 		return nil, c.download(context.WithoutCancel(ctx), repoID, pack)
 	})

@@ -128,7 +128,7 @@ func validMerge(req code.MergeRequest) error {
 // merge builds the merge req asks for over a snapshot of the repository read now, and records it as a push of its
 // base.
 func (s *Server) merge(ctx context.Context, repoID uuid.UUID, req code.MergeRequest) (code.Merged, error) {
-	dir, remove, err := s.snapshotWorkspace(ctx, repoID)
+	dir, remove, err := s.snapshotWorkspace(ctx, repoID, opMerge)
 	if err != nil {
 		return code.Merged{}, err
 	}

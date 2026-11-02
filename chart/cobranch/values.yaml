@@ -115,8 +115,9 @@ serviceAccount:
   # Binds them to the cloud's workload identity, for a bucket.
   annotations: {}
 
-# Every Cobranch workload's logs and traces. Logs are JSON on stdout, for the cluster's log collector. Traces go over
-# OTLP/HTTP to your OpenTelemetry Collector or a vendor's endpoint, as OpenTelemetry's own OTEL_ variables.
+# Every Cobranch workload's logs, traces and metrics. Logs are JSON on stdout, for the cluster's log collector. Traces
+# and metrics go over OTLP/HTTP to your OpenTelemetry Collector or a vendor's endpoint, as OpenTelemetry's own OTEL_
+# variables, or metrics wait at /metrics for your Prometheus.
 telemetry:
   # The lowest level logged: debug, info, warn or error.
   logLevel: info
@@ -130,6 +131,16 @@ telemetry:
     headersKey: headers
     # The share of new traces kept, from 0 to 1. A trace that a caller started follows the caller's choice.
     sampleRatio: 1
+  metrics:
+    # otlp pushes them every minute, to endpoint or else to traces.endpoint, with its headers; prometheus serves them
+    # at /metrics on port, which every server then declares as container port metrics, for your scraper's pod
+    # selector; none keeps them in the pods. Empty: otlp when either endpoint is set, and none otherwise.
+    exporter: ""
+    # The metrics' own OTLP/HTTP URL, such as http://otel-collector.observability:4318/v1/metrics, when it isn't
+    # traces'.
+    endpoint: ""
+    # Where /metrics listens, with exporter prometheus.
+    port: 9464
   # More of OpenTelemetry's variables, such as OTEL_RESOURCE_ATTRIBUTES: deployment.environment.name=production. Each
   # workload names itself as the service.
   env: {}
