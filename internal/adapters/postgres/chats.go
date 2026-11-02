@@ -36,7 +36,8 @@ type chatEvent struct {
 	Message *uuid.UUID `json:"message,omitempty"`
 }
 
-// Subject finds one of the repository's live branches by name as a chat's subject, or repos.ErrNotFound (chats.Store).
+// Subject finds a repository's branch by name as a chat's subject: the live one, or else the one of that name deleted
+// last; repos.ErrNotFound when no branch had the name (chats.Store).
 func (s *ChatStore) Subject(ctx context.Context, repoID uuid.UUID, branch string) (chats.Subject, error) {
 	row, err := s.q.ChatSubject(ctx, repoID, branch)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -227,6 +228,14 @@ func (s *ChatStore) changeChat(ctx context.Context, actor uuid.UUID, subj chats.
 	})
 }
 
+// touchThread bumps the version of a thread whose messages changed, so its ETag covers them.
+func touchThread(ctx context.Context, q *queries.Queries, id uuid.UUID) error {
+	if err := q.TouchChatThread(ctx, id); err != nil {
+		return fmt.Errorf("bumping thread %s's version: %w", id, err)
+	}
+	return nil
+}
+
 // StartThread starts the subject's thread id with its first message for actor, and answers it and true; or answers
 // the thread of id that is there and false, and chats.ErrIDTaken when it isn't the subject's (chats.Store).
 func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
@@ -284,6 +293,9 @@ func (s *ChatStore) Post(ctx context.Context, actor uuid.UUID, subj chats.Subjec
 		if err != nil {
 			return "", chatEvent{}, fmt.Errorf("inserting message %s: %w", id, err)
 		}
+		if err := touchThread(ctx, q, threadID); err != nil {
+			return "", chatEvent{}, err
+		}
 		created = true
 		out, err = chatMessage(ctx, q, subj, id)
 		return chats.MessagePosted, chatEvent{Thread: threadID, Message: &id}, err
@@ -306,6 +318,9 @@ func (s *ChatStore) Edit(ctx context.Context, actor uuid.UUID, subj chats.Subjec
 		if err != nil {
 			return "", chatEvent{}, fmt.Errorf("editing message %s: %w", id, err)
 		}
+		if err := touchThread(ctx, q, row.ThreadID); err != nil {
+			return "", chatEvent{}, err
+		}
 		out, err = chatMessage(ctx, q, subj, id)
 		return chats.MessageEdited, chatEvent{Thread: row.ThreadID, Message: &id}, err
 	})
@@ -325,6 +340,9 @@ func (s *ChatStore) Delete(ctx context.Context, actor uuid.UUID, subj chats.Subj
 		}
 		if err != nil {
 			return "", chatEvent{}, fmt.Errorf("deleting message %s: %w", id, err)
+		}
+		if err := touchThread(ctx, q, row.ThreadID); err != nil {
+			return "", chatEvent{}, err
 		}
 		return chats.MessageDeleted, chatEvent{Thread: row.ThreadID, Message: &id}, nil
 	})

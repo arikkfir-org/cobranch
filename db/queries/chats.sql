@@ -1,9 +1,10 @@
--- ChatSubject finds one of a repository's live branches by name, as the subject of its chat, with the commit it is at
--- and the slugs of the repository and its organization.
+-- ChatSubject finds a repository's branch by name, as the subject of its chat: the live one, or else the one of that
+-- name deleted last, with the commit it is at and the slugs of the repository and its organization.
 -- name: ChatSubject :one
 SELECT b.id, b.org_id, b.repo_id, b.name, b.head, r.slug AS repo_slug, o.slug AS org_slug
 FROM branches b JOIN repositories r ON r.id = b.repo_id JOIN organizations o ON o.id = b.org_id
-WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
+WHERE b.repo_id = $1 AND b.name = $2
+ORDER BY b.deleted_at DESC NULLS FIRST LIMIT 1;
 
 -- HasCommit reports whether a repository holds a commit.
 -- name: HasCommit :one
@@ -96,6 +97,10 @@ RETURNING *;
 UPDATE chat_threads SET resolved_at = CASE WHEN sqlc.narg(by)::uuid IS NULL THEN NULL ELSE now() END, resolved_by = sqlc.narg(by)::uuid
 WHERE id = @id AND (@version::bigint < 0 OR version = @version::bigint)
 RETURNING *;
+
+-- TouchChatThread bumps a thread's version, its ETag, for a change to its messages.
+-- name: TouchChatThread :exec
+UPDATE chat_threads SET version = version + 1 WHERE id = @id;
 
 -- BranchHead finds the object a branch is at, deleted or not.
 -- name: BranchHead :one

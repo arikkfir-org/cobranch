@@ -1423,6 +1423,7 @@ paths:
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/branch"
         - $ref: "#/components/parameters/thread"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The thread.
@@ -1433,6 +1434,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatThread"
+        "304":
+          description: The thread is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -1532,6 +1538,7 @@ paths:
         - $ref: "#/components/parameters/branch"
         - $ref: "#/components/parameters/thread"
         - $ref: "#/components/parameters/message"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The message.
@@ -1542,6 +1549,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatMessage"
+        "304":
+          description: The message is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "404":
@@ -2734,7 +2746,9 @@ components:
         version:
           type: integer
           format: int64
-          description: Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+          description: >-
+            Counts its changes and its messages' from 1. Its ETag is this number in quotes, which If-Match names to refuse
+            a change made meanwhile.
         messages:
           type: array
           description: Its messages in the order they were posted; absent from an update.

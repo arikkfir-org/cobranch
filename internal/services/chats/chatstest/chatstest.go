@@ -89,7 +89,7 @@ func (s *Store) addCommit(repoID uuid.UUID, sha string) {
 	s.commits[repoID][sha] = true
 }
 
-// Subject finds one of the repository's live branches by name as a chat's subject, or repos.ErrNotFound.
+// Subject finds a repository's branch by name as a chat's subject, or repos.ErrNotFound.
 func (s *Store) Subject(_ context.Context, repoID uuid.UUID, branch string) (chats.Subject, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -223,6 +223,7 @@ func (s *Store) Post(_ context.Context, actor uuid.UUID, subj chats.Subject, thr
 		return *m, false, nil
 	}
 	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: body, Author: s.principal(actor), CreatedAt: s.Now, Version: 1}
+	s.threads[threadID].Version++
 	s.record(subj, chats.MessagePosted, threadID, &id)
 	return *s.messages[id], true, nil
 }
@@ -240,6 +241,7 @@ func (s *Store) Edit(_ context.Context, _ uuid.UUID, subj chats.Subject, id uuid
 	}
 	at := s.Now
 	m.Body, m.EditedAt, m.Version = body, &at, m.Version+1
+	s.threads[m.ThreadID].Version++
 	s.record(subj, chats.MessageEdited, m.ThreadID, &id)
 	return *m, nil
 }
@@ -257,6 +259,7 @@ func (s *Store) Delete(_ context.Context, actor uuid.UUID, subj chats.Subject, i
 	}
 	at := s.Now
 	m.Body, m.DeletedAt, m.DeletedBy, m.Version = "", &at, s.principal(actor), m.Version+1
+	s.threads[m.ThreadID].Version++
 	s.record(subj, chats.MessageDeleted, m.ThreadID, &id)
 	return nil
 }

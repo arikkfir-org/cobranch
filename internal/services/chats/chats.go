@@ -6,6 +6,7 @@ package chats
 import (
 	"errors"
 	"fmt"
+	"math"
 	"path"
 	"regexp"
 	"strings"
@@ -71,7 +72,7 @@ type Thread struct {
 	ResolvedAt *time.Time
 	// ResolvedBy is who resolved it; nil while it is open, and once they are gone.
 	ResolvedBy *Principal
-	// Version counts its changes from 1: it is its ETag, which resolving or opening it again names.
+	// Version counts its changes and its messages' from 1: it is its ETag, which resolving or opening it again names.
 	Version int64
 	// Messages are its messages; an update's thread comes without them.
 	Messages []Message
@@ -215,6 +216,8 @@ func ValidateAnchor(a Anchor) error {
 		return invalid("startLine", "an anchor's lines start at 1")
 	case a.EndLine < a.StartLine:
 		return invalid("endLine", "an anchor's last line is at or after its first")
+	case a.EndLine > math.MaxInt32:
+		return invalid("endLine", fmt.Sprintf("an anchor's lines end by %d", math.MaxInt32))
 	}
 	return nil
 }

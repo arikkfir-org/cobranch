@@ -13,16 +13,18 @@ import (
 // chatStep is one request of a conversation on feature/login's chat, against one fixture: path is relative to the
 // chat's, and may name {thread} and {message}, the last ones started and posted.
 type chatStep struct {
-	name       string
-	viewer     func(f *orgFixture) *auth.Authenticated
-	method     string
-	path       string
-	body       string
-	ifMatch    string
-	wantStatus int
-	wantCode   string
-	want       []string
-	wantHeader map[string]string
+	name    string
+	viewer  func(f *orgFixture) *auth.Authenticated
+	method  string
+	path    string
+	body    string
+	ifMatch string
+	// ifNoneMatch is the ETag the caller holds.
+	ifNoneMatch string
+	wantStatus  int
+	wantCode    string
+	want        []string
+	wantHeader  map[string]string
 }
 
 // maxAs is Max, holding role on the website.
@@ -49,6 +51,12 @@ func TestChats(t *testing.T) {
 			wantHeader: map[string]string{"ETag": `"1"`, "Location": chat + "/threads/{thread}/messages/{message}"}},
 		{name: "the reply, read", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", wantStatus: 200,
 			wantHeader: map[string]string{"ETag": `"1"`}},
+		{name: "the reply, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}/messages/{message}", ifNoneMatch: `"1"`,
+			wantStatus: 304, wantHeader: map[string]string{"ETag": `"1"`}},
+		{name: "the reply bumped the thread's version", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: `"1"`,
+			wantStatus: 200, want: []string{`"version":2`}, wantHeader: map[string]string{"ETag": `"2"`}},
+		{name: "the thread, still the one held", viewer: olivia, method: "GET", path: "/threads/{thread}", ifNoneMatch: `"2"`,
+			wantStatus: 304, wantHeader: map[string]string{"ETag": `"2"`}},
 		{name: "another's ID", viewer: olivia, method: "POST", path: "/threads/{thread}/messages", body: `{"id":"{message}","body":"Mine"}`,
 			wantStatus: 409, wantCode: "chat.id_taken"},
 		{name: "an edit names the ETag", viewer: maxAs(auth.RoleDeveloper), method: "PATCH", path: "/threads/{thread}/messages/{message}",
@@ -60,8 +68,10 @@ func TestChats(t *testing.T) {
 			body: `{"body":"Stale"}`, ifMatch: `"1"`, wantStatus: 412, wantCode: "precondition.failed"},
 		{name: "another may not edit it", viewer: olivia, method: "PATCH", path: "/threads/{thread}/messages/{message}",
 			body: `{"body":"Mine now"}`, ifMatch: "*", wantStatus: 403, wantCode: "auth.forbidden"},
-		{name: "its starter resolves the thread", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: `"1"`,
-			wantStatus: 200, want: []string{`"resolvedBy":{"displayName":"Olivia"`, `"version":2`}, wantHeader: map[string]string{"ETag": `"2"`}},
+		{name: "a resolution from before the edit", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: `"2"`,
+			wantStatus: 412, wantCode: "precondition.failed"},
+		{name: "its starter resolves the thread", viewer: olivia, method: "PATCH", path: "/threads/{thread}", body: `{"resolved":true}`, ifMatch: `"3"`,
+			wantStatus: 200, want: []string{`"resolvedBy":{"displayName":"Olivia"`, `"version":4`}, wantHeader: map[string]string{"ETag": `"4"`}},
 		{name: "the updates, in order", viewer: olivia, method: "GET", path: "/updates?after=0", wantStatus: 200,
 			want: []string{`"after":"4"`, `"kind":"thread.started"`, `"kind":"message.posted"`, `"kind":"message.edited"`, `"kind":"thread.resolved"`}},
 		{name: "none after the last", viewer: olivia, method: "GET", path: "/updates?after=4&wait=0", wantStatus: 200,
@@ -102,6 +112,9 @@ func (s chatStep) run(t *testing.T, f *orgFixture, chat string, ids *chatIDs) {
 	header := http.Header{}
 	if s.ifMatch != "" {
 		header.Set("If-Match", s.ifMatch)
+	}
+	if s.ifNoneMatch != "" {
+		header.Set("If-None-Match", s.ifNoneMatch)
 	}
 	if s.method == "PATCH" {
 		header.Set("Content-Type", "application/merge-patch+json")

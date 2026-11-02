@@ -26,7 +26,8 @@ var tracer = otel.Tracer("cobranch.dev/internal/services/chats")
 // the servers that follow it once its transaction commits; a change to the chat of a deleted branch is
 // ErrBranchDeleted.
 type Store interface {
-	// Subject finds one of the repository's live branches by name as a chat's subject, or repos.ErrNotFound.
+	// Subject finds a repository's branch by name as a chat's subject: the live one, or else the one of that name deleted
+	// last; repos.ErrNotFound when no branch had the name.
 	Subject(ctx context.Context, repoID uuid.UUID, branch string) (Subject, error)
 	// Head finds the object a branch is at now, deleted or not, or repos.ErrNotFound.
 	Head(ctx context.Context, branchID uuid.UUID) (string, error)
@@ -117,8 +118,9 @@ func on(subj Subject) []attribute.KeyValue {
 	return []attribute.KeyValue{attribute.String("cobranch.repository.id", subj.RepoID.String()), attribute.String("cobranch.branch.id", subj.BranchID.String())}
 }
 
-// Branch finds the chat of one of the repository's live branches by name, without refs/heads/; it takes repo.read.
-// A branch that isn't there is repos.ErrNotFound.
+// Branch finds the chat of one of the repository's branches by name, without refs/heads/: the live one, or else the
+// one of that name deleted last, whose chat stays readable and refuses changes; it takes repo.read. A name no branch
+// had is repos.ErrNotFound.
 func (s *Service) Branch(ctx context.Context, v Viewer, repoID uuid.UUID, name string) (Subject, error) {
 	ctx, span := tracer.Start(ctx, "chats.Service.Branch")
 	defer span.End()

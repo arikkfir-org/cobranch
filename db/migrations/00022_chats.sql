@@ -5,8 +5,8 @@
 
 -- A thread of a branch's chat. A branch deleted and pushed again is another branch, with a chat of its own. An anchor
 -- points the thread at lines start_line to end_line of the file at path of commit sha, and stays there when the branch
--- moves on. Its starter, or a principal holding messages.moderate, resolves it and opens it again; each time bumps its
--- version, which is its ETag.
+-- moves on. Its starter, or a principal holding messages.moderate, resolves it and opens it again; each time, and each
+-- change to its messages, bumps its version, which is its ETag.
 CREATE TABLE chat_threads (
     id uuid PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,

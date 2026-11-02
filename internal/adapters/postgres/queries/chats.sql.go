@@ -177,7 +177,8 @@ func (q *Queries) ChatMessagesOf(ctx context.Context, threadIds []uuid.UUID) ([]
 const chatSubject = `-- name: ChatSubject :one
 SELECT b.id, b.org_id, b.repo_id, b.name, b.head, r.slug AS repo_slug, o.slug AS org_slug
 FROM branches b JOIN repositories r ON r.id = b.repo_id JOIN organizations o ON o.id = b.org_id
-WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL
+WHERE b.repo_id = $1 AND b.name = $2
+ORDER BY b.deleted_at DESC NULLS FIRST LIMIT 1
 `
 
 type ChatSubjectRow struct {
@@ -190,8 +191,8 @@ type ChatSubjectRow struct {
 	OrgSlug  string
 }
 
-// ChatSubject finds one of a repository's live branches by name, as the subject of its chat, with the commit it is at
-// and the slugs of the repository and its organization.
+// ChatSubject finds a repository's branch by name, as the subject of its chat: the live one, or else the one of that
+// name deleted last, with the commit it is at and the slugs of the repository and its organization.
 func (q *Queries) ChatSubject(ctx context.Context, repoID uuid.UUID, name string) (ChatSubjectRow, error) {
 	row := q.db.QueryRow(ctx, chatSubject, repoID, name)
 	var i ChatSubjectRow
@@ -534,4 +535,14 @@ func (q *Queries) ResolveChatThread(ctx context.Context, by *uuid.UUID, iD uuid.
 		&i.Version,
 	)
 	return i, err
+}
+
+const touchChatThread = `-- name: TouchChatThread :exec
+UPDATE chat_threads SET version = version + 1 WHERE id = $1
+`
+
+// TouchChatThread bumps a thread's version, its ETag, for a change to its messages.
+func (q *Queries) TouchChatThread(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, touchChatThread, id)
+	return err
 }

@@ -168,7 +168,11 @@ func (a api) GetChatThread(ctx context.Context, req GetChatThreadRequestObject) 
 	if err != nil {
 		return nil, fail(err, "thread")
 	}
-	return GetChatThread200JSONResponse{Body: chatThread(t), Headers: GetChatThread200ResponseHeaders{ETag: versionTag(t.Version)}}, nil
+	tag := versionTag(t.Version)
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetChatThread304Response{Headers: GetChatThread304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetChatThread200JSONResponse{Body: chatThread(t), Headers: GetChatThread200ResponseHeaders{ETag: tag}}, nil
 }
 
 // UpdateChatThread resolves one of a branch's chat threads, or opens it again.
@@ -216,7 +220,11 @@ func (a api) GetChatMessage(ctx context.Context, req GetChatMessageRequestObject
 	if err != nil {
 		return nil, fail(err, "message")
 	}
-	return GetChatMessage200JSONResponse{Body: chatMessage(m), Headers: GetChatMessage200ResponseHeaders{ETag: versionTag(m.Version)}}, nil
+	tag := versionTag(m.Version)
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetChatMessage304Response{Headers: GetChatMessage304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetChatMessage200JSONResponse{Body: chatMessage(m), Headers: GetChatMessage200ResponseHeaders{ETag: tag}}, nil
 }
 
 // EditChatMessage changes the body of one of the viewer's messages.

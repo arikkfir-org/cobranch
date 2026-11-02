@@ -207,7 +207,7 @@ type ChatThread struct {
 	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
 	// Who resolved it; null while it is open, and once they are gone.
 	ResolvedBy *CommitPrincipal `json:"resolvedBy,omitempty"`
-	// Counts its changes from 1: resolveChatThread names it as expectedVersion to refuse one made meanwhile.
+	// Counts its changes and its messages' from 1: resolveChatThread names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 	// Its messages in the order they were posted; null in an update.
 	Messages []*ChatMessage `json:"messages,omitempty"`

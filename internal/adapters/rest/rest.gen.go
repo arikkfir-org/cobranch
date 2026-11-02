@@ -622,7 +622,7 @@ type ChatThread struct {
 	// StartedBy Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
 	StartedBy *Principal `json:"startedBy,omitempty"`
 
-	// Version Counts its changes from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
+	// Version Counts its changes and its messages' from 1. Its ETag is this number in quotes, which If-Match names to refuse a change made meanwhile.
 	Version int64 `json:"version"`
 }
 
@@ -1266,6 +1266,12 @@ type ListChatThreadsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetChatThreadParams defines parameters for GetChatThread.
+type GetChatThreadParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // UpdateChatThreadParams defines parameters for UpdateChatThread.
 type UpdateChatThreadParams struct {
 	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
@@ -1276,6 +1282,12 @@ type UpdateChatThreadParams struct {
 type DeleteChatMessageParams struct {
 	// IfMatch The ETag of the thread or the message the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
 	IfMatch *IfMatchChat `json:"If-Match,omitempty"`
+}
+
+// GetChatMessageParams defines parameters for GetChatMessage.
+type GetChatMessageParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // EditChatMessageParams defines parameters for EditChatMessage.
@@ -1583,7 +1595,7 @@ type ServerInterface interface {
 	StartChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// GetChatThread One of the branch's chat threads, with its messages in the order they were posted; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
-	GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID)
+	GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, params GetChatThreadParams)
 	// UpdateChatThread Resolves one of the branch's chat threads, or opens it again; takes messages.post for a thread the viewer started and messages.moderate for another's. The change names the thread's ETag in If-Match; without it, the answer is 428. A thread already so is answered as it is.
 	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread})
 	UpdateChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, params UpdateChatThreadParams)
@@ -1595,7 +1607,7 @@ type ServerInterface interface {
 	DeleteChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params DeleteChatMessageParams)
 	// GetChatMessage One of the messages of one of the branch's chat threads; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
-	GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID)
+	GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params GetChatMessageParams)
 	// EditChatMessage Changes the body of one of the viewer's messages; takes messages.post, and only a message's author edits it. The edit names the message's ETag in If-Match; without it, the answer is 428. A deleted message answers 409.
 	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/chat/threads/{thread}/messages/{message})
 	EditChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params EditChatMessageParams)
@@ -3109,8 +3121,32 @@ func (siw *ServerInterfaceWrapper) GetChatThread(w http.ResponseWriter, r *http.
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetChatThreadParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetChatThread(w, r, org, repo, branchName, threadID)
+		siw.Handler.GetChatThread(w, r, org, repo, branchName, threadID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3387,8 +3423,32 @@ func (siw *ServerInterfaceWrapper) GetChatMessage(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetChatMessageParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetChatMessage(w, r, org, repo, branchName, threadID, messageID)
+		siw.Handler.GetChatMessage(w, r, org, repo, branchName, threadID, messageID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8504,6 +8564,7 @@ type GetChatThreadRequestObject struct {
 	Repo       Repo       `json:"repo"`
 	BranchName BranchName `json:"branch"`
 	ThreadID   ThreadID   `json:"thread"`
+	Params     GetChatThreadParams
 }
 
 type GetChatThreadResponseObject interface {
@@ -8530,6 +8591,20 @@ func (response GetChatThread200JSONResponse) VisitGetChatThreadResponse(w http.R
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetChatThread304ResponseHeaders struct {
+	ETag string
+}
+
+type GetChatThread304Response struct {
+	Headers GetChatThread304ResponseHeaders
+}
+
+func (response GetChatThread304Response) VisitGetChatThreadResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetChatThread401ApplicationProblemPlusJSONResponse struct {
@@ -8958,6 +9033,7 @@ type GetChatMessageRequestObject struct {
 	BranchName BranchName `json:"branch"`
 	ThreadID   ThreadID   `json:"thread"`
 	MessageID  MessageID  `json:"message"`
+	Params     GetChatMessageParams
 }
 
 type GetChatMessageResponseObject interface {
@@ -8984,6 +9060,20 @@ func (response GetChatMessage200JSONResponse) VisitGetChatMessageResponse(w http
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetChatMessage304ResponseHeaders struct {
+	ETag string
+}
+
+type GetChatMessage304Response struct {
+	Headers GetChatMessage304ResponseHeaders
+}
+
+func (response GetChatMessage304Response) VisitGetChatMessageResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetChatMessage401ApplicationProblemPlusJSONResponse struct {
@@ -12554,13 +12644,14 @@ func (sh *strictHandler) StartChatThread(w http.ResponseWriter, r *http.Request,
 }
 
 // GetChatThread operation middleware
-func (sh *strictHandler) GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID) {
+func (sh *strictHandler) GetChatThread(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, params GetChatThreadParams) {
 	var request GetChatThreadRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.BranchName = branchName
 	request.ThreadID = threadID
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetChatThread(ctx, request.(GetChatThreadRequestObject))
@@ -12687,7 +12778,7 @@ func (sh *strictHandler) DeleteChatMessage(w http.ResponseWriter, r *http.Reques
 }
 
 // GetChatMessage operation middleware
-func (sh *strictHandler) GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID) {
+func (sh *strictHandler) GetChatMessage(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, threadID ThreadID, messageID MessageID, params GetChatMessageParams) {
 	var request GetChatMessageRequestObject
 
 	request.Org = org
@@ -12695,6 +12786,7 @@ func (sh *strictHandler) GetChatMessage(w http.ResponseWriter, r *http.Request, 
 	request.BranchName = branchName
 	request.ThreadID = threadID
 	request.MessageID = messageID
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetChatMessage(ctx, request.(GetChatMessageRequestObject))

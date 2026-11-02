@@ -33,16 +33,19 @@ func newChatFixture(t *testing.T) *chatFixture {
 func v7() uuid.UUID { return uuid.Must(uuid.NewV7()) }
 
 func TestChatStoreSubject(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	if s := f.feature; s.RepoID != f.website.ID || s.OrgID != f.acme.ID || s.Branch != "feature" || s.Head != shaC || s.Org != f.acme.Slug ||
 		s.Repo != "website" || s.BranchID == uuid.Nil {
 		t.Errorf("Subject(feature) = %+v", s)
 	}
-	for _, name := range []string{"old", "nothing"} {
-		if _, err := f.s.Subject(ctx, f.website.ID, name); !errors.Is(err, repos.ErrNotFound) {
-			t.Errorf("Subject(%s) = %v, want %v", name, err, repos.ErrNotFound)
-		}
+	// A deleted branch's chat stays readable by its name; a name no branch had is not found.
+	if old, err := f.s.Subject(ctx, f.website.ID, "old"); err != nil || old.Branch != "old" || old.Head != shaA {
+		t.Errorf("Subject(old) = %+v, %v; want the deleted branch", old, err)
+	}
+	if _, err := f.s.Subject(ctx, f.website.ID, "nothing"); !errors.Is(err, repos.ErrNotFound) {
+		t.Errorf("Subject(nothing) = %v, want %v", err, repos.ErrNotFound)
 	}
 	if head, err := f.s.Head(ctx, f.feature.BranchID); err != nil || head != shaC {
 		t.Errorf("Head() = %q, %v; want %s", head, err, shaC)
@@ -75,8 +78,8 @@ func (f *chatFixture) changed(t *testing.T) (chats.Thread, uuid.UUID) {
 	if _, err := f.s.Edit(ctx, f.max, f.feature, id, 1, "Hello, world"); err != nil {
 		t.Fatal(err)
 	}
-	for i, resolved := range []bool{true, false} {
-		if _, err := f.s.Resolve(ctx, f.nia, f.feature, thread.ID, int64(i+1), resolved); err != nil {
+	for i, resolved := range []bool{true, false} { // the edit made the thread's version 2
+		if _, err := f.s.Resolve(ctx, f.nia, f.feature, thread.ID, int64(i+2), resolved); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -87,6 +90,7 @@ func (f *chatFixture) changed(t *testing.T) (chats.Thread, uuid.UUID) {
 }
 
 func TestChatStoreStartThread(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	anchor := &chats.Anchor{SHA: shaC, Path: "src/main.go", StartLine: 3, EndLine: 5}
@@ -112,6 +116,7 @@ func TestChatStoreStartThread(t *testing.T) {
 }
 
 func TestChatStorePost(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	first, second, reply := f.started(t, f.max, "Why?"), f.started(t, f.nia, "Ship it"), v7()
@@ -132,12 +137,13 @@ func TestChatStorePost(t *testing.T) {
 	if _, _, err := f.s.Post(ctx, f.nia, main, first.ID, v7(), "Lost"); !errors.Is(err, repos.ErrNotFound) {
 		t.Errorf("Post() to another chat's thread = %v, want %v", err, repos.ErrNotFound)
 	}
-	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name IN ('chat_threads', 'chat_messages') AND principal_id = $1", f.nia); n != 3 {
-		t.Errorf("Nia's audit rows = %d, want 3: a thread and two messages", n)
+	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name IN ('chat_threads', 'chat_messages') AND principal_id = $1", f.nia); n != 4 {
+		t.Errorf("Nia's audit rows = %d, want 4: a thread, two messages and the version of the thread she answered", n)
 	}
 }
 
 func TestChatStoreThreads(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	first, second, reply := f.started(t, f.max, "Why?"), f.started(t, f.nia, "Ship it"), v7()
@@ -169,6 +175,7 @@ func TestChatStoreThreads(t *testing.T) {
 }
 
 func TestChatStoreEditResolve(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	thread := f.started(t, f.max, "Hello")
@@ -180,21 +187,23 @@ func TestChatStoreEditResolve(t *testing.T) {
 	if _, err := f.s.Edit(ctx, f.max, f.feature, id, 1, "Stale"); !errors.Is(err, chats.ErrChanged) {
 		t.Errorf("Edit(from version 1) = %v, want %v", err, chats.ErrChanged)
 	}
+	// The edit bumped the thread's version too, so its ETag covers its messages.
 	resolved, err := f.s.Resolve(ctx, f.nia, f.feature, thread.ID, chats.AnyVersion, true)
-	if err != nil || resolved.ResolvedAt == nil || resolved.ResolvedBy == nil || resolved.ResolvedBy.ID != f.nia || resolved.Version != 2 ||
+	if err != nil || resolved.ResolvedAt == nil || resolved.ResolvedBy == nil || resolved.ResolvedBy.ID != f.nia || resolved.Version != 3 ||
 		len(resolved.Messages) != 1 {
 		t.Fatalf("Resolve() = %+v, %v", resolved, err)
 	}
 	if _, err := f.s.Resolve(ctx, f.max, f.feature, thread.ID, 1, false); !errors.Is(err, chats.ErrChanged) {
 		t.Errorf("Resolve(from version 1) = %v, want %v", err, chats.ErrChanged)
 	}
-	reopened, err := f.s.Resolve(ctx, f.max, f.feature, thread.ID, 2, false)
-	if err != nil || reopened.ResolvedAt != nil || reopened.ResolvedBy != nil || reopened.Version != 3 {
+	reopened, err := f.s.Resolve(ctx, f.max, f.feature, thread.ID, 3, false)
+	if err != nil || reopened.ResolvedAt != nil || reopened.ResolvedBy != nil || reopened.Version != 4 {
 		t.Errorf("Resolve(open) = %+v, %v", reopened, err)
 	}
 }
 
 func TestChatStoreDelete(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	id := f.started(t, f.max, "Hello").Messages[0].ID
@@ -214,6 +223,7 @@ func TestChatStoreDelete(t *testing.T) {
 }
 
 func TestChatStoreUpdates(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	thread, id := f.changed(t)
@@ -231,7 +241,7 @@ func TestChatStoreUpdates(t *testing.T) {
 			t.Errorf("update %d = %+v, want %s on %s in order", i, u, want[i], thread.ID)
 		}
 	}
-	if u := updates[0]; u.Message == nil || u.Message.ID != id || u.Message.DeletedAt == nil || u.Thread.Version != 3 {
+	if u := updates[0]; u.Message == nil || u.Message.ID != id || u.Message.DeletedAt == nil || u.Thread.Version != 5 {
 		t.Errorf("first update = %+v; want the message and thread as they are now", u)
 	}
 	if later, err := f.s.Updates(ctx, f.feature, updates[2].Cursor, 100); err != nil || len(later) != 2 || later[0].Kind != chats.ThreadReopened {
@@ -246,6 +256,7 @@ func TestChatStoreUpdates(t *testing.T) {
 }
 
 func TestChatStoreDeletedBranch(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx := context.Background()
 	thread := f.started(t, f.max, "Hello")
@@ -258,9 +269,22 @@ func TestChatStoreDeletedBranch(t *testing.T) {
 	if kept, err := f.s.Thread(ctx, f.feature, thread.ID); err != nil || len(kept.Messages) != 1 {
 		t.Errorf("Thread() of a deleted branch's chat = %+v, %v; want it as it was", kept, err)
 	}
+	// Its name finds it while no live branch has the name, and the live one once the name is pushed again.
+	if subj, err := f.s.Subject(ctx, f.feature.RepoID, f.feature.Branch); err != nil || subj.BranchID != f.feature.BranchID {
+		t.Errorf("Subject() of a deleted branch = %+v, %v; want branch %s", subj, err, f.feature.BranchID)
+	}
+	again := v7()
+	if _, err := f.pool.Exec(ctx, `INSERT INTO branches (id, org_id, repo_id, name, head, created_at, updated_at)
+		SELECT $1, org_id, repo_id, name, head, now(), now() FROM branches WHERE id = $2`, again, f.feature.BranchID); err != nil {
+		t.Fatal(err)
+	}
+	if subj, err := f.s.Subject(ctx, f.feature.RepoID, f.feature.Branch); err != nil || subj.BranchID != again {
+		t.Errorf("Subject() of a name pushed again = %+v, %v; want the live branch %s", subj, err, again)
+	}
 }
 
 func TestChatHub(t *testing.T) {
+	t.Parallel()
 	f := newChatFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

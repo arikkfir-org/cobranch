@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -30,8 +31,8 @@ var updateKinds = map[chats.UpdateKind]ChatUpdateKind{
 }
 
 func chatThread(t chats.Thread) *ChatThread {
-	out := &ChatThread{ID: t.ID.String(), Outdated: t.Outdated, StartedBy: commitPrincipal(t.StartedBy), CreatedAt: t.CreatedAt,
-		ResolvedAt: t.ResolvedAt, ResolvedBy: commitPrincipal(t.ResolvedBy), Version: int(t.Version)}
+	out := &ChatThread{ID: t.ID.String(), Outdated: t.Outdated, StartedBy: commitPrincipal(t.StartedBy), CreatedAt: t.CreatedAt.UTC(),
+		ResolvedAt: utc(t.ResolvedAt), ResolvedBy: commitPrincipal(t.ResolvedBy), Version: int(t.Version)}
 	if a := t.Anchor; a != nil {
 		out.Anchor = &ChatAnchor{Sha: a.SHA, Path: a.Path, StartLine: a.StartLine, EndLine: a.EndLine}
 	}
@@ -43,7 +44,16 @@ func chatThread(t chats.Thread) *ChatThread {
 
 func chatMessage(m chats.Message) *ChatMessage {
 	return &ChatMessage{ID: m.ID.String(), ThreadID: m.ThreadID.String(), Body: m.Body, HTML: m.HTML, Author: commitPrincipal(m.Author),
-		CreatedAt: m.CreatedAt, EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: commitPrincipal(m.DeletedBy), Version: int(m.Version)}
+		CreatedAt: m.CreatedAt.UTC(), EditedAt: utc(m.EditedAt), DeletedAt: utc(m.DeletedAt), DeletedBy: commitPrincipal(m.DeletedBy), Version: int(m.Version)}
+}
+
+// utc is *at in UTC, or nil for nil.
+func utc(at *time.Time) *time.Time {
+	if at == nil {
+		return nil
+	}
+	in := at.UTC()
+	return &in
 }
 
 func chatUpdate(u chats.Update) *ChatUpdate {

@@ -3,6 +3,7 @@ package chats_test
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"sync"
@@ -159,6 +160,9 @@ func TestStartThread(t *testing.T) {
 		{name: "line 0", in: chats.ThreadInput{Anchor: &chats.Anchor{SHA: sha(1), Path: "a", StartLine: 0, EndLine: 1}, Body: "Why?"},
 			wantErr: invalid("anchor.invalid")},
 		{name: "lines backwards", in: chats.ThreadInput{Anchor: &chats.Anchor{SHA: sha(1), Path: "a", StartLine: 5, EndLine: 4}, Body: "Why?"},
+			wantErr: invalid("anchor.invalid")},
+		{name: "the last line a column holds", in: chats.ThreadInput{Anchor: &chats.Anchor{SHA: sha(1), Path: "a", StartLine: 1, EndLine: math.MaxInt32}, Body: "Why?"}},
+		{name: "a line past it", in: chats.ThreadInput{Anchor: &chats.Anchor{SHA: sha(1), Path: "a", StartLine: 1, EndLine: math.MaxInt32 + 1}, Body: "Why?"},
 			wantErr: invalid("anchor.invalid")},
 	}
 	for _, tt := range tests {
