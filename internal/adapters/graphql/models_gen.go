@@ -239,6 +239,10 @@ type ChatMessage struct {
 	DeletedAt *time.Time `json:"deletedAt,omitempty"`
 	// Who deleted it; null while it is there, and once they are gone.
 	DeletedBy *CommitPrincipal `json:"deletedBy,omitempty"`
+	// The task of the agent that posted it; null for a person's message, and once the task is deleted.
+	TaskID *string `json:"taskId,omitempty"`
+	// That task's number in its organization.
+	TaskNumber *int `json:"taskNumber,omitempty"`
 	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
 	Version int `json:"version"`
 }
@@ -822,12 +826,18 @@ type ModelProvider struct {
 type Mutation struct {
 }
 
-// The task a task token works, the slug of its organization, and its agent's standing instructions, which the task starts from.
+// The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
 type MyTask struct {
 	Organization string `json:"organization"`
 	Task         *Task  `json:"task"`
 	// The standing instructions, in Markdown, of the task's agent; empty for none.
 	AgentInstructions string `json:"agentInstructions"`
+	// The email of the task's agent, verified, so that the commits that carry it are the agent's.
+	AgentEmail string `json:"agentEmail"`
+	// The number of the issue the task works on, whose chat it talks in; null for none.
+	IssueNumber *int `json:"issueNumber,omitempty"`
+	// The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; null for none.
+	IssueKey *string `json:"issueKey,omitempty"`
 }
 
 // What makes a secret.

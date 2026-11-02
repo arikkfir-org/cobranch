@@ -1,0 +1,292 @@
+package harness_test
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/uuid"
+
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/harness"
+)
+
+// chatCase is a task that talks in a chat: where it works, the thread it has, its transcript and its model's turns.
+type chatCase struct {
+	name     string
+	branch   string
+	issue    int64
+	thread   uuid.UUID
+	threads  map[uuid.UUID]*thread
+	entries  []agents.Entry
+	turns    []harness.Turn
+	postErr  error
+	checkout *checkout
+	// kind, when set, handles the task, of kind review.
+	kind    *kind
+	wantErr bool
+	check   func(t *testing.T, c *cobranch, m *model)
+}
+
+// checkout is a harness.Checkout that holds a clone, or fails, and remembers what it prepared.
+type checkout struct {
+	clone    harness.Clone
+	err      error
+	prepared []agents.Work
+}
+
+func (k *checkout) Prepare(_ context.Context, w agents.Work) (harness.Clone, error) {
+	k.prepared = append(k.prepared, w)
+	return k.clone, k.err
+}
+
+// keyed is a call with a key of its own, as the harness records it.
+func keyed(c harness.Call, key uuid.UUID) harness.Call {
+	c.Key = key.String()
+	return c
+}
+
+func TestChat(t *testing.T) {
+	for _, tc := range slices.Concat(threadCases(), postCases(), checkoutCases()) {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			runChat(t, tc)
+		})
+	}
+}
+
+// threadCases are TestChat's cases of a task's thread: starting it, and reading it.
+func threadCases() []chatCase {
+	ours, theirs := uuid.MustParse("0190f1b2-0000-7000-8000-0000000000aa"), uuid.MustParse("0190f1b2-0000-7000-8000-0000000000bb")
+	tidy := harness.Chat{Repo: "website", Branch: "tidy"}
+	begun := entry(nil, agents.EntryInput, `{"text":"# Sweep"}`)
+	return []chatCase{
+		{name: "the first post starts the task's thread, and the next replies there", branch: "tidy",
+			turns: []harness.Turn{calling(call("a", "post_message", `{"body":"Starting."}`)), calling(call("b", "post_message", `{"body":"Swept."}`)),
+				calling(call("c", "read_thread", `{}`)), done},
+			check: startedAndReplied},
+		{name: "a post starts no thread again after a restart", branch: "tidy", thread: ours,
+			threads: map[uuid.UUID]*thread{ours: {chat: tidy, messages: []harness.ChatMessage{{ID: uuid.New(), Body: "Starting.", Task: 7}}}},
+			entries: entry(begun, agents.EntryTurn, `{"calls":[{"id":"a","name":"post_message","arguments":{"body":"Starting."},"key":"`+ours.String()+`"}]}`),
+			turns:   []harness.Turn{done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				if len(c.threads) != 1 || len(c.threads[ours].messages) != 1 {
+					t.Errorf("the chat holds %+v", c.threads)
+				}
+				resultAt(2, "Posted, starting the task's thread.", false)(t, c, nil, nil)
+			}},
+		{name: "the task's thread", branch: "tidy", thread: theirs,
+			threads: map[uuid.UUID]*thread{theirs: {chat: tidy, messages: []harness.ChatMessage{
+				{ID: uuid.New(), Author: "Olivia", At: time.Date(2026, 11, 2, 8, 0, 0, 0, time.UTC), Body: "Please sweep."},
+				{ID: uuid.New(), Author: "Reviewer", Task: 9, Body: "Looks dusty."},
+				{ID: uuid.New(), Deleted: true}}}},
+			turns: []harness.Turn{calling(keyed(call("a", "post_message", `{"body":"On it."}`), ours), call("b", "read_thread", `{}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				if got := c.threads[theirs].messages; len(got) != 4 || got[3].ID == ours {
+					t.Errorf("the thread holds %+v", got)
+				}
+				resultAt(2, "Posted.", false)(t, c, nil, nil)
+				resultAt(3, "From Olivia at 2026-11-02 08:00 UTC, message", false)(t, c, nil, nil)
+				containsAll(t, string(c.entries[3].Body), "Please sweep.", "From Reviewer (an agent, on task #9)", "From someone since gone", "(deleted)",
+					"From you", "On it.")
+			}},
+		{name: "a thread too long to show whole", branch: "tidy", thread: theirs,
+			threads: map[uuid.UUID]*thread{theirs: {chat: tidy, messages: long(40)}},
+			turns:   []harness.Turn{calling(call("a", "read_thread", `{}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				body := string(c.entries[2].Body)
+				if !strings.Contains(body, "older messages left out") || !strings.Contains(body, "message 39") || strings.Contains(body, "message 0 ") ||
+					len(body) > harness.MaxOutput+200 {
+					t.Errorf("read_thread answered %d bytes: %.120s", len(body), body)
+				}
+			}},
+		{name: "no thread yet", branch: "tidy", turns: []harness.Turn{calling(call("a", "read_thread", `{}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				resultAt(2, "The task has no thread yet: post_message starts one.", false)(t, c, nil, nil)
+			}},
+	}
+}
+
+// postCases are TestChat's cases of a task's posts, and of a task without a chat.
+func postCases() []chatCase {
+	return []chatCase{
+		{name: "an issue's task talks in its chat", issue: 12,
+			turns: []harness.Turn{calling(call("a", "post_message", `{"body":"Looking."}`)), done},
+			check: func(t *testing.T, c *cobranch, m *model) {
+				for _, th := range c.threads {
+					if th.chat != (harness.Chat{Issue: 12}) {
+						t.Errorf("started a thread of %+v", th.chat)
+					}
+				}
+				if !strings.Contains(m.requests[0].System, "issue #12's chat") {
+					t.Errorf("the system prompt %q doesn't name the chat", m.requests[0].System)
+				}
+			}},
+		{name: "a refused post", branch: "tidy", postErr: errors.New("the API answered 403, forbidden"),
+			turns: []harness.Turn{calling(call("a", "post_message", `{"body":"Hi."}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				resultAt(2, "post_message failed: starting the thread: the API answered 403", true)(t, c, nil, nil)
+			}},
+		{name: "an empty post", branch: "tidy", turns: []harness.Turn{calling(call("a", "post_message", `{"body":" "}`)), done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				resultAt(2, "post_message failed: the message is empty", true)(t, c, nil, nil)
+			}},
+		{name: "a task without a chat", turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				if names := toolNames(m.requests[0]); !slices.Equal(names, []string{"echo", "finish"}) {
+					t.Errorf("the model is offered %v", names)
+				}
+			}},
+	}
+}
+
+// startedAndReplied checks that the task started one thread of branch tidy's chat, posted twice there, and read both.
+func startedAndReplied(t *testing.T, c *cobranch, m *model) {
+	if len(c.threads) != 1 {
+		t.Fatalf("started %d threads", len(c.threads))
+	}
+	for id, th := range c.threads {
+		if th.chat != (harness.Chat{Repo: "website", Branch: "tidy"}) || len(th.messages) != 2 || th.messages[0].Body != "Starting." ||
+			th.messages[1].Body != "Swept." {
+			t.Errorf("thread %s = %+v", id, th)
+		}
+	}
+	containsAll(t, m.requests[3].Messages[6].Results[0].Text, "From you at 2026-11-02 09:00 UTC", "Starting.", "Swept.")
+}
+
+// containsAll checks that a tool's answer holds each of wants.
+func containsAll(t *testing.T, answer string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(answer, want) {
+			t.Errorf("the tool answered %s, without %q", answer, want)
+		}
+	}
+}
+
+// checkoutCases are the cases of the task's workspace.
+func checkoutCases() []chatCase {
+	begun := entry(nil, agents.EntryInput, `{"text":"# Sweep"}`)
+	return []chatCase{
+		{name: "a new task's clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}}, turns: []harness.Turn{done},
+			check: func(t *testing.T, c *cobranch, m *model) {
+				if got := c.kinds(); !slices.Equal(got, kinds("input", "turn", "state")) {
+					t.Errorf("the transcript's entries are %v", got)
+				}
+				prompts(t, m, []string{"The workspace holds a clone of repository website, on branch tidy", "as agent@agents.example",
+					"push branch tidy with git", "a thread of branch tidy's chat"}, []string{"push no other"})
+			}},
+		{name: "a task's own branch", issue: 42, checkout: &checkout{clone: harness.Clone{Branch: "acme-42-task-7", Fresh: true}},
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"on branch acme-42-task-7", "push branch acme-42-task-7 with git", "The branch is the task's own: push no other."}, nil)
+			}},
+		{name: "a task at a commit", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Commit: "0123abcd", Fresh: true}},
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"a clone of repository website at commit 0123abcd of branch tidy", "push nothing"}, []string{"Commit there", "push branch"})
+			}},
+		{name: "a task its kind ends gets no clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}},
+			kind: &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Nothing to do."}}},
+			check: func(t *testing.T, c *cobranch, m *model) {
+				if got := c.kinds(); !slices.Equal(got, kinds("input", "state")) || len(m.requests) != 0 {
+					t.Errorf("the transcript's entries are %v, after %d requests", got, len(m.requests))
+				}
+			}},
+		{name: "a workspace without a clone", branch: "tidy", checkout: &checkout{}, turns: []harness.Turn{done},
+			check: func(t *testing.T, _ *cobranch, m *model) {
+				prompts(t, m, []string{"a thread of branch tidy's chat"}, []string{"clone", "push"})
+			}},
+		{name: "a task under way gets a fresh clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy", Fresh: true}}, entries: begun,
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, c *cobranch, m *model) {
+				if got := c.kinds(); !slices.Equal(got, kinds("input", "input", "turn", "state")) {
+					t.Fatalf("the transcript's entries are %v", got)
+				}
+				if body := string(c.entries[1].Body); !strings.Contains(body, "fresh clone") || !strings.Contains(body, `"by":"harness"`) {
+					t.Errorf("the harness wrote %s", body)
+				}
+				if got := m.requests[0].Messages[0].Text; !strings.Contains(got, "fresh clone") {
+					t.Errorf("the model reads %q", got)
+				}
+			}},
+		{name: "a task under way keeps its clone", branch: "tidy", checkout: &checkout{clone: harness.Clone{Branch: "tidy"}}, entries: begun,
+			turns: []harness.Turn{done},
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				if got := c.kinds(); !slices.Equal(got, kinds("input", "turn", "state")) {
+					t.Errorf("the transcript's entries are %v", got)
+				}
+			}},
+		{name: "a clone that fails", branch: "tidy", checkout: &checkout{err: errors.New("no route to host")}, turns: []harness.Turn{done}, wantErr: true,
+			check: func(t *testing.T, c *cobranch, _ *model) {
+				if len(c.entries) != 0 {
+					t.Errorf("the transcript's entries are %v", c.kinds())
+				}
+			}},
+	}
+}
+
+// prompts checks that the first system prompt m was asked with says each of want, and none of not.
+func prompts(t *testing.T, m *model, want, not []string) {
+	t.Helper()
+	system := m.requests[0].System
+	for _, w := range want {
+		if !strings.Contains(system, w) {
+			t.Errorf("the system prompt %q doesn't say %q", system, w)
+		}
+	}
+	for _, n := range not {
+		if strings.Contains(system, n) {
+			t.Errorf("the system prompt %q says %q", system, n)
+		}
+	}
+}
+
+// runChat works tc's task with an echo tool, and checks what it leaves.
+func runChat(t *testing.T, tc chatCase) {
+	c := &cobranch{entries: slices.Clone(tc.entries), threads: tc.threads, postErr: tc.postErr, work: agents.Work{OrgSlug: "acme", IssueNumber: tc.issue,
+		AgentEmail: "agent@agents.example", Task: agents.Task{Number: 7, Title: "Sweep", State: agents.TaskRunning, Agent: agents.Principal{DisplayName: "Scout"},
+			RepoSlug: "website", Branch: tc.branch, ThreadID: tc.thread}}}
+	m := &model{turns: tc.turns}
+	h := harness.New(c, m, 0, &echo{})
+	if tc.checkout != nil {
+		h.WithCheckout(tc.checkout)
+	}
+	want := 1
+	if tc.kind != nil {
+		c.work.Task.Kind = "review"
+		h.Handle("review", tc.kind)
+		if tc.kind.kit.End != nil {
+			want = 0
+		}
+	}
+	if err := h.Run(context.Background()); (err != nil) != tc.wantErr {
+		t.Fatalf("Run() = %v, want an error: %v", err, tc.wantErr)
+	}
+	if tc.checkout != nil && (len(tc.checkout.prepared) != want || want == 1 && tc.checkout.prepared[0].Task.RepoSlug != "website") {
+		t.Errorf("prepared %+v, want %d", tc.checkout.prepared, want)
+	}
+	tc.check(t, c, m)
+}
+
+// toolNames lists the names of the tools r offers.
+func toolNames(r harness.Request) []string {
+	out := []string{}
+	for _, s := range r.Tools {
+		out = append(out, s.Name)
+	}
+	return out
+}
+
+// long is n messages, each of 4 KiB, numbered.
+func long(n int) []harness.ChatMessage {
+	out := make([]harness.ChatMessage, 0, n)
+	for i := range n {
+		out = append(out, harness.ChatMessage{ID: uuid.New(), Author: "Olivia", Body: "message " + strconv.Itoa(i) + " " + strings.Repeat("y", 4<<10)})
+	}
+	return out
+}

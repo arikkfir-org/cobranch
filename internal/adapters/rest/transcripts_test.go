@@ -71,7 +71,15 @@ func TestMyTask(t *testing.T) {
 		{name: "a task token's", viewer: working(2), method: "GET", path: fixed("/v1/me/task"), wantStatus: 200,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
 				mine := decode[MyTask](t, body)
-				if mine.Organization != "acme" || mine.Task.Number != 2 || mine.Task.Agent.Id != f.scout.ID || mine.AgentInstructions != "Be brief." {
+				if mine.Organization != "acme" || mine.Task.Number != 2 || mine.Task.Agent.Id != f.scout.ID || mine.AgentInstructions != "Be brief." ||
+					mine.AgentEmail != agents.Email(f.scout.ID) || mine.IssueNumber != nil || mine.IssueKey != nil {
+					t.Errorf("my task = %s", body)
+				}
+			}},
+		{name: "an issue's task's", viewer: withScoutsIssue(working(4)), method: "GET", path: fixed("/v1/me/task"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				if mine := decode[MyTask](t, body); mine.Task.Number != 4 || mine.IssueNumber == nil || *mine.IssueNumber != 1 ||
+					mine.IssueKey == nil || *mine.IssueKey != "ACME" {
 					t.Errorf("my task = %s", body)
 				}
 			}},

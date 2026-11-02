@@ -65,8 +65,12 @@ func TestIssueStoreAgentTask(t *testing.T) {
 	if err != nil || got.Assignee == nil || !got.Assignee.Agent || got.Task == nil || *got.Task != (issues.Task{Number: 1, State: agents.TaskQueued, RepoID: f.website.ID}) {
 		t.Fatalf("Get() = assignee %+v, task %+v, %v; want Scout and task 1", got.Assignee, got.Task, err)
 	}
-	if task, err := f.a.Task(ctx, f.acme.ID, 1); err != nil || task.IssueID != issue.ID || task.Kind != issues.KindTask {
+	task, err := f.a.Task(ctx, f.acme.ID, 1)
+	if err != nil || task.IssueID != issue.ID || task.Kind != issues.KindTask {
 		t.Errorf("the task = %+v, %v; want of kind issue, naming the issue", task, err)
+	}
+	if w, err := f.a.TaskByID(ctx, task.ID); err != nil || w.IssueKey != "ACME" || w.IssueNumber != 1 {
+		t.Errorf("TaskByID() = issue %s-%d, %v; want ACME-1", w.IssueKey, w.IssueNumber, err)
 	}
 	if list, _, err := f.is.List(ctx, f.acme.ID, issues.Query{States: issues.States, Limit: 10}); err != nil || len(list) != 1 || list[0].Task == nil {
 		t.Errorf("List() = %+v, %v; want the issue with its task", list, err)

@@ -25,6 +25,7 @@ func (r *run) system() string {
 	}
 	prompt += "\n\nWork through the tools you have: your messages reach no one but the task's transcript. Once the task " +
 		"is done, or you find you can't do it, call finish, which ends the task."
+	prompt += r.where()
 	if r.work.AgentInstructions != "" {
 		prompt += "\n\nYour standing instructions, which every task of yours starts from:\n\n" + r.work.AgentInstructions
 	}
@@ -32,4 +33,30 @@ func (r *run) system() string {
 		prompt += "\n\n" + r.kit.Instructions
 	}
 	return prompt
+}
+
+// where tells the model where people follow the task, and where its work goes: its chat's thread, and the clone of its
+// repository in the workspace.
+func (r *run) where() string {
+	var out string
+	if chat, ok := r.chat(); ok {
+		name := "branch " + chat.Branch + "'s chat"
+		if chat.Branch == "" {
+			name = "issue #" + strconv.FormatInt(chat.Issue, 10) + "'s chat"
+		}
+		out += "\n\nPeople follow the task in a thread of " + name + ": read it with read_thread, and post there with " +
+			"post_message."
+	}
+	switch c := r.clone; {
+	case c.Commit != "":
+		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + " at commit " + c.Commit + " of branch " +
+			c.Branch + ", which the task works at: push nothing."
+	case c.Branch != "":
+		out += "\n\nThe workspace holds a clone of repository " + r.work.Task.RepoSlug + ", on branch " + c.Branch + ". Commit there, as " +
+			r.work.AgentEmail + ", and push branch " + c.Branch + " with git: what you don't push is lost when the task ends."
+		if r.work.Task.Branch == "" {
+			out += " The branch is the task's own: push no other."
+		}
+	}
+	return out
 }

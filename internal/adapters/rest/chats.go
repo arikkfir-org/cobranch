@@ -67,6 +67,9 @@ func chatMessage(m chats.Message) ChatMessage {
 		at := m.DeletedAt.UTC()
 		out.DeletedAt = &at
 	}
+	if m.Task != nil {
+		out.TaskId, out.TaskNumber = &m.Task.ID, &m.Task.Number
+	}
 	return out
 }
 

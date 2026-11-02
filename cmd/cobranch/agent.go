@@ -51,7 +51,8 @@ func runAgent(ctx context.Context, logs io.Writer) error {
 		return fmt.Errorf("preparing the workspace: %w", err)
 	}
 	defer func() { _ = ws.Close() }() // only reads the directory's handle
-	h := harness.New(api, model, cfg.MaxTurns, ws.Tools()...).Handle(agents.KindReview, reviewer.New(api))
+	ws.WithGit(workspace.Git{URL: cfg.Git, TokenFile: cfg.TokenFile})
+	h := harness.New(api, model, cfg.MaxTurns, ws.Tools()...).WithCheckout(ws).Handle(agents.KindReview, reviewer.New(api))
 	if err := h.Run(ctx); err != nil {
 		return fmt.Errorf("working the task: %w", err)
 	}

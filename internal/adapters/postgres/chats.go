@@ -171,7 +171,7 @@ func withMessages(ctx context.Context, q *queries.Queries, threads []chats.Threa
 	}
 	for _, r := range rows {
 		i := at[r.ChatMessage.ThreadID]
-		threads[i].Messages = append(threads[i].Messages, chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName))
+		threads[i].Messages = append(threads[i].Messages, chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName, r.TaskNumber))
 	}
 	return nil
 }
@@ -211,7 +211,7 @@ func chatMessages(ctx context.Context, q *queries.Queries, subj chats.Subject, i
 	out := make(map[uuid.UUID]chats.Message, len(rows))
 	for _, r := range rows {
 		if _, ours := threads[r.ChatMessage.ThreadID]; ours {
-			out[r.ChatMessage.ID] = chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName)
+			out[r.ChatMessage.ID] = chatMessageOf(r.ChatMessage, r.AuthorName, r.DeleterName, r.TaskNumber)
 		}
 	}
 	return out, nil
@@ -293,13 +293,15 @@ func touchThread(ctx context.Context, q *queries.Queries, id uuid.UUID) error {
 	return nil
 }
 
-// StartThread starts the subject's thread id with its first message for actor, and answers it and true; or answers
-// the thread of id that is there and false, and chats.ErrIDTaken when it isn't the subject's (chats.Store).
-func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
+// StartThread starts the subject's thread id with its first message for by, and answers it and true; or answers the
+// thread of id that is there and false, and chats.ErrIDTaken when it isn't the subject's. A thread an agent's task
+// starts in its branch's chat, or its issue's, becomes the one the task talks in, when it talks in none yet
+// (chats.Store).
+func (s *ChatStore) StartThread(ctx context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
 	var out chats.Thread
 	created := false
-	err := s.changeChat(ctx, actor, subj, "starting the thread", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
-		inserted, err := insertThread(ctx, q, actor, subj, id, messageID, anchor, nil, body)
+	err := s.changeChat(ctx, by.ID, subj, "starting the thread", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
+		inserted, err := insertThread(ctx, q, by, subj, id, messageID, anchor, nil, body)
 		if err != nil {
 			return "", chatEvent{}, err
 		}
@@ -310,6 +312,11 @@ func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats
 			}
 			return "", chatEvent{}, err
 		}
+		if by.Task != uuid.Nil {
+			if err := q.SetTaskThread(ctx, by.Task, id); err != nil {
+				return "", chatEvent{}, fmt.Errorf("making thread %s task %s's: %w", id, by.Task, err)
+			}
+		}
 		created = true
 		out, err = chatThread(ctx, q, subj, id)
 		return chats.ThreadStarted, chatEvent{Thread: id, Message: &messageID}, err
@@ -317,10 +324,10 @@ func (s *ChatStore) StartThread(ctx context.Context, actor uuid.UUID, subj chats
 	return out, created, err
 }
 
-// insertThread inserts the subject's thread id for actor, anchored when anchor is set and a comment of the review
+// insertThread inserts the subject's thread id for by, anchored when anchor is set and a comment of the review
 // reviewID names when it is set, with its first message, and reports whether it did: not when a thread of id is there.
-func insertThread(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
-	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &actor, ReviewID: reviewID}
+func insertThread(ctx context.Context, q *queries.Queries, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, reviewID *uuid.UUID, body string) (bool, error) {
+	p := queries.InsertChatThreadParams{ID: id, OrgID: subj.OrgID, RepoID: &subj.RepoID, BranchID: &subj.BranchID, CreatedBy: &by.ID, ReviewID: reviewID}
 	if subj.OfIssue() {
 		p.RepoID, p.BranchID, p.IssueID = nil, nil, &subj.IssueID
 	}
@@ -333,19 +340,19 @@ func insertThread(ctx context.Context, q *queries.Queries, actor uuid.UUID, subj
 	} else if err != nil {
 		return false, fmt.Errorf("inserting thread %s: %w", id, err)
 	}
-	if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &actor,
-		Body: body}); err != nil {
+	if _, err := q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: messageID, ThreadID: id, OrgID: subj.OrgID, AuthorID: &by.ID,
+		Body: body, TaskID: taskOf(by)}); err != nil {
 		return false, fmt.Errorf("inserting message %s: %w", messageID, err)
 	}
 	return true, nil
 }
 
-// Post posts message id to one of the subject's threads for actor, and answers it and true; or answers the message of
-// id that is there and false, and chats.ErrIDTaken when it isn't the thread's (chats.Store).
-func (s *ChatStore) Post(ctx context.Context, actor uuid.UUID, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
+// Post posts message id to one of the subject's threads for by, and answers it and true; or answers the message of id
+// that is there and false, and chats.ErrIDTaken when it isn't the thread's (chats.Store).
+func (s *ChatStore) Post(ctx context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
 	var out chats.Message
 	created := false
-	err := s.changeChat(ctx, actor, subj, "posting the message", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
+	err := s.changeChat(ctx, by.ID, subj, "posting the message", func(ctx context.Context, q *queries.Queries) (chats.UpdateKind, chatEvent, error) {
 		threads, err := chatThreads(ctx, q, subj, []uuid.UUID{threadID})
 		if err != nil {
 			return "", chatEvent{}, err
@@ -353,7 +360,8 @@ func (s *ChatStore) Post(ctx context.Context, actor uuid.UUID, subj chats.Subjec
 		if _, found := threads[threadID]; !found {
 			return "", chatEvent{}, repos.ErrNotFound
 		}
-		_, err = q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: id, ThreadID: threadID, OrgID: subj.OrgID, AuthorID: &actor, Body: body})
+		_, err = q.InsertChatMessage(ctx, queries.InsertChatMessageParams{ID: id, ThreadID: threadID, OrgID: subj.OrgID, AuthorID: &by.ID, Body: body,
+			TaskID: taskOf(by)})
 		if errors.Is(err, pgx.ErrNoRows) { // one of its ID is there
 			out, err = chatMessage(ctx, q, subj, id)
 			if errors.Is(err, repos.ErrNotFound) || err == nil && out.ThreadID != threadID {
@@ -498,8 +506,21 @@ func chatThreadOf(t queries.ChatThread, starter, resolver, reviewed *string) cha
 	return out
 }
 
-// chatMessageOf is the domain's view of a chat_messages row, with the display names of its author and deleter.
-func chatMessageOf(m queries.ChatMessage, author, deleter *string) chats.Message {
-	return chats.Message{ID: m.ID, ThreadID: m.ThreadID, Body: m.Body, Author: principalOf(m.AuthorID, author), CreatedAt: m.CreatedAt,
+// chatMessageOf is the domain's view of a chat_messages row, with the display names of its author and deleter, and
+// the number of the task it came from.
+func chatMessageOf(m queries.ChatMessage, author, deleter *string, taskNumber *int64) chats.Message {
+	out := chats.Message{ID: m.ID, ThreadID: m.ThreadID, Body: m.Body, Author: principalOf(m.AuthorID, author), CreatedAt: m.CreatedAt,
 		EditedAt: m.EditedAt, DeletedAt: m.DeletedAt, DeletedBy: principalOf(m.DeletedBy, deleter), Version: m.Version}
+	if m.TaskID != nil && taskNumber != nil {
+		out.Task = &chats.TaskRef{ID: *m.TaskID, Number: *taskNumber}
+	}
+	return out
+}
+
+// taskOf is the task by works, for a chat_messages row; nil for none.
+func taskOf(by chats.Poster) *uuid.UUID {
+	if by.Task == uuid.Nil {
+		return nil
+	}
+	return &by.Task
 }

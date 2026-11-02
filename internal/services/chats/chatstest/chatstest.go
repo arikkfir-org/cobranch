@@ -16,8 +16,9 @@ import (
 )
 
 // Store is a chats.Store in memory: each repository's branches by name, the commits it holds, each organization's
-// issues by number, and the chats' threads, messages and updates. Names names the principals by ID; Now is the time it records changes at. It is safe for
-// concurrent use, so a test may change it while a follower reads.
+// issues by number, and the chats' threads, messages and updates. Names names the principals by ID, and Tasks numbers
+// the agents' tasks by ID; Now is the time it records changes at. It is safe for concurrent use, so a test may change
+// it while a follower reads.
 type Store struct {
 	mu       sync.Mutex
 	branches map[uuid.UUID]map[string]chats.Subject
@@ -28,6 +29,7 @@ type Store struct {
 	messages map[uuid.UUID]*chats.Message
 	updates  []update
 	Names    map[uuid.UUID]string
+	Tasks    map[uuid.UUID]int64
 	Now      time.Time
 }
 
@@ -49,7 +51,8 @@ var _ chats.Store = (*Store)(nil)
 // NewStore returns an empty Store.
 func NewStore() *Store {
 	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
-		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, Names: map[uuid.UUID]string{}}
+		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, Names: map[uuid.UUID]string{},
+		Tasks: map[uuid.UUID]int64{}}
 }
 
 // SetBranch makes subj's branch live at its head in its repository, and the repository hold the head, and answers
@@ -229,13 +232,21 @@ func (s *Store) principal(id uuid.UUID) *chats.Principal {
 	return &chats.Principal{ID: id, DisplayName: s.Names[id]}
 }
 
+// task is the task of id, by its number; nil for uuid.Nil.
+func (s *Store) task(id uuid.UUID) *chats.TaskRef {
+	if id == uuid.Nil {
+		return nil
+	}
+	return &chats.TaskRef{ID: id, Number: s.Tasks[id]}
+}
+
 func (s *Store) record(subj chats.Subject, kind chats.UpdateKind, threadID uuid.UUID, messageID *uuid.UUID) {
 	s.updates = append(s.updates, update{subject: subj.ID(), cursor: int64(len(s.updates) + 1), kind: kind, thread: threadID, message: messageID})
 }
 
-// StartThread starts the subject's thread id with its first message for actor, or answers the thread of id that is
+// StartThread starts the subject's thread id with its first message for by, or answers the thread of id that is
 // there.
-func (s *Store) StartThread(_ context.Context, actor uuid.UUID, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
+func (s *Store) StartThread(_ context.Context, by chats.Poster, subj chats.Subject, id, messageID uuid.UUID, anchor *chats.Anchor, body string) (chats.Thread, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[id]; ok {
@@ -244,14 +255,15 @@ func (s *Store) StartThread(_ context.Context, actor uuid.UUID, subj chats.Subje
 		}
 		return s.withMessages(t.Thread), false, nil
 	}
-	s.threads[id] = &thread{subject: subj.ID(), Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(actor), CreatedAt: s.Now, Version: 1}}
-	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: body, Author: s.principal(actor), CreatedAt: s.Now, Version: 1}
+	s.threads[id] = &thread{subject: subj.ID(), Thread: chats.Thread{ID: id, Anchor: anchor, StartedBy: s.principal(by.ID), CreatedAt: s.Now, Version: 1}}
+	s.messages[messageID] = &chats.Message{ID: messageID, ThreadID: id, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now,
+		Version: 1}
 	s.record(subj, chats.ThreadStarted, id, &messageID)
 	return s.withMessages(s.threads[id].Thread), true, nil
 }
 
-// Post posts message id to one of the subject's threads for actor, or answers the message of id that is there.
-func (s *Store) Post(_ context.Context, actor uuid.UUID, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
+// Post posts message id to one of the subject's threads for by, or answers the message of id that is there.
+func (s *Store) Post(_ context.Context, by chats.Poster, subj chats.Subject, threadID, id uuid.UUID, body string) (chats.Message, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if t, ok := s.threads[threadID]; !ok || t.subject != subj.ID() {
@@ -263,7 +275,7 @@ func (s *Store) Post(_ context.Context, actor uuid.UUID, subj chats.Subject, thr
 		}
 		return *m, false, nil
 	}
-	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: body, Author: s.principal(actor), CreatedAt: s.Now, Version: 1}
+	s.messages[id] = &chats.Message{ID: id, ThreadID: threadID, Body: body, Author: s.principal(by.ID), Task: s.task(by.Task), CreatedAt: s.Now, Version: 1}
 	s.threads[threadID].Version++
 	s.record(subj, chats.MessagePosted, threadID, &id)
 	return *s.messages[id], true, nil

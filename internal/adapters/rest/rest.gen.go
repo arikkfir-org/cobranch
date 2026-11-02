@@ -1312,9 +1312,15 @@ type ChatMessage struct {
 	EditedAt *time.Time `json:"editedAt,omitempty"`
 
 	// Html Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
-	Html     string             `json:"html"`
-	Id       openapi_types.UUID `json:"id"`
-	ThreadId openapi_types.UUID `json:"threadId"`
+	Html string             `json:"html"`
+	Id   openapi_types.UUID `json:"id"`
+
+	// TaskId The task of the agent that posted it; absent for a person's message, and once the task is deleted.
+	TaskId *openapi_types.UUID `json:"taskId,omitempty"`
+
+	// TaskNumber That task's number in its organization.
+	TaskNumber *int64             `json:"taskNumber,omitempty"`
+	ThreadId   openapi_types.UUID `json:"threadId"`
 
 	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which the branch's head, the slugs its links name and its people's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
 	Version int64 `json:"version"`
@@ -2091,11 +2097,20 @@ type ModelProviderList struct {
 	ModelProviders []ModelProvider `json:"modelProviders"`
 }
 
-// MyTask The task a task token works, the slug of its organization, which the harness's calls name, and its agent's standing instructions, which the task starts from.
+// MyTask The task a task token works, the slug of its organization, which the harness's calls name, its agent's standing instructions, which the task starts from, and email, which its commits carry, and the issue whose chat it talks in.
 type MyTask struct {
+	// AgentEmail The email of the task's agent, verified, so that the commits that carry it are the agent's.
+	AgentEmail string `json:"agentEmail"`
+
 	// AgentInstructions The standing instructions, in Markdown, of the task's agent; empty for none.
 	AgentInstructions string `json:"agentInstructions"`
-	Organization      string `json:"organization"`
+
+	// IssueKey The key of the organization's issues, which with issueNumber names the issue the task works on, such as ACME in ACME-42; absent for none.
+	IssueKey *string `json:"issueKey,omitempty"`
+
+	// IssueNumber The number of the issue the task works on, whose chat it talks in; absent for none.
+	IssueNumber  *int64 `json:"issueNumber,omitempty"`
+	Organization string `json:"organization"`
 
 	// Task A task of one of the organization's agents, which the organization numbers.
 	Task Task `json:"task"`

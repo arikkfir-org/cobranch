@@ -124,7 +124,7 @@ func newOrgFixture() *orgFixture {
 	f.issueStore = issuestest.NewStore(store)
 	f.issueStore.Repos[f.website.ID] = f.website
 	f.issueStore.Agents[f.scout.ID] = f.acme.ID
-	f.issueStore.TaskOf = issuestest.TasksOf(f.agentStore.KeptTasks)
+	f.issueStore.TaskOf, f.agentStore.IssueOf = issuestest.TasksOf(f.agentStore.KeptTasks), f.issueStore.Named
 	store.AddUser(f.scout.ID, f.scout.Name)
 	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store)).WithAgents(f.agents, f.agentStore)
 	f.issues.SetClock(func() time.Time { return now })

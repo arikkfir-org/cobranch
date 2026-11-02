@@ -23,6 +23,7 @@ type Harness struct {
 	model    Model
 	tools    []Tool
 	maxTurns int
+	checkout Checkout
 	kinds    map[string]Kind
 }
 
@@ -38,6 +39,12 @@ func New(c Cobranch, m Model, maxTurns int, tools ...Tool) *Harness {
 // Handle has k prepare the tasks of kind, and answers h.
 func (h *Harness) Handle(kind string, k Kind) *Harness {
 	h.kinds[kind] = k
+	return h
+}
+
+// WithCheckout has the Harness ready the task's workspace with c before it works the task, and answers it.
+func (h *Harness) WithCheckout(c Checkout) *Harness {
+	h.checkout = c
 	return h
 }
 
@@ -58,7 +65,8 @@ func (h *Harness) Run(ctx context.Context) error {
 	return failed(span, err)
 }
 
-// resume reads the task and its transcript, and answers the run that carries it on; nil when the task has ended.
+// resume reads the task and its transcript, readies its workspace, and answers the run that carries it on; nil when
+// the task has ended.
 func (h *Harness) resume(ctx context.Context) (*run, error) {
 	w, err := h.cobranch.Work(ctx)
 	if err != nil {
@@ -80,7 +88,8 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 		}
 	}
 	slog.InfoContext(ctx, "Working the task", "entries", len(entries), "kind", w.Task.Kind)
-	r := &run{Harness: h, work: w, entries: entries, kit: kit, toolset: append(slices.Clip(h.tools), kit.Tools...)}
+	r := &run{Harness: h, work: w, entries: entries, kit: kit, thread: w.Task.ThreadID}
+	r.toolset = slices.Concat(r.chatTools(), h.tools, kit.Tools)
 	// A task its kind ended has no deadline: it ends as its kind said, however late it resumed.
 	if start := w.Task.StartedAt; kit.Timeout > 0 && kit.End == nil {
 		if start.IsZero() {
@@ -88,11 +97,11 @@ func (h *Harness) resume(ctx context.Context) (*run, error) {
 		}
 		r.deadline = start.Add(kit.Timeout)
 	}
-	return r, nil
+	return r, r.prepare(ctx)
 }
 
-// run is a task the harness works, and its transcript so far: the kit its kind gave it, the tools it offers, the
-// agent's and its kind's, and when it must have ended, zero for no deadline of its own.
+// run is a task the harness works, and its transcript so far: the kit its kind gave it, the tools it offers, its
+// chat's, the agent's and its kind's, and when it must have ended, zero for no deadline of its own.
 type run struct {
 	*Harness
 	work     agents.Work
@@ -100,6 +109,27 @@ type run struct {
 	kit      Kit
 	toolset  []Tool
 	deadline time.Time
+	// thread is the thread of its chat the task talks in; uuid.Nil until it has one.
+	thread uuid.UUID
+	// clone is the clone of the task's repository that its workspace holds.
+	clone Clone
+}
+
+// prepare readies the task's workspace, unless its kind ended it, and tells the model when a task under way got a
+// fresh one, as it does when its pod starts again: what it didn't push is gone.
+func (r *run) prepare(ctx context.Context) error {
+	if r.checkout == nil || r.kit.End != nil {
+		return nil
+	}
+	clone, err := r.checkout.Prepare(ctx, r.work)
+	if err != nil {
+		return fmt.Errorf("preparing the workspace: %w", err)
+	}
+	r.clone = clone
+	if !clone.Fresh || len(r.entries) == 0 {
+		return nil
+	}
+	return r.append(ctx, agents.EntryInput, input{Text: freshWorkspace, By: byHarness})
 }
 
 // loop takes the task's steps until it ends, and fails it once it runs past its deadline: a step the deadline cuts

@@ -22,6 +22,59 @@ type cobranch struct {
 	entries []agents.Entry
 	// refuseAt is the entry whose append the token is refused at; 0 for none.
 	refuseAt int
+	// threads are the chats' threads by ID, each with the chat it is of and its messages.
+	threads map[uuid.UUID]*thread
+	// postErr fails every start and post.
+	postErr error
+}
+
+type thread struct {
+	chat     harness.Chat
+	messages []harness.ChatMessage
+}
+
+func (c *cobranch) Thread(_ context.Context, org string, chat harness.Chat, id uuid.UUID) ([]harness.ChatMessage, error) {
+	t, ok := c.threads[id]
+	if org != c.work.OrgSlug || !ok || t.chat != chat {
+		return nil, errors.New("no such thread")
+	}
+	return slices.Clone(t.messages), nil
+}
+
+func (c *cobranch) StartThread(_ context.Context, org string, chat harness.Chat, id uuid.UUID, body string) error {
+	if c.postErr != nil {
+		return c.postErr
+	}
+	if org != c.work.OrgSlug {
+		return errors.New("another organization")
+	}
+	if c.threads == nil {
+		c.threads = map[uuid.UUID]*thread{}
+	}
+	if _, ok := c.threads[id]; !ok {
+		c.threads[id] = &thread{chat: chat, messages: []harness.ChatMessage{c.mine(uuid.New(), body)}}
+	}
+	return nil
+}
+
+func (c *cobranch) Post(_ context.Context, org string, chat harness.Chat, threadID, id uuid.UUID, body string) error {
+	if c.postErr != nil {
+		return c.postErr
+	}
+	t, ok := c.threads[threadID]
+	if org != c.work.OrgSlug || !ok || t.chat != chat {
+		return errors.New("no such thread")
+	}
+	if !slices.ContainsFunc(t.messages, func(m harness.ChatMessage) bool { return m.ID == id }) {
+		t.messages = append(t.messages, c.mine(id, body))
+	}
+	return nil
+}
+
+// mine is a message the task posts.
+func (c *cobranch) mine(id uuid.UUID, body string) harness.ChatMessage {
+	return harness.ChatMessage{ID: id, Author: c.work.Task.Agent.DisplayName, Task: c.work.Task.Number, At: time.Date(2026, 11, 2, 9, 0, 0, 0, time.UTC),
+		Body: body}
 }
 
 func (c *cobranch) Work(context.Context) (agents.Work, error) { return c.work, nil }
@@ -285,7 +338,8 @@ func kindCases() []harnessCase {
 				for _, s := range m.requests[0].Tools {
 					names = append(names, s.Name)
 				}
-				if !slices.Equal(names, []string{"echo", "stamp", "finish"}) || !strings.HasSuffix(m.requests[0].System, "Be brief.\n\nStamp it.") {
+				if !slices.Equal(names, []string{"read_thread", "post_message", "echo", "stamp", "finish"}) ||
+					!strings.HasSuffix(m.requests[0].System, "Be brief.\n\nStamp it.") {
 					t.Errorf("the model is offered %v, with %q", names, m.requests[0].System)
 				}
 				resultAt(2, "ok", false)(t, c, m, e)
@@ -360,7 +414,7 @@ func firstTask(t *testing.T, c *cobranch, m *model, e *echo) {
 	for _, s := range first.Tools {
 		names = append(names, s.Name)
 	}
-	if !slices.Equal(names, []string{"echo", "finish"}) {
+	if !slices.Equal(names, []string{"read_thread", "post_message", "echo", "finish"}) {
 		t.Errorf("the model is offered %v", names)
 	}
 	second := m.requests[1].Messages

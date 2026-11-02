@@ -39,6 +39,23 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 // startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' counterparts.
 var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage)":\{"id":"([0-9a-f-]{36})"`)
 
+// agentOnTask is Scout, a Developer on the website, through the token of its task numbered number, whose number the
+// chats know.
+func agentOnTask(number int64) func(*orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		task, err := f.agentStore.Task(context.Background(), f.acme.ID, number)
+		if err != nil {
+			panic(err)
+		}
+		f.store.AddMember(f.acme.ID, f.scout.ID, auth.RoleMember)
+		f.store.Grant(f.scout.ID, auth.RoleDeveloper, auth.ScopeRepository, f.website.ID)
+		f.chatStore.Names[f.scout.ID], f.chatStore.Tasks[task.ID] = "Scout", number
+		return &auth.Authenticated{User: auth.User{Principal: auth.Principal{ID: f.scout.ID, Kind: auth.KindAgent, DisplayName: "Scout"}},
+			Credential: auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: f.scout.ID,
+				Task: auth.TaskGrant{ID: task.ID, OrgID: f.acme.ID, AssignerID: task.AssignedBy.ID}}}
+	}
+}
+
 func TestChats(t *testing.T) {
 	const target = `repositoryId: "{repo}", branch: "feature/login"`
 	const chat = `{ organization(slug: "acme") { repository(slug: "website") { chat(branch: "feature/login") { after nextCursor threads { id anchor { path startLine endLine } resolvedBy { displayName } messages { body deletedBy { displayName } } } } } } }`
@@ -75,6 +92,12 @@ func TestChats(t *testing.T) {
 		{name: "a deleted reply takes no edit", viewer: maxAs(auth.RoleDeveloper),
 			document: `mutation { editChatMessage(` + target + `, thread: "{thread}", message: "{message}", body: "Back") { body } }`,
 			wantCode: conflict, wantReason: "message.deleted"},
+		{name: "a person's message links no task", viewer: olivia,
+			document: `mutation { postChatMessage(` + target + `, thread: "{thread}", input: {body: "Thanks"}) { taskId taskNumber } }`,
+			want:     []string{`"taskId":null,"taskNumber":null`}},
+		{name: "an agent's links its task", viewer: agentOnTask(2),
+			document: `mutation { postChatMessage(` + target + `, thread: "{thread}", input: {body: "Done."}) { author { displayName } taskId taskNumber } }`,
+			want:     []string{`"author":{"displayName":"Scout"},"taskId":"`, `"taskNumber":2`}},
 	}
 	f := newOrgFixture()
 	var ids chatIDs

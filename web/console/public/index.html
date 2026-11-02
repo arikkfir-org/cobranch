@@ -1683,7 +1683,10 @@
         const actions = m.deletedAt ? [] : [mine && post ? h("button", { class: "button small", type: "button", onclick: edit }, "Edit") : null,
           (mine && post) || moderate ? h("button", { class: "button small danger", type: "button", onclick: remove }, "Delete") : null].filter(Boolean);
         return h("div", { class: "message", id: "message-" + m.id },
-          h("div", { class: "meta" }, h("strong", {}, m.author ? m.author.displayName : "Someone since gone"), h("time", { datetime: m.createdAt }, whenExactly(m.createdAt)),
+          h("div", { class: "meta" }, h("strong", {}, m.author ? m.author.displayName : "Someone since gone"),
+            m.taskNumber ? h("a", { class: "chip", href: base + chat.split("/")[2] + "/tasks/" + m.taskNumber, "data-nav": "",
+              title: "An agent posted it, working this task." }, "agent · task #" + m.taskNumber) : null,
+            h("time", { datetime: m.createdAt }, whenExactly(m.createdAt)),
             m.editedAt ? h("span", { title: "Edited " + whenExactly(m.editedAt) }, "edited") : null, actions.length ? h("span", { class: "actions" }, actions) : null),
           content);
       };

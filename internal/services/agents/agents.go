@@ -57,6 +57,16 @@ const AnyVersion int64 = -1
 // Viewer is who an operation runs for: a signed-in user, or the user or API key a credential acts as.
 type Viewer = auth.User
 
+// EmailDomain is the domain of every agent's email, which migration 00042's trigger gives it as it is made: a
+// top-level domain that never resolves, so no mail goes anywhere, the same whatever the installation's host.
+const EmailDomain = "agents.cobranch.invalid"
+
+// Email is the email of the agent id, verified, with which its harness commits, so that the push worker maps the
+// agent's commits to the agent.
+func Email(id uuid.UUID) string {
+	return id.String() + "@" + EmailDomain
+}
+
 // Principal is who created an agent, assigned a task or cancelled it.
 type Principal struct {
 	ID          uuid.UUID

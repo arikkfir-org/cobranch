@@ -163,21 +163,31 @@ func (q *Queries) LeaseTaskRestart(ctx context.Context, leaseUntil time.Time, ta
 
 const markTaskRunning = `-- name: MarkTaskRunning :one
 UPDATE agent_tasks SET state = 'running', started_at = now() WHERE id = $1 AND state = 'queued'
-RETURNING org_id, number, agent_id
+RETURNING org_id, number, agent_id, kind, repo_id, sha
 `
 
 type MarkTaskRunningRow struct {
 	OrgID   uuid.UUID
 	Number  int64
 	AgentID uuid.UUID
+	Kind    string
+	RepoID  *uuid.UUID
+	Sha     *string
 }
 
-// MarkTaskRunning marks a queued task running, as its first pod starts, and answers its organization, number and
-// agent; no row when it is no longer queued.
+// MarkTaskRunning marks a queued task running, as its first pod starts, and answers its organization, number, agent,
+// and kind, repository and head, for a review task's branches; no row when it is no longer queued.
 func (q *Queries) MarkTaskRunning(ctx context.Context, id uuid.UUID) (MarkTaskRunningRow, error) {
 	row := q.db.QueryRow(ctx, markTaskRunning, id)
 	var i MarkTaskRunningRow
-	err := row.Scan(&i.OrgID, &i.Number, &i.AgentID)
+	err := row.Scan(
+		&i.OrgID,
+		&i.Number,
+		&i.AgentID,
+		&i.Kind,
+		&i.RepoID,
+		&i.Sha,
+	)
 	return i, err
 }
 
