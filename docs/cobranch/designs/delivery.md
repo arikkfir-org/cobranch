@@ -93,10 +93,11 @@ The Git server records each tip’s parsed file in the push’s transaction
 
 ### Variables
 
-Strings in `delivery` take `${…}`. A root that sets `substitute: true` takes them in its plain manifests, its values
-files and its kustomization's output too, never in a chart's templates, which have Helm's own. `$${…}` writes a literal
-`${…}`, and an unknown name, or one with no value, such as `${repository}` where `cobranch render` isn't told it, is an
-error.
+Strings in `delivery` take `${…}`, except the keys of a chart's inline `values`: only its values are expanded, so a key
+that holds `${…}`, or `$${…}`, is an error. A root that sets `substitute: true` takes them in its plain manifests, its
+values files and its kustomization's output too, never in a chart's templates, which have Helm's own. `$${…}` writes a
+literal `${…}`, and an unknown name, or one with no value, such as `${repository}` where `cobranch render` isn't told
+it, is an error.
 
 | Variable | Is | For `preview` of `feature/Login` at `3b7d0c4…` |
 | --- | --- | --- |
