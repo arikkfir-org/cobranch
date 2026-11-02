@@ -374,6 +374,18 @@ func (q *Queries) PushRecorded(ctx context.Context, id uuid.UUID) (bool, error) 
 	return exists, err
 }
 
+const refSHA = `-- name: RefSHA :one
+SELECT sha FROM refs WHERE repo_id = $1 AND name = $2
+`
+
+// RefSHA reads the object a ref of a repository names now.
+func (q *Queries) RefSHA(ctx context.Context, repoID uuid.UUID, name string) (string, error) {
+	row := q.db.QueryRow(ctx, refSHA, repoID, name)
+	var sha string
+	err := row.Scan(&sha)
+	return sha, err
+}
+
 const refsOf = `-- name: RefsOf :many
 SELECT name, sha FROM refs WHERE repo_id = $1
 `

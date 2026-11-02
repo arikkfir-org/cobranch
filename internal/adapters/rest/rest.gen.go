@@ -1281,6 +1281,12 @@ type ListRunsParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetRunParams defines parameters for GetRun.
+type GetRunParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetTreeParams defines parameters for GetTree.
 type GetTreeParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -1523,7 +1529,7 @@ type ServerInterface interface {
 	ListRuns(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListRunsParams)
 	// GetRun One of the repository's runs by its number; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/runs/{number})
-	GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, params GetRunParams)
 	// CancelRun Cancels one of the repository's runs that hasn't ended, for the viewer, whose job's annotation then fails naming them; takes jobs.run. A run that has ended answers 409 run.ended.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/cancel)
 	CancelRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
@@ -3523,8 +3529,32 @@ func (siw *ServerInterfaceWrapper) GetRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRunParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetRun(w, r, org, repo, number)
+		siw.Handler.GetRun(w, r, org, repo, number, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -8773,6 +8803,7 @@ type GetRunRequestObject struct {
 	Org    Org       `json:"org"`
 	Repo   Repo      `json:"repo"`
 	Number RunNumber `json:"number"`
+	Params GetRunParams
 }
 
 type GetRunResponseObject interface {
@@ -8799,6 +8830,20 @@ func (response GetRun200JSONResponse) VisitGetRunResponse(w http.ResponseWriter)
 	w.WriteHeader(200)
 	_, err := buf.WriteTo(w)
 	return err
+}
+
+type GetRun304ResponseHeaders struct {
+	ETag string
+}
+
+type GetRun304Response struct {
+	Headers GetRun304ResponseHeaders
+}
+
+func (response GetRun304Response) VisitGetRunResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
 }
 
 type GetRun401ApplicationProblemPlusJSONResponse struct {
@@ -11569,12 +11614,13 @@ func (sh *strictHandler) ListRuns(w http.ResponseWriter, r *http.Request, org Or
 }
 
 // GetRun operation middleware
-func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+func (sh *strictHandler) GetRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber, params GetRunParams) {
 	var request GetRunRequestObject
 
 	request.Org = org
 	request.Repo = repo
 	request.Number = number
+	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetRun(ctx, request.(GetRunRequestObject))

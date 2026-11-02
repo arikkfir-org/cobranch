@@ -97,7 +97,7 @@ func (a api) ListRuns(ctx context.Context, req ListRunsRequestObject) (ListRunsR
 	return out, nil
 }
 
-// GetRun answers one of the repository's runs.
+// GetRun answers one of the repository's runs, or 304 while the caller holds its version.
 func (a api) GetRun(ctx context.Context, req GetRunRequestObject) (GetRunResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -111,11 +111,15 @@ func (a api) GetRun(ctx context.Context, req GetRunRequestObject) (GetRunRespons
 	if err != nil {
 		return nil, fail(err, "run")
 	}
+	tag := runTag(r)
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetRun304Response{Headers: GetRun304ResponseHeaders{ETag: tag}}, nil
+	}
 	shown, err := run(r)
 	if err != nil {
 		return nil, err
 	}
-	return GetRun200JSONResponse{Body: shown, Headers: GetRun200ResponseHeaders{ETag: runTag(r)}}, nil
+	return GetRun200JSONResponse{Body: shown, Headers: GetRun200ResponseHeaders{ETag: tag}}, nil
 }
 
 // CancelRun cancels one of the repository's runs for the viewer.

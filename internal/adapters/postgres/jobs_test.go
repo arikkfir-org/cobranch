@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -213,6 +214,87 @@ func TestGitStoreRunsTakenAnnotation(t *testing.T) {
 	runs := f.runs(t, repo)
 	if len(runs) != 1 || !strings.HasPrefix(runs[0], "#1 ci/build feature@a failed: another principal, ") || !strings.HasSuffix(runs[0], ", holds annotation ci/build on this commit") {
 		t.Errorf("runs = %q, want ci/build failed for Max's annotation", runs)
+	}
+}
+
+// TestGitStoreQueuesTagRunsOfItsLatestPush processes two pushes that move a tag out of order, as two push workers
+// can: the later push's run stands, and the earlier one, whose tag moved on, queues nothing.
+func TestGitStoreQueuesTagRunsOfItsLatestPush(t *testing.T) {
+	f := newJobsFixture(t)
+	repo := f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
+		tip(t, "main", "blob-1", jobsFile))
+	f.push(t, pushOf(repo, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/next", Old: git.ZeroSHA, New: shaB}}, commit(shaB, person("Olivia", "olivia@example.com"), shaA)),
+		tip(t, "next", "blob-1", jobsFile))
+	tagA, tagB := strings.Repeat("1", 40), strings.Repeat("2", 40)
+	earlier := withPeeled(pushOf(repo, f.olivia, "", []git.RefUpdate{{Name: "refs/tags/v2", Old: git.ZeroSHA, New: tagA}}), "refs/tags/v2", shaA)
+	later := withPeeled(pushOf(repo, f.olivia, "", []git.RefUpdate{{Name: "refs/tags/v2", Old: tagA, New: tagB}}), "refs/tags/v2", shaB)
+	for _, p := range []git.Push{earlier, later} {
+		if err := f.g.Record(context.Background(), p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	execAll(t, f.pool, "UPDATE pushes SET retry_at = now() + interval '1 hour' WHERE id = '"+earlier.ID.String()+"'")
+	f.process(t)
+	execAll(t, f.pool, "UPDATE pushes SET retry_at = now() WHERE id = '"+earlier.ID.String()+"'")
+	if n := f.process(t); n != 1 {
+		t.Fatalf("processed %d pushes, want the earlier one", n)
+	}
+	want := []string{"#1 ci/build main@a queued", "#2 ci/build next@b queued", "#3 release tags/v2@b queued"}
+	if got := f.runs(t, repo); !slices.Equal(got, want) {
+		t.Errorf("runs = %q, want %q", got, want)
+	}
+}
+
+// TestGitStoreQueuesRunsOneRepositoryAtATime has two push workers process two pushes of a commit at once, while the
+// repository's runs are locked: both wait, and then one run of the job is queued there, not two.
+func TestGitStoreQueuesRunsOneRepositoryAtATime(t *testing.T) {
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	repo := f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}}, commit(shaA, person("Olivia", "olivia@example.com"))),
+		tip(t, "main", "blob-1", jobsFile))
+	for _, p := range []git.Push{
+		pushOf(repo, f.olivia, "pack-2", []git.RefUpdate{{Name: "refs/heads/one", Old: git.ZeroSHA, New: shaB}}, commit(shaB, person("Olivia", "olivia@example.com"), shaA)),
+		pushOf(repo, f.max, "", []git.RefUpdate{{Name: "refs/heads/two", Old: git.ZeroSHA, New: shaB}}),
+	} {
+		branch := strings.TrimPrefix(p.Updates[0].Name, "refs/heads/")
+		p.Settings = []git.TipSettings{tip(t, branch, "blob-1", jobsFile)}
+		if err := f.g.Record(ctx, p); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gate, err := acquire(t, f.pool).Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := gate.Exec(ctx, "SELECT last FROM run_numbers WHERE repo_id = $1 FOR UPDATE", repo); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			_, err := f.g.Process(ctx, git.RetryAfter)
+			done <- err
+		}()
+	}
+	for i := 0; count(t, f.pool, `SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()
+		AND wait_event_type = 'Lock' AND query LIKE '%run_numbers%'`) < 2; i++ {
+		if i == 500 {
+			t.Fatal("the push workers don't wait for the repository's runs")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := gate.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("Process() = %v", err)
+		}
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM job_runs WHERE repo_id = $1 AND sha = $2", repo, shaB); n != 1 {
+		t.Errorf("%d runs at the commit both pushes reached, want 1", n)
 	}
 }
 

@@ -60,21 +60,16 @@ func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.Clai
 	if err := json.Unmarshal(claimed.Peeled, &peeled); err != nil {
 		return fmt.Errorf("reading the push's tags: %w", err)
 	}
-	pusher := uuid.Nil
+	pushed := jobs.Event{RepoID: claimed.RepoID, PushID: claimed.ID}
 	if claimed.PusherID != nil {
-		pusher = *claimed.PusherID
+		pushed.ActorID = *claimed.PusherID
 	}
 	for _, u := range updates {
-		e := jobs.Event{RepoID: claimed.RepoID, Ref: u.Name, ActorID: pusher, PushID: claimed.ID}
-		_, isBranch := git.Branch(u.Name)
+		e, ok, err := pushEvent(ctx, q, pushed, u, peeled[u.Name])
 		switch {
-		case u.New == git.ZeroSHA:
-			continue
-		case isBranch:
-			e.Kind, e.SHA = jobs.EventPush, u.New
-		case peeled[u.Name] != "":
-			e.Kind, e.SHA = jobs.EventTag, peeled[u.Name]
-		default:
+		case err != nil:
+			return err
+		case !ok:
 			continue
 		}
 		if err := queueRuns(ctx, q, e); err != nil {
@@ -82,6 +77,34 @@ func queuePushRuns(ctx context.Context, q *queries.Queries, claimed queries.Clai
 		}
 	}
 	return nil
+}
+
+// pushEvent is the event a push's update of a ref makes, peeled being the commit a tag names: a push to a branch it
+// creates or moves, or a tag that names a commit and still names what the push set it to; none for a deleted ref, or
+// a tag that moved on since. The later push that moved it, which another push worker may have processed first, makes
+// that tag's event.
+func pushEvent(ctx context.Context, q *queries.Queries, pushed jobs.Event, u refUpdateJSON, peeled string) (jobs.Event, bool, error) {
+	e := pushed
+	e.Ref = u.Name
+	_, isBranch := git.Branch(u.Name)
+	switch {
+	case u.New == git.ZeroSHA:
+		return e, false, nil
+	case isBranch:
+		e.Kind, e.SHA = jobs.EventPush, u.New
+		return e, true, nil
+	case peeled == "":
+		return e, false, nil
+	}
+	current, err := q.RefSHA(ctx, e.RepoID, u.Name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return e, false, nil
+	}
+	if err != nil {
+		return e, false, fmt.Errorf("reading tag %s: %w", u.Name, err)
+	}
+	e.Kind, e.SHA = jobs.EventTag, peeled
+	return e, current == u.New, nil
 }
 
 // queueRuns queues, in the transaction of the change that caused e, a run of each job whose triggers match it, by
@@ -100,6 +123,9 @@ func queueRuns(ctx context.Context, q *queries.Queries, e jobs.Event) error {
 	defined, err := definitionsFor(ctx, q, e)
 	if err != nil || len(defined) == 0 {
 		return err
+	}
+	if err := q.LockRunQueue(ctx, e.RepoID); err != nil {
+		return fmt.Errorf("locking the repository's runs: %w", err)
 	}
 	wait := false
 	if e.Kind == jobs.EventPush {

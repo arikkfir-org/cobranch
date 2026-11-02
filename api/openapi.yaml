@@ -1571,6 +1571,7 @@ paths:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/runNumber"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The run.
@@ -1581,6 +1582,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Run"
+        "304":
+          description: The run is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "401":
           $ref: "#/components/responses/Problem"
         "404":

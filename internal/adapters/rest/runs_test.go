@@ -87,6 +87,10 @@ func TestRunAPI(t *testing.T) {
 					t.Errorf("run = %s", body)
 				}
 			}},
+		{name: "one the caller holds", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"),
+			header: http.Header{"If-None-Match": {`"1"`}}, wantStatus: 304, wantHeader: http.Header{"Etag": {`"1"`}}},
+		{name: "one the caller holds an older version of", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/2"),
+			header: http.Header{"If-None-Match": {`"0"`}}, wantStatus: 200, wantHeader: http.Header{"Etag": {`"1"`}}},
 		{name: "one that isn't there", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "/9"), wantStatus: 404},
 		{name: "a Developer cancels one", viewer: withRuns(maxDeveloping), method: http.MethodPost, path: fixed(runsPath + "/3/cancel"), wantStatus: 200,
 			wantHeader: http.Header{"Etag": {`"2"`}}, check: func(t *testing.T, _ *orgFixture, body []byte) {

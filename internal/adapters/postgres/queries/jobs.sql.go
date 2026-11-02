@@ -136,6 +136,18 @@ func (q *Queries) JobPrincipal(ctx context.Context, repoID uuid.UUID, name strin
 	return principal_id, err
 }
 
+const lockRunQueue = `-- name: LockRunQueue :exec
+INSERT INTO run_numbers (repo_id, last) VALUES ($1, 0)
+ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last
+`
+
+// LockRunQueue locks the repository's run counter, making it first, to the end of the transaction: runs are queued for
+// one repository at a time, so two changes that reach a commit at once can't both find no run of a job there.
+func (q *Queries) LockRunQueue(ctx context.Context, repoID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, lockRunQueue, repoID)
+	return err
+}
+
 const nextRunNumber = `-- name: NextRunNumber :one
 INSERT INTO run_numbers (repo_id, last) VALUES ($1, 1)
 ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last + 1

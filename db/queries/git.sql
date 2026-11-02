@@ -17,6 +17,10 @@ SELECT EXISTS (SELECT 1 FROM pushes WHERE id = $1);
 -- name: RefsOf :many
 SELECT name, sha FROM refs WHERE repo_id = $1;
 
+-- RefSHA reads the object a ref of a repository names now.
+-- name: RefSHA :one
+SELECT sha FROM refs WHERE repo_id = @repo_id AND name = @name;
+
 -- InsertPack lists a pack. A pack the repository lists already, which a push brought again, keeps its upload while
 -- active; one compaction superseded turns active again, with this upload's files, as maintenance may be deleting the
 -- old upload's.
