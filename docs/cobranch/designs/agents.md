@@ -127,7 +127,8 @@ admin changes its model, its secrets, or deletes it.
 - **It has an email of its own,** `<agent ID>@agents.cobranch.invalid`, verified, which a trigger writes whenever an
   agent is made, by the agents store, a migration or a seed: the harness commits with it, so the push worker maps the
   agent's commits to the agent. `.invalid` never resolves, so no mail goes anywhere, and the name stays the same
-  whatever the installation's host.
+  whatever the installation's host. The trigger takes the address from whoever held it first: only a push's login-less
+  user, made by a commit that named it, could, and leaving it to them would credit the agent's commits to them.
 - **Built-in agents,** such as the [AI reviewer](product.md#agents-and-ai-review) of
   [ENG-216](https://linear.app/arikkfir/issue/ENG-216), are marked `built_in`: an admin changes their model, never
   deletes them.
@@ -288,9 +289,12 @@ adapters stay the same.
   its timeout kills whole, whose long output keeps its start and its end; Git through the shell with a credential helper
   that reads the token file, for the Git server's URL alone; the task's chat thread (`read_thread`, `post_message`, and
   asking and waiting for an answer); and `finish`. Asking and waiting come last.
-- **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` at the task's
-  branch, or `main`, before its first turn, and commits as the agent, with its name and email. A pod that starts again
-  clones afresh, and the harness tells the model that what it hadn't pushed is gone.
+- **The checkout.** When the task names a repository, the harness clones it over HTTPS into `/workspace` before its
+  first turn, on the branch its work goes to: the task's, or else one of its own, `acme-42-task-7` for an issue's task
+  and `tasks/7` for any other, made from `main` unless an earlier pod of the task pushed it. The model commits as the
+  agent, with its name and email, which a Git configuration of the workspace's own holds, read by every `git` the pod
+  runs in place of the user's, and is told to push that branch and no other. A pod that starts again clones afresh, and
+  the harness tells the model that what it hadn't pushed is gone.
 - **The thread.** A task talks in its thread: the one it was assigned from, or else the first it starts in its branch's
   chat, or its issue's for an issue's task, which becomes its thread, so a pod that starts again posts there.
   `post_message` names its message, or the thread it starts, by its call's key; `read_thread` shows the newest messages
