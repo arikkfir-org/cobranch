@@ -276,6 +276,26 @@
     .markdown-file { display: grid; gap: 12px; }
     .tabs { display: flex; gap: 4px; }
     .tabs button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+    .diff-summary { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; margin: 0; }
+    .added-count { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
+    .removed-count { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
+    .diff-files { display: grid; gap: 12px; }
+    details.file-diff { border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); overflow: hidden; }
+    details.file-diff > summary { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; background: var(--color-bg-sunken); }
+    details.file-diff[open] > summary { border-bottom: 1px solid var(--color-border-default); }
+    details.file-diff summary code { overflow-wrap: anywhere; }
+    details.file-diff summary .counts { margin-left: auto; display: flex; gap: 8px; }
+    .file-diff p.note { margin: 0; padding: 8px 12px; color: var(--color-fg-muted); }
+    .hunks { overflow-x: auto; }
+    table.hunk { font: 13px/20px var(--font-mono); font-variant-ligatures: none; }
+    table.hunk td { padding: 0 8px; white-space: pre; vertical-align: top; }
+    table.hunk td.ln { width: 1%; text-align: right; color: var(--color-fg-muted); user-select: none; }
+    table.hunk td.mark { width: 1%; padding: 0 4px; user-select: none; }
+    table.hunk td.text { tab-size: 4; }
+    table.hunk tr.added td { background: var(--color-status-success-bg); }
+    table.hunk tr.removed td { background: var(--color-status-danger-bg); }
+    table.hunk tr.hunk-head td { background: var(--color-status-info-bg); color: var(--color-fg-muted); }
+    table.hunk .no-newline { color: var(--color-fg-muted); font-family: var(--font-sans); font-size: 12px; }
   </style>
 </head>
 <body class="centered">
@@ -611,9 +631,9 @@
       const can = (p) => repo.viewerPermissions.includes(p);
       const tabs = [["", "Code"], ["branches", "Branches"], ["access", "Access"]];
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
-      // A directory, a file, a branch's history and a commit are the Code tab's.
-      const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2)) return go("/" + org.slug + "/" + repo.slug, true);
+      // A directory, a file, a branch's history and a commit are the Code tab's; a branch's changes the Branches tab's.
+      const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub === "changes" ? "branches" : sub;
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "changes" && !rest.length)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -628,6 +648,7 @@
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
       else if (sub === "branches" && rest.length) sections = await repositoryBranch(path, at, rest.join("/"), can, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
+      else if (sub === "changes") sections = await repositoryChanges(path, at, rest.join("/"), can, fail);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
       else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can("repo.push"));
@@ -636,7 +657,7 @@
     }
 
     // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-    // parents, to a branch's page, to a commit, to a directory or a file at a ref, and to a file's bytes, which the REST
+    // parents, to a branch's page and its changes, to a commit, to a directory or a file at a ref, and to a file's bytes, which the REST
     // API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
@@ -644,6 +665,7 @@
       return {
         history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
         branchPage: (name) => root + "/branches/" + parts(name),
+        changes: (name) => root + "/changes/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
         blob: (ref, path) => root + "/blob/" + parts(ref, path),
@@ -1133,7 +1155,8 @@
         return [h("section", { class: "panel" }, h("h3", {}, "Branch"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
-        h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"));
+        h("div", { class: "row" }, b.base ? h("a", { class: "button small", href: at.changes(b.name), "data-nav": "" }, "Changes") : null,
+          h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History")));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       // A Merged branch has nothing left to check or to merge.
@@ -1250,6 +1273,77 @@
       return [b.commit ? [who(b.commit.author), " wants to merge "] : "It would merge ", commits, ...into, ...updated];
     }
 
+    // repositoryChanges is a branch's Changes tab: what it would merge into its base, from where it left it, file by
+    // file, and the reviews of its head beneath, with the form to submit one, so a reviewer reads the change and gives
+    // their verdict on one page.
+    async function repositoryChanges(path, at, name, can, fail) {
+      let b;
+      try {
+        b = await api("GET", path + "/branches/" + encodeURIComponent(name));
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Changes"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
+      }
+      const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
+        h("a", { class: "button small", href: at.branchPage(b.name), "data-nav": "" }, "Branch"));
+      if (!b.base) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch merges into nothing, so it has no changes to review."))];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, "What it would merge into ", h("code", {}, b.base), ", from where it left it: commits ",
+          h("code", {}, b.base), " gained since don't show.")),
+        await diffPanel(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, "Changes")];
+      if (b.commit) sections.push(commitReviews(path, b.commit, can, fail));
+      return sections;
+    }
+
+    // diffPanel reads the diff at url and shows it under title, or why it couldn't.
+    async function diffPanel(url, at, title) {
+      const panel = h("section", { class: "panel" }, h("h3", {}, title));
+      let d;
+      try {
+        d = await api("GET", url);
+      } catch (err) {
+        panel.append(h("p", {}, err.code === "git.unavailable" ? "This installation runs no Git server, so its changes can't be shown."
+          : "The changes couldn't be read: " + err.message));
+        return panel;
+      }
+      const files = d.files.length + d.filesLeftOut;
+      panel.append(h("p", { class: "diff-summary" }, files ? plural(files, "file") + " changed" : "No files changed",
+        h("span", { class: "added-count" }, "+" + d.additions), h("span", { class: "removed-count" }, "\u2212" + d.deletions),
+        h("span", { class: "muted" }, "from ", d.base ? h("a", { href: at.commit(d.base), "data-nav": "" }, h("code", {}, shortSha(d.base))) : "nothing", " to ",
+          h("a", { href: at.commit(d.head), "data-nav": "" }, h("code", {}, shortSha(d.head))))));
+      if (d.files.length) panel.append(h("div", { class: "diff-files" }, d.files.map((f) => fileDiffView(f, at, d))));
+      if (d.filesLeftOut) panel.append(h("p", { class: "muted" }, plural(d.filesLeftOut, "more file") + " changed past the 3,000 a diff shows."));
+      return panel;
+    }
+
+    // fileStatuses are the words for what a diff did to a file.
+    const fileStatuses = { added: "Added", modified: "Modified", deleted: "Deleted", renamed: "Renamed", type_changed: "Type changed" };
+
+    // fileDiffView is one file's change, folded when it is long: its path, what changed, its counts, and its hunks, or
+    // why it shows none.
+    function fileDiffView(f, at, d) {
+      const lines = f.hunks.reduce((n, hk) => n + hk.lines.length, 0);
+      const file = f.status === "deleted" ? (d.base ? at.blob(d.base, f.path) : null) : at.blob(d.head, f.path);
+      const summary = h("summary", {}, h("span", { class: "chip" }, fileStatuses[f.status]),
+        f.oldPath ? [h("code", {}, f.oldPath), " \u2192 "] : null, file ? h("a", { href: file, "data-nav": "" }, h("code", {}, f.path)) : h("code", {}, f.path),
+        f.binary ? null : h("span", { class: "counts" }, h("span", { class: "added-count" }, "+" + f.additions), h("span", { class: "removed-count" }, "\u2212" + f.deletions)));
+      const notes = [];
+      if (f.oldMode && f.mode && f.oldMode !== f.mode) notes.push("Mode " + f.oldMode + " \u2192 " + f.mode + ".");
+      if (f.binary) notes.push("A binary file: its lines don't show.");
+      else if (f.truncated) notes.push("Too large to show here: " + plural(f.additions + f.deletions, "line") + " changed.");
+      else if (!f.hunks.length && !notes.length) notes.push(f.status === "renamed" ? "Renamed without changes." : "An empty file.");
+      return h("details", { class: "file-diff", open: lines <= 500 ? "" : null }, summary, notes.map((n) => h("p", { class: "note" }, n)),
+        f.hunks.length ? h("div", { class: "hunks" }, h("table", { class: "hunk" }, h("tbody", {}, f.hunks.map(hunkRows)))) : null);
+    }
+
+    // hunkRows is a hunk as table rows: its header, then each line with its numbers in the old file and the new.
+    function hunkRows(hk) {
+      const marks = { context: " ", added: "+", removed: "-" };
+      const head = h("tr", { class: "hunk-head" }, h("td", { colspan: "4" }, "@@ -" + hk.oldStart + "," + hk.oldLines + " +" + hk.newStart + "," + hk.newLines + " @@" +
+        (hk.section ? " " + hk.section : "")));
+      return [head, hk.lines.map((l) => h("tr", { class: l.kind }, h("td", { class: "ln" }, l.old || ""), h("td", { class: "ln" }, l.new || ""),
+        h("td", { class: "mark" }, marks[l.kind]), h("td", { class: "text" }, l.text, l.noNewline ? h("span", { class: "no-newline" }, "  No newline at end of file") : null)))];
+    }
+
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,
     // the push that first brought it, with its pusher, and the annotations principals set on it, each deletable by a
     // viewer who may: its principal with annotations.write, anyone with annotations.delete_any. It links its files and
@@ -1277,7 +1371,8 @@
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
         h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
-        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail)];
+        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail),
+        await diffPanel(path + "/commits/" + c.sha + "/diff", at, "Changes")];
     }
 
     // commitReviews lists a commit's reviews: each reviewer's latest, the one that counts, in the order they first
