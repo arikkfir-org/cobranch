@@ -104,9 +104,9 @@ SHA as its app version, so that its images default to those just pushed. An inst
 images are there, and only the newest waiting push is built: one that a newer push overtakes while it waits publishes
 nothing, and `main`'s newest commit always gets its images and its chart.
 
-**Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, and saves its Go caches**
+**Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, then its chart, and saves its Go caches**
 
-![Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, and saves its Go caches](repository/main.svg)
+![Pipeline main publishes the images of main’s newest commit, tagged with its short SHA, then its chart, and saves its Go caches](repository/main.svg)
 
 The cache bucket is `arikkfir-cobranch-ci-cache`. The repository, the bucket and their grants are infra’s ([Artifact
 Registry](../../infra/terraform/gcp.md#artifact-registry), [buckets](../../infra/terraform/gcp.md#buckets));
