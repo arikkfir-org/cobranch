@@ -282,7 +282,7 @@ namespace names the installation’s controller ClusterRole as its owner, so uni
   servers included), a LimitRange whose defaults are `jobs.resources`, an optional ResourceQuota from `jobs.quota`, and
   RoleBindings to the chart's ClusterRoles: one lets the controller run pods there, the other lets the REST and GraphQL
   servers read their pods, logs and Secrets. Copies of the installation's `imagePullSecrets` sit beside them, for
-  [agents' pods](agents.md#the-agents-pod).
+  [agents' pods](agents.md#the-agents-pod) alone: a job's pod may not name them.
 - **It goes with the organization,** whose deletion deletes it, **and with the installation:** it names the
   installation's controller ClusterRole as its owner, so uninstalling the chart, which deletes that role, has
   Kubernetes's garbage collector delete the namespace and every run in it, with no controller left to clean up.
@@ -297,10 +297,11 @@ The controller polls every 5 seconds. A timeout deletes the pod and fails the ru
 While it runs, the REST and GraphQL servers read its pod’s logs from Kubernetes, masked as the archive is.
 
 - **`pod`** is a Kubernetes pod spec. The controller refuses what would leave the namespace's bounds: a ServiceAccount
-  or its token, host namespaces, host paths, node names, node selectors, affinities, tolerations, priority classes,
-  volumes other than `emptyDir` and ephemeral ones, and variables read from the namespace's Secrets or ConfigMaps, which
-  hold the other runs'. It sets what every run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout,
-  the operator's `jobs.nodeSelector`, `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
+  or its token, image pull secrets, which would pull with the installation's credentials, host namespaces, host paths,
+  node names, node selectors, affinities, tolerations, priority classes, volumes other than `emptyDir` and ephemeral
+  ones, and variables read from the namespace's Secrets or ConfigMaps, which hold the other runs'. It sets what every
+  run needs: `restartPolicy: Never`, `activeDeadlineSeconds` from the timeout, the operator's `jobs.nodeSelector`,
+  `jobs.tolerations` and `jobs.affinity`, its labels, and no service links.
 - **`script`** is shorthand for a pod of one container in `image`, the chart's `jobs.script.image` by default, which is
   Cobranch's own image, carrying Bash and Git, running the script with `bash -eo pipefail`. The script travels in the
   run's Secret, never in the pod's command line.

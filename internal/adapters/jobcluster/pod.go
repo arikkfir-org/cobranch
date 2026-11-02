@@ -110,6 +110,9 @@ func (c *Cluster) podOf(l runner.Launch) (*corev1.Pod, error) {
 	deadline := int64(l.Timeout / time.Second)
 	spec.RestartPolicy, spec.ActiveDeadlineSeconds = corev1.RestartPolicyNever, &deadline
 	spec.EnableServiceLinks, spec.AutomountServiceAccountToken = new(false), new(false)
+	// The namespace holds the installation's image pull secrets for agents' pods; a run never pulls with them, even one
+	// queued before jobs refused them.
+	spec.ImagePullSecrets = nil
 	spec.NodeSelector, spec.Tolerations, spec.Affinity = c.cfg.NodeSelector, c.cfg.Tolerations, c.cfg.Affinity
 	spec.SecurityContext = podSecurity(spec.SecurityContext)
 	spec.Volumes = append(spec.Volumes,

@@ -16,6 +16,8 @@ func TestCheckPod(t *testing.T) {
 			"securityContext":{"privileged":false}}],"volumes":[{"name":"tmp","emptyDir":{}},{"name":"e","ephemeral":{}}]}`},
 		{name: "no containers", spec: `{}`, wantErr: "a job's pod needs containers, a list of at least one"},
 		{name: "a ServiceAccount", spec: `{"serviceAccountName":"x","containers":[{"name":"a","image":"b"}]}`, wantErr: "a job's pod may not set serviceAccountName"},
+		{name: "image pull secrets", spec: `{"imagePullSecrets":[{"name":"registry"}],"containers":[{"name":"a","image":"b"}]}`,
+			wantErr: "a job's pod may not set imagePullSecrets"},
 		{name: "a node", spec: `{"nodeName":"n","containers":[{"name":"a","image":"b"}]}`, wantErr: "a job's pod may not set nodeName"},
 		{name: "tolerations", spec: `{"tolerations":[],"containers":[{"name":"a","image":"b"}]}`, wantErr: "a job's pod may not set tolerations"},
 		{name: "a nameless container", spec: `{"containers":[{"image":"b"}]}`, wantErr: "containers[0] needs a name"},

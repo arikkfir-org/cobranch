@@ -267,6 +267,23 @@ func TestStart(t *testing.T) {
 	}
 }
 
+func TestStartWithoutPullSecrets(t *testing.T) {
+	ctx := context.Background()
+	client := fake.NewClientset()
+	l := launch(func(l *runner.Launch) {
+		l.Script, l.Pod = "", json.RawMessage(`{"imagePullSecrets":[{"name":"registry"}],"containers":[{"name":"a","image":"b"}]}`)
+	})
+	cfg := config()
+	cfg.ImagePullSecrets = []string{"registry"}
+	if err := New(client, cfg).Start(ctx, l); err != nil {
+		t.Fatalf("Start() = %v", err)
+	}
+	pod, err := client.CoreV1().Pods(ns).Get(ctx, "run-"+run.String(), metav1.GetOptions{})
+	if err != nil || len(pod.Spec.ImagePullSecrets) != 0 {
+		t.Errorf("pod's image pull secrets = %+v, %v; want none: a run never pulls with the installation's", pod.Spec.ImagePullSecrets, err)
+	}
+}
+
 func TestStartRefusals(t *testing.T) {
 	quota := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "run", errors.New(`exceeded quota: cobranch-quota, requested: pods=1`))
 	security := apierrors.NewForbidden(schema.GroupResource{Resource: "pods"}, "run", errors.New(`violates PodSecurity "restricted:latest": privileged`))

@@ -6,12 +6,13 @@ import (
 )
 
 // forbiddenPodFields are the fields of a pod spec that would take a run out of its namespace's bounds: a
-// ServiceAccount or its token, the node's namespaces, a node, where the scheduler places it, or how much it outranks
-// others. The operator places job pods; the controller sets restartPolicy and the deadline itself.
+// ServiceAccount or its token, the installation's image pull secrets, which the namespace holds for agents' pods, the
+// node's namespaces, a node, where the scheduler places it, or how much it outranks others. The operator places job
+// pods; the controller sets restartPolicy and the deadline itself.
 var forbiddenPodFields = []string{
-	"serviceAccountName", "serviceAccount", "automountServiceAccountToken", "hostNetwork", "hostPID", "hostIPC",
-	"hostUsers", "nodeName", "nodeSelector", "affinity", "tolerations", "schedulerName", "priorityClassName", "priority",
-	"preemptionPolicy", "runtimeClassName", "restartPolicy", "activeDeadlineSeconds",
+	"serviceAccountName", "serviceAccount", "automountServiceAccountToken", "imagePullSecrets", "hostNetwork", "hostPID",
+	"hostIPC", "hostUsers", "nodeName", "nodeSelector", "affinity", "tolerations", "schedulerName", "priorityClassName",
+	"priority", "preemptionPolicy", "runtimeClassName", "restartPolicy", "activeDeadlineSeconds",
 }
 
 // allowedVolumeSources are the only volumes a job's pod may mount: scratch space that lives and dies with it.
