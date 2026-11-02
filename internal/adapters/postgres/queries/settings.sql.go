@@ -15,18 +15,22 @@ import (
 const changeInstallationSettings = `-- name: ChangeInstallationSettings :one
 UPDATE installation_settings
 SET sign_up = $1, sign_up_domains = $2, self_serve = $3,
-    updated_at = $4, updated_by = $5
-WHERE version = $6
+    organizations_per_user = $4, repositories_per_organization = $5,
+    git_data_per_organization = $6, updated_at = $7, updated_by = $8
+WHERE version = $9
 RETURNING id, sign_up, sign_up_domains, self_serve, version, updated_at, updated_by, organizations_per_user, repositories_per_organization, git_data_per_organization
 `
 
 type ChangeInstallationSettingsParams struct {
-	SignUp        *string
-	SignUpDomains []string
-	SelfServe     *bool
-	UpdatedAt     time.Time
-	UpdatedBy     *uuid.UUID
-	Version       int64
+	SignUp                      *string
+	SignUpDomains               []string
+	SelfServe                   *bool
+	OrganizationsPerUser        *int64
+	RepositoriesPerOrganization *int64
+	GitDataPerOrganization      *int64
+	UpdatedAt                   time.Time
+	UpdatedBy                   *uuid.UUID
+	Version                     int64
 }
 
 // ChangeInstallationSettings writes every setting, by who, unless the row's version is no longer the one the change
@@ -36,6 +40,9 @@ func (q *Queries) ChangeInstallationSettings(ctx context.Context, arg ChangeInst
 		arg.SignUp,
 		arg.SignUpDomains,
 		arg.SelfServe,
+		arg.OrganizationsPerUser,
+		arg.RepositoriesPerOrganization,
+		arg.GitDataPerOrganization,
 		arg.UpdatedAt,
 		arg.UpdatedBy,
 		arg.Version,

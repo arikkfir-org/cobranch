@@ -13,6 +13,7 @@ import (
 	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 )
 
 // The organizations' store keeps the installation's administration too: the Back-office's lists, an organization made
@@ -44,7 +45,8 @@ func (s *OrgStore) AllOrganizations(ctx context.Context, page admin.Page) ([]adm
 	out := make([]admin.Organization, 0, len(rows))
 	for _, r := range rows {
 		o := r.Organization
-		out = append(out, admin.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: int(r.Members)})
+		out = append(out, admin.Organization{ID: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: int(r.Members),
+			Usage: limits.Usage{Repositories: r.Repositories, GitData: r.GitData}, Own: limits.Overrides{Repositories: r.OwnRepositories, GitData: r.OwnGitData}})
 	}
 	return out, nil
 }
@@ -113,4 +115,60 @@ func (s *OrgStore) Enter(ctx context.Context, actor, orgID uuid.UUID, reason str
 		}
 		return orgEvent(ctx, q, &orgID, actor, "org.entered", orgID, map[string]any{"reason": reason})
 	})
+}
+
+// ownLimits is the Back-office's view of an organization_limits row.
+func ownLimits(row queries.OrganizationLimit) admin.OwnLimits {
+	out := admin.OwnLimits{Overrides: limits.Overrides{Repositories: row.Repositories, GitData: row.GitData}, Version: row.Version,
+		UpdatedAt: row.UpdatedAt}
+	if row.UpdatedBy != nil {
+		out.UpdatedBy = *row.UpdatedBy
+	}
+	return out
+}
+
+// OwnLimits reads the organization's own limits, at version 0 while it has none.
+func (s *OrgStore) OwnLimits(ctx context.Context, orgID uuid.UUID) (admin.OwnLimits, error) {
+	row, err := s.q.OwnLimits(ctx, orgID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return admin.OwnLimits{}, nil
+	}
+	if err != nil {
+		return admin.OwnLimits{}, fmt.Errorf("reading the organization's limits: %w", err)
+	}
+	return ownLimits(row), nil
+}
+
+// ChangeOwnLimits writes the organization's own limits, acting for actor, and records org.limits_changed in its trail,
+// unless their version is no longer own's (0: none yet): then admin.ErrStale. It holds the organization's lock, so an
+// organization deleted meanwhile is orgs.ErrNotFound.
+func (s *OrgStore) ChangeOwnLimits(ctx context.Context, actor, orgID uuid.UUID, own admin.OwnLimits, at time.Time) (admin.OwnLimits, error) {
+	var written admin.OwnLimits
+	err := s.transact(ctx, "changing the organization's limits", actor, func(ctx context.Context, q *queries.Queries) error {
+		if _, err := q.LockOrganization(ctx, orgID); err != nil {
+			return wrapOrg("locking the organization", err)
+		}
+		var row queries.OrganizationLimit
+		var err error
+		if own.Version == 0 {
+			row, err = q.InsertOwnLimits(ctx, queries.InsertOwnLimitsParams{OrgID: orgID, Repositories: own.Repositories, GitData: own.GitData,
+				UpdatedAt: at, UpdatedBy: &actor})
+		} else {
+			row, err = q.ChangeOwnLimits(ctx, queries.ChangeOwnLimitsParams{Repositories: own.Repositories, GitData: own.GitData,
+				UpdatedAt: at, UpdatedBy: &actor, OrgID: orgID, Version: own.Version})
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return admin.ErrStale
+		}
+		if err != nil {
+			return fmt.Errorf("writing them: %w", err)
+		}
+		written = ownLimits(row)
+		return orgEvent(ctx, q, &orgID, actor, "org.limits_changed", orgID,
+			map[string]any{"repositories": own.Repositories, "gitData": own.GitData})
+	})
+	if err != nil {
+		return admin.OwnLimits{}, err
+	}
+	return written, nil
 }
