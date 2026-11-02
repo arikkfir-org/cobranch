@@ -2,6 +2,7 @@ package code
 
 import (
 	"bytes"
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
@@ -17,17 +18,19 @@ import (
 )
 
 // SettingsError is a SettingsFile that doesn't parse, naming the line at fault, as a push into the default branch that
-// brings it is refused.
+// brings it is refused; or a ReviewSettingsFile, which File then names.
 type SettingsError struct {
+	File    string
 	Line    int
 	Message string
 }
 
 func (e *SettingsError) Error() string {
+	file := cmp.Or(e.File, git.SettingsFile)
 	if e.Line == 0 {
-		return fmt.Sprintf("/%s: %s", git.SettingsFile, e.Message)
+		return fmt.Sprintf("/%s: %s", file, e.Message)
 	}
-	return fmt.Sprintf("/%s: line %d: %s", git.SettingsFile, e.Line, e.Message)
+	return fmt.Sprintf("/%s: line %d: %s", file, e.Line, e.Message)
 }
 
 // Settings are what a SettingsFile says: of the repository, read from the default branch's only; the branches' merge
