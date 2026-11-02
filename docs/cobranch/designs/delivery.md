@@ -275,8 +275,8 @@ Health is read after each apply, every 15 seconds while Progressing, and at each
 `delivery/preview`, so a branch merges only once its preview runs.
 
 - **Revision** is the commit of the environment's last successful delivery; **sync** is Synced when the cluster holds
-  that render, and Out of sync while a newer commit waits or a delivery failed; a paused environment shows Paused beside
-  it.
+  the branch's head, and Out of sync while a newer commit waits or a delivery failed, however often a resync re-applies
+  an older revision; a paused environment shows Paused beside it.
 - **Health** follows the kstatus rules Kubernetes' own tools share, so Deployments, StatefulSets, DaemonSets, Jobs,
   PersistentVolumeClaims, Services and any object with a `Ready` condition read as they do everywhere else; an object
   without a status is Healthy once it exists. An object that is gone, or whose kind the cluster no longer serves, is

@@ -577,8 +577,10 @@ func (q *Queries) ProgressingEnvironments(ctx context.Context) ([]ProgressingEnv
 
 const setEnvironmentDelivered = `-- name: SetEnvironmentDelivered :exec
 UPDATE environments e SET revision = $1::text, synced_at = now(), health = $2::text,
-    sync = CASE WHEN EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> $3
-        AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'out_of_sync' ELSE 'synced' END
+    sync = CASE WHEN EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL
+            AND b.head = $1::text)
+        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> $3
+            AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'synced' ELSE 'out_of_sync' END
 WHERE e.id = $4
 `
 
@@ -589,8 +591,9 @@ type SetEnvironmentDeliveredParams struct {
 	ID         uuid.UUID
 }
 
-// SetEnvironmentDelivered records a delivery of a commit that succeeded: the environment's revision, its health, and
-// Synced unless a newer delivery waits.
+// SetEnvironmentDelivered records a delivery of a commit, or a resync, that succeeded: the environment's revision, its
+// health, and Synced when that revision is its branch's head and no newer delivery waits. A resync of a revision older
+// than the head, whose delivery failed, leaves it Out of sync.
 func (q *Queries) SetEnvironmentDelivered(ctx context.Context, arg SetEnvironmentDeliveredParams) error {
 	_, err := q.db.Exec(ctx, setEnvironmentDelivered,
 		arg.Revision,

@@ -162,12 +162,15 @@ UPDATE environment_objects o SET health = h.health, message = h.message
 FROM (SELECT unnest(@positions::int[]) AS position, unnest(@healths::text[]) AS health, unnest(@messages::text[]) AS message) h
 WHERE o.environment_id = @environment_id AND o.position = h.position;
 
--- SetEnvironmentDelivered records a delivery of a commit that succeeded: the environment's revision, its health, and
--- Synced unless a newer delivery waits.
+-- SetEnvironmentDelivered records a delivery of a commit, or a resync, that succeeded: the environment's revision, its
+-- health, and Synced when that revision is its branch's head and no newer delivery waits. A resync of a revision older
+-- than the head, whose delivery failed, leaves it Out of sync.
 -- name: SetEnvironmentDelivered :exec
 UPDATE environments e SET revision = @revision::text, synced_at = now(), health = @health::text,
-    sync = CASE WHEN EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> @delivery_id
-        AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'out_of_sync' ELSE 'synced' END
+    sync = CASE WHEN EXISTS (SELECT 1 FROM branches b WHERE b.repo_id = e.repo_id AND b.name = e.branch AND b.deleted_at IS NULL
+            AND b.head = @revision::text)
+        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.environment_id = e.id AND d.id <> @delivery_id
+            AND d.state IN ('waiting', 'queued', 'rendering', 'applying', 'deleting')) THEN 'synced' ELSE 'out_of_sync' END
 WHERE e.id = @id;
 
 -- EndEnvironment ends an environment whose teardown deleted what it held: it is no longer live, and its history stays.

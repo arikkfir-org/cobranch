@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/deliverer"
 	"cobranch.dev/internal/services/git"
@@ -306,6 +307,9 @@ func TestDeliveryStoreSchedules(t *testing.T) {
 	if got := f.note(t, repo, shaA, "delivery/production"); got != "successful: Healthy by production" {
 		t.Errorf("a resynced commit's annotation = %q, want #1's", got)
 	}
+	if got := f.environments(t, repo, "main"); !slices.Equal(got, []string{"production main shop synced"}) {
+		t.Errorf("environments = %q, want production Synced: it holds main's head", got)
+	}
 	want := []string{"#1 production main@a succeeded", "#2 previews feature/login@b waiting: waits for a member to start it",
 		"#3 production main@a resync succeeded"}
 	if got := f.history(t, repo); !slices.Equal(got, want) {
@@ -316,6 +320,85 @@ func TestDeliveryStoreSchedules(t *testing.T) {
 		t.Errorf("Delivery(#3) = %+v, %v, want the schedule's", resync, err)
 	}
 	f.checkScheduledTeardown(t, production)
+}
+
+// TestDeliveryStoreResyncsAnOlderRevision resyncs production at a after the delivery of main's newer head, c, failed:
+// production stays Out of sync, since its cluster doesn't hold its branch's head.
+func TestDeliveryStoreResyncsAnOlderRevision(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t)
+	ctx := context.Background()
+	repo := f.website.ID
+	f.pushTwoDeliveries(t)
+	f.deliverOnce(t, code.DeliverySucceeded)
+	f.push(t, pushOf(repo, f.olivia, "pack-3", []git.RefUpdate{{Name: "refs/heads/main", Old: shaA, New: shaC}},
+		commit(shaC, person("Olivia", "olivia@example.com"), shaA)), tip(t, "main", "blob-1", deliveryFile))
+	if d := f.deliverOnce(t, code.DeliveryFailed); d.SHA != shaC {
+		t.Fatalf("deliverOnce() = %+v, want c's delivery", d)
+	}
+	if n, err := f.d.Schedule(ctx, time.Nanosecond); n != 1 || err != nil {
+		t.Fatalf("Schedule() = %d, %v, want production's resync", n, err)
+	}
+	d := f.claim(t)
+	a, ok, err := f.d.TakeApply(ctx, d.ID, time.Now().Add(time.Hour))
+	if err != nil || !ok || a.Kind != code.Resync || a.SHA != shaA || !a.Rendered {
+		t.Fatalf("TakeApply() = %+v, %t, %v, want production's resync of a", a, ok, err)
+	}
+	if err := f.d.Record(ctx, deliverer.Outcome{Apply: a, Inventory: inventory(code.Healthy, "site"), Health: code.Healthy,
+		State: code.DeliverySucceeded}); err != nil {
+		t.Fatalf("Record() = %v", err)
+	}
+	if got := f.environments(t, repo, "main"); !slices.Equal(got, []string{"production main shop out_of_sync"}) {
+		t.Errorf("environments = %q, want production Out of sync: main's head is c", got)
+	}
+	if got, err := f.c.Environment(ctx, repo, a.EnvironmentID); err != nil || got.Revision != shaA || got.Health != code.Healthy {
+		t.Errorf("Environment(production) = %+v, %v, want it at a, Healthy", got, err)
+	}
+}
+
+// TestDeliveryStoreEndsATeardownInTheQueue ends a teardown while a push that brings its branch back holds the
+// repository's delivery queue: the teardown waits for the push, then sees its delivery and keeps the environment.
+func TestDeliveryStoreEndsATeardownInTheQueue(t *testing.T) {
+	t.Parallel()
+	f, preview := teardownFixture(t)
+	ctx := context.Background()
+	td := f.takeTeardown(t, time.Now().Add(time.Hour))
+	tx, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }() // a no-op after Commit
+	q := queries.New(tx)
+	if err := q.LockDeliveryQueue(ctx, f.website.ID); err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan error, 1)
+	go func() { ended <- f.d.EndTeardown(ctx, td, nil, code.DeliverySucceeded, "") }()
+	select {
+	case err := <-ended:
+		t.Fatalf("EndTeardown() = %v while a push holds the queue, want it to wait", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	env, err := q.LiveEnvironment(ctx, preview.Target.ID, "feature/login")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := enqueue(ctx, q, queuedDelivery{env: env, target: "previews", kind: code.DeliverCommit, sha: shaB,
+		trigger: code.TriggeredByPush, state: code.DeliveryQueued}); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-ended; err != nil {
+		t.Fatalf("EndTeardown() = %v", err)
+	}
+	if got := f.environments(t, f.website.ID, "feature/login"); !slices.Equal(got, []string{"previews feature/login shop-feature-login out_of_sync"}) {
+		t.Errorf("environments = %q, want the preview live for the push's delivery", got)
+	}
+	if d := f.claim(t); d.Number != 4 || d.SHA != shaB || d.EnvironmentID != preview.ID {
+		t.Errorf("Claim() = %+v, want #4 of b to the preview", d)
+	}
 }
 
 // checkScheduledTeardown pauses production, which the schedule then leaves alone, and leaves feature/login's preview

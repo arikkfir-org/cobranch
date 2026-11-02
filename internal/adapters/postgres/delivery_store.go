@@ -248,14 +248,19 @@ func (s *DeliveryStore) LookAgain(ctx context.Context, deliveryID uuid.UUID, at 
 	return wrapIf(s.q.LeaseTeardown(ctx, at, deliveryID), "holding teardown "+deliveryID.String())
 }
 
-// EndTeardown ends a teardown in state with reason, in one transaction (deliverer.Store). One that succeeded ends its
-// environment, keeping its last inventory as its history, unless a newer delivery of it waits, as its branch came back:
-// that environment then holds nothing and has no revision. One that failed leaves the environment holding remaining,
-// Out of sync, for the schedule to tear down again.
+// EndTeardown ends a teardown in state with reason, in one transaction that holds the repository's delivery queue
+// (deliverer.Store). One that succeeded ends its environment, keeping its last inventory as its history, unless a newer
+// delivery of it waits, as its branch came back: that environment then holds nothing and has no revision. Holding the
+// queue, it sees the delivery of a push that brought the branch back, or ends first and that push makes a new
+// environment. One that failed leaves the environment holding remaining, Out of sync, for the schedule to tear down
+// again.
 func (s *DeliveryStore) EndTeardown(ctx context.Context, t deliverer.Teardown, remaining []deliverer.Object, state code.DeliveryState,
 	reason string) error {
 	envID := t.Environment.ID
 	return transact(ctx, s.pool, s.q, "ending the teardown", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.LockDeliveryQueue(ctx, t.RepoID); err != nil {
+			return fmt.Errorf("locking the repository's deliveries: %w", err)
+		}
 		if _, err := q.FinishDelivery(ctx, string(state), reason, t.ID); errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		} else if err != nil {
