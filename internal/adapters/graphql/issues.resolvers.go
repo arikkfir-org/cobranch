@@ -121,6 +121,56 @@ func (r *mutationResolver) LinkBranch(ctx context.Context, organizationID string
 	return branchIssue(link), nil
 }
 
+// CreateLabel is the resolver for the createLabel field.
+func (r *mutationResolver) CreateLabel(ctx context.Context, organizationID string, input LabelInput) (*Label, error) {
+	v, orgID, err := issueOrg(ctx, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	in := issues.LabelInput{Name: input.Name}
+	if input.Color != nil {
+		in.Color = colorOf(*input.Color)
+	}
+	if input.Description != nil {
+		in.Description = *input.Description
+	}
+	created, err := r.IssueService.CreateLabel(ctx, v, orgID, in)
+	if err != nil {
+		return nil, issueFail(ctx, err, "creating the label")
+	}
+	return labelOf(created), nil
+}
+
+// UpdateLabel is the resolver for the updateLabel field.
+func (r *mutationResolver) UpdateLabel(ctx context.Context, organizationID string, id string, input LabelPatch, expectedVersion *int) (*Label, error) {
+	v, orgID, labelID, version, err := labelOrg(ctx, organizationID, id, expectedVersion)
+	if err != nil {
+		return nil, err
+	}
+	p := issues.LabelPatch{Name: input.Name, Description: input.Description, Version: version}
+	if input.Color != nil {
+		c := colorOf(*input.Color)
+		p.Color = &c
+	}
+	updated, err := r.IssueService.UpdateLabel(ctx, v, orgID, labelID, p)
+	if err != nil {
+		return nil, issueFail(ctx, err, "changing the label")
+	}
+	return labelOf(updated), nil
+}
+
+// DeleteLabel is the resolver for the deleteLabel field.
+func (r *mutationResolver) DeleteLabel(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error) {
+	v, orgID, labelID, version, err := labelOrg(ctx, organizationID, id, expectedVersion)
+	if err != nil {
+		return false, err
+	}
+	if err := r.IssueService.DeleteLabel(ctx, v, orgID, labelID, version); err != nil {
+		return false, issueFail(ctx, err, "deleting the label")
+	}
+	return true, nil
+}
+
 // UnlinkBranch is the resolver for the unlinkBranch field.
 func (r *mutationResolver) UnlinkBranch(ctx context.Context, organizationID string, repositoryID string, branch string) (bool, error) {
 	v, orgID, err := issueOrg(ctx, organizationID)
@@ -172,6 +222,19 @@ func (r *organizationResolver) Issue(ctx context.Context, obj *Organization, num
 		return nil, issueFail(ctx, err, "reading the issue")
 	}
 	return issueOf(issue), nil
+}
+
+// Labels is the resolver for the labels field.
+func (r *organizationResolver) Labels(ctx context.Context, obj *Organization) ([]*Label, error) {
+	v, orgID, err := issueOrg(ctx, obj.ID)
+	if err != nil {
+		return nil, err
+	}
+	labels, err := r.IssueService.Labels(ctx, v, orgID)
+	if err != nil {
+		return nil, issueFail(ctx, err, "listing the labels")
+	}
+	return mapAll(labels, labelOf), nil
 }
 
 // Issue returns IssueResolver implementation.

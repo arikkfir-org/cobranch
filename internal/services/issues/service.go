@@ -48,6 +48,7 @@ type Store interface {
 	Branches(ctx context.Context, issueID uuid.UUID) ([]LinkedBranch, error)
 	// Branch finds a live branch of the organization's repository by name, with its link, or ErrBranchNotFound.
 	Branch(ctx context.Context, orgID, repoID uuid.UUID, name string) (Branch, error)
+	LabelStore
 	// Link links a live branch to an issue by hand, or unlinks it by hand for nil, in place of the issue it works on
 	// when the change applies, which may differ from branch's: it records event issue.branch_unlinked on that one and
 	// issue.branch_linked on this one, and moves this one from a state of StartsFrom to In progress, recording
@@ -64,7 +65,7 @@ const (
 	PermRead = "issues.read"
 	// PermWrite creates issues and changes any of their fields.
 	PermWrite = "issues.write"
-	// PermManage deletes issues.
+	// PermManage deletes issues, and manages the organization's labels.
 	PermManage = "issues.manage"
 )
 
@@ -72,6 +73,7 @@ const (
 // first.
 type Service struct {
 	store    Store
+	labels   LabelStore
 	markdown Renderer
 	authz    *auth.Authorizer
 	now      func() time.Time
@@ -80,7 +82,7 @@ type Service struct {
 // NewService returns a Service over store, rendering descriptions with markdown and checking permissions with authz.
 // Without markdown, a description answers as text alone.
 func NewService(store Store, markdown Renderer, authz *auth.Authorizer) *Service {
-	return &Service{store: store, markdown: markdown, authz: authz, now: time.Now}
+	return &Service{store: store, labels: store, markdown: markdown, authz: authz, now: time.Now}
 }
 
 // SetClock makes the service read the time from now: for tests.
@@ -160,7 +162,10 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter)
 
 // query is f as the store runs it, or a *orgs.ValidationError.
 func query(f Filter) (Query, error) {
-	q := Query{States: f.States, AssigneeID: f.AssigneeID, RepositoryID: f.RepositoryID, Limit: f.Limit}
+	q := Query{States: f.States, AssigneeID: f.AssigneeID, RepositoryID: f.RepositoryID, LabelIDs: distinct(f.LabelIDs), Limit: f.Limit}
+	if len(q.LabelIDs) > MaxIssueLabels {
+		return Query{}, &orgs.ValidationError{Field: "label", Code: "label.invalid", Message: "at most 20 labels"}
+	}
 	if len(q.States) == 0 {
 		q.States = OpenStates
 	}
@@ -267,6 +272,9 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID uuid.UUID, in Inpu
 	if issue.Repository, err = s.repository(ctx, v, orgID, in.RepositoryID); err != nil {
 		return Issue{}, failed(span, "creating the issue", err)
 	}
+	if issue.Labels, err = s.issueLabels(ctx, orgID, in.LabelIDs); err != nil {
+		return Issue{}, failed(span, "creating the issue", err)
+	}
 	created, err := s.store.Create(ctx, v.ID, issue)
 	if err != nil {
 		return Issue{}, failed(span, "creating the issue", err)
@@ -321,7 +329,8 @@ func failed(span trace.Span, what string, err error) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, ErrNotFound), errors.Is(err, orgs.ErrNotFound), errors.Is(err, ErrChanged), errors.As(err, &verr),
-		errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrBranchNotFound):
+		errors.Is(err, auth.ErrForbidden), errors.Is(err, ErrBranchNotFound), errors.Is(err, ErrLabelNotFound), errors.Is(err, ErrLabelChanged),
+		errors.Is(err, ErrLabelTaken):
 		return err
 	}
 	span.RecordError(err)
@@ -334,7 +343,8 @@ func wrap(what string, err error) error {
 	switch {
 	case err == nil:
 		return nil
-	case errors.Is(err, ErrNotFound), errors.Is(err, ErrChanged), errors.Is(err, ErrBranchNotFound):
+	case errors.Is(err, ErrNotFound), errors.Is(err, ErrChanged), errors.Is(err, ErrBranchNotFound), errors.Is(err, ErrLabelNotFound),
+		errors.Is(err, ErrLabelChanged), errors.Is(err, ErrLabelTaken):
 		return err
 	}
 	return fmt.Errorf("%s: %w", what, err)

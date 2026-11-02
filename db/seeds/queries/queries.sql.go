@@ -192,12 +192,44 @@ func (q *Queries) InsertSeedIssue(ctx context.Context, arg InsertSeedIssueParams
 	return err
 }
 
+const insertSeedIssueLabel = `-- name: InsertSeedIssueLabel :exec
+INSERT INTO issue_labels (issue_id, label_id) VALUES ($1, $2)
+`
+
+func (q *Queries) InsertSeedIssueLabel(ctx context.Context, issueID uuid.UUID, labelID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, insertSeedIssueLabel, issueID, labelID)
+	return err
+}
+
 const insertSeedIssueNumber = `-- name: InsertSeedIssueNumber :exec
 INSERT INTO issue_numbers (org_id, last) VALUES ($1, $2)
 `
 
 func (q *Queries) InsertSeedIssueNumber(ctx context.Context, orgID uuid.UUID, last int32) error {
 	_, err := q.db.ExecContext(ctx, insertSeedIssueNumber, orgID, last)
+	return err
+}
+
+const insertSeedLabel = `-- name: InsertSeedLabel :exec
+INSERT INTO labels (id, org_id, name, color, description) VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertSeedLabelParams struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Color       string
+	Description string
+}
+
+func (q *Queries) InsertSeedLabel(ctx context.Context, arg InsertSeedLabelParams) error {
+	_, err := q.db.ExecContext(ctx, insertSeedLabel,
+		arg.ID,
+		arg.OrgID,
+		arg.Name,
+		arg.Color,
+		arg.Description,
+	)
 	return err
 }
 
