@@ -43,7 +43,7 @@ whenever it runs the Git server.
 - **The internal call arrives.** The [architecture](architecture.md#components) planned it: the REST and GraphQL servers
   ask the Git server over plain HTTP with JSON, on a port of its own that no route names. This slice builds it, for
   trees, blobs and history walks; merges through the API ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)) use it
-  too ([by asking Cobranch](branch-status.md#by-asking-cobranch)).
+  too ([by asking Cobranch](branch-status.md#by-asking-cobranch)), and so do reviews' diffs ([diffs](reviews.md#diffs)).
 - **The Git server reads; the API servers decide.** The internal call takes a repository's ID, a ref and a path, and
   answers what Git holds there. The REST and GraphQL servers check `repo.read` first, pick a directory's README, render
   Markdown and add PostgreSQL's commits and principals. The Git server checks the viewer too: its callers send on the
@@ -61,6 +61,7 @@ whenever it runs the Git server.
 | `GET /internal/v1/repos/{id}/raw?ref=&path=` | The blob's bytes, streamed, with its commit and object in headers |
 | `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=` | The commits reachable from the ref, every parent followed, in `git rev-list --date-order`: each one's name and its parents' |
 | `POST /internal/v1/repos/{id}/merge` | Merges a branch into its base for its requester, by a merge commit or a fast-forward, recorded as a push ([by asking Cobranch](branch-status.md#by-asking-cobranch)) |
+| `GET /internal/v1/repos/{id}/diff?ref=&base=&mergeBase=` | The change from the base (or the merge base of the base and the ref, or the empty tree without a base) to the ref: its files, their counts and hunks, up to a diff's limits. Added with reviews ([diffs](reviews.md#diffs)) |
 
 - **Its own port and Service.** The Git server listens on `8081` beside Git's `8080`, behind a Service of its own,
   `<release>-git-server-internal`; routes name only `<release>-git-server`, so nothing outside reaches it. The REST and
@@ -294,7 +295,7 @@ Nothing of an installation is in the product: the chart wires the internal call 
 | History follows every parent by default in the Console, with a graph; `parents=first` keeps today's walk | A merge's second line shows; first parent stays one switch away | Agreed (owner, 2026-11-01) |
 | A demo installation's Job pushes a history to the demo organization's website: directories, Markdown, an image, a symlink, merges, a tag and an open branch | A preview shows every page of this slice at once, through the push path anyone takes | Agreed (owner, 2026-11-01) |
 | Raw bytes at the full name of their commit are cached as immutable; everything else is `private, no-cache` | A README's images load once; the house rules' default stays for whatever can change | Agreed (owner, 2026-11-01) |
-| Syntax colouring, each entry's last commit, blame, a file's history, diffs, a setting that turns images from elsewhere off and code search come later | Keeps this slice to its issue | Agreed (owner, 2026-11-01) |
+| Syntax colouring, each entry's last commit, blame, a file's history, diffs (since built by [reviews](reviews.md#diffs)), a setting that turns images from elsewhere off and code search come later | Keeps this slice to its issue | Agreed (owner, 2026-11-01) |
 
 ## Open questions
 

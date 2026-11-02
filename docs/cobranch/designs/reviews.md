@@ -225,8 +225,10 @@ adds them to it.
 - **Built by the Git server** on code browsing's internal call, in a throwaway repository of one snapshot: `git diff`
   with renames found, each file's status, its old and new paths, and its hunks.
 - **Up to limits:** 3,000 files, and 20,000 lines in all, past which the answer says what it left out; a file past 5,000
-  lines or with a line past 64 KiB, or binary, is listed with its counts but without hunks. An answer's ETag is the pair
-  of commits, which never change, so a client revalidates rather than reads it again.
+  lines or with a line past 64 KiB, or binary, is listed with its counts but without hunks. The limits bound the Git
+  server's work as well as the answer: it reads `git diff`'s listing of files as Git prints it, only as far as the files
+  it lists while counting the rest, and the patch only as far as the limits. An answer's ETag is the pair of commits,
+  which never change, so a client revalidates rather than reads it again.
 
 ## Jobs on reviews
 
