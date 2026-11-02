@@ -515,6 +515,36 @@ func (e RunTriggerKind) Valid() bool {
 	}
 }
 
+// Defines values for TaskState.
+const (
+	TaskStateCancelled TaskState = "cancelled"
+	TaskStateFailed    TaskState = "failed"
+	TaskStateQueued    TaskState = "queued"
+	TaskStateRunning   TaskState = "running"
+	TaskStateSucceeded TaskState = "succeeded"
+	TaskStateWaiting   TaskState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the TaskState enum.
+func (e TaskState) Valid() bool {
+	switch e {
+	case TaskStateCancelled:
+		return true
+	case TaskStateFailed:
+		return true
+	case TaskStateQueued:
+		return true
+	case TaskStateRunning:
+		return true
+	case TaskStateSucceeded:
+		return true
+	case TaskStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for TreeEntryKind.
 const (
 	TreeEntryKindBlob      TreeEntryKind = "blob"
@@ -585,6 +615,68 @@ func (e ListBuiltInRolesParamsScope) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// Agent One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
+type Agent struct {
+	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
+	BuiltIn   bool      `json:"builtIn"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CreatedBy   *Principal `json:"createdBy,omitempty"`
+	Description string     `json:"description"`
+
+	// Grants The roles it holds, those at the organization first.
+	Grants []AgentGrant `json:"grants"`
+
+	// Id Its principal's ID.
+	Id openapi_types.UUID `json:"id"`
+
+	// Instructions The standing instructions, in Markdown, that every task of it starts from.
+	Instructions string    `json:"instructions"`
+	Name         string    `json:"name"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its creator's and its repositories' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// AgentGrant A role an agent holds, at its organization or, with a repository, on that repository.
+type AgentGrant struct {
+	// RepositoryId The repository it holds the role on; absent at the organization.
+	RepositoryId   *openapi_types.UUID `json:"repositoryId,omitempty"`
+	RepositorySlug *string             `json:"repositorySlug,omitempty"`
+	RoleId         openapi_types.UUID  `json:"roleId"`
+	RoleName       string              `json:"roleName"`
+}
+
+// AgentGrantInput A role a new agent starts with, at the organization or, with a repository, on that repository.
+type AgentGrantInput struct {
+	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
+	RoleId       openapi_types.UUID  `json:"roleId"`
+}
+
+// AgentInput A new agent.
+type AgentInput struct {
+	// Description At most 1000 characters.
+	Description *string `json:"description,omitempty"`
+
+	// Grants At most 20, each one the creator holds every permission of where it applies.
+	Grants *[]AgentGrantInput `json:"grants,omitempty"`
+
+	// Instructions At most 20000 characters of Markdown.
+	Instructions *string `json:"instructions,omitempty"`
+
+	// Name 1 to 100 characters, unique in the organization in any case.
+	Name string `json:"name"`
+}
+
+// AgentPatch What changes about an agent; a field left out keeps its value.
+type AgentPatch struct {
+	Description  *string `json:"description,omitempty"`
+	Instructions *string `json:"instructions,omitempty"`
+	Name         *string `json:"name,omitempty"`
 }
 
 // Annotation A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -1611,6 +1703,73 @@ type Tag struct {
 	Target string `json:"target"`
 }
 
+// Task A task of one of the organization's agents, which the organization numbers.
+type Task struct {
+	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	Agent Principal `json:"agent"`
+
+	// AssignedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	AssignedBy *Principal `json:"assignedBy,omitempty"`
+	Branch     *string    `json:"branch,omitempty"`
+
+	// BranchId The branch of that repository it works on; absent for none.
+	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
+
+	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
+	CancelledBy  *Principal         `json:"cancelledBy,omitempty"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	EndedAt      *time.Time         `json:"endedAt,omitempty"`
+	Id           openapi_types.UUID `json:"id"`
+	Instructions string             `json:"instructions"`
+
+	// Kind What it is for; assigned for a task a principal assigned.
+	Kind string `json:"kind"`
+
+	// Number Counts the organization's tasks from 1.
+	Number int64 `json:"number"`
+
+	// Reason Why it failed or was cancelled; empty otherwise.
+	Reason string `json:"reason"`
+
+	// RepositoryId The repository it works in; absent for none.
+	RepositoryId   *openapi_types.UUID `json:"repositoryId,omitempty"`
+	RepositorySlug *string             `json:"repositorySlug,omitempty"`
+	StartedAt      *time.Time          `json:"startedAt,omitempty"`
+
+	// State Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+	State TaskState `json:"state"`
+
+	// Summary What the agent said it did, once it ended.
+	Summary string `json:"summary"`
+
+	// ThreadId The thread of that branch's chat it talks in; absent for none.
+	ThreadId *openapi_types.UUID `json:"threadId,omitempty"`
+	Title    string              `json:"title"`
+
+	// Version Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its people's, its agent's and its repository's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+	Version int64 `json:"version"`
+}
+
+// TaskInput A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a thread of that branch's chat.
+type TaskInput struct {
+	AgentId openapi_types.UUID `json:"agentId"`
+
+	// Branch The branch's name, without refs/heads/, when branchId doesn't name it.
+	Branch   *string             `json:"branch,omitempty"`
+	BranchId *openapi_types.UUID `json:"branchId,omitempty"`
+
+	// Instructions At most 20000 characters of Markdown.
+	Instructions *string             `json:"instructions,omitempty"`
+	RepositoryId *openapi_types.UUID `json:"repositoryId,omitempty"`
+	ThreadId     *openapi_types.UUID `json:"threadId,omitempty"`
+
+	// Title 1 to 200 characters.
+	Title string `json:"title"`
+}
+
+// TaskState Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+type TaskState string
+
 // Tree A directory at a commit.
 type Tree struct {
 	// Commit The commit the ref resolved to, which every link to the directory's files may pin.
@@ -1671,6 +1830,9 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// AgentID defines model for agent.
+type AgentID = openapi_types.UUID
+
 // Name defines model for annotation.
 type Name = string
 
@@ -1679,6 +1841,9 @@ type BranchName = string
 
 // Id defines model for id.
 type Id = openapi_types.UUID
+
+// IfMatchAgent defines model for ifMatchAgent.
+type IfMatchAgent = string
 
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
@@ -1691,6 +1856,9 @@ type IfMatchChat = string
 
 // IfMatchIssue defines model for ifMatchIssue.
 type IfMatchIssue = string
+
+// IfMatchTask defines model for ifMatchTask.
+type IfMatchTask = string
 
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
@@ -1734,6 +1902,9 @@ type SecretID = openapi_types.UUID
 // SHA defines model for sha.
 type SHA = string
 
+// TaskNumber defines model for taskNumber.
+type TaskNumber = int64
+
 // ThreadID defines model for thread.
 type ThreadID = openapi_types.UUID
 
@@ -1746,6 +1917,24 @@ type CreateOrganizationJSONBody struct {
 
 	// Slug 2 to 39 lowercase letters, digits and single hyphens, unique among organizations and their old slugs.
 	Slug string `json:"slug"`
+}
+
+// DeleteAgentParams defines parameters for DeleteAgent.
+type DeleteAgentParams struct {
+	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
+}
+
+// GetAgentParams defines parameters for GetAgent.
+type GetAgentParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateAgentParams defines parameters for UpdateAgent.
+type UpdateAgentParams struct {
+	// IfMatch The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+	IfMatch *IfMatchAgent `json:"If-Match,omitempty"`
 }
 
 // InviteJSONBody defines parameters for Invite.
@@ -1967,6 +2156,36 @@ type GetTreeParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// ListTasksParams defines parameters for ListTasks.
+type ListTasksParams struct {
+	// AgentID Only this agent's tasks, by its ID.
+	AgentID *openapi_types.UUID `form:"agent,omitempty" json:"agent,omitempty"`
+
+	// State Only the tasks in these states.
+	State *[]TaskState `form:"state,omitempty" json:"state,omitempty"`
+
+	// RepositoryID Only the tasks that work in this repository, by its ID.
+	RepositoryID *openapi_types.UUID `form:"repositoryId,omitempty" json:"repositoryId,omitempty"`
+
+	// Cursor Where the page starts, as the previous page's Link names it; the newest task when left out. Opaque.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// Limit How many tasks the page holds at most.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetTaskParams defines parameters for GetTask.
+type GetTaskParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// CancelTaskParams defines parameters for CancelTask.
+type CancelTaskParams struct {
+	// IfMatch The ETag of the task the change was made from, which refuses with 412 one made meanwhile; * or none names whichever is there.
+	IfMatch *IfMatchTask `json:"If-Match,omitempty"`
+}
+
 // ListPermissionsParams defines parameters for ListPermissions.
 type ListPermissionsParams struct {
 	Scope ListPermissionsParamsScope `form:"scope" json:"scope"`
@@ -1994,6 +2213,12 @@ type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 
 // UpdateOrganizationJSONRequestBody defines body for UpdateOrganization for application/json ContentType.
 type UpdateOrganizationJSONRequestBody = OrganizationSettings
+
+// CreateAgentJSONRequestBody defines body for CreateAgent for application/json ContentType.
+type CreateAgentJSONRequestBody = AgentInput
+
+// UpdateAgentApplicationMergePatchPlusJSONRequestBody defines body for UpdateAgent for application/merge-patch+json ContentType.
+type UpdateAgentApplicationMergePatchPlusJSONRequestBody = AgentPatch
 
 // CreateAPIKeyJSONRequestBody defines body for CreateAPIKey for application/json ContentType.
 type CreateAPIKeyJSONRequestBody = ApiKeyInput
@@ -2055,6 +2280,9 @@ type CreateRoleJSONRequestBody = RoleInput
 // UpdateRoleJSONRequestBody defines body for UpdateRole for application/json ContentType.
 type UpdateRoleJSONRequestBody = RoleChanges
 
+// AssignTaskJSONRequestBody defines body for AssignTask for application/json ContentType.
+type AssignTaskJSONRequestBody = TaskInput
+
 // ReportPageViewsJSONRequestBody defines body for ReportPageViews for application/json ContentType.
 type ReportPageViewsJSONRequestBody = PageViews
 
@@ -2111,6 +2339,21 @@ type ServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(w http.ResponseWriter, r *http.Request, org Org)
+	// ListAgents The organization's agents by name, each with its grants; takes org.read.
+	// (GET /orgs/{org}/agents)
+	ListAgents(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
+	// (POST /orgs/{org}/agents)
+	CreateAgent(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/agents/{agent})
+	DeleteAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params DeleteAgentParams)
+	// GetAgent One of the organization's agents, with its grants; takes org.read.
+	// (GET /orgs/{org}/agents/{agent})
+	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params GetAgentParams)
+	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/agents/{agent})
+	UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
 	// (GET /orgs/{org}/api-keys)
 	ListAPIKeys(w http.ResponseWriter, r *http.Request, org Org)
@@ -2306,6 +2549,18 @@ type ServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(w http.ResponseWriter, r *http.Request, org Org, roleID RoleID)
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// (GET /orgs/{org}/tasks)
+	ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams)
+	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
+	// (POST /orgs/{org}/tasks)
+	AssignTask(w http.ResponseWriter, r *http.Request, org Org)
+	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// (GET /orgs/{org}/tasks/{number})
+	GetTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params GetTaskParams)
+	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
+	// (POST /orgs/{org}/tasks/{number}/cancel)
+	CancelTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params CancelTaskParams)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
 	// (POST /page-views)
 	ReportPageViews(w http.ResponseWriter, r *http.Request)
@@ -2644,6 +2899,235 @@ func (siw *ServerInterfaceWrapper) UpdateOrganization(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOrganization(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgent(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteAgentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAgent
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgent(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetAgentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, org, agentID, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgent operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentID AgentID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateAgentParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchAgent
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgent(w, r, org, agentID, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -5893,6 +6377,244 @@ func (siw *ServerInterfaceWrapper) UpdateRole(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// ListTasks operation middleware
+func (siw *ServerInterfaceWrapper) ListTasks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTasksParams
+
+	// ------------- Optional query parameter "agent" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "agent", r.URL.Query(), &params.AgentID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "agent"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "state" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "state", r.URL.Query(), &params.State, runtime.BindQueryParameterOptions{Type: "array", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "state"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "state", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "repositoryId" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "repositoryId", r.URL.Query(), &params.RepositoryID, runtime.BindQueryParameterOptions{Type: "string", Format: "uuid"})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "repositoryId"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repositoryId", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "cursor", r.URL.Query(), &params.Cursor, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "cursor"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", r.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "limit"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		}
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTasks(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AssignTask operation middleware
+func (siw *ServerInterfaceWrapper) AssignTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AssignTask(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTask operation middleware
+func (siw *ServerInterfaceWrapper) GetTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number TaskNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTaskParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTask(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CancelTask operation middleware
+func (siw *ServerInterfaceWrapper) CancelTask(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number TaskNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CancelTaskParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchTask
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelTask(w, r, org, number, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReportPageViews operation middleware
 func (siw *ServerInterfaceWrapper) ReportPageViews(w http.ResponseWriter, r *http.Request) {
 
@@ -6149,6 +6871,15 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests", wrapper.RequestToJoin)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/approve", wrapper.ApproveJoinRequest)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/join-requests/{id}/decline", wrapper.DeclineJoinRequest)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.CreateAgent)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.DeleteAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.UpdateAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.ListTasks)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks", wrapper.AssignTask)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/tasks/{number}", wrapper.GetTask)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/tasks/{number}/cancel", wrapper.CancelTask)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.ListIssues)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/issues", wrapper.CreateIssue)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/issues/{number}", wrapper.DeleteIssue)
@@ -7371,6 +8102,563 @@ type UpdateOrganizationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response UpdateOrganizationdefaultApplicationProblemPlusJSONResponse) VisitUpdateOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentsRequestObject struct {
+	Org Org `json:"org"`
+}
+
+type ListAgentsResponseObject interface {
+	VisitListAgentsResponse(w http.ResponseWriter) error
+}
+
+type ListAgents200JSONResponse struct {
+	Agents []Agent `json:"agents"`
+}
+
+func (response ListAgents200JSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgents401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListAgents401ApplicationProblemPlusJSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgents404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListAgents404ApplicationProblemPlusJSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListAgentsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListAgentsdefaultApplicationProblemPlusJSONResponse) VisitListAgentsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentRequestObject struct {
+	Org  Org `json:"org"`
+	Body *CreateAgentJSONRequestBody
+}
+
+type CreateAgentResponseObject interface {
+	VisitCreateAgentResponse(w http.ResponseWriter) error
+}
+
+type CreateAgent201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type CreateAgent201JSONResponse struct {
+	Body    Agent
+	Headers CreateAgent201ResponseHeaders
+}
+
+func (response CreateAgent201JSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgent400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CreateAgent400ApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgent401ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAgent401ApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgent403ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAgent403ApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgent404ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAgent404ApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgent409ApplicationProblemPlusJSONResponse Problem
+
+func (response CreateAgent409ApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CreateAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CreateAgentdefaultApplicationProblemPlusJSONResponse) VisitCreateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  DeleteAgentParams
+}
+
+type DeleteAgentResponseObject interface {
+	VisitDeleteAgentResponse(w http.ResponseWriter) error
+}
+
+type DeleteAgent204Response struct {
+}
+
+func (response DeleteAgent204Response) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteAgent401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteAgent401ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgent403ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgent404ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgent409ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgent412ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgent428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteAgent428ApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteAgentdefaultApplicationProblemPlusJSONResponse) VisitDeleteAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  GetAgentParams
+}
+
+type GetAgentResponseObject interface {
+	VisitGetAgentResponse(w http.ResponseWriter) error
+}
+
+type GetAgent200ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgent200JSONResponse struct {
+	Body    Agent
+	Headers GetAgent200ResponseHeaders
+}
+
+func (response GetAgent200JSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgent304ResponseHeaders struct {
+	ETag string
+}
+
+type GetAgent304Response struct {
+	Headers GetAgent304ResponseHeaders
+}
+
+func (response GetAgent304Response) VisitGetAgentResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetAgent401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetAgent401ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgent404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetAgent404ApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetAgentdefaultApplicationProblemPlusJSONResponse) VisitGetAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentRequestObject struct {
+	Org     Org     `json:"org"`
+	AgentID AgentID `json:"agent"`
+	Params  UpdateAgentParams
+	Body    *UpdateAgentApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateAgentResponseObject interface {
+	VisitUpdateAgentResponse(w http.ResponseWriter) error
+}
+
+type UpdateAgent200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateAgent200JSONResponse struct {
+	Body    Agent
+	Headers UpdateAgent200ResponseHeaders
+}
+
+func (response UpdateAgent200JSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateAgent400ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent401ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent403ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent404ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent409ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent409ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent412ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgent428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateAgent428ApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateAgentdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateAgentdefaultApplicationProblemPlusJSONResponse) VisitUpdateAgentResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -13912,6 +15200,424 @@ func (response UpdateRoledefaultApplicationProblemPlusJSONResponse) VisitUpdateR
 	return err
 }
 
+type ListTasksRequestObject struct {
+	Org    Org `json:"org"`
+	Params ListTasksParams
+}
+
+type ListTasksResponseObject interface {
+	VisitListTasksResponse(w http.ResponseWriter) error
+}
+
+type ListTasks200ResponseHeaders struct {
+	Link *string
+}
+
+type ListTasks200JSONResponse struct {
+	Body struct {
+		Tasks []Task `json:"tasks"`
+	}
+	Headers ListTasks200ResponseHeaders
+}
+
+func (response ListTasks200JSONResponse) VisitListTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if response.Headers.Link != nil {
+		w.Header().Set("Link", fmt.Sprint(*response.Headers.Link))
+	}
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTasks400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ListTasks400ApplicationProblemPlusJSONResponse) VisitListTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTasks401ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTasks401ApplicationProblemPlusJSONResponse) VisitListTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTasks404ApplicationProblemPlusJSONResponse Problem
+
+func (response ListTasks404ApplicationProblemPlusJSONResponse) VisitListTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ListTasksdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ListTasksdefaultApplicationProblemPlusJSONResponse) VisitListTasksResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTaskRequestObject struct {
+	Org  Org `json:"org"`
+	Body *AssignTaskJSONRequestBody
+}
+
+type AssignTaskResponseObject interface {
+	VisitAssignTaskResponse(w http.ResponseWriter) error
+}
+
+type AssignTask201ResponseHeaders struct {
+	ETag     string
+	Location string
+}
+
+type AssignTask201JSONResponse struct {
+	Body    Task
+	Headers AssignTask201ResponseHeaders
+}
+
+func (response AssignTask201JSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.Header().Set("Location", fmt.Sprint(response.Headers.Location))
+	w.WriteHeader(201)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTask400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response AssignTask400ApplicationProblemPlusJSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTask401ApplicationProblemPlusJSONResponse Problem
+
+func (response AssignTask401ApplicationProblemPlusJSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response AssignTask403ApplicationProblemPlusJSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response AssignTask404ApplicationProblemPlusJSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type AssignTaskdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response AssignTaskdefaultApplicationProblemPlusJSONResponse) VisitAssignTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTaskRequestObject struct {
+	Org    Org        `json:"org"`
+	Number TaskNumber `json:"number"`
+	Params GetTaskParams
+}
+
+type GetTaskResponseObject interface {
+	VisitGetTaskResponse(w http.ResponseWriter) error
+}
+
+type GetTask200ResponseHeaders struct {
+	ETag string
+}
+
+type GetTask200JSONResponse struct {
+	Body    Task
+	Headers GetTask200ResponseHeaders
+}
+
+func (response GetTask200JSONResponse) VisitGetTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTask304ResponseHeaders struct {
+	ETag string
+}
+
+type GetTask304Response struct {
+	Headers GetTask304ResponseHeaders
+}
+
+func (response GetTask304Response) VisitGetTaskResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetTask401ApplicationProblemPlusJSONResponse) VisitGetTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTask404ApplicationProblemPlusJSONResponse) VisitGetTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTaskdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTaskdefaultApplicationProblemPlusJSONResponse) VisitGetTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTaskRequestObject struct {
+	Org    Org        `json:"org"`
+	Number TaskNumber `json:"number"`
+	Params CancelTaskParams
+}
+
+type CancelTaskResponseObject interface {
+	VisitCancelTaskResponse(w http.ResponseWriter) error
+}
+
+type CancelTask200ResponseHeaders struct {
+	ETag string
+}
+
+type CancelTask200JSONResponse struct {
+	Body    Task
+	Headers CancelTask200ResponseHeaders
+}
+
+func (response CancelTask200JSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTask401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response CancelTask401ApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTask403ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelTask403ApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTask404ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelTask404ApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTask409ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelTask409ApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTask412ApplicationProblemPlusJSONResponse Problem
+
+func (response CancelTask412ApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type CancelTaskdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response CancelTaskdefaultApplicationProblemPlusJSONResponse) VisitCancelTaskResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ReportPageViewsRequestObject struct {
 	Body *ReportPageViewsJSONRequestBody
 }
@@ -14180,6 +15886,21 @@ type StrictServerInterface interface {
 	// UpdateOrganization Changes an organization's name, slug or settings, its issue key among them; takes org.manage.
 	// (PATCH /orgs/{org})
 	UpdateOrganization(ctx context.Context, request UpdateOrganizationRequestObject) (UpdateOrganizationResponseObject, error)
+	// ListAgents The organization's agents by name, each with its grants; takes org.read.
+	// (GET /orgs/{org}/agents)
+	ListAgents(ctx context.Context, request ListAgentsRequestObject) (ListAgentsResponseObject, error)
+	// CreateAgent Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, answers 409 agent.name_taken.
+	// (POST /orgs/{org}/agents)
+	CreateAgent(ctx context.Context, request CreateAgentRequestObject) (CreateAgentResponseObject, error)
+	// DeleteAgent Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in If-Match; without it, the answer is 428.
+	// (DELETE /orgs/{org}/agents/{agent})
+	DeleteAgent(ctx context.Context, request DeleteAgentRequestObject) (DeleteAgentResponseObject, error)
+	// GetAgent One of the organization's agents, with its grants; takes org.read.
+	// (GET /orgs/{org}/agents/{agent})
+	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
+	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// (PATCH /orgs/{org}/agents/{agent})
+	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
 	// ListAPIKeys The organization's API keys, with their roles and secrets, by name; takes org.read.
 	// (GET /orgs/{org}/api-keys)
 	ListAPIKeys(ctx context.Context, request ListAPIKeysRequestObject) (ListAPIKeysResponseObject, error)
@@ -14375,6 +16096,18 @@ type StrictServerInterface interface {
 	// UpdateRole Redefines a custom role, and with it every grant of it; takes org.grants.manage and every permission it listed or lists.
 	// (PATCH /orgs/{org}/roles/{role})
 	UpdateRole(ctx context.Context, request UpdateRoleRequestObject) (UpdateRoleResponseObject, error)
+	// ListTasks A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read; takes org.read.
+	// (GET /orgs/{org}/tasks)
+	ListTasks(ctx context.Context, request ListTasksRequestObject) (ListTasksResponseObject, error)
+	// AssignTask Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks.
+	// (POST /orgs/{org}/tasks)
+	AssignTask(ctx context.Context, request AssignTaskRequestObject) (AssignTaskResponseObject, error)
+	// GetTask One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+	// (GET /orgs/{org}/tasks/{number})
+	GetTask(ctx context.Context, request GetTaskRequestObject) (GetTaskResponseObject, error)
+	// CancelTask Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage. A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
+	// (POST /orgs/{org}/tasks/{number}/cancel)
+	CancelTask(ctx context.Context, request CancelTaskRequestObject) (CancelTaskResponseObject, error)
 	// ReportPageViews Reports how long Console pages took to show and how many Git reads each took, for the installation's metrics (cobranch.console.page.duration and cobranch.console.page.git.reads). Takes no credential: the sign-in page reports too. Records nothing about who viewed what.
 	// (POST /page-views)
 	ReportPageViews(ctx context.Context, request ReportPageViewsRequestObject) (ReportPageViewsResponseObject, error)
@@ -14873,6 +16606,156 @@ func (sh *strictHandler) UpdateOrganization(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateOrganizationResponseObject); ok {
 		if err := validResponse.VisitUpdateOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListAgents operation middleware
+func (sh *strictHandler) ListAgents(w http.ResponseWriter, r *http.Request, org Org) {
+	var request ListAgentsRequestObject
+
+	request.Org = org
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListAgents(ctx, request.(ListAgentsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListAgents")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListAgentsResponseObject); ok {
+		if err := validResponse.VisitListAgentsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CreateAgent operation middleware
+func (sh *strictHandler) CreateAgent(w http.ResponseWriter, r *http.Request, org Org) {
+	var request CreateAgentRequestObject
+
+	request.Org = org
+
+	var body CreateAgentJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CreateAgent(ctx, request.(CreateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CreateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CreateAgentResponseObject); ok {
+		if err := validResponse.VisitCreateAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteAgent operation middleware
+func (sh *strictHandler) DeleteAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params DeleteAgentParams) {
+	var request DeleteAgentRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteAgent(ctx, request.(DeleteAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteAgentResponseObject); ok {
+		if err := validResponse.VisitDeleteAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetAgent operation middleware
+func (sh *strictHandler) GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params GetAgentParams) {
+	var request GetAgentRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetAgent(ctx, request.(GetAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetAgentResponseObject); ok {
+		if err := validResponse.VisitGetAgentResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateAgent operation middleware
+func (sh *strictHandler) UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams) {
+	var request UpdateAgentRequestObject
+
+	request.Org = org
+	request.AgentID = agentID
+	request.Params = params
+
+	var body UpdateAgentApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateAgent(ctx, request.(UpdateAgentRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateAgent")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateAgentResponseObject); ok {
+		if err := validResponse.VisitUpdateAgentResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -16822,6 +18705,122 @@ func (sh *strictHandler) UpdateRole(w http.ResponseWriter, r *http.Request, org 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(UpdateRoleResponseObject); ok {
 		if err := validResponse.VisitUpdateRoleResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListTasks operation middleware
+func (sh *strictHandler) ListTasks(w http.ResponseWriter, r *http.Request, org Org, params ListTasksParams) {
+	var request ListTasksRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListTasks(ctx, request.(ListTasksRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListTasks")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListTasksResponseObject); ok {
+		if err := validResponse.VisitListTasksResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// AssignTask operation middleware
+func (sh *strictHandler) AssignTask(w http.ResponseWriter, r *http.Request, org Org) {
+	var request AssignTaskRequestObject
+
+	request.Org = org
+
+	var body AssignTaskJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.AssignTask(ctx, request.(AssignTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "AssignTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(AssignTaskResponseObject); ok {
+		if err := validResponse.VisitAssignTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTask operation middleware
+func (sh *strictHandler) GetTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params GetTaskParams) {
+	var request GetTaskRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTask(ctx, request.(GetTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTaskResponseObject); ok {
+		if err := validResponse.VisitGetTaskResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// CancelTask operation middleware
+func (sh *strictHandler) CancelTask(w http.ResponseWriter, r *http.Request, org Org, number TaskNumber, params CancelTaskParams) {
+	var request CancelTaskRequestObject
+
+	request.Org = org
+	request.Number = number
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.CancelTask(ctx, request.(CancelTaskRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "CancelTask")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(CancelTaskResponseObject); ok {
+		if err := validResponse.VisitCancelTaskResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

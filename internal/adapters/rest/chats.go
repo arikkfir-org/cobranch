@@ -78,10 +78,10 @@ func chatUpdate(u chats.Update) ChatUpdate {
 	return out
 }
 
-// chatTag is the ETag of a thread or a message at version as body shows it, quoted: the version, then a digest of
-// body. More than its own changes shape how it reads (the branch's head, the slugs its links name, its people's
-// names), so the digest changes with any of them, and the version leads for If-Match.
-func chatTag(version int64, body any) (string, error) {
+// versionTag is the ETag of a thread, a message, an agent or a task at version as body shows it, quoted: the version,
+// then a digest of body. More than its own changes shape how it reads (a branch's head, the slugs its links name, the
+// names of its people and roles), so the digest changes with any of them, and the version leads for If-Match.
+func versionTag(version int64, body any) (string, error) {
 	shown, err := json.Marshal(body)
 	if err != nil {
 		return "", fmt.Errorf("digesting version %d: %w", version, err)
@@ -93,14 +93,14 @@ func chatTag(version int64, body any) (string, error) {
 // taggedThread is t as the API shows it, with its ETag.
 func taggedThread(t chats.Thread) (ChatThread, string, error) {
 	body := chatThread(t)
-	tag, err := chatTag(t.Version, body)
+	tag, err := versionTag(t.Version, body)
 	return body, tag, err
 }
 
 // taggedMessage is m as the API shows it, with its ETag.
 func taggedMessage(m chats.Message) (ChatMessage, string, error) {
 	body := chatMessage(m)
-	tag, err := chatTag(m.Version, body)
+	tag, err := versionTag(m.Version, body)
 	return body, tag, err
 }
 
@@ -212,7 +212,7 @@ func (a api) UpdateChatThread(ctx context.Context, req UpdateChatThreadRequestOb
 	if err != nil {
 		return nil, err
 	}
-	match, err := chatMatch(req.Params.IfMatch)
+	match, err := versionMatch(req.Params.IfMatch, chats.AnyVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +275,7 @@ func (a api) EditChatMessage(ctx context.Context, req EditChatMessageRequestObje
 	if err != nil {
 		return nil, err
 	}
-	match, err := chatMatch(req.Params.IfMatch)
+	match, err := versionMatch(req.Params.IfMatch, chats.AnyVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -296,7 +296,7 @@ func (a api) DeleteChatMessage(ctx context.Context, req DeleteChatMessageRequest
 	if err != nil {
 		return nil, err
 	}
-	match, err := chatMatch(req.Params.IfMatch)
+	match, err := versionMatch(req.Params.IfMatch, chats.AnyVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -334,17 +334,17 @@ func (a api) ListChatUpdates(ctx context.Context, req ListChatUpdatesRequestObje
 	return out, nil
 }
 
-// chatMatch is the version of a thread or a message that If-Match names, chats.AnyVersion for *: a refusal with 428
-// without the header, and with 412 for a tag that names no version, a weak one included, since If-Match compares
-// strongly. It compares the version alone: a push changes how a thread or a message reads, not what a change acts on,
-// so a change made from before one still applies.
-func chatMatch(header *string) (int64, error) {
+// versionMatch is the version of a thread, a message, an agent or a task that If-Match names, anyVersion for *: a
+// refusal with 428 without the header, and with 412 for a tag that names no version, a weak one included, since
+// If-Match compares strongly. It compares the version alone, which its ETag leads with: more than its own changes
+// shape how it reads, and a change made from before one of those still applies.
+func versionMatch(header *string, anyVersion int64) (int64, error) {
 	if header == nil || strings.TrimSpace(*header) == "" {
 		return 0, refuse(http.StatusPreconditionRequired, "precondition.required", "Name its ETag in If-Match, or * for whichever version is there.")
 	}
 	tag := strings.TrimSpace(*header)
 	if tag == "*" {
-		return chats.AnyVersion, nil
+		return anyVersion, nil
 	}
 	number, _, _ := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(tag, `"`), `"`), "-")
 	version, err := strconv.ParseInt(number, 10, 64)

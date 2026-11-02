@@ -1017,6 +1017,333 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents:
+    get:
+      operationId: listAgents
+      summary: The organization's agents by name, each with its grants; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [agents]
+                properties:
+                  agents:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Agent"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createAgent
+      summary: >-
+        Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every
+        permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case,
+        answers 409 agent.name_taken.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentInput"
+      responses:
+        "201":
+          description: The agent.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/agents/{agent}:
+    get:
+      operationId: getAgent
+      summary: One of the organization's agents, with its grants; takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The agent.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "304":
+          description: The agent is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateAgent
+      summary: >-
+        Changes an agent's name, description or standing instructions; takes being its creator, or
+        org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/AgentPatch"
+      responses:
+        "200":
+          description: The agent as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Agent"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteAgent
+      summary: >-
+        Deletes an agent with its grants and tasks; takes org.principals.manage and every permission of the roles it
+        holds where they apply. A built-in agent answers 409 agent.built_in. The deletion names the agent's ETag in
+        If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/ifMatchAgent"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/tasks:
+    get:
+      operationId: listTasks
+      summary: >-
+        A page of the organization's tasks, newest first, leaving out those on repositories the viewer doesn't read;
+        takes org.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: agent
+          in: query
+          description: Only this agent's tasks, by its ID.
+          x-go-name: AgentID
+          schema:
+            type: string
+            format: uuid
+        - name: state
+          in: query
+          description: Only the tasks in these states.
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/TaskState"
+        - name: repositoryId
+          in: query
+          description: Only the tasks that work in this repository, by its ID.
+          x-go-name: RepositoryID
+          schema:
+            type: string
+            format: uuid
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the newest task when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many tasks the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: The page's tasks, newest first.
+          headers:
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tasks]
+                properties:
+                  tasks:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: assignTask
+      summary: >-
+        Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is
+        capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the
+        repository it names. An agent assigns no tasks.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: The task, queued.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/tasks/{number}:
+    get:
+      operationId: getTask
+      summary: One of the organization's tasks by its number; takes org.read, and repo.read on the repository it names.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/taskNumber"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The task.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "304":
+          description: The task is still the version If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/tasks/{number}/cancel:
+    post:
+      operationId: cancelTask
+      summary: >-
+        Cancels one of the organization's tasks that hasn't ended; takes being its assigner, or org.principals.manage.
+        A task that has ended answers 409 task.ended; If-Match, when given, refuses with 412 a change made meanwhile.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/taskNumber"
+        - $ref: "#/components/parameters/ifMatchTask"
+      responses:
+        "200":
+          description: The task, cancelled.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/issues:
     get:
       operationId: listIssues
@@ -2764,6 +3091,36 @@ components:
       description: The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
       schema:
         type: string
+    agent:
+      name: agent
+      in: path
+      required: true
+      description: One of the organization's agents, by its principal ID.
+      x-go-name: AgentID
+      schema:
+        type: string
+        format: uuid
+    taskNumber:
+      name: number
+      in: path
+      required: true
+      description: The task's number in its organization.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    ifMatchAgent:
+      name: If-Match
+      in: header
+      description: The ETag of the agent the change was made from, which refuses with 412 one made meanwhile; * names whichever is there.
+      schema:
+        type: string
+    ifMatchTask:
+      name: If-Match
+      in: header
+      description: The ETag of the task the change was made from, which refuses with 412 one made meanwhile; * or none names whichever is there.
+      schema:
+        type: string
   headers:
     ETag:
       description: A strong entity tag of the answer.
@@ -4279,3 +4636,189 @@ components:
         requestId:
           type: string
           description: The request's ID, which the response's X-Request-Id header names too.
+    Agent:
+      type: object
+      description: One of an organization's agents, a principal it owns that takes tasks, with the roles it holds.
+      required: [id, name, description, instructions, builtIn, createdAt, updatedAt, version, grants]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Its principal's ID.
+        name:
+          type: string
+        description:
+          type: string
+        instructions:
+          type: string
+          description: The standing instructions, in Markdown, that every task of it starts from.
+        builtIn:
+          type: boolean
+          description: Whether Cobranch made it for the organization; it is never deleted.
+        createdBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its creator's and its repositories' names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+        grants:
+          type: array
+          description: The roles it holds, those at the organization first.
+          items:
+            $ref: "#/components/schemas/AgentGrant"
+    AgentGrant:
+      type: object
+      description: A role an agent holds, at its organization or, with a repository, on that repository.
+      required: [roleId, roleName]
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        roleName:
+          type: string
+        repositoryId:
+          type: string
+          format: uuid
+          description: The repository it holds the role on; absent at the organization.
+        repositorySlug:
+          type: string
+    AgentGrantInput:
+      type: object
+      description: A role a new agent starts with, at the organization or, with a repository, on that repository.
+      required: [roleId]
+      properties:
+        roleId:
+          type: string
+          format: uuid
+        repositoryId:
+          type: string
+          format: uuid
+    AgentInput:
+      type: object
+      description: A new agent.
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: 1 to 100 characters, unique in the organization in any case.
+        description:
+          type: string
+          description: At most 1000 characters.
+        instructions:
+          type: string
+          description: At most 20000 characters of Markdown.
+        grants:
+          type: array
+          description: At most 20, each one the creator holds every permission of where it applies.
+          items:
+            $ref: "#/components/schemas/AgentGrantInput"
+    AgentPatch:
+      type: object
+      description: What changes about an agent; a field left out keeps its value.
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        instructions:
+          type: string
+    TaskState:
+      type: string
+      description: Where a task stands. Queued tasks wait for the controller; waiting ones for an answer in their thread.
+      enum: [queued, running, waiting, succeeded, failed, cancelled]
+    Task:
+      type: object
+      description: A task of one of the organization's agents, which the organization numbers.
+      required: [id, number, agent, kind, title, instructions, state, reason, summary, createdAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: integer
+          format: int64
+          description: Counts the organization's tasks from 1.
+        agent:
+          $ref: "#/components/schemas/Principal"
+        kind:
+          type: string
+          description: What it is for; assigned for a task a principal assigned.
+        assignedBy:
+          $ref: "#/components/schemas/Principal"
+        title:
+          type: string
+        instructions:
+          type: string
+        repositoryId:
+          type: string
+          format: uuid
+          description: The repository it works in; absent for none.
+        repositorySlug:
+          type: string
+        branchId:
+          type: string
+          format: uuid
+          description: The branch of that repository it works on; absent for none.
+        branch:
+          type: string
+        threadId:
+          type: string
+          format: uuid
+          description: The thread of that branch's chat it talks in; absent for none.
+        state:
+          $ref: "#/components/schemas/TaskState"
+        reason:
+          type: string
+          description: Why it failed or was cancelled; empty otherwise.
+        summary:
+          type: string
+          description: What the agent said it did, once it ended.
+        cancelledBy:
+          $ref: "#/components/schemas/Principal"
+        createdAt:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1. Its ETag is this number and a digest of how it reads, which its people's, its agent's and its repository's names shape too, in quotes; If-Match names it, or this number alone in quotes, to refuse a change made meanwhile.
+    TaskInput:
+      type: object
+      description: >-
+        A task to assign, and perhaps where it works: a repository, one of its live branches by ID or by name, and a
+        thread of that branch's chat.
+      required: [agentId, title]
+      properties:
+        agentId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          description: 1 to 200 characters.
+        instructions:
+          type: string
+          description: At most 20000 characters of Markdown.
+        repositoryId:
+          type: string
+          format: uuid
+        branchId:
+          type: string
+          format: uuid
+        branch:
+          type: string
+          description: The branch's name, without refs/heads/, when branchId doesn't name it.
+        threadId:
+          type: string
+          format: uuid

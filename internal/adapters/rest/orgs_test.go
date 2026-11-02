@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/adapters/markdown"
+	"cobranch.dev/internal/services/agents"
+	"cobranch.dev/internal/services/agents/agentstest"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/chats"
 	"cobranch.dev/internal/services/chats/chatstest"
@@ -55,6 +57,9 @@ type orgFixture struct {
 	chatStore        *chatstest.Store
 	notifier         *chatstest.Notifier
 	chats            *chats.Service
+	agentStore       *agentstest.Store
+	agents           *agents.Service
+	scout            agents.Agent
 }
 
 func viewerOf(name, email string) auth.Authenticated {
@@ -110,6 +115,14 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	f.codeStore.TagList[f.website.ID] = []code.Tag{{Name: "v1.0.0", Target: shaOf("b")}}
 	f.codeStore.SlugList[f.website.ID] = [2]string{"acme", "website"}
 	f.addChats()
+	f.addAgents(t)
+	f.addObjects()
+	f.addIssues()
+	return f
+}
+
+// addObjects gives the fixture the files and history of website's commits b and c.
+func (f *orgFixture) addObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
@@ -122,8 +135,6 @@ func newOrgFixture(t *testing.T) *orgFixture {
 	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
-	f.addIssues()
-	return f
 }
 
 // addIssues gives the fixture the issues' service, over a store that knows website.
@@ -167,22 +178,28 @@ func (f *orgFixture) callWith(viewer *auth.Authenticated, method, path, body str
 		req.Header[k] = v
 	}
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents)).ServeHTTP(rec, req)
 	return rec
 }
 
 type orgCase struct {
-	name       string
-	viewer     func(f *orgFixture) *auth.Authenticated
-	method     string
-	path       func(f *orgFixture) string
-	body       string
-	header     http.Header
+	name   string
+	viewer func(f *orgFixture) *auth.Authenticated
+	method string
+	path   func(f *orgFixture) string
+	body   string
+	// bodyFor, when set, gives the body from the fixture instead.
+	bodyFor func(f *orgFixture) string
+	header  http.Header
+	// headerFor, when set, gives the header from the fixture instead.
+	headerFor  func(f *orgFixture) http.Header
 	wantStatus int
 	wantCode   string
 	check      func(t *testing.T, f *orgFixture, body []byte)
 	// wantHeader holds fields the answer must carry, with their values.
 	wantHeader http.Header
+	// wantTag is what the answer's ETag starts with, for one that digests how its body reads after its version.
+	wantTag string
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -194,22 +211,38 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 			if tt.viewer != nil {
 				viewer = tt.viewer(f)
 			}
-			rec := f.callWith(viewer, tt.method, tt.path(f), tt.body, tt.header)
-			if rec.Code != tt.wantStatus {
-				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+			body := tt.body
+			if tt.bodyFor != nil {
+				body = tt.bodyFor(f)
 			}
-			for k := range tt.wantHeader {
-				if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
-					t.Errorf("%s = %q, want %q", k, got, want)
-				}
+			header := tt.header
+			if tt.headerFor != nil {
+				header = tt.headerFor(f)
 			}
-			if tt.wantCode != "" {
-				checkBody(t, rec, "", tt.wantCode)
-			}
-			if tt.check != nil {
-				tt.check(t, f, rec.Body.Bytes())
-			}
+			tt.verify(t, f, f.callWith(viewer, tt.method, tt.path(f), body, header))
 		})
+	}
+}
+
+// verify checks the answer rec against what the case wants.
+func (tt orgCase) verify(t *testing.T, f *orgFixture, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if rec.Code != tt.wantStatus {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
+	}
+	for k := range tt.wantHeader {
+		if got, want := rec.Header().Get(k), tt.wantHeader.Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	if got := rec.Header().Get("Etag"); tt.wantTag != "" && !strings.HasPrefix(got, tt.wantTag) {
+		t.Errorf("Etag = %q, want it to start %q", got, tt.wantTag)
+	}
+	if tt.wantCode != "" {
+		checkBody(t, rec, "", tt.wantCode)
+	}
+	if tt.check != nil {
+		tt.check(t, f, rec.Body.Bytes())
 	}
 }
 
