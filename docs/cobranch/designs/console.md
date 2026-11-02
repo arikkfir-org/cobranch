@@ -4,9 +4,11 @@
 > Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced again once
 > Cobranch's shape settles.
 
-**Status**: Proposed 2026-11-02 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) · Restructures the Console of
-[the architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as
-before: Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), in one pull request
+**Status**: Proposed 2026-11-02 · [ENG-246](https://linear.app/arikkfir/issue/ENG-246) ·
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252) · Restructures the Console of [the
+architecture](architecture.md#components), [code browsing](code-browsing.md) and every page since · Served as before:
+Caddy, no build step · Built by [ENG-246](https://linear.app/arikkfir/issue/ENG-246), its first load sped up by
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252)
 
 The Console was one 3,700-line index.html: its styles, router and every page in one file, which every slice that touched
 a page changed, so their pull requests conflicted and fell out of the merge queue. It becomes a shell and native ES
@@ -17,10 +19,12 @@ does changes.
 ## Scope
 
 How the Console's code is laid out in files, so slices that build pages in parallel stop conflicting
-([ENG-246](https://linear.app/arikkfir/issue/ENG-246)). Since 2026-11-02 01:40Z five approved, green pull requests fell
+([ENG-246](https://linear.app/arikkfir/issue/ENG-246)), and how a load asks for them all at once
+([ENG-252](https://linear.app/arikkfir/issue/ENG-252)). Since 2026-11-02 01:40Z five approved, green pull requests fell
 out of the merge queue on conflicts in `web/console/public/index.html`, the one file that held the Console's styles,
 router and every page. This design splits that file without changing what the Console does: same routes, same pages,
-same requests, same look, same page views.
+same look, same page views. Only how a load asks for its files changes: the page names them all, so they are asked for
+at once.
 
 **A shell, shared modules, and a module per page that the Console finds by its file’s name**
 
@@ -31,7 +35,7 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 
 | Path under `web/console/public/` | Holds |
 | --- | --- |
-| `index.html` | The shell: a `<div id="app">` and a bootstrap that finds the Console's root and release, imports that release's `console.js`, and loads again when it fails |
+| `index.html` | The shell: a `<div id="app">`, the configuration and every file's name, which Caddy writes in, and a bootstrap that asks for every file and the viewer at once, imports its release's `console.js`, and loads again when it fails |
 | `assets/console.js` | `start`: the configuration, the viewer, their organizations, every page's module and stylesheet, then the first route |
 | `assets/console.css` | What every page shares: the design system's tokens, elements, layout and status language |
 | `assets/lib/` | The router, the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
@@ -41,20 +45,30 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 
 ## A load
 
-**A load: the shell, its root and release from config.json, every page’s module and stylesheet of that release, then the
+**A load: the shell with its configuration and files’ names, every file of its release at once with the viewer, then the
 route**
 
-![A load: the shell, its root and release from config.json, every page’s module and stylesheet of that release, then the route](console/boot.svg)
+![A load: the shell with its configuration and files’ names, every file of its release at once with the viewer, then the route](console/boot.svg)
 
-A load takes every file from one release: a server serves only its own release’s, so a load that reaches another fails
-whole and starts again, instead of running two releases’ modules together. One that still fails shows “The Console
-couldn’t load” instead of half a Console. Navigating within the Console loads no more modules: every page’s is already
-in.
+Before a signed-in viewer’s first page draws, three requests wait on each other: the shell, then every file with the
+viewer, then the viewer’s organizations. The single page waited for four (itself, config.json, the viewer, their
+organizations), and the modules before [ENG-252](https://linear.app/arikkfir/issue/ENG-252) for about ten, each round of
+imports found only once the round before arrived. A load takes every file from one release: a server serves only its own
+release’s, so a load that reaches another fails whole and starts again, instead of running two releases’ modules
+together. One that still fails shows “The Console couldn’t load” instead of half a Console. Navigating within the
+Console loads no more modules: every page’s is already in.
 
-- **The root comes from `config.json`.** An operator may mount the Console at a prefix, which its route strips:
+- **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
+  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/` and `pages/repo/` (its `templates`, at request
+  time: no build step). The shell then asks for every module (`modulepreload`) and stylesheet (`preload`), and for the
+  viewer from the REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
+  arrive. Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the
+  modules before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s.
+  At 500 ms, 1.7 s against 5.2 s and 2.1 s.
+- **The root comes from the configuration.** An operator may mount the Console at a prefix, which its route strips:
   `consoleUrl`'s path is then the root every module and link starts from, as the pages' links already did.
-- **So does the release.** `config.json` names the release of the server that answered (`COBRANCH_RELEASE`, which the
-  chart sets to the image's tag), and the shell imports `assets/@<release>/console.js`; every module and stylesheet
+- **So does the release.** The configuration names the release of the server that answered (`COBRANCH_RELEASE`, which
+  the chart sets to the image's tag), and the shell imports `assets/@<release>/console.js`; every module and stylesheet
   resolves from there, so one load takes them all under that path. A server serves only its own release's: while a
   rollout runs two releases behind one Service, a request that reaches the other release's server answers 404 instead of
   a file that doesn't fit the rest. The shell then loads the Console again, after 1 s, 3 s and 9 s, and after the third
@@ -64,8 +78,8 @@ in.
   whole.
 - **Every page's module loads at the start,** not when first opened. The frames need every page's `nav` and `allowed` to
   draw the nav and the tabs, and a session then runs one release's modules throughout: a release can't land between two
-  pages of one visit. The cost is about fifty small requests on a first load, over one connection, which later loads
-  answer with 304s.
+  pages of one visit. The cost is about sixty small requests on every load, over one connection, all asked for at once,
+  which later loads answer with 304s.
 - **Caching: `Cache-Control: no-cache` on every file,** the shell included. A browser checks each file again before it
   uses it, so a release reaches it on its next load, every module at once. The release's path keeps a load to one
   release; it doesn't let browsers keep files longer, which would need content-hashed names and a build step to rewrite
@@ -82,14 +96,16 @@ in.
 A third part that names no module draws nothing new: the repository’s root, as an unknown tab always did. The Console’s
 own paths are the organization slugs no organization may take.
 
-- **No list of pages.** `lib/assets.js` asks Caddy for the files of `pages/org/` and `pages/repo/`, which
-  `file_server browse` lists as JSON when asked, and imports each `.js` there; a file's name is the route's part that
-  opens it. Caddy lists only the directories the Console reads, those two and `lib/` and `pages/` for their stylesheets.
-  A new page is a new file, and nothing else in the Console changes.
+- **No list of pages.** Caddy writes the names of the files in `pages/org/` and `pages/repo/` into the shell, and
+  `lib/assets.js` imports each `.js` there; a file's name is the route's part that opens it. A new page is a new file,
+  and nothing else in the Console changes. No directory is listed over HTTP.
 - **Rejected: a registry module,** one import a line: two slices that add pages insert at the same place, the end, and
   conflict, the failure this design removes. **Rejected: importing `pages/org/<part>.js` on demand:** most second parts
   are repositories, each of which would cost a 404 first, and the nav must know every page before any is opened.
-  **Rejected: a manifest written when the image builds:** a build step the Console doesn't have.
+  **Rejected: a manifest written when the image builds:** a build step the Console doesn't have. **Rejected: asking
+  Caddy for each directory's listing** (`file_server browse`, as [ENG-246](https://linear.app/arikkfir/issue/ENG-246)
+  first did): the listings waited for `console.js` and its imports, and the pages for the listings, about ten requests
+  in a row before the first page drew.
 - **The three pages outside an organization stay named in the router:** their paths are the Console's own, decided once,
   as their slugs are reserved for organizations.
 
@@ -145,13 +161,15 @@ insert between the same two lines.
 
 | Risk | What happens |
 | --- | --- |
-| A module, a stylesheet or a listing fails to load | The Console says it couldn't load its pages and to try again, instead of drawing half a page |
+| A module or a stylesheet fails to load | The Console says it couldn't load its pages and to try again, instead of drawing half a page |
 | A release while a tab is open | The tab keeps the release it loaded until it reloads; the next load gets every new file at once |
-| A rollout, two releases behind one Service | A load asks for its files under the release `config.json` named; a server of the other release answers 404, and the shell loads again, at most three times over 13 s, then says to try again. It never runs two releases' modules together. The shell of one release may start the `console.js` of another, so `start`'s arguments stay as they are or both accept the old ones |
+| A rollout, two releases behind one Service | A load asks for its files under the release its shell names; a server of the other release answers 404, and the shell loads again, at most three times over 13 s, then says to try again. It never runs two releases' modules together. The shell and its configuration now come in one response, so a shell starts only its own release's `console.js` |
+| A shell of a release before [ENG-252](https://linear.app/arikkfir/issue/ENG-252) | It still asks for `config.json`, which every directory answers, and starts this release's `console.js`, which finds no files' names and loads the Console again, now with this release's shell |
 | The first rollout of this design | The servers before it answer `/assets/@<release>/…` with the old single page, which fails as a module, and the shell loads again; those answers carry no `Cache-Control`, so a browser may keep one for a while, which is why a browser never asks again for a path that failed |
 | An image retagged in place | Two builds under one tag share a release's path; the chart's tags are versions or commits, never reused |
-| Directory listings | Public, and harmless: only the four directories the Console reads list their files (`lib/`, `pages/`, `pages/org/`, `pages/repo/` under `/assets/`), files anyone may fetch anyway; every other directory answers 404 |
-| A Content Security Policy | None today, and none added. Modules and stylesheets are files of the Console's own origin, so a policy of `script-src 'self'` would need only the shell's bootstrap allowed by its hash |
+| Files' names in the shell | Public, and harmless: the names of files anyone may fetch anyway. No directory is listed over HTTP |
+| A failed load's console | Every preload of a release that isn't there logs its 404, about sixty lines, before the shell loads again |
+| A Content Security Policy | None today, and none added. Modules and stylesheets are files of the Console's own origin, so a policy of `script-src 'self'` would need only the shell's bootstrap allowed by its hash; the JSON Caddy writes in is data (`application/json`), not a script, and its values are escaped as JSON escapes `<`, `>` and `&` |
 
 ## Rollout
 
@@ -160,10 +178,13 @@ changing behaviour: no migration, no chart value, no API change. The chart gives
 `COBRANCH_RELEASE`, from its image's tag. Its preview is walked route by route as the demo users, deep links and reloads
 on nested routes included, and an installation of main once it merges.
 
+[ENG-252](https://linear.app/arikkfir/issue/ENG-252), one pull request, writes the configuration and the files' names
+into the shell and asks for every file at once: no chart value, no migration. `config.json` stays for shells of earlier
+releases.
+
 ## Open questions
 
-- **Loading pages lazily** once the Console holds many more modules: measure a first load first.
-- **Page views the API refuses:** the agents, tasks and secrets pages report names the API's list lacks, as they did
-  before this change, and a report holding one is refused whole. Monitoring's thread decides the names.
+- **Loading pages lazily** once the Console holds many more modules: every load asks for every file, so the count grows
+  with the pages. Measure again when it doubles.
 
 Cobranch is a Kfirs project, created by Arik Kfir.

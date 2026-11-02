@@ -9,7 +9,12 @@ export async function api(method, path, body, headers = {}, signal = undefined) 
     options.headers["Content-Type"] = headers["Content-Type"] || "application/json";
     options.body = JSON.stringify(body);
   }
-  const r = await fetch(config.restUrl + "/v1" + path, options);
+  return answer(fetch(config.restUrl + "/v1" + path, options));
+}
+// answer reads what the REST API answered to a call (a promise of its response) as api does: its JSON, null for no
+// content, or a rejection with the problem it answered.
+export async function answer(response) {
+  const r = await response;
   countReads(r);
   if (r.status === 204) return null;
   const data = await r.json().catch(() => ({}));

@@ -6,17 +6,23 @@
   <title>Cobranch</title>
   <!-- The Console: sign in, the welcome page (create, join, invitations), an organization's pages under its slug, its
        repositories' pages under theirs, and the viewer's own settings, routed in the browser. Caddy serves this page
-       for every path; its modules and stylesheets are under assets/@<release>/ at the Console's root, a page of an
+       for every path, with where the APIs and the Console answer, the release of its files and their names written in
+       (the Caddyfile); its modules and stylesheets are under assets/@<release>/ at the Console's root, a page of an
        organization or a repository a module of its own (assets/lib/assets.js). The design system's colours
-       (docs/cobranch/designs/design-system), the REST API at the URL config.json names, the Auth server at the other
-       URL it names, and the Git server, whose URLs, over HTTPS and SSH, a repository's clone URLs start with, when it
-       names them. -->
+       (docs/cobranch/designs/design-system), the REST API at the URL the configuration names, the Auth server at the
+       other URL it names, and the Git server, whose URLs, over HTTPS and SSH, a repository's clone URLs start with, when
+       it names them. -->
+  <script type="application/json" id="console">{{ dict
+    "restUrl" (env "COBRANCH_REST_URL") "authUrl" (env "COBRANCH_AUTH_URL") "consoleUrl" (env "COBRANCH_CONSOLE_URL")
+    "gitUrl" (env "COBRANCH_GIT_URL") "gitSshUrl" (env "COBRANCH_GIT_SSH_URL") "release" (env "COBRANCH_RELEASE")
+    "files" (dict "" (listFiles "/assets") "lib/" (listFiles "/assets/lib") "pages/" (listFiles "/assets/pages")
+      "pages/org/" (listFiles "/assets/pages/org") "pages/repo/" (listFiles "/assets/pages/repo"))
+    | toJson }}</script>
   <script type="module">
-    // config.json sits beside the page's directory, for the Console's root without a trailing slash too, and names the
-    // Console's root, where its modules are, and their release; a page at any depth knows them only from there.
+    // The configuration names the Console's root, where its modules are, and their release; a page at any depth knows
+    // them only from there.
     const app = document.getElementById("app");
-    const loaded = fetch(new URL("config.json", location.origin + location.pathname.replace(/\/?$/, "/"))).then((r) => r.json());
-    const config = await loaded.catch(() => ({}));
+    const config = JSON.parse(document.getElementById("console").textContent);
     const root = config.consoleUrl ? new URL(config.consoleUrl).pathname.replace(/\/?$/, "/") : "/";
     // A rollout runs two releases at once for a moment, and a load that reaches the other release's servers for a
     // module fails (Caddyfile): the Console loads again, three times at most and later each time. Each try asks under
@@ -40,8 +46,19 @@
       setTimeout(() => location.reload(), 1000 * 3 ** tries);
       return true;
     };
+    // Every file the Console runs is asked for at once, with the viewer, rather than each when a module that imports it
+    // arrives: the requests that wait on each other are this page, then the rest.
+    const assets = root + "assets/@" + config.release + (tried ? "~" + tried : "") + "/";
+    for (const [dir, names] of Object.entries(config.files)) {
+      for (const name of names.filter((n) => /\.(js|css)$/.test(n))) {
+        const preload = name.endsWith(".js") ? { rel: "modulepreload" } : { rel: "preload", as: "style" };
+        document.head.append(Object.assign(document.createElement("link"), preload, { href: assets + dir + name }));
+      }
+    }
+    config.me = fetch(config.restUrl + "/v1/me", { credentials: "include", headers: { Accept: "application/json" } });
+    config.me.catch(() => {}); // console.js reads the failure, when it starts
     try {
-      await (await import(root + "assets/@" + (config.release || "") + (tried ? "~" + tried : "") + "/console.js")).start(loaded, root, again);
+      await (await import(assets + "console.js")).start(Promise.resolve(config), root, again);
     } catch {
       if (!again()) app.textContent = "The Console couldn't load. Try again in a moment.";
     }

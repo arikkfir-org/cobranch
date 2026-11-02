@@ -251,13 +251,15 @@ slice after the ones it waits for. Where it stands:
   [ENG-251](https://linear.app/arikkfir/issue/ENG-251), [design](reviews.md)), issues linked to branches and taken by
   agents ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](issues.md)), delivery of every branch to an
   environment of its own through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
-  [design](delivery.md)), and storage and push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
-  [design](quotas.md)), brought forward from phase 2 because an installation open to sign-up needs them.
+  [design](delivery.md)), the Console split into a module per page, so slices that each add a page no longer conflict
+  ([ENG-246](https://linear.app/arikkfir/issue/ENG-246), [design](console.md)), and storage and push quotas
+  ([ENG-238](https://linear.app/arikkfir/issue/ENG-238), [design](quotas.md)), brought forward from phase 2 because an
+  installation open to sign-up needs them.
 - **In progress:** operators' metrics for page views, code reads and caches
   ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)), whose metrics are live and whose
   alerts come last.
-- **Next:** the Console's pages split into files of their own, so slices that each add a page no longer conflict in one
-  file ([ENG-246](https://linear.app/arikkfir/issue/ENG-246)), then the rest of [phase 2](#phase-2).
+- **Next:** the Console's first page drawn in fewer round trips ([ENG-252](https://linear.app/arikkfir/issue/ENG-252),
+  [design](console.md)), then the rest of [phase 2](#phase-2).
 
 **The roadmap by milestone, as of 2026-11-02**
 
