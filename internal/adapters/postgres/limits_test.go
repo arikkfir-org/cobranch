@@ -58,6 +58,7 @@ func (f *orgFixture) createForNia(t *testing.T, byAnAdmin, created int) {
 }
 
 func TestOrgStoreCreateHeldToLimit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		limit int64
@@ -74,6 +75,7 @@ func TestOrgStoreCreateHeldToLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newOrgFixture(t)
 			f.createForNia(t, tt.byAnAdmin, tt.created)
 			checkExceeded(t, f.s.Create(context.Background(), f.nia, newOrganization("initech"), tt.limit), tt.want)
@@ -89,6 +91,7 @@ func TestOrgStoreCreateHeldToLimit(t *testing.T) {
 }
 
 func TestOrgStoreCreateHeldToLimitAtOnce(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t) // Olivia created Acme
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -114,6 +117,7 @@ func TestOrgStoreCreateHeldToLimitAtOnce(t *testing.T) {
 }
 
 func TestRepoStoreCreateHeldToLimit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name  string
 		limit int64
@@ -125,6 +129,7 @@ func TestRepoStoreCreateHeldToLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			f := newRepoFixture(t) // Acme holds website and secret
 			tools := repos.Repository{ID: uuid.New(), OrgID: f.acme.ID, Slug: "tools", Name: "tools", ObjectFormat: "sha1", CreatedBy: f.olivia, CreatedAt: now}
 			checkExceeded(t, f.r.Create(context.Background(), f.olivia, tools, tt.limit), tt.want)
@@ -140,6 +145,7 @@ func TestRepoStoreCreateHeldToLimit(t *testing.T) {
 }
 
 func TestLimitStore(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	s := NewLimitStore(f.pool)
@@ -181,6 +187,7 @@ func TestLimitStore(t *testing.T) {
 }
 
 func TestGitStoreRecordHeldToGitDataLimit(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	// Each pack holds 100 bytes; Acme may store 250.
@@ -219,6 +226,7 @@ func TestGitStoreRecordHeldToGitDataLimit(t *testing.T) {
 }
 
 func TestGitStoreRecordHeldToGitDataLimitAtOnce(t *testing.T) {
+	t.Parallel()
 	f := newGitFixture(t)
 	ctx := context.Background()
 	// Two pushes into Acme's two repositories, 100 bytes each, under a limit of 150: one fits, whichever is first.
@@ -237,6 +245,7 @@ func TestGitStoreRecordHeldToGitDataLimitAtOnce(t *testing.T) {
 }
 
 func TestLimitsMigrationNamesCreators(t *testing.T) {
+	t.Parallel()
 	f := newOrgFixture(t) // Olivia created Acme herself
 	ctx := context.Background()
 	globex := newOrganization("globex")

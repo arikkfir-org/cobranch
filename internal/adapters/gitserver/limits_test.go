@@ -35,6 +35,7 @@ func files(t *testing.T, dir string) int {
 // for is refused before the Git server stores it, and one another push filled the room for meanwhile is refused as
 // the push is recorded.
 func TestPushOverGitDataLimit(t *testing.T) {
+	t.Parallel()
 	filled := func(ctx context.Context, push git.Push, next git.Store) error {
 		// Another push stores the organization's whole limit first, between this push's weighing and its record.
 		other := git.Push{ID: uuid.Must(uuid.NewV7()), RepoID: push.RepoID, OrgID: push.OrgID, PusherID: olivia, Transport: git.TransportHTTPS,
@@ -59,6 +60,7 @@ func TestPushOverGitDataLimit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 			s := newStackIn(t, inFiles)
 			if _, err := s.pool.Exec(context.Background(), "UPDATE installation_settings SET git_data_per_organization = $1", tt.limit); err != nil {
 				t.Fatal(err)
@@ -86,6 +88,7 @@ func TestPushOverGitDataLimit(t *testing.T) {
 // brought them is deleted: the pack the push brings is the one the repository lists already, so it adds nothing and is
 // taken, before the Git server stores it and as the push is recorded.
 func TestPushOfAPackListedAlready(t *testing.T) {
+	t.Parallel()
 	s := newStackIn(t, inFiles)
 	s.quotas = limits.NewService(postgres.NewLimitStore(s.pool), limits.Settings{})
 	dir := clone(t, s.websiteURL(s.serve(t.TempDir()), olivia))
