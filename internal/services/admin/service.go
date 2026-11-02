@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
+	"cobranch.dev/internal/services/limits"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -34,10 +35,16 @@ type Store interface {
 	// organization that isn't there.
 	Enter(ctx context.Context, actor, orgID uuid.UUID, reason string, at time.Time) error
 	// InstallationSettings reads the settings the Back-office changes.
-	InstallationSettings(ctx context.Context) (auth.InstallationSettings, error)
+	InstallationSettings(ctx context.Context) (StoredSettings, error)
 	// ChangeInstallationSettings writes settings at at, acting for actor, unless the stored version is no longer
 	// settings.Version: then ErrStale. It returns the settings as written, their version bumped.
-	ChangeInstallationSettings(ctx context.Context, actor uuid.UUID, settings auth.InstallationSettings, at time.Time) (auth.InstallationSettings, error)
+	ChangeInstallationSettings(ctx context.Context, actor uuid.UUID, settings StoredSettings, at time.Time) (StoredSettings, error)
+	// OwnLimits reads the organization's own limits: at version 0 while nobody has set any.
+	OwnLimits(ctx context.Context, orgID uuid.UUID) (OwnLimits, error)
+	// ChangeOwnLimits writes the organization's own limits at at, acting for actor, and records the change in its
+	// audit trail, unless their stored version is no longer own.Version: then ErrStale. It returns them as written,
+	// their version bumped.
+	ChangeOwnLimits(ctx context.Context, actor, orgID uuid.UUID, own OwnLimits, at time.Time) (OwnLimits, error)
 	// IdentityProviders lists the identity providers the Back-office added, by ID.
 	IdentityProviders(ctx context.Context) ([]auth.StoredProvider, error)
 	// IdentityProvider finds the Back-office's provider id, or orgs.ErrNotFound.
@@ -60,6 +67,8 @@ type Service struct {
 	authz *auth.Authorizer
 	// values are the chart's sign-up settings, which lock those they set.
 	values auth.Settings
+	// limitValues are the limits the chart's values set, which lock those they set (WithLimits).
+	limitValues limits.Settings
 	// providers is what the identity providers' administration needs (SetProviders).
 	providers ProviderSetup
 	now       func() time.Time
@@ -68,6 +77,12 @@ type Service struct {
 // NewService returns a Service over store, checking permissions with authz, under the chart's values' sign-up settings.
 func NewService(store Store, authz *auth.Authorizer, values auth.Settings) *Service {
 	return &Service{store: store, authz: authz, values: values, now: time.Now}
+}
+
+// WithLimits sets the limits the chart's values set, which win over the database's and lock those they set.
+func (s *Service) WithLimits(values limits.Settings) *Service {
+	s.limitValues = values
+	return s
 }
 
 // SetClock makes the service read the time from now: for tests.
@@ -101,10 +116,17 @@ func (s *Service) Organizations(ctx context.Context, v auth.User, p Page) (List[
 	if err := s.require(ctx, v, PermManage); err != nil {
 		return List[Organization]{}, err
 	}
+	installation, err := s.installationLimits(ctx)
+	if err != nil {
+		return List[Organization]{}, err
+	}
 	p = p.normalize()
 	items, err := s.store.AllOrganizations(ctx, Page{Query: p.Query, After: p.After, Limit: p.Limit + 1})
 	if err != nil {
 		return List[Organization]{}, fmt.Errorf("listing the organizations: %w", err)
+	}
+	for i := range items {
+		items[i].Limits = installation.For(items[i].Own)
 	}
 	return page(items, p.Limit, func(o Organization) uuid.UUID { return o.ID }), nil
 }
@@ -136,6 +158,10 @@ func (s *Service) CreateOrganization(ctx context.Context, v auth.User, slug, nam
 	if err != nil {
 		return Organization{}, err
 	}
+	installation, err := s.installationLimits(ctx)
+	if err != nil {
+		return Organization{}, err
+	}
 	owner, err := s.store.VerifiedEmailHolder(ctx, ownerEmail)
 	if errors.Is(err, orgs.ErrNotFound) {
 		return Organization{}, &orgs.ValidationError{Field: "ownerEmail", Code: "owner.not_found", Message: "no user holds this email, verified"}
@@ -149,7 +175,7 @@ func (s *Service) CreateOrganization(ctx context.Context, v auth.User, slug, nam
 		}
 		return Organization{}, fmt.Errorf("creating the organization: %w", err)
 	}
-	return Organization{ID: org.ID, Slug: org.Slug, Name: org.Name, CreatedAt: org.CreatedAt, Members: 1}, nil
+	return Organization{ID: org.ID, Slug: org.Slug, Name: org.Name, CreatedAt: org.CreatedAt, Members: 1, Limits: installation}, nil
 }
 
 // Enter makes v an Owner of the organization slug names, for reason, which its Owners read in its audit trail; it
@@ -162,18 +188,27 @@ func (s *Service) Enter(ctx context.Context, v auth.User, slug, reason string) (
 	if err := validateReason(reason); err != nil {
 		return orgs.Organization{}, err
 	}
-	org, err := s.store.BySlug(ctx, slug)
-	if errors.Is(err, orgs.ErrNotFound) {
-		return orgs.Organization{}, orgs.ErrNotFound
-	}
+	org, err := s.bySlug(ctx, slug)
 	if err != nil {
-		return orgs.Organization{}, fmt.Errorf("finding the organization: %w", err)
+		return orgs.Organization{}, err
 	}
 	if err := s.store.Enter(ctx, v.ID, org.ID, reason, s.now()); err != nil {
 		if errors.Is(err, orgs.ErrNotFound) {
 			return orgs.Organization{}, orgs.ErrNotFound
 		}
 		return orgs.Organization{}, fmt.Errorf("entering the organization: %w", err)
+	}
+	return org, nil
+}
+
+// bySlug finds the organization slug names, by any slug it has had, or orgs.ErrNotFound.
+func (s *Service) bySlug(ctx context.Context, slug string) (orgs.Organization, error) {
+	org, err := s.store.BySlug(ctx, slug)
+	if errors.Is(err, orgs.ErrNotFound) {
+		return orgs.Organization{}, orgs.ErrNotFound
+	}
+	if err != nil {
+		return orgs.Organization{}, fmt.Errorf("finding the organization: %w", err)
 	}
 	return org, nil
 }

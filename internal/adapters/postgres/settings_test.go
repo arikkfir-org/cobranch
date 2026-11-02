@@ -25,19 +25,19 @@ func TestInstallationSettings(t *testing.T) {
 	domains, off := auth.PolicyDomains, false
 	tests := []struct {
 		name        string
-		change      func(s auth.InstallationSettings) auth.InstallationSettings
+		change      func(s admin.StoredSettings) admin.StoredSettings
 		wantErr     error
 		wantVersion int64
 	}{
-		{name: "the policy and its domains, self-serve off", change: func(s auth.InstallationSettings) auth.InstallationSettings {
+		{name: "the policy and its domains, self-serve off", change: func(s admin.StoredSettings) admin.StoredSettings {
 			s.SignUp, s.SignUpDomains, s.SelfServe = &domains, []string{"example.com"}, &off
 			return s
 		}, wantVersion: 2},
-		{name: "from an old version", change: func(s auth.InstallationSettings) auth.InstallationSettings {
+		{name: "from an old version", change: func(s admin.StoredSettings) admin.StoredSettings {
 			s.Version--
 			return s
 		}, wantErr: admin.ErrStale, wantVersion: 2},
-		{name: "the domains policy without a domain", change: func(s auth.InstallationSettings) auth.InstallationSettings {
+		{name: "the domains policy without a domain", change: func(s admin.StoredSettings) admin.StoredSettings {
 			s.SignUpDomains = nil
 			return s
 		}, wantErr: errAny, wantVersion: 2},

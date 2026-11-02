@@ -39,6 +39,14 @@ type Overrides struct {
 	GitData      *int64
 }
 
+// Usage is what an organization takes of what its limits cap.
+type Usage struct {
+	// Repositories counts its repositories.
+	Repositories int64
+	// GitData is the bytes of its repositories' active packs.
+	GitData int64
+}
+
 // Resolve returns the limits that apply to an installation whose chart's values set values and whose database sets
 // db: each the values', else the database's, else the default.
 func Resolve(values, db Settings) Limits {
