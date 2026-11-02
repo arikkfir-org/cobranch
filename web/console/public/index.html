@@ -1831,9 +1831,30 @@
     }
 
     // reviewDrafting is the drafting of comments on branch b's changes, for a viewer who may review its head and post to
-    // its chat, or null: the Changes tab drafts them, and the review forms there and on the branch's page send them.
+    // its chat, or null: the Changes tab drafts them, and the review forms there, on the branch's page and on its head's
+    // page send them.
     function reviewDrafting(path, b, can) {
       return b.base && b.commit && can("reviews.submit") && can("messages.post") ? draftsOf(path, b.name, b.head) : null;
+    }
+
+    // commitDrafting is the drafting of comments on the changes of a branch whose head is commit c, for a viewer who may
+    // review it and post to its chat, or null: the Changes tab links its head's page, whose review form sends them too.
+    // Of several branches at c with drafts, the first found holds.
+    function commitDrafting(path, c, can) {
+      if (!can("reviews.submit") || !can("messages.post")) return null;
+      const prefix = "cobranch.review-drafts\n" + path + "\n", suffix = "\n" + c.sha;
+      const keys = [...reviewDrafts.keys()];
+      try {
+        for (let i = 0; i < sessionStorage.length; i++) keys.push(sessionStorage.key(i));
+      } catch {
+        // Without the tab's storage, only the drafts of this page's life count.
+      }
+      for (const key of keys) {
+        if (!key || !key.startsWith(prefix) || !key.endsWith(suffix)) continue;
+        const drafting = draftsOf(path, key.slice(prefix.length, -suffix.length), c.sha);
+        if (drafting.comments.length) return drafting;
+      }
+      return null;
     }
 
     // reviewDrafts holds the comments a reviewer drafted on a branch's changes, by repository, branch and head, until they
@@ -1989,7 +2010,7 @@
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
         h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
-        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha),
+        commitReviews(path, c, can, fail, commitDrafting(path, c, can)), commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha),
         await diffPanel(path + "/commits/" + c.sha + "/diff", at, "Changes")];
     }
 
