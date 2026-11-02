@@ -207,6 +207,26 @@ func TestGetAndUpdate(t *testing.T) {
 	})
 }
 
+func TestIssueKey(t *testing.T) {
+	runCases(t, []testCase{
+		{name: "an Owner changes the issue key", run: func(ctx context.Context, f *fixture) error {
+			org, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "AC2"})
+			if err == nil && org.IssueKey != "AC2" {
+				t.Errorf("Update() = %+v, want key AC2", org)
+			}
+			kept, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember})
+			if err == nil && kept.IssueKey != "AC2" {
+				t.Errorf("Update() without a key = %+v, want key AC2 kept", kept)
+			}
+			return got(err)
+		}, wantEvents: []string{"org.updated", "org.updated"}},
+		{name: "an issue key that isn't one", run: func(ctx context.Context, f *fixture) error {
+			_, err := f.service.Update(ctx, f.olivia, f.acme.ID, orgs.Settings{Slug: "acme", Name: "Acme", MembershipRoleID: auth.RoleMember, IssueKey: "acme"})
+			return got(err)
+		}, wantCode: "issue_key.invalid"},
+	})
+}
+
 func TestInvitations(t *testing.T) {
 	runCases(t, []testCase{
 		{name: "a Manager invites with the membership role", run: func(ctx context.Context, f *fixture) error {

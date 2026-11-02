@@ -1,6 +1,6 @@
 -- name: InsertOrganization :exec
-INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, created_at)
-VALUES (@id, @slug, @name, @membership_role_id, @accepts_join_requests, @providers, @created_at);
+INSERT INTO organizations (id, slug, name, membership_role_id, accepts_join_requests, providers, issue_key, created_at)
+VALUES (@id, @slug, @name, @membership_role_id, @accepts_join_requests, @providers, @issue_key, @created_at);
 
 -- InsertSlug claims a slug for an organization; the primary key refuses one another organization has or had.
 -- name: InsertSlug :exec
@@ -15,7 +15,7 @@ SELECT * FROM organizations WHERE id = $1;
 
 -- name: UpdateOrganization :execrows
 UPDATE organizations SET slug = @slug, name = @name, membership_role_id = @membership_role_id,
-    accepts_join_requests = @accepts_join_requests, providers = @providers
+    accepts_join_requests = @accepts_join_requests, providers = @providers, issue_key = @issue_key
 WHERE id = @id;
 
 -- OrganizationsOf lists the organizations a user belongs to, by name.

@@ -169,7 +169,7 @@ func TestValidateSlug(t *testing.T) {
 	}{
 		{"a", true}, {"web-site", true}, {"web.site_2", true}, {"0day", true},
 		{"", false}, {"-web", false}, {".web", false}, {"_web", false}, {"Web", false}, {"web site", false},
-		{"web.git", false}, {"repos", false}, {"new", false}, {string(make([]byte, 101)), false},
+		{"web.git", false}, {"repos", false}, {"new", false}, {"issues", false}, {string(make([]byte, 101)), false},
 	} {
 		if err := repos.ValidateSlug(tt.slug); (err == nil) != tt.ok {
 			t.Errorf("ValidateSlug(%q) = %v, want ok %v", tt.slug, err, tt.ok)

@@ -18,6 +18,7 @@ import (
 	"cobranch.dev/internal/services/admin"
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/issues"
 	"cobranch.dev/internal/services/orgs"
 	"cobranch.dev/internal/services/repos"
 	"cobranch.dev/internal/system/buildinfo"
@@ -45,6 +46,7 @@ type services struct {
 	organizations  *orgs.Service
 	repositories   *repos.Service
 	code           *code.Service
+	issues         *issues.Service
 	administration *admin.Service
 }
 
@@ -54,12 +56,12 @@ func backOffice(u config.URLs) config.URL { return u.BackOffice }
 var (
 	// restServer serves the REST API, at every path but the health endpoints: an unknown one answers a problem.
 	restServer = api{workload: "rest-server", pattern: "/", pages: console, handler: func(version string, s services) http.Handler {
-		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code)
+		return rest.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues)
 	}}
 	// graphqlServer serves GraphQL at the root path alone. Like every workload, it serves as if it were alone: the
 	// operator mounts it at a host or at a path prefix that the route strips.
 	graphqlServer = api{workload: "graphql-server", pattern: "/{$}", pages: console, handler: func(version string, s services) http.Handler {
-		return graphql.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code)
+		return graphql.NewHandler(version, s.sessions, s.organizations, s.repositories, s.code, s.issues)
 	}}
 	// adminServer serves the Admin API, which the Back-office's pages call, at every path but the health endpoints.
 	adminServer = api{workload: "admin-server", pattern: "/", pages: backOffice, handler: func(version string, s services) http.Handler {
@@ -104,9 +106,10 @@ func runServer(ctx context.Context, logs io.Writer, a api) error {
 	if err != nil {
 		return err
 	}
+	renderer := markdown.New(cfg.Console.URL, cfg.REST.URL)
 	domain := services{sessions: sessions, organizations: orgs.NewService(orgStore, authorizer),
-		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), markdown.New(cfg.Console.URL, cfg.REST.URL), authorizer),
-		administration: administration}
+		repositories: repos.NewService(postgres.NewRepoStore(pool), authorizer), code: code.NewService(postgres.NewCodeStore(pool), objects(cfg), renderer, authorizer),
+		issues: issues.NewService(postgres.NewIssueStore(pool), renderer, authorizer), administration: administration}
 
 	ln, err := server.Listen(ctx, cfg.HTTPAddr)
 	if err != nil {
