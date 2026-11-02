@@ -36,8 +36,8 @@ INSERT INTO jobs (principal_id, org_id, repo_id, name) VALUES (@id, @org_id, @re
 
 -- LockRunQueue locks the repository's run counter, making it first, to the end of the transaction: runs are queued for
 -- one repository at a time, so two changes that reach a commit at once can't both find no run of a job there. Every
--- transaction that locks a run or may queue runs takes it first, before it locks a run, an annotation or a branch, so
--- that those transactions never wait for each other in a circle.
+-- transaction that locks a run or an annotation, or may queue runs, takes it first, before it locks a run, an
+-- annotation or a branch, so that those transactions never wait for each other in a circle.
 -- name: LockRunQueue :exec
 INSERT INTO run_numbers (repo_id, last) VALUES (@repo_id, 0)
 ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last;

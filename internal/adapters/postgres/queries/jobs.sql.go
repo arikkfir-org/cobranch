@@ -245,8 +245,8 @@ ON CONFLICT (repo_id) DO UPDATE SET last = run_numbers.last
 
 // LockRunQueue locks the repository's run counter, making it first, to the end of the transaction: runs are queued for
 // one repository at a time, so two changes that reach a commit at once can't both find no run of a job there. Every
-// transaction that locks a run or may queue runs takes it first, before it locks a run, an annotation or a branch, so
-// that those transactions never wait for each other in a circle.
+// transaction that locks a run or an annotation, or may queue runs, takes it first, before it locks a run, an
+// annotation or a branch, so that those transactions never wait for each other in a circle.
 func (q *Queries) LockRunQueue(ctx context.Context, repoID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, lockRunQueue, repoID)
 	return err

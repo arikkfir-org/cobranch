@@ -177,9 +177,9 @@ func queueBranchRuns(ctx context.Context, q *queries.Queries, e jobs.Event) erro
 }
 
 // lockForTriggers takes the repository's run queue when a job of a live branch whose head is the commit follows
-// events of kind, an annotation's or a review's, and answers whether it did: a change on the commit that may queue runs
-// calls it first, before it locks anything else, and one that it answers false for queues none. Most changes of
-// annotations and reviews then don't wait for each other, or for pushes, on the queue.
+// events of kind, a review's, and answers whether it did: a change on the commit that may queue runs, and locks no
+// annotation or run otherwise, calls it first, before it locks anything else, and one that it answers false for queues
+// none. Most reviews then don't wait for each other, or for pushes, on the queue.
 func lockForTriggers(ctx context.Context, q *queries.Queries, repoID uuid.UUID, sha string, kind jobs.EventKind) (bool, error) {
 	names, err := q.LiveBranchesAt(ctx, repoID, sha)
 	if err != nil {

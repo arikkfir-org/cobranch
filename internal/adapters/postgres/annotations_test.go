@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"cobranch.dev/internal/adapters/postgres/queries"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/repos"
 )
@@ -271,7 +272,11 @@ END $$`, "CREATE TRIGGER hold_nia BEFORE INSERT ON annotations FOR EACH ROW EXEC
 		set <- err
 	}()
 	waitForLock(t, f.pool, "advisory")
-	if _, err := f.c.SetAnnotation(ctx, f.max, f.website.ID, f.shaD, annotation("ci/build", code.AnnotationFailed)); err != nil {
+	// Max's annotation goes in directly: SetAnnotation would wait for Nia's on the repository's run queue, which a
+	// transaction of another kind, a delivery's, needn't hold to set an annotation.
+	in := annotation("ci/build", code.AnnotationFailed)
+	if _, err := queries.New(f.pool).InsertAnnotation(ctx, queries.InsertAnnotationParams{ID: uuid.New(), OrgID: f.website.OrgID,
+		RepoID: f.website.ID, Sha: f.shaD, Name: in.Name, Status: string(in.Status), Summary: in.Summary, Link: in.Link, CreatedBy: &f.max}); err != nil {
 		t.Fatal(err)
 	}
 	deleter, err := acquire(t, f.pool).Begin(ctx)
