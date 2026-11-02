@@ -6,6 +6,7 @@ toolchain go1.27.1
 
 require (
 	github.com/99designs/gqlgen v0.17.98
+	github.com/coder/websocket v1.8.15
 	github.com/coreos/go-oidc/v3 v3.21.0
 	github.com/felixge/httpsnoop v1.1.0
 	github.com/google/uuid v1.6.0
@@ -80,7 +81,6 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

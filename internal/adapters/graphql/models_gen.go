@@ -130,6 +130,109 @@ type BranchMerge struct {
 	At time.Time `json:"at"`
 }
 
+// Lines startLine to endLine of the file at path of a commit, where a thread points; it stays there when the branch moves on.
+type ChatAnchor struct {
+	// The commit's full name, in lowercase hexadecimal.
+	Sha string `json:"sha"`
+	// The file's path from the repository's root, as names separated by /.
+	Path string `json:"path"`
+	// The first line, from 1.
+	StartLine int `json:"startLine"`
+	// The last line, at or after startLine.
+	EndLine int `json:"endLine"`
+}
+
+// Lines of a file at a commit the repository holds, where a thread points.
+type ChatAnchorInput struct {
+	// The commit's full name, in lowercase hexadecimal.
+	Sha string `json:"sha"`
+	// The file's path from the repository's root, as names separated by /.
+	Path string `json:"path"`
+	// The first line, from 1.
+	StartLine int `json:"startLine"`
+	// The last line, at or after startLine.
+	EndLine int `json:"endLine"`
+}
+
+// One of a thread's messages, in Markdown.
+type ChatMessage struct {
+	ID       string `json:"id"`
+	ThreadID string `json:"threadId"`
+	// Its Markdown; empty once it is deleted.
+	Body string `json:"body"`
+	// Its body rendered as GitHub-flavoured Markdown, sanitized as a README is, its relative links leading to the branch's files; empty once it is deleted, or where the installation renders no Markdown.
+	HTML string `json:"html"`
+	// Who posted it; null once they are gone.
+	Author    *CommitPrincipal `json:"author,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	// When its author last edited it; null until they do.
+	EditedAt *time.Time `json:"editedAt,omitempty"`
+	// When it was deleted; null while it is there.
+	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	// Who deleted it; null while it is there, and once they are gone.
+	DeletedBy *CommitPrincipal `json:"deletedBy,omitempty"`
+	// Counts its changes from 1: an edit or a deletion names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
+// A message to post.
+type ChatMessageInput struct {
+	// The message's ID, a UUIDv7 its poster picks so that posting it again finds it; Cobranch picks one when it is left out.
+	ID *string `json:"id,omitempty"`
+	// Its Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+}
+
+// A page of a branch's chat.
+type ChatPage struct {
+	// Its threads, newest first.
+	Threads []*ChatThread `json:"threads"`
+	// Where the next page starts, as chat's after; null after the last page.
+	NextCursor *string `json:"nextCursor,omitempty"`
+	// Where the chat's updates stood when the page was read: chatUpdates after it sends every change the page may lack.
+	After string `json:"after"`
+}
+
+// One of a branch's chat threads.
+type ChatThread struct {
+	ID string `json:"id"`
+	// Where it points: lines of a file at a commit; null for none.
+	Anchor *ChatAnchor `json:"anchor,omitempty"`
+	// Whether the branch has moved on from the commit its anchor names; false without an anchor.
+	Outdated bool `json:"outdated"`
+	// Who started it; null once they are gone.
+	StartedBy *CommitPrincipal `json:"startedBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	// When it was resolved; null while it is open.
+	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+	// Who resolved it; null while it is open, and once they are gone.
+	ResolvedBy *CommitPrincipal `json:"resolvedBy,omitempty"`
+	// Counts its changes and its messages' from 1: resolveChatThread names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+	// Its messages in the order they were posted; null in an update.
+	Messages []*ChatMessage `json:"messages,omitempty"`
+}
+
+// A thread to start, with its first message.
+type ChatThreadInput struct {
+	// The thread's ID, a UUIDv7 its starter picks so that starting it again finds it; Cobranch picks one when it is left out.
+	ID     *string          `json:"id,omitempty"`
+	Anchor *ChatAnchorInput `json:"anchor,omitempty"`
+	// Its first message's Markdown, at most 20,000 characters.
+	Body string `json:"body"`
+}
+
+// A change to a chat, with the thread and the message it changed as they are now: applying updates in order, replacing threads and messages by ID, holds the chat as it is.
+type ChatUpdate struct {
+	// Where it stands among the chat's updates: chatUpdates after it sends those that follow.
+	Cursor string         `json:"cursor"`
+	Kind   ChatUpdateKind `json:"kind"`
+	// The thread it changed, or the thread of the message it changed, without its messages.
+	Thread *ChatThread `json:"thread"`
+	// The message it posted, edited or deleted, or a started thread's first; null when it resolved a thread or opened one again.
+	Message *ChatMessage `json:"message,omitempty"`
+}
+
 // A commit a push brought, as the push recorded it.
 type Commit struct {
 	Sha  string `json:"sha"`
@@ -369,6 +472,8 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
+	// A page of the chat of one of the repository's live branches, by name without refs/heads/: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless the branch is there; takes repo.read. first is 1 to 100.
+	Chat *ChatPage `json:"chat,omitempty"`
 	// The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	Branches []*Branch `json:"branches"`
 	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
@@ -462,6 +567,9 @@ type Session struct {
 	IP        string    `json:"ip"`
 	// Whether this is the session the request itself came with.
 	Current bool `json:"current"`
+}
+
+type Subscription struct {
 }
 
 // One of a repository's tags and the object it names, a commit or an annotated tag.
@@ -705,6 +813,70 @@ func (e *BranchStatus) UnmarshalJSON(b []byte) error {
 }
 
 func (e BranchStatus) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// What changed in a chat.
+type ChatUpdateKind string
+
+const (
+	ChatUpdateKindThreadStarted  ChatUpdateKind = "THREAD_STARTED"
+	ChatUpdateKindMessagePosted  ChatUpdateKind = "MESSAGE_POSTED"
+	ChatUpdateKindMessageEdited  ChatUpdateKind = "MESSAGE_EDITED"
+	ChatUpdateKindMessageDeleted ChatUpdateKind = "MESSAGE_DELETED"
+	ChatUpdateKindThreadResolved ChatUpdateKind = "THREAD_RESOLVED"
+	ChatUpdateKindThreadReopened ChatUpdateKind = "THREAD_REOPENED"
+)
+
+var AllChatUpdateKind = []ChatUpdateKind{
+	ChatUpdateKindThreadStarted,
+	ChatUpdateKindMessagePosted,
+	ChatUpdateKindMessageEdited,
+	ChatUpdateKindMessageDeleted,
+	ChatUpdateKindThreadResolved,
+	ChatUpdateKindThreadReopened,
+}
+
+func (e ChatUpdateKind) IsValid() bool {
+	switch e {
+	case ChatUpdateKindThreadStarted, ChatUpdateKindMessagePosted, ChatUpdateKindMessageEdited, ChatUpdateKindMessageDeleted, ChatUpdateKindThreadResolved, ChatUpdateKindThreadReopened:
+		return true
+	}
+	return false
+}
+
+func (e ChatUpdateKind) String() string {
+	return string(e)
+}
+
+func (e *ChatUpdateKind) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = ChatUpdateKind(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid ChatUpdateKind", str)
+	}
+	return nil
+}
+
+func (e ChatUpdateKind) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *ChatUpdateKind) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e ChatUpdateKind) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

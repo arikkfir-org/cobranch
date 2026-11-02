@@ -190,7 +190,7 @@ func TestRawCache(t *testing.T) {
 // serve serves req to viewer.
 func (f *orgFixture) serve(viewer *auth.Authenticated, req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
-	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code)).ServeHTTP(rec, req)
+	as(viewer, NewHandler("v1", nil, f.service, f.repos, f.code, f.chats)).ServeHTTP(rec, req)
 	return rec
 }
 
