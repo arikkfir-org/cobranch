@@ -30,6 +30,12 @@ type Agent struct {
 	Version int `json:"version"`
 	// The roles it holds, those at the organization first.
 	Grants []*AgentGrant `json:"grants"`
+	// The model provider it runs on, one the organization added; null while it runs on none.
+	Provider *string `json:"provider,omitempty"`
+	// The model it runs on, as its provider names it; null while it runs on none.
+	Model *string `json:"model,omitempty"`
+	// The secrets its tasks receive, by the environment variables they go in.
+	Secrets []*AgentSecret `json:"secrets"`
 }
 
 // A role an agent holds, at its organization or, with a repository, on that repository.
@@ -64,6 +70,18 @@ type AgentPatch struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
+}
+
+// A secret an agent's tasks receive, in the environment variable name.
+type AgentSecret struct {
+	Name     string `json:"name"`
+	SecretID string `json:"secretId"`
+}
+
+// A secret an agent's tasks receive: the environment variable it goes in, other than those the harness sets itself (PATH, HOME and those starting COBRANCH_, GIT_ or LD_), and one of the organization's secrets or its repositories'.
+type AgentSecretInput struct {
+	Name     string `json:"name"`
+	SecretID string `json:"secretId"`
 }
 
 // A principal's verdict on a commit, such as ci/build passing. It belongs to the commit, so every branch at that commit shows it; a commit holds at most one of each name, which only its principal changes.
@@ -696,6 +714,24 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
+// A model provider an organization added, one the installation knows, with the organization's own secret that holds its API key. An agent on one of its models must read that secret for its tasks to run.
+type ModelProvider struct {
+	// The provider's name, as the installation knows it.
+	Name string `json:"name"`
+	// The organization's secret that holds its API key; null once that secret is deleted.
+	SecretID *string `json:"secretId,omitempty"`
+	// That secret's name, shown to a viewer holding secrets.manage at the organization; null otherwise.
+	SecretName *string `json:"secretName,omitempty"`
+	// Whether it lost its secret, so that the tasks of agents on it can't run until an admin names another.
+	Broken bool `json:"broken"`
+	// Who added it; null once they are gone.
+	CreatedBy *CommitPrincipal `json:"createdBy,omitempty"`
+	CreatedAt time.Time        `json:"createdAt"`
+	UpdatedAt time.Time        `json:"updatedAt"`
+	// Counts its changes from 1: a change names it as expectedVersion to refuse one made meanwhile.
+	Version int `json:"version"`
+}
+
 type Mutation struct {
 }
 
@@ -739,6 +775,10 @@ type Organization struct {
 	Tasks *TaskPage `json:"tasks"`
 	// One of the organization's tasks by number: null unless it is there and the viewer reads the repository it names; takes org.read.
 	Task *Task `json:"task,omitempty"`
+	// The model providers the organization added, by name; takes org.read. The names of their secrets show to a viewer holding secrets.manage at the organization.
+	ModelProviders []*ModelProvider `json:"modelProviders"`
+	// The model providers the installation knows, by name: those the organization may add.
+	AvailableModelProviders []string `json:"availableModelProviders"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
 	IssueKey string `json:"issueKey"`
 	// A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100.
