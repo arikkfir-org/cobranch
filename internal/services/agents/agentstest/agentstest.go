@@ -45,6 +45,8 @@ type Store struct {
 	Branches  map[uuid.UUID]Branch
 	Threads   map[uuid.UUID]uuid.UUID
 	Names     map[uuid.UUID]string
+	providers map[uuid.UUID]map[string]agents.ModelProvider
+	secrets   map[uuid.UUID]Secret
 	Events    []string
 	Now       time.Time
 }
@@ -57,7 +59,7 @@ func NewStore() *Store {
 		OrgRoles:  []orgs.Role{orgstest.Owner, orgstest.Member, orgstest.Guest, orgstest.Manager},
 		RepoRoles: []orgs.Role{orgstest.Reader, orgstest.Developer, orgstest.Maintainer, orgstest.Automation},
 		Repos:     map[uuid.UUID]Repository{}, Branches: map[uuid.UUID]Branch{}, Threads: map[uuid.UUID]uuid.UUID{},
-		Names: map[uuid.UUID]string{}}
+		Names: map[uuid.UUID]string{}, providers: map[uuid.UUID]map[string]agents.ModelProvider{}, secrets: map[uuid.UUID]Secret{}}
 }
 
 // AddAgent records a, as CreateAgent would without checking its name, and answers it as the store keeps it.
