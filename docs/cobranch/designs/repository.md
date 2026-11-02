@@ -46,7 +46,7 @@ tests with the race detector against the PostgreSQL sidecar, the cluster adapter
 those binaries, and with `CI` set a test fails rather than skip when it can't reach them. A test that sets up a database
 or a Git server of its own runs in parallel with the others: one at a time, the Git server's took four minutes. Go
 Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiled on a cold cache: its steps kept
-about two cores busy and peaked near 2.1Gi (`generated`), 1.5Gi (`lint`) or 2.6Gi (`test`), hence the tasks' sizes.
+about two cores busy and peaked near 2.1Gi (`generated`), 2.8Gi (`lint`) or 2.6Gi (`test`), hence the tasks' sizes.
 
 Every task starts from `main`'s Go caches, so a run downloads and compiles only what its commit changed. They are six
 archives of bucket `arikkfir-cobranch-ci-cache`, `main/go/<cache>.tar.gz`: `mod`, the modules; Go's build caches of the
