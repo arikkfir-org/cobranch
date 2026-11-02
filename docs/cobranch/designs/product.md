@@ -49,13 +49,14 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Branch status](branch-status.md) | Commit annotations, merge requirements, how a branch’s status is computed, and merges. | Proposed |
 | [Code browsing](code-browsing.md) | Files, trees and history in the Console, with Markdown and READMEs rendered. | Proposed |
 | [Git object storage](git-object-storage.md) | Where Git objects live: PostgreSQL by default, a bucket or local files by choice, and moving between them. | Proposed |
-| [Jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y) | Jobs from /cobranch.yaml: triggers, runs in per-organization job namespaces, annotations, secrets. | Proposed |
-| [Delivery](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd) | The built-in GitOps controller: delivery roots in /cobranch.yaml, an environment per branch, apply, prune and health. | Proposed |
+| [Jobs](jobs.md) | Jobs from /cobranch.yaml: triggers, runs in per-organization job namespaces, annotations, secrets. | Proposed |
+| [Delivery](delivery.md) | The built-in GitOps controller: delivery roots in /cobranch.yaml, an environment per branch, apply, prune and health. | Proposed |
 | [Monitoring](monitoring.md) | Metrics for page-view times, code reads and the pack cache, exported over OpenTelemetry. | Proposed |
-| [Agents](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4) | Agents as principals, tasks, the agent pod and its harness, and branch chats. | Proposed |
+| [Agents](agents.md) | Agents as principals, tasks, the agent pod and its harness, and branch chats. | Proposed |
 | [Reviews](reviews.md) | Reviews on commits, required approvals, and the built-in AI reviewer. | Proposed |
-| [Quotas](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
-| [Issues](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
+| [Quotas](quotas.md) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
+| [Issues](issues.md) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
+| [Console](console.md) | The Console as static ES modules: a shell, shared modules and a module per page, with no build step. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -110,7 +111,7 @@ use them ([secrets](principals-and-permissions.md#secrets)).
 ### Jobs
 
 Jobs are inspired by Octomaton's `.octomaton.yaml`. How they are declared, triggered, run and report, with their
-secrets, is in [Jobs](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y).
+secrets, is in [Jobs](jobs.md).
 
 **A job runs when an event fires, as a principal with the permissions it declares**
 
@@ -124,7 +125,7 @@ what may be overridden, as Octomaton trusts only the default branch’s definiti
 A branch is the request to merge into its base: there is no separate pull request. Each branch carries a real-time,
 threaded chat whose messages can point at a file and line range, which is how review comments point at code.
 Annotations, merge requirements, how a branch's status is computed and how a merge is recorded are in [Branch status and
-merges](branch-status.md). Deleting a merged branch from the Console and the APIs is in progress
+merges](branch-status.md). People delete a merged branch from the Console or the APIs
 ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)).
 
 **A branch’s status is computed; the first rule that matches wins**
@@ -155,13 +156,12 @@ An admin picks each agent's model from the providers the organization holds cred
 Google's Gemini, xAI's Grok, OpenAI's GPT and DeepSeek. One organization can run its reviewer on one model, a
 refactoring agent on another and an agent for small tasks on a third
 ([models](architecture.md#settings-secrets-and-models)). Agents, their tasks, pods and branch chats are in
-[Agents](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4); reviews, required approvals and the built-in reviewer in
-[Reviews and AI review](reviews.md).
+[Agents](agents.md); reviews, required approvals and the built-in reviewer in [Reviews and AI review](reviews.md).
 
 ### Delivery
 
 An Argo CD-like GitOps controller, built in. Delivery roots, environments per branch, apply, prune and health are in
-[Delivery](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd).
+[Delivery](delivery.md).
 
 **Every branch becomes an environment**
 
@@ -173,8 +173,8 @@ An Argo CD-like GitOps controller, built in. Delivery roots, environments per br
 
 Issues are Linear-like and belong to an organization. A branch is linked to an issue by its name, or by hand, so an
 issue shows the branches that work on it and a branch shows its issue; agents take issues as tasks. The details are in
-[Issues](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n). Identity providers are the first integration, Slack comes
-in phase 2 with several use cases still to design, and more follow.
+[Issues](issues.md). Identity providers are the first integration, Slack comes in phase 2 with several use cases still
+to design, and more follow.
 
 ## Architecture
 
@@ -237,26 +237,27 @@ synced into the repository's docs once Cobranch's shape settles. The work is tra
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
 slice after the ones it waits for. Where it stands:
 
-- **Done:** the design, the installable foundations, identity and organizations (sign-in, organizations and the
-  Back-office), Git hosting, branch status and merges ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)), browsing
-  code and rendering Markdown in the Console ([ENG-228](https://linear.app/arikkfir/issue/ENG-228),
-  [design](code-browsing.md)), and Git objects in PostgreSQL by default
-  ([ENG-237](https://linear.app/arikkfir/issue/ENG-237), [design](git-object-storage.md)).
-- **In progress, in parallel:** jobs from `/cobranch.yaml` ([ENG-214](https://linear.app/arikkfir/issue/ENG-214),
-  [design](https://claude.ai/artifact/FqmP4JjVLtfXc5q4uAZ68y)); operators' metrics for page views, code reads and caches
-  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)); agents and branch chats
-  ([ENG-215](https://linear.app/arikkfir/issue/ENG-215), [design](https://claude.ai/artifact/KWNwxfUQ15rK85CNzhYXr4));
-  reviews and the built-in AI reviewer ([ENG-216](https://linear.app/arikkfir/issue/ENG-216), [design](reviews.md));
-  issues linked to branches ([ENG-217](https://linear.app/arikkfir/issue/ENG-217),
-  [design](https://claude.ai/artifact/QM3VmRAtnSvttwT9bNaN8n)); delivery through the built-in GitOps controller
-  ([ENG-218](https://linear.app/arikkfir/issue/ENG-218), [design](https://claude.ai/artifact/Hhr4cGRUk6JtUDWRAUgWXd));
-  deleting a branch from the Console and the APIs once it has merged
-  ([ENG-241](https://linear.app/arikkfir/issue/ENG-241), [design](branch-status.md#deleting-a-branch)); and storage and
-  push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
-  [design](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6)), brought forward from phase 2 because an installation
-  open to sign-up needs them. The designs are Proposed and each slice builds on them while they are reviewed; each
-  builds first on what is already on `main` and on the others' agreed seams.
-- **Next:** the rest of [phase 2](#phase-2).
+- **Done:** milestones 1, 2, 3, 5 and 6, and all of milestone 4 but its operators' metrics: the design, the installable
+  foundations, identity and organizations (sign-in, organizations and the Back-office), Git hosting, branch status and
+  merges ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)), browsing code and rendering Markdown in the Console
+  ([ENG-228](https://linear.app/arikkfir/issue/ENG-228), [design](code-browsing.md)), Git objects in PostgreSQL by
+  default ([ENG-237](https://linear.app/arikkfir/issue/ENG-237), [design](git-object-storage.md)), deleting a merged
+  branch from the Console and the APIs ([ENG-241](https://linear.app/arikkfir/issue/ENG-241),
+  [design](branch-status.md#deleting-a-branch)), jobs from `/cobranch.yaml`, run by the built-in controller in a
+  namespace per organization ([ENG-214](https://linear.app/arikkfir/issue/ENG-214), [design](jobs.md)), agents that take
+  tasks in pods of their own and talk in branch chats ([ENG-215](https://linear.app/arikkfir/issue/ENG-215),
+  [design](agents.md)), reviews and the built-in AI reviewer, which reviews every push and can be required to merge
+  ([ENG-216](https://linear.app/arikkfir/issue/ENG-216), [ENG-250](https://linear.app/arikkfir/issue/ENG-250),
+  [ENG-251](https://linear.app/arikkfir/issue/ENG-251), [design](reviews.md)), issues linked to branches and taken by
+  agents ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](issues.md)), delivery of every branch to an
+  environment of its own through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
+  [design](delivery.md)), and storage and push quotas ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
+  [design](quotas.md)), brought forward from phase 2 because an installation open to sign-up needs them.
+- **In progress:** operators' metrics for page views, code reads and caches
+  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)), whose metrics are live and whose
+  alerts come last.
+- **Next:** the Console's pages split into files of their own, so slices that each add a page no longer conflict in one
+  file ([ENG-246](https://linear.app/arikkfir/issue/ENG-246)), then the rest of [phase 2](#phase-2).
 
 **The roadmap by milestone, as of 2026-11-02**
 
@@ -300,7 +301,7 @@ Planned after the foundations, each with a design of its own when its turn comes
   on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review)
   ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
 - **Quotas:** administrators cap what each user and organization may store and push, so an installation open to anyone's
-  sign-up keeps its storage in check ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
-  [design](https://claude.ai/artifact/Uy8pkcdmvn5kp41xTTmne6)).
+  sign-up keeps its storage in check; built ahead of the rest ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
+  [design](quotas.md)).
 
 Cobranch is a Kfirs project, created by Arik Kfir.
