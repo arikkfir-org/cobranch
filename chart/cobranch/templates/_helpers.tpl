@@ -131,7 +131,7 @@ securityContext:
 {{- end }}
 {{- end -}}
 
-{{/* Every workload's log level, and where its traces go, as OpenTelemetry's own variables. */}}
+{{/* Every workload's log level, and where its traces and metrics go, as OpenTelemetry's own variables. */}}
 {{- define "cobranch.telemetryEnv" -}}
 {{- $t := .Values.telemetry -}}
 - name: COBRANCH_LOG_LEVEL
@@ -143,6 +143,20 @@ securityContext:
   value: parentbased_traceidratio
 - name: OTEL_TRACES_SAMPLER_ARG
   value: {{ $t.traces.sampleRatio | quote }}
+{{- end }}
+{{- with $t.metrics.exporter }}
+- name: OTEL_METRICS_EXPORTER
+  value: {{ . | quote }}
+{{- end }}
+{{- with $t.metrics.endpoint }}
+- name: OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+  value: {{ . | quote }}
+{{- end }}
+{{- if eq $t.metrics.exporter "prometheus" }}
+- name: OTEL_EXPORTER_PROMETHEUS_HOST
+  value: "0.0.0.0"
+- name: OTEL_EXPORTER_PROMETHEUS_PORT
+  value: {{ $t.metrics.port | quote }}
 {{- end }}
 {{- with $t.traces.headersSecret }}
 - name: OTEL_EXPORTER_OTLP_HEADERS
