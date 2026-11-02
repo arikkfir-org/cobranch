@@ -508,6 +508,10 @@ func TestLoadAgent(t *testing.T) {
 			return c.ModelURL.String() == "https://models.example.com/anthropic" && c.ModelMaxTokens == 32000 && c.MaxTurns == 50 &&
 				c.ShellTimeout == 2*time.Minute && c.Workspace == "/work"
 		}},
+		{name: "a proxy that adds the key", env: map[string]string{"COBRANCH_REST_URL": "http://rest.cobranch.svc:8080/", "COBRANCH_TOKEN_FILE": "/t",
+			"COBRANCH_MODEL_PROVIDER": "anthropic", "COBRANCH_MODEL": "test-model", "COBRANCH_MODEL_URL": "http://127.0.0.1:8090"}, check: func(c Agent) bool {
+			return c.ModelKeyFile == "" && c.ModelURL.String() == "http://127.0.0.1:8090"
+		}},
 		{name: "nothing", env: map[string]string{},
 			wantErr: "the agent takes COBRANCH_MODEL, COBRANCH_MODEL_KEY_FILE, COBRANCH_MODEL_PROVIDER, COBRANCH_REST_URL, COBRANCH_TOKEN_FILE"},
 		{name: "no turns", env: with(map[string]string{"COBRANCH_MAX_TURNS": "0"}), wantErr: "COBRANCH_MODEL_MAX_TOKENS, COBRANCH_MAX_TURNS and COBRANCH_SHELL_TIMEOUT are more than 0"},
@@ -525,6 +529,28 @@ func TestLoadAgent(t *testing.T) {
 			}
 			if err != nil || !tt.check(got) {
 				t.Errorf("LoadAgent() = %+v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestLoadModelProxy(t *testing.T) {
+	tests := []struct {
+		name    string
+		env     map[string]string
+		want    ModelProxy
+		wantErr bool
+	}{
+		{name: "defaults", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google", "COBRANCH_MODEL_KEY_FILE": "/cobranch/key/key"},
+			want: ModelProxy{HTTPAddr: "127.0.0.1:8090", ModelProvider: "google", ModelKeyFile: "/cobranch/key/key", ShutdownTimeout: 5 * time.Second}},
+		{name: "no key", env: map[string]string{"COBRANCH_MODEL_PROVIDER": "google"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			clean(t, tt.env)
+			got, err := LoadModelProxy()
+			if (err != nil) != tt.wantErr || (!tt.wantErr && !reflect.DeepEqual(got, tt.want)) {
+				t.Errorf("LoadModelProxy() = %+v, %v", got, err)
 			}
 		})
 	}

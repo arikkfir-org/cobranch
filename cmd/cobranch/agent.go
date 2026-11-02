@@ -55,11 +55,15 @@ func runAgent(ctx context.Context, logs io.Writer) error {
 	return nil
 }
 
-// agentModel is the agent's model, with its provider's key from its file.
+// agentModel is the agent's model, with its provider's key from its file, or through the proxy at its URL, which adds
+// the key, without one.
 func agentModel(cfg config.Agent) (harness.Model, error) {
-	key, err := os.ReadFile(cfg.ModelKeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("reading the provider's key: %w", err)
+	var key []byte
+	if cfg.ModelKeyFile != "" {
+		var err error
+		if key, err = os.ReadFile(cfg.ModelKeyFile); err != nil {
+			return nil, fmt.Errorf("reading the provider's key: %w", err)
+		}
 	}
 	var url string
 	if cfg.ModelURL.URL != nil {

@@ -69,7 +69,8 @@ func (a anthropic) Next(ctx context.Context, r harness.Request) (harness.Turn, e
 		req.Tools = append(req.Tools, anthropicTool{Name: t.Name, Description: t.Description, InputSchema: t.Parameters})
 	}
 	var resp anthropicResponse
-	headers := map[string]string{"x-api-key": a.settings.Key, "anthropic-version": anthropicVersion}
+	headers := keyHeader(a.settings.Provider, a.settings.Key)
+	headers["anthropic-version"] = anthropicVersion
 	if err := a.post(ctx, a.url+"/v1/messages", headers, req, &resp); err != nil {
 		return harness.Turn{}, err
 	}

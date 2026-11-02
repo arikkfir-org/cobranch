@@ -67,7 +67,7 @@ func (o openAI) Next(ctx context.Context, r harness.Request) (harness.Turn, erro
 		req.Tools = append(req.Tools, openAITool{Type: "function", Function: openAIFunction{Name: t.Name, Description: t.Description, Parameters: t.Parameters}})
 	}
 	var resp openAIResponse
-	if err := o.post(ctx, o.url+"/chat/completions", map[string]string{"Authorization": "Bearer " + o.settings.Key}, req, &resp); err != nil {
+	if err := o.post(ctx, o.url+"/chat/completions", keyHeader(o.settings.Provider, o.settings.Key), req, &resp); err != nil {
 		return harness.Turn{}, err
 	}
 	if len(resp.Choices) == 0 {
