@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -87,6 +88,34 @@ var (
 	}
 )
 
+// columnsBC are three SQL migrations: table a, then columns b and c of it; tableAC lacks the column b, as a database
+// does that migrated before 2 merged, after 3.
+var (
+	columnsBC = fstest.MapFS{
+		"00001_a.sql": tableA["00001_a.sql"],
+		"00002_b.sql": columnB["00002_b.sql"],
+		"00003_c.sql": {Data: []byte("-- +goose Up\nALTER TABLE a ADD COLUMN c text;\n")},
+	}
+	tableAC = fstest.MapFS{"00001_a.sql": columnsBC["00001_a.sql"], "00003_c.sql": columnsBC["00003_c.sql"]}
+)
+
+// cobranchVersion is the highest of Cobranch's migrations: the version its schema is at once migrated.
+func cobranchVersion(t *testing.T) int64 {
+	t.Helper()
+	names, err := fs.Glob(migrations.FS, "*.sql")
+	if err != nil || len(names) == 0 {
+		t.Fatalf("listing Cobranch's migrations: %v, %d found", err, len(names))
+	}
+	version, err := strconv.ParseInt(strings.SplitN(names[len(names)-1], "_", 2)[0], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migrations.Go {
+		version = max(version, m.Version)
+	}
+	return version
+}
+
 // insertA is a Go migration, version 3, that writes a row into table a.
 func insertA() *goose.Migration {
 	return goose.NewGoMigration(3, &goose.GoFunc{RunTx: func(ctx context.Context, tx *sql.Tx) error {
@@ -105,7 +134,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 26},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: cobranchVersion(t)},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +172,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 26},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 26},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: cobranchVersion(t)},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: cobranchVersion(t)},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{
@@ -221,20 +250,25 @@ func TestSchemaCheck(t *testing.T) {
 		reach    bool
 		migrated fs.FS // the migrations the database has had, if any
 		needs    fs.FS // the migrations of the build that checks
-		wantErr  bool
+		wantErr  string
 	}{
-		{name: "a database never migrated", reach: true, needs: tableA, wantErr: true},
-		{name: "a schema behind the build", reach: true, migrated: tableA, needs: columnB, wantErr: true},
+		{name: "a database never migrated", reach: true, needs: tableA, wantErr: "lacks migration 1, which this build has"},
+		{name: "a schema behind the build", reach: true, migrated: tableA, needs: columnB, wantErr: "lacks migration 2, which this build has"},
 		{name: "a schema at the build's version", reach: true, migrated: columnB, needs: columnB},
 		{name: "a schema ahead of the build, mid-upgrade", reach: true, migrated: columnB, needs: tableA},
-		{name: "a database that never answers", needs: tableA, wantErr: true},
+		{
+			name: "a schema past the build's version that lacks one of its migrations", reach: true, migrated: tableAC, needs: columnsBC,
+			wantErr: "lacks migration 2, which this build has",
+		},
+		{name: "a database that never answers", needs: tableA, wantErr: "reading the schema's migrations"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			pool := migratedDatabase(t, tt.reach, tt.migrated)
 			s := newSchema(t, pool, tt.needs)
-			if err := s.Check(context.Background()); (err != nil) != tt.wantErr {
-				t.Errorf("Check() = %v, want error %t", err, tt.wantErr)
+			err := s.Check(context.Background())
+			if (err != nil) != (tt.wantErr != "") || err != nil && !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("Check() = %v, want an error saying %q", err, tt.wantErr)
 			}
 			if tt.reach && tt.migrated == nil && schemaTableExists(t, pool) {
 				t.Error("Check() created the migrations' table; it must only read")
@@ -267,6 +301,33 @@ func schemaTableExists(t *testing.T, pool *pgxpool.Pool) bool {
 		t.Fatal(err)
 	}
 	return exists
+}
+
+func TestSchemaMigrateLowerAfterHigher(t *testing.T) {
+	tests := []struct {
+		name     string
+		migrated fs.FS // the migrations the database had before
+		sqlFiles fs.FS // the migrations of the build that migrates
+	}{
+		{name: "a lower migration merged after a higher one", migrated: tableAC, sqlFiles: columnsBC},
+		{name: "every migration in order", migrated: columnB, sqlFiles: columnsBC},
+		{name: "nothing new", migrated: columnsBC, sqlFiles: columnsBC},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pool := migratedDatabase(t, true, tt.migrated)
+			s := newSchema(t, pool, tt.sqlFiles)
+			if err := s.Migrate(context.Background()); err != nil {
+				t.Fatalf("Migrate() = %v", err)
+			}
+			if err := s.Check(context.Background()); err != nil {
+				t.Errorf("Check() = %v after Migrate", err)
+			}
+			if _, err := pool.Exec(context.Background(), "INSERT INTO a (id, b, c) VALUES (1, 'b', 'c')"); err != nil {
+				t.Errorf("table a lacks a column after Migrate: %v", err)
+			}
+		})
+	}
 }
 
 func TestSchemaCheckOnceMigrated(t *testing.T) {
@@ -457,6 +518,12 @@ func TestSeedsMigrate(t *testing.T) {
 		{
 			name:          "a newer build, only the new seed",
 			runs:          [][]*goose.Migration{{seedA(1, 1)}, {seedA(1, 1), seedA(2, 2)}},
+			wantRows:      2,
+			wantSeedTable: 2,
+		},
+		{
+			name:          "a lower seed merged after a higher one",
+			runs:          [][]*goose.Migration{{seedA(2, 2)}, {seedA(1, 1), seedA(2, 2)}},
 			wantRows:      2,
 			wantSeedTable: 2,
 		},
