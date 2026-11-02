@@ -101,8 +101,20 @@ var (
 // slugPattern is a letter or digit, then letters, digits, hyphens, dots and underscores.
 var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 
-// ReservedSlugs are the Console's pages under an organization, which no repository may take.
-var ReservedSlugs = []string{"members", "roles", "api-keys", "agents", "tasks", "secrets", "settings", "repos", "new", "issues"}
+// ReservedSlugs are the Console's pages under an organization, which no repository may take: one per page module of
+// its pages/org but index.js, the organization's home. One a line, so two changes that each add a page add a line each.
+var ReservedSlugs = []string{
+	"agents",
+	"api-keys",
+	"issues",
+	"members",
+	"new",
+	"repos",
+	"roles",
+	"secrets",
+	"settings",
+	"tasks",
+}
 
 // ValidateSlug reports whether slug may name a repository: 1 to 100 lowercase letters, digits, hyphens, dots and
 // underscores, starting with a letter or digit, not ending in .git, and none of the Console's pages.

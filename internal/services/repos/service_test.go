@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -179,6 +181,25 @@ func TestValidateSlug(t *testing.T) {
 		if err := repos.ValidateSlug(tt.slug); (err == nil) != tt.ok {
 			t.Errorf("ValidateSlug(%q) = %v, want ok %v", tt.slug, err, tt.ok)
 		}
+	}
+}
+
+// TestReservedSlugsAreConsolePages checks that the slugs no repository may take are the Console's pages under an
+// organization, whose page modules it finds by their files' names: a page without its slug would hide the repository
+// that has it, and a slug without its page would refuse a name for nothing.
+func TestReservedSlugsAreConsolePages(t *testing.T) {
+	files, err := filepath.Glob("../../../web/console/public/assets/pages/org/*.js")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("the Console's organization pages: %v, %v", files, err)
+	}
+	var pages []string
+	for _, f := range files {
+		if page := strings.TrimSuffix(filepath.Base(f), ".js"); page != "index" {
+			pages = append(pages, page)
+		}
+	}
+	if reserved := slices.Sorted(slices.Values(repos.ReservedSlugs)); !slices.Equal(reserved, pages) {
+		t.Errorf("ReservedSlugs = %v, want the Console's organization pages %v", reserved, pages)
 	}
 }
 

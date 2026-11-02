@@ -1,0 +1,2 @@
+/* Markdown, drawn in a sandboxed frame. */
+iframe.markdown { display: block; width: 100%; height: 0; border: 0; background: transparent; }
