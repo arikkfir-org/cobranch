@@ -7,8 +7,6 @@ import { follows } from "../../lib/state.js";
 
 export const nav = { label: "Runs", order: 20 };
 export const accepts = (rest) => rest.length <= 1;
-// The API's page views name no page of runs yet: they count as the code's.
-export const view = "repository.code";
 export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryRun(path, at, rest[0], can, fail) : [await runsPanel(path, at, can, fail, "")];
 
 // repositoryRun is a run's page: its state and why, its job, ref and commit, what queued it, who started it, when it

@@ -7,8 +7,6 @@ import { render } from "../../lib/router.js";
 
 export const nav = { label: "Environments", order: 30 };
 export const accepts = (rest) => rest.length <= 1;
-// The API's page views name no page of environments yet: they count as the code's.
-export const view = "repository.code";
 export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryEnvironment(path, at, rest[0], can, fail) : [await environmentsPanel(path, at, "")];
 
 // repositoryEnvironment is an environment's page: its target and branch, where it delivers, its sync, health and

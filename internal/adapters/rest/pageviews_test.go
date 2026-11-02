@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -76,6 +79,59 @@ func TestReportPageViews(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPageViewsNameEveryConsolePage keeps the names the Console's page modules report their views under among the
+// pages the API records, so a new page's views aren't skipped, and holds a module whose own page the API records to
+// that name, so it isn't counted as another page's.
+func TestPageViewsNameEveryConsolePage(t *testing.T) {
+	for _, dir := range []struct{ glob, prefix string }{
+		{glob: "../../../web/console/public/assets/pages/org/*.js", prefix: "organization."},
+		{glob: "../../../web/console/public/assets/pages/repo/*.js", prefix: "repository."},
+	} {
+		files, err := filepath.Glob(dir.glob)
+		if err != nil || len(files) == 0 {
+			t.Fatalf("the Console's pages in %s: %v, %v", dir.glob, files, err)
+		}
+		for _, f := range files {
+			own := dir.prefix + strings.TrimSuffix(filepath.Base(f), ".js")
+			names := consoleViews(t, f, own)
+			for _, name := range names {
+				if !PageViewPage(name).Valid() {
+					t.Errorf("%s reports its views as %q, which PageView.page in api/openapi.yaml doesn't name", f, name)
+				}
+			}
+			if PageViewPage(own).Valid() && !slices.Contains(names, own) {
+				t.Errorf("%s reports its views as %q, though the API records its own page, %q", f, names, own)
+			}
+		}
+	}
+}
+
+// quotedName is a string literal in a page module's view.
+var quotedName = regexp.MustCompile(`"([^"]+)"`)
+
+// consoleViews reads the names the Console's page module at path reports its views under, as the Console's router
+// names them: its view's, a name or those its function returns, or else own, the module's own page.
+func consoleViews(t *testing.T, path, own string) []string {
+	t.Helper()
+	src, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for line := range strings.Lines(string(src)) {
+		if view, ok := strings.CutPrefix(line, "export const view = "); ok {
+			var names []string
+			for _, m := range quotedName.FindAllStringSubmatch(view, -1) {
+				names = append(names, m[1])
+			}
+			if len(names) == 0 {
+				t.Errorf("%s: its view names no page on its line: %s", path, strings.TrimSpace(line))
+			}
+			return names
+		}
+	}
+	return []string{own}
 }
 
 // recordedViews collects the page views' metrics from reader: "page navigation count sum" of each duration's data
