@@ -402,6 +402,10 @@ delivery:
         memory: 1Gi
   # How often an environment that is Progressing has its health read again.
   healthInterval: 15s
+  renders:
+    # How many renders each environment keeps, for its deliveries' pages; the controller deletes older ones, but those
+    # of deliveries still working and the environment's last to succeed.
+    keep: 10
   inCluster:
     # Whether targets without a cluster deliver into this installation's cluster: each environment into a namespace
     # the controller makes, labels and fences, applying as the delivery account, a ServiceAccount <release>-delivery

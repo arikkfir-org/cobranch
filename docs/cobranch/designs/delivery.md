@@ -240,8 +240,8 @@ carries the environment’s label, and never a CRD.
 - **What it deletes:** every object of the inventory still carrying the environment's label, in reverse install order,
   and then the namespace if Cobranch created it. It waits until each is gone, so finalizers run, up to
   `delivery.teardownTimeout` (10 minutes), then fails with what remains.
-- **What it keeps:** CRDs, objects someone relabelled, and the environment's history: its deliveries, renders until
-  maintenance deletes them, and its last inventory.
+- **What it keeps:** CRDs, objects someone relabelled, and the environment's history: its deliveries, renders until the
+  controller deletes them, and its last inventory.
 - **A merged branch** keeps its environment until it is deleted, as it keeps its other state.
 
 ## Health and revision
@@ -373,7 +373,7 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 | `delivery.healthInterval` | 15s | How often a Progressing environment's health is read again |
 | `delivery.resync` | 10m | How often each environment is re-applied and its health read |
 | `delivery.teardownTimeout` | 10m | How long a teardown waits for objects to go |
-| `delivery.renders.keep` | 10 per environment | Renders kept; maintenance deletes older ones |
+| `delivery.renders.keep` | 10 per environment | Renders kept; the controller deletes older ones, but those of deliveries still working and the environment's last to succeed |
 
 ## Data model
 
@@ -433,7 +433,7 @@ grants the chart’s delivery RBAC.
 | One principal per target, holding only Secret reader on its cluster's secret | The jobs model: least privilege, audit by name | Proposed |
 | Other clusters through a kubeconfig secret, exec plugins refused | No new credential store; the other cluster's RBAC bounds it | Proposed |
 | This installation's cluster in namespaces the controller makes, fences and applies to as an impersonated, namespace-bound account, off by default | Grants renders nothing cluster-wide; off until an operator consents, since any organization's target can then make a namespace of any free name | Agreed: off by default, a reversible default (Open question 3) |
-| Renders kept in the database, beside the delivery, rather than in the object store | The REST server, which takes the upload, holds no object store; a render is at most 16 MiB, and maintenance deletes old ones | Proposed |
+| Renders kept in the database, beside the delivery, rather than in the object store | The REST server, which takes the upload, holds no object store; a render is at most 16 MiB, and the controller's sweep deletes old ones | Proposed |
 | The upload is a `POST` of a delivery's number, creating its render once | The API's routes name deliveries by number, and a `PUT` would need `If-Match` for a resource the token can't read | Proposed |
 | The render pod's token also reads its repository | The checkout fetches the commit with it, as a run's token does; one token per pod | Proposed |
 | A failed render's reason is the last line its failed container logged | `cobranch render` and the checkout end with their error, which then reads on the commit's annotation | Proposed |

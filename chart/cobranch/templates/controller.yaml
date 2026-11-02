@@ -31,30 +31,37 @@
   "NODE_SELECTOR" (toJson $jobs.nodeSelector)
   "TOLERATIONS" (toJson $jobs.tolerations)
   "AFFINITY" (toJson $jobs.affinity) }}
-{{- $delivery := .Values.delivery }}
+{{- /* An upgrade with --reuse-values keeps an older version's values, which have no delivery: the controller's
+defaults stand in for what is unset. */}}
+{{- $delivery := .Values.delivery | default dict }}
+{{- $render := $delivery.render | default dict }}
+{{- $deliveryInCluster := $delivery.inCluster | default dict }}
 {{- $inCluster := include "cobranch.inCluster" . }}
 {{- $deliveryEnv := dict
   "IN_CLUSTER" (toString (not (empty $inCluster)))
-  "RENDER_TIMEOUT" $delivery.render.timeout
-  "RENDER_RESOURCES" (toJson $delivery.render.resources)
-  "HEALTH_INTERVAL" $delivery.healthInterval }}
+  "RENDER_TIMEOUT" $render.timeout
+  "RENDER_RESOURCES" (toJson $render.resources)
+  "HEALTH_INTERVAL" $delivery.healthInterval
+  "RENDERS_KEEP" ($delivery.renders | default dict).keep }}
 {{- if $inCluster }}
 {{- $_ := merge $deliveryEnv (dict
-  "POD_SECURITY" $delivery.inCluster.podSecurity
-  "NAMESPACE_LABELS" (toJson $delivery.inCluster.namespaceLabels)
+  "POD_SECURITY" $deliveryInCluster.podSecurity
+  "NAMESPACE_LABELS" (toJson $deliveryInCluster.namespaceLabels)
   "ACCOUNT" (include "cobranch.deliveryAccount" .)
   "ROLE" (printf "%s-delivery" $cluster)
   "FENCE_ROLE" (printf "%s-environments" $cluster)
-  "INGRESS_FROM" (toJson $delivery.inCluster.ingressFrom)
-  "RESOURCES" (toJson $delivery.inCluster.resources)
-  "QUOTA" (toJson $delivery.inCluster.quota)) }}
+  "INGRESS_FROM" (toJson $deliveryInCluster.ingressFrom)
+  "RESOURCES" (toJson $deliveryInCluster.resources)
+  "QUOTA" (toJson $deliveryInCluster.quota)) }}
 {{- end }}
 {{- $vars := list }}
 {{- range $name, $value := $env }}
 {{- $vars = append $vars (printf "- name: COBRANCH_JOBS_%s\n  value: %s" $name (quote $value)) }}
 {{- end }}
 {{- range $name, $value := $deliveryEnv }}
+{{- if not (has (toString $value) (list "" "null" "<nil>")) }}
 {{- $vars = append $vars (printf "- name: COBRANCH_DELIVERY_%s\n  value: %s" $name (quote $value)) }}
+{{- end }}
 {{- end }}
 {{- /* Without pods, the controller mounts no token: it reaches nothing in the cluster but the database. */}}
 {{- include "cobranch.server" (dict "root" . "component" "controller" "values" .Values.controller "bucket" true "service" false "serviceAccount" (ternary $controller "" $jobs.pods) "env" (join "\n" $vars)) }}

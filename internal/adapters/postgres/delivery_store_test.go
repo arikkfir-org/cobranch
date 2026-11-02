@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/code"
@@ -225,5 +226,112 @@ func TestDeliveryStoreFails(t *testing.T) {
 	}
 	if n, err := f.d.DropTokens(ctx); n != 0 || err != nil {
 		t.Errorf("DropTokens() = %d, %v, want none: Finish deleted it", n, err)
+	}
+}
+
+// deliverOnce takes the delivery that waited longest through its render, uploaded before it is marked rendering, as
+// a fast pod's may be, and its apply, which ends in state.
+func (f *deliveryFixture) deliverOnce(t *testing.T, state code.DeliveryState) deliverer.Delivery {
+	t.Helper()
+	ctx := context.Background()
+	d := f.claim(t)
+	f.token(t, d.ID, time.Now().Add(time.Hour))
+	if err := f.c.KeepRender(ctx, d.ID, []byte("kind: ConfigMap\n")); err != nil {
+		t.Fatalf("KeepRender() of a queued delivery = %v", err)
+	}
+	if marked, err := f.d.MarkRendering(ctx, d.ID); !marked || err != nil {
+		t.Fatalf("MarkRendering() = %t, %v", marked, err)
+	}
+	a, ok, err := f.d.TakeApply(ctx, d.ID, time.Now().Add(time.Hour))
+	if err != nil || !ok {
+		t.Fatalf("TakeApply() = %t, %v", ok, err)
+	}
+	if err := f.d.Record(ctx, deliverer.Outcome{Apply: a, Inventory: inventory(code.Healthy, "site"), Health: code.Healthy, State: state,
+		Report: code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}}); err != nil {
+		t.Fatalf("Record() = %v", err)
+	}
+	return d
+}
+
+// rendered lists the numbers of the repository's deliveries that keep their renders.
+func (f *deliveryFixture) rendered(t *testing.T, repoID uuid.UUID) []int64 {
+	t.Helper()
+	rows, err := f.pool.Query(context.Background(),
+		`SELECT d.number FROM delivery_renders r JOIN deliveries d ON d.id = r.delivery_id WHERE d.repo_id = $1 ORDER BY d.number`, repoID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	numbers, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return numbers
+}
+
+// TestDeliveryStoreDropsRenders keeps production's newest render and its last to succeed, deleting the rest.
+func TestDeliveryStoreDropsRenders(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t)
+	ctx := context.Background()
+	production, _ := f.pushTwoDeliveries(t)
+	f.deliverOnce(t, code.DeliverySucceeded)
+	for range 2 {
+		if _, err := f.c.Redeliver(ctx, f.max, f.website.ID, production.ID); err != nil {
+			t.Fatal(err)
+		}
+		f.deliverOnce(t, code.DeliveryFailed)
+	}
+	if got := f.rendered(t, f.website.ID); !slices.Equal(got, []int64{1, 3, 4}) {
+		t.Fatalf("renders kept before the sweep = %v", got)
+	}
+	if n, err := f.d.DropRenders(ctx, 1); n != 1 || err != nil {
+		t.Errorf("DropRenders(1) = %d, %v, want #3's", n, err)
+	}
+	if got := f.rendered(t, f.website.ID); !slices.Equal(got, []int64{1, 4}) {
+		t.Errorf("renders kept = %v, want #4, the newest, and #1, the last to succeed", got)
+	}
+	if n, err := f.d.DropRenders(ctx, 1); n != 0 || err != nil {
+		t.Errorf("DropRenders(1) again = %d, %v, want none", n, err)
+	}
+}
+
+// TestDeliveryStoreLateRecord records nothing of an apply whose lease lapsed once another controller ended the
+// delivery: the environment keeps the inventory that controller recorded.
+func TestDeliveryStoreLateRecord(t *testing.T) {
+	t.Parallel()
+	f := newDeliveryFixture(t)
+	ctx := context.Background()
+	production, _ := f.pushTwoDeliveries(t)
+	d := f.claim(t)
+	f.token(t, d.ID, time.Now().Add(time.Hour))
+	if _, err := f.d.MarkRendering(ctx, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.c.KeepRender(ctx, d.ID, []byte("kind: ConfigMap\n")); err != nil {
+		t.Fatal(err)
+	}
+	slow, ok, err := f.d.TakeApply(ctx, d.ID, time.Now().Add(-time.Second))
+	if err != nil || !ok {
+		t.Fatalf("TakeApply() = %t, %v", ok, err)
+	}
+	fast, ok, err := f.d.TakeApply(ctx, d.ID, time.Now().Add(time.Hour))
+	if err != nil || !ok {
+		t.Fatalf("TakeApply() of a lapsed apply = %t, %v, want it taken again", ok, err)
+	}
+	report := code.AnnotationInput{Status: code.AnnotationSuccessful, Summary: "Healthy"}
+	if err := f.d.Record(ctx, deliverer.Outcome{Apply: fast, Inventory: inventory(code.Healthy, "site"), Health: code.Healthy,
+		State: code.DeliverySucceeded, Report: report}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.d.Record(ctx, deliverer.Outcome{Apply: slow, Inventory: inventory(code.Healthy, "stale"), Health: code.Healthy,
+		State: code.DeliveryFailed, Report: report}); err != nil {
+		t.Errorf("Record() of an ended delivery = %v, want nothing recorded", err)
+	}
+	objects, err := f.d.Objects(ctx, production.ID)
+	if err != nil || len(objects) != 1 || objects[0].Name != "site" {
+		t.Errorf("Objects() = %+v, %v, want the inventory the delivery ended with", objects, err)
+	}
+	if got := f.deliveries(t, f.website.ID); !slices.Contains(got, "#1 production main@a succeeded") {
+		t.Errorf("deliveries = %q, want #1 succeeded", got)
 	}
 }

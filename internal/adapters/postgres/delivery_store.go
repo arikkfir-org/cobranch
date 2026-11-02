@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -147,15 +148,13 @@ func (s *DeliveryStore) TakeApply(ctx context.Context, deliveryID uuid.UUID, lea
 	return a, taken, err
 }
 
-// Record records how an apply ended, in one transaction: the environment's inventory; the delivery's end and its
-// token's; for one that succeeded the environment's revision, health and sync, and for one that failed Out of sync;
-// and the target's annotation (deliverer.Store).
+// Record records how an apply ended, in one transaction: the delivery's end and its token's; the environment's
+// inventory; for one that succeeded the environment's revision, health and sync, and for one that failed Out of sync;
+// and the target's annotation (deliverer.Store). A delivery that ended already, as another controller took its apply
+// when its lease lapsed, records nothing more: the environment's inventory may be a newer delivery's by then.
 func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 	a := o.Apply
 	return transact(ctx, s.pool, s.q, "recording the delivery's apply", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
-		if err := setInventory(ctx, q, a.EnvironmentID, a.ID, o.Inventory); err != nil {
-			return err
-		}
 		if err := q.DeleteDeliveryToken(ctx, a.ID); err != nil {
 			return fmt.Errorf("deleting delivery %s's token: %w", a.ID, err)
 		}
@@ -165,6 +164,9 @@ func (s *DeliveryStore) Record(ctx context.Context, o deliverer.Outcome) error {
 		}
 		if err != nil {
 			return fmt.Errorf("ending delivery %s: %w", a.ID, err)
+		}
+		if err := setInventory(ctx, q, a.EnvironmentID, a.ID, o.Inventory); err != nil {
+			return err
 		}
 		if o.State == code.DeliverySucceeded {
 			err = q.SetEnvironmentDelivered(ctx, queries.SetEnvironmentDeliveredParams{Revision: a.SHA, Health: string(o.Health),
@@ -221,6 +223,16 @@ func (s *DeliveryStore) Deliveries(ctx context.Context, ids []uuid.UUID) (map[uu
 func (s *DeliveryStore) DropTokens(ctx context.Context) (int64, error) {
 	n, err := s.q.DeleteDeadDeliveryTokens(ctx)
 	return n, wrapIf(err, "deleting the tokens of ended deliveries")
+}
+
+// DropRenders deletes each environment's renders past its newest keep, but those of deliveries that haven't ended and
+// its last to succeed (deliverer.Store).
+func (s *DeliveryStore) DropRenders(ctx context.Context, keep int) (int64, error) {
+	n, err := s.q.DeleteOldRenders(ctx, int32(min(keep, math.MaxInt32))) //nolint:gosec // min caps it
+	if err != nil {
+		return 0, fmt.Errorf("deleting old renders: %w", err)
+	}
+	return n, nil
 }
 
 // Progressing lists the live environments of this installation's cluster whose health is Progressing

@@ -73,6 +73,8 @@ type Delivery struct {
 	RenderResources JSON[corev1.ResourceRequirements] `envconfig:"DELIVERY_RENDER_RESOURCES"`
 	// HealthInterval is how often a Progressing environment's health is read again.
 	HealthInterval time.Duration `envconfig:"DELIVERY_HEALTH_INTERVAL" default:"15s"`
+	// RendersKeep is how many renders each environment keeps; the controller's sweep deletes older ones.
+	RendersKeep int `envconfig:"DELIVERY_RENDERS_KEEP" default:"10"`
 }
 
 // Jobs are the installation's settings for runs, from the chart's jobs values.
@@ -142,6 +144,8 @@ func LoadController() (Controller, error) {
 		return Controller{}, errors.New("COBRANCH_JOBS_LOGS_MAX_BYTES must be positive")
 	case c.RenderTimeout <= 0 || c.HealthInterval <= 0:
 		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDER_TIMEOUT and COBRANCH_DELIVERY_HEALTH_INTERVAL must be positive")
+	case c.RendersKeep < 1:
+		return Controller{}, errors.New("COBRANCH_DELIVERY_RENDERS_KEEP must be positive: an environment keeps the render it delivered")
 	case c.InCluster && (c.Account == "" || c.DeliveryRole == "" || c.FenceRole == ""):
 		return Controller{}, errors.New("delivering into this installation's cluster needs COBRANCH_DELIVERY_ACCOUNT, COBRANCH_DELIVERY_ROLE and COBRANCH_DELIVERY_FENCE_ROLE")
 	}

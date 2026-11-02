@@ -89,7 +89,7 @@ func controllerLoops(ctx context.Context, cfg config.Controller, pool *pgxpool.P
 		GitURL: j.GitURL, LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished})
 	deliveries := deliverer.NewService(postgres.NewDeliveryStore(pool), c.renders, c.target, archive, deliverer.Settings{Pods: j.Pods,
 		Lease: j.Lease, RoomRetry: j.RoomRetry, Timeout: d.RenderTimeout, RESTURL: j.RESTURL, GitURL: j.GitURL,
-		LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished, HealthEvery: d.HealthInterval})
+		LogLimit: int64(j.LogsMaxBytes), Vanished: j.Vanished, HealthEvery: d.HealthInterval, KeepRenders: d.RendersKeep})
 	// A store closed as the controller exits has nothing left to flush.
 	return map[string]controller.Runner{"runs": runs, "deliveries": deliveries}, func() { _ = bucket.Close() }, nil
 }

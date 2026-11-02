@@ -126,6 +126,11 @@ func (s store) DropTokens(context.Context) (int64, error) {
 	return 1, nil
 }
 
+func (s store) DropRenders(_ context.Context, keep int) (int64, error) {
+	s.log("dropped renders past %d", keep)
+	return 1, nil
+}
+
 func (s store) Progressing(context.Context) ([]deliverer.Environment, error) {
 	return s.progressing, nil
 }
@@ -226,7 +231,8 @@ func (a archive) Put(_ context.Context, _, deliveryID uuid.UUID, container strin
 }
 
 var settings = deliverer.Settings{Pods: true, Lease: 2 * time.Minute, RoomRetry: 30 * time.Second, Timeout: 10 * time.Minute,
-	RESTURL: "http://rest", GitURL: "http://git/", LogLimit: 1 << 20, Vanished: time.Minute, HealthEvery: 15 * time.Second}
+	RESTURL: "http://rest", GitURL: "http://git/", LogLimit: 1 << 20, Vanished: time.Minute, HealthEvery: 15 * time.Second,
+	KeepRenders: 10}
 
 // service is a Service over w, at now, delivering into a cluster unless noCluster.
 func service(w *world, s deliverer.Settings, noCluster bool) *deliverer.Service {
@@ -514,7 +520,7 @@ func TestSweep(t *testing.T) {
 			want = append(want, "removed render pod "+id.String()[:4])
 		}
 	}
-	if want = append([]string{"dropped dead tokens"}, want...); !slices.Equal(w.events, want) {
+	if want = append([]string{"dropped dead tokens", "dropped renders past 10"}, want...); !slices.Equal(w.events, want) {
 		t.Errorf("events = %q, want %q", w.events, want)
 	}
 }
@@ -530,7 +536,7 @@ func TestNoPods(t *testing.T) {
 	if err := svc.Follow(ctx); err != nil {
 		t.Errorf("Follow() = %v", err)
 	}
-	if want := []string{"dropped dead tokens"}; !slices.Equal(w.events, want) {
+	if want := []string{"dropped dead tokens", "dropped renders past 0"}; !slices.Equal(w.events, want) {
 		t.Errorf("events = %q, want %q", w.events, want)
 	}
 }

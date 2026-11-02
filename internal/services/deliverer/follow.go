@@ -140,7 +140,8 @@ func (s *Service) keepLogs(ctx context.Context, w Working) (map[string][]byte, e
 
 // Sweep cleans up after what Follow doesn't see: it removes the render pods of deliveries that ended otherwise (a newer
 // one superseded them, a member paused their environment), keeping their logs, and of deliveries that are gone, and
-// deletes the tokens of deliveries that ended or expired. It answers what failed, having gone on with the rest.
+// deletes the tokens of deliveries that ended or expired, and each environment's renders past the newest KeepRenders.
+// It answers what failed, having gone on with the rest.
 func (s *Service) Sweep(ctx context.Context) (err error) {
 	ctx, span := tracer.Start(ctx, "deliverer.Service.Sweep")
 	defer span.End()
@@ -150,6 +151,11 @@ func (s *Service) Sweep(ctx context.Context) (err error) {
 		return fmt.Errorf("deleting the tokens of ended deliveries: %w", err)
 	}
 	span.SetAttributes(attribute.Int64("cobranch.delivery_tokens.dropped", dropped))
+	renders, err := s.store.DropRenders(ctx, s.settings.KeepRenders)
+	if err != nil {
+		return fmt.Errorf("deleting old renders: %w", err)
+	}
+	span.SetAttributes(attribute.Int64("cobranch.delivery_renders.dropped", renders))
 	orgs, err := s.pods.Namespaces(ctx)
 	if err != nil {
 		return fmt.Errorf("listing the job namespaces: %w", err)

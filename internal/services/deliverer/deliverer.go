@@ -108,8 +108,8 @@ type Store interface {
 	// TakeApply marks a delivery that rendered, or whose apply a controller left, applying until leaseUntil, and
 	// answers what its apply needs; false when it neither rendered nor was left.
 	TakeApply(ctx context.Context, deliveryID uuid.UUID, leaseUntil time.Time) (Apply, bool, error)
-	// Record records how an apply ended: the environment's inventory, health, revision and sync, the delivery's end,
-	// and its target's annotation.
+	// Record records how an apply ended: the delivery's end, and, unless it had ended already, the environment's
+	// inventory, health, revision and sync and its target's annotation.
 	Record(ctx context.Context, o Outcome) error
 	// Finish ends a delivery that hasn't ended, in state with reason, sets its target's annotation to match and deletes
 	// its token; false when it had ended already.
@@ -118,6 +118,9 @@ type Store interface {
 	Deliveries(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]Standing, error)
 	// DropTokens deletes the tokens of deliveries that no longer render, and those that expired, and answers how many.
 	DropTokens(ctx context.Context) (int64, error)
+	// DropRenders deletes each environment's renders past its newest keep, but those of deliveries that haven't ended
+	// and its last to succeed, and answers how many.
+	DropRenders(ctx context.Context, keep int) (int64, error)
 	// Progressing lists the live environments of this installation's cluster whose health is Progressing.
 	Progressing(ctx context.Context) ([]Environment, error)
 	// Objects lists what an environment holds, in order.
@@ -201,6 +204,8 @@ type Settings struct {
 	Vanished time.Duration
 	// HealthEvery is how often a Progressing environment's health is read again.
 	HealthEvery time.Duration
+	// KeepRenders is how many renders each environment keeps; a sweep deletes older ones.
+	KeepRenders int
 }
 
 // Service delivers the deliveries.

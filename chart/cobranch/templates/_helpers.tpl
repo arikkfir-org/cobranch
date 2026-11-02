@@ -358,10 +358,12 @@ name, as two releases of one name in two namespaces share a cluster. */}}
 {{/* Whether targets without a cluster deliver into this installation's cluster: delivery.inCluster.enabled, which
 fails the render without jobs.pods, since a delivery renders in a pod. */}}
 {{- define "cobranch.inCluster" -}}
-{{- if and .Values.delivery.inCluster.enabled (not .Values.jobs.pods) -}}
+{{- /* An upgrade with --reuse-values keeps an older version's values, which have no delivery. */ -}}
+{{- $enabled := ((.Values.delivery | default dict).inCluster | default dict).enabled -}}
+{{- if and $enabled (not .Values.jobs.pods) -}}
 {{- fail "delivery.inCluster.enabled needs jobs.pods: a delivery renders in a pod" -}}
 {{- end -}}
-{{- if .Values.delivery.inCluster.enabled }}true{{ end -}}
+{{- if $enabled }}true{{ end -}}
 {{- end -}}
 
 {{/* What starts every job namespace's name: the value's, or the release's namespace's and -jobs-. Fails the render

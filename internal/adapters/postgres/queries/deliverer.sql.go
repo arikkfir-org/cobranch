@@ -129,6 +129,27 @@ func (q *Queries) DeleteEnvironmentObjects(ctx context.Context, environmentID uu
 	return err
 }
 
+const deleteOldRenders = `-- name: DeleteOldRenders :execrows
+DELETE FROM delivery_renders r
+USING (
+    SELECT d.id, d.environment_id, d.state, row_number() OVER (PARTITION BY d.environment_id ORDER BY d.number DESC) AS newest
+    FROM deliveries d JOIN delivery_renders kept ON kept.delivery_id = d.id
+) old
+WHERE r.delivery_id = old.id AND old.newest > $1::int AND old.state IN ('succeeded', 'failed', 'cancelled')
+  AND old.id IS DISTINCT FROM (SELECT s.id FROM deliveries s WHERE s.environment_id = old.environment_id
+      AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1)
+`
+
+// DeleteOldRenders deletes the renders of each environment's deliveries past its newest @keep, but those of deliveries
+// that haven't ended and the environment's last to succeed, which a resync applies again.
+func (q *Queries) DeleteOldRenders(ctx context.Context, keep int32) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOldRenders, keep)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deliveriesStanding = `-- name: DeliveriesStanding :many
 SELECT id, repo_id, state FROM deliveries WHERE id = ANY ($1::uuid[])
 `
@@ -286,11 +307,12 @@ func (q *Queries) FinishDelivery(ctx context.Context, state string, reason strin
 
 const insertDeliveryRender = `-- name: InsertDeliveryRender :execrows
 INSERT INTO delivery_renders (delivery_id, manifests)
-SELECT d.id, $1::bytea FROM deliveries d WHERE d.id = $2 AND d.state = 'rendering'
+SELECT d.id, $1::bytea FROM deliveries d WHERE d.id = $2 AND d.state IN ('queued', 'rendering')
 ON CONFLICT (delivery_id) DO NOTHING
 `
 
-// InsertDeliveryRender keeps a delivery's render, once, while it renders: no row when it doesn't, or has one.
+// InsertDeliveryRender keeps a delivery's render, once, while it renders: no row when it doesn't, or has one. A
+// delivery still queued renders too, as its token does: its pod may upload before the controller marks it rendering.
 func (q *Queries) InsertDeliveryRender(ctx context.Context, manifests []byte, deliveryID uuid.UUID) (int64, error) {
 	result, err := q.db.Exec(ctx, insertDeliveryRender, manifests, deliveryID)
 	if err != nil {

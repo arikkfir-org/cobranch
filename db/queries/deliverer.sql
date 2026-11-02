@@ -59,11 +59,24 @@ DELETE FROM delivery_tokens WHERE delivery_id = $1;
 DELETE FROM delivery_tokens t USING deliveries d
 WHERE d.id = t.delivery_id AND (d.state NOT IN ('queued', 'rendering') OR t.expires_at <= now());
 
--- InsertDeliveryRender keeps a delivery's render, once, while it renders: no row when it doesn't, or has one.
+-- InsertDeliveryRender keeps a delivery's render, once, while it renders: no row when it doesn't, or has one. A
+-- delivery still queued renders too, as its token does: its pod may upload before the controller marks it rendering.
 -- name: InsertDeliveryRender :execrows
 INSERT INTO delivery_renders (delivery_id, manifests)
-SELECT d.id, @manifests::bytea FROM deliveries d WHERE d.id = @delivery_id AND d.state = 'rendering'
+SELECT d.id, @manifests::bytea FROM deliveries d WHERE d.id = @delivery_id AND d.state IN ('queued', 'rendering')
 ON CONFLICT (delivery_id) DO NOTHING;
+
+-- DeleteOldRenders deletes the renders of each environment's deliveries past its newest @keep, but those of deliveries
+-- that haven't ended and the environment's last to succeed, which a resync applies again.
+-- name: DeleteOldRenders :execrows
+DELETE FROM delivery_renders r
+USING (
+    SELECT d.id, d.environment_id, d.state, row_number() OVER (PARTITION BY d.environment_id ORDER BY d.number DESC) AS newest
+    FROM deliveries d JOIN delivery_renders kept ON kept.delivery_id = d.id
+) old
+WHERE r.delivery_id = old.id AND old.newest > @keep::int AND old.state IN ('succeeded', 'failed', 'cancelled')
+  AND old.id IS DISTINCT FROM (SELECT s.id FROM deliveries s WHERE s.environment_id = old.environment_id
+      AND s.state = 'succeeded' ORDER BY s.number DESC LIMIT 1);
 
 -- WorkingDeliveries lists the deliveries the controller follows: those that render, and those whose apply a
 -- controller left, its lease lapsed, with whether each has its render.
