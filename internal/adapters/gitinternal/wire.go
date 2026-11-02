@@ -15,8 +15,9 @@ import (
 )
 
 // ReposPath is the prefix of the internal call's paths, under a repository's ID: GET <ReposPath>{id}/tree, /blob and
-// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit; and
-// POST <ReposPath>{id}/merge, with a MergeRequest.
+// /raw, each with the query parameters ref and path, and blob with limit; /log, with ref, skip and limit;
+// POST <ReposPath>{id}/merge, with a MergeRequest; and POST <ReposPath>{id}/delete, with a DeleteRequest, which
+// answers 204.
 const ReposPath = "/internal/v1/repos/"
 
 // The headers of a raw answer, beside its Content-Length, which name what its bytes are.
@@ -132,7 +133,26 @@ func (m Merged) Domain() code.Merged {
 	return code.Merged{Base: m.Base, Head: m.Head, Commit: m.Commit}
 }
 
-// CodeMoved is the code of the 409 of a merge whose branch or base moved; any other 409 carries a *code.MergeError's.
+// DeleteRequest is a branch deletion the internal call asks the Git server to record: code.DeleteRequest.
+type DeleteRequest struct {
+	Branch string    `json:"branch"`
+	Head   string    `json:"head"`
+	By     uuid.UUID `json:"by"`
+	Bypass bool      `json:"bypass"`
+}
+
+// DeleteRequestOf is req as the internal call carries it.
+func DeleteRequestOf(req code.DeleteRequest) DeleteRequest {
+	return DeleteRequest(req)
+}
+
+// Domain is the domain's deletion request.
+func (r DeleteRequest) Domain() code.DeleteRequest {
+	return code.DeleteRequest(r)
+}
+
+// CodeMoved is the code of the 409 of a merge whose branch or base moved, or of a deletion whose branch moved; any
+// other 409 carries a *code.MergeError's code, or a deletion's a *code.DeleteError's.
 const CodeMoved = "branch.moved"
 
 // Problem is the body of an answer other than 200: a code, for one that finds nothing, and what went wrong.

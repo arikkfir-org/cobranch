@@ -292,6 +292,7 @@
     let orgs = [];
     let roles = []; // the roles the organization shown grants
     let permissions = []; // what a role at an organization may hold
+    let carried = null; // what the next repository page says went wrong, once: a step that failed after the step before it re-rendered
 
     // api calls the REST API with the session cookie, and rejects with the problem it answered.
     async function api(method, path, body, headers = {}) {
@@ -549,6 +550,10 @@
         repo.description ? h("p", {}, repo.description) : null, h("nav", { class: "tabs" }, tabs.map(tab)));
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      if (carried) {
+        fail(carried);
+        carried = null;
+      }
       const at = repoLinks(org, repo);
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
@@ -597,6 +602,7 @@
       "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+      "trash-2": '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
     };
     // The branch statuses as the design system draws them, the same way.
     const branchStatuses = {
@@ -1028,19 +1034,20 @@
         others.length ? [h("p", {}, file(), " also names:"), h("ul", {}, others.map(named))] : null);
     }
 
-    // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button for a
-    // viewer who may, why it is Blocked, requirement by requirement, its commits, and the annotations on its head. main's
-    // page names what merges into it need instead.
+    // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
+    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, and the
+    // annotations on its head. main's page names what merges into it need instead, and a branch that isn't live any
+    // more, its deletion.
     async function repositoryBranch(path, at, name, can, fail) {
       let b;
       try {
         b = await api("GET", path + "/branches/" + encodeURIComponent(name));
       } catch (err) {
         if (err.status !== 404) throw err;
-        return [h("section", { class: "panel" }, h("h3", {}, "Branch"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
+        return deletedBranchPage(path, at, name);
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
-        h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"));
+        h("div", { class: "row" }, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), mergeRequirements([b])];
       const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
       // A Merged branch has nothing left to check or to merge.
@@ -1114,9 +1121,56 @@
       return panel;
     }
 
+    // deletedBranchPage is the page of a branch of name that isn't live: who deleted it and when, the head it was at,
+    // and its merge, as its latest deletion recorded them; or that there is none, for a name no branch had.
+    async function deletedBranchPage(path, at, name) {
+      let d;
+      try {
+        d = await api("GET", path + "/deleted-branches/" + encodeURIComponent(name));
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Branch"), h("p", {}, "There is no branch ", h("code", {}, name), "."))];
+      }
+      const by = d.deletedBy ? d.deletedBy.displayName : "a principal since gone, or before Cobranch recorded who";
+      const head = h("a", { href: at.commit(d.head), "data-nav": "" }, h("code", {}, shortSha(d.head)));
+      const merged = d.merge ? ["Merged into ", h("code", {}, "main"), " by ", d.merge.by ? d.merge.by.displayName : "a principal since gone", " · ", whenExactly(d.merge.at),
+        ": its commits are in ", h("a", { href: at.history("main"), "data-nav": "" }, "main's history"), "."]
+        : ["Never merged into ", h("code", {}, "main"), ": no branch holds its commits any more, though its head's page still shows them."];
+      return [h("section", { class: "panel" }, h("div", { class: "row" }, h("div", { class: "title" }, icon("trash-2"), h("h2", {}, h("code", {}, d.name)), h("span", { class: "chip" }, "Deleted"))),
+        h("p", {}, "Deleted by ", by, " · ", whenExactly(d.deletedAt)),
+        h("p", {}, "It was at ", head, d.commit ? [" · ", subject(d.commit.message)] : null, "."),
+        h("p", {}, merged))];
+    }
+
+    // mayDelete reports whether the viewer may delete b: with repo.push, and repo.bypass too for a branch main's
+    // /cobranch.yaml names. main is never deleted.
+    const mayDelete = (b, can) => b.name !== "main" && can("repo.push") && (!b.requirements || can("repo.bypass"));
+
+    // deleteControl offers to delete b, at the head the page shows, for a viewer who may: a plain confirmation for a
+    // Merged or Empty branch, and a danger button whose confirmation names the commits main lacks for any other.
+    function deleteControl(path, b, can, fail) {
+      if (!mayDelete(b, can)) return null;
+      const done = b.status === "merged" || b.status === "empty";
+      const button = h("button", { class: "button small" + (done ? "" : " danger"), type: "button" }, icon("trash-2"), "Delete branch");
+      button.addEventListener("click", () => {
+        const lacks = b.ahead ? plural(b.ahead, "commit") + " main lacks" : "commits main may lack";
+        const question = done ? "Delete branch " + b.name + "? Its commits stay in main's history."
+          : "Delete branch " + b.name + "? It has " + lacks + ", and no branch will hold them any more.";
+        if (!confirm(question)) return;
+        button.disabled = true;
+        deleteBranch(path, b).then(render).catch((err) => { button.disabled = false; fail(err); });
+      });
+      return button;
+    }
+
+    // deleteBranch deletes b at the head the page showed, which refuses one that moved since.
+    const deleteBranch = (path, b) => api("DELETE", path + "/branches/" + encodeURIComponent(b.name), undefined, { "If-Match": '"' + b.head + '"' });
+
     // mergeControl offers to merge b into its base, at the head the page shows, for a viewer who may: Merge once it is
     // Ready, with repo.merge, and Merge anyway otherwise, with repo.bypass too. A merge commit or a fast-forward, where
-    // the base requires linear history a fast-forward alone, and none for a branch behind its base.
+    // the base requires linear history a fast-forward alone, and none for a branch behind its base. A viewer who may
+    // delete b also has it deleted once merged, unless they uncheck it; a branch that moved meanwhile is kept, and the
+    // merge stands.
     function mergeControl(path, b, can, fail) {
       const ready = b.status === "ready";
       if (b.ahead === 0 || !can("repo.merge") || (!ready && !can("repo.bypass"))) return null;
@@ -1130,14 +1184,16 @@
         : linear ? "By fast-forward: " + b.base + " requires linear history."
         : "By a merge commit: it is " + plural(b.behind, "commit") + " behind " + b.base + ".");
       const button = h("button", { class: "button " + (ready ? "primary" : "danger"), type: "submit" }, ready ? "Merge" : "Merge anyway");
+      const remove = mayDelete(b, can) ? h("input", { name: "deleteBranch", type: "checkbox", checked: true }) : null;
       const merge = (e) => {
         e.preventDefault();
         if (!ready && !confirm("Merge " + b.name + " into " + b.base + " though it is " + branchStatuses[b.status].word + "?")) return;
         button.disabled = true;
         api("POST", path + "/branches/" + encodeURIComponent(b.name) + "/merge", { head: b.head, method: method ? method.value : methods.length ? methods[0][0] : undefined })
+          .then(() => remove && remove.checked ? deleteBranch(path, b).catch((err) => { carried = new Error("Merged, but the branch was kept: " + err.message); }) : null)
           .then(render).catch((err) => { button.disabled = false; fail(err); });
       };
-      return h("form", { class: "row merge", onsubmit: merge }, method, button, how);
+      return h("form", { class: "row merge", onsubmit: merge }, method, button, remove ? h("label", { class: "check" }, remove, "Delete the branch once merged") : null, how);
     }
 
     // wantsToMerge says what b would merge into its base: how many commits, after the author of its head.

@@ -87,6 +87,46 @@ func TestCodeStoreBranches(t *testing.T) {
 	}
 }
 
+// TestCodeStoreDeletedBranch runs its cases in order over one codeFixture, each pushing updates first: the latest
+// deletion of a name answers, and none does while a branch of that name is live.
+func TestCodeStoreDeletedBranch(t *testing.T) {
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	tests := []struct {
+		name     string
+		updates  []git.RefUpdate
+		branch   string
+		wantHead string
+	}{
+		{name: "a branch a push deleted", branch: "old", wantHead: shaA},
+		{name: "a live branch", branch: "feature"},
+		{name: "a name no branch had", branch: "nothing"},
+		{name: "a deleted branch's name, live again", updates: []git.RefUpdate{{Name: "refs/heads/old", Old: git.ZeroSHA, New: f.shaD}}, branch: "old"},
+		{name: "the same name deleted again", updates: []git.RefUpdate{{Name: "refs/heads/old", Old: f.shaD, New: git.ZeroSHA}}, branch: "old",
+			wantHead: f.shaD},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.updates != nil {
+				if err := f.g.Record(ctx, pushOf(f.website.ID, f.olivia, "", tt.updates)); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := f.c.DeletedBranch(ctx, f.website.ID, tt.branch)
+			if tt.wantHead == "" {
+				if !errors.Is(err, repos.ErrNotFound) {
+					t.Errorf("DeletedBranch(%s) = %+v, %v, want %v", tt.branch, got, err, repos.ErrNotFound)
+				}
+				return
+			}
+			if err != nil || got.Head != tt.wantHead || got.Commit == nil || got.Commit.SHA != tt.wantHead || got.DeletedAt.IsZero() ||
+				got.DeletedBy == nil || got.DeletedBy.ID != f.olivia || got.Merge != nil {
+				t.Errorf("DeletedBranch(%s) = %+v, %v, want it at %s, deleted by Olivia, never merged", tt.branch, got, err, tt.wantHead[:1])
+			}
+		})
+	}
+}
+
 func TestCodeStoreFirstParents(t *testing.T) {
 	f := newCodeFixture(t)
 	tests := []struct {

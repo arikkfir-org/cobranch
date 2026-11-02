@@ -58,8 +58,10 @@ VALUES (@id, @org_id, @repo_id, @name, @head, @at, @at);
 -- name: MoveBranch :execrows
 UPDATE branches SET head = @head, updated_at = @at WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL;
 
+-- DeleteBranch deletes a live branch for the principal who pushed its deletion, keeping its row.
 -- name: DeleteBranch :execrows
-UPDATE branches SET deleted_at = @at::timestamptz, updated_at = @at::timestamptz WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL;
+UPDATE branches SET deleted_at = @at::timestamptz, updated_at = @at::timestamptz, deleted_by = @deleted_by
+WHERE repo_id = @repo_id AND name = @name AND deleted_at IS NULL;
 
 -- NotifyPush wakes the push workers that listen, once the push's transaction commits.
 -- name: NotifyPush :exec

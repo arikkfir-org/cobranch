@@ -160,6 +160,22 @@ type CommitPrincipal struct {
 	DisplayName string `json:"displayName"`
 }
 
+// The latest deletion of a branch of a name, which keeps what it was at and its merge.
+type DeletedBranch struct {
+	// Its name, without refs/heads/.
+	Name string `json:"name"`
+	// The object it was at when deleted.
+	Head string `json:"head"`
+	// The commit it was at; null while its head is no commit a push recorded.
+	Commit    *Commit   `json:"commit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	DeletedAt time.Time `json:"deletedAt"`
+	// Who deleted it; null when no one was recorded, or once they are gone.
+	DeletedBy *CommitPrincipal `json:"deletedBy,omitempty"`
+	// The last merge recorded of it into its base; null when none was.
+	Merge *BranchMerge `json:"merge,omitempty"`
+}
+
 type Email struct {
 	Email    string `json:"email"`
 	Verified bool   `json:"verified"`
@@ -373,6 +389,8 @@ type Repository struct {
 	Branches []*Branch `json:"branches"`
 	// One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read.
 	Branch *Branch `json:"branch,omitempty"`
+	// The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read.
+	DeletedBranch *DeletedBranch `json:"deletedBranch,omitempty"`
 	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.

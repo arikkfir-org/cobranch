@@ -19,6 +19,8 @@ type Code interface {
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
+	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
 	Tree(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Tree, error)
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
@@ -179,6 +181,18 @@ func branch(b code.Branch) *Branch {
 	return out
 }
 
+// deletedBranch is b as the API shows it.
+func deletedBranch(b code.DeletedBranch) *DeletedBranch {
+	out := &DeletedBranch{Name: b.Name, Head: b.Head, CreatedAt: b.CreatedAt.UTC(), DeletedAt: b.DeletedAt.UTC(), DeletedBy: commitPrincipal(b.DeletedBy)}
+	if b.Commit != nil {
+		out.Commit = commit(*b.Commit)
+	}
+	if m := b.Merge; m != nil {
+		out.Merge = &BranchMerge{Head: m.Head, By: commitPrincipal(m.By), At: m.At.UTC()}
+	}
+	return out
+}
+
 // branchStatuses maps the domain's branch statuses to the schema's.
 var branchStatuses = map[code.BranchStatus]BranchStatus{
 	code.StatusProcessing: BranchStatusProcessing, code.StatusBlocked: BranchStatusBlocked, code.StatusEmpty: BranchStatusEmpty,
@@ -237,4 +251,19 @@ func mergeFail(ctx context.Context, err error) error {
 		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
 	}
 	return fail(ctx, err, "branch", "merging the branch")
+}
+
+// deleteFail is fail for deletions: CONFLICT for a branch that moved and a deletion Cobranch won't make, and
+// UNAVAILABLE without a Git server.
+func deleteFail(ctx context.Context, err error) error {
+	var refused *code.DeleteError
+	switch {
+	case errors.Is(err, code.ErrBranchMoved):
+		return refuse(ctx, conflict, "branch.moved", "The branch moved since you read it: read it again.")
+	case errors.As(err, &refused):
+		return refuse(ctx, conflict, refused.Code, refused.Message)
+	case errors.Is(err, code.ErrUnavailable):
+		return refuse(ctx, unavailable, "git.unavailable", code.ErrUnavailable.Error())
+	}
+	return fail(ctx, err, "branch", "deleting the branch")
 }

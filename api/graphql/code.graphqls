@@ -3,13 +3,16 @@
 # trees and files, which the Git server reads
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/code-browsing.md, "Trees and files"); and
 # the annotations principals set on its commits
-# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations").
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/branch-status.md, "Annotations"); and its
+# branches' merges and deletions (the same design, "Merging" and "Deleting a branch").
 
 extend type Repository {
   "The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read."
   branches: [Branch!]!
   "One of the repository's live branches by name, without refs/heads/, as branches answers each: null unless it is there; takes repo.read."
   branch(name: String!): Branch
+  "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
+  deletedBranch(name: String!): DeletedBranch
   "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100."
   history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
@@ -106,6 +109,8 @@ extend type Mutation {
   deleteAnnotation(repositoryId: ID!, sha: String!, name: String!, expectedVersion: Int): Boolean!
   "Merges one of the repository's branches into its base, main, for the viewer, and answers once Cobranch has recorded the merge as a push of main, which makes the branch MERGED once the push worker processes it; takes repo.merge for a READY branch, and repo.bypass for one that isn't, which also passes main's merge requirements. A head the branch has moved from, or a branch or a main that moved while Cobranch built the merge, is refused (CONFLICT, branch.moved); so are a branch with nothing to merge, one that isn't READY, a fast-forward of one behind main, a merge commit of one that conflicts with main and a push the merge requirements refuse, each with a reason of its own. It builds the merge on the Git server: an installation without one answers UNAVAILABLE."
   mergeBranch(repositoryId: ID!, branch: String!, input: MergeInput): MergeResult!
+  "Deletes one of the repository's branches for the viewer, and answers true once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves branches, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. With expectedHead, a branch that moved from it, or that moved while Cobranch recorded the deletion, is refused (CONFLICT, branch.moved). main is never deleted (CONFLICT, branch.default), and a push the deletion breaks a rule of is refused (CONFLICT, branch.refused). It records the deletion on the Git server: an installation without one answers UNAVAILABLE."
+  deleteBranch(repositoryId: ID!, branch: String!, expectedHead: String): Boolean!
 }
 
 "How to merge a branch into its base."
@@ -169,6 +174,22 @@ type BranchMerge {
   by: CommitPrincipal
   "When Cobranch recorded the push."
   at: Time!
+}
+
+"The latest deletion of a branch of a name, which keeps what it was at and its merge."
+type DeletedBranch {
+  "Its name, without refs/heads/."
+  name: String!
+  "The object it was at when deleted."
+  head: String!
+  "The commit it was at; null while its head is no commit a push recorded."
+  commit: Commit
+  createdAt: Time!
+  deletedAt: Time!
+  "Who deleted it; null when no one was recorded, or once they are gone."
+  deletedBy: CommitPrincipal
+  "The last merge recorded of it into its base; null when none was."
+  merge: BranchMerge
 }
 
 "Where a branch stands as a request to merge into its base, the first that holds."

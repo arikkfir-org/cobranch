@@ -43,6 +43,7 @@ models:
       roles: { resolver: true }
       branches: { resolver: true }
       branch: { resolver: true }
+      deletedBranch: { resolver: true }
       history: { resolver: true }
       commit: { resolver: true }
       tags: { resolver: true }

@@ -96,6 +96,21 @@ func (c *Client) Merge(ctx context.Context, repoID uuid.UUID, req code.MergeRequ
 	return merged.Domain(), nil
 }
 
+// DeleteBranch asks the Git server to record the deletion req asks for in the repository, on the viewer's token the
+// context carries (code.Objects).
+func (c *Client) DeleteBranch(ctx context.Context, repoID uuid.UUID, req code.DeleteRequest) error {
+	body, err := json.Marshal(DeleteRequestOf(req))
+	if err != nil {
+		return fmt.Errorf("asking the Git server for a deletion in repository %s: %w", repoID, err)
+	}
+	resp, err := c.do(ctx, http.MethodPost, repoID, opDelete, nil, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	_ = resp.Body.Close() // a 204 has no body; nothing left to tell
+	return nil
+}
+
 // getJSON reads the answer of the internal call's read into out.
 func (c *Client) getJSON(ctx context.Context, repoID uuid.UUID, read string, query url.Values, out any) error {
 	resp, err := c.get(ctx, repoID, read, query)
@@ -119,8 +134,12 @@ func (c *Client) get(ctx context.Context, repoID uuid.UUID, read string, query u
 	return c.do(ctx, http.MethodGet, repoID, read, query, nil)
 }
 
-// do asks the Git server for op of the repository, and returns its answer when it is 200; the domain's error when it
-// is a 404 with one of answers' codes, a 403, or a 409 of a merge; or an error naming what it said.
+// opDelete is the internal call's deletion of a branch, whose refusals are *code.DeleteErrors.
+const opDelete = "delete"
+
+// do asks the Git server for op of the repository, and returns its answer when it is 200 or 204; the domain's error
+// when it is a 404 with one of answers' codes, a 403, or a 409 of a merge or a deletion; or an error naming what it
+// said.
 func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op string, query url.Values, body io.Reader) (*http.Response, error) {
 	u := c.base.JoinPath(ReposPath, repoID.String(), op)
 	u.RawQuery = query.Encode()
@@ -138,7 +157,7 @@ func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op str
 	if err != nil {
 		return nil, fmt.Errorf("asking the Git server for the %s of repository %s: %w", op, repoID, err)
 	}
-	if resp.StatusCode == http.StatusOK {
+	if resp.StatusCode == http.StatusOK || resp.StatusCode == http.StatusNoContent {
 		return resp, nil
 	}
 	defer func() { _ = resp.Body.Close() }() // a problem's body is small; nothing left to tell
@@ -149,11 +168,13 @@ func (c *Client) do(ctx context.Context, method string, repoID uuid.UUID, op str
 	case ok && resp.StatusCode == http.StatusNotFound:
 		return nil, fmt.Errorf("reading the %s of repository %s: %w", op, repoID, answer)
 	case resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("merging in repository %s: %w: %s", repoID, auth.ErrForbidden, problem.Message)
+		return nil, fmt.Errorf("asking for the %s in repository %s: %w: %s", op, repoID, auth.ErrForbidden, problem.Message)
 	case resp.StatusCode == http.StatusConflict && problem.Code == CodeMoved:
-		return nil, fmt.Errorf("merging in repository %s: %w", repoID, code.ErrBranchMoved)
+		return nil, fmt.Errorf("asking for the %s in repository %s: %w", op, repoID, code.ErrBranchMoved)
+	case resp.StatusCode == http.StatusConflict && problem.Code != "" && op == opDelete:
+		return nil, fmt.Errorf("asking for the %s in repository %s: %w", op, repoID, &code.DeleteError{Code: problem.Code, Message: problem.Message})
 	case resp.StatusCode == http.StatusConflict && problem.Code != "":
-		return nil, fmt.Errorf("merging in repository %s: %w", repoID, &code.MergeError{Code: problem.Code, Message: problem.Message})
+		return nil, fmt.Errorf("asking for the %s in repository %s: %w", op, repoID, &code.MergeError{Code: problem.Code, Message: problem.Message})
 	}
 	return nil, fmt.Errorf("asking the Git server for the %s of repository %s: it answered %s: %s", op, repoID, resp.Status, problem.Message)
 }

@@ -425,15 +425,16 @@ func moveRefs(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git
 		if !ok {
 			continue
 		}
-		if err := moveBranch(ctx, q, orgID, push.RepoID, branch, u, at); err != nil {
+		if err := moveBranch(ctx, q, orgID, push, branch, u, at); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// moveBranch creates, moves or deletes the branch u updates.
-func moveBranch(ctx context.Context, q *queries.Queries, orgID, repoID uuid.UUID, name string, u git.RefUpdate, at time.Time) error {
+// moveBranch creates, moves or deletes the branch u updates; a branch deleted keeps its row, naming its pusher.
+func moveBranch(ctx context.Context, q *queries.Queries, orgID uuid.UUID, push git.Push, name string, u git.RefUpdate, at time.Time) error {
+	repoID := push.RepoID
 	switch {
 	case u.Old == git.ZeroSHA:
 		id, err := uuid.NewV7()
@@ -444,7 +445,7 @@ func moveBranch(ctx context.Context, q *queries.Queries, orgID, repoID uuid.UUID
 			return fmt.Errorf("creating branch %s: %w", name, err)
 		}
 	case u.New == git.ZeroSHA:
-		if _, err := q.DeleteBranch(ctx, at, repoID, name); err != nil {
+		if _, err := q.DeleteBranch(ctx, queries.DeleteBranchParams{At: at, DeletedBy: &push.PusherID, RepoID: repoID, Name: name}); err != nil {
 			return fmt.Errorf("deleting branch %s: %w", name, err)
 		}
 	default:

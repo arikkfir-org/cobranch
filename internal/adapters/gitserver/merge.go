@@ -60,7 +60,7 @@ func (s *Server) mergeHandler() http.HandlerFunc {
 		defer span.End()
 		merged, err := s.mergeFor(ctx, viewer.User, id, req)
 		if err != nil {
-			answerMerge(ctx, w, span, id, req.Branch, err)
+			answerChange(ctx, w, span, "merge", id, req.Branch, err)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -85,10 +85,11 @@ func (s *Server) mergeFor(ctx context.Context, viewer auth.User, repoID uuid.UUI
 	return s.merge(ctx, repoID, req)
 }
 
-// answerMerge answers a merge that failed: 403 for one the viewer may not ask for, 404 with the code of what it didn't
-// find, 409 for one Cobranch won't make, or 500, logged, for anything else.
-func answerMerge(ctx context.Context, w http.ResponseWriter, span trace.Span, repoID uuid.UUID, branch string, err error) {
+// answerChange answers a merge or a deletion of a branch, what, that failed: 403 for one the viewer may not ask for,
+// 404 with the code of what it didn't find, 409 for one Cobranch won't make, or 500, logged, for anything else.
+func answerChange(ctx context.Context, w http.ResponseWriter, span trace.Span, what string, repoID uuid.UUID, branch string, err error) {
 	var refused *code.MergeError
+	var refusedDelete *code.DeleteError
 	c, missing := gitinternal.CodeOf(err)
 	switch {
 	case errors.Is(err, auth.ErrForbidden):
@@ -99,10 +100,12 @@ func answerMerge(ctx context.Context, w http.ResponseWriter, span trace.Span, re
 		problem(w, http.StatusConflict, gitinternal.Problem{Code: gitinternal.CodeMoved, Message: code.ErrBranchMoved.Error()})
 	case errors.As(err, &refused):
 		problem(w, http.StatusConflict, gitinternal.Problem{Code: refused.Code, Message: refused.Message})
+	case errors.As(err, &refusedDelete):
+		problem(w, http.StatusConflict, gitinternal.Problem{Code: refusedDelete.Code, Message: refusedDelete.Message})
 	default:
 		span.SetStatus(codes.Error, err.Error())
-		slog.ErrorContext(ctx, "Merging a branch failed", "repository", repoID, "branch", branch, "error", err)
-		problem(w, http.StatusInternalServerError, gitinternal.Problem{Message: "the merge could not be made"})
+		slog.ErrorContext(ctx, "A branch's "+what+" failed", "repository", repoID, "branch", branch, "error", err)
+		problem(w, http.StatusInternalServerError, gitinternal.Problem{Message: "the " + what + " could not be made"})
 	}
 }
 
