@@ -1,0 +1,32 @@
+-- TaskByID finds a task by its ID, with the names Task gives it and its organization's slug.
+-- name: TaskByID :one
+SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
+    rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug
+FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
+    LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
+    LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
+WHERE t.id = @id;
+
+-- LockTask holds the task's row until the transaction ends, so its transcript grows one entry at a time.
+-- name: LockTask :one
+SELECT org_id, number, state FROM agent_tasks WHERE id = $1 FOR UPDATE;
+
+-- name: LastEntry :one
+SELECT coalesce(max(seq), 0)::integer AS seq FROM agent_task_entries WHERE task_id = $1;
+
+-- name: TranscriptEntry :one
+SELECT * FROM agent_task_entries WHERE task_id = $1 AND seq = $2;
+
+-- name: InsertEntry :one
+INSERT INTO agent_task_entries (task_id, seq, kind, body) VALUES (@task_id, @seq, @kind, @body) RETURNING *;
+
+-- Entries lists at most lim of a task's entries numbered above after, in order.
+-- name: Entries :many
+SELECT * FROM agent_task_entries WHERE task_id = @task_id AND seq > @after ORDER BY seq LIMIT @lim;
+
+-- MoveTask moves the task to state from one of from, with its summary and reason, ending it now when the state ends
+-- it: no row when it is in none of from.
+-- name: MoveTask :execrows
+UPDATE agent_tasks SET state = @state::text, summary = @summary, reason = @reason,
+    ended_at = CASE WHEN @state::text IN ('succeeded', 'failed') THEN now() END
+WHERE id = @id AND state = ANY(@from_states::text[]);

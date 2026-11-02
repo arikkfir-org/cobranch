@@ -598,10 +598,102 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "pods": {
+          "type": "boolean"
+        },
+        "namespacePrefix": {
+          "type": "string",
+          "pattern": "^([a-z0-9]([-a-z0-9]*[a-z0-9])?-)?$",
+          "maxLength": 26
+        },
         "namespaceLabels": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
+          }
+        },
+        "podSecurity": {
+          "enum": [
+            "restricted",
+            "baseline",
+            "privileged"
+          ]
+        },
+        "egress": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "except": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "dns": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "resources": {
+          "type": "object"
+        },
+        "quota": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number"
+            ]
+          }
+        },
+        "script": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            }
+          }
+        },
+        "timeout": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "default": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+            },
+            "max": {
+              "type": "string",
+              "pattern": "^([0-9]+(\\.[0-9]+)?(ns|us|µs|ms|s|m|h))+$"
+            }
+          }
+        },
+        "logs": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "maxBytes": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            }
+          }
+        },
+        "urls": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rest": {
+              "type": "string"
+            },
+            "git": {
+              "type": "string"
+            }
           }
         },
         "nodeSelector": {

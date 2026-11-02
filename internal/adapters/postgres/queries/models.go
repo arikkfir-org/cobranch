@@ -52,6 +52,14 @@ type AgentTask struct {
 	Sha          *string
 }
 
+type AgentTaskEntry struct {
+	TaskID    uuid.UUID
+	Seq       int32
+	Kind      string
+	Body      []byte
+	CreatedAt time.Time
+}
+
 type Annotation struct {
 	ID          uuid.UUID
 	OrgID       uuid.UUID

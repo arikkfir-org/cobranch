@@ -100,3 +100,6 @@ models:
   Secret:
     fields:
       access: { resolver: true }
+  Task:
+    fields:
+      transcript: { resolver: true }

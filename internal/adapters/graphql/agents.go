@@ -31,6 +31,9 @@ type Agents interface {
 	RemoveModelProvider(ctx context.Context, v agents.Viewer, orgID uuid.UUID, name string, version int64) error
 	SetModel(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, provider, model string, version int64) (agents.Agent, error)
 	SetSecrets(ctx context.Context, v agents.Viewer, orgID, id uuid.UUID, named map[string]uuid.UUID, version int64) (agents.Agent, error)
+	Work(ctx context.Context, v agents.Viewer) (agents.Task, string, error)
+	Transcript(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, after, limit int) ([]agents.Entry, error)
+	Append(ctx context.Context, v agents.Viewer, orgID uuid.UUID, number int64, e agents.Entry) (agents.Entry, bool, error)
 }
 
 func agentPrincipal(p *agents.Principal) *CommitPrincipal {
@@ -114,7 +117,7 @@ func providerVersion(ctx context.Context, expectedVersion *int) (int64, error) {
 }
 
 func task(t agents.Task) *Task {
-	out := &Task{ID: t.ID.String(), Number: int(t.Number), Agent: agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
+	out := &Task{ID: t.ID.String(), OrganizationID: t.OrgID.String(), Number: int(t.Number), Agent: agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
 		Title: t.Title, Instructions: t.Instructions, RepositoryID: idOf(t.RepoID), RepositorySlug: text(t.RepoSlug), BranchID: idOf(t.BranchID),
 		Branch: text(t.Branch), ThreadID: idOf(t.ThreadID), Sha: text(t.SHA), State: TaskState(strings.ToUpper(string(t.State))), Reason: t.Reason, Summary: t.Summary,
 		CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: int(t.Version)}

@@ -47,9 +47,14 @@ func runMaintenance(ctx context.Context, logs io.Writer) error {
 	return errors.Join(expired, maintainPacks(ctx, cfg, pool))
 }
 
-// deleteExpired deletes the sign-in flows, sessions, invitations and join requests that expired.
+// deleteExpired deletes the sign-in flows, sessions, task tokens, invitations and join requests that expired.
 func deleteExpired(ctx context.Context, pool *pgxpool.Pool) error {
-	flows, sessions, err := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{}).DeleteExpired(ctx)
+	signIn := auth.NewService(postgres.NewAuthStore(pool), nil, auth.Settings{})
+	flows, sessions, err := signIn.DeleteExpired(ctx)
+	if err != nil {
+		return fmt.Errorf("maintaining the database: %w", err)
+	}
+	taskTokens, err := signIn.DeleteExpiredTaskTokens(ctx)
 	if err != nil {
 		return fmt.Errorf("maintaining the database: %w", err)
 	}
@@ -58,7 +63,7 @@ func deleteExpired(ctx context.Context, pool *pgxpool.Pool) error {
 	if err != nil {
 		return fmt.Errorf("maintaining the database: %w", err)
 	}
-	slog.InfoContext(ctx, "Deleted what expired", "signInFlows", flows, "sessions", sessions, "invitations", invitations, "joinRequests", requests)
+	slog.InfoContext(ctx, "Deleted what expired", "signInFlows", flows, "sessions", sessions, "taskTokens", taskTokens, "invitations", invitations, "joinRequests", requests)
 	return nil
 }
 

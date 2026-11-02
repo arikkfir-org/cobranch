@@ -338,3 +338,24 @@ leave unset are the Back-office's (the built-in defaults until an administrator 
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/* What names the release's cluster-wide objects, and labels its job namespaces as its own: its namespace and its
+name, as two releases of one name in two namespaces share a cluster. */}}
+{{- define "cobranch.cluster" -}}
+{{ printf "%s-%s" .Release.Namespace (include "cobranch.fullname" .) | trunc 52 | trimSuffix "-" }}
+{{- end -}}
+
+{{/* The controller's ServiceAccount. */}}
+{{- define "cobranch.controller" -}}
+{{ include "cobranch.fullname" . }}-controller
+{{- end -}}
+
+{{/* What starts every job namespace's name: the value's, or the release's namespace's and -jobs-. Fails the render
+when a namespace's name, the prefix and an organization's ID of 36 characters, would pass Kubernetes's 63. */}}
+{{- define "cobranch.jobsPrefix" -}}
+{{- $prefix := .Values.jobs.namespacePrefix | default (printf "%s-jobs-" .Release.Namespace) -}}
+{{- if gt (len $prefix) 27 -}}
+{{- fail (printf "jobs.namespacePrefix %q leaves no room for an organization's ID in a namespace's name: 27 characters at most" $prefix) -}}
+{{- end -}}
+{{ $prefix }}
+{{- end -}}

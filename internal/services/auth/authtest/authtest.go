@@ -61,14 +61,73 @@ type Store struct {
 	// Installation is the settings the Back-office changes, and Stored the providers it added, by ID.
 	Installation auth.InstallationSettings
 	Stored       []auth.StoredProvider
-	Fail         error
+	// Tasks are the agents' tasks that task tokens work, by ID, and TaskTokens those tokens by hash.
+	Tasks      map[uuid.UUID]*Task
+	TaskTokens map[string]auth.Credential
+	Fail       error
+}
+
+// Task is an agent's task as task tokens see it: what it grants, its agent, and whether it ended.
+type Task struct {
+	Grant auth.TaskGrant
+	Agent auth.Principal
+	Ended bool
 }
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
 	return &Store{Flows: map[string]auth.Flow{}, Identities: map[string]auth.Identity{}, Users: map[uuid.UUID]auth.User{},
 		Grants: map[uuid.UUID][]auth.Grant{}, ByToken: map[string]auth.Session{},
-		Credentials: map[string]auth.Credential{}, Principals: map[uuid.UUID]auth.Principal{}}
+		Credentials: map[string]auth.Credential{}, Principals: map[uuid.UUID]auth.Principal{},
+		Tasks: map[uuid.UUID]*Task{}, TaskTokens: map[string]auth.Credential{}}
+}
+
+// CreateTaskToken records a token of task taskID by hash, or answers auth.ErrNotFound for a task that isn't there or
+// ended.
+func (s *Store) CreateTaskToken(_ context.Context, taskID uuid.UUID, hash []byte, expiresAt time.Time) error {
+	if s.Fail != nil {
+		return s.Fail
+	}
+	t, ok := s.Tasks[taskID]
+	if !ok || t.Ended {
+		return auth.ErrNotFound
+	}
+	s.TaskTokens[string(hash)] = auth.Credential{Kind: auth.CredentialTaskToken, PrincipalID: t.Agent.ID, ExpiresAt: expiresAt,
+		Task: auth.TaskGrant{ID: taskID}}
+	return nil
+}
+
+// TaskToken finds a task token by hash, with its task's grant as it stands, or auth.ErrNotFound, also once the task
+// ended.
+func (s *Store) TaskToken(_ context.Context, tokenHash []byte) (auth.Credential, auth.User, error) {
+	if s.Fail != nil {
+		return auth.Credential{}, auth.User{}, s.Fail
+	}
+	c, ok := s.TaskTokens[string(tokenHash)]
+	if !ok {
+		return auth.Credential{}, auth.User{}, auth.ErrNotFound
+	}
+	t, ok := s.Tasks[c.Task.ID]
+	if !ok || t.Ended {
+		return auth.Credential{}, auth.User{}, auth.ErrNotFound
+	}
+	c.Task = t.Grant
+	return c, auth.User{Principal: t.Agent}, nil
+}
+
+// DeleteExpiredTaskTokens deletes the task tokens that expired before at, and those of tasks that ended.
+func (s *Store) DeleteExpiredTaskTokens(_ context.Context, at time.Time) (int64, error) {
+	if s.Fail != nil {
+		return 0, s.Fail
+	}
+	var n int64
+	for k, c := range s.TaskTokens {
+		if t, ok := s.Tasks[c.Task.ID]; !ok || t.Ended || c.ExpiresAt.Before(at) {
+			delete(s.TaskTokens, k)
+			n++
+		}
+	}
+	return n, nil
 }
 
 // AddCredential registers secret as an API key's secret acting as principal, with expiresAt (zero never).
@@ -174,10 +233,10 @@ func (s *Store) DeleteSSHKey(_ context.Context, userID, id uuid.UUID) error {
 	return auth.ErrNotFound
 }
 
-// TouchCredential marks credential id used at usedAt.
-func (s *Store) TouchCredential(_ context.Context, id uuid.UUID, usedAt time.Time) error {
+// TouchCredential marks credential id, of kind, used at usedAt.
+func (s *Store) TouchCredential(_ context.Context, id uuid.UUID, kind auth.CredentialKind, usedAt time.Time) error {
 	for k, c := range s.Credentials {
-		if c.ID == id {
+		if c.ID == id && c.Kind == kind {
 			c.LastUsedAt = usedAt
 			s.Credentials[k] = c
 		}

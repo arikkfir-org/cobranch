@@ -23,6 +23,7 @@ func (f *orgFixture) addAgents(t *testing.T) {
 		f.agentStore.Names[v.User.ID] = v.User.DisplayName
 	}
 	f.agentStore.Repos[f.website.ID] = agentstest.Repository{Org: f.acme.ID, Slug: "website"}
+	f.agentStore.OrgSlugs[f.acme.ID] = "acme"
 	f.agentStore.Branches[uuid.New()] = agentstest.Branch{Repo: f.website.ID, Name: "feature/login"}
 	f.agents = agents.NewService(f.agentStore, auth.NewAuthorizer(f.store)).WithProviders("anthropic", "openai")
 	f.providerKey, f.deployKey = f.agentStore.AddSecret(f.acme.ID, uuid.Nil, "anthropic-key"), f.agentStore.AddSecret(f.acme.ID, f.website.ID, "deploy-key")
