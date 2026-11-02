@@ -163,6 +163,21 @@ func TestCodeStoreTags(t *testing.T) {
 	}
 }
 
+func TestCodeStoreCommitsAt(t *testing.T) {
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	got, err := f.c.CommitsAt(ctx, f.website.ID, []string{f.shaD, f.shaE, shaA})
+	if err != nil || len(got) != 2 || got[f.shaD].Message != "Change d\n" || got[shaA].SHA != shaA || got[f.shaD].Author.Principal == nil {
+		t.Errorf("CommitsAt(d, e, a) = %v, %v, want d with its author's principal and a, without e, which is no commit", got, err)
+	}
+	if other, err := f.c.CommitsAt(ctx, f.secret.ID, []string{f.shaD}); err != nil || len(other) != 0 {
+		t.Errorf("another repository's CommitsAt() = %v, %v", other, err)
+	}
+	if none, err := f.c.CommitsAt(ctx, f.website.ID, nil); err != nil || len(none) != 0 {
+		t.Errorf("CommitsAt() of nothing = %v, %v", none, err)
+	}
+}
+
 func TestCodeStoreSlugs(t *testing.T) {
 	f := newCodeFixture(t)
 	ctx := context.Background()

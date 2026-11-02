@@ -1,6 +1,7 @@
 package rest
 
 import (
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -113,6 +114,57 @@ func TestCommitsAPI(t *testing.T) {
 			wantStatus: 404, wantCode: "repository.not_found"},
 		{name: "a token with repo.read alone reads it", viewer: oliviaToken("repo.read"), method: "GET", path: fixed("/v1/orgs/acme/repos/website/commits"),
 			wantStatus: 200, check: history("c", "b", "a")},
+	})
+}
+
+func TestEveryParentAPI(t *testing.T) {
+	const commits = "/v1/orgs/acme/repos/website/commits"
+	runOrgCases(t, []orgCase{
+		{name: "every parent, newest first", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all"), wantStatus: 200, check: history("c", "b", "a")},
+		{name: "a page links the next, which holds still", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all&limit=2"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, body []byte) {
+				history("c", "b")(t, f, body)
+				link := f.call(&f.olivia, "GET", commits+"?parents=all&limit=2", "").Header().Get("Link")
+				next, ok := strings.CutPrefix(link, "<?")
+				next, _, _ = strings.Cut(next, ">")
+				if !ok || !strings.Contains(next, "parents=all") || !strings.Contains(next, "limit=2") {
+					t.Fatalf("Link = %q, want the next page of every parent", link)
+				}
+				f.objects.Refs["main"] = shaOf("b")
+				rec := f.call(&f.olivia, "GET", commits+"?"+next, "")
+				history("a")(t, f, rec.Body.Bytes())
+				if rec.Header().Get("Link") != "" {
+					t.Errorf("the last page links %q", rec.Header().Get("Link"))
+				}
+			}},
+		{name: "from a tag", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all&ref=v1.0.0"), wantStatus: 200, check: history("b", "a")},
+		{name: "first parents from a tag", viewer: olivia, method: "GET", path: fixed(commits + "?ref=v1.0.0"), wantStatus: 200, check: history("b", "a")},
+		{name: "a ref that names nothing", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all&ref=gone"), wantStatus: 404, wantCode: "ref.not_found"},
+		{name: "a cursor of nothing", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all&cursor=nonsense"), wantStatus: 400, wantCode: "cursor.invalid"},
+		{name: "parents that are neither", viewer: olivia, method: "GET", path: fixed(commits + "?parents=some"), wantStatus: 400},
+		{name: "a page's ETag answers 304 while it holds", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				tag := f.call(&f.olivia, "GET", commits+"?parents=all", "").Header().Get("ETag")
+				revalidate := func() *httptest.ResponseRecorder {
+					req := httptest.NewRequest("GET", commits+"?parents=all", nil)
+					req.Header.Set("If-None-Match", tag)
+					return f.serve(&f.olivia, req)
+				}
+				if rec := revalidate(); tag == "" || rec.Code != 304 || rec.Body.Len() != 0 {
+					t.Fatalf("ETag %q answered %d", tag, rec.Code)
+				}
+				f.codeStore.Add(f.website.ID, f.push, code.Commit{SHA: shaOf("c"), Parents: []string{shaOf("b")}, Message: "Reworded\n"})
+				if rec := revalidate(); rec.Code != 200 || rec.Header().Get("ETag") == tag {
+					t.Errorf("a page whose commit changed answered %d with ETag %q", rec.Code, rec.Header().Get("ETag"))
+				}
+			}},
+		{name: "without a Git server", viewer: olivia, method: "GET", path: fixed(commits + "?parents=all"), wantStatus: 200,
+			check: func(t *testing.T, f *orgFixture, _ []byte) {
+				f.objects.Fail = code.ErrUnavailable
+				if rec := f.call(&f.olivia, "GET", commits+"?parents=all", ""); rec.Code != 503 {
+					t.Errorf("every parent without a Git server answered %d, want 503", rec.Code)
+				}
+			}},
 	})
 }
 

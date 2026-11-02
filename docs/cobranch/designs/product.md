@@ -222,9 +222,20 @@ reconciliation are worked out in the subsystem designs.
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
 project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
-slice after the ones it waits for. The design, the installable foundations, and identity and organizations (sign-in,
-organizations and the Back-office) are done, and so is Git hosting; branch status and browsing code in the Console are
-in progress.
+slice after the ones it waits for. Where it stands:
+
+- **Done:** the design, the installable foundations, identity and organizations (sign-in, organizations and the
+  Back-office), Git hosting, and branch status and merges ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)).
+- **In review, merging one after another:** browsing code and rendering Markdown in the Console
+  ([ENG-228](https://linear.app/arikkfir/issue/ENG-228)), and Git objects in PostgreSQL by default
+  ([ENG-237](https://linear.app/arikkfir/issue/ENG-237)).
+- **Next:** jobs from `/cobranch.yaml` ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)), now that branch status
+  has landed, and operators' metrics for page views, code reads and caches
+  ([ENG-235](https://linear.app/arikkfir/issue/ENG-235)), closing milestone 4. Then agents
+  ([ENG-215](https://linear.app/arikkfir/issue/ENG-215)) and the built-in AI reviewer
+  ([ENG-216](https://linear.app/arikkfir/issue/ENG-216)) in milestone 5, and issues linked to branches
+  ([ENG-217](https://linear.app/arikkfir/issue/ENG-217)) and delivery through the built-in GitOps controller
+  ([ENG-218](https://linear.app/arikkfir/issue/ENG-218)) in milestone 6.
 
 **The roadmap by milestone, as of 2026-11-01**
 

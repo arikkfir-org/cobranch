@@ -138,66 +138,6 @@ func sameError(err, want error) bool {
 	return errors.Is(err, want) || strings.Contains(err.Error(), want.Error())
 }
 
-func TestHistory(t *testing.T) {
-	invalid := func(code string) error { return &orgs.ValidationError{Code: code} }
-	tests := []struct {
-		name     string
-		viewer   func(*fixture) code.Viewer
-		branch   string
-		cursor   string
-		limit    int
-		want     []string
-		wantNext string
-		wantErr  error
-	}{
-		{name: "the first parents, nearest first", branch: "main", want: []string{"5", "4", "3", "2", "1"}},
-		{name: "a page and where the next starts", branch: "main", limit: 2, want: []string{"5", "4"}, wantNext: sha(3)},
-		{name: "the next page", branch: "main", cursor: sha(3), limit: 2, want: []string{"3", "2"}, wantNext: sha(1)},
-		{name: "the last page", branch: "main", cursor: sha(1), limit: 2, want: []string{"1"}},
-		{name: "a page as long as what's left", branch: "main", limit: 5, want: []string{"5", "4", "3", "2", "1"}},
-		{name: "another branch", branch: "feature/x", want: []string{"6", "2", "1"}},
-		{name: "a branch at no recorded commit has no history", branch: "stray"},
-		{name: "a branch that doesn't live", branch: "gone", wantErr: repos.ErrNotFound},
-		{name: "a cursor that names no commit", branch: "main", cursor: sha(77), wantErr: invalid("cursor.invalid")},
-		{name: "a cursor that is no object name", branch: "main", cursor: "HEAD~2", wantErr: invalid("cursor.invalid")},
-		{name: "a page too long", branch: "main", limit: 101, wantErr: invalid("limit.invalid")},
-		{name: "a negative page", branch: "main", limit: -1, wantErr: invalid("limit.invalid")},
-		{name: "a viewer who doesn't read the repository", viewer: func(f *fixture) code.Viewer { return f.nia }, branch: "main", wantErr: repos.ErrNotFound},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			f := newFixture()
-			v := f.max
-			if tt.viewer != nil {
-				v = tt.viewer(f)
-			}
-			got, err := f.service.History(t.Context(), v, f.repo, tt.branch, tt.cursor, tt.limit)
-			if !sameError(err, tt.wantErr) {
-				t.Fatalf("got error %v, want %v", err, tt.wantErr)
-			}
-			if !slices.Equal(shas(got.Commits), tt.want) || got.Next != tt.wantNext {
-				t.Errorf("got %v next %q, want %v next %q", shas(got.Commits), got.Next, tt.want, tt.wantNext)
-			}
-		})
-	}
-}
-
-func TestHistoryDefaultPage(t *testing.T) {
-	f := newFixture()
-	f.store.Add(f.repo, f.push, code.Commit{SHA: sha(7), Parents: []string{sha(5)}})
-	for n := 8; n < 7+code.DefaultPageSize+5; n++ {
-		f.store.Add(f.repo, f.push, code.Commit{SHA: sha(n), Parents: []string{sha(n - 1)}})
-	}
-	f.store.SetBranch(f.repo, "main", sha(6+code.DefaultPageSize+5))
-	got, err := f.service.History(t.Context(), f.max, f.repo, "main", "", 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Commits) != code.DefaultPageSize || got.Next == "" {
-		t.Errorf("got %d commits and next %q, want %d and a next page", len(got.Commits), got.Next, code.DefaultPageSize)
-	}
-}
-
 func TestCommit(t *testing.T) {
 	tests := []struct {
 		name     string

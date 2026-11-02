@@ -6,7 +6,7 @@
 
 **Status**: Agreed 2026-11-01 · [ENG-228](https://linear.app/arikkfir/issue/ENG-228) · Builds on [Git hosting’s
 Console](git-hosting.md#the-console) and the [architecture’s internal calls](architecture.md#components) · Adds the Git
-server’s internal port to the chart · Built by [ENG-228](https://linear.app/arikkfir/issue/ENG-228), in three pull
+server’s internal port to the chart · Built by [ENG-228](https://linear.app/arikkfir/issue/ENG-228), in four pull
 requests
 
 People read a repository in the Console the way its authors wrote it: its directories and files at any branch, tag or
@@ -59,7 +59,7 @@ whenever it runs the Git server.
 | `GET /internal/v1/repos/{id}/tree?ref=&path=` | The commit the ref names, the tree at the path, and its entries: name, mode, kind, object and size |
 | `GET /internal/v1/repos/{id}/blob?ref=&path=&limit=` | The commit, the blob at the path, its mode and size, and up to `limit` bytes of it |
 | `GET /internal/v1/repos/{id}/raw?ref=&path=` | The blob's bytes, streamed, with its commit and object in headers |
-| `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=` | The commits reachable from the ref, every parent followed, newest first: their names only |
+| `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=` | The commits reachable from the ref, every parent followed, in `git rev-list --date-order`: each one's name and its parents' |
 | `POST /internal/v1/repos/{id}/merge` | Merges a branch into its base for its requester, by a merge commit or a fast-forward, recorded as a push ([by asking Cobranch](branch-status.md#by-asking-cobranch)) |
 
 - **Its own port and Service.** The Git server listens on `8081` beside Git's `8080`, behind a Service of its own,
@@ -251,9 +251,9 @@ for them until its deadline and fails the install.
 
 ## Rollout
 
-**Three pull requests in Cobranch, each one usable on its own**
+**Four pull requests in Cobranch, each one usable on its own**
 
-![Three pull requests in Cobranch, each one usable on its own](code-browsing/rollout.svg)
+![Four pull requests in Cobranch, each one usable on its own](code-browsing/rollout.svg)
 
 Nothing of an installation is in the product: the chart wires the internal call whenever it runs the Git server.
 

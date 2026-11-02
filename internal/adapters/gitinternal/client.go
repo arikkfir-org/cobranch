@@ -18,10 +18,10 @@ import (
 	"cobranch.dev/internal/services/code"
 )
 
-// Client reads a repository's trees and files from the Git server, and has it build merges, over the internal call:
-// code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it sends the token
-// the viewer's credential carried (auth.Token), or none for Anonymous, and the Git server decides what that viewer may
-// read or merge.
+// Client reads a repository's trees, files and history from the Git server, and has it build merges, over the internal
+// call: code.Objects. The REST and GraphQL servers each hold one, and it asks as their request's viewer: it sends the
+// token the viewer's credential carried (auth.Token), or none for Anonymous, and the Git server decides what that
+// viewer may read or merge.
 type Client struct {
 	base *url.URL
 	http *http.Client
@@ -66,6 +66,17 @@ func (c *Client) Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (c
 	}
 	return code.Raw{Commit: resp.Header.Get(HeaderCommit), Path: path, SHA: resp.Header.Get(HeaderObject), Size: resp.ContentLength,
 		Body: resp.Body}, nil
+}
+
+// Log lists at most limit of the commits reachable from the commit ref names, every parent followed, after the first
+// skip (code.Objects).
+func (c *Client) Log(ctx context.Context, repoID uuid.UUID, ref string, skip, limit int) (code.Log, error) {
+	var log Log
+	query := url.Values{"ref": {ref}, "skip": {strconv.Itoa(skip)}, "limit": {strconv.Itoa(limit)}}
+	if err := c.getJSON(ctx, repoID, "log", query, &log); err != nil {
+		return code.Log{}, err
+	}
+	return log.Domain(), nil
 }
 
 // Merge has the Git server build the merge req asks for and record it as a push of its base (code.Objects).
