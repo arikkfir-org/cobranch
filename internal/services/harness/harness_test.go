@@ -175,7 +175,7 @@ func TestRun(t *testing.T) {
 		{name: "the most turns", maxTurns: 2, turns: []harness.Turn{calling(call("a", "echo", `{"text":"again"}`))},
 			want: kinds("input", "turn", "result", "turn", "result", "state"), check: failedWith("The model took 2 turns without finishing")},
 		{name: "a provider's refusal", modelErr: fmt.Errorf("no such model: %w", harness.ErrModelRefused),
-			want: kinds("input", "state"), check: failedWith("The model's provider refused the request: no such model")},
+			want: kinds("input", "state"), check: failedWith("Asking the model failed: no such model: the model's provider refused the request")},
 		{name: "a provider's failure", modelErr: errors.New("overloaded"), wantErr: true, want: kinds("input")},
 		{name: "a turn without calls", turns: []harness.Turn{{Text: "Thinking.", Stop: "end_turn"}, done},
 			want: kinds("input", "turn", "input", "turn", "state"), check: func(t *testing.T, _ *cobranch, m *model, _ *echo) {

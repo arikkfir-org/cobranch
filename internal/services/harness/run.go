@@ -124,7 +124,7 @@ func (r *run) ask(ctx context.Context, s state) error {
 	defer span.End()
 	t, err := r.model.Next(ctx, r.request(s))
 	if errors.Is(err, ErrModelRefused) {
-		return failed(span, r.fail(ctx, "The model's provider refused the request: "+err.Error()))
+		return failed(span, r.fail(ctx, "Asking the model failed: "+err.Error()))
 	}
 	if err != nil {
 		return failed(span, fmt.Errorf("asking the model for its next turn: %w", err))

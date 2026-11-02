@@ -90,6 +90,8 @@ type Message struct {
 	Text    string
 	Calls   []Call
 	Results []Result
+	// Signature is what the provider asked to be sent back with the assistant's text, opaque; empty for most.
+	Signature string
 }
 
 // Turn is a turn of the model, as a turn entry of the transcript records it.

@@ -76,7 +76,7 @@ func read(entries []agents.Entry) (state, error) {
 			last, answered = &Turn{}, map[string]bool{}
 			err = json.Unmarshal(e.Body, last)
 			s.turns++
-			s.messages = append(s.messages, Message{Role: RoleAssistant, Text: last.Text, Calls: last.Calls})
+			s.messages = append(s.messages, Message{Role: RoleAssistant, Text: last.Text, Calls: last.Calls, Signature: last.Signature})
 		case agents.EntryResult:
 			var r result
 			err = json.Unmarshal(e.Body, &r)
