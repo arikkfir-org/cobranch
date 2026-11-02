@@ -1511,6 +1511,99 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+    get:
+      operationId: listReviews
+      summary: The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+      responses:
+        "200":
+          description: The reviews.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reviews]
+                properties:
+                  reviews:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Review"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: submitReview
+      summary: Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewInput"
+      responses:
+        "201":
+          description: The review.
+          headers:
+            Location:
+              description: The review's own URL, relative to this one.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/reviews/{review}:
+    get:
+      operationId: getReview
+      summary: One of the repository's reviews; takes repo.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - name: review
+          in: path
+          required: true
+          description: The review's ID.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The review.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Review"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/tags:
     get:
       operationId: listTags
@@ -2154,16 +2247,20 @@ components:
           type: string
           description: >-
             annotation, an annotation its head must carry, Successful; linear_history, no merge among its commits to
-            merge; up_to_date, its base's tip in it.
-          enum: [annotation, linear_history, up_to_date]
+            merge; approvals, people's approvals of its head, besides its author's and its pusher's; changes_requested,
+            a reviewer whose latest review of its head requests changes, never met; up_to_date, its base's tip in it.
+          enum: [annotation, linear_history, approvals, changes_requested, up_to_date]
         name:
           type: string
-          description: The required annotation's name; only for annotation.
+          description: The required annotation's name, for annotation; the reviewer's display name, for changes_requested.
         status:
           $ref: "#/components/schemas/AnnotationStatus"
         count:
           type: integer
-          description: For linear_history, the merges among its commits to merge; for up_to_date, the commits of its base it lacks.
+          description: For linear_history, the merges among its commits to merge; for approvals, the approvals that count; for up_to_date, the commits of its base it lacks.
+        required:
+          type: integer
+          description: For approvals, how many the base requires.
         met:
           type: boolean
     MergeRequirements:
@@ -2179,10 +2276,24 @@ components:
         linearHistory:
           type: boolean
           description: Whether no merge commit may come in.
+        reviews:
+          $ref: "#/components/schemas/ReviewRequirements"
+    ReviewRequirements:
+      type: object
+      description: >-
+        The reviews a merge needs of the incoming head, when /cobranch.yaml requires them: no reviewer's latest review
+        requesting changes, and at least approvals people's latest reviews approving it, besides its author's and its
+        pusher's.
+      required: [approvals]
+      properties:
+        approvals:
+          type: integer
+          minimum: 0
+          maximum: 10
     Commit:
       type: object
       description: A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
-      required: [sha, tree, parents, message, author, committer, signature, annotations]
+      required: [sha, tree, parents, message, author, committer, signature, annotations, reviews]
       properties:
         sha:
           type: string
@@ -2207,6 +2318,11 @@ components:
           description: The annotations principals set on it, by name.
           items:
             $ref: "#/components/schemas/Annotation"
+        reviews:
+          type: array
+          description: The reviews submitted of it, in the order they were; each reviewer's latest is the one that counts.
+          items:
+            $ref: "#/components/schemas/Review"
         push:
           $ref: "#/components/schemas/Push"
     Person:
@@ -2228,7 +2344,7 @@ components:
           $ref: "#/components/schemas/Principal"
     Principal:
       type: object
-      description: Who is behind a commit's author or committer, a push, an annotation or a merge; absent from a person until the push worker maps their email, and from a push, an annotation or a merge once its principal is gone.
+      description: Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
       required: [id, displayName]
       properties:
         id:
@@ -2295,6 +2411,45 @@ components:
       type: string
       description: Where an annotation stands, in any order its principal sets them.
       enum: [pending, in_progress, failed, successful]
+    Review:
+      type: object
+      description: A principal's verdict on a commit, with what they wrote. It belongs to the commit, so every branch at that commit shows it, and it is never changed.
+      required: [id, sha, state, body, person, submittedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sha:
+          type: string
+          description: The commit reviewed.
+        state:
+          $ref: "#/components/schemas/ReviewState"
+        body:
+          type: string
+        reviewer:
+          $ref: "#/components/schemas/Principal"
+        person:
+          type: boolean
+          description: Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.
+        submittedAt:
+          type: string
+          format: date-time
+    ReviewState:
+      type: string
+      description: >-
+        A review's verdict: approved; changes_requested, which holds back a branch whose base requires reviews until
+        its reviewer submits another; or neutral, a comment that takes back its reviewer's earlier verdict.
+      enum: [approved, changes_requested, neutral]
+    ReviewInput:
+      type: object
+      description: The review a principal submits.
+      required: [state]
+      properties:
+        state:
+          $ref: "#/components/schemas/ReviewState"
+        body:
+          type: string
+          description: What the reviewer writes, at most 65,536 characters, which only an approval may leave blank.
     AnnotationInput:
       type: object
       description: What a principal sets an annotation to.
