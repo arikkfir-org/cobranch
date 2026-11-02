@@ -36,6 +36,8 @@ func TestRun(t *testing.T) {
 		},
 		{name: "Git server stopping in no time", args: []string{"git-server"}, env: map[string]string{"COBRANCH_SHUTDOWN_TIMEOUT": "soon"}, wantCode: 1,
 			wantStderr: "cobranch git-server: configuring: reading git-server's configuration from the COBRANCH_ variables: envconfig.Process: assigning COBRANCH_SHUTDOWN_TIMEOUT to ShutdownTimeout: converting 'soon' to type time.Duration. details: time: invalid duration \"soon\"\n"},
+		{name: "agent without its task", args: []string{"agent"}, env: map[string]string{"COBRANCH_MODEL": "test-model"}, wantCode: 1,
+			wantStderr: "cobranch agent: configuring: the agent takes COBRANCH_MODEL_KEY_FILE, COBRANCH_MODEL_PROVIDER, COBRANCH_REST_URL, COBRANCH_TOKEN_FILE\n"},
 		{name: "push worker polling at no interval", args: []string{"push-worker"}, env: map[string]string{"COBRANCH_PUSH_POLL_INTERVAL": "often"}, wantCode: 1,
 			wantStderr: "cobranch push-worker: configuring: reading push-worker's configuration from the COBRANCH_ variables: envconfig.Process: assigning COBRANCH_PUSH_POLL_INTERVAL to PollInterval: converting 'often' to type time.Duration. details: time: invalid duration \"often\"\n"},
 		{name: "a hook outside a push", args: []string{"git-hook"}, wantCode: 1, wantStderr: git.MessageNotRecorded + "\n"},

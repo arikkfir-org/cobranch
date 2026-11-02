@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 
 	"cobranch.dev/internal/services/harness"
 )
@@ -34,7 +35,8 @@ type Settings struct {
 	URL string
 	// MaxTokens is the most tokens a turn may take, for the providers that ask for it; DefaultMaxTokens for 0.
 	MaxTokens int
-	// Client sends the requests; an instrumented default client for nil.
+	// Client sends the requests; for nil, an instrumented default client that sends no trace context, which stays within
+	// Cobranch.
 	Client *http.Client
 	// backoff is the first wait before a retry, which doubles with each; DefaultBackoff for 0.
 	backoff time.Duration
@@ -61,7 +63,7 @@ func New(s Settings) (harness.Model, error) {
 		s.backoff = DefaultBackoff
 	}
 	if s.Client == nil {
-		s.Client = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport)}
+		s.Client = &http.Client{Transport: otelhttp.NewTransport(http.DefaultTransport, otelhttp.WithPropagators(propagation.NewCompositeTextMapPropagator()))}
 	}
 	c := caller{provider: s.Provider, client: s.Client, backoff: s.backoff}
 	switch s.Provider {
