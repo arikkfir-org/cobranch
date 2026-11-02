@@ -41,11 +41,12 @@ a busy pool before the tasks restored `main`'s Go caches. Task `build` checks an
 fails when `go generate` changes the checkout, so the REST and GraphQL stubs match `api/` and the queries match `db/`;
 `build` builds the binaries and `version` runs one. Task `lint` runs golangci-lint's standard linters, the house rules'
 (errcheck, wrapcheck, contextcheck, sloglint, spancheck, depguard, funlen, gocognit, revive with `use-any`) and gofmt,
-then `go vet`. Task `test` runs the tests with the race detector against the PostgreSQL sidecar, and with `CI` set a
-test fails rather than skip when it can't reach it. A test that sets up a database or a Git server of its own runs in
-parallel with the others: one at a time, the Git server's took four minutes. Go Cloud's drivers bring the AWS, Azure and
-Google Cloud SDKs, which each task compiled on a cold cache: its steps kept about two cores busy and peaked near 2.1Gi
-(`generated`) or 1.5Gi (`lint`, `test`), hence the tasks' sizes.
+then `go vet`. Task `test` fetches kube-apiserver and etcd, checked against the sums of their releases, and runs the
+tests with the race detector against the PostgreSQL sidecar, the cluster adapter's against a throwaway API server of
+those binaries, and with `CI` set a test fails rather than skip when it can't reach them. A test that sets up a database
+or a Git server of its own runs in parallel with the others: one at a time, the Git server's took four minutes. Go
+Cloud's drivers bring the AWS, Azure and Google Cloud SDKs, which each task compiled on a cold cache: its steps kept
+about two cores busy and peaked near 2.1Gi (`generated`), 1.5Gi (`lint`) or 2.6Gi (`test`), hence the tasks' sizes.
 
 Every task starts from `main`'s Go caches, so a run downloads and compiles only what its commit changed. `restore`
 streams archive `main/go.tar.gz` of bucket `arikkfir-cobranch-ci-cache` into the task's caches (modules, builds and
