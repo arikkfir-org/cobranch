@@ -57,7 +57,7 @@ func (s *Service) follow(ctx context.Context, a Active, pod Pod) error {
 	case now.Sub(a.StartedAt) > s.settings.Timeout:
 		return s.end(ctx, a, "timed out after "+s.settings.Timeout.String())
 	case a.Stopped:
-		return s.rest(ctx, a, pod.Number != 0)
+		return s.rest(ctx, a, pod.Number == a.Pod)
 	case !ok && now.Sub(a.PodStartedAt) < s.settings.Vanished:
 		return nil
 	case !ok:
@@ -105,9 +105,10 @@ func (s *Service) replace(ctx context.Context, a Active) error {
 	return err
 }
 
-// stop stops the pod of a, which waited Idle for an answer: its next starts once someone posts in its thread.
+// stop stops the pod of a, which waited Idle for an answer: its next starts once someone posts in its thread. It stops
+// only the pod it saw, so that a pass that read a before another controller woke it leaves the newer pod be.
 func (s *Service) stop(ctx context.Context, a Active) error {
-	stopped, err := s.store.Stop(ctx, a.ID)
+	stopped, err := s.store.Stop(ctx, a.ID, a.Pod)
 	switch {
 	case err != nil:
 		return fmt.Errorf("stopping task %s's pod: %w", a.ID, err)
@@ -118,8 +119,9 @@ func (s *Service) stop(ctx context.Context, a Active) error {
 }
 
 // rest keeps a, whose pod stopped while it waited: it starts a's next pod once someone answered, or a no longer waits,
-// and removes a pod that a stop left behind otherwise. The quota may keep the next pod waiting for room, until a later
-// pass.
+// and otherwise removes the stopped pod, when a stop left it behind (present). A newer pod, which another controller
+// started after this pass read a, is that controller's. The quota may keep the next pod waiting for room, until a
+// later pass.
 func (s *Service) rest(ctx context.Context, a Active, present bool) error {
 	switch {
 	case a.Answered || a.State != agents.TaskWaiting:

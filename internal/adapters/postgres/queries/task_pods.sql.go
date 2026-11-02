@@ -224,14 +224,14 @@ func (q *Queries) RecordTaskPod(ctx context.Context, attempt int32, taskID uuid.
 const stopTaskPod = `-- name: StopTaskPod :one
 UPDATE agent_task_pods p SET stopped_at = now(), stops = p.stops + 1
 FROM agent_tasks t
-WHERE p.task_id = $1 AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
+WHERE p.task_id = $1 AND p.attempt = $2 AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
 RETURNING p.task_id
 `
 
-// StopTaskPod records that the controller stops the pod of a task that waits, and answers whether it does: no row when
-// the task no longer waits, or its pod stopped already.
-func (q *Queries) StopTaskPod(ctx context.Context, taskID uuid.UUID) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, stopTaskPod, taskID)
+// StopTaskPod records that the controller stops a waiting task's pod numbered attempt, and answers whether it does: no
+// row when the task no longer waits, its pod stopped already, or a newer pod took attempt's place.
+func (q *Queries) StopTaskPod(ctx context.Context, taskID uuid.UUID, attempt int32) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, stopTaskPod, taskID, attempt)
 	var task_id uuid.UUID
 	err := row.Scan(&task_id)
 	return task_id, err

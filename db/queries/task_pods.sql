@@ -50,12 +50,12 @@ RETURNING task_id;
 UPDATE agent_task_pods SET attempt = @attempt, pod_started_at = now(), lease_until = NULL, stopped_at = NULL
 WHERE task_id = @task_id;
 
--- StopTaskPod records that the controller stops the pod of a task that waits, and answers whether it does: no row when
--- the task no longer waits, or its pod stopped already.
+-- StopTaskPod records that the controller stops a waiting task's pod numbered attempt, and answers whether it does: no
+-- row when the task no longer waits, its pod stopped already, or a newer pod took attempt's place.
 -- name: StopTaskPod :one
 UPDATE agent_task_pods p SET stopped_at = now(), stops = p.stops + 1
 FROM agent_tasks t
-WHERE p.task_id = $1 AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
+WHERE p.task_id = @task_id AND p.attempt = @attempt AND t.id = p.task_id AND t.state = 'waiting' AND p.stopped_at IS NULL
 RETURNING p.task_id;
 
 -- FailTask ends a task that hasn't ended Failed, for reason, and answers its organization, number and agent; no row

@@ -98,11 +98,11 @@ func (s *store) Started(_ context.Context, taskID uuid.UUID, pod int) error {
 	return nil
 }
 
-func (s *store) Stop(_ context.Context, taskID uuid.UUID) (bool, error) {
+func (s *store) Stop(_ context.Context, taskID uuid.UUID, pod int) (bool, error) {
 	if s.answered {
 		return false, nil
 	}
-	s.events = append(s.events, taskID.String()[:4]+"'s pod stopped")
+	s.events = append(s.events, fmt.Sprintf("%s's pod %d stopped", taskID.String()[:4], pod))
 	return true, nil
 }
 
@@ -404,12 +404,14 @@ func idleCases() []followCase {
 	woke := []string{"removed aaaa", "prepared 0001", "started aaaa/2"}
 	return []followCase{
 		{name: "a task that waited past agents.idle", active: waiting(1, nil), pods: runs,
-			wantEvents: []string{"aaaa's pod stopped"}, wantCluster: []string{"removed aaaa"}},
+			wantEvents: []string{"aaaa's pod 1 stopped"}, wantCluster: []string{"removed aaaa"}},
 		{name: "a task that waits within agents.idle", active: waiting(1, func(a *taskrunner.Active) { a.StateAt = now.Add(-29 * time.Minute) }), pods: runs},
 		{name: "a task with an answer its harness hasn't read yet", active: waiting(1, func(a *taskrunner.Active) { a.Answered = true }), pods: runs},
 		{name: "a task that moves on as its pod stops", active: waiting(1, nil), pods: runs, answered: true},
 		{name: "a stopped task without an answer", active: waiting(1, stopped)},
 		{name: "a stopped task's pod left behind", active: waiting(1, stopped), pods: runs, wantCluster: []string{"removed aaaa"}},
+		{name: "a stopped task whose next pod another controller started", active: waiting(1, stopped),
+			pods: map[uuid.UUID]map[uuid.UUID]taskrunner.Pod{org: {id("aaaa"): {Number: 2, Pod: runner.Pod{Outcome: runner.Pending}}}}},
 		{name: "a stopped task with an answer", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.Answered = true }),
 			wantEvents: []string{"aaaa's pod 2 started"}, wantCluster: woke},
 		{name: "a stopped task that runs again", active: waiting(1, func(a *taskrunner.Active) { stopped(a); a.State = agents.TaskRunning }),

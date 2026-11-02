@@ -145,10 +145,10 @@ func (s *TaskPodStore) Started(ctx context.Context, taskID uuid.UUID, pod int) e
 	return nil
 }
 
-// Stop records that the task's pod stops while it waits, and answers whether it does: false when the task no longer
-// waits, or its pod stopped already (taskrunner.Store).
-func (s *TaskPodStore) Stop(ctx context.Context, taskID uuid.UUID) (bool, error) {
-	_, err := s.q.StopTaskPod(ctx, taskID)
+// Stop records that the task's pod numbered pod stops while the task waits, and answers whether it does: false when the
+// task no longer waits, its pod stopped already, or a newer pod took its place (taskrunner.Store).
+func (s *TaskPodStore) Stop(ctx context.Context, taskID uuid.UUID, pod int) (bool, error) {
+	_, err := s.q.StopTaskPod(ctx, taskID, int32(pod)) //nolint:gosec // a task has far fewer pods
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		return false, nil

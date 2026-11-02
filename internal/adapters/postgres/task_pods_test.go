@@ -207,7 +207,7 @@ func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
 	if _, err := f.s.MarkRunning(ctx, task.ID); err != nil {
 		t.Fatal(err)
 	}
-	if stopped, err := f.s.Stop(ctx, task.ID); err != nil || stopped {
+	if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped {
 		t.Errorf("Stop() while the task runs = %t, %v; want false", stopped, err)
 	}
 	chat := f.agentFixture.s
@@ -221,7 +221,7 @@ func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
 	}
 	f.checkIdle(t, "once it waits", false, 0, false)
 	for i, want := range []bool{true, false} {
-		if stopped, err := f.s.Stop(ctx, task.ID); err != nil || stopped != want {
+		if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped != want {
 			t.Fatalf("Stop() #%d = %t, %v, want %t", i+1, stopped, err, want)
 		}
 	}
@@ -238,6 +238,10 @@ func TestTaskPodStoreStopsAWaitingTask(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.checkIdle(t, "once its next pod started", false, 1, true)
+	if stopped, err := f.s.Stop(ctx, task.ID, 1); err != nil || stopped {
+		t.Errorf("Stop() of the pod before = %t, %v; want false, its next pod having taken its place", stopped, err)
+	}
+	f.checkIdle(t, "after a stop of the pod before", false, 1, true)
 }
 
 // checkIdle checks that the store lists the one task as waiting since a moment ago, with its pod stopped or not, the

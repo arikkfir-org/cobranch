@@ -88,8 +88,9 @@ type Store interface {
 	LeaseRestart(ctx context.Context, taskID uuid.UUID, pod int, leaseUntil time.Time) (bool, error)
 	// Started records that the task's pod numbered pod started now, which ends a stop and the lease of its restart.
 	Started(ctx context.Context, taskID uuid.UUID, pod int) error
-	// Stop records that the task's pod stops while it waits; false when it no longer waits, or its pod stopped already.
-	Stop(ctx context.Context, taskID uuid.UUID) (bool, error)
+	// Stop records that the task's pod numbered pod stops while the task waits; false when it no longer waits, its pod
+	// stopped already, or a newer pod took its place.
+	Stop(ctx context.Context, taskID uuid.UUID, pod int) (bool, error)
 	// Fail ends a task that hasn't ended Failed, for reason, recording the change in its transcript; false when it had
 	// ended already.
 	Fail(ctx context.Context, taskID uuid.UUID, reason string) (bool, error)
