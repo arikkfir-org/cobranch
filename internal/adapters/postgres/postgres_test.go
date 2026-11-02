@@ -105,7 +105,7 @@ func TestNewSchema(t *testing.T) {
 		wantVersion  int64
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 20},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, wantVersion: 25},
 		{name: "SQL only", sqlFiles: columnB, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, wantVersion: 3},
 		{name: "no migrations", sqlFiles: fstest.MapFS{}, wantErr: true},
@@ -143,8 +143,8 @@ func TestSchemaMigrate(t *testing.T) {
 		wantRow      bool
 		wantErr      bool
 	}{
-		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 20},
-		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 20},
+		{name: "Cobranch's migrations", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 1, wantVersion: 25},
+		{name: "two Jobs at once", sqlFiles: migrations.FS, goMigrations: migrations.Go, jobs: 2, wantVersion: 25},
 		{name: "a table, then a column", sqlFiles: columnB, jobs: 2, wantVersion: 2},
 		{name: "SQL, then Go", sqlFiles: columnB, goMigrations: []*goose.Migration{insertA()}, jobs: 2, wantVersion: 3, wantRow: true},
 		{

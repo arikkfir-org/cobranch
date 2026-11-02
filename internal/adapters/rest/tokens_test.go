@@ -83,7 +83,7 @@ func runCredentialCases(t *testing.T, seed func(t *testing.T, service *auth.Serv
 			rec := httptest.NewRecorder()
 			req := httptest.NewRequest(tt.method, tt.path(id), strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
-			as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil)).ServeHTTP(rec, req)
+			as(viewer, NewHandler("v1", service, emptyOrgs(t), nil, nil, nil)).ServeHTTP(rec, req)
 			if rec.Code != tt.wantStatus {
 				t.Fatalf("status = %d, want %d: %s", rec.Code, tt.wantStatus, rec.Body)
 			}

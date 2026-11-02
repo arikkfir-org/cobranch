@@ -36,6 +36,16 @@ models:
       apiKeys: { resolver: true }
       repositories: { resolver: true }
       repository: { resolver: true }
+      issues: { resolver: true }
+      issue: { resolver: true }
+  Issue:
+    fields:
+      activity: { resolver: true }
+  # A null clears an issue's assignee or repository; a field left out keeps it.
+  IssuePatch:
+    fields:
+      assigneeId: { omittable: true }
+      repositoryId: { omittable: true }
   Repository:
     fields:
       viewerPermissions: { resolver: true }

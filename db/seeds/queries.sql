@@ -40,3 +40,14 @@ INSERT INTO repositories (id, org_id, slug, name, description, created_by) VALUE
 
 -- name: InsertSeedRepositorySlug :exec
 INSERT INTO repository_slugs (org_id, slug, repo_id) VALUES ($1, $2, $3);
+
+-- name: InsertSeedIssue :exec
+INSERT INTO issues (id, org_id, number, title, description, state, priority, assignee_id, repo_id, created_by, closed_at)
+VALUES (@id, @org_id, @number, @title, @description, @state, @priority, sqlc.narg(assignee_id), sqlc.narg(repo_id), @created_by,
+        CASE WHEN @state::text IN ('done', 'canceled') THEN now() END);
+
+-- name: InsertSeedIssueNumber :exec
+INSERT INTO issue_numbers (org_id, last) VALUES ($1, $2);
+
+-- name: InsertSeedEvent :exec
+INSERT INTO events (actor_id, kind, subject_id, details, org_id) VALUES (@actor_id, @kind, @subject_id, @details, @org_id);

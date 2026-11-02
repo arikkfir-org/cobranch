@@ -265,6 +265,32 @@
     .markdown-file { display: grid; gap: 12px; }
     .tabs { display: flex; gap: 4px; }
     .tabs button[aria-pressed="true"] { border-color: var(--color-accent); color: var(--color-accent); }
+    .tone-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); }
+    .filters { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; }
+    .filters select { width: auto; }
+    .groups { display: grid; gap: 16px; }
+    .issues td.priority, .issues td.key, .issues td.when { width: 1%; white-space: nowrap; }
+    .issues td.meta { text-align: right; white-space: nowrap; }
+    .issues a.subject { color: var(--color-fg-default); font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
+    .issues a.subject:hover { color: var(--color-accent); }
+    .avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; vertical-align: middle;
+      background: var(--color-status-info-bg); color: var(--color-status-info-fg); border: 1px solid var(--color-status-info-border); font-size: 10px; font-weight: 600; }
+    .fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    textarea { font-family: var(--font-mono); font-size: 13px; resize: vertical; }
+    .issue { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 24px; align-items: start; }
+    .issue .column { display: grid; gap: 24px; min-width: 0; }
+    aside.side { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); }
+    aside.side .fact { color: var(--color-fg-default); font-size: 14px; }
+    .branch-name { display: grid; gap: 6px; }
+    .branch-name code { font-size: 12px; overflow-wrap: anywhere; flex: 1; }
+    .activity { list-style: none; margin: 0; padding: 0; display: grid; }
+    .activity li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+    .activity li:first-child { border-top: 0; }
+    .activity li .muted { white-space: nowrap; }
+    @media (max-width: 720px) {
+      .issue, .filters { grid-template-columns: minmax(0, 1fr); }
+      .issue aside.side { order: -1; }
+    }
   </style>
 </head>
 <body class="centered">
@@ -293,11 +319,12 @@
     let roles = []; // the roles the organization shown grants
     let permissions = []; // what a role at an organization may hold
 
-    // api calls the REST API with the session cookie, and rejects with the problem it answered.
+    // api calls the REST API with the session cookie, a body as JSON unless headers name another type, and rejects with
+    // the problem it answered.
     async function api(method, path, body, headers = {}) {
       const options = { method, credentials: "include", headers: { Accept: "application/json", ...headers } };
       if (body !== undefined) {
-        options.headers["Content-Type"] = "application/json";
+        options.headers["Content-Type"] = headers["Content-Type"] || "application/json";
         options.body = JSON.stringify(body);
       }
       const r = await fetch(config.restUrl + "/v1" + path, options);
@@ -450,15 +477,15 @@
     const roleSelect = (selected) => h("select", { name: "roleId" }, roles.map((r) => h("option", { value: r.id, selected: r.id === selected }, r.name)));
 
     // An organization's own pages, which no repository's slug is: the repositories' reserved slugs.
-    const orgPages = ["members", "roles", "api-keys", "settings", "repos", "new"];
+    const orgPages = ["members", "roles", "api-keys", "settings", "repos", "new", "issues"];
     // What a repository's visibility means, as the API names it.
     const visibilities = {
       private: { name: "Private", title: "Only those granted a role on it, and the organization's Owners, read it." },
       internal: { name: "Internal", title: "Others of the organization read it too, through a grant on it or an organization role." },
     };
 
-    // An organization's pages: its home with its repositories, members, roles, API keys and settings, and its
-    // repositories' pages, under a bar with the switcher and the navigation.
+    // An organization's pages: its home with its repositories, its issues, members, roles, API keys and settings, and
+    // its repositories' pages, under a bar with the switcher and the navigation.
     async function showOrganization(slug, page, sub, rest) {
       let org;
       try {
@@ -471,7 +498,7 @@
       try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
       roles = (await api("GET", "/orgs/" + org.slug + "/roles")).roles;
       const can = (p) => org.viewerPermissions.includes(p);
-      const pages = [["", "Home"], ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"]];
+      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"]];
       if (can("org.manage")) pages.push(["settings", "Settings"]);
       const current = orgPages.includes(page) ? page : "";
       const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, label);
@@ -487,6 +514,7 @@
       if (page === "api-keys") return showApiKeys(org, main, can);
       if (page === "settings" && can("org.manage")) return showSettings(org, main);
       if (page === "new" && can("repos.create")) return showNewRepository(org, main);
+      if (page === "issues" && can("issues.read")) return showIssues(org, main, can, sub);
       if (orgPages.includes(page)) return go("/" + org.slug);
       if (page) return showRepository(org, main, can, page, sub, rest);
       const list = (await api("GET", "/orgs/" + org.slug + "/repos")).repositories;
@@ -597,6 +625,13 @@
       "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
+      "eye": '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+      "circle-slash": '<circle cx="12" cy="12" r="10"/><line x1="9" x2="15" y1="15" y2="9"/>',
+      "triangle-alert": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+      "signal-high": '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/><path d="M17 20V8"/>',
+      "signal-medium": '<path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/>',
+      "signal-low": '<path d="M2 20h.01"/><path d="M7 20v-4"/>',
+      "minus": '<path d="M5 12h14"/>',
     };
     // The branch statuses as the design system draws them, the same way.
     const branchStatuses = {
@@ -1255,6 +1290,262 @@
       return [saved, h("section", { class: "panel" }, form)];
     }
 
+    // The issue states as the design system draws them, in the order the side column offers them: Done and Canceled
+    // close an issue. A list groups the open ones nearest to done first.
+    const issueStates = {
+      backlog: { word: "Backlog", icon: "circle-dashed", tone: "neutral" },
+      todo: { word: "Todo", icon: "circle", tone: "neutral" },
+      in_progress: { word: "In progress", icon: "loader-circle", tone: "info" },
+      in_review: { word: "In review", icon: "eye", tone: "warning" },
+      done: { word: "Done", icon: "circle-check", tone: "success" },
+      canceled: { word: "Canceled", icon: "circle-slash", tone: "neutral" },
+    };
+    const issueGroups = ["in_review", "in_progress", "todo", "backlog", "done", "canceled"];
+    // The priorities, most urgent first, as a list sorts each group.
+    const issuePriorities = {
+      urgent: { word: "Urgent", icon: "triangle-alert", tone: "danger" },
+      high: { word: "High", icon: "signal-high", tone: "neutral" },
+      medium: { word: "Medium", icon: "signal-medium", tone: "neutral" },
+      low: { word: "Low", icon: "signal-low", tone: "neutral" },
+      none: { word: "No priority", icon: "minus", tone: "neutral" },
+    };
+    const priorityRank = (p) => Object.keys(issuePriorities).indexOf(p);
+    // issueBadge is an issue's state as a badge, as branchBadge draws a branch's.
+    function issueBadge(state) {
+      const s = issueStates[state];
+      return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
+    }
+    // priorityIcon is an issue's priority as its icon alone, named in its tooltip.
+    function priorityIcon(priority) {
+      const p = issuePriorities[priority];
+      return h("span", { class: "tone-" + p.tone }, icon(p.icon, p.word));
+    }
+    // avatar is a principal's initials in a circle, named in its tooltip.
+    const avatar = (p) => h("span", { class: "avatar", title: p.displayName, role: "img", "aria-label": p.displayName },
+      p.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?");
+    // issuePath is an issue's page under the Console's root: by its identifier, though the page reads only its number.
+    const issuePath = (org, i) => "/" + org.slug + "/issues/" + i.identifier;
+    // branchName is the name to give a branch that works on an issue: its identifier and title in lowercase words,
+    // cut at a word within 60 characters, as Linear's "Copy git branch name" does.
+    function branchName(i) {
+      const words = i.title.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f'\u2019]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const name = (i.identifier.toLowerCase() + "-" + words).replace(/-$/, "");
+      return name.length <= 60 ? name : name.slice(0, 61).replace(/-[^-]*$/, "");
+    }
+    // issueChoices are whom an issue may be assigned to and what it may be about: the organization's members, and the
+    // repositories the viewer reads.
+    async function issueChoices(org) {
+      const [members, repositories] = await Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
+        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
+      return { members, repositories };
+    }
+    const stateSelect = (value) => h("select", { name: "state" }, Object.entries(issueStates).map(([s, { word }]) => h("option", { value: s, selected: s === value }, word)));
+    const prioritySelect = (value) => h("select", { name: "priority" }, Object.entries(issuePriorities).map(([p, { word }]) => h("option", { value: p, selected: p === value }, word)));
+    // assigneeSelect picks one of the members, or nobody; an assignee who is no member any more stays its choice.
+    function assigneeSelect(members, current) {
+      const gone = current && !members.some((m) => m.userId === current.id);
+      return h("select", { name: "assigneeId" }, h("option", { value: "" }, "Nobody"),
+        members.map((m) => h("option", { value: m.userId, selected: current && m.userId === current.id }, m.displayName + (m.userId === me.id ? " (you)" : ""))),
+        gone ? h("option", { value: current.id, selected: true }, current.displayName) : null);
+    }
+    const repositorySelect = (repositories, current) => h("select", { name: "repositoryId" }, h("option", { value: "" }, "None"),
+      repositories.map((r) => h("option", { value: r.id, selected: current && r.id === current.id }, r.slug)));
+
+    // showIssues is the Issues page's: the list, the form that creates one, or an issue's page, by what follows issues/.
+    function showIssues(org, main, can, sub) {
+      if (sub === "new" && can("issues.write")) return showNewIssue(org, main);
+      if (sub && sub !== "new") return showIssue(org, main, can, sub);
+      return showIssueList(org, main, can);
+    }
+
+    // showIssueList lists the organization's open issues by state, the most urgent first within each, filtered by the
+    // assignee, the repository and a text that the page's query names; a switch adds the closed ones.
+    async function showIssueList(org, main, can) {
+      const params = new URLSearchParams(location.search);
+      const { members, repositories } = await issueChoices(org);
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const filter = (name, value) => {
+        const p = new URLSearchParams(location.search);
+        if (value) p.set(name, value); else p.delete(name);
+        go("/" + org.slug + "/issues" + (p.toString() ? "?" + p : ""), true);
+      };
+      const assignee = h("select", { "aria-label": "Assignee", onchange: (e) => filter("assignee", e.target.value) }, h("option", { value: "" }, "Anyone"),
+        h("option", { value: me.id }, "Me"), h("option", { value: "none" }, "Nobody"),
+        members.filter((m) => m.userId !== me.id).map((m) => h("option", { value: m.userId }, m.displayName)));
+      assignee.value = params.get("assignee") || "";
+      const repository = h("select", { "aria-label": "Repository", onchange: (e) => filter("repository", e.target.value) }, h("option", { value: "" }, "Any repository"),
+        h("option", { value: "none" }, "No repository"), repositories.map((r) => h("option", { value: r.id }, r.slug)));
+      repository.value = params.get("repository") || "";
+      const text = h("input", { type: "search", "aria-label": "Search", placeholder: "Search titles, descriptions, identifiers", value: params.get("q") || "",
+        onchange: (e) => filter("q", e.target.value.trim()) });
+      const closed = params.get("closed") === "1";
+      const switcher = h("label", { class: "check" }, h("input", { type: "checkbox", checked: closed, onchange: (e) => filter("closed", e.target.checked ? "1" : "") }), "Show closed");
+      const query = new URLSearchParams({ limit: "100" });
+      if (closed) issueGroups.forEach((s) => query.append("state", s));
+      for (const [name, value] of [["assignee", assignee.value], ["repository", repository.value], ["q", text.value.trim()]]) if (value) query.set(name, value);
+      const groups = h("div", { class: "groups" });
+      const more = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "More issues");
+      const loaded = [];
+      let next = null;
+      const draw = () => {
+        const shown = issueGroups.map((state) => {
+          const of = loaded.filter((i) => i.state === state).sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority));
+          return of.length ? h("section", { class: "panel" }, h("div", { class: "title" }, issueBadge(state), h("span", { class: "muted" }, String(of.length))),
+            h("table", { class: "issues" }, h("tbody", {}, of.map((i) => issueRow(org, i))))) : null;
+        }).filter(Boolean);
+        const filtered = params.get("assignee") || params.get("repository") || params.get("q");
+        groups.replaceChildren(...(shown.length ? shown : [h("section", { class: "panel" }, h("p", {}, filtered ? "No issues match." : closed ? "No issues yet."
+          : can("issues.write") ? "No open issues. Create the first." : "No open issues."))]));
+      };
+      async function load(from) {
+        more.disabled = true;
+        try {
+          const page = await apiPage(from);
+          loaded.push(...page.data.issues);
+          next = page.next;
+          more.hidden = !next;
+          draw();
+        } catch (err) {
+          fail(err);
+        } finally {
+          more.disabled = false;
+        }
+      }
+      main.replaceChildren(h("div", { class: "row" }, h("h1", {}, "Issues"),
+        can("issues.write") ? h("a", { class: "button small primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null),
+      error, h("div", { class: "filters" }, assignee, repository, text, switcher), groups, h("div", {}, more));
+      await load("/orgs/" + org.slug + "/issues?" + query);
+    }
+
+    // issueRow is a list's row of an issue, as the design system's Issue row draws it: its priority, identifier and
+    // title, its repository, its assignee's avatar, and when it last changed.
+    const issueRow = (org, i) => h("tr", {}, h("td", { class: "priority" }, priorityIcon(i.priority)),
+      h("td", { class: "key" }, h("a", { href: base + issuePath(org, i).slice(1), "data-nav": "" }, h("code", {}, i.identifier))),
+      h("td", { class: "name" }, h("a", { class: "subject", href: base + issuePath(org, i).slice(1), "data-nav": "" }, i.title)),
+      h("td", { class: "meta" }, i.repository ? h("span", { class: "chip" }, i.repository.slug) : null, i.assignee ? avatar(i.assignee) : null),
+      h("td", { class: "when muted" }, when(i.updatedAt)));
+
+    // showNewIssue asks for a title, then the rest, as an issue's side column does, and creates the issue.
+    async function showNewIssue(org, main) {
+      const { members, repositories } = await issueChoices(org);
+      const error = h("p", { class: "alert", hidden: true });
+      const title = h("input", { name: "title", required: true, maxlength: 200, placeholder: "Show pushes before the client returns" });
+      const description = h("textarea", { name: "description", rows: 8, maxlength: 65536, placeholder: "What it is and why, in Markdown" });
+      const state = stateSelect("backlog"), priority = prioritySelect("none"), assignee = assigneeSelect(members, null), repository = repositorySelect(repositories, null);
+      const create = h("button", { class: "button primary", type: "submit" }, "Create");
+      main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / new"), h("h1", {}, "New issue")),
+        error, h("section", { class: "panel" }, h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          create.disabled = true;
+          api("POST", "/orgs/" + org.slug + "/issues", { title: title.value, description: description.value, state: state.value, priority: priority.value,
+            assigneeId: assignee.value || undefined, repositoryId: repository.value || undefined })
+            .then((i) => go(issuePath(org, i))).catch((err) => { create.disabled = false; error.textContent = err.message; error.hidden = false; });
+        } },
+          h("label", {}, "Title", title), h("label", {}, "Description", h("span", {}, "Markdown, as the Console renders a repository's."), description),
+          h("div", { class: "fields" }, h("label", {}, "State", state), h("label", {}, "Priority", priority), h("label", {}, "Assignee", assignee),
+            h("label", {}, "Repository", h("span", {}, "What it is about, if one thing."), repository)),
+          h("div", {}, create))));
+      title.focus();
+    }
+
+    // showIssue is an issue's page: its identifier and state, its title and rendered description, which the viewer may
+    // edit, and its activity, oldest first; beside them, the side column changes its state, priority, assignee and
+    // repository, each at once and from the version the page shows, and offers a branch name. It opens the issue by
+    // the number its identifier ends in, so a link made before the organization changed its key still opens it.
+    async function showIssue(org, main, can, identifier, notice) {
+      const number = /^(?:[A-Za-z][A-Za-z0-9]*-)?(\d+)$/.exec(identifier);
+      if (!number) return go("/" + org.slug + "/issues", true);
+      const path = "/orgs/" + org.slug + "/issues/" + number[1];
+      let issue;
+      try {
+        issue = await api("GET", path);
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return main.replaceChildren(h("h1", {}, "No such issue"), h("p", {}, "There is no issue ", h("code", {}, identifier), " in " + org.name + "."),
+          h("div", {}, h("a", { class: "button", href: base + org.slug + "/issues", "data-nav": "" }, "Back to the issues")));
+      }
+      if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
+      const write = can("issues.write");
+      const [events, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events), write ? issueChoices(org) : null]);
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
+      const tag = '"' + issue.version + '"';
+      // save changes the fields patch names from the version shown, and shows the issue as it then is: when someone
+      // changed it meanwhile, as they left it, saying so.
+      const save = (patch) => api("PATCH", path, patch, { "Content-Type": "application/merge-patch+json", "If-Match": tag })
+        .then(() => refresh()).catch((err) => (err.status === 412 ? refresh("Someone changed it meanwhile: here it is as they left it. Make your change again.") : fail(err)));
+      const heading = h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / ", h("code", {}, issue.identifier)),
+        h("div", { class: "title" }, h("code", {}, issue.identifier), issueBadge(issue.state)), h("h1", {}, issue.title));
+      const body = h("section", { class: "panel" });
+      const show = () => body.replaceChildren(h("div", { class: "row" }, h("h3", {}, "Description"),
+        write ? h("button", { class: "button small", type: "button", onclick: edit }, "Edit") : null),
+      issue.descriptionHtml ? rendered(issue.descriptionHtml) : h("p", {}, "No description."));
+      function edit() {
+        const title = h("input", { name: "title", required: true, maxlength: 200, value: issue.title });
+        const description = h("textarea", { name: "description", rows: 12, maxlength: 65536 });
+        description.value = issue.description;
+        body.replaceChildren(h("form", { onsubmit: (e) => { e.preventDefault(); save({ title: title.value, description: description.value }); } },
+          h("label", {}, "Title", title), h("label", {}, "Description", h("span", {}, "Markdown."), description),
+          h("div", { class: "row" }, h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save"), " ",
+            h("button", { class: "button", type: "button", onclick: show }, "Cancel")))));
+        title.focus();
+      }
+      show();
+      const activity = h("section", { class: "panel" }, h("h3", {}, "Activity"), h("ul", { class: "activity" }, events.flatMap(issueEventLines)));
+      const notes = h("p", { class: "alert", hidden: !notice }, notice || "");
+      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+    }
+
+    // issueSide is an issue's side column: its fields, each a select that saves at once for a viewer with issues.write
+    // and a fact otherwise, who created it and when, the branch name to copy, and Delete for a viewer with issues.manage.
+    function issueSide(org, issue, can, choices, save, tag, fail) {
+      const field = (label, select, patch, fact) => h("label", {}, label, choices ? Object.assign(select, { onchange: (e) => { e.target.disabled = true; save(patch(e.target.value)); } })
+        : h("span", { class: "fact" }, fact));
+      const name = branchName(issue);
+      const code = h("code", {}, name);
+      const copy = h("button", { class: "button small", type: "button", onclick: () => navigator.clipboard.writeText(name).then(() => { copy.textContent = "Copied"; })
+        .catch(() => getSelection().selectAllChildren(code)) }, "Copy");
+      const remove = () => {
+        if (!confirm("Delete " + issue.identifier + " and its activity? An issue that won't be done is Canceled instead.")) return;
+        api("DELETE", "/orgs/" + org.slug + "/issues/" + issue.number, undefined, { "If-Match": tag }).then(() => go("/" + org.slug + "/issues")).catch(fail);
+      };
+      return h("aside", { class: "side" },
+        field("State", choices && stateSelect(issue.state), (v) => ({ state: v }), issueBadge(issue.state)),
+        field("Priority", choices && prioritySelect(issue.priority), (v) => ({ priority: v }), [priorityIcon(issue.priority), " ", issuePriorities[issue.priority].word]),
+        field("Assignee", choices && assigneeSelect(choices.members, issue.assignee), (v) => ({ assigneeId: v || null }), issue.assignee ? issue.assignee.displayName : "Nobody"),
+        field("Repository", choices && repositorySelect(choices.repositories, issue.repository), (v) => ({ repositoryId: v || null }), issue.repository ? h("code", {}, issue.repository.slug) : "None"),
+        h("dl", { class: "facts" }, h("dt", {}, "Created by"), h("dd", {}, issue.createdBy ? issue.createdBy.displayName : "Someone since gone"),
+          h("dt", {}, "Created"), h("dd", {}, whenExactly(issue.createdAt)), issue.closedAt ? [h("dt", {}, "Closed"), h("dd", {}, whenExactly(issue.closedAt))] : null),
+        h("div", { class: "branch-name" }, h("h3", {}, "Branch name"), h("p", {}, "Its identifier and title, for the branch that works on it."), h("div", { class: "row" }, code, copy)),
+        can("issues.manage") ? h("div", {}, h("button", { class: "button small danger", type: "button", onclick: remove }, "Delete")) : null);
+    }
+
+    // issueEventLines are an event of an issue's activity as lines: who did it, what, and when; one line per field a
+    // change changed.
+    function issueEventLines(e) {
+      const line = (...what) => h("li", {}, h("span", {}, h("strong", {}, e.actor ? e.actor.displayName : "Someone since gone"), " ", ...what), h("span", { class: "muted" }, whenExactly(e.at)));
+      if (e.kind === "issue.created") return [line("created it")];
+      if (e.kind !== "issue.changed") return [line(h("code", {}, e.kind))];
+      return e.changes.map((c) => line(...issueChangeWords(c)));
+    }
+
+    // issueChangeWords says what a change did to a field, with its values as people read them.
+    function issueChangeWords(c) {
+      const quoted = (s) => "“" + s + "”";
+      const word = (names, v) => (names[v] ? names[v].word : v);
+      switch (c.field) {
+        case "title": return ["renamed it from ", quoted(c.from), " to ", quoted(c.to)];
+        case "description": return ["changed its description"];
+        case "state": return ["moved it from ", word(issueStates, c.from), " to ", word(issueStates, c.to)];
+        case "priority": return ["changed its priority from ", word(issuePriorities, c.from), " to ", word(issuePriorities, c.to)];
+        case "assignee": return c.to ? (c.from ? ["reassigned it from ", c.from, " to ", c.to] : ["assigned it to ", c.to]) : ["unassigned ", c.from || "it"];
+        case "repository": return c.to ? ["made it about ", h("code", {}, c.to)] : c.from ? ["made it about no repository instead of ", h("code", {}, c.from)] : ["changed its repository"];
+      }
+      return ["changed its ", c.field];
+    }
+
     function notFound(slug) {
       showCard(h("h2", {}, "No such organization"), h("p", {}, "There is no organization ", h("code", {}, slug), " that you may see."), h("a", { class: "button", href: base, "data-nav": "" }, "Back"));
     }
@@ -1518,12 +1809,14 @@
       const role = roleSelect(org.membershipRoleId);
       const accepts = h("input", { name: "acceptsJoinRequests", type: "checkbox", checked: org.acceptsJoinRequests });
       const providers = h("input", { name: "providers", value: (org.providers || []).join(", "), placeholder: "All of this installation's" });
+      const issueKey = h("input", { name: "issueKey", required: true, value: org.issueKey, pattern: "[A-Z][A-Z0-9]{0,9}", maxlength: 10,
+        oninput: (e) => { e.target.value = e.target.value.toUpperCase(); } });
       const form = h("form", { onsubmit: async (e) => {
         e.preventDefault();
         error.hidden = saved.hidden = true;
         const list = providers.value.split(",").map((s) => s.trim()).filter(Boolean);
         try {
-          const updated = await api("PATCH", "/orgs/" + org.slug, { name: name.value, slug: slug.value, membershipRoleId: role.value, acceptsJoinRequests: accepts.checked, providers: list });
+          const updated = await api("PATCH", "/orgs/" + org.slug, { name: name.value, slug: slug.value, membershipRoleId: role.value, acceptsJoinRequests: accepts.checked, providers: list, issueKey: issueKey.value });
           orgs = (await api("GET", "/me/organizations")).organizations;
           if (updated.slug !== org.slug) return go("/" + updated.slug + "/settings");
           saved.hidden = false;
@@ -1537,6 +1830,8 @@
         h("label", {}, "Slug", h("span", {}, "Its URL. The old slug keeps pointing here after a change."), slug),
         h("label", {}, "Membership role", h("span", {}, "The role everyone who joins gets."), role),
         h("label", { class: "check" }, accepts, "Accept join requests by slug"),
+        h("label", {}, "Issue key", h("span", {}, "What its issues' identifiers start with, such as " + org.issueKey + "-42: 1 to 10 uppercase letters and digits, from a letter. " +
+          "A change renames every issue; links to the old identifiers still open them."), issueKey),
         h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
       main.replaceChildren(h("h1", {}, "Settings"), error, saved, h("section", { class: "panel" }, form));

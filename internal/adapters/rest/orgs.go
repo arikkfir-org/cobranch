@@ -126,7 +126,7 @@ func fail(err error, kind string) error {
 // organization is o as the API shows it, with what the viewer holds there.
 func organization(o orgs.Organization, held []string) Organization {
 	out := Organization{Id: o.ID, Slug: o.Slug, Name: o.Name, MembershipRoleId: o.MembershipRoleID,
-		AcceptsJoinRequests: o.AcceptsJoinRequests, CreatedAt: o.CreatedAt, ViewerPermissions: nonNil(held)}
+		AcceptsJoinRequests: o.AcceptsJoinRequests, IssueKey: o.IssueKey, CreatedAt: o.CreatedAt, ViewerPermissions: nonNil(held)}
 	if o.Providers != nil {
 		out.Providers = &o.Providers
 	}
@@ -270,6 +270,9 @@ func (a api) UpdateOrganization(ctx context.Context, req UpdateOrganizationReque
 		if len(settings.Providers) == 0 {
 			settings.Providers = nil
 		}
+	}
+	if b.IssueKey != nil {
+		settings.IssueKey = *b.IssueKey
 	}
 	updated, err := a.orgs.Update(ctx, v, org.ID, settings)
 	if err != nil {

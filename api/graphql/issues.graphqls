@@ -1,0 +1,163 @@
+# An organization's issues: the work its members create, assign and move through six states, each named by the
+# organization's issue key and a number, such as ACME-42
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/issues.md).
+
+extend type Organization {
+  "The key its issues' identifiers start with, such as ACME in ACME-42."
+  issueKey: String!
+  "A page of the organization's issues that filter matches, newest first, open ones unless filter names states: from the start, or from after, where the previous page's nextCursor says the next one starts; takes issues.read. An issue about a repository the viewer doesn't read shows no repository, and filtering by one finds none. first is 1 to 100."
+  issues(filter: IssueFilter, first: Int! = 50, after: String): IssuePage!
+  "One of the organization's issues by number, with its description rendered: null unless it is there; takes issues.read."
+  issue(number: Int!): Issue
+}
+
+"Which of an organization's issues a list shows."
+input IssueFilter {
+  "The states it shows; left out or empty, the open ones (BACKLOG, TODO, IN_PROGRESS, IN_REVIEW)."
+  states: [IssueState!]
+  "Those assigned to one principal, by ID, or to nobody, for none."
+  assigneeId: ID
+  "Those about one repository, by ID, or about none, for none."
+  repositoryId: ID
+  "Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42."
+  text: String
+}
+
+"A page of an organization's issues."
+type IssuePage {
+  "The page's issues, newest first, without their rendered descriptions."
+  issues: [Issue!]!
+  "Where the next page starts, for after; null after the last."
+  nextCursor: String
+}
+
+"Where an issue stands: DONE and CANCELED close it."
+enum IssueState {
+  "Known, not planned."
+  BACKLOG
+  "Planned, not started."
+  TODO
+  "Someone works on it."
+  IN_PROGRESS
+  "Its work waits for review."
+  IN_REVIEW
+  "Its work is merged."
+  DONE
+  "It won't be done."
+  CANCELED
+}
+
+"How urgent an issue is."
+enum IssuePriority {
+  NONE
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+"A piece of an organization's work, named by its organization's issue key and its number."
+type Issue {
+  id: ID!
+  organizationId: ID!
+  "Its number in its organization, from 1, never given to another."
+  number: Int!
+  "Its organization's issue key and its number, such as ACME-42; a changed key renames it."
+  identifier: String!
+  title: String!
+  "Markdown."
+  description: String!
+  "The description rendered, as the Console shows it, its relative links pointing at the organization's pages beside the issue's: issue, createIssue and updateIssue answer it, a list doesn't, nor an empty description."
+  descriptionHtml: String
+  state: IssueState!
+  priority: IssuePriority!
+  "Who works on it; null for nobody, or once they are gone."
+  assignee: IssuePrincipal
+  "The repository it is about; null for none, and for a viewer who doesn't read it."
+  repository: IssueRepository
+  "Who created it; null once they are gone."
+  createdBy: IssuePrincipal
+  createdAt: Time!
+  updatedAt: Time!
+  "When it was last done or canceled; null while it is open."
+  closedAt: Time
+  "Counts its changes from 1: a change names it in expectedVersion to refuse one made meanwhile."
+  version: Int!
+  "What happened to it, oldest first; takes issues.read. A move between repositories names only those the viewer reads."
+  activity: [IssueEvent!]!
+}
+
+"Who an issue is assigned to, who created it, or who changed it."
+type IssuePrincipal {
+  id: ID!
+  displayName: String!
+}
+
+"The repository an issue is about."
+type IssueRepository {
+  id: ID!
+  slug: String!
+  name: String!
+}
+
+"Something that happened to an issue."
+type IssueEvent {
+  id: ID!
+  "issue.created or issue.changed; more kinds come with branches."
+  kind: String!
+  "Who did it; null once they are gone."
+  actor: IssuePrincipal
+  at: Time!
+  "The fields an issue.changed changed."
+  changes: [IssueChange!]!
+}
+
+"A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug. A description's change names no values, and a repository's only those the viewer reads."
+type IssueChange {
+  "title, description, state, priority, assignee or repository."
+  field: String!
+  from: String
+  to: String
+}
+
+"What creates an issue."
+input IssueInput {
+  "1 to 200 characters on one line."
+  title: String!
+  "Markdown, at most 65536 characters."
+  description: String
+  "BACKLOG when left out."
+  state: IssueState
+  "NONE when left out."
+  priority: IssuePriority
+  "One of the organization's members."
+  assigneeId: ID
+  "One of the organization's repositories, which the viewer reads."
+  repositoryId: ID
+}
+
+"What changes an issue: a field left out keeps its value, and null clears an assignee or a repository."
+input IssuePatch {
+  title: String
+  description: String
+  state: IssueState
+  priority: IssuePriority
+  "One of the organization's members, or null for nobody."
+  assigneeId: ID
+  "One of the organization's repositories, which the viewer reads, or null for none."
+  repositoryId: ID
+}
+
+extend input OrganizationSettings {
+  "1 to 10 uppercase letters and digits, starting with a letter; changing it renames every issue's identifier. Left out or null, as before."
+  issueKey: String
+}
+
+extend type Mutation {
+  "Creates an issue in the organization, numbered after its last, with the viewer its creator; takes issues.write, and repo.read on the repository it is about."
+  createIssue(organizationId: ID!, input: IssueInput!): Issue!
+  "Changes the fields input names of one of the organization's issues and answers it as it now is; takes issues.write, and repo.read on a repository it makes it about. With expectedVersion, an issue at another version is refused (CONFLICT, precondition.failed)."
+  updateIssue(organizationId: ID!, number: Int!, input: IssuePatch!, expectedVersion: Int): Issue!
+  "Deletes one of the organization's issues, with its activity, for a mistake, and answers true; work that won't be done is CANCELED instead. Takes issues.manage. With expectedVersion, an issue at another version is refused (CONFLICT, precondition.failed)."
+  deleteIssue(organizationId: ID!, number: Int!, expectedVersion: Int): Boolean!
+}
