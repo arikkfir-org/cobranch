@@ -83,5 +83,7 @@ func (a api) ListUsers(ctx context.Context, req ListUsersRequestObject) (ListUse
 }
 
 func organization(o admin.Organization) Organization {
-	return Organization{Id: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: o.Members}
+	return Organization{Id: o.ID, Slug: o.Slug, Name: o.Name, CreatedAt: o.CreatedAt, Members: o.Members,
+		Repositories: Usage{Used: o.Usage.Repositories, Limit: o.Limits.RepositoriesPerOrganization},
+		GitData:      Usage{Used: o.Usage.GitData, Limit: o.Limits.GitDataPerOrganization}}
 }

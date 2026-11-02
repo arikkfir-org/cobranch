@@ -54,8 +54,8 @@ func sealer(key string) (auth.Sealer, error) {
 	return box, nil
 }
 
-// adminService is the Admin server's domain: the installation's administration under the values' sign-up settings
-// and identity providers, sealing the Back-office's providers' secrets with the secrets key.
+// adminService is the Admin server's domain: the installation's administration under the values' sign-up settings,
+// limits and identity providers, sealing the Back-office's providers' secrets with the secrets key.
 func adminService(cfg config.Server, store *postgres.OrgStore, authz *auth.Authorizer) (*admin.Service, error) {
 	values, err := signUpSettings(cfg.SignUpSettings)
 	if err != nil {
@@ -69,7 +69,7 @@ func adminService(cfg config.Server, store *postgres.OrgStore, authz *auth.Autho
 	if err != nil {
 		return nil, fmt.Errorf("configuring: %w", err)
 	}
-	service := admin.NewService(store, authz, values)
+	service := admin.NewService(store, authz, values).WithLimits(limitValues(cfg.Limits))
 	service.SetProviders(admin.ProviderSetup{Values: providers, Sealer: box, Discover: func(ctx context.Context, issuer string) error {
 		return oidc.Discover(ctx, issuer, nil)
 	}})

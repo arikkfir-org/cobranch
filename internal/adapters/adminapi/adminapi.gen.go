@@ -68,13 +68,22 @@ func (e ProviderChangePreset) Valid() bool {
 
 // Defines values for SettingsLocked.
 const (
-	SelfServe SettingsLocked = "selfServe"
-	SignUp    SettingsLocked = "signUp"
+	GitDataPerOrganization      SettingsLocked = "gitDataPerOrganization"
+	OrganizationsPerUser        SettingsLocked = "organizationsPerUser"
+	RepositoriesPerOrganization SettingsLocked = "repositoriesPerOrganization"
+	SelfServe                   SettingsLocked = "selfServe"
+	SignUp                      SettingsLocked = "signUp"
 )
 
 // Valid indicates whether the value is a known member of the SettingsLocked enum.
 func (e SettingsLocked) Valid() bool {
 	switch e {
+	case GitDataPerOrganization:
+		return true
+	case OrganizationsPerUser:
+		return true
+	case RepositoriesPerOrganization:
+		return true
 	case SelfServe:
 		return true
 	case SignUp:
@@ -156,13 +165,56 @@ type NewProviderPreset string
 
 // Organization An organization as an administrator sees it, never its content.
 type Organization struct {
-	CreatedAt time.Time          `json:"createdAt"`
-	Id        openapi_types.UUID `json:"id"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// GitData What an organization takes of what a limit caps, against the limit that applies.
+	GitData Usage              `json:"gitData"`
+	Id      openapi_types.UUID `json:"id"`
 
 	// Members How many members it has.
 	Members int    `json:"members"`
 	Name    string `json:"name"`
-	Slug    string `json:"slug"`
+
+	// Repositories What an organization takes of what a limit caps, against the limit that applies.
+	Repositories Usage  `json:"repositories"`
+	Slug         string `json:"slug"`
+}
+
+// OrganizationLimit One of an organization's limits, 0 capping nothing; Git data's in bytes.
+type OrganizationLimit struct {
+	// Applies The limit that applies, its own else the installation's.
+	Applies int64 `json:"applies"`
+
+	// Installation The installation's limit.
+	Installation int64 `json:"installation"`
+
+	// Own Its own limit; absent when it takes the installation's.
+	Own *int64 `json:"own,omitempty"`
+}
+
+// OrganizationLimits An organization's limits: for its repositories and its Git data, its own where an administrator set one, which wins over the installation's.
+type OrganizationLimits struct {
+	// GitData One of an organization's limits, 0 capping nothing; Git data's in bytes.
+	GitData OrganizationLimit  `json:"gitData"`
+	Name    string             `json:"name"`
+	OrgId   openapi_types.UUID `json:"orgId"`
+
+	// Repositories One of an organization's limits, 0 capping nothing; Git data's in bytes.
+	Repositories OrganizationLimit `json:"repositories"`
+	Slug         string            `json:"slug"`
+
+	// UpdatedAt When an administrator last changed its own limits; absent when nobody has.
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+
+	// UpdatedBy Who last changed them; absent when nobody has, or they're gone.
+	UpdatedBy *openapi_types.UUID `json:"updatedBy,omitempty"`
+}
+
+// OrganizationLimitsChange The organization's own limits to change, each 0 or more (0 caps nothing), or null to take the installation's again; those it leaves out stay as they are.
+type OrganizationLimitsChange struct {
+	// GitData In bytes.
+	GitData      LimitChange `json:"gitData,omitempty"`
+	Repositories LimitChange `json:"repositories,omitempty"`
 }
 
 // Problem Problem details (RFC 9457), with Cobranch's stable error code and the request's ID.
@@ -235,10 +287,19 @@ type ProviderChange struct {
 // ProviderChangePreset defines model for ProviderChange.Preset.
 type ProviderChangePreset string
 
-// Settings The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else its default (anyone signs up, and creates organizations).
+// Settings The installation's settings: each the chart's values' where they set it (locked), else an administrator's, else its default (anyone signs up, and creates organizations; 5 organizations per user, 100 repositories and 1 GiB of Git data per organization).
 type Settings struct {
+	// GitDataPerOrganization The most bytes of Git data an organization without its own limit stores; 0 caps nothing.
+	GitDataPerOrganization int64 `json:"gitDataPerOrganization"`
+
 	// Locked The settings the chart's values set, which only they change.
 	Locked []SettingsLocked `json:"locked"`
+
+	// OrganizationsPerUser The most organizations a user creates for themselves; 0 caps nothing.
+	OrganizationsPerUser int64 `json:"organizationsPerUser"`
+
+	// RepositoriesPerOrganization The most repositories an organization without its own limit holds; 0 caps nothing.
+	RepositoriesPerOrganization int64 `json:"repositoriesPerOrganization"`
 
 	// SelfServe Whether every new user may create organizations (Installation user).
 	SelfServe bool `json:"selfServe"`
@@ -261,7 +322,15 @@ type SettingsLocked string
 
 // SettingsChange The settings to change; those it leaves out stay as they are.
 type SettingsChange struct {
-	SelfServe *bool `json:"selfServe,omitempty"`
+	// GitDataPerOrganization In bytes; 0 caps nothing.
+	GitDataPerOrganization *int64 `json:"gitDataPerOrganization,omitempty"`
+
+	// OrganizationsPerUser 0 caps nothing.
+	OrganizationsPerUser *int64 `json:"organizationsPerUser,omitempty"`
+
+	// RepositoriesPerOrganization 0 caps nothing.
+	RepositoriesPerOrganization *int64 `json:"repositoriesPerOrganization,omitempty"`
+	SelfServe                   *bool  `json:"selfServe,omitempty"`
 
 	// SignUp Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first administrator's email always may.
 	SignUp *SignUpPolicy `json:"signUp,omitempty"`
@@ -272,6 +341,15 @@ type SettingsChange struct {
 
 // SignUpPolicy Who may sign up: anyone, domains (a verified email in signUpDomains) or invited (a pending invitation). A first administrator's email always may.
 type SignUpPolicy string
+
+// Usage What an organization takes of what a limit caps, against the limit that applies.
+type Usage struct {
+	// Limit The limit that applies, its own else the installation's; 0 caps nothing.
+	Limit int64 `json:"limit"`
+
+	// Used How many it holds, or the bytes it stores.
+	Used int64 `json:"used"`
+}
 
 // User A user as an administrator sees them.
 type User struct {
@@ -331,6 +409,18 @@ type EnterOrganizationJSONBody struct {
 	Reason string `json:"reason"`
 }
 
+// GetOrganizationLimitsParams defines parameters for GetOrganizationLimits.
+type GetOrganizationLimitsParams struct {
+	// IfNoneMatch The limits' ETag the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *string `json:"If-None-Match,omitempty"`
+}
+
+// ChangeOrganizationLimitsParams defines parameters for ChangeOrganizationLimits.
+type ChangeOrganizationLimitsParams struct {
+	// IfMatch The ETag of the limits the change was made from. Without it, the answer is 428.
+	IfMatch *string `json:"If-Match,omitempty"`
+}
+
 // RemoveProviderParams defines parameters for RemoveProvider.
 type RemoveProviderParams struct {
 	// IfMatch The ETag of the provider the removal was decided on. Without it, the answer is 428.
@@ -379,6 +469,9 @@ type CreateOrganizationJSONRequestBody CreateOrganizationJSONBody
 // EnterOrganizationJSONRequestBody defines body for EnterOrganization for application/json ContentType.
 type EnterOrganizationJSONRequestBody EnterOrganizationJSONBody
 
+// ChangeOrganizationLimitsApplicationMergePatchPlusJSONRequestBody defines body for ChangeOrganizationLimits for application/merge-patch+json ContentType.
+type ChangeOrganizationLimitsApplicationMergePatchPlusJSONRequestBody = OrganizationLimitsChange
+
 // AddProviderJSONRequestBody defines body for AddProvider for application/json ContentType.
 type AddProviderJSONRequestBody = NewProvider
 
@@ -402,6 +495,12 @@ type ServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(w http.ResponseWriter, r *http.Request, org string)
+	// GetOrganizationLimits An organization's limits: its own, which an administrator sets, the installation's, and those that apply; takes installation.manage.
+	// (GET /orgs/{org}/limits)
+	GetOrganizationLimits(w http.ResponseWriter, r *http.Request, org string, params GetOrganizationLimitsParams)
+	// ChangeOrganizationLimits Sets an organization's own limits the body names, or clears them with null (a JSON merge patch, RFC 7396), unless they changed since the caller read them; takes installation.manage. The organization's audit trail records the change, and the next creation or push follows it.
+	// (PATCH /orgs/{org}/limits)
+	ChangeOrganizationLimits(w http.ResponseWriter, r *http.Request, org string, params ChangeOrganizationLimitsParams)
 	// ListProviders The installation's identity providers: the chart's values', which only they change, then those administrators added, by ID; takes installation.manage. A client secret is never shown.
 	// (GET /providers)
 	ListProviders(w http.ResponseWriter, r *http.Request)
@@ -544,6 +643,106 @@ func (siw *ServerInterfaceWrapper) EnterOrganization(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.EnterOrganization(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationLimits operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationLimits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationLimitsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationLimits(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ChangeOrganizationLimits operation middleware
+func (siw *ServerInterfaceWrapper) ChangeOrganizationLimits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ChangeOrganizationLimitsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch string
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ChangeOrganizationLimits(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1011,6 +1210,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrganizations)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrganization)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/entries", wrapper.EnterOrganization)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/limits", wrapper.GetOrganizationLimits)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/limits", wrapper.ChangeOrganizationLimits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/users", wrapper.ListUsers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/settings", wrapper.GetSettings)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/settings", wrapper.ChangeSettings)
@@ -1358,6 +1559,247 @@ type EnterOrganizationdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response EnterOrganizationdefaultApplicationProblemPlusJSONResponse) VisitEnterOrganizationResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationLimitsRequestObject struct {
+	Org    string `json:"org"`
+	Params GetOrganizationLimitsParams
+}
+
+type GetOrganizationLimitsResponseObject interface {
+	VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationLimits200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationLimits200JSONResponse struct {
+	Body    OrganizationLimits
+	Headers GetOrganizationLimits200ResponseHeaders
+}
+
+func (response GetOrganizationLimits200JSONResponse) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationLimits304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationLimits304Response struct {
+	Headers GetOrganizationLimits304ResponseHeaders
+}
+
+func (response GetOrganizationLimits304Response) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationLimits401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationLimits401ApplicationProblemPlusJSONResponse) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationLimits403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationLimits403ApplicationProblemPlusJSONResponse) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationLimits404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationLimits404ApplicationProblemPlusJSONResponse) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationLimitsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationLimitsdefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimitsRequestObject struct {
+	Org    string `json:"org"`
+	Params ChangeOrganizationLimitsParams
+	Body   *ChangeOrganizationLimitsApplicationMergePatchPlusJSONRequestBody
+}
+
+type ChangeOrganizationLimitsResponseObject interface {
+	VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error
+}
+
+type ChangeOrganizationLimits200ResponseHeaders struct {
+	ETag string
+}
+
+type ChangeOrganizationLimits200JSONResponse struct {
+	Body    OrganizationLimits
+	Headers ChangeOrganizationLimits200ResponseHeaders
+}
+
+func (response ChangeOrganizationLimits200JSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response ChangeOrganizationLimits400ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits401ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOrganizationLimits401ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits403ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOrganizationLimits403ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits404ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOrganizationLimits404ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits412ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOrganizationLimits412ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimits428ApplicationProblemPlusJSONResponse Problem
+
+func (response ChangeOrganizationLimits428ApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type ChangeOrganizationLimitsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response ChangeOrganizationLimitsdefaultApplicationProblemPlusJSONResponse) VisitChangeOrganizationLimitsResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -2296,6 +2738,12 @@ type StrictServerInterface interface {
 	// EnterOrganization Enters an organization: makes the administrator one of its Owners, a member first when they aren't one, and records the entry with its reason in the organization's audit trail. Takes installation.manage.
 	// (POST /orgs/{org}/entries)
 	EnterOrganization(ctx context.Context, request EnterOrganizationRequestObject) (EnterOrganizationResponseObject, error)
+	// GetOrganizationLimits An organization's limits: its own, which an administrator sets, the installation's, and those that apply; takes installation.manage.
+	// (GET /orgs/{org}/limits)
+	GetOrganizationLimits(ctx context.Context, request GetOrganizationLimitsRequestObject) (GetOrganizationLimitsResponseObject, error)
+	// ChangeOrganizationLimits Sets an organization's own limits the body names, or clears them with null (a JSON merge patch, RFC 7396), unless they changed since the caller read them; takes installation.manage. The organization's audit trail records the change, and the next creation or push follows it.
+	// (PATCH /orgs/{org}/limits)
+	ChangeOrganizationLimits(ctx context.Context, request ChangeOrganizationLimitsRequestObject) (ChangeOrganizationLimitsResponseObject, error)
 	// ListProviders The installation's identity providers: the chart's values', which only they change, then those administrators added, by ID; takes installation.manage. A client secret is never shown.
 	// (GET /providers)
 	ListProviders(ctx context.Context, request ListProvidersRequestObject) (ListProvidersResponseObject, error)
@@ -2471,6 +2919,67 @@ func (sh *strictHandler) EnterOrganization(w http.ResponseWriter, r *http.Reques
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(EnterOrganizationResponseObject); ok {
 		if err := validResponse.VisitEnterOrganizationResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationLimits operation middleware
+func (sh *strictHandler) GetOrganizationLimits(w http.ResponseWriter, r *http.Request, org string, params GetOrganizationLimitsParams) {
+	var request GetOrganizationLimitsRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationLimits(ctx, request.(GetOrganizationLimitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationLimits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationLimitsResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationLimitsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ChangeOrganizationLimits operation middleware
+func (sh *strictHandler) ChangeOrganizationLimits(w http.ResponseWriter, r *http.Request, org string, params ChangeOrganizationLimitsParams) {
+	var request ChangeOrganizationLimitsRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	var body ChangeOrganizationLimitsApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ChangeOrganizationLimits(ctx, request.(ChangeOrganizationLimitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ChangeOrganizationLimits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ChangeOrganizationLimitsResponseObject); ok {
+		if err := validResponse.VisitChangeOrganizationLimitsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
