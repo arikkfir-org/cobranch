@@ -42,10 +42,13 @@ func (t chatTool) Spec() Spec { return t.spec }
 // Run runs the call (Tool).
 func (t chatTool) Run(ctx context.Context, c Call) (string, error) { return t.run(ctx, c) }
 
-// chat is the chat the task talks in: its branch's, or else its issue's; false for a task with neither.
+// chat is the chat the task talks in: its branch's, or else its issue's; false for a task with neither, or whose kind
+// keeps it quiet.
 func (r *run) chat() (Chat, bool) {
 	t := r.work.Task
 	switch {
+	case r.kit.Quiet:
+		return Chat{}, false
 	case t.Branch != "":
 		return Chat{Repo: t.RepoSlug, Branch: t.Branch}, true
 	case r.work.IssueNumber != 0:

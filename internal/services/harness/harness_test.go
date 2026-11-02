@@ -344,6 +344,17 @@ func kindCases() []harnessCase {
 				}
 				resultAt(2, "ok", false)(t, c, m, e)
 			}},
+		{name: "a kind that keeps its task out of the chat", kind: &kind{kit: harness.Kit{Tools: []harness.Tool{named("stamp")}, Quiet: true}},
+			turns: []harness.Turn{done}, want: kinds("input", "turn", "state"),
+			check: func(t *testing.T, _ *cobranch, m *model, _ *echo) {
+				var names []string
+				for _, s := range m.requests[0].Tools {
+					names = append(names, s.Name)
+				}
+				if !slices.Equal(names, []string{"echo", "stamp", "finish"}) || strings.Contains(m.requests[0].System, "read_thread") {
+					t.Errorf("the model is offered %v, with %q", names, m.requests[0].System)
+				}
+			}},
 		{name: "a task its kind ends", kind: &kind{kit: harness.Kit{End: &agents.StateChange{State: agents.TaskSucceeded, Summary: "Nothing to stamp."}}},
 			want: kinds("input", "state"), check: asked(0)},
 		{name: "a success its kind refuses until the task is done", kind: &kind{left: 1}, turns: []harness.Turn{done, done},
