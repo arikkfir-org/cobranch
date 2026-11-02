@@ -245,6 +245,17 @@ type JoinRequest struct {
 	DecidedBy *uuid.UUID
 }
 
+type Label struct {
+	ID          uuid.UUID
+	OrgID       uuid.UUID
+	Name        string
+	Color       string
+	Description string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	Version     int64
+}
+
 type Membership struct {
 	OrgID    uuid.UUID
 	UserID   uuid.UUID
@@ -261,6 +272,15 @@ type Organization struct {
 	CreatedAt           time.Time
 	IssueKey            string
 	CreatedBy           *uuid.UUID
+}
+
+type OrganizationLimit struct {
+	OrgID        uuid.UUID
+	Repositories *int64
+	GitData      *int64
+	Version      int64
+	UpdatedAt    time.Time
+	UpdatedBy    *uuid.UUID
 }
 
 type Principal struct {

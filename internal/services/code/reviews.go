@@ -2,6 +2,7 @@ package code
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"slices"
 	"strings"
@@ -93,23 +94,79 @@ func Latest(reviews []Review) []Review {
 	return out
 }
 
-// Reviews lists the reviews on one of the repository's commits, in the order they were submitted; it takes repo.read.
-// A commit the repository doesn't hold is repos.ErrNotFound.
-func (s *Service) Reviews(ctx context.Context, v Viewer, repoID uuid.UUID, sha string) ([]Review, error) {
+// ReviewQuery is the page of a commit's reviews a listing asks for: from Cursor, as the previous page's Next names it,
+// or else from the first; at most Limit, or DefaultPageSize when it is 0.
+type ReviewQuery struct {
+	Cursor string
+	Limit  int
+}
+
+// ReviewPage is a page of a commit's reviews, in the order they were submitted, and the cursor of the next page, empty
+// after the last.
+type ReviewPage struct {
+	Reviews []Review
+	Next    string
+}
+
+// Reviews lists a page of the reviews on one of the repository's commits, in the order they were submitted; it takes
+// repo.read. A commit the repository doesn't hold is repos.ErrNotFound, and a cursor that starts no page of its
+// reviews is cursor.invalid.
+func (s *Service) Reviews(ctx context.Context, v Viewer, repoID uuid.UUID, sha string, q ReviewQuery) (ReviewPage, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.Reviews")
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.commit.sha", sha))
 	if err := s.read(ctx, v, repoID); err != nil {
-		return nil, failed(span, "reading the reviews", err)
+		return ReviewPage{}, failed(span, "reading the reviews", err)
 	}
 	if err := ValidateSHA("sha", sha); err != nil {
-		return nil, err
+		return ReviewPage{}, err
 	}
-	list, err := s.store.Reviews(ctx, repoID, sha)
+	size, err := pageSize(q.Limit)
 	if err != nil {
-		return nil, failed(span, "reading the reviews", err)
+		return ReviewPage{}, err
 	}
-	return list, nil
+	after, err := decodeReviewCursor(q.Cursor)
+	if err != nil {
+		return ReviewPage{}, err
+	}
+	list, err := s.store.Reviews(ctx, repoID, sha, after, size+1)
+	switch {
+	case err != nil:
+		return ReviewPage{}, failed(span, "reading the reviews", err)
+	case len(list) == 0 && q.Cursor != "":
+		return ReviewPage{}, invalidReviewCursor()
+	}
+	page := ReviewPage{Reviews: list}
+	if len(list) > size {
+		page.Reviews, page.Next = list[:size], encodeReviewCursor(list[size-1].ID)
+	}
+	return page, nil
+}
+
+// encodeReviewCursor is the cursor of the page of a commit's reviews after the review named id, opaque to callers.
+func encodeReviewCursor(id uuid.UUID) string {
+	return base64.RawURLEncoding.EncodeToString(id[:])
+}
+
+// decodeReviewCursor reads a cursor encodeReviewCursor made, uuid.Nil for none, or answers cursor.invalid.
+func decodeReviewCursor(cursor string) (uuid.UUID, error) {
+	if cursor == "" {
+		return uuid.Nil, nil
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return uuid.Nil, invalidReviewCursor()
+	}
+	id, err := uuid.FromBytes(raw)
+	if err != nil || id == uuid.Nil {
+		return uuid.Nil, invalidReviewCursor()
+	}
+	return id, nil
+}
+
+// invalidReviewCursor is the error of a cursor that starts no page of a commit's reviews.
+func invalidReviewCursor() error {
+	return &orgs.ValidationError{Field: "cursor", Code: "cursor.invalid", Message: "no page of this commit's reviews starts here"}
 }
 
 // Review finds one of the repository's reviews by its ID; it takes repo.read. A review the repository doesn't hold is

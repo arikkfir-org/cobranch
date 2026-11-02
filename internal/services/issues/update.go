@@ -12,7 +12,7 @@ import (
 )
 
 // Update changes the fields p names of one of the organization's issues, for v, and answers it as it now is; it takes
-// issues.write, and repo.read on a repository it makes the issue about. A change that names a version the issue no
+// issues.write, and repo.read on a repository it makes the issue about. Its labels are the organization's. A change that names a version the issue no
 // longer is gets ErrChanged; one that changes nothing changes nothing.
 func (s *Service) Update(ctx context.Context, v Viewer, orgID uuid.UUID, number int, p Patch) (Issue, error) {
 	ctx, span := tracer.Start(ctx, "issues.Service.Update")
@@ -84,6 +84,9 @@ func (s *Service) apply(ctx context.Context, v Viewer, cur Issue, p Patch) (Issu
 	}
 	var err error
 	if next, changes, err = s.reassign(ctx, cur, next, changes, p.AssigneeID); err != nil {
+		return Issue{}, nil, err
+	}
+	if next, changes, err = s.relabel(ctx, cur, next, changes, p.LabelIDs); err != nil {
 		return Issue{}, nil, err
 	}
 	return s.move(ctx, v, cur, next, changes, p.RepositoryID)
@@ -206,9 +209,13 @@ func (s *Service) Activity(ctx context.Context, v Viewer, orgID uuid.UUID, numbe
 	return hideRepositories(events, readable), nil
 }
 
-// hideRepositories blanks the slugs of the repositories outside readable in events' changes.
+// hideRepositories blanks the slugs of the repositories outside readable in events' changes, and the branches of
+// theirs that links name.
 func hideRepositories(events []Event, readable []uuid.UUID) []Event {
 	for i, e := range events {
+		if b := e.Branch; b != nil && !slices.Contains(readable, b.RepositoryID) {
+			events[i].Branch = &EventBranch{RepositoryID: b.RepositoryID, LinkedBy: b.LinkedBy}
+		}
 		for j, c := range e.Changes {
 			if c.Field != "repository" {
 				continue

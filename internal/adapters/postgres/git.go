@@ -308,13 +308,7 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		if err := s.attribute(ctx, q, claimed); err != nil {
 			return err
 		}
-		if err := recordMerges(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := queuePushRuns(ctx, q, claimed); err != nil {
-			return err
-		}
-		if err := restatusWaiting(ctx, q, claimed.RepoID, claimed.ID); err != nil {
+		if err := followPush(ctx, q, claimed); err != nil {
 			return err
 		}
 		if err := q.MarkPushProcessed(ctx, claimed.ID); err != nil {
@@ -330,6 +324,18 @@ func (s *GitStore) Process(ctx context.Context, retry func(attempts int) time.Du
 		return claimed.ID, errors.Join(err, fmt.Errorf("keeping the push for another try: %w", failed))
 	}
 	return claimed.ID, err
+}
+
+// followPush does, in the push worker's transaction, what the claimed push brings once its commits are attributed:
+// links its branches to their issues, records its merges and finishes their issues, queues its jobs' runs, and works
+// out the status of the branches waiting on it.
+func followPush(ctx context.Context, q *queries.Queries, claimed queries.ClaimPushRow) error {
+	for _, step := range []func(context.Context, *queries.Queries, queries.ClaimPushRow) error{linkPushed, recordMerges, finishMerged, queuePushRuns} {
+		if err := step(ctx, q, claimed); err != nil {
+			return err
+		}
+	}
+	return restatusWaiting(ctx, q, claimed.RepoID, claimed.ID)
 }
 
 // traceparent is the W3C traceparent of the span in ctx, or "" without one.

@@ -3,6 +3,7 @@ package graphql
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -30,6 +31,8 @@ type Code interface {
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
+	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
+	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 }
 
 // unavailable is the code of the error a field answers when the installation lacks what it needs: a Git server.
@@ -85,6 +88,51 @@ func file(f code.File) *File {
 		out.HTML = &f.HTML
 	}
 	return out
+}
+
+// fileStatuses and lineKinds map the domain's diffs' statuses and kinds to the schema's.
+var (
+	fileStatuses = map[code.FileStatus]FileStatus{
+		code.FileAdded: FileStatusAdded, code.FileModified: FileStatusModified, code.FileDeleted: FileStatusDeleted,
+		code.FileRenamed: FileStatusRenamed, code.FileTypeChanged: FileStatusTypeChanged,
+	}
+	lineKinds = map[code.LineKind]LineKind{code.LineContext: LineKindContext, code.LineAdded: LineKindAdded, code.LineRemoved: LineKindRemoved}
+)
+
+// diff is d as the API shows it.
+func diff(d code.Diff) *Diff {
+	return &Diff{Base: optional(d.Base), BaseTip: optional(d.BaseTip), Head: d.Head, Files: mapAll(d.Files, fileDiff),
+		FilesLeftOut: d.FilesLeftOut, Additions: d.Additions, Deletions: d.Deletions}
+}
+
+func fileDiff(f code.FileDiff) *FileDiff {
+	return &FileDiff{Status: fileStatuses[f.Status], Path: f.Path, OldPath: optional(f.OldPath), OldMode: optional(f.OldMode),
+		Mode: optional(f.Mode), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+		Hunks: mapAll(f.Hunks, hunk)}
+}
+
+func hunk(h code.Hunk) *Hunk {
+	return &Hunk{OldStart: h.OldStart, OldLines: h.OldLines, NewStart: h.NewStart, NewLines: h.NewLines, Section: h.Section,
+		Lines: mapAll(h.Lines, diffLine)}
+}
+
+func diffLine(l code.DiffLine) *DiffLine {
+	out := &DiffLine{Kind: lineKinds[l.Kind], Text: l.Text, NoNewline: l.NoNewline}
+	if l.Kind != code.LineAdded {
+		out.Old = &l.Old
+	}
+	if l.Kind != code.LineRemoved {
+		out.New = &l.New
+	}
+	return out
+}
+
+// optional is s, or nil when it is empty.
+func optional(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 func commitPrincipal(p *code.Principal) *CommitPrincipal {
@@ -178,6 +226,36 @@ func codeRepo(ctx context.Context, repositoryID string) (code.Viewer, uuid.UUID,
 		return code.Viewer{}, uuid.Nil, err
 	}
 	return v.User, repoID, nil
+}
+
+// Branch is one of a repository's live branches as the schema shows it, with the organization and repository it is
+// of, from which its issue resolves.
+type Branch struct {
+	Name          string             `json:"name"`
+	Head          string             `json:"head"`
+	Commit        *Commit            `json:"commit,omitempty"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	UpdatedAt     time.Time          `json:"updatedAt"`
+	Base          *string            `json:"base,omitempty"`
+	Status        *BranchStatus      `json:"status,omitempty"`
+	Checks        []*BranchCheck     `json:"checks"`
+	Ahead         *int               `json:"ahead,omitempty"`
+	Behind        *int               `json:"behind,omitempty"`
+	Requirements  *MergeRequirements `json:"requirements,omitempty"`
+	Merge         *BranchMerge       `json:"merge,omitempty"`
+	SettingsError *string            `json:"settingsError,omitempty"`
+
+	orgID, repoID uuid.UUID
+}
+
+// of makes b the branch of repo, which its issue resolves from.
+func (b *Branch) of(ctx context.Context, repo *Repository) error {
+	var err error
+	if b.orgID, err = parseID(ctx, repo.OrganizationID, "organization"); err != nil {
+		return err
+	}
+	b.repoID, err = parseID(ctx, repo.ID, "repository")
+	return err
 }
 
 // branch is b as the API shows it: every branch but main with its base, status, checks and facts, any branch

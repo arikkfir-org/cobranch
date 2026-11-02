@@ -250,6 +250,15 @@ func (s *OrgStore) OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]org
 	return out, nil
 }
 
+// Created counts the organizations the user created for themselves that still exist.
+func (s *OrgStore) Created(ctx context.Context, userID uuid.UUID) (int64, error) {
+	created, err := s.q.CreatedOrganizations(ctx, userID)
+	if err != nil {
+		return 0, fmt.Errorf("counting the organizations the user created: %w", err)
+	}
+	return created, nil
+}
+
 // role is the domain's view of a roles row.
 func role(r queries.Role) orgs.Role {
 	out := orgs.Role{ID: r.ID, Name: r.Name, Description: r.Description, Permissions: r.Permissions, BuiltIn: r.BuiltIn}

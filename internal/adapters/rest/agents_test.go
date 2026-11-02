@@ -77,7 +77,7 @@ func TestAgents(t *testing.T) {
 		{name: "create with a role beyond the creator's", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/agents"),
 			body: `{"name":"Root","grants":[{"roleId":"` + auth.RoleOwner.String() + `"}]}`, wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "create on a repository the creator doesn't read", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/agents"), wantStatus: 400, wantCode: "repository.invalid",
-			bodyFor: func(f *orgFixture) string {
+			bodyOf: func(f *orgFixture) string {
 				return `{"name":"Peek","grants":[{"roleId":"` + auth.RoleReader.String() + `","repositoryId":"` + f.website.ID.String() + `"}]}`
 			}},
 		{name: "create as an outsider", viewer: nia, method: "POST", path: fixed("/v1/orgs/acme/agents"), body: `{"name":"Mine"}`, wantStatus: 404, wantCode: "organization.not_found"},
@@ -153,7 +153,7 @@ func TestTaskChanges(t *testing.T) {
 	runOrgCases(t, []orgCase{
 		{name: "assign", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/tasks"), wantStatus: 201,
 			wantTag: `"1-`, wantHeader: http.Header{"Location": {"/v1/orgs/acme/tasks/4"}},
-			bodyFor: func(f *orgFixture) string {
+			bodyOf: func(f *orgFixture) string {
 				return `{"agentId":"` + f.scout.ID.String() + `","title":"Write the notes","instructions":"Short ones."}`
 			},
 			check: func(t *testing.T, f *orgFixture, body []byte) {
@@ -164,7 +164,7 @@ func TestTaskChanges(t *testing.T) {
 				}
 			}},
 		{name: "assign on a branch", viewer: olivia, method: "POST", path: fixed("/v1/orgs/acme/tasks"), wantStatus: 201,
-			bodyFor: func(f *orgFixture) string {
+			bodyOf: func(f *orgFixture) string {
 				return `{"agentId":"` + f.scout.ID.String() + `","title":"Fix it","repositoryId":"` + f.website.ID.String() + `","branch":"refs/heads/feature/login"}`
 			},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
@@ -173,13 +173,13 @@ func TestTaskChanges(t *testing.T) {
 				}
 			}},
 		{name: "assign on a repository the assigner doesn't read", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/tasks"), wantStatus: 400, wantCode: "repository.invalid",
-			bodyFor: func(f *orgFixture) string {
+			bodyOf: func(f *orgFixture) string {
 				return `{"agentId":"` + f.scout.ID.String() + `","title":"Peek","repositoryId":"` + f.website.ID.String() + `"}`
 			}},
 		{name: "assign to an agent not there", viewer: maxim, method: "POST", path: fixed("/v1/orgs/acme/tasks"), wantStatus: 400, wantCode: "agent.invalid",
 			body: `{"agentId":"` + uuid.NewString() + `","title":"Lost"}`},
 		{name: "assign as an outsider", viewer: nia, method: "POST", path: fixed("/v1/orgs/acme/tasks"), wantStatus: 404, wantCode: "organization.not_found",
-			bodyFor: func(f *orgFixture) string { return `{"agentId":"` + f.scout.ID.String() + `","title":"Mine"}` }},
+			bodyOf: func(f *orgFixture) string { return `{"agentId":"` + f.scout.ID.String() + `","title":"Mine"}` }},
 		{name: "get", viewer: olivia, method: "GET", path: fixed("/v1/orgs/acme/tasks/2"), wantStatus: 200, wantTag: `"1-`,
 			check: func(t *testing.T, f *orgFixture, body []byte) {
 				if task := decode[Task](t, body); task.Number != 2 || task.Title != "Fix the login" || task.RepositoryId == nil || *task.RepositoryId != f.website.ID {

@@ -88,8 +88,9 @@ organizations:
   selfServe: null
 
 # Quotas (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/quotas.md): what a creation or a push
-# that would cross one is refused with. Set, each is the values', for every organization without a limit of its own;
-# null, the built-in default. 0 caps nothing.
+# that would cross one is refused with. Set, each is the values', for every organization without a limit of its own,
+# which the Back-office only shows; null, the Back-office's (the built-in default until an administrator changes it).
+# 0 caps nothing.
 limits:
   # The organizations a user creates for themselves; 5 by default. Those an administrator creates for a user count
   # against nobody.

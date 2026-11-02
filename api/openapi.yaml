@@ -253,6 +253,31 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/usage:
+    get:
+      operationId: getMyUsage
+      summary: What the user takes of what the limits cap, each against the limit that applies; the user's own, so it takes no permission.
+      parameters:
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The user's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewerUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/invitations:
     get:
       operationId: listMyInvitations
@@ -477,6 +502,34 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
         "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/usage:
+    get:
+      operationId: getOrganizationUsage
+      summary: What the organization takes of what its limits cap, each against the limit that applies, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The organization's usage.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrganizationUsage"
+        "304":
+          description: The usage is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1368,6 +1421,15 @@ paths:
           description: Those about one repository, by ID, or about none, for none.
           schema:
             type: string
+        - name: label
+          in: query
+          description: Those that carry every one of these labels, by ID, one parameter each, at most 20.
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+              format: uuid
         - name: q
           in: query
           description: Those whose title or description holds this text, in any case, or whose identifier it is, such as ACME-42.
@@ -1539,6 +1601,36 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/issues/{number}/branches:
+    get:
+      operationId: listIssueBranches
+      summary: >-
+        The branches linked to one of the organization's issues, by their names or by hand, the live ones first, by
+        repository and name; takes issues.read, and lists only the branches of repositories the viewer reads.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/number"
+      responses:
+        "200":
+          description: The issue's branches.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branches]
+                properties:
+                  branches:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IssueBranch"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/issues/{number}/activity:
     get:
       operationId: listIssueActivity
@@ -1564,6 +1656,163 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels:
+    get:
+      operationId: listLabels
+      summary: The organization's labels by name, whatever its case, with how many issues carry each; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      responses:
+        "200":
+          description: The labels.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [labels]
+                properties:
+                  labels:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Label"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createLabel
+      summary: Creates a label in the organization, named unlike its others whatever their case; takes issues.manage.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LabelInput"
+      responses:
+        "201":
+          description: The label.
+          headers:
+            Location:
+              description: The label's URL.
+              required: true
+              schema:
+                type: string
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/labels/{label}:
+    get:
+      operationId: getLabel
+      summary: One of the organization's labels; takes issues.read.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The label.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "304":
+          description: The label is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateLabel
+      summary: Changes the fields the merge patch (RFC 7396) names of one of the organization's labels, which its issues then show; takes issues.manage. The change names the ETag it was made from in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/LabelPatch"
+      responses:
+        "200":
+          description: The label as it now is.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: deleteLabel
+      summary: Deletes one of the organization's labels, which takes it off every issue; takes issues.manage. The deletion names the ETag it was decided on in If-Match; without it, the answer is 428.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/label"
+        - $ref: "#/components/parameters/ifMatchLabel"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -1864,6 +2113,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/diff:
+    get:
+      operationId: getBranchDiff
+      summary: >-
+        The branch's change as a request to merge into its base: from the merge base of its base's tip and its head
+        to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers
+        400 branch.default. It reads the Git server: an installation without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The branch's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/deleted-branches/{branch}:
     get:
       operationId: getDeletedBranch
@@ -1880,6 +2166,60 @@ paths:
               schema:
                 $ref: "#/components/schemas/DeletedBranch"
         "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/issue:
+    put:
+      operationId: linkBranch
+      summary: >-
+        Links the branch to one of the organization's issues by hand, in place of any issue it works on, for the
+        viewer; takes issues.write, and repo.read. An issue in Backlog or Todo moves to In progress. main works on no
+        issue: 400 branch.default, as for an issue the organization doesn't have, issue.invalid.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkBranchInput"
+      responses:
+        "200":
+          description: The branch's issue.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BranchIssue"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    delete:
+      operationId: unlinkBranch
+      summary: >-
+        Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write,
+        and repo.read. A branch with no issue answers 204 too.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+      responses:
+        "204":
+          description: The branch works on no issue.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
           $ref: "#/components/responses/Problem"
         "404":
           $ref: "#/components/responses/Problem"
@@ -2500,17 +2840,74 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
-  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+  /orgs/{org}/repos/{repo}/commits/{sha}/diff:
     get:
-      operationId: listReviews
-      summary: The reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      operationId: getCommitDiff
+      summary: >-
+        The commit's change against its first parent, or against the empty tree when it has none; takes repo.read.
+        It reads the Git server: an installation without one answers 503.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
         - $ref: "#/components/parameters/sha"
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
-          description: The reviews.
+          description: The commit's diff.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Diff"
+        "304":
+          description: The diff is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/commits/{sha}/reviews:
+    get:
+      operationId: listReviews
+      summary: A page of the reviews submitted of one of the repository's commits, in the order they were; takes repo.read. Each reviewer's latest is the one that counts.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/sha"
+        - name: cursor
+          in: query
+          description: Where the page starts, as the previous page's Link names it; the commit's first review when left out. Opaque.
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: How many reviews the page holds at most.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The page's reviews, in the order they were submitted.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Link:
+              description: The next page, as rel="next" (RFC 8288), relative to this page's URL; absent after the last page.
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -2521,6 +2918,11 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Review"
+        "304":
+          description: The page is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -2578,13 +2980,22 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: "#/components/parameters/ifNoneMatch"
       responses:
         "200":
           description: The review.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Review"
+        "304":
+          description: The review is still the one If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -2932,6 +3343,21 @@ components:
       description: The issue's number in its organization, such as 42 for ACME-42.
       schema:
         type: integer
+    label:
+      name: label
+      in: path
+      required: true
+      description: The label's ID.
+      x-go-name: LabelID
+      schema:
+        type: string
+        format: uuid
+    ifMatchLabel:
+      name: If-Match
+      in: header
+      description: The ETag of the label the change was made from; a change made meanwhile is refused with 412.
+      schema:
+        type: string
     ifMatchIssue:
       name: If-Match
       in: header
@@ -3168,7 +3594,7 @@ components:
           enum: [sign-in, welcome, settings, organization, organization.members, organization.roles,
             organization.api-keys, organization.settings, organization.new-repository, organization.issues, repository.code,
             repository.file, repository.commits, repository.commit, repository.branches, repository.branch,
-            repository.access, repository.settings]
+            repository.changes, repository.access, repository.settings]
         navigation:
           type: string
           description: load, the browser loading the Console, timed from its navigation's start; route, a move inside it, timed from the click or Back.
@@ -3360,6 +3786,59 @@ components:
           description: The permissions the viewer holds on the repository.
           items:
             type: string
+    Usage:
+      type: object
+      description: What a user or an organization takes of what one limit caps, against the limit that applies.
+      required: [used, limit]
+      properties:
+        used:
+          type: integer
+          format: int64
+          description: How many it holds, or the bytes it stores.
+        limit:
+          type: integer
+          format: int64
+          description: The most it may hold or store; 0 caps nothing.
+    ViewerUsage:
+      type: object
+      description: What the user takes of what the limits cap.
+      required: [organizations]
+      properties:
+        organizations:
+          $ref: "#/components/schemas/Usage"
+          description: The organizations the user created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
+    OrganizationUsage:
+      type: object
+      description: What an organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads.
+      required: [repositories, gitData, byRepository]
+      properties:
+        repositories:
+          $ref: "#/components/schemas/Usage"
+          description: Its repositories, every one of them.
+        gitData:
+          $ref: "#/components/schemas/Usage"
+          description: The bytes of its repositories' active packs, as the object store keeps them.
+        byRepository:
+          type: array
+          description: The repositories the viewer reads, by slug, each with its Git data.
+          items:
+            $ref: "#/components/schemas/RepositoryUsage"
+    RepositoryUsage:
+      type: object
+      description: One repository's share of its organization's Git data.
+      required: [id, slug, name, gitData]
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+        gitData:
+          type: integer
+          format: int64
+          description: The bytes of its active packs.
     RepositoryInput:
       type: object
       description: What makes a repository.
@@ -3445,11 +3924,69 @@ components:
           $ref: "#/components/schemas/MergeRequirements"
         merge:
           $ref: "#/components/schemas/BranchMerge"
+        issue:
+          $ref: "#/components/schemas/BranchIssue"
         settingsError:
           type: string
           description: >-
             Why the /cobranch.yaml at its head doesn't parse, with the line at fault: its jobs run nothing until it
             does. Left out when it parses, or there is none.
+    BranchIssue:
+      type: object
+      description: >-
+        The issue a branch works on, and how the branch was linked to it; getBranch answers it, a list doesn't, and
+        leaves it out for a branch that works on none, and for a viewer who holds no issues.read.
+      required: [number, identifier, title, state, priority, linkedBy]
+      properties:
+        number:
+          type: integer
+        identifier:
+          type: string
+          description: Its organization's issue key and its number, such as ACME-42.
+        title:
+          type: string
+        state:
+          $ref: "#/components/schemas/IssueState"
+        priority:
+          $ref: "#/components/schemas/IssuePriority"
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
+    LinkedBy:
+      type: string
+      description: How a branch was linked to its issue, or unlinked from it, by its name, or by hand, which its name never undoes.
+      enum: [name, hand]
+    LinkBranchInput:
+      type: object
+      description: The issue to link a branch to.
+      required: [number]
+      properties:
+        number:
+          type: integer
+          description: One of the organization's issues, by its number.
+    IssueBranch:
+      type: object
+      description: >-
+        A branch linked to an issue, of a repository the viewer reads: the commit it is at, its status as a request to
+        merge while a push has worked it out, and how it was linked. A deleted branch stays linked.
+      required: [repository, name, head, deleted, linkedBy, linkedAt]
+      properties:
+        repository:
+          $ref: "#/components/schemas/IssueRepository"
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        head:
+          type: string
+          description: The object it is at, or was at when it was deleted.
+        status:
+          $ref: "#/components/schemas/BranchStatus"
+        deleted:
+          type: boolean
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
+        linkedAt:
+          type: string
+          format: date-time
     BranchMerge:
       type: object
       description: >-
@@ -3642,7 +4179,7 @@ components:
     Issue:
       type: object
       description: A piece of the organization's work, named by its organization's issue key and its number.
-      required: [id, number, identifier, title, description, state, priority, createdAt, updatedAt, version]
+      required: [id, number, identifier, title, description, state, priority, labels, createdAt, updatedAt, version]
       properties:
         id:
           type: string
@@ -3668,6 +4205,11 @@ components:
           $ref: "#/components/schemas/Principal"
         repository:
           $ref: "#/components/schemas/IssueRepository"
+        labels:
+          type: array
+          description: The organization's labels it carries, by name.
+          items:
+            $ref: "#/components/schemas/IssueLabel"
         createdBy:
           $ref: "#/components/schemas/Principal"
         createdAt:
@@ -3719,6 +4261,12 @@ components:
           type: string
           format: uuid
           description: One of the organization's repositories, which the viewer reads.
+        labelIds:
+          type: array
+          description: The organization's labels it carries, at most 20.
+          items:
+            type: string
+            format: uuid
     IssuePatch:
       type: object
       description: What changes an issue, as a merge patch; a field left out keeps its value.
@@ -3739,6 +4287,78 @@ components:
           type: [string, "null"]
           format: uuid
           description: One of the organization's repositories, which the viewer reads, or null for none.
+        labelIds:
+          type: array
+          description: The organization's labels it carries from now on, at most 20, in place of those it did; empty for none.
+          items:
+            type: string
+            format: uuid
+    IssueLabel:
+      type: object
+      description: A label as an issue shows it.
+      required: [id, name, color]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+    LabelColor:
+      type: string
+      description: A label's colour, which the Console draws in its tones of both themes.
+      enum: [gray, blue, green, yellow, red]
+    Label:
+      type: object
+      description: One of an organization's labels, which its issues carry.
+      required: [id, name, color, description, issues, createdAt, updatedAt, version]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: 1 to 50 characters on one line, unlike the organization's other labels' whatever their case.
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+          description: What it is for, at most 200 characters on one line.
+        issues:
+          type: integer
+          description: How many issues carry it.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+          description: Counts its changes from 1; its ETag.
+    LabelInput:
+      type: object
+      description: What creates a label.
+      required: [name]
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
+    LabelPatch:
+      type: object
+      description: What changes a label, as a merge patch; a field left out keeps its value.
+      properties:
+        name:
+          type: string
+        color:
+          $ref: "#/components/schemas/LabelColor"
+        description:
+          type: string
     IssueEvent:
       type: object
       description: Something that happened to an issue.
@@ -3749,7 +4369,7 @@ components:
           format: uuid
         kind:
           type: string
-          description: issue.created or issue.changed; more kinds come with branches.
+          description: issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
         actor:
           $ref: "#/components/schemas/Principal"
         at:
@@ -3760,14 +4380,31 @@ components:
           description: The fields an issue.changed changed.
           items:
             $ref: "#/components/schemas/IssueChange"
+        branch:
+          $ref: "#/components/schemas/IssueEventBranch"
+    IssueEventBranch:
+      type: object
+      description: >-
+        The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out
+        for a viewer who doesn't read the repository.
+      required: [linkedBy]
+      properties:
+        repository:
+          type: string
+          description: Its repository's slug.
+        name:
+          type: string
+          description: Its name, without refs/heads/.
+        linkedBy:
+          $ref: "#/components/schemas/LinkedBy"
     IssueChange:
       type: object
-      description: A field a change changed, with its values as people read them; a description's change names no values, and a repository's only those the viewer reads.
+      description: A field a change changed, with its values as people read them, a labels' change their names by name, comma-separated; a description's change names no values, and a repository's only those the viewer reads.
       required: [field]
       properties:
         field:
           type: string
-          enum: [title, description, state, priority, assignee, repository]
+          enum: [title, description, state, priority, assignee, repository, labels]
         from:
           type: string
         to:
@@ -4571,6 +5208,117 @@ components:
           type: integer
           format: int64
           description: A file's or a symlink's size in bytes.
+    Diff:
+      type: object
+      description: >-
+        A change from one commit to another, up to the limits of a diff: at most 3000 files, 20000 lines and 4 MiB of
+        hunks' text in all, 5000 lines and 1 MiB in one file, and 64 KiB in one line. Past them it lists what it left
+        out rather than show it.
+      required: [head, files, filesLeftOut, additions, deletions]
+      properties:
+        base:
+          type: string
+          description: >-
+            The commit it runs from: a commit's first parent, or a branch's merge base with its base's tip. Absent
+            when it runs from the empty tree, for a root commit or a branch that shares no history with its base.
+        baseTip:
+          type: string
+          description: A branch's base's tip, which its merge base is reckoned from; absent for a commit.
+        head:
+          type: string
+          description: The commit it runs to.
+        files:
+          type: array
+          description: The files it changes, in Git's order, by path.
+          items:
+            $ref: "#/components/schemas/FileDiff"
+        filesLeftOut:
+          type: integer
+          description: How many files it changes past the 3000 it lists.
+        additions:
+          type: integer
+          description: The lines it adds, in every file it changes, those it left out included.
+        deletions:
+          type: integer
+          description: The lines it removes, in every file it changes, those it left out included.
+    FileDiff:
+      type: object
+      description: One file's change.
+      required: [status, path, binary, additions, deletions, truncated, hunks]
+      properties:
+        status:
+          type: string
+          description: What the change did to the file; type_changed is a path whose kind changed, such as a symlink that became a file.
+          enum: [added, modified, deleted, renamed, type_changed]
+        path:
+          type: string
+          description: Its path from the repository's root; a deleted file's old one.
+        oldPath:
+          type: string
+          description: The path it had before, for a renamed file.
+        oldMode:
+          type: string
+          description: Its mode before, as Git writes it; absent for an added file.
+        mode:
+          type: string
+          description: Its mode after; absent for a deleted file.
+        binary:
+          type: boolean
+          description: Whether Git reads it as binary, which shows no lines.
+        additions:
+          type: integer
+        deletions:
+          type: integer
+        truncated:
+          type: boolean
+          description: >-
+            Whether its hunks were left out: it passes 5000 lines or 1 MiB of text, or holds a line past 64 KiB, or the
+            diff passed 20000 lines or 4 MiB before it. Its counts stay.
+        hunks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hunk"
+    Hunk:
+      type: object
+      description: One run of a file's changes, with up to three lines around them.
+      required: [oldStart, oldLines, newStart, newLines, section, lines]
+      properties:
+        oldStart:
+          type: integer
+          description: Its first line in the old file, or the line before it when it spans none.
+        oldLines:
+          type: integer
+        newStart:
+          type: integer
+          description: Its first line in the new file, or the line before it when it spans none.
+        newLines:
+          type: integer
+        section:
+          type: string
+          description: The heading Git found above it, such as a function's; empty when it found none.
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiffLine"
+    DiffLine:
+      type: object
+      description: One of a hunk's lines, without its newline.
+      required: [kind, text]
+      properties:
+        kind:
+          type: string
+          enum: [context, added, removed]
+        old:
+          type: integer
+          description: Its number in the old file; absent for an added line.
+        new:
+          type: integer
+          description: Its number in the new file; absent for a removed line.
+        text:
+          type: string
+        noNewline:
+          type: boolean
+          description: Present and true when the file ends on it without a newline.
     File:
       type: object
       description: A file or a symlink at a commit, and its text when it isn't binary.

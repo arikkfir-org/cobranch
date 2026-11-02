@@ -15,14 +15,19 @@ import (
 	"cobranch.dev/internal/services/issues"
 )
 
-// Issues is what the API needs of the issues' service.
+// Issues is what the API needs of the issues' service, its organizations' labels included.
 type Issues interface {
+	Labels
 	List(ctx context.Context, v issues.Viewer, orgID uuid.UUID, f issues.Filter) (issues.Page, error)
 	Create(ctx context.Context, v issues.Viewer, orgID uuid.UUID, in issues.Input) (issues.Issue, error)
 	Get(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) (issues.Issue, error)
 	Update(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, p issues.Patch) (issues.Issue, error)
 	Delete(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int, version int64) error
 	Activity(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.Event, error)
+	Branches(ctx context.Context, v issues.Viewer, orgID uuid.UUID, number int) ([]issues.LinkedBranch, error)
+	OfBranch(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) (*issues.Link, error)
+	Link(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string, number int) (issues.Link, error)
+	Unlink(ctx context.Context, v issues.Viewer, orgID, repoID uuid.UUID, name string) error
 }
 
 // issueOf is i as the API shows it.
@@ -42,6 +47,7 @@ func issueOf(i issues.Issue) Issue {
 	if r := i.Repository; r != nil {
 		out.Repository = &IssueRepository{Id: r.ID, Slug: r.Slug, Name: r.Name}
 	}
+	out.Labels = mapAll(i.Labels, issueLabel)
 	if i.ClosedAt != nil {
 		at := i.ClosedAt.UTC()
 		out.ClosedAt = &at
@@ -81,6 +87,8 @@ func failIssue(err error) error {
 		return refuse(http.StatusNotFound, "issue.not_found", "There is no such issue, or you may not see it.")
 	case errors.Is(err, issues.ErrChanged):
 		return refuse(http.StatusPreconditionFailed, "precondition.failed", "The issue changed since you read it: read it again.")
+	case errors.Is(err, issues.ErrBranchNotFound):
+		return refuse(http.StatusNotFound, "branch.not_found", "There is no such branch, or you may not see it.")
 	}
 	return fail(err, "organization")
 }
@@ -127,6 +135,9 @@ func issueFilter(p ListIssuesParams) (issues.Filter, error) {
 	if f.RepositoryID, err = idOrNone("repository", p.Repository); err != nil {
 		return f, err
 	}
+	if p.Label != nil {
+		f.LabelIDs = *p.Label
+	}
 	if p.Text != nil {
 		f.Text = *p.Text
 	}
@@ -163,6 +174,11 @@ func nextIssues(p ListIssuesParams, cursor string) url.Values {
 	if p.State != nil {
 		for _, s := range *p.State {
 			next.Add("state", string(s))
+		}
+	}
+	if p.Label != nil {
+		for _, id := range *p.Label {
+			next.Add("label", id.String())
 		}
 	}
 	for name, value := range map[string]*string{"assignee": p.Assignee, "repository": p.Repository, "q": p.Text} {
@@ -204,6 +220,9 @@ func (a api) CreateIssue(ctx context.Context, req CreateIssueRequestObject) (Cre
 	}
 	if b.RepositoryId != nil {
 		in.RepositoryID = *b.RepositoryId
+	}
+	if b.LabelIds != nil {
+		in.LabelIDs = *b.LabelIds
 	}
 	created, err := a.issues.Create(ctx, v, org.ID, in)
 	if err != nil {
@@ -274,7 +293,7 @@ func issuePatch(b IssuePatch) (issues.Patch, error) {
 		}
 		p.Priority = &priority
 	}
-	p.AssigneeID, p.RepositoryID = idOrClear(b.AssigneeId), idOrClear(b.RepositoryId)
+	p.AssigneeID, p.RepositoryID, p.LabelIDs = idOrClear(b.AssigneeId), idOrClear(b.RepositoryId), b.LabelIds
 	return p, nil
 }
 
@@ -332,6 +351,12 @@ func issueEvent(e issues.Event) IssueEvent {
 	if e.Actor != nil {
 		out.Actor = &Principal{Id: e.Actor.ID, DisplayName: e.Actor.DisplayName}
 	}
+	if b := e.Branch; b != nil {
+		out.Branch = &IssueEventBranch{LinkedBy: LinkedBy(b.LinkedBy)}
+		if b.Name != "" {
+			out.Branch.Repository, out.Branch.Name = &b.Repository, &b.Name
+		}
+	}
 	return out
 }
 
@@ -344,4 +369,73 @@ func issueChange(c issues.Change) IssueChange {
 		out.To = &c.To
 	}
 	return out
+}
+
+// ListIssueBranches lists the branches linked to one of the organization's issues.
+func (a api) ListIssueBranches(ctx context.Context, req ListIssueBranchesRequestObject) (ListIssueBranchesResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	branches, err := a.issues.Branches(ctx, v, org.ID, req.Number)
+	if err != nil {
+		return nil, failIssue(err)
+	}
+	return ListIssueBranches200JSONResponse{Branches: mapAll(branches, issueBranch)}, nil
+}
+
+func issueBranch(b issues.LinkedBranch) IssueBranch {
+	out := IssueBranch{Repository: IssueRepository{Id: b.Repository.ID, Slug: b.Repository.Slug, Name: b.Repository.Name}, Name: b.Name,
+		Head: b.Head, Deleted: b.Deleted, LinkedBy: LinkedBy(b.LinkedBy), LinkedAt: b.LinkedAt.UTC()}
+	if b.Status != "" {
+		status := BranchStatus(b.Status)
+		out.Status = &status
+	}
+	return out
+}
+
+// branchIssue is a branch's link as the API shows it.
+func branchIssue(l issues.Link) BranchIssue {
+	return BranchIssue{Number: l.Issue.Number, Identifier: l.Issue.Identifier(), Title: l.Issue.Title, State: IssueState(l.Issue.State),
+		Priority: IssuePriority(l.Issue.Priority.String()), LinkedBy: LinkedBy(l.LinkedBy)}
+}
+
+// LinkBranch links one of the repository's live branches to one of the organization's issues by hand.
+func (a api) LinkBranch(ctx context.Context, req LinkBranchRequestObject) (LinkBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req.Body == nil {
+		return nil, refuse(http.StatusBadRequest, "issue.invalid", "Name the issue's number.")
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	link, err := a.issues.Link(ctx, v, repo.OrgID, repo.ID, req.BranchName, req.Body.Number)
+	if err != nil {
+		return nil, failIssue(err)
+	}
+	return LinkBranch200JSONResponse(branchIssue(link)), nil
+}
+
+// UnlinkBranch unlinks one of the repository's live branches from its issue by hand.
+func (a api) UnlinkBranch(ctx context.Context, req UnlinkBranchRequestObject) (UnlinkBranchResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	repo, err := a.codeRepo(ctx, v, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.issues.Unlink(ctx, v, repo.OrgID, repo.ID, req.BranchName); err != nil {
+		return nil, failIssue(err)
+	}
+	return UnlinkBranch204Response{}, nil
 }

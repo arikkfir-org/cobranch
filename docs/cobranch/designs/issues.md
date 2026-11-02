@@ -51,7 +51,8 @@ A branch works on one issue at most; an issue has any number of branches, in any
   still opens an issue by its old identifier, since it reads only the number.
 - **What it says.** A title of 1 to 200 characters, a description in Markdown of at most 65,536 characters, rendered as
   the Console renders a repository's Markdown ([code browsing](code-browsing.md)), a state, a priority (None, Urgent,
-  High, Medium or Low), one assignee, and optionally the repository it is about. Labels come in their own pull request.
+  High, Medium or Low), one assignee, any of the organization's [labels](#labels), and optionally the repository it is
+  about.
 - **One assignee, any principal of the organization** who acts: a member, or one of its agents once they exist.
   Assigning an agent hands it the issue as its task ([below](#agents-and-comments)).
 - **Its repository is a hint,** not an owner: the agent its task goes to works there, and the Console filters by it.
@@ -62,10 +63,11 @@ A branch works on one issue at most; an issue has any number of branches, in any
   ([branch status](branch-status.md#annotations)); a key changed meanwhile doesn't refuse them. GraphQL's
   `expectedVersion` does the same, optionally.
 - **Its activity** is the [architecture](architecture.md#events-and-background-work)'s events with the issue as their
-  subject: `issue.created`, `issue.changed` with each field's old and new value, `issue.branch_linked` and
-  `issue.branch_unlinked`, each naming its actor, so the issue page shows who moved it and when. A deleted issue's
-  events go with it, and the organization's own event `issue.deleted` keeps its number and title. Comments join them
-  once branch chats exist ([below](#agents-and-comments)); the table carries trigger `audit()`.
+  subject: `issue.created`, `issue.changed` with each field's old and new value (a label's by name),
+  `issue.branch_linked` and `issue.branch_unlinked`, each naming its actor, so the issue page shows who moved it and
+  when. A deleted issue's events go with it, and the organization's own event `issue.deleted` keeps its number and
+  title. Comments join them once branch chats exist ([below](#agents-and-comments)); the table carries trigger
+  `audit()`.
 - **Deleting is for mistakes.** `issues.manage` deletes an issue, its links and its activity with it; work that won't be
   done is Canceled, which keeps its history.
 
@@ -97,6 +99,33 @@ a person.
   the principal who merged it, unless it is Done or Canceled already. Its other branches stay linked.
 - **Done and Canceled close it,** and the issue keeps when; reopening clears it. Lists show open issues by default.
 
+## Labels
+
+An organization's labels sort its issues across its repositories: one set, the organization's, as its issues are.
+
+**An organization’s labels: a name, one of five colours and what it is for; an issue carries any of them**
+
+![An organization’s labels: a name, one of five colours and what it is for; an issue carries any of them](issues/labels.svg)
+
+The five colours are the design system’s status tones, so a label reads the same in both themes. A rename or a new
+colour changes each issue that carries the label, so a client holding one reads it again; a new description doesn’t.
+
+- **A label is a name, a colour and what it is for.** A name of 1 to 50 characters on one line, unique within the
+  organization in any case, so `Bug` and `bug` can't both exist; one of five colours, gray (the default), blue, green,
+  yellow or red, which the Console draws in the design system's neutral, info, success, warning and danger tones; and a
+  description of at most 200 characters on one line.
+- **An issue carries up to 20.** `issues.write` sets an issue's labels as one of its fields, from the version shown,
+  like any other; the issue's activity records the change by the labels' names. Lists show each issue's labels, and
+  filter by labels: an issue must carry every label named.
+- **`issues.manage` manages them.** It creates, renames, recolours and deletes labels; `issues.read` sees them, and how
+  many issues carry each. A rename or a new colour changes each issue that carries the label, bumping its version, so a
+  client holding the issue's ETag reads the new name; a new description shows on no issue, so it changes none. Deleting
+  a label takes it off its issues the same way.
+- **A version, its ETag.** Each change bumps a label's version. Its ETag is the version and how many issues carry the
+  label, `"3-12"`, since labelling an issue changes the count but not the label; `PATCH` and `DELETE` take it in
+  `If-Match`, by its version, as for issues. The organization's events `label.created`, `label.changed` and
+  `label.deleted` name who did it.
+
 ## Who may do what
 
 Three permissions at the organization scope, added to the [catalog](principals-and-permissions.md#permissions), and to
@@ -111,8 +140,8 @@ The migration adds them to the built-in roles; custom roles take them when someo
 | Permission | Allows |
 | --- | --- |
 | `issues.read` | See the organization's issues, their activity and links |
-| `issues.write` | Create issues, change any field of them, link and unlink branches |
-| `issues.manage` | Delete issues; manage labels |
+| `issues.write` | Create issues, change any field of them, their labels included, link and unlink branches |
+| `issues.manage` | Delete issues; create, change and delete the organization's labels |
 
 - **Members track work, Guests don't see it.** Owners hold all three, Members `issues.read` and `issues.write`, Guests
   none, since a Guest is there for the repositories granted to them. A custom role takes any of them.
@@ -185,7 +214,7 @@ change, merge patches, and lists paged by an opaque cursor with `Link: rel="next
 
 | Operation | REST | GraphQL | Takes |
 | --- | --- | --- | --- |
-| List issues, filtered by state, assignee, repository and text, newest first | `GET /issues` | `Organization.issues` | `issues.read` |
+| List issues, filtered by state, assignee, repository, labels and text, newest first | `GET /issues` | `Organization.issues` | `issues.read` |
 | Create an issue | `POST /issues`, 201 with `Location` | `createIssue` | `issues.write` |
 | Read one, with its rendered description | `GET /issues/{number}`, 304 on its ETag | `Organization.issue(number)` | `issues.read` |
 | Change fields | `PATCH /issues/{number}`, merge patch, `If-Match` | `updateIssue` | `issues.write`, and `agents.assign` for an agent |
@@ -195,6 +224,10 @@ change, merge patches, and lists paged by an opaque cursor with `Link: rel="next
 | A branch's issue | the branch's `issue` | `Branch.issue` | `issues.read` |
 | Link or unlink by hand | `PUT` or `DELETE /repos/{repo}/branches/{branch}/issue` | `linkBranch`, `unlinkBranch` | `issues.write`, `repo.read` |
 | The key | the organization's `issueKey` | `Organization.issueKey`, `updateOrganization` | `org.manage` to change |
+| List labels, by name, with their issues' count | `GET /labels` | `Organization.labels` | `issues.read` |
+| Create a label | `POST /labels`, 201 with `Location`, 409 for a name taken | `createLabel` | `issues.manage` |
+| Read one | `GET /labels/{id}`, 304 on its ETag | | `issues.read` |
+| Change or delete one | `PATCH` (merge patch) or `DELETE /labels/{id}`, `If-Match` | `updateLabel`, `deleteLabel` | `issues.manage` |
 
 ## The Console
 
@@ -209,31 +242,36 @@ Each property saves as soon as it changes, naming the version it was made from; 
 the page instead of overwriting it.
 
 - **The list** at `/<org>/issues` groups open issues by state, Urgent first within each, and filters by assignee (Me
-  among them), repository and text; a switch shows closed ones. Each row is the design system's Issue row: identifier,
-  title, priority, assignee's avatar, the linked branches' count.
+  among them), repository, label and text; a switch shows closed ones. Each row is the design system's Issue row:
+  identifier, title, priority, labels, assignee's avatar, the linked branches' count.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
   description, its branches with their status as branch rows, and its activity, oldest first; the side column edits
-  state, priority, assignee and repository, each change saved at once with the version it was made from, and shows who
-  created it. "Assign to an agent" lists the organization's agents once they exist.
+  state, priority, assignee, labels and repository, each change saved at once with the version it was made from, and
+  shows who created it. "Assign to an agent" lists the organization's agents once they exist.
+- **Labels** at `/<org>/issues/labels` lists the organization's labels with what each is for and how many issues carry
+  it, linked to the list filtered by it; for `issues.manage`, each row edits or deletes its label, and a form adds one.
 - **New issue** at `/<org>/issues/new` asks for a title, then the rest, as the side column does. `issues` joins the
   repository slugs the Console reserves.
 - **A branch's page** shows its issue under its status, linked to the issue page, with Link and Unlink.
 
 ## Data model
 
-**This slice’s tables: issues and their numbers, branch links, and the key on organizations**
+**This slice’s tables: issues and their numbers, branch links, labels, and the key on organizations**
 
-![This slice’s tables: issues and their numbers, branch links, and the key on organizations](issues/er.svg)
+![This slice’s tables: issues and their numbers, branch links, labels, and the key on organizations](issues/er.svg)
 
-`issues` and `branch_issues` carry trigger `audit()`, and `issues` trigger `bump_version()`. Every new row carries
-`org_id`.
+`issues`, `branch_issues`, `labels` and `issue_labels` carry trigger `audit()`, and `issues` and `labels` trigger
+`bump_version()`. Every new row carries `org_id`, but `issue_labels`, which joins two that do.
 
 - **Numbers come from a counter per organization,** `issue_numbers`, incremented in the issue's transaction, so two
   issues created at once never share a number and a deleted one never frees its own.
 - **`branch_issues` is keyed by the branch,** which keeps "a branch works on one issue" in the schema; a row with no
   issue is a branch unlinked by hand, which the push worker leaves alone.
-- **Every new row carries `org_id`;** `issues` and `branch_issues` carry trigger `audit()`, and `issues` trigger
-  `bump_version()`. The counter carries neither: it is bookkeeping.
+- **`labels` is unique by name in any case,** an index on the organization and the lowercased name; `issue_labels` joins
+  an issue to a label, and deleting either deletes the row.
+- **Every new row carries `org_id`,** but `issue_labels`, which joins two rows that do; `issues`, `branch_issues`,
+  `labels` and `issue_labels` carry trigger `audit()`, and `issues` and `labels` trigger `bump_version()`. The counter
+  carries neither: it is bookkeeping.
 
 ## Decisions
 
@@ -248,7 +286,9 @@ the page instead of overwriting it.
 | A branch has at most one issue; the first identifier in its name wins; a hand link or unlink is never undone by the name | "A branch shows its issue", in the product design's words; the person decides over the pattern | Proposed |
 | Names link when the push worker processes the branch's push, and when the issue they name is created | Keeps pushes as fast as before; a branch pushed before its issue still links | Proposed |
 | Comments are a chat whose subject is the issue; tasks are agents' tasks naming the issue | One message model and one task model, agreed with [ENG-215](https://linear.app/arikkfir/issue/ENG-215) | Agreed |
-| Labels, sub-issues, relations, estimates, cycles and projects, custom states, notifications and search come later | Keeps this slice to its issue; labels follow in their own pull request | Proposed |
+| Labels are the organization's, in five colours of the design system's tones; `issues.manage` manages them and `issues.write` sets them, at most 20 an issue | One vocabulary across repositories, as issues are the organization's; the tones read in both themes; a shared vocabulary is an Owner's to shape and everyone's to use | Proposed |
+| A label's rename or new colour changes each issue that carries it | An issue's ETag then changes, so a client that cached it reads the new name; a description shows on no issue, so its change touches none | Proposed |
+| Sub-issues, relations, estimates, cycles and projects, custom states, notifications and search come later | Keeps this slice to issues, their branches, labels and agents | Proposed |
 
 ## Rollout
 
@@ -261,7 +301,8 @@ Pull requests 1 to 3 need nothing but `main`; the fourth waits for
 
 Nothing changes for an operator: no workload, no chart value. An organization's existing members get the new permissions
 through the built-in roles; custom roles get them only when someone adds them. Demo data seeds Acme's issues in every
-state, priority and repository, a few of them changed since, and one of Globex's, so a preview shows the pages at once.
+state, priority and repository, a few of them changed since, five labels on them, and one of Globex's with a label of
+its own, so a preview shows the pages at once.
 
 ## Open questions
 

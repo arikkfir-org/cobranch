@@ -28,7 +28,7 @@ type Code interface {
 	Annotations(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Annotation, error)
 	SetAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.AnnotationInput) (code.Annotation, error)
 	DeleteAnnotation(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha, name string, version int64) error
-	Reviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) ([]code.Review, error)
+	Reviews(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, q code.ReviewQuery) (code.ReviewPage, error)
 	Review(ctx context.Context, v code.Viewer, repoID, id uuid.UUID) (code.Review, error)
 	SubmitReview(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, in code.ReviewInput) (code.Review, error)
 	Tags(ctx context.Context, v code.Viewer, repoID uuid.UUID) ([]code.Tag, error)
@@ -36,6 +36,8 @@ type Code interface {
 	File(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.File, error)
 	Raw(ctx context.Context, v code.Viewer, repoID uuid.UUID, ref, path string) (code.Raw, error)
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
+	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
+	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
@@ -169,7 +171,16 @@ func (a api) GetBranch(ctx context.Context, req GetBranchRequestObject) (GetBran
 	if err != nil {
 		return nil, fail(err, "branch")
 	}
-	return GetBranch200JSONResponse(branch(b)), nil
+	out := branch(b)
+	link, err := a.issues.OfBranch(ctx, v, repo.OrgID, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, failIssue(err)
+	}
+	if link != nil {
+		issue := branchIssue(*link)
+		out.Issue = &issue
+	}
+	return GetBranch200JSONResponse(out), nil
 }
 
 // MergeBranch merges a branch into its base for the viewer.
@@ -331,7 +342,7 @@ func (a api) ListCommits(ctx context.Context, req ListCommitsRequestObject) (Lis
 		link := `<?` + next.Encode() + `>; rel="next"`
 		out.Headers.Link = &link
 	}
-	tag, err := pageTag(out)
+	tag, err := bodyTag("history", out.Body, out.Headers.Link)
 	if err != nil {
 		return nil, err
 	}
@@ -363,18 +374,18 @@ func historyQuery(p ListCommitsParams) code.HistoryQuery {
 	return q
 }
 
-// pageTag is the strong entity tag of a page of history: its commits, with the names of the principals behind them,
-// and its next page's link fix it, so nothing cheaper than the page itself can.
-func pageTag(page ListCommits200JSONResponse) (string, error) {
-	body, err := json.Marshal(page.Body)
+// bodyTag is the strong entity tag of an answer of kind: its body, with the names of the principals it shows, and its
+// next page's link, when it has one, fix it, so nothing cheaper than the answer itself can.
+func bodyTag(kind string, body any, link *string) (string, error) {
+	raw, err := json.Marshal(body)
 	if err != nil {
-		return "", fmt.Errorf("tagging a page of history: %w", err)
+		return "", fmt.Errorf("tagging the %s: %w", kind, err)
 	}
-	link := ""
-	if page.Headers.Link != nil {
-		link = *page.Headers.Link
+	next := ""
+	if link != nil {
+		next = *link
 	}
-	sum := sha256.Sum256([]byte("history\x00" + string(body) + "\x00" + link))
+	sum := sha256.Sum256([]byte(kind + "\x00" + string(raw) + "\x00" + next))
 	return `"` + hex.EncodeToString(sum[:16]) + `"`, nil
 }
 
@@ -414,7 +425,8 @@ func (a api) ListAnnotations(ctx context.Context, req ListAnnotationsRequestObje
 	return ListAnnotations200JSONResponse{Annotations: mapAll(list, annotation)}, nil
 }
 
-// ListReviews lists the reviews submitted of one of the repository's commits.
+// ListReviews lists a page of the reviews submitted of one of the repository's commits, links the next, and answers
+// 304 while the caller holds the page.
 func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (ListReviewsResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -424,11 +436,36 @@ func (a api) ListReviews(ctx context.Context, req ListReviewsRequestObject) (Lis
 	if err != nil {
 		return nil, err
 	}
-	list, err := a.code.Reviews(ctx, v, repo.ID, req.SHA)
+	q := code.ReviewQuery{}
+	if req.Params.Cursor != nil {
+		q.Cursor = *req.Params.Cursor
+	}
+	if req.Params.Limit != nil {
+		q.Limit = *req.Params.Limit
+	}
+	page, err := a.code.Reviews(ctx, v, repo.ID, req.SHA, q)
 	if err != nil {
 		return nil, fail(err, "commit")
 	}
-	return ListReviews200JSONResponse{Reviews: mapAll(list, review)}, nil
+	out := ListReviews200JSONResponse{}
+	out.Body.Reviews = mapAll(page.Reviews, review)
+	if page.Next != "" {
+		next := url.Values{"cursor": {page.Next}}
+		if q.Limit != 0 {
+			next.Set("limit", strconv.Itoa(q.Limit))
+		}
+		link := `<?` + next.Encode() + `>; rel="next"`
+		out.Headers.Link = &link
+	}
+	tag, err := bodyTag("reviews", out.Body, out.Headers.Link)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return ListReviews304Response{Headers: ListReviews304ResponseHeaders{ETag: tag}}, nil
+	}
+	out.Headers.ETag = tag
+	return out, nil
 }
 
 // SubmitReview submits the viewer's review of one of the repository's commits.
@@ -453,7 +490,7 @@ func (a api) SubmitReview(ctx context.Context, req SubmitReviewRequestObject) (S
 	return SubmitReview201JSONResponse{Body: review(r), Headers: SubmitReview201ResponseHeaders{Location: &location}}, nil
 }
 
-// GetReview answers one of the repository's reviews.
+// GetReview answers one of the repository's reviews, or 304 while the caller holds it.
 func (a api) GetReview(ctx context.Context, req GetReviewRequestObject) (GetReviewResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -467,7 +504,16 @@ func (a api) GetReview(ctx context.Context, req GetReviewRequestObject) (GetRevi
 	if err != nil {
 		return nil, fail(err, "review")
 	}
-	return GetReview200JSONResponse(review(r)), nil
+	out := GetReview200JSONResponse{Body: review(r)}
+	tag, err := bodyTag("review", out.Body, nil)
+	if err != nil {
+		return nil, err
+	}
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetReview304Response{Headers: GetReview304ResponseHeaders{ETag: tag}}, nil
+	}
+	out.Headers.ETag = tag
+	return out, nil
 }
 
 // SetAnnotation sets an annotation on one of the repository's commits for the viewer, or changes the viewer's own.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"cobranch.dev/db/migrations"
 	"cobranch.dev/internal/services/code"
 	"cobranch.dev/internal/services/git"
 	"cobranch.dev/internal/services/jobs"
@@ -437,5 +438,25 @@ func TestCodeStoreReadsRuns(t *testing.T) {
 	}
 	if page, err = f.c.Runs(ctx, repo, "", 2, 10); err != nil || len(page) != 1 || page[0].Number != 1 {
 		t.Errorf("Runs(before #2) = %+v, %v", page, err)
+	}
+}
+
+func TestJobsMigrationRollsBack(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	ctx := context.Background()
+	f.pushTwoRuns(t) // the jobs' annotations are events with a job as their actor, which keep its ID once it's gone
+	if n := count(t, f.pool, "SELECT count(*) FROM events e JOIN principals p ON p.id = e.actor_id WHERE p.kind = 'job'"); n == 0 {
+		t.Fatal("no events of a job, want the annotations it set")
+	}
+	schema := newSchema(t, f.pool, migrations.FS, migrations.Go...)
+	if _, err := schema.provider.DownTo(ctx, 20); err != nil {
+		t.Fatalf("rolling the jobs' migration back: %v", err)
+	}
+	if n := count(t, f.pool, "SELECT count(*) FROM principals WHERE kind NOT IN ('user', 'anonymous', 'agent', 'automation', 'installation', 'api_key')"); n != 0 {
+		t.Errorf("%d job principals left after rolling back", n)
+	}
+	if _, err := schema.provider.Up(ctx); err != nil {
+		t.Fatalf("migrating up again: %v", err)
 	}
 }

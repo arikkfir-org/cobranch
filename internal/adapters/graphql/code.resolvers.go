@@ -95,7 +95,13 @@ func (r *repositoryResolver) Branches(ctx context.Context, obj *Repository) ([]*
 	if err != nil {
 		return nil, err
 	}
-	return mapAll(list, branch), nil
+	out := mapAll(list, branch)
+	for _, b := range out {
+		if err := b.of(ctx, obj); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 // Branch is the resolver for the branch field.
@@ -111,7 +117,8 @@ func (r *repositoryResolver) Branch(ctx context.Context, obj *Repository, name s
 	case err != nil:
 		return nil, fail(ctx, err, "branch", "reading the branch")
 	}
-	return branch(b), nil
+	out := branch(b)
+	return out, out.of(ctx, obj)
 }
 
 // DeletedBranch is the resolver for the deletedBranch field.
@@ -233,3 +240,40 @@ func (r *repositoryResolver) Blob(ctx context.Context, obj *Repository, ref stri
 	}
 	return file(f), nil
 }
+
+// BranchDiff is the resolver for the branchDiff field.
+func (r *repositoryResolver) BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	d, err := r.Code.BranchDiff(ctx, v, repoID, name)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, codeFail(ctx, err, "reading the branch's diff")
+	}
+	return diff(d), nil
+}
+
+// CommitDiff is the resolver for the commitDiff field.
+func (r *repositoryResolver) CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	d, err := r.Code.CommitDiff(ctx, v, repoID, sha)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, codeFail(ctx, err, "reading the commit's diff")
+	}
+	return diff(d), nil
+}
+
+// Branch returns BranchResolver implementation.
+func (r *Resolver) Branch() BranchResolver { return &branchResolver{r} }
+
+type branchResolver struct{ *Resolver }

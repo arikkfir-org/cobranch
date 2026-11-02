@@ -35,8 +35,8 @@ func agentPrincipal(p *agents.Principal) *Principal {
 	return &Principal{Id: p.ID, DisplayName: p.DisplayName}
 }
 
-// optional is a pointer to id, or nil for uuid.Nil.
-func optional(id uuid.UUID) *uuid.UUID {
+// optionalID is a pointer to id, or nil for uuid.Nil.
+func optionalID(id uuid.UUID) *uuid.UUID {
 	if id == uuid.Nil {
 		return nil
 	}
@@ -51,29 +51,21 @@ func orEmpty(s *string) string {
 	return *s
 }
 
-// optionalString is a pointer to s, or nil for empty.
-func optionalString(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
 func agent(a agents.Agent) Agent {
 	out := Agent{Id: a.ID, Name: a.Name, Description: a.Description, Instructions: a.Instructions, BuiltIn: a.BuiltIn,
 		CreatedBy: agentPrincipal(a.CreatedBy), CreatedAt: a.CreatedAt.UTC(), UpdatedAt: a.UpdatedAt.UTC(), Version: a.Version,
 		Grants: make([]AgentGrant, 0, len(a.Grants))}
 	for _, g := range a.Grants {
-		out.Grants = append(out.Grants, AgentGrant{RoleId: g.RoleID, RoleName: g.RoleName, RepositoryId: optional(g.RepoID),
-			RepositorySlug: optionalString(g.RepoSlug)})
+		out.Grants = append(out.Grants, AgentGrant{RoleId: g.RoleID, RoleName: g.RoleName, RepositoryId: optionalID(g.RepoID),
+			RepositorySlug: optional(g.RepoSlug)})
 	}
 	return out
 }
 
 func task(t agents.Task) Task {
 	out := Task{Id: t.ID, Number: t.Number, Agent: *agentPrincipal(&t.Agent), Kind: t.Kind, AssignedBy: agentPrincipal(t.AssignedBy),
-		Title: t.Title, Instructions: t.Instructions, RepositoryId: optional(t.RepoID), RepositorySlug: optionalString(t.RepoSlug),
-		BranchId: optional(t.BranchID), Branch: optionalString(t.Branch), ThreadId: optional(t.ThreadID), State: TaskState(t.State),
+		Title: t.Title, Instructions: t.Instructions, RepositoryId: optionalID(t.RepoID), RepositorySlug: optional(t.RepoSlug),
+		BranchId: optionalID(t.BranchID), Branch: optional(t.Branch), ThreadId: optionalID(t.ThreadID), State: TaskState(t.State),
 		Reason: t.Reason, Summary: t.Summary, CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: t.Version}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()

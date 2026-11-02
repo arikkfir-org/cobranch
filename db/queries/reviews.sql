@@ -23,3 +23,14 @@ RETURNING *;
 SELECT c.sha, c.author_id, p.pusher_id
 FROM commits c JOIN pushes p ON p.id = c.first_push
 WHERE c.repo_id = @repo_id AND c.sha = ANY (@shas::text[]);
+
+-- ReviewsPage lists at most lim of the reviews on one of a repository's commits, in the order they were submitted,
+-- after the one named after, or from the first when after is null; none when after names no review of that commit.
+-- name: ReviewsPage :many
+SELECT sqlc.embed(r), p.display_name AS reviewer_display_name, p.kind AS reviewer_kind
+FROM reviews r LEFT JOIN principals p ON p.id = r.reviewer_id
+WHERE r.repo_id = @repo_id AND r.sha = @sha
+  AND (sqlc.narg(after)::uuid IS NULL OR (r.submitted_at, r.id) > (
+    SELECT a.submitted_at, a.id FROM reviews a WHERE a.id = sqlc.narg(after) AND a.repo_id = @repo_id AND a.sha = @sha))
+ORDER BY r.submitted_at, r.id
+LIMIT @lim;

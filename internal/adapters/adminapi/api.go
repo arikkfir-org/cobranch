@@ -34,6 +34,8 @@ type Administration interface {
 	Enter(ctx context.Context, v auth.User, slug, reason string) (orgs.Organization, error)
 	Settings(ctx context.Context, v auth.User) (admin.Settings, error)
 	ChangeSettings(ctx context.Context, v auth.User, match string, change admin.SettingsChange) (admin.Settings, error)
+	OrganizationLimits(ctx context.Context, v auth.User, slug string) (admin.OrganizationLimits, error)
+	ChangeOrganizationLimits(ctx context.Context, v auth.User, slug, match string, change admin.OwnLimitsChange) (admin.OrganizationLimits, error)
 	Providers(ctx context.Context, v auth.User) ([]admin.Provider, error)
 	Provider(ctx context.Context, v auth.User, id string) (admin.Provider, error)
 	AddProvider(ctx context.Context, v auth.User, p admin.NewProvider) (admin.Provider, error)

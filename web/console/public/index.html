@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
   <!-- The Console's first screens: sign in, the welcome page (create, join, invitations), an organization's home,
-       members, roles and settings under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches
+       members, roles and settings (with its usage against its limits) under its slug, its repositories under theirs with their files, Markdown and READMEs rendered, branches
        with their status, history and commits with their annotations, and the viewer's own settings with their personal tokens and SSH keys. The design system's colours (docs/cobranch/designs/design-system), the REST
        API at the URL config.json names, the Auth server at the other URL it names, and the Git server, whose URLs, over
        HTTPS and SSH, a repository's clone URLs start with, when it names them. Caddy serves this page for
@@ -189,6 +189,7 @@
     th { color: var(--color-fg-muted); font-weight: 500; font-size: 12px; }
     td.actions { text-align: right; white-space: nowrap; }
     @media (max-width: 640px) { td.actions { white-space: normal; } }
+    th.number, td.number { text-align: right; white-space: nowrap; }
     .chip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); font-size: 12px; margin-right: 4px; }
     .perms { display: flex; flex-wrap: wrap; gap: 4px; }
     .perms code { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: var(--color-bg-raised); border: 1px solid var(--color-border-default); }
@@ -201,6 +202,11 @@
     .picks label code { font-size: 12px; }
     .picks input { width: auto; }
     .muted { color: var(--color-fg-muted); font-size: 12px; }
+    .gauge { display: grid; gap: 4px; }
+    .meter { height: 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); overflow: hidden; }
+    .meter span { display: block; height: 100%; background: var(--color-accent); }
+    .meter[data-tone="warning"] span { background: var(--color-status-warning-fg); }
+    .meter[data-tone="danger"] span { background: var(--color-status-danger-fg); }
     section.panel.notice code { word-break: break-all; }
     .commits td { vertical-align: top; }
     .commits td.sha { text-align: right; white-space: nowrap; }
@@ -308,8 +314,28 @@
     .message .body th, .message .body td { padding: 4px 8px; border: 1px solid var(--color-border-default); }
     .message .text { white-space: pre-wrap; overflow-wrap: anywhere; }
     .thread form textarea, .chat > form textarea { min-height: 64px; resize: vertical; }
+    .diff-summary { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; margin: 0; }
+    .added-count { color: var(--color-status-success-fg); font-variant-numeric: tabular-nums; }
+    .removed-count { color: var(--color-status-danger-fg); font-variant-numeric: tabular-nums; }
+    .diff-files { display: grid; gap: 12px; }
+    details.file-diff { border: 1px solid var(--color-border-default); border-radius: 8px; background: var(--color-bg-raised); overflow: hidden; }
+    details.file-diff > summary { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; padding: 8px 12px; cursor: pointer; background: var(--color-bg-sunken); }
+    details.file-diff[open] > summary { border-bottom: 1px solid var(--color-border-default); }
+    details.file-diff summary code { overflow-wrap: anywhere; }
+    details.file-diff summary .counts { margin-left: auto; display: flex; gap: 8px; }
+    .file-diff p.note { margin: 0; padding: 8px 12px; color: var(--color-fg-muted); }
+    .hunks { overflow-x: auto; }
+    table.hunk { font: 13px/20px var(--font-mono); font-variant-ligatures: none; }
+    table.hunk td { padding: 0 8px; white-space: pre; vertical-align: top; }
+    table.hunk td.ln { width: 1%; text-align: right; color: var(--color-fg-muted); user-select: none; }
+    table.hunk td.mark { width: 1%; padding: 0 4px; user-select: none; }
+    table.hunk td.text { tab-size: 4; }
+    table.hunk tr.added td { background: var(--color-status-success-bg); }
+    table.hunk tr.removed td { background: var(--color-status-danger-bg); }
+    table.hunk tr.hunk-head td { background: var(--color-status-info-bg); color: var(--color-fg-muted); }
+    table.hunk .no-newline { color: var(--color-fg-muted); font-family: var(--font-sans); font-size: 12px; }
     .tone-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); }
-    .filters { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; }
+    .filters { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 8px; align-items: center; }
     .filters select { width: auto; }
     .groups { display: grid; gap: 16px; }
     .issues td.priority, .issues td.key, .issues td.when { width: 1%; white-space: nowrap; }
@@ -330,9 +356,39 @@
     .activity li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
     .activity li:first-child { border-top: 0; }
     .activity li .muted { white-space: nowrap; }
+    .linked { list-style: none; margin: 0; padding: 0; }
+    .linked li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+    .linked li:first-child { border-top: 0; }
+    .linked li a { min-width: 0; overflow-wrap: anywhere; }
+    .works-on { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
+    .works-on form { display: flex; gap: 8px; align-items: center; }
+    .works-on input { width: 9em; }
+    .label { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--tone-border);
+      background: var(--tone-bg); color: var(--tone-fg); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+    .label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .field { display: grid; gap: 6px; }
+    .field strong { font-weight: 500; }
+    .label-picks { display: flex; flex-wrap: wrap; gap: 6px 4px; }
+    .label-picks label.check { display: inline-flex; gap: 4px; font-weight: 400; }
+    .label-picks label.check .label { margin: 0; }
+    .labels-table td.what { color: var(--color-fg-muted); overflow-wrap: anywhere; }
+    .labels-table td.count, .labels-table td.actions { width: 1%; white-space: nowrap; }
+    .labels-table form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr) auto; gap: 8px; align-items: end; }
     @media (max-width: 720px) {
-      .issue, .filters { grid-template-columns: minmax(0, 1fr); }
+      .issue, .filters, .labels-table form { grid-template-columns: minmax(0, 1fr); }
       .issue aside.side { order: -1; }
+      .issues tr, .labels-table tr { display: grid; align-items: center; column-gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--color-border-default); }
+      .issues td, .labels-table td { border-bottom: 0; padding: 2px 0; width: auto; }
+      .issues tr:last-child, .labels-table tr:last-child { border-bottom: 0; }
+      .issues tr { grid-template-columns: auto auto minmax(0, 1fr) auto; }
+      .issues td.priority { grid-area: 1 / 1; }
+      .issues td.key { grid-area: 1 / 2; }
+      .issues td.name { grid-area: 1 / 3; }
+      .issues td.when { grid-area: 1 / 4; }
+      .issues td.meta { grid-area: 2 / 3 / 3 / 5; text-align: left; white-space: normal; }
+      .labels-table tr { grid-template-columns: minmax(0, 1fr) auto auto; }
+      .labels-table td.what { grid-area: 2 / 1 / 3 / 4; }
+      .labels-table td[colspan] { grid-column: 1 / -1; }
     }
   </style>
 </head>
@@ -457,7 +513,7 @@
       if (page === "new") return "organization.new-repository";
       if (orgPages.includes(page)) return "organization." + page;
       if (sub === "branches") return rest.length ? "repository.branch" : "repository.branches";
-      const tabs = { tree: "code", blob: "file", commits: "commits", commit: "commit", access: "access", settings: "settings" };
+      const tabs = { tree: "code", blob: "file", commits: "commits", commit: "commit", changes: "changes", access: "access", settings: "settings" };
       return "repository." + (tabs[sub] || "code");
     }
     // reportViews sends the views kept so far, 20 at a time, with keepalive so a tab that closes still sends them, and
@@ -562,14 +618,7 @@
           h("div", {}, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/accept").then(reloadTo).catch(fail) }, "Accept"), " ",
             h("button", { class: "button small", type: "button", onclick: () => api("POST", "/me/invitations/" + inv.id + "/decline").then(() => showWelcome()).catch(fail) }, "Decline"))))));
       }
-      if (me.permissions.includes("orgs.create")) {
-        const slug = h("input", { name: "slug", required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39 });
-        const name = h("input", { name: "name", required: true, placeholder: "Acme" });
-        sections.push(h("section", { class: "panel" }, h("h3", {}, "Create an organization"),
-          h("form", { onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs", { slug: slug.value, name: name.value }).then(reloadTo).catch(fail); } },
-            h("label", {}, "Name", name), h("label", {}, "Slug", h("span", {}, "Its URL: 2 to 39 lowercase letters, digits and hyphens."), slug),
-            h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))));
-      }
+      if (me.permissions.includes("orgs.create")) sections.push(await createOrganization(fail));
       const joinSlug = h("input", { name: "slug", required: true, placeholder: "acme" });
       const note = h("input", { name: "note", placeholder: "A word for its managers (optional)", maxlength: 500 });
       sections.push(h("section", { class: "panel" }, h("h3", {}, "Ask to join"),
@@ -578,6 +627,23 @@
         requests.length ? h("p", {}, "Waiting: ", requests.map((r, i) => [i ? ", " : "", h("strong", {}, r.orgName)]), ".") : null));
       document.body.className = "centered";
       app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Cobranch"), ...sections));
+    }
+
+    // createOrganization is the form that creates an organization, with how many the viewer created against the most a
+    // user may create; once they reach it, the reason takes the button's place.
+    async function createOrganization(fail) {
+      const created = (await api("GET", "/me/usage")).organizations;
+      const count = (n) => n + (n === 1 ? " organization" : " organizations");
+      const reached = created.limit > 0 && created.used >= created.limit;
+      const slug = h("input", { name: "slug", required: true, placeholder: "acme", pattern: "[a-z0-9]+(-[a-z0-9]+)*", minlength: 2, maxlength: 39, disabled: reached });
+      const name = h("input", { name: "name", required: true, placeholder: "Acme", disabled: reached });
+      const submit = reached
+        ? h("p", { class: "muted" }, "You created " + count(created.used) + ", and a user may create at most " + created.limit + " here. An administrator can create more for you.")
+        : h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create"));
+      return h("section", { class: "panel" }, h("div", { class: "row" }, h("h3", {}, "Create an organization"),
+        created.limit > 0 && !reached ? h("span", { class: "muted" }, "You created " + created.used + " of " + count(created.limit)) : null),
+        h("form", { onsubmit: (e) => { e.preventDefault(); if (!reached) api("POST", "/orgs", { slug: slug.value, name: name.value }).then(reloadTo).catch(fail); } },
+          h("label", {}, "Name", name), h("label", {}, "Slug", h("span", {}, "Its URL: 2 to 39 lowercase letters, digits and hyphens."), slug), submit));
     }
 
     // reloadTo reloads the viewer's organizations and opens org.
@@ -609,8 +675,7 @@
       try { localStorage.setItem("cobranch.org", org.slug); } catch { /* a convenience */ }
       roles = (await api("GET", "/orgs/" + org.slug + "/roles")).roles;
       const can = (p) => org.viewerPermissions.includes(p);
-      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"], ["agents", "Agents"], ["tasks", "Tasks"]];
-      if (can("org.manage")) pages.push(["settings", "Settings"]);
+      const pages = [["", "Home"], ...(can("issues.read") ? [["issues", "Issues"]] : []), ["members", "Members"], ["roles", "Roles"], ["api-keys", "API keys"], ["agents", "Agents"], ["tasks", "Tasks"], ["settings", "Settings"]];
       const current = orgPages.includes(page) ? page : "";
       const link = ([p, label]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, label);
       const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
@@ -625,7 +690,7 @@
       if (page === "api-keys") return showApiKeys(org, main, can);
       if (page === "agents") return showAgents(org, main, can);
       if (page === "tasks") return showTasks(org, main, can);
-      if (page === "settings" && can("org.manage")) return showSettings(org, main);
+      if (page === "settings") return showSettings(org, main, can);
       if (page === "new" && can("repos.create")) return showNewRepository(org, main);
       if (page === "issues" && can("issues.read")) return showIssues(org, main, can, sub);
       if (orgPages.includes(page)) return go("/" + org.slug);
@@ -679,9 +744,9 @@
       const can = (p) => repo.viewerPermissions.includes(p);
       const tabs = [["", "Code"], ["branches", "Branches"], ["runs", "Runs"], ["access", "Access"]];
       if (can("repo.manage")) tabs.push(["settings", "Settings"]);
-      // A directory, a file, a branch's history and a commit are the Code tab's.
-      const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub;
-      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "runs" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
+      // A directory, a file, a branch's history and a commit are the Code tab's; a branch's changes the Branches tab's.
+      const tabOf = ["commits", "commit", "tree", "blob"].includes(sub) ? "" : sub === "changes" ? "branches" : sub;
+      if (!tabs.some(([t]) => t === tabOf) || (sub === "commit" && rest.length !== 1) || (sub === "blob" && rest.length < 2) || (sub === "changes" && !rest.length) || (sub === "runs" && rest.length > 1)) return go("/" + org.slug + "/" + repo.slug, true);
       const path = "/orgs/" + org.slug + "/repos/" + repo.slug;
       const tab = ([t, label]) => h("a", { href: base + org.slug + "/" + repo.slug + (t ? "/" + t : ""), "data-nav": "", class: t === tabOf ? "current" : "" }, label);
       const visibility = visibilities[repo.visibility];
@@ -698,10 +763,11 @@
       let sections;
       if (sub === "access") sections = await repositoryAccess(org, repo, path, orgCan("org.grants.manage"), fail);
       else if (sub === "settings") sections = repositorySettings(org, repo, path, fail);
-      else if (sub === "branches" && rest.length) sections = await repositoryBranch(path, at, rest.join("/"), can, fail);
+      else if (sub === "branches" && rest.length) sections = await repositoryBranch(org, path, at, rest.join("/"), can, orgCan, fail);
       else if (sub === "branches") sections = await repositoryBranches(path, at);
       else if (sub === "runs" && rest.length) sections = await repositoryRun(path, at, rest[0], can, fail);
       else if (sub === "runs") sections = [await runsPanel(path, at, can, fail, "")];
+      else if (sub === "changes") sections = await repositoryChanges(path, at, rest.join("/"), can, fail);
       else if (sub === "commit") sections = await repositoryCommit(path, at, rest[0], can, fail);
       else if (sub === "commits") sections = [await repositoryHistory(path, at, rest.join("/") || "main", fail)];
       else sections = await repositoryFiles(org, repo, path, at, sub === "blob", rest, can);
@@ -710,14 +776,15 @@
     }
 
     // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-    // parents, to a branch's page, to a commit, to a run, to a directory or a file at a ref, and to a file's bytes, which
-    // the REST API serves.
+    // parents, to a branch's page and its changes, to a commit, to a run, to a directory or a file at a ref, and to a file's
+    // bytes, which the REST API serves.
     function repoLinks(org, repo) {
       const root = base + org.slug + "/" + repo.slug;
       const parts = (...names) => names.filter(Boolean).join("/").split("/").map(encodeURIComponent).join("/");
       return {
         history: (ref, first) => root + "/commits/" + parts(ref) + (first ? "?parents=first" : ""),
         branchPage: (name) => root + "/branches/" + parts(name),
+        changes: (name) => root + "/changes/" + parts(name),
         commit: (sha) => root + "/commit/" + sha,
         run: (number) => root + "/runs/" + number,
         tree: (ref, path) => root + "/tree/" + parts(ref, path),
@@ -744,6 +811,7 @@
         '<path d="M3.721 6.391a10 10 0 0 1 2.7-2.69"/><path d="M6.391 20.279a10 10 0 0 1-2.69-2.7"/>',
       "octagon-alert": '<path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/>',
       "git-merge": '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/>',
+      "circle-dot": '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/>',
       "git-branch": '<line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>',
       "circle-pause": '<circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/>',
       "ban": '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
@@ -1233,10 +1301,10 @@
     }
 
     // repositoryBranch is a branch's page: whose commits it would merge into main and how many, a Merge button and a
-    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, its commits, and the
-    // reviews, annotations and runs of its head. main's page names what merges into it need instead, and a branch that
-    // isn't live any more, its deletion.
-    async function repositoryBranch(path, at, name, can, fail) {
+    // Delete branch button for a viewer who may, why it is Blocked, requirement by requirement, the issue it works on,
+    // its commits, and the reviews, annotations and runs of its head. main's page names what merges into it need
+    // instead, and a branch that isn't live any more, its deletion.
+    async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
       let b;
       try {
         b = await api("GET", path + "/branches/" + encodeURIComponent(name));
@@ -1245,10 +1313,11 @@
         return deletedBranchPage(path, at, name);
       }
       const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
-        h("div", { class: "row" }, h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
+        h("div", { class: "row" }, b.base ? h("a", { class: "button small", href: at.changes(b.name), "data-nav": "" }, "Changes") : null,
+          h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
       if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), mergeRequirements([b]),
         await branchChat(path, at, b, can)].filter(Boolean);
-      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail))];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail), worksOn(org, path, b, orgCan, fail))];
       if (b.settingsError) sections.push(settingsError(b));
       // A Merged branch has nothing left to check or to merge.
       if (b.status !== "merged") sections.push(branchChecks(b));
@@ -1697,6 +1766,30 @@
       return h("form", { class: "row merge", onsubmit: merge }, method, button, remove ? h("label", { class: "check" }, remove, "Delete the branch once merged") : null, how);
     }
 
+    // worksOn is the issue b works on, linked to its page with its state and how b was linked, for a viewer with
+    // issues.read, and for one with issues.write a field to link it to an issue by identifier, and Unlink. Nothing for
+    // a viewer without issues.read.
+    function worksOn(org, path, b, orgCan, fail) {
+      if (!orgCan("issues.read")) return null;
+      const at = path + "/branches/" + encodeURIComponent(b.name) + "/issue";
+      const i = b.issue;
+      const line = h("div", { class: "works-on" }, icon("circle-dot"), i
+        ? ["Works on ", h("a", { href: base + org.slug + "/issues/" + i.identifier, "data-nav": "" }, h("code", {}, i.identifier), " ", i.title), issueBadge(i.state),
+          h("span", { class: "muted" }, i.linkedBy === "name" ? "linked by its name" : "linked by hand")]
+        : h("span", {}, "Works on no issue. Name it after one, such as ", h("code", {}, org.issueKey.toLowerCase() + "-42-" + "what-it-does"), ", or link one."));
+      if (!orgCan("issues.write")) return line;
+      const identifier = h("input", { name: "issue", required: true, placeholder: org.issueKey + "-42", "aria-label": "Issue", pattern: "\\s*(?:[A-Za-z][A-Za-z0-9]*-)?\\d+\\s*" });
+      const link = (e) => {
+        e.preventDefault();
+        const number = Number(/(\d+)\s*$/.exec(identifier.value)[1]);
+        api("PUT", at, { number }).then(render).catch(fail);
+      };
+      const unlink = () => api("DELETE", at).then(render).catch(fail);
+      line.append(h("form", { onsubmit: link }, identifier, h("button", { class: "button small", type: "submit" }, i ? "Link another" : "Link")));
+      if (i) line.append(h("button", { class: "button small", type: "button", onclick: unlink }, "Unlink"));
+      return line;
+    }
+
     // wantsToMerge says what b would merge into its base: how many commits, after the author of its head.
     function wantsToMerge(b) {
       const into = [" into ", h("code", {}, b.base)];
@@ -1707,6 +1800,77 @@
       if (!b.ahead) return ["Nothing to merge: every commit of it is in ", h("code", {}, b.base), " already", ...updated];
       const commits = b.ahead === 1 ? "1 commit" : b.ahead + " commits";
       return [b.commit ? [who(b.commit.author), " wants to merge "] : "It would merge ", commits, ...into, ...updated];
+    }
+
+    // repositoryChanges is a branch's Changes tab: what it would merge into its base, from where it left it, file by
+    // file, and the reviews of its head beneath, with the form to submit one, so a reviewer reads the change and gives
+    // their verdict on one page.
+    async function repositoryChanges(path, at, name, can, fail) {
+      let b;
+      try {
+        b = await api("GET", path + "/branches/" + encodeURIComponent(name));
+      } catch (err) {
+        if (err.status !== 404) throw err;
+        return [h("section", { class: "panel" }, h("h3", {}, "Changes"), h("p", {}, "There is no branch ", h("code", {}, name), " any more."))];
+      }
+      const title = h("div", { class: "row" }, h("div", { class: "title" }, icon("git-branch"), h("h2", {}, h("code", {}, b.name)), b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
+        h("a", { class: "button small", href: at.branchPage(b.name), "data-nav": "" }, "Branch"));
+      if (!b.base) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch merges into nothing, so it has no changes to review."))];
+      const sections = [h("section", { class: "panel" }, title, h("p", {}, "What it would merge into ", h("code", {}, b.base), ", from where it left it: commits ",
+          h("code", {}, b.base), " gained since don't show.")),
+        await diffPanel(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, "Changes")];
+      if (b.commit) sections.push(commitReviews(path, b.commit, can, fail));
+      return sections;
+    }
+
+    // diffPanel reads the diff at url and shows it under title, or why it couldn't.
+    async function diffPanel(url, at, title) {
+      const panel = h("section", { class: "panel" }, h("h3", {}, title));
+      let d;
+      try {
+        d = await api("GET", url);
+      } catch (err) {
+        panel.append(h("p", {}, err.code === "git.unavailable" ? "This installation runs no Git server, so its changes can't be shown."
+          : "The changes couldn't be read: " + err.message));
+        return panel;
+      }
+      const files = d.files.length + d.filesLeftOut;
+      panel.append(h("p", { class: "diff-summary" }, files ? plural(files, "file") + " changed" : "No files changed",
+        h("span", { class: "added-count" }, "+" + d.additions), h("span", { class: "removed-count" }, "\u2212" + d.deletions),
+        h("span", { class: "muted" }, "from ", d.base ? h("a", { href: at.commit(d.base), "data-nav": "" }, h("code", {}, shortSha(d.base))) : "nothing", " to ",
+          h("a", { href: at.commit(d.head), "data-nav": "" }, h("code", {}, shortSha(d.head))))));
+      if (d.files.length) panel.append(h("div", { class: "diff-files" }, d.files.map((f) => fileDiffView(f, at, d))));
+      if (d.filesLeftOut) panel.append(h("p", { class: "muted" }, plural(d.filesLeftOut, "more file") + " changed past the 3,000 a diff shows."));
+      return panel;
+    }
+
+    // fileStatuses are the words for what a diff did to a file.
+    const fileStatuses = { added: "Added", modified: "Modified", deleted: "Deleted", renamed: "Renamed", type_changed: "Type changed" };
+
+    // fileDiffView is one file's change, folded when it is long: its path, what changed, its counts, and its hunks, or
+    // why it shows none.
+    function fileDiffView(f, at, d) {
+      const lines = f.hunks.reduce((n, hk) => n + hk.lines.length, 0);
+      const file = f.status === "deleted" ? (d.base ? at.blob(d.base, f.path) : null) : at.blob(d.head, f.path);
+      const summary = h("summary", {}, h("span", { class: "chip" }, fileStatuses[f.status]),
+        f.oldPath ? [h("code", {}, f.oldPath), " \u2192 "] : null, file ? h("a", { href: file, "data-nav": "" }, h("code", {}, f.path)) : h("code", {}, f.path),
+        f.binary ? null : h("span", { class: "counts" }, h("span", { class: "added-count" }, "+" + f.additions), h("span", { class: "removed-count" }, "\u2212" + f.deletions)));
+      const notes = [];
+      if (f.oldMode && f.mode && f.oldMode !== f.mode) notes.push("Mode " + f.oldMode + " \u2192 " + f.mode + ".");
+      if (f.binary) notes.push("A binary file: its lines don't show.");
+      else if (f.truncated) notes.push("Too large to show here: " + plural(f.additions + f.deletions, "line") + " changed.");
+      else if (!f.hunks.length && !notes.length) notes.push(f.status === "renamed" ? "Renamed without changes." : "An empty file.");
+      return h("details", { class: "file-diff", open: lines <= 500 ? "" : null }, summary, notes.map((n) => h("p", { class: "note" }, n)),
+        f.hunks.length ? h("div", { class: "hunks" }, h("table", { class: "hunk" }, h("tbody", {}, f.hunks.map(hunkRows)))) : null);
+    }
+
+    // hunkRows is a hunk as table rows: its header, then each line with its numbers in the old file and the new.
+    function hunkRows(hk) {
+      const marks = { context: " ", added: "+", removed: "-" };
+      const head = h("tr", { class: "hunk-head" }, h("td", { colspan: "4" }, "@@ -" + hk.oldStart + "," + hk.oldLines + " +" + hk.newStart + "," + hk.newLines + " @@" +
+        (hk.section ? " " + hk.section : "")));
+      return [head, hk.lines.map((l) => h("tr", { class: l.kind }, h("td", { class: "ln" }, l.old || ""), h("td", { class: "ln" }, l.new || ""),
+        h("td", { class: "mark" }, marks[l.kind]), h("td", { class: "text" }, l.text, l.noNewline ? h("span", { class: "no-newline" }, "  No newline at end of file") : null)))];
     }
 
     // repositoryCommit is a commit's page: its message, its author and committer with the users behind them, its parents,
@@ -1736,7 +1900,8 @@
       const links = h("div", { class: "row" }, h("a", { class: "button small", href: at.tree(c.sha, ""), "data-nav": "" }, "Browse files"),
         h("a", { class: "button small", href: at.history(c.sha), "data-nav": "" }, "History"));
       return [h("section", { class: "panel" }, h("div", { class: "row" }, h("h2", {}, first || "(no message)"), links), body ? h("pre", { class: "message" }, body) : null, facts),
-        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha)];
+        commitReviews(path, c, can, fail), commitAnnotations(path, c, can, fail), await runsPanel(path, at, can, fail, c.sha),
+        await diffPanel(path + "/commits/" + c.sha + "/diff", at, "Changes")];
     }
 
     // commitReviews lists a commit's reviews: each reviewer's latest, the one that counts, in the order they first
@@ -1982,13 +2147,23 @@
       const name = (i.identifier.toLowerCase() + "-" + words).replace(/-$/, "");
       return name.length <= 60 ? name : name.slice(0, 61).replace(/-[^-]*$/, "");
     }
-    // issueChoices are whom an issue may be assigned to and what it may be about: the organization's members, and the
-    // repositories the viewer reads.
+    // issueChoices are whom an issue may be assigned to, what it may be about and what it may carry: the
+    // organization's members, the repositories the viewer reads, and the organization's labels.
     async function issueChoices(org) {
-      const [members, repositories] = await Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
-        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories)]);
-      return { members, repositories };
+      const [members, repositories, labels] = await Promise.all([api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
+        api("GET", "/orgs/" + org.slug + "/repos").then((d) => d.repositories), api("GET", "/orgs/" + org.slug + "/labels").then((d) => d.labels)]);
+      return { members, repositories, labels };
     }
+    // A label's colour is one of the design system's tones, so it reads in both themes.
+    const labelTones = { gray: "neutral", blue: "info", green: "success", yellow: "warning", red: "danger" };
+    const labelColors = { gray: "Gray", blue: "Blue", green: "Green", yellow: "Yellow", red: "Red" };
+    // labelChip is a label as the design system's Label draws it: a dot and its name in its colour.
+    const labelChip = (l) => h("span", { class: "label tone-" + labelTones[l.color], title: l.description || l.name }, l.name);
+    // labelPicks are the organization's labels as boxes to tick, those chosen ticked.
+    const labelPicks = (labels, chosen) => h("div", { class: "label-picks" }, labels.map((l) =>
+      h("label", { class: "check" }, h("input", { type: "checkbox", value: l.id, checked: chosen.includes(l.id), "aria-label": l.name }), labelChip(l))));
+    const pickedLabels = (picks) => [...picks.querySelectorAll("input:checked")].map((i) => i.value);
+    const colorSelect = (value) => h("select", { name: "color", "aria-label": "Colour" }, Object.entries(labelColors).map(([c, word]) => h("option", { value: c, selected: c === value }, word)));
     const stateSelect = (value) => h("select", { name: "state" }, Object.entries(issueStates).map(([s, { word }]) => h("option", { value: s, selected: s === value }, word)));
     const prioritySelect = (value) => h("select", { name: "priority" }, Object.entries(issuePriorities).map(([p, { word }]) => h("option", { value: p, selected: p === value }, word)));
     // assigneeSelect picks one of the members, or nobody; an assignee who is no member any more stays its choice.
@@ -2001,18 +2176,20 @@
     const repositorySelect = (repositories, current) => h("select", { name: "repositoryId" }, h("option", { value: "" }, "None"),
       repositories.map((r) => h("option", { value: r.id, selected: current && r.id === current.id }, r.slug)));
 
-    // showIssues is the Issues page's: the list, the form that creates one, or an issue's page, by what follows issues/.
+    // showIssues is the Issues page's: the list, the form that creates one, the labels, or an issue's page, by what
+    // follows issues/.
     function showIssues(org, main, can, sub) {
       if (sub === "new" && can("issues.write")) return showNewIssue(org, main);
+      if (sub === "labels") return showLabels(org, main, can);
       if (sub && sub !== "new") return showIssue(org, main, can, sub);
       return showIssueList(org, main, can);
     }
 
     // showIssueList lists the organization's open issues by state, the most urgent first within each, filtered by the
-    // assignee, the repository and a text that the page's query names; a switch adds the closed ones.
+    // assignee, the repository, a label and a text that the page's query names; a switch adds the closed ones.
     async function showIssueList(org, main, can) {
       const params = new URLSearchParams(location.search);
-      const { members, repositories } = await issueChoices(org);
+      const { members, repositories, labels } = await issueChoices(org);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const filter = (name, value) => {
@@ -2027,13 +2204,16 @@
       const repository = h("select", { "aria-label": "Repository", onchange: (e) => filter("repository", e.target.value) }, h("option", { value: "" }, "Any repository"),
         h("option", { value: "none" }, "No repository"), repositories.map((r) => h("option", { value: r.id }, r.slug)));
       repository.value = params.get("repository") || "";
+      const label = h("select", { "aria-label": "Label", onchange: (e) => filter("label", e.target.value) }, h("option", { value: "" }, "Any label"),
+        labels.map((l) => h("option", { value: l.id }, l.name)));
+      label.value = params.get("label") || "";
       const text = h("input", { type: "search", "aria-label": "Search", placeholder: "Search titles, descriptions, identifiers", value: params.get("q") || "",
         onchange: (e) => filter("q", e.target.value.trim()) });
       const closed = params.get("closed") === "1";
       const switcher = h("label", { class: "check" }, h("input", { type: "checkbox", checked: closed, onchange: (e) => filter("closed", e.target.checked ? "1" : "") }), "Show closed");
       const query = new URLSearchParams({ limit: "100" });
       if (closed) issueGroups.forEach((s) => query.append("state", s));
-      for (const [name, value] of [["assignee", assignee.value], ["repository", repository.value], ["q", text.value.trim()]]) if (value) query.set(name, value);
+      for (const [name, value] of [["assignee", assignee.value], ["repository", repository.value], ["label", label.value], ["q", text.value.trim()]]) if (value) query.set(name, value);
       const groups = h("div", { class: "groups" });
       const more = h("button", { class: "button small", type: "button", hidden: true, onclick: () => load(next) }, "More issues");
       const loaded = [];
@@ -2044,7 +2224,7 @@
           return of.length ? h("section", { class: "panel" }, h("div", { class: "title" }, issueBadge(state), h("span", { class: "muted" }, String(of.length))),
             h("table", { class: "issues" }, h("tbody", {}, of.map((i) => issueRow(org, i))))) : null;
         }).filter(Boolean);
-        const filtered = params.get("assignee") || params.get("repository") || params.get("q");
+        const filtered = params.get("assignee") || params.get("repository") || params.get("label") || params.get("q");
         groups.replaceChildren(...(shown.length ? shown : [h("section", { class: "panel" }, h("p", {}, filtered ? "No issues match." : closed ? "No issues yet."
           : can("issues.write") ? "No open issues. Create the first." : "No open issues."))]));
       };
@@ -2062,25 +2242,27 @@
           more.disabled = false;
         }
       }
-      main.replaceChildren(h("div", { class: "row" }, h("h1", {}, "Issues"),
-        can("issues.write") ? h("a", { class: "button small primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null),
-      error, h("div", { class: "filters" }, assignee, repository, text, switcher), groups, h("div", {}, more));
+      main.replaceChildren(h("div", { class: "row" }, h("h1", {}, "Issues"), h("div", {},
+        h("a", { class: "button small", href: base + org.slug + "/issues/labels", "data-nav": "" }, "Labels"), " ",
+        can("issues.write") ? h("a", { class: "button small primary", href: base + org.slug + "/issues/new", "data-nav": "" }, "New issue") : null)),
+      error, h("div", { class: "filters" }, assignee, repository, label, text, switcher), groups, h("div", {}, more));
       await load("/orgs/" + org.slug + "/issues?" + query);
     }
 
     // issueRow is a list's row of an issue, as the design system's Issue row draws it: its priority, identifier and
-    // title, its repository, its assignee's avatar, and when it last changed.
+    // title, its labels and repository, its assignee's avatar, and when it last changed.
     const issueRow = (org, i) => h("tr", {}, h("td", { class: "priority" }, priorityIcon(i.priority)),
       h("td", { class: "key" }, h("a", { href: base + issuePath(org, i).slice(1), "data-nav": "" }, h("code", {}, i.identifier))),
       h("td", { class: "name" }, h("a", { class: "subject", href: base + issuePath(org, i).slice(1), "data-nav": "" }, i.title)),
-      h("td", { class: "meta" }, i.repository ? h("span", { class: "chip" }, i.repository.slug) : null, i.assignee ? avatar(i.assignee) : null),
+      h("td", { class: "meta" }, i.labels.map(labelChip), i.repository ? h("span", { class: "chip" }, i.repository.slug) : null, i.assignee ? avatar(i.assignee) : null),
       h("td", { class: "when muted" }, when(i.updatedAt)));
 
     // showNewIssue asks for a title, then the rest, as an issue's side column does, and creates the issue.
     async function showNewIssue(org, main) {
-      const { members, repositories } = await issueChoices(org);
+      const { members, repositories, labels } = await issueChoices(org);
       const error = h("p", { class: "alert", hidden: true });
       const title = h("input", { name: "title", required: true, maxlength: 200, placeholder: "Show pushes before the client returns" });
+      const picks = labelPicks(labels, []);
       const description = h("textarea", { name: "description", rows: 8, maxlength: 65536, placeholder: "What it is and why, in Markdown" });
       const state = stateSelect("backlog"), priority = prioritySelect("none"), assignee = assigneeSelect(members, null), repository = repositorySelect(repositories, null);
       const create = h("button", { class: "button primary", type: "submit" }, "Create");
@@ -2089,12 +2271,13 @@
           e.preventDefault();
           create.disabled = true;
           api("POST", "/orgs/" + org.slug + "/issues", { title: title.value, description: description.value, state: state.value, priority: priority.value,
-            assigneeId: assignee.value || undefined, repositoryId: repository.value || undefined })
+            assigneeId: assignee.value || undefined, repositoryId: repository.value || undefined, labelIds: pickedLabels(picks) })
             .then((i) => go(issuePath(org, i))).catch((err) => { create.disabled = false; error.textContent = err.message; error.hidden = false; });
         } },
           h("label", {}, "Title", title), h("label", {}, "Description", h("span", {}, "Markdown, as the Console renders a repository's."), description),
           h("div", { class: "fields" }, h("label", {}, "State", state), h("label", {}, "Priority", priority), h("label", {}, "Assignee", assignee),
             h("label", {}, "Repository", h("span", {}, "What it is about, if one thing."), repository)),
+          labels.length ? h("div", { class: "field" }, h("strong", {}, "Labels"), picks) : null,
           h("div", {}, create))));
       title.focus();
     }
@@ -2117,7 +2300,8 @@
       }
       if (issue.identifier !== identifier) return go(issuePath(org, issue), true);
       const write = can("issues.write");
-      const [events, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events), write ? issueChoices(org) : null]);
+      const [events, branches, choices] = await Promise.all([api("GET", path + "/activity").then((d) => d.events),
+        api("GET", path + "/branches").then((d) => d.branches), write ? issueChoices(org) : null]);
       const error = h("p", { class: "alert", hidden: true });
       const fail = (err) => { error.textContent = err.message; error.hidden = false; };
       const refresh = (message) => showIssue(org, main, can, issue.identifier, message);
@@ -2143,9 +2327,22 @@
         title.focus();
       }
       show();
+      const linked = h("section", { class: "panel" }, h("h3", {}, "Branches"), branches.length
+        ? h("ul", { class: "linked" }, branches.map((b) => issueBranchLine(org, b)))
+        : h("p", {}, "No branch works on it yet: push one whose name holds ", h("code", {}, issue.identifier.toLowerCase()), ", or link one from its page."));
       const activity = h("section", { class: "panel" }, h("h3", {}, "Activity"), h("ul", { class: "activity" }, events.flatMap(issueEventLines)));
       const notes = h("p", { class: "alert", hidden: !notice }, notice || "");
-      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+      main.replaceChildren(heading, notes, error, h("div", { class: "issue" }, h("div", { class: "column" }, body, linked, activity), issueSide(org, issue, can, choices, save, tag, fail)));
+    }
+
+    // issueBranchLine is a branch linked to an issue as a branch row: its repository and name, linked to its page while
+    // it lives, its status, and how it was linked.
+    function issueBranchLine(org, b) {
+      const name = h("code", {}, b.repository.slug + " / " + b.name);
+      const page = base + org.slug + "/" + b.repository.slug + "/branches/" + b.name.split("/").map(encodeURIComponent).join("/");
+      return h("li", {}, icon("git-branch"), b.deleted ? name : h("a", { href: page, "data-nav": "" }, name),
+        b.deleted ? h("span", { class: "chip" }, "deleted") : b.status ? branchBadge(b.status) : null,
+        h("span", { class: "muted" }, b.linkedBy === "name" ? "by its name" : "by hand"));
     }
 
     // issueSide is an issue's side column: its fields, each a select that saves at once for a viewer with issues.write
@@ -2166,10 +2363,25 @@
         field("Priority", choices && prioritySelect(issue.priority), (v) => ({ priority: v }), [priorityIcon(issue.priority), " ", issuePriorities[issue.priority].word]),
         field("Assignee", choices && assigneeSelect(choices.members, issue.assignee), (v) => ({ assigneeId: v || null }), issue.assignee ? issue.assignee.displayName : "Nobody"),
         field("Repository", choices && repositorySelect(choices.repositories, issue.repository), (v) => ({ repositoryId: v || null }), issue.repository ? h("code", {}, issue.repository.slug) : "None"),
+        issueLabelsField(org, issue, choices, save),
         h("dl", { class: "facts" }, h("dt", {}, "Created by"), h("dd", {}, issue.createdBy ? issue.createdBy.displayName : "Someone since gone"),
           h("dt", {}, "Created"), h("dd", {}, whenExactly(issue.createdAt)), issue.closedAt ? [h("dt", {}, "Closed"), h("dd", {}, whenExactly(issue.closedAt))] : null),
         h("div", { class: "branch-name" }, h("h3", {}, "Branch name"), h("p", {}, "Its identifier and title, for the branch that works on it."), h("div", { class: "row" }, code, copy)),
         can("issues.manage") ? h("div", {}, h("button", { class: "button small danger", type: "button", onclick: remove }, "Delete")) : null);
+    }
+
+    // issueLabelsField is the side column's labels: boxes to tick, each saving at once, for a viewer with issues.write,
+    // and the labels it carries otherwise.
+    function issueLabelsField(org, issue, choices, save) {
+      if (!choices) return h("div", { class: "field" }, h("strong", {}, "Labels"), issue.labels.length ? h("div", { class: "label-picks" }, issue.labels.map(labelChip)) : h("span", { class: "fact" }, "None"));
+      if (!choices.labels.length) return h("div", { class: "field" }, h("strong", {}, "Labels"), h("span", { class: "fact" }, "The organization has no ",
+        h("a", { href: base + org.slug + "/issues/labels", "data-nav": "" }, "labels"), " yet."));
+      const picks = labelPicks(choices.labels, issue.labels.map((l) => l.id));
+      picks.addEventListener("change", () => {
+        picks.querySelectorAll("input").forEach((i) => { i.disabled = true; });
+        save({ labelIds: pickedLabels(picks) });
+      });
+      return h("div", { class: "field" }, h("strong", {}, "Labels"), picks);
     }
 
     // issueEventLines are an event of an issue's activity as lines: who did it, what, and when; one line per field a
@@ -2177,6 +2389,11 @@
     function issueEventLines(e) {
       const line = (...what) => h("li", {}, h("span", {}, h("strong", {}, e.actor ? e.actor.displayName : "Someone since gone"), " ", ...what), h("span", { class: "muted" }, whenExactly(e.at)));
       if (e.kind === "issue.created") return [line("created it")];
+      if (e.kind === "issue.branch_linked" || e.kind === "issue.branch_unlinked") {
+        const b = e.branch;
+        const what = b && b.name ? h("code", {}, b.repository + " / " + b.name) : "a branch of a repository you don't read";
+        return [line(e.kind === "issue.branch_linked" ? "linked " : "unlinked ", what, b && b.linkedBy === "name" ? " by its name" : "")];
+      }
       if (e.kind !== "issue.changed") return [line(h("code", {}, e.kind))];
       return e.changes.map((c) => line(...issueChangeWords(c)));
     }
@@ -2192,8 +2409,53 @@
         case "priority": return ["changed its priority from ", word(issuePriorities, c.from), " to ", word(issuePriorities, c.to)];
         case "assignee": return c.to ? (c.from ? ["reassigned it from ", c.from, " to ", c.to] : ["assigned it to ", c.to]) : ["unassigned ", c.from || "it"];
         case "repository": return c.to ? ["made it about ", h("code", {}, c.to)] : c.from ? ["made it about no repository instead of ", h("code", {}, c.from)] : ["changed its repository"];
+        case "labels": return c.to ? (c.from ? ["changed its labels from ", c.from, " to ", c.to] : ["labeled it ", c.to]) : ["took off its labels ", c.from || ""];
       }
       return ["changed its ", c.field];
+    }
+
+    // showLabels lists the organization's labels by name, each with what it is for and the issues that carry it; for a
+    // viewer with issues.manage, each row edits or deletes its label from the version shown, and a form adds one.
+    async function showLabels(org, main, can, notice) {
+      const path = "/orgs/" + org.slug + "/labels";
+      const labels = (await api("GET", path)).labels;
+      const manage = can("issues.manage");
+      const error = h("p", { class: "alert", hidden: true });
+      const fail = (err) => { error.textContent = err.message; error.hidden = false; };
+      const refresh = (message) => showLabels(org, main, can, message);
+      const stale = (err) => (err.status === 412 ? refresh("Someone changed it meanwhile: here it is as they left it. Make your change again.") : fail(err));
+      const issuesOf = (l) => h("a", { href: base + org.slug + "/issues?closed=1&label=" + l.id, "data-nav": "" }, l.issues === 1 ? "1 issue" : l.issues + " issues");
+      const row = (l) => {
+        const tr = h("tr", {}, h("td", {}, labelChip(l)), h("td", { class: "what" }, l.description), h("td", { class: "count" }, issuesOf(l)),
+          manage ? h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: () => tr.replaceWith(editRow(l)) }, "Edit"), " ",
+            h("button", { class: "button small danger", type: "button", onclick: () => remove(l) }, "Delete")) : null);
+        return tr;
+      };
+      const remove = (l) => {
+        if (!confirm("Delete the label " + l.name + "?" + (l.issues ? " It comes off " + (l.issues === 1 ? "its issue." : "its " + l.issues + " issues.") : ""))) return;
+        api("DELETE", path + "/" + l.id, undefined, { "If-Match": '"' + l.version + '"' }).then(() => refresh()).catch(stale);
+      };
+      const fields = (l) => [h("input", { name: "name", required: true, maxlength: 50, value: l ? l.name : "", "aria-label": "Name", placeholder: "Name" }),
+        colorSelect(l ? l.color : "gray"), h("input", { name: "description", maxlength: 200, value: l ? l.description : "", "aria-label": "Description", placeholder: "What it is for" })];
+      const editRow = (l) => {
+        const [name, color, description] = fields(l);
+        return h("tr", {}, h("td", { colspan: 4 }, h("form", { onsubmit: (e) => {
+          e.preventDefault();
+          api("PATCH", path + "/" + l.id, { name: name.value, color: color.value, description: description.value },
+            { "Content-Type": "application/merge-patch+json", "If-Match": '"' + l.version + '"' }).then(() => refresh()).catch(stale);
+        } }, name, color, description, h("div", {}, h("button", { class: "button small primary", type: "submit" }, "Save"), " ",
+          h("button", { class: "button small", type: "button", onclick: () => refresh() }, "Cancel")))));
+      };
+      const [name, color, description] = fields(null);
+      const add = manage ? h("section", { class: "panel" }, h("h3", {}, "New label"), h("form", { class: "labels-new", onsubmit: (e) => {
+        e.preventDefault();
+        api("POST", path, { name: name.value, color: color.value, description: description.value }).then(() => refresh()).catch(fail);
+      } }, h("div", { class: "fields" }, h("label", {}, "Name", name), h("label", {}, "Colour", color), h("label", {}, "Description", description)),
+        h("div", {}, h("button", { class: "button primary", type: "submit" }, "Create")))) : null;
+      main.replaceChildren(h("div", { class: "heading" }, h("p", {}, h("a", { href: base + org.slug + "/issues", "data-nav": "" }, "Issues"), " / labels"), h("h1", {}, "Labels")),
+        h("p", { class: "alert", hidden: !notice }, notice || ""), error,
+        h("section", { class: "panel" }, labels.length ? h("table", { class: "labels-table" }, h("tbody", {}, labels.map(row)))
+          : h("p", {}, manage ? "No labels yet. Create the first below." : "No labels yet.")), ...(add ? [add] : []));
     }
 
     function notFound(slug) {
@@ -2604,7 +2866,47 @@
         h("div", {}, older)));
     }
 
-    async function showSettings(org, main) {
+    // showSettings is an organization's usage against its limits, for anyone who reads it, and, with org.manage, the
+    // form that changes its settings.
+    async function showSettings(org, main, can) {
+      const usage = await api("GET", "/orgs/" + org.slug + "/usage");
+      const sections = [h("h1", {}, "Settings"), usagePanel(org, usage)];
+      if (can("org.manage")) sections.push(...settingsForm(org));
+      main.replaceChildren(...sections);
+    }
+
+    // bytes is a size in binary units, as limits are written: 1 GiB, 2.5 MiB.
+    const bytes = (n) => size(n).replace(".0 ", " ");
+
+    // gauge is one limit's usage: what is used against the limit, on a meter that warns at 90% and turns to danger at
+    // the limit; a limit of 0 caps nothing, and shows no meter.
+    function gauge(label, usage, format) {
+      const head = h("div", { class: "row" }, h("strong", {}, label),
+        h("span", {}, usage.limit ? format(usage.used) + " of " + format(usage.limit) : format(usage.used) + " · no limit"));
+      if (!usage.limit) return h("div", { class: "gauge" }, head);
+      const share = usage.used / usage.limit;
+      const tone = share >= 1 ? "danger" : share >= 0.9 ? "warning" : "";
+      const meter = h("div", { class: "meter", role: "meter", "aria-label": label, "aria-valuemin": "0", "aria-valuemax": String(usage.limit),
+        "aria-valuenow": String(usage.used), "data-tone": tone }, h("span", { style: "width: " + Math.min(100, share * 100).toFixed(1) + "%" }));
+      const note = tone === "danger" ? "At its limit: what would add more is refused. An administrator can raise it."
+        : tone === "warning" ? "Near its limit." : null;
+      return h("div", { class: "gauge" }, head, meter, note ? h("span", { class: "muted" }, note) : null);
+    }
+
+    // usagePanel is what the organization takes of what its limits cap, with each repository the viewer reads and its
+    // Git data, largest first.
+    function usagePanel(org, usage) {
+      const list = [...usage.byRepository].sort((a, b) => b.gitData - a.gitData || a.slug.localeCompare(b.slug));
+      const unread = usage.repositories.used - list.length;
+      const row = (r) => h("tr", {}, h("td", {}, h("a", { href: base + org.slug + "/" + r.slug, "data-nav": "" }, r.name)), h("td", { class: "number" }, bytes(r.gitData)));
+      return h("section", { class: "panel" }, h("h3", {}, "Usage"),
+        gauge("Repositories", usage.repositories, String), gauge("Git data", usage.gitData, bytes),
+        list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", { class: "number" }, "Git data"))), h("tbody", {}, list.map(row))) : null,
+        unread > 0 ? h("p", { class: "muted" }, (unread === 1 ? "1 repository you can't read counts" : unread + " repositories you can't read count") + " toward these too.") : null);
+    }
+
+    // settingsForm changes the organization's name, slug, membership role, join requests and identity providers.
+    function settingsForm(org) {
       const error = h("p", { class: "alert", hidden: true });
       const saved = h("p", { class: "notice", hidden: true }, "Saved.");
       const name = h("input", { name: "name", required: true, value: org.name });
@@ -2637,7 +2939,7 @@
           "A change renames every issue; links to the old identifiers still open them."), issueKey),
         h("label", {}, "Identity providers", h("span", {}, "The providers members may sign in with, by ID, comma-separated; empty for all of this installation's."), providers),
         h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
-      main.replaceChildren(h("h1", {}, "Settings"), error, saved, h("section", { class: "panel" }, form));
+      return [error, saved, h("section", { class: "panel" }, form)];
     }
   </script>
 </body>

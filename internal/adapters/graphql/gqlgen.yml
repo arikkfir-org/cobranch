@@ -17,8 +17,11 @@ resolver:
 omit_gqlgen_version_in_file_notice: true
 skip_mod_tidy: true
 models:
+  Int64:
+    model: github.com/99designs/gqlgen/graphql.Int64
   User:
     fields:
+      usage: { resolver: true }
       sessions: { resolver: true }
       personalTokens: { resolver: true }
       sshKeys: { resolver: true }
@@ -36,15 +39,23 @@ models:
       apiKeys: { resolver: true }
       repositories: { resolver: true }
       repository: { resolver: true }
+      usage: { resolver: true }
       issues: { resolver: true }
       issue: { resolver: true }
       agents: { resolver: true }
       agent: { resolver: true }
       tasks: { resolver: true }
       task: { resolver: true }
+      labels: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
+      branches: { resolver: true }
+  # code.go's, which knows the repository its issue resolves from.
+  Branch:
+    model: cobranch.dev/internal/adapters/graphql.Branch
+    fields:
+      issue: { resolver: true }
   # A null clears an issue's assignee or repository; a field left out keeps it.
   IssuePatch:
     fields:
@@ -64,6 +75,8 @@ models:
       tags: { resolver: true }
       tree: { resolver: true }
       blob: { resolver: true }
-      chat: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }
+      chat: { resolver: true }
+      branchDiff: { resolver: true }
+      commitDiff: { resolver: true }
