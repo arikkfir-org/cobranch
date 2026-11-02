@@ -1019,7 +1019,7 @@
             "null"
           ],
           "minimum": 0,
-          "description": "The organizations a user creates for themselves; 0 caps nothing, null takes the built-in default."
+          "description": "The organizations a user creates for themselves; 0 caps nothing; null, the Back-office's setting (the built-in default until an administrator changes it)."
         },
         "repositoriesPerOrganization": {
           "type": [
@@ -1027,7 +1027,7 @@
             "null"
           ],
           "minimum": 0,
-          "description": "The repositories an organization holds; 0 caps nothing, null takes the built-in default."
+          "description": "The repositories an organization holds; 0 caps nothing; null, the Back-office's setting (the built-in default until an administrator changes it)."
         },
         "gitDataPerOrganization": {
           "type": [
@@ -1038,7 +1038,7 @@
           "pattern": "^(0|[1-9][0-9]*(Ki|Mi|Gi|Ti)?)$",
           "minimum": 0,
           "maximum": 0,
-          "description": "The Git data an organization stores, such as 5Gi; 0 caps nothing, null takes the built-in default."
+          "description": "The Git data an organization stores, such as 5Gi; 0 caps nothing; null, the Back-office's setting (the built-in default until an administrator changes it)."
         }
       }
     }

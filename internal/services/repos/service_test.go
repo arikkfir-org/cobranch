@@ -502,3 +502,65 @@ func TestCreateHeldToLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestUsage(t *testing.T) {
+	broken := errors.New("broken")
+	tests := []struct {
+		name    string
+		viewer  func(*fixture) repos.Viewer
+		limits  *orgLimits
+		want    func(*fixture) repos.Usage
+		wantErr error
+	}{
+		{name: "an Owner sees every repository's Git data", viewer: func(f *fixture) repos.Viewer { return f.olivia },
+			limits: &orgLimits{Limits: limits.Limits{RepositoriesPerOrganization: 100, GitDataPerOrganization: 1 << 30}},
+			want: func(f *fixture) repos.Usage {
+				return repos.Usage{Repositories: limits.Quota{Used: 2, Limit: 100}, GitData: limits.Quota{Used: 3000, Limit: 1 << 30},
+					ByRepository: []repos.RepositoryUsage{{Repository: f.secret, GitData: 2000}, {Repository: f.website, GitData: 1000}}}
+			}},
+		{name: "a member sees the totals, and only the repositories they read", viewer: func(f *fixture) repos.Viewer { return f.max },
+			limits: &orgLimits{Limits: limits.Limits{RepositoriesPerOrganization: 2, GitDataPerOrganization: 2500}},
+			want: func(f *fixture) repos.Usage {
+				return repos.Usage{Repositories: limits.Quota{Used: 2, Limit: 2}, GitData: limits.Quota{Used: 3000, Limit: 2500},
+					ByRepository: []repos.RepositoryUsage{{Repository: f.website, GitData: 1000}}}
+			}},
+		{name: "a Guest reads no repository", viewer: func(f *fixture) repos.Viewer { return f.gwen }, limits: &orgLimits{},
+			want: func(*fixture) repos.Usage {
+				return repos.Usage{Repositories: limits.Quota{Used: 2}, GitData: limits.Quota{Used: 3000}, ByRepository: []repos.RepositoryUsage{}}
+			}},
+		{name: "a service without limits caps nothing", viewer: func(f *fixture) repos.Viewer { return f.max },
+			want: func(f *fixture) repos.Usage {
+				return repos.Usage{Repositories: limits.Quota{Used: 2}, GitData: limits.Quota{Used: 3000},
+					ByRepository: []repos.RepositoryUsage{{Repository: f.website, GitData: 1000}}}
+			}},
+		{name: "outsiders don't learn the organization exists", viewer: func(f *fixture) repos.Viewer { return f.nia }, wantErr: repos.ErrNotFound},
+		{name: "the limits can't be read", viewer: func(f *fixture) repos.Viewer { return f.olivia }, limits: &orgLimits{err: broken}, wantErr: broken},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			if tt.limits != nil {
+				f.service.WithLimits(*tt.limits)
+			}
+			f.store.GitData[f.website.ID], f.store.GitData[f.secret.ID] = 1000, 2000
+			got, err := f.service.Usage(t.Context(), tt.viewer(f), f.acme.ID)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Usage() = %v, want %v", err, tt.wantErr)
+			}
+			if tt.want == nil {
+				return
+			}
+			if want := tt.want(f); !sameUsage(got, want) {
+				t.Errorf("Usage() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
+// sameUsage compares usages by their quotas and their repositories' IDs and Git data.
+func sameUsage(a, b repos.Usage) bool {
+	return a.Repositories == b.Repositories && a.GitData == b.GitData &&
+		slices.EqualFunc(a.ByRepository, b.ByRepository, func(x, y repos.RepositoryUsage) bool {
+			return x.Repository.ID == y.Repository.ID && x.GitData == y.GitData
+		})
+}

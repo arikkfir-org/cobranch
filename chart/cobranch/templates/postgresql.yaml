@@ -36,8 +36,9 @@ spec:
       {{- include "cobranch.selectorLabels" $component | nindent 6 }}
   template:
     metadata:
+      # Without the chart's version and app version: an upgrade that leaves PostgreSQL as it was doesn't restart it.
       labels:
-        {{- include "cobranch.labels" $component | nindent 8 }}
+        {{- include "cobranch.stableLabels" $component | nindent 8 }}
       {{- with $values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
