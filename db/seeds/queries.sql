@@ -57,3 +57,10 @@ INSERT INTO labels (id, org_id, name, color, description) VALUES (@id, @org_id, 
 
 -- name: InsertSeedIssueLabel :exec
 INSERT INTO issue_labels (issue_id, label_id) VALUES ($1, $2);
+
+-- name: InsertSeedChatThread :exec
+INSERT INTO chat_threads (id, org_id, issue_id, created_by, resolved_at, resolved_by)
+VALUES (@id, @org_id, @issue_id, @created_by, CASE WHEN sqlc.narg(resolved_by)::uuid IS NOT NULL THEN now() END, sqlc.narg(resolved_by));
+
+-- name: InsertSeedChatMessage :exec
+INSERT INTO chat_messages (id, thread_id, org_id, author_id, body) VALUES (@id, @thread_id, @org_id, @author_id, @body);
