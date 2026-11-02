@@ -69,6 +69,53 @@ func (q *Queries) CommitsAt(ctx context.Context, repoID uuid.UUID, shas []string
 	return items, nil
 }
 
+const deletedBranch = `-- name: DeletedBranch :one
+SELECT b.id, b.name, b.head, b.created_at, b.deleted_at, b.deleted_by, d.display_name AS deleted_by_name,
+    b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+FROM branches b
+LEFT JOIN principals d ON d.id = b.deleted_by
+LEFT JOIN principals m ON m.id = b.merged_by
+WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM branches l WHERE l.repo_id = $1 AND l.name = $2 AND l.deleted_at IS NULL)
+ORDER BY b.deleted_at DESC
+LIMIT 1
+`
+
+type DeletedBranchRow struct {
+	ID            uuid.UUID
+	Name          string
+	Head          string
+	CreatedAt     time.Time
+	DeletedAt     *time.Time
+	DeletedBy     *uuid.UUID
+	DeletedByName *string
+	MergedHead    *string
+	MergedBy      *uuid.UUID
+	MergedByName  *string
+	MergedAt      *time.Time
+}
+
+// DeletedBranch reads the latest deletion of a repository's branch of a name, with the display names of the
+// principals who merged and deleted it; none while a branch of that name is live.
+func (q *Queries) DeletedBranch(ctx context.Context, repoID uuid.UUID, name string) (DeletedBranchRow, error) {
+	row := q.db.QueryRow(ctx, deletedBranch, repoID, name)
+	var i DeletedBranchRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Head,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.DeletedBy,
+		&i.DeletedByName,
+		&i.MergedHead,
+		&i.MergedBy,
+		&i.MergedByName,
+		&i.MergedAt,
+	)
+	return i, err
+}
+
 const firstParents = `-- name: FirstParents :many
 WITH RECURSIVE line (sha, next, depth) AS (
     SELECT s.sha, s.parents[1], 1 FROM commits s WHERE s.repo_id = $1 AND s.sha = $2

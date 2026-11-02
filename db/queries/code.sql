@@ -16,6 +16,19 @@ FROM branches b LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.br
 LEFT JOIN principals m ON m.id = b.merged_by
 WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
 
+-- DeletedBranch reads the latest deletion of a repository's branch of a name, with the display names of the
+-- principals who merged and deleted it; none while a branch of that name is live.
+-- name: DeletedBranch :one
+SELECT b.id, b.name, b.head, b.created_at, b.deleted_at, b.deleted_by, d.display_name AS deleted_by_name,
+    b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at
+FROM branches b
+LEFT JOIN principals d ON d.id = b.deleted_by
+LEFT JOIN principals m ON m.id = b.merged_by
+WHERE b.repo_id = @repo_id AND b.name = @name AND b.deleted_at IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM branches l WHERE l.repo_id = @repo_id AND l.name = @name AND l.deleted_at IS NULL)
+ORDER BY b.deleted_at DESC
+LIMIT 1;
+
 -- CommitsAt finds those of a repository's commits that shas name, with the display names of the principals behind
 -- their authors and committers.
 -- name: CommitsAt :many

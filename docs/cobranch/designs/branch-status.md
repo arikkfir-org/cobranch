@@ -2,23 +2,26 @@
 
 > **Snapshot.** This design lives in its [branch status and merges
 > page](https://claude.ai/artifact/2NuiCJYpPVGGqX78b47dMH), linked with Cobranch's other designs; this file is generated
-> from it, with its diagrams, as of 2026-11-01, and synced again once Cobranch's shape settles.
+> from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
 
-**Status**: Proposed 2026-11-01 · [ENG-199](https://linear.app/arikkfir/issue/ENG-199) · Builds the [product’s
-branches](product.md#branches) on [Git hosting](git-hosting.md) · Adds no workload and no chart value · Built by
-[ENG-199](https://linear.app/arikkfir/issue/ENG-199), in four pull requests
+**Status**: Proposed 2026-11-01, deletion 2026-11-02 · [ENG-199](https://linear.app/arikkfir/issue/ENG-199) ·
+[ENG-241](https://linear.app/arikkfir/issue/ENG-241) · Builds the [product’s branches](product.md#branches) on [Git
+hosting](git-hosting.md) · Adds no workload and no chart value · Built by
+[ENG-199](https://linear.app/arikkfir/issue/ENG-199), in four pull requests; deleting branches by
+[ENG-241](https://linear.app/arikkfir/issue/ENG-241)
 
 A branch is a request to merge into `main`: principals set annotations on its commits, `main`’s `/cobranch.yaml` names
 the annotations a merge needs and whether history stays linear, the push worker computes each branch’s status after
-every push, and a principal merges a Ready branch by pushing it into `main` or by asking Cobranch, which records who
-did.
+every push, a principal merges a Ready branch by pushing it into `main` or by asking Cobranch, which records who did,
+and a merged branch is deleted the same two ways.
 
 ## Scope
 
 How a branch becomes a request to merge ([ENG-199](https://linear.app/arikkfir/issue/ENG-199)): annotations that
 principals set on commits, merge requirements that name the annotations a merge needs and whether history stays linear,
 a status the push worker computes for every branch, and an explicit merge, by a push into the base or by asking
-Cobranch. The [product design](product.md#branches) fixed the five statuses and their order, and the
+Cobranch; and how a merged branch is deleted ([ENG-241](https://linear.app/arikkfir/issue/ENG-241)), the same two ways.
+The [product design](product.md#branches) fixed the five statuses and their order, and the
 [architecture](architecture.md#merges-and-settings-take-the-same-road) that every ref change goes through the Git
 server's push transaction; this page builds them on [Git hosting](git-hosting.md#a-push), and names what it adds and
 changes.
@@ -29,7 +32,7 @@ changes.
 
 Every later slice reads what this one computes: a branch’s status, the checks behind it, and who merged it.
 
-Choices beyond the agreed designs are collected under [Decisions](#decisions), and two questions for the owner under
+Choices beyond the agreed designs are collected under [Decisions](#decisions), and three questions for the owner under
 [Open questions](#open-questions).
 
 ## Annotations
@@ -249,6 +252,77 @@ a client’s stale push is refused; nothing changed, so asking again is safe.
 | 409 `merge.refused` | The push the merge records breaks a rule, such as a `/cobranch.yaml` that doesn't parse, or a branch that turned Blocked while the Git server built the merge |
 | 503 `git.unavailable` | The installation runs no Git server |
 
+## Deleting a branch
+
+A merged branch has done its job, and left on the list it crowds the branches still in work. Deleting it takes it off
+the repository's branch list and keeps everything it brought: its commits, their annotations and its merge stay in
+`main`'s history ([ENG-241](https://linear.app/arikkfir/issue/ENG-241)). Cobranch deletes a branch as Git does, by a
+push that deletes its ref, so a deletion asked of Cobranch and a `git push --delete` are one kind of event, recorded and
+followed the same way.
+
+**Deleting a branch through Cobranch is a push of its ref to nothing, which the Git server records for the requester**
+
+![Deleting a branch through Cobranch is a push of its ref to nothing, which the Git server records for the requester](branch-status/api-delete.svg)
+
+No snapshot, no objects: a deletion brings nothing and changes no other branch’s facts. A branch that moved since the
+page read it fails the compare-and-swap, and the request answers 412; nothing changed.
+
+- **`repo.push` deletes a branch,** as it does through `git push --delete`; a branch that `/cobranch.yaml` names under
+  `branches` needs `repo.bypass` too, as [a push](#by-a-push) does. `main` is never deleted through Cobranch's APIs.
+  Deleting someone else's branch takes nothing more: Git never asked more, and the record names who did it.
+- **Only at the head the requester saw.** REST's `DELETE` names that head in `If-Match`, quoted, and answers 412 once
+  the branch moved from it, 428 without the header; `If-Match: *` deletes it wherever it is: when it moves while the Git
+  server records the deletion, the API reads it again and deletes it at its new head, up to three times, and answers 412
+  only once it kept moving. GraphQL's `expectedHead` does the same, refusing with CONFLICT `branch.moved`, and is
+  optional there, as `expectedVersion` is.
+- **The Git server records it,** on an internal call beside the merge's (`POST …/delete`), for the requester alone: a
+  push of one ref update, from the head to nothing, transport `api`, through the same transaction and checks as a
+  client's push, which compares the head and the requirements again. It reads no snapshot: a deletion brings no objects
+  and changes no other branch's facts.
+- **The branch keeps its row:** its name, head, status and merge, with when it was deleted and by whom. The push records
+  the same, and event `repo.pushed` names the deleted ref.
+- **Then as any push.** The push worker processes it as it processes a client's, and whatever follows a push that
+  deletes a branch, such as a job that runs on its deletion ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)) or
+  the teardown of its environments ([ENG-218](https://linear.app/arikkfir/issue/ENG-218)), follows this one too.
+- **A merge's record outlives its branch.** A merge and a deletion asked in the same moment leave the push worker to
+  process the merge after the branch is gone; the push keeps the IDs of the branches it merged, not only their names, so
+  the merge is still recorded on the deleted branch's row.
+- **Any branch but `main` may be deleted,** merged or not, as with Git. Its commits stay in the repository's objects,
+  which maintenance keeps reachable or not, but once no ref reaches them no clone fetches them, so the Console asks
+  harder before it deletes a branch with commits `main` lacks.
+
+| The requester sees | When |
+| --- | --- |
+| 204 No Content | The push that deletes it is committed |
+| 403 `auth.forbidden` | The requester lacks `repo.push`, or `repo.bypass` for a branch `/cobranch.yaml` names |
+| 404 `branch.not_found` | No live branch has that name |
+| 409 `branch.default` | The branch is `main` |
+| 409 `branch.refused` | The push that deletes it breaks a rule, such as a branch under `cobranch/`, which only Cobranch writes |
+| 412 `precondition.failed` | The branch moved from the head `If-Match` names |
+| 428 `precondition.required` | No `If-Match` |
+| 503 `git.unavailable` | The installation runs no Git server |
+
+### In the Console
+
+**The Console offers Delete branch to those who may push, and asks harder when commits would be left behind**
+
+![The Console offers Delete branch to those who may push, and asks harder when commits would be left behind](branch-status/delete-console.svg)
+
+A branch of that name pushed again later is a new branch, and its page shows it instead.
+
+- **A branch's page** offers Delete branch to a viewer who may delete it: a plain confirmation on a Merged or Empty
+  branch, and on any other a danger button whose confirmation names how many commits `main` lacks. It deletes at the
+  head the page shows.
+- **Merging offers to delete in the same step:** Delete the branch once merged, checked by default, next to the Merge
+  button. The Console merges, then deletes the branch at the head it merged; a branch that moved in between is kept, and
+  the merge stands.
+- **The deleted branch's page** says who deleted it and when, the head it was at, linked to that commit, and its merge,
+  linked to `main`'s history. It reads the latest deletion of a branch of that name, `GET …/deleted-branches/{branch}`,
+  since `GET …/branches/{branch}` answers only for a live one.
+- **Later:** deleting merged branches automatically, a setting in `/cobranch.yaml` once its parser
+  ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)) lands; a list of recently deleted branches; restoring one at
+  its head; deleting merged branches in bulk from the branch list.
+
 ## The Console
 
 **The Console shows status where branches are listed, and why on each branch’s page**
@@ -278,9 +352,13 @@ Branch names carry `/`; the Console takes the rest of the path after `branches/`
 | `DELETE /commits/{sha}/annotations/{name}` | `deleteAnnotation` | `annotations.write`, or `annotations.delete_any` for another's |
 | `GET /branches`, `GET /branches/{branch}` | `Repository.branches`, `Repository.branch` | `repo.read` |
 | `POST /branches/{branch}/merge` | `mergeBranch` | `repo.merge`, and `repo.bypass` unless Ready |
+| `DELETE /branches/{branch}` | `deleteBranch` | `repo.push`, and `repo.bypass` for a branch `/cobranch.yaml` names |
+| `GET /deleted-branches/{branch}` | `Repository.deletedBranch` | `repo.read` |
 
 A name or a branch with a `/` travels escaped in a path, as `ci%2Fbuild`. A branch carries its base, status, checks,
-ahead and behind counts, and its merge: who, when and which head; `main` carries its merge requirements instead.
+ahead and behind counts, and its merge: who, when and which head; `main` carries its merge requirements instead. A
+deleted branch carries its head and that commit, when it was created, its merge, and when it was deleted and by whom;
+its base, status, checks and counts went with it.
 
 ## Data model
 
@@ -307,6 +385,8 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
   repository's next push works out their facts, and branches merged before it show Empty, since no merge of theirs was
   recorded.
 - **A repository adopts requirements** by pushing a `/cobranch.yaml` with a `branches` key into `main`.
+- **Deleting branches ([ENG-241](https://linear.app/arikkfir/issue/ENG-241)) comes in one pull request,** its APIs, the
+  Git server's part and the Console's together. Branches deleted before it show no one as their deleter.
 
 ## Risks
 
@@ -338,6 +418,14 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
 | An API merge is a merge commit or a fast-forward, never a rebase; linear history merges by fast-forward | A Ready branch contains its base's tip, so a fast-forward always keeps history linear | Changed |
 | A push into a branch with merge requirements must bring only Ready branches' commits, merges aside; `repo.bypass` skips it, with event `branch.bypassed` | The architecture's accepted pushes, now with the status to check | Agreed |
 | Reviews, path rules, stacked branches and the Console's editing of `/cobranch.yaml` come later | Keeps this slice to its issue | Proposed |
+| Deleting a branch through Cobranch is a push of its ref to nothing, which the Git server records for the requester, transport `api` | Whatever follows a deletion sees one kind of event; every ref change goes through the push's transaction | Proposed |
+| It takes `repo.push`, and `repo.bypass` for a branch `/cobranch.yaml` names, and nothing more for someone else's branch | What `git push --delete` takes; the record names who did it | Proposed |
+| `If-Match` names the branch's head, quoted, and is required; `*` deletes it wherever it is | A branch moves by its head; its status changes under the same head, so a tag of the whole branch would refuse a deletion each time the push worker finished | Proposed |
+| Any branch but `main` may be deleted; the Console asks harder for one with commits `main` lacks | Git deletes unmerged branches too, and maintenance keeps their objects | Proposed |
+| Merging and deleting stay two requests, which the Console makes in one step | Each answers on its own: a branch that moved after its merge is kept, and the merge stands | Proposed |
+| A push keeps the IDs of the branches it merged, and the push worker records a merge on that row, deleted or not | A merge and a deletion asked together would otherwise lose the merge | Proposed |
+| The deleted branch's page reads `GET …/deleted-branches/{branch}`, the latest deletion of that name | `GET …/branches/{branch}` keeps answering 404 for a branch that isn't live, as its clients expect | Proposed |
+| Deleting merged branches automatically waits for `/cobranch.yaml`'s parser ([ENG-214](https://linear.app/arikkfir/issue/ENG-214)) | One parser for the file | Proposed |
 
 ## Open questions
 
@@ -345,5 +433,8 @@ Nothing changes for an operator: no chart value is added, and a repository opts 
    own API and Console control; the column and the requirements keyed by name already allow it later.
 2. **No rebase in Cobranch's merge?** Recommended: yes. A Ready branch always fast-forwards, so linear history needs no
    rebase; rebasing a branch onto its base can come as an action of its own.
+3. **Does merging in the Console delete the branch by default?** Recommended: yes, the checkbox checked. Every commit of
+   a merged branch is in `main`, so deleting it loses nothing, and a branch someone means to keep working on is one
+   click away from staying.
 
 Cobranch is a Kfirs project, created by Arik Kfir.

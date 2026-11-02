@@ -393,7 +393,7 @@ type Annotation struct {
 	Link string `json:"link"`
 	Name string `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// StartedAt When its run started, when it was set or when it last went back from failed or successful to pending or in_progress.
@@ -535,7 +535,7 @@ type BranchMerge struct {
 	// At When Cobranch recorded the push.
 	At time.Time `json:"at"`
 
-	// By Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	// By Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 	By *Principal `json:"by,omitempty"`
 
 	// Head The head it brought into the base.
@@ -570,6 +570,26 @@ type Commit struct {
 	// Signature Its signature as written, not checked yet; empty for an unsigned commit.
 	Signature string `json:"signature"`
 	Tree      string `json:"tree"`
+}
+
+// DeletedBranch The latest deletion of a branch of a name, which keeps what it was at and its merge.
+type DeletedBranch struct {
+	// Commit A commit a push brought, as the push recorded it. A branch's commit leaves it out while the branch's head is no commit a push recorded.
+	Commit    *Commit   `json:"commit,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	DeletedAt time.Time `json:"deletedAt"`
+
+	// DeletedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
+	DeletedBy *Principal `json:"deletedBy,omitempty"`
+
+	// Head The object it was at when deleted.
+	Head string `json:"head"`
+
+	// Merge The last merge recorded of a branch into its base, which a push made; left out when none was. The branch is merged while its head is the merge's.
+	Merge *BranchMerge `json:"merge,omitempty"`
+
+	// Name Its name, without refs/heads/.
+	Name string `json:"name"`
 }
 
 // Email defines model for Email.
@@ -748,7 +768,7 @@ type Person struct {
 	Email string    `json:"email"`
 	Name  string    `json:"name"`
 
-	// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	// Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Zone The zone the commit wrote its time in, such as +0200.
@@ -793,7 +813,7 @@ type PersonalTokenInput struct {
 	Permissions *[]string `json:"permissions,omitempty"`
 }
 
-// Principal Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+// Principal Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 type Principal struct {
 	DisplayName string             `json:"displayName"`
 	Id          openapi_types.UUID `json:"id"`
@@ -826,14 +846,14 @@ type Push struct {
 	At time.Time          `json:"at"`
 	Id openapi_types.UUID `json:"id"`
 
-	// Pusher Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	// Pusher Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 	Pusher *Principal `json:"pusher,omitempty"`
 
-	// Transport How the push came; api for a merge asked of Cobranch.
+	// Transport How the push came; api for a merge or a branch deletion asked of Cobranch.
 	Transport PushTransport `json:"transport"`
 }
 
-// PushTransport How the push came; api for a merge asked of Cobranch.
+// PushTransport How the push came; api for a merge or a branch deletion asked of Cobranch.
 type PushTransport string
 
 // Repository One of an organization's Git repositories, with what the viewer may do there. Every repository opens on main, its default branch, which nobody changes.
@@ -905,7 +925,7 @@ type Review struct {
 	// Person Whether its reviewer is a person, whose approvals count towards a branch's required approvals; agents' and API keys' don't.
 	Person bool `json:"person"`
 
-	// Reviewer Who is behind a commit's author or committer, a push, an annotation, a review or a merge; absent from a person until the push worker maps their email, and from a push, an annotation, a review or a merge once its principal is gone.
+	// Reviewer Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion; absent from a person until the push worker maps their email, and from a push, an annotation, a review, a merge or a deletion once its principal is gone.
 	Reviewer *Principal `json:"reviewer,omitempty"`
 
 	// Sha The commit reviewed.
@@ -1089,6 +1109,9 @@ type Id = openapi_types.UUID
 // IfMatchAnnotation defines model for ifMatchAnnotation.
 type IfMatchAnnotation = string
 
+// IfMatchBranch defines model for ifMatchBranch.
+type IfMatchBranch = string
+
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
 
@@ -1173,6 +1196,12 @@ type GetBlobParams struct {
 
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// DeleteBranchParams defines parameters for DeleteBranch.
+type DeleteBranchParams struct {
+	// IfMatch The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
+	IfMatch *IfMatchBranch `json:"If-Match,omitempty"`
 }
 
 // ListCommitsParams defines parameters for ListCommits.
@@ -1445,6 +1474,9 @@ type ServerInterface interface {
 	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch})
+	DeleteBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params DeleteBranchParams)
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -1472,6 +1504,9 @@ type ServerInterface interface {
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, sha SHA)
+	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
+	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
+	GetDeletedBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
@@ -2761,6 +2796,74 @@ func (siw *ServerInterfaceWrapper) ListBranches(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteBranch operation middleware
+func (siw *ServerInterfaceWrapper) DeleteBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteBranchParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchBranch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteBranch(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetBranch operation middleware
 func (siw *ServerInterfaceWrapper) GetBranch(w http.ResponseWriter, r *http.Request) {
 
@@ -3313,6 +3416,50 @@ func (siw *ServerInterfaceWrapper) SubmitReview(w http.ResponseWriter, r *http.R
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SubmitReview(w, r, org, repo, sha)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDeletedBranch operation middleware
+func (siw *ServerInterfaceWrapper) GetDeletedBranch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDeletedBranch(w, r, org, repo, branchName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4006,7 +4153,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles", wrapper.GrantRepositoryRole)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/access/{principal}/roles/{role}", wrapper.RevokeRepositoryRole)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches", wrapper.ListBranches)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deleted-branches/{branch}", wrapper.GetDeletedBranch)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/merge", wrapper.MergeBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits", wrapper.ListCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/commits/{sha}", wrapper.GetCommit)
@@ -7578,6 +7727,156 @@ func (response ListBranchesdefaultApplicationProblemPlusJSONResponse) VisitListB
 	return err
 }
 
+type DeleteBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     DeleteBranchParams
+}
+
+type DeleteBranchResponseObject interface {
+	VisitDeleteBranchResponse(w http.ResponseWriter) error
+}
+
+type DeleteBranch204Response struct {
+}
+
+func (response DeleteBranch204Response) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
+type DeleteBranch400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response DeleteBranch400ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch401ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch401ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch403ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch403ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch404ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch409ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch409ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(409)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch412ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch412ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch428ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch428ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranch503ApplicationProblemPlusJSONResponse Problem
+
+func (response DeleteBranch503ApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type DeleteBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response DeleteBranchdefaultApplicationProblemPlusJSONResponse) VisitDeleteBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
@@ -8537,6 +8836,77 @@ type SubmitReviewdefaultApplicationProblemPlusJSONResponse struct {
 }
 
 func (response SubmitReviewdefaultApplicationProblemPlusJSONResponse) VisitSubmitReviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeletedBranchRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+}
+
+type GetDeletedBranchResponseObject interface {
+	VisitGetDeletedBranchResponse(w http.ResponseWriter) error
+}
+
+type GetDeletedBranch200JSONResponse DeletedBranch
+
+func (response GetDeletedBranch200JSONResponse) VisitGetDeletedBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeletedBranch401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetDeletedBranch401ApplicationProblemPlusJSONResponse) VisitGetDeletedBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeletedBranch404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetDeletedBranch404ApplicationProblemPlusJSONResponse) VisitGetDeletedBranchResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetDeletedBranchdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetDeletedBranchdefaultApplicationProblemPlusJSONResponse) VisitGetDeletedBranchResponse(w http.ResponseWriter) error {
 
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
@@ -9772,6 +10142,9 @@ type StrictServerInterface interface {
 	// ListBranches The repository's live branches, main first and then by name, each with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches)
 	ListBranches(ctx context.Context, request ListBranchesRequestObject) (ListBranchesResponseObject, error)
+	// DeleteBranch Deletes the branch for the viewer, and answers once Cobranch has recorded the deletion as a push that deletes its ref, as git push --delete does: the branch leaves the list, and its commits, their annotations and its merge stay; takes repo.push, and repo.bypass for a branch main's /cobranch.yaml names. The deletion names the head the viewer saw in If-Match, which refuses with 412 a branch that moved from it, or that moved while Cobranch recorded the deletion; without it, the answer is 428. main is never deleted, answering 409 branch.default, and a push the deletion breaks a rule of answers 409 branch.refused. It records the deletion on the Git server: an installation without one answers 503.
+	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch})
+	DeleteBranch(ctx context.Context, request DeleteBranchRequestObject) (DeleteBranchResponseObject, error)
 	// GetBranch One of the repository's live branches, with the commit it is at, its status as a request to merge into its base and what a merge into it needs; takes repo.read.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch})
 	GetBranch(ctx context.Context, request GetBranchRequestObject) (GetBranchResponseObject, error)
@@ -9799,6 +10172,9 @@ type StrictServerInterface interface {
 	// SubmitReview Submits the viewer's review of one of the repository's commits, which works out again the status of the branches at it; takes reviews.submit. A review is never changed; its reviewer submits another, and their latest is the one that counts.
 	// (POST /orgs/{org}/repos/{repo}/commits/{sha}/reviews)
 	SubmitReview(ctx context.Context, request SubmitReviewRequestObject) (SubmitReviewResponseObject, error)
+	// GetDeletedBranch The latest deletion of the repository's branch of a name, which no live branch has, with who deleted it and when, the head it was at and its last merge; takes repo.read. A name no deleted branch had, or a live branch has, answers 404.
+	// (GET /orgs/{org}/repos/{repo}/deleted-branches/{branch})
+	GetDeletedBranch(ctx context.Context, request GetDeletedBranchRequestObject) (GetDeletedBranchResponseObject, error)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(ctx context.Context, request GetRawRequestObject) (GetRawResponseObject, error)
@@ -11098,6 +11474,35 @@ func (sh *strictHandler) ListBranches(w http.ResponseWriter, r *http.Request, or
 	}
 }
 
+// DeleteBranch operation middleware
+func (sh *strictHandler) DeleteBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params DeleteBranchParams) {
+	var request DeleteBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteBranch(ctx, request.(DeleteBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteBranchResponseObject); ok {
+		if err := validResponse.VisitDeleteBranchResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetBranch operation middleware
 func (sh *strictHandler) GetBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
 	var request GetBranchRequestObject
@@ -11371,6 +11776,34 @@ func (sh *strictHandler) SubmitReview(w http.ResponseWriter, r *http.Request, or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SubmitReviewResponseObject); ok {
 		if err := validResponse.VisitSubmitReviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetDeletedBranch operation middleware
+func (sh *strictHandler) GetDeletedBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName) {
+	var request GetDeletedBranchRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetDeletedBranch(ctx, request.(GetDeletedBranchRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetDeletedBranch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetDeletedBranchResponseObject); ok {
+		if err := validResponse.VisitGetDeletedBranchResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

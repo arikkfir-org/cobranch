@@ -127,6 +127,8 @@ type orgCase struct {
 	// want are substrings of the response; wantCode an error's code, wantReason its reason.
 	want                 []string
 	wantCode, wantReason string
+	// check, when set, checks what else the case expects once the response is in.
+	check func(t *testing.T, f *orgFixture, body string)
 }
 
 func runOrgCases(t *testing.T, cases []orgCase) {
@@ -146,6 +148,9 @@ func runOrgCases(t *testing.T, cases []orgCase) {
 				if !strings.Contains(body, w) {
 					t.Errorf("body = %s, want %s in it", body, w)
 				}
+			}
+			if tt.check != nil {
+				tt.check(t, f, body)
 			}
 		})
 	}
