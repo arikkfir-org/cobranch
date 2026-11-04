@@ -1,0 +1,11 @@
+/* Help's components page: its specimens laid out as the Figma file's Components page lays them out. Layout only; every
+   component on it is drawn by components.css. */
+.specimens { display: grid; gap: var(--space-12); justify-items: start; }
+.specimens-names { font: var(--text-caption); }
+.specimens-grid { display: grid; grid-template-columns: repeat(var(--columns), auto); gap: var(--space-12) var(--space-24); align-items: center; }
+.specimens-head { color: var(--color-fg-muted); font: var(--text-label-small); }
+.specimens-row { display: flex; flex-wrap: wrap; gap: var(--space-12); align-items: center; }
+.specimens-fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--size-sidebar), 1fr)); gap: var(--space-24); width: 100%; }
+.specimens .list, .specimens .table { width: 100%; }
+.specimens-menu { width: var(--size-sidebar); }
+.specimens-segmented { width: var(--size-sidebar); }

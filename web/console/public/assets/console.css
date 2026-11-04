@@ -142,17 +142,6 @@ pre.message { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: v
 dl.facts { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-6) var(--space-16); margin: 0; }
 dl.facts dt { color: var(--color-fg-muted); }
 dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-/* The design system's status language: one word, one icon and one tone per status. */
-.tone-neutral { --tone-fg: var(--color-status-neutral-fg); --tone-bg: var(--color-status-neutral-bg); --tone-border: var(--color-status-neutral-border); }
-.tone-info { --tone-fg: var(--color-status-info-fg); --tone-bg: var(--color-status-info-bg); --tone-border: var(--color-status-info-border); }
-.tone-success { --tone-fg: var(--color-status-success-fg); --tone-bg: var(--color-status-success-bg); --tone-border: var(--color-status-success-border); }
-.tone-danger { --tone-fg: var(--color-status-danger-fg); --tone-bg: var(--color-status-danger-bg); --tone-border: var(--color-status-danger-border); }
-.tone-warning { --tone-fg: var(--color-status-warning-fg); --tone-bg: var(--color-status-warning-bg); --tone-border: var(--color-status-warning-border); }
-.tone-inverse { --tone-fg: var(--color-fg-inverse); --tone-bg: var(--color-bg-inverse); --tone-border: var(--color-bg-inverse); }
-.badge { display: inline-flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-8) var(--space-2) var(--space-6); border-radius: var(--radius-full); border: 1px solid var(--tone-border);
-  background: var(--tone-bg); color: var(--tone-fg); font: var(--text-label-small); white-space: nowrap; }
-.icon { display: inline-flex; color: var(--tone-fg); vertical-align: -3px; }
-.icon svg { width: var(--size-icon-sm); height: var(--size-icon-sm); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .icons { display: inline-flex; gap: var(--space-2); margin-right: var(--space-8); }
 .annotations td { vertical-align: top; }
 .annotations td.state, .runs td.state, .environments td.state, .deliveries td.state { width: 1%; white-space: nowrap; }
