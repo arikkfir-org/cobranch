@@ -1,5 +1,6 @@
 import { api } from "./api.js";
 import { orgPages } from "./assets.js";
+import { logo } from "./brand.js";
 import { app, h } from "./dom.js";
 import { notFound, viewerLinks } from "./layout.js";
 import { showRepository } from "./repository.js";
@@ -39,7 +40,7 @@ export async function showOrganization(slug, page, sub, rest) {
   const link = ([p, m]) => h("a", { href: base + org.slug + (p ? "/" + p : ""), "data-nav": "", class: p === current ? "current" : "" }, m.nav.label);
   const switcher = h("select", { onchange: (e) => (e.target.value === "+" ? go("/new") : go("/" + e.target.value)) },
     orgs.map((o) => h("option", { value: o.slug, selected: o.slug === org.slug }, o.name)), h("option", { value: "+" }, "Create or join…"));
-  const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, "Cobranch"), switcher, h("nav", {}, pages.map(link)),
+  const bar = h("header", { class: "bar" }, h("a", { class: "brand", href: base, "data-nav": "" }, logo()), switcher, h("nav", {}, pages.map(link)),
     h("span", { class: "spacer" }), ...viewerLinks());
   const main = h("main", { class: "page" });
   document.body.className = "";

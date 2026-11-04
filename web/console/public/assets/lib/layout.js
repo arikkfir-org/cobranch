@@ -1,9 +1,10 @@
+import { logo } from "./brand.js";
 import { app, h } from "./dom.js";
 import { base, config, me } from "./state.js";
 
 export function showCard(...children) {
   document.body.className = "centered";
-  app.replaceChildren(h("main", { class: "card" }, h("h1", {}, "Cobranch"), ...children));
+  app.replaceChildren(h("main", { class: "card" }, h("h1", { class: "brand" }, logo()), ...children));
 }
 
 export function signOut() {

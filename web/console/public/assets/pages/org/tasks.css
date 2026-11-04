@@ -1,9 +1,9 @@
 /* A task's page: its instructions and transcript. */
-ol.transcript { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
-ol.transcript > li { border-left: 3px solid var(--color-border-default); padding-left: 12px; display: grid; gap: 4px; min-width: 0; }
-ol.transcript > li.state { border-left-color: var(--color-accent); }
+ol.transcript { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-12); }
+ol.transcript > li { border-left: 3px solid var(--color-border-default); padding-left: var(--space-12); display: grid; gap: var(--space-4); min-width: 0; }
+ol.transcript > li.state { border-left-color: var(--color-status-info-solid); }
 ol.transcript .text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-ol.transcript pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/18px var(--font-mono); color: var(--color-fg-muted); }
-ol.transcript ul.calls { margin: 0; padding-left: 18px; display: grid; gap: 2px; overflow-wrap: anywhere; }
+ol.transcript pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-code-small); color: var(--color-fg-muted); }
+ol.transcript ul.calls { margin: 0; padding-left: var(--space-16); display: grid; gap: var(--space-2); overflow-wrap: anywhere; }
 ol.transcript > li.failed { border-left-color: var(--color-status-danger-border); }
 p.instructions { white-space: pre-wrap; overflow-wrap: anywhere; }
