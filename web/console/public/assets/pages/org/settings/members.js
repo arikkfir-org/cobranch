@@ -58,8 +58,8 @@ async function showMembers(org, main, can, actions) {
     return button;
   };
   const text = (title, meta) => h("div", { class: "row-text" }, h("span", { class: "row-title" }, title), meta ? h("span", { class: "row-meta" }, meta) : null);
-  const memberRow = (m) => h("li", { class: "member-row", "data-filter": m.displayName.toLowerCase() },
-    avatar(m.displayName, false, 32), text(m.displayName, m.userId === me.id ? "You" : null), h("span", { class: "row-aside" }, joined(m.joinedAt)), rolesButton(m),
+  const memberRow = (m) => h("li", { class: "member-row", "data-filter": (m.displayName + " " + (m.email || "")).toLowerCase() },
+    avatar(m.displayName, false, 32), text(m.displayName, [m.email, m.userId === me.id ? "You" : null].filter(Boolean).join(" · ") || null), h("span", { class: "row-aside" }, joined(m.joinedAt)), rolesButton(m),
     more("More for " + m.displayName, m.userId === me.id
       ? [["Leave " + org.name, "log-out", () => leave(org), true]]
       : manage ? [["Remove from " + org.name, "trash-2", () => remove(org, m, refresh), true]] : []));
@@ -89,7 +89,7 @@ async function showMembers(org, main, can, actions) {
   } });
   counted.textContent = members.length + (members.length === 1 ? " member" : " members") + (invitations.length ? " · " + invitations.length + " invited" : "");
   main.replaceChildren(error.el, ...requests.map(requestBanner),
-    h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-space" }), counted),
+    h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), counted),
     list, none);
 }
 

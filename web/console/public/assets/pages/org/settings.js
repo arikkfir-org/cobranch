@@ -16,7 +16,7 @@ export const view = (after) => tabOf(after[0])?.view || "organization.settings";
 // heading is Settings' title, what it holds, the slot a tab puts its actions in, and the tabs the viewer may open.
 export const heading = ({ org, can, sub, root }) => {
   const head = pageHeading({ title: "Settings", actions: [],
-    description: "Who is in " + org.name + " and what they may do, its API keys, agents, secrets, the models its agents run on, and what it uses." });
+    description: org.name + " · organization settings" });
   head.append(tabBar(tabsOf("org/settings", can), sub || "", (p) => root + "/settings" + (p ? "/" + p : ""), { org, can }, "Settings"));
   return head;
 };
@@ -26,5 +26,5 @@ export const heading = ({ org, can, sub, root }) => {
 export default function show({ org, main, can, sub, rest, head }) {
   const shown = tabsOf("org/settings", can).find(([p]) => p === (sub || ""));
   if (!shown) return go("/" + org.slug + "/settings", true);
-  return shown[1].default({ org, main, can, rest, actions: head.querySelector(".app-page-heading-actions") });
+  return shown[1].default({ org, main, can, rest, actions: head.querySelector(".page-header-actions") });
 }

@@ -249,7 +249,7 @@ plan.
 | Tab | State: Default, Selected | Label, icon, count | `.tab-bar`, `.tab`, `.tab-count` |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked | `.menu`, `.menu-item`, `.menu-item-danger`, `.menu-shortcut`, `.menu-divider` |
 | Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | `.nav-item`, `.nav-sub-item` (`lib/shell.css`) |
-| Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono | Text | `.table`, `.cell-muted`, `.cell-mono` |
+| Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono, Number, Actions, Two lines | Text; Actions a small Ghost button | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines` |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone | `.badge` with a `.tone-*` class |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None | `.badge` with a `.tone-*` class |
 | Badge/Review | Approved, Changes requested, Neutral | None | `.badge` with a `.tone-*` class |
@@ -267,6 +267,8 @@ plan.
 | Branch row | None | Name, meta, message count; status badge and author avatar nested | `.branch-row` in a `.list` |
 | Chat message | Author: Person, Agent | Name, time, body, code reference | `.chat-message` (`lib/shell.css`) |
 | Repository row, Issue row, Member row | None | Name or title, description or email, meta; tags, avatars and role nested | `.repository-row`, `.issue-row`, `.member-row` in a `.list` |
+| Filters, Section header | None | A 320px search Input, count; title, description, a Secondary action | `.filters`, `.filters-count`; `.section-header` |
+| Card/Row, Card/Footer | Row: State Default, Hover, Selected | Icon, title, meta, a small Ghost action; Primary and Secondary actions | `.card-row` in a `.card` (`.card-row-label` for a 200px label column); `.card-footer` |
 
 Two rules keep instances honest: never detach one to change it (add a property to the component instead), and never
 place a node inside an instance (Figma refuses it; compose rows beside it).

@@ -240,6 +240,16 @@
 .table .cell-muted { color: var(--color-fg-muted); }
 .table .cell-mono { font: var(--text-code-small); }
 .table .cell-person { display: flex; align-items: center; gap: var(--space-8); }
+/* Table/Cell Kind=Number: a count, size or share, right-aligned in tabular figures; Kind=Actions: the row's small ghost
+   buttons, hugging them on the right. */
+.table :is(th, td).cell-number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.table td.cell-actions { width: 1%; text-align: right; white-space: nowrap; }
+.table td.cell-actions > * + * { margin-left: var(--space-8); }
+.table td.cell-two-lines { padding-block: var(--space-12); }
+.cell-two-lines > * { display: block; color: var(--color-fg-muted); font: var(--text-body-small); }
+.cell-two-lines > :first-child { color: var(--color-fg-default); font: var(--text-body-medium); }
+.cell-two-lines > * + * { margin-top: var(--space-2); }
+.cell-two-lines > code, .cell-two-lines > code:first-child { font: var(--text-code-medium); }
 
 /* Card: the bordered surface every in-page list, table and form sits in, with an optional header of a title, a count
    or state, and an action. A table or list alone is its own card, so in a card it drops its border. */
@@ -249,6 +259,29 @@
 .card-meta { color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
 .card-body { display: grid; gap: var(--space-12); padding: var(--space-16); color: var(--color-fg-default); font: var(--text-body-medium); }
 .card > :is(.table, .list) { border: 0; border-radius: 0; }
+/* Card/Row: one object in a card: a 16px icon, its title over its meta, and trailing small ghost buttons; Hover and
+   Selected tint it. A row may lead with a 200px label column (a group of permissions) instead of the icon. Rows divide
+   with border/subtle. */
+.card-row {
+  display: flex; align-items: center; gap: var(--space-16); min-width: 0;
+  padding: var(--space-12) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-surface);
+}
+.card-row:last-child { border-bottom: 0; }
+.card-row:hover { background: var(--color-bg-hover); }
+.card-row[aria-selected="true"], .card-row[aria-current="true"] { background: var(--color-bg-selected); }
+.card-row > .icon { color: var(--color-fg-muted); }
+.card-row-text { display: flex; flex-direction: column; gap: var(--space-2); flex: 1; min-width: 0; }
+.card-row-title { display: flex; align-items: center; gap: var(--space-8); min-width: 0; color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.card-row-meta { overflow: hidden; color: var(--color-fg-muted); font: var(--text-body-small); text-overflow: ellipsis; white-space: nowrap; }
+.card-row-actions { display: flex; align-items: center; gap: var(--space-8); flex: none; }
+.card-row-label { flex: none; align-self: flex-start; width: 200px; color: var(--color-fg-muted); font: var(--text-label-small); }
+.card-row-picks { display: grid; gap: var(--space-8); flex: 1; min-width: 0; }
+/* Card/Footer: a form's or an editor's actions under its card, on the sunken background, on the right with the primary
+   last. */
+.card-footer {
+  display: flex; align-items: center; justify-content: flex-end; gap: var(--space-8);
+  padding: var(--space-12) var(--space-16); border-top: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken);
+}
 
 /* Dialog: a modal dialog over the scrim, 480px wide: a title with a close button, the body, and a sunken footer with
    the actions on the right, primary last. Esc closes it, and so does a click on the scrim, which the page wires. */
@@ -302,6 +335,23 @@
 .page-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-large); letter-spacing: var(--text-heading-large-tracking); }
 .page-header-description { color: var(--color-fg-muted); font: var(--text-body-medium); }
 .page-header-actions { display: flex; align-items: center; gap: var(--space-8); flex: none; }
+
+/* Section header: a section of a page, a Heading/Small title over a muted line on what it holds, and an optional
+   secondary action on the right. */
+.section-header { display: flex; align-items: flex-start; gap: var(--space-16); }
+.section-header-text { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; }
+.section-header-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
+.section-header-description { margin: 0; color: var(--color-fg-muted); font: var(--text-body-small); }
+
+/* Filters: the row over a list or table: a 320px search Input on the left, then its controls, and its count in Caption on
+   the right. */
+.filters { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.filters > .input { flex: 0 1 320px; }
+.filters-count { margin-left: auto; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+@media (max-width: 768px) {
+  .filters { flex-wrap: wrap; }
+  .filters > .input { flex-basis: 100%; }
+}
 
 /* Rows, the Patterns page's components: lists of rich rows on the surface, in a card with border/default and radius/lg,
    each row divided from the next by border/subtle. A row's text is a title over its metadata. */

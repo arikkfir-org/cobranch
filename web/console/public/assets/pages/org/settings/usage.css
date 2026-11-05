@@ -1,10 +1,16 @@
-/* Settings' Usage: each limit's usage on a meter. The meter waits for a component of the design system's (asked of its
-   Figma file); until then it is drawn here, from tokens only. */
-.gauge { display: grid; gap: var(--space-6); }
-.gauge-head { display: flex; justify-content: space-between; gap: var(--space-12); font: var(--text-body-small); }
-.gauge-label { color: var(--color-fg-default); font: var(--text-body-small-strong); }
-.gauge-value, .gauge-note, .usage-unread { color: var(--color-fg-muted); font: var(--text-caption); }
-.meter { height: var(--space-8); border-radius: var(--radius-full); background: var(--color-bg-sunken); box-shadow: inset 0 0 0 1px var(--color-border-default); overflow: hidden; }
-.meter span { display: block; height: 100%; background: var(--color-status-info-solid); }
+/* Settings' Usage: each limit's row and its meter, and each repository's share. The meter waits for the design system's
+   Meter component (Kind Full and Share), which its Figma file is getting; until then it is drawn here, from tokens
+   only, as the Settings · Usage screen draws it: a 6px track on bg/sunken, the bar in action/primary/bg, warning and
+   danger near and at the limit, and a 120px track beside a share. */
+.gauge { display: grid; gap: var(--space-8); flex: 1; min-width: 0; }
+.gauge-head { display: flex; justify-content: space-between; gap: var(--space-12); }
+.gauge-label { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.gauge-value { color: var(--color-fg-muted); font: var(--text-body-small); font-variant-numeric: tabular-nums; }
+.gauge-note, .usage-unread { color: var(--color-fg-muted); font: var(--text-caption); }
+.meter { height: 6px; border-radius: var(--radius-full); background: var(--color-bg-sunken); overflow: hidden; }
+.meter span { display: block; height: 100%; border-radius: var(--radius-full); background: var(--color-action-primary-bg); }
 .meter[data-tone="warning"] span { background: var(--color-status-warning-solid); }
 .meter[data-tone="danger"] span { background: var(--color-status-danger-solid); }
+.share { display: flex; align-items: center; gap: var(--space-12); }
+.share .meter { flex: none; width: 120px; }
+.share-value { color: var(--color-fg-muted); font: var(--text-body-small); font-variant-numeric: tabular-nums; }

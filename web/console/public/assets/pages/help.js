@@ -192,7 +192,9 @@ function patterns() {
     h("span", { class: "row-description" }, "412 tests passed"), h("span", { class: "avatar avatar-machine", role: "img", "aria-label": "A job" }, icon("cog")),
     h("span", { class: "row-aside" }, "1m 12s"), h("a", { href: "#" }, "Details"));
   return section("Patterns", "Rows that recur across screens, composed from the components above. Lists are rows on bg/surface inside a border/default card with radius/lg; each row is divided by border/subtle.",
-    [["Commit row", ".commit-row"], ["Annotation row", ".annotation-row"], ["Branch row", ".branch-row"], ["Repository row", ".repository-row"], ["Issue row", ".issue-row"], ["Member row", ".member-row"], ["the list", ".list .row-text .row-title .row-meta"]],
+    [["Commit row", ".commit-row"], ["Annotation row", ".annotation-row"], ["Branch row", ".branch-row"], ["Repository row", ".repository-row"], ["Issue row", ".issue-row"], ["Member row", ".member-row"], ["the list", ".list .row-text .row-title .row-meta"],
+      ["Section header", ".section-header .section-header-title .section-header-description"], ["Filters", ".filters .filters-count"], ["Card/Row", ".card-row .card-row-text .card-row-title .card-row-meta .card-row-actions .card-row-label"],
+      ["Card/Footer", ".card-footer"], ["Table/Cell Number, Actions, Two lines", ".cell-number .cell-actions .cell-two-lines"]],
     h("ul", { class: "list" },
       h("li", { class: "commit-row" }, h("span", { class: "avatar avatar-24" }, "NL"), text("Hand pushes to the push worker before returning", "Noa Levi committed 12 minutes ago"),
         h("span", { class: "row-icons" }, [annotationStatuses.successful, annotationStatuses.successful, annotationStatuses.in_progress].map((s) => h("span", { class: "tone-" + s.tone }, icon(s.icon, s.word)))),
@@ -210,5 +212,21 @@ function patterns() {
         h("span", { class: "tag tone-info" }, "Git"), h("span", { class: "row-branch" }, icon("git-branch"), "feature/push-worker"), h("span", { class: "avatar" }, "NL"))),
     h("ul", { class: "list" },
       h("li", { class: "member-row" }, h("span", { class: "avatar avatar-32" }, "NL"), text("Noa Levi", "noa@example.com"), h("span", { class: "row-aside" }, "Joined Oct 2026"),
-        h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Owner", icon("chevron-down")), ghost("ellipsis", "More actions"))));
+        h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Owner", icon("chevron-down")), ghost("ellipsis", "More actions"))),
+    h("header", { class: "section-header" }, h("div", { class: "section-header-text" }, h("h2", { class: "section-header-title" }, "Section title"),
+      h("p", { class: "section-header-description" }, "One line on what the section holds.")), h("button", { class: "btn", type: "button" }, icon("pencil"), "Action")),
+    h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), h("input", { type: "search", placeholder: "Filter by name", "aria-label": "Filter by name" })),
+      h("span", { class: "filters-count" }, "5 keys · 1 revoked")),
+    h("section", { class: "card" },
+      h("div", { class: "card-row" }, icon("key-round"), h("div", { class: "card-row-text" }, h("span", { class: "card-row-title" }, "Owner", h("span", { class: "tag" }, "Built-in")),
+        h("span", { class: "card-row-meta" }, "Everything · 2 hold it")), h("div", { class: "card-row-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "View"))),
+      h("div", { class: "card-row", "aria-selected": "true" }, icon("key-round"), h("div", { class: "card-row-text" }, h("span", { class: "card-row-title" }, "Reviewer", h("span", { class: "tag tone-info" }, "Custom")),
+        h("span", { class: "card-row-meta" }, "4 permissions · nobody holds it")), h("div", { class: "card-row-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, icon("pencil"), "Edit"),
+        h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Delete"))),
+      h("div", { class: "card-row" }, h("span", { class: "card-row-label" }, "Organization"), h("div", { class: "card-row-picks" },
+        h("label", { class: "checkbox" }, h("input", { type: "checkbox", checked: true }), "Read the organization"), h("label", { class: "checkbox" }, h("input", { type: "checkbox" }), "Manage members"))),
+      h("footer", { class: "card-footer" }, h("button", { class: "btn", type: "button" }, "Discard"), h("button", { class: "btn btn-primary", type: "button" }, "Save"))),
+    h("table", { class: "table" }, h("thead", {}, h("tr", {}, h("th", {}, "Repository"), h("th", { class: "cell-number" }, "Total"), h("th", { "aria-label": "Actions" }))),
+      h("tbody", {}, h("tr", {}, h("td", { class: "cell-two-lines" }, h("span", {}, "deploy-bot"), h("code", {}, "cbk_…3hWH")), h("td", { class: "cell-number" }, "1.2 GiB"),
+        h("td", { class: "cell-actions" }, h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Rotate"), h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Revoke"))))));
 }
