@@ -28,6 +28,7 @@ func NewExecutableSchema(cfg Config) graphql.ExecutableSchema {
 type Config = graphql.Config[ResolverRoot, DirectiveRoot, ComplexityRoot]
 
 type ResolverRoot interface {
+	Agent() AgentResolver
 	Artifact() ArtifactResolver
 	Branch() BranchResolver
 	Environment() EnvironmentResolver
@@ -55,6 +56,7 @@ type ComplexityRoot struct {
 
 	Agent struct {
 		BuiltIn      func(childComplexity int) int
+		Conversation func(childComplexity int, first int, after *string) int
 		CreatedAt    func(childComplexity int) int
 		CreatedBy    func(childComplexity int) int
 		Description  func(childComplexity int) int
@@ -573,89 +575,94 @@ type ComplexityRoot struct {
 	}
 
 	Mutation struct {
-		AcceptInvitation       func(childComplexity int, id string) int
-		AddArtifactVersion     func(childComplexity int, organizationID string, id string, input NewArtifactVersion, expectedVersion *int) int
-		AddSSHKey              func(childComplexity int, input SSHKeyInput) int
-		AppendTranscriptEntry  func(childComplexity int, organizationID string, number int, input TranscriptEntryInput) int
-		ApproveJoinRequest     func(childComplexity int, organizationID string, id string, roleID string) int
-		AssignTask             func(childComplexity int, organizationID string, input TaskInput) int
-		CancelInvitation       func(childComplexity int, organizationID string, id string) int
-		CancelRun              func(childComplexity int, repositoryID string, number int) int
-		CancelTask             func(childComplexity int, organizationID string, number int, expectedVersion *int) int
-		CreateAPIKey           func(childComplexity int, organizationID string, input APIKeyInput) int
-		CreateAgent            func(childComplexity int, organizationID string, input AgentInput) int
-		CreateArtifact         func(childComplexity int, organizationID string, repositoryID string, input NewArtifact) int
-		CreateIssue            func(childComplexity int, organizationID string, input IssueInput) int
-		CreateLabel            func(childComplexity int, organizationID string, input LabelInput) int
-		CreateOrganization     func(childComplexity int, slug string, name string) int
-		CreatePersonalToken    func(childComplexity int, input PersonalTokenInput) int
-		CreateRepository       func(childComplexity int, organizationID string, input RepositoryInput) int
-		CreateRole             func(childComplexity int, organizationID string, input RoleInput) int
-		CreateSecret           func(childComplexity int, organizationID string, repositoryID *string, input NewSecret) int
-		DeclineInvitation      func(childComplexity int, id string) int
-		DeclineJoinRequest     func(childComplexity int, organizationID string, id string) int
-		DeleteAPIKey           func(childComplexity int, organizationID string, id string) int
-		DeleteAgent            func(childComplexity int, organizationID string, id string, expectedVersion *int) int
-		DeleteAnnotation       func(childComplexity int, repositoryID string, sha string, name string, expectedVersion *int) int
-		DeleteArtifact         func(childComplexity int, organizationID string, id string, expectedVersion *int) int
-		DeleteBranch           func(childComplexity int, repositoryID string, branch string, expectedHead *string) int
-		DeleteChatMessage      func(childComplexity int, repositoryID string, branch string, thread string, message string, expectedVersion *int) int
-		DeleteIssue            func(childComplexity int, organizationID string, number int, expectedVersion *int) int
-		DeleteIssueChatMessage func(childComplexity int, organizationID string, number int, thread string, message string, expectedVersion *int) int
-		DeleteLabel            func(childComplexity int, organizationID string, id string, expectedVersion *int) int
-		DeleteRole             func(childComplexity int, organizationID string, id string) int
-		DeleteSSHKey           func(childComplexity int, id string) int
-		DeleteSecret           func(childComplexity int, organizationID string, id string, expectedVersion *int) int
-		EditChatMessage        func(childComplexity int, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) int
-		EditIssueChatMessage   func(childComplexity int, organizationID string, number int, thread string, message string, body string, expectedVersion *int) int
-		GrantRepositoryRole    func(childComplexity int, repositoryID string, principalID string, roleID string) int
-		GrantRole              func(childComplexity int, organizationID string, userID string, roleID string) int
-		GrantSecret            func(childComplexity int, organizationID string, id string, principalID string) int
-		InviteMember           func(childComplexity int, organizationID string, email string, roleID string) int
-		LeaveOrganization      func(childComplexity int, id string) int
-		LinkBranch             func(childComplexity int, organizationID string, repositoryID string, branch string, number int) int
-		MergeBranch            func(childComplexity int, repositoryID string, branch string, input *MergeInput) int
-		PauseEnvironment       func(childComplexity int, repositoryID string, environmentID string) int
-		PostChatMessage        func(childComplexity int, repositoryID string, branch string, thread string, input ChatMessageInput) int
-		PostEvent              func(childComplexity int, repositoryID string, name string, branch *string, data any) int
-		PostIssueChatMessage   func(childComplexity int, organizationID string, number int, thread string, input ChatMessageInput) int
-		Redeliver              func(childComplexity int, repositoryID string, environmentID string) int
-		RemoveMember           func(childComplexity int, organizationID string, userID string) int
-		RemoveModelProvider    func(childComplexity int, organizationID string, provider string, expectedVersion *int) int
-		RequestReview          func(childComplexity int, repositoryID string, branch string) int
-		RequestToJoin          func(childComplexity int, slug string, note *string) int
-		RerunRun               func(childComplexity int, repositoryID string, number int) int
-		ResolveChatThread      func(childComplexity int, repositoryID string, branch string, thread string, resolved bool, expectedVersion *int) int
-		ResolveIssueChatThread func(childComplexity int, organizationID string, number int, thread string, resolved bool, expectedVersion *int) int
-		ResumeEnvironment      func(childComplexity int, repositoryID string, environmentID string) int
-		RevokeAPIKeySecret     func(childComplexity int, organizationID string, id string, secretID string) int
-		RevokePersonalToken    func(childComplexity int, id string) int
-		RevokeRepositoryRole   func(childComplexity int, repositoryID string, principalID string, roleID string) int
-		RevokeRole             func(childComplexity int, organizationID string, userID string, roleID string) int
-		RevokeSecret           func(childComplexity int, organizationID string, id string, principalID string) int
-		RevokeSession          func(childComplexity int, id string) int
-		RotateAPIKey           func(childComplexity int, organizationID string, id string, input *SecretInput) int
-		RunJob                 func(childComplexity int, repositoryID string, branch string, job string) int
-		SetAgentModel          func(childComplexity int, organizationID string, id string, provider *string, model *string, expectedVersion *int) int
-		SetAgentSecrets        func(childComplexity int, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) int
-		SetAnnotation          func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
-		SetModelProvider       func(childComplexity int, organizationID string, provider string, secretID string, expectedVersion *int) int
-		ShareArtifact          func(childComplexity int, organizationID string, id string, principalID string, role ArtifactRole) int
-		StartChatThread        func(childComplexity int, repositoryID string, branch string, input ChatThreadInput) int
-		StartDelivery          func(childComplexity int, repositoryID string, number int) int
-		StartIssueChatThread   func(childComplexity int, organizationID string, number int, input ChatThreadInput) int
-		StartRun               func(childComplexity int, repositoryID string, number int) int
-		SubmitReview           func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
-		UnlinkBranch           func(childComplexity int, organizationID string, repositoryID string, branch string) int
-		UnshareArtifact        func(childComplexity int, organizationID string, id string, principalID string) int
-		UpdateAgent            func(childComplexity int, organizationID string, id string, input AgentPatch, expectedVersion *int) int
-		UpdateArtifact         func(childComplexity int, organizationID string, id string, input ArtifactPatch, expectedVersion *int) int
-		UpdateIssue            func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
-		UpdateLabel            func(childComplexity int, organizationID string, id string, input LabelPatch, expectedVersion *int) int
-		UpdateOrganization     func(childComplexity int, id string, input OrganizationSettings) int
-		UpdateRepository       func(childComplexity int, id string, input RepositoryInput) int
-		UpdateRole             func(childComplexity int, organizationID string, id string, input RoleInput) int
-		UpdateSecret           func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
+		AcceptInvitation          func(childComplexity int, id string) int
+		AddArtifactVersion        func(childComplexity int, organizationID string, id string, input NewArtifactVersion, expectedVersion *int) int
+		AddSSHKey                 func(childComplexity int, input SSHKeyInput) int
+		AppendTranscriptEntry     func(childComplexity int, organizationID string, number int, input TranscriptEntryInput) int
+		ApproveJoinRequest        func(childComplexity int, organizationID string, id string, roleID string) int
+		AssignTask                func(childComplexity int, organizationID string, input TaskInput) int
+		CancelInvitation          func(childComplexity int, organizationID string, id string) int
+		CancelRun                 func(childComplexity int, repositoryID string, number int) int
+		CancelTask                func(childComplexity int, organizationID string, number int, expectedVersion *int) int
+		CreateAPIKey              func(childComplexity int, organizationID string, input APIKeyInput) int
+		CreateAgent               func(childComplexity int, organizationID string, input AgentInput) int
+		CreateArtifact            func(childComplexity int, organizationID string, repositoryID string, input NewArtifact) int
+		CreateIssue               func(childComplexity int, organizationID string, input IssueInput) int
+		CreateLabel               func(childComplexity int, organizationID string, input LabelInput) int
+		CreateOrganization        func(childComplexity int, slug string, name string) int
+		CreatePersonalToken       func(childComplexity int, input PersonalTokenInput) int
+		CreateRepository          func(childComplexity int, organizationID string, input RepositoryInput) int
+		CreateRole                func(childComplexity int, organizationID string, input RoleInput) int
+		CreateSecret              func(childComplexity int, organizationID string, repositoryID *string, input NewSecret) int
+		DeclineInvitation         func(childComplexity int, id string) int
+		DeclineJoinRequest        func(childComplexity int, organizationID string, id string) int
+		DeleteAPIKey              func(childComplexity int, organizationID string, id string) int
+		DeleteAgent               func(childComplexity int, organizationID string, id string, expectedVersion *int) int
+		DeleteAnnotation          func(childComplexity int, repositoryID string, sha string, name string, expectedVersion *int) int
+		DeleteArtifact            func(childComplexity int, organizationID string, id string, expectedVersion *int) int
+		DeleteBranch              func(childComplexity int, repositoryID string, branch string, expectedHead *string) int
+		DeleteChatMessage         func(childComplexity int, repositoryID string, branch string, thread string, message string, expectedVersion *int) int
+		DeleteConversationMessage func(childComplexity int, subject ConversationSubject, thread string, message string, expectedVersion *int) int
+		DeleteIssue               func(childComplexity int, organizationID string, number int, expectedVersion *int) int
+		DeleteIssueChatMessage    func(childComplexity int, organizationID string, number int, thread string, message string, expectedVersion *int) int
+		DeleteLabel               func(childComplexity int, organizationID string, id string, expectedVersion *int) int
+		DeleteRole                func(childComplexity int, organizationID string, id string) int
+		DeleteSSHKey              func(childComplexity int, id string) int
+		DeleteSecret              func(childComplexity int, organizationID string, id string, expectedVersion *int) int
+		EditChatMessage           func(childComplexity int, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) int
+		EditConversationMessage   func(childComplexity int, subject ConversationSubject, thread string, message string, body string, expectedVersion *int) int
+		EditIssueChatMessage      func(childComplexity int, organizationID string, number int, thread string, message string, body string, expectedVersion *int) int
+		GrantRepositoryRole       func(childComplexity int, repositoryID string, principalID string, roleID string) int
+		GrantRole                 func(childComplexity int, organizationID string, userID string, roleID string) int
+		GrantSecret               func(childComplexity int, organizationID string, id string, principalID string) int
+		InviteMember              func(childComplexity int, organizationID string, email string, roleID string) int
+		LeaveOrganization         func(childComplexity int, id string) int
+		LinkBranch                func(childComplexity int, organizationID string, repositoryID string, branch string, number int) int
+		MergeBranch               func(childComplexity int, repositoryID string, branch string, input *MergeInput) int
+		PauseEnvironment          func(childComplexity int, repositoryID string, environmentID string) int
+		PostChatMessage           func(childComplexity int, repositoryID string, branch string, thread string, input ChatMessageInput) int
+		PostConversationMessage   func(childComplexity int, subject ConversationSubject, thread string, input ChatMessageInput) int
+		PostEvent                 func(childComplexity int, repositoryID string, name string, branch *string, data any) int
+		PostIssueChatMessage      func(childComplexity int, organizationID string, number int, thread string, input ChatMessageInput) int
+		Redeliver                 func(childComplexity int, repositoryID string, environmentID string) int
+		RemoveMember              func(childComplexity int, organizationID string, userID string) int
+		RemoveModelProvider       func(childComplexity int, organizationID string, provider string, expectedVersion *int) int
+		RequestReview             func(childComplexity int, repositoryID string, branch string) int
+		RequestToJoin             func(childComplexity int, slug string, note *string) int
+		RerunRun                  func(childComplexity int, repositoryID string, number int) int
+		ResolveChatThread         func(childComplexity int, repositoryID string, branch string, thread string, resolved bool, expectedVersion *int) int
+		ResolveConversationThread func(childComplexity int, subject ConversationSubject, thread string, resolved bool, expectedVersion *int) int
+		ResolveIssueChatThread    func(childComplexity int, organizationID string, number int, thread string, resolved bool, expectedVersion *int) int
+		ResumeEnvironment         func(childComplexity int, repositoryID string, environmentID string) int
+		RevokeAPIKeySecret        func(childComplexity int, organizationID string, id string, secretID string) int
+		RevokePersonalToken       func(childComplexity int, id string) int
+		RevokeRepositoryRole      func(childComplexity int, repositoryID string, principalID string, roleID string) int
+		RevokeRole                func(childComplexity int, organizationID string, userID string, roleID string) int
+		RevokeSecret              func(childComplexity int, organizationID string, id string, principalID string) int
+		RevokeSession             func(childComplexity int, id string) int
+		RotateAPIKey              func(childComplexity int, organizationID string, id string, input *SecretInput) int
+		RunJob                    func(childComplexity int, repositoryID string, branch string, job string) int
+		SetAgentModel             func(childComplexity int, organizationID string, id string, provider *string, model *string, expectedVersion *int) int
+		SetAgentSecrets           func(childComplexity int, organizationID string, id string, secrets []*AgentSecretInput, expectedVersion *int) int
+		SetAnnotation             func(childComplexity int, repositoryID string, sha string, name string, input AnnotationInput, expectedVersion *int) int
+		SetModelProvider          func(childComplexity int, organizationID string, provider string, secretID string, expectedVersion *int) int
+		ShareArtifact             func(childComplexity int, organizationID string, id string, principalID string, role ArtifactRole) int
+		StartChatThread           func(childComplexity int, repositoryID string, branch string, input ChatThreadInput) int
+		StartConversationThread   func(childComplexity int, subject ConversationSubject, input ChatThreadInput) int
+		StartDelivery             func(childComplexity int, repositoryID string, number int) int
+		StartIssueChatThread      func(childComplexity int, organizationID string, number int, input ChatThreadInput) int
+		StartRun                  func(childComplexity int, repositoryID string, number int) int
+		SubmitReview              func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
+		UnlinkBranch              func(childComplexity int, organizationID string, repositoryID string, branch string) int
+		UnshareArtifact           func(childComplexity int, organizationID string, id string, principalID string) int
+		UpdateAgent               func(childComplexity int, organizationID string, id string, input AgentPatch, expectedVersion *int) int
+		UpdateArtifact            func(childComplexity int, organizationID string, id string, input ArtifactPatch, expectedVersion *int) int
+		UpdateIssue               func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
+		UpdateLabel               func(childComplexity int, organizationID string, id string, input LabelPatch, expectedVersion *int) int
+		UpdateOrganization        func(childComplexity int, id string, input OrganizationSettings) int
+		UpdateRepository          func(childComplexity int, id string, input RepositoryInput) int
+		UpdateRole                func(childComplexity int, organizationID string, id string, input RoleInput) int
+		UpdateSecret              func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
 	}
 
 	MyTask struct {
@@ -674,6 +681,7 @@ type ComplexityRoot struct {
 		Agents                  func(childComplexity int) int
 		Artifact                func(childComplexity int, id string) int
 		AvailableModelProviders func(childComplexity int) int
+		Conversation            func(childComplexity int, first int, after *string) int
 		CreatedAt               func(childComplexity int) int
 		ID                      func(childComplexity int) int
 		Invitations             func(childComplexity int) int
@@ -753,6 +761,7 @@ type ComplexityRoot struct {
 		Chat              func(childComplexity int, branch string, first int, after *string) int
 		Commit            func(childComplexity int, sha string) int
 		CommitDiff        func(childComplexity int, sha string) int
+		Conversation      func(childComplexity int, first int, after *string) int
 		CreatedAt         func(childComplexity int) int
 		CreatedBy         func(childComplexity int) int
 		DeletedBranch     func(childComplexity int, name string) int
@@ -892,8 +901,9 @@ type ComplexityRoot struct {
 	}
 
 	Subscription struct {
-		ChatUpdates      func(childComplexity int, repositoryID string, branch string, after string) int
-		IssueChatUpdates func(childComplexity int, organizationID string, number int, after string) int
+		ChatUpdates         func(childComplexity int, repositoryID string, branch string, after string) int
+		ConversationUpdates func(childComplexity int, subject ConversationSubject, after string) int
+		IssueChatUpdates    func(childComplexity int, organizationID string, number int, after string) int
 	}
 
 	Tag struct {
@@ -984,6 +994,9 @@ type ComplexityRoot struct {
 
 // region    ************************** generated!.gotpl **************************
 
+type AgentResolver interface {
+	Conversation(ctx context.Context, obj *Agent, first int, after *string) (*ChatPage, error)
+}
 type ArtifactResolver interface {
 	Versions(ctx context.Context, obj *Artifact) ([]*ArtifactVersion, error)
 	VersionByNumber(ctx context.Context, obj *Artifact, number int) (*ArtifactVersion, error)
@@ -1039,6 +1052,11 @@ type MutationResolver interface {
 	DeleteBranch(ctx context.Context, repositoryID string, branch string, expectedHead *string) (bool, error)
 	SubmitReview(ctx context.Context, repositoryID string, sha string, input ReviewInput) (*Review, error)
 	RequestReview(ctx context.Context, repositoryID string, branch string) (*AIReview, error)
+	StartConversationThread(ctx context.Context, subject ConversationSubject, input ChatThreadInput) (*ChatThread, error)
+	PostConversationMessage(ctx context.Context, subject ConversationSubject, thread string, input ChatMessageInput) (*ChatMessage, error)
+	EditConversationMessage(ctx context.Context, subject ConversationSubject, thread string, message string, body string, expectedVersion *int) (*ChatMessage, error)
+	DeleteConversationMessage(ctx context.Context, subject ConversationSubject, thread string, message string, expectedVersion *int) (bool, error)
+	ResolveConversationThread(ctx context.Context, subject ConversationSubject, thread string, resolved bool, expectedVersion *int) (*ChatThread, error)
 	Redeliver(ctx context.Context, repositoryID string, environmentID string) (*Delivery, error)
 	PauseEnvironment(ctx context.Context, repositoryID string, environmentID string) (*Environment, error)
 	ResumeEnvironment(ctx context.Context, repositoryID string, environmentID string) (*Environment, error)
@@ -1100,6 +1118,7 @@ type OrganizationResolver interface {
 	ModelProviders(ctx context.Context, obj *Organization) ([]*ModelProvider, error)
 	AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error)
 	Artifact(ctx context.Context, obj *Organization, id string) (*Artifact, error)
+	Conversation(ctx context.Context, obj *Organization, first int, after *string) (*ChatPage, error)
 
 	Issues(ctx context.Context, obj *Organization, filter *IssueFilter, first int, after *string) (*IssuePage, error)
 	Issue(ctx context.Context, obj *Organization, number int) (*Issue, error)
@@ -1134,6 +1153,7 @@ type RepositoryResolver interface {
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
 	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
+	Conversation(ctx context.Context, obj *Repository, first int, after *string) (*ChatPage, error)
 	Environments(ctx context.Context, obj *Repository) ([]*Environment, error)
 	Environment(ctx context.Context, obj *Repository, id string) (*Environment, error)
 	Delivery(ctx context.Context, obj *Repository, number int) (*Delivery, error)
@@ -1151,6 +1171,7 @@ type SecretResolver interface {
 type SubscriptionResolver interface {
 	ChatUpdates(ctx context.Context, repositoryID string, branch string, after string) (<-chan *ChatUpdate, error)
 	IssueChatUpdates(ctx context.Context, organizationID string, number int, after string) (<-chan *ChatUpdate, error)
+	ConversationUpdates(ctx context.Context, subject ConversationSubject, after string) (<-chan *ChatUpdate, error)
 }
 type TaskResolver interface {
 	Transcript(ctx context.Context, obj *Task, after *int, first *int) ([]*TranscriptEntry, error)
@@ -1209,6 +1230,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.BuiltIn(childComplexity), true
+	case "Agent.conversation":
+		if e.ComplexityRoot.Agent.Conversation == nil {
+			break
+		}
+
+		args, err := ec.field_Agent_conversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Agent.Conversation(childComplexity, args["first"].(int), args["after"].(*string)), true
 	case "Agent.createdAt":
 		if e.ComplexityRoot.Agent.CreatedAt == nil {
 			break
@@ -3711,6 +3743,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.DeleteChatMessage(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["thread"].(string), args["message"].(string), args["expectedVersion"].(*int)), true
+	case "Mutation.deleteConversationMessage":
+		if e.ComplexityRoot.Mutation.DeleteConversationMessage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_deleteConversationMessage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.DeleteConversationMessage(childComplexity, args["subject"].(ConversationSubject), args["thread"].(string), args["message"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.deleteIssue":
 		if e.ComplexityRoot.Mutation.DeleteIssue == nil {
 			break
@@ -3788,6 +3831,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.EditChatMessage(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["thread"].(string), args["message"].(string), args["body"].(string), args["expectedVersion"].(*int)), true
+	case "Mutation.editConversationMessage":
+		if e.ComplexityRoot.Mutation.EditConversationMessage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_editConversationMessage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.EditConversationMessage(childComplexity, args["subject"].(ConversationSubject), args["thread"].(string), args["message"].(string), args["body"].(string), args["expectedVersion"].(*int)), true
 	case "Mutation.editIssueChatMessage":
 		if e.ComplexityRoot.Mutation.EditIssueChatMessage == nil {
 			break
@@ -3898,6 +3952,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.PostChatMessage(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["thread"].(string), args["input"].(ChatMessageInput)), true
+	case "Mutation.postConversationMessage":
+		if e.ComplexityRoot.Mutation.PostConversationMessage == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_postConversationMessage_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.PostConversationMessage(childComplexity, args["subject"].(ConversationSubject), args["thread"].(string), args["input"].(ChatMessageInput)), true
 	case "Mutation.postEvent":
 		if e.ComplexityRoot.Mutation.PostEvent == nil {
 			break
@@ -3997,6 +4062,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ResolveChatThread(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["thread"].(string), args["resolved"].(bool), args["expectedVersion"].(*int)), true
+	case "Mutation.resolveConversationThread":
+		if e.ComplexityRoot.Mutation.ResolveConversationThread == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_resolveConversationThread_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ResolveConversationThread(childComplexity, args["subject"].(ConversationSubject), args["thread"].(string), args["resolved"].(bool), args["expectedVersion"].(*int)), true
 	case "Mutation.resolveIssueChatThread":
 		if e.ComplexityRoot.Mutation.ResolveIssueChatThread == nil {
 			break
@@ -4173,6 +4249,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.StartChatThread(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["input"].(ChatThreadInput)), true
+	case "Mutation.startConversationThread":
+		if e.ComplexityRoot.Mutation.StartConversationThread == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_startConversationThread_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.StartConversationThread(childComplexity, args["subject"].(ConversationSubject), args["input"].(ChatThreadInput)), true
 	case "Mutation.startDelivery":
 		if e.ComplexityRoot.Mutation.StartDelivery == nil {
 			break
@@ -4411,6 +4498,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.AvailableModelProviders(childComplexity), true
+	case "Organization.conversation":
+		if e.ComplexityRoot.Organization.Conversation == nil {
+			break
+		}
+
+		args, err := ec.field_Organization_conversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Organization.Conversation(childComplexity, args["first"].(int), args["after"].(*string)), true
 	case "Organization.createdAt":
 		if e.ComplexityRoot.Organization.CreatedAt == nil {
 			break
@@ -4841,6 +4939,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.CommitDiff(childComplexity, args["sha"].(string)), true
+	case "Repository.conversation":
+		if e.ComplexityRoot.Repository.Conversation == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_conversation_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Conversation(childComplexity, args["first"].(int), args["after"].(*string)), true
 	case "Repository.createdAt":
 		if e.ComplexityRoot.Repository.CreatedAt == nil {
 			break
@@ -5505,6 +5614,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Subscription.ChatUpdates(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["after"].(string)), true
+	case "Subscription.conversationUpdates":
+		if e.ComplexityRoot.Subscription.ConversationUpdates == nil {
+			break
+		}
+
+		args, err := ec.field_Subscription_conversationUpdates_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Subscription.ConversationUpdates(childComplexity, args["subject"].(ConversationSubject), args["after"].(string)), true
 	case "Subscription.issueChatUpdates":
 		if e.ComplexityRoot.Subscription.IssueChatUpdates == nil {
 			break
@@ -5886,6 +6006,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("ChatAnchorInput", ec.unmarshalInputChatAnchorInput),
 			graphql.NewInputUnmarshaler("ChatMessageInput", ec.unmarshalInputChatMessageInput),
 			graphql.NewInputUnmarshaler("ChatThreadInput", ec.unmarshalInputChatThreadInput),
+			graphql.NewInputUnmarshaler("ConversationSubject", ec.unmarshalInputConversationSubject),
 			graphql.NewInputUnmarshaler("IssueFilter", ec.unmarshalInputIssueFilter),
 			graphql.NewInputUnmarshaler("IssueInput", ec.unmarshalInputIssueInput),
 			graphql.NewInputUnmarshaler("IssuePatch", ec.unmarshalInputIssuePatch),
@@ -7163,6 +7284,52 @@ type Push {
   at: Time!
 }
 `, BuiltIn: false},
+	{Name: "../../../api/graphql/conversations.graphqls", Input: `# Each person's own conversations: one about each organization they read, about each of its repositories and with
+# each of its agents, which only they read; their threads point at no file
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/conversations.md).
+
+extend type Organization {
+  "A page of the viewer's own conversation about the organization, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100."
+  conversation(first: Int! = 30, after: String): ChatPage!
+}
+
+extend type Repository {
+  "A page of the viewer's own conversation about the repository, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes repo.read. first is 1 to 100."
+  conversation(first: Int! = 30, after: String): ChatPage!
+}
+
+extend type Agent {
+  "A page of the viewer's own conversation with the agent, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100."
+  conversation(first: Int! = 30, after: String): ChatPage!
+}
+
+"Which of the viewer's own conversations a change or a subscription names: the one about the organization, about one of its repositories, or with one of its agents; naming both a repository and an agent is refused (BAD_USER_INPUT, conversation.invalid)."
+input ConversationSubject {
+  organizationId: ID!
+  "The repository it is about; null for the organization's or an agent's."
+  repositoryId: ID
+  "The agent it is with, by its principal ID; null for the organization's or a repository's."
+  agentId: ID
+}
+
+extend type Mutation {
+  "Starts a thread on one of the viewer's own conversations, with its first message, and the conversation with its first thread; takes org.read, or repo.read for a repository's. A conversation's threads point at no file (BAD_USER_INPUT, anchor.not_allowed). Starting the viewer's thread again by the ID it picked answers it as it is, and an ID of another's thread is refused (CONFLICT, chat.id_taken)."
+  startConversationThread(subject: ConversationSubject!, input: ChatThreadInput!): ChatThread!
+  "Posts a message to one of the threads of one of the viewer's own conversations; takes org.read, or repo.read for a repository's. Posting the viewer's message to the thread again by the ID it picked answers it as it is, and an ID of another message is refused (CONFLICT, chat.id_taken)."
+  postConversationMessage(subject: ConversationSubject!, thread: ID!, input: ChatMessageInput!): ChatMessage!
+  "Changes the body of one of the viewer's messages in their conversation; takes org.read, or repo.read for a repository's, and only a message's author edits it. A deleted message is refused (CONFLICT, message.deleted); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
+  editConversationMessage(subject: ConversationSubject!, thread: ID!, message: ID!, body: String!, expectedVersion: Int): ChatMessage!
+  "Deletes a message of one of the viewer's own conversations, which empties it and keeps its place in its thread, marked with who deleted it, and answers true; takes org.read, or repo.read for a repository's. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  deleteConversationMessage(subject: ConversationSubject!, thread: ID!, message: ID!, expectedVersion: Int): Boolean!
+  "Resolves one of the threads of one of the viewer's own conversations, or opens it again when resolved is false, and answers it; takes org.read, or repo.read for a repository's. A thread already so is answered as it is; with expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  resolveConversationThread(subject: ConversationSubject!, thread: ID!, resolved: Boolean!, expectedVersion: Int): ChatThread!
+}
+
+extend type Subscription {
+  "The changes to one of the viewer's own conversations after cursor after, as a page's after or an update's cursor names it, in order, as they come; takes org.read, or repo.read for a repository's, checked at every read, and ends once the viewer no longer reads what it is about or that is deleted. Over WebSocket (graphql-transport-ws)."
+  conversationUpdates(subject: ConversationSubject!, after: String!): ChatUpdate!
+}
+`, BuiltIn: false},
 	{Name: "../../../api/graphql/environments.graphqls", Input: `# A repository's environments: a target of main's /cobranch.yaml and a live branch it delivers, with the deliveries that
 # pushes and members queue for each, and what a member does to them
 # (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/delivery.md, "The Console and APIs").
@@ -8289,6 +8456,8 @@ func (ec *executionContext) childFields_Agent(ctx context.Context, field graphql
 		return ec.fieldContext_Agent_model(ctx, field)
 	case "secrets":
 		return ec.fieldContext_Agent_secrets(ctx, field)
+	case "conversation":
+		return ec.fieldContext_Agent_conversation(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Agent", field.Name)
 }
@@ -9359,6 +9528,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_availableModelProviders(ctx, field)
 	case "artifact":
 		return ec.fieldContext_Organization_artifact(ctx, field)
+	case "conversation":
+		return ec.fieldContext_Organization_conversation(ctx, field)
 	case "issueKey":
 		return ec.fieldContext_Organization_issueKey(ctx, field)
 	case "issues":
@@ -9503,6 +9674,8 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_branchDiff(ctx, field)
 	case "commitDiff":
 		return ec.fieldContext_Repository_commitDiff(ctx, field)
+	case "conversation":
+		return ec.fieldContext_Repository_conversation(ctx, field)
 	case "environments":
 		return ec.fieldContext_Repository_environments(ctx, field)
 	case "environment":
@@ -10028,6 +10201,28 @@ func (ec *executionContext) childFields___Type(ctx context.Context, field graphq
 // endregion ************************** internal!.gotpl ***************************
 
 // region    ***************************** args.gotpl *****************************
+
+func (ec *executionContext) field_Agent_conversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	return args, nil
+}
 
 func (ec *executionContext) field_Artifact_versionByNumber_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
@@ -10769,6 +10964,44 @@ func (ec *executionContext) field_Mutation_deleteChatMessage_args(ctx context.Co
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_deleteConversationMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "thread",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["thread"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "message",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["message"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_deleteIssueChatMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -10992,6 +11225,52 @@ func (ec *executionContext) field_Mutation_editChatMessage_args(ctx context.Cont
 		return nil, err
 	}
 	args["expectedVersion"] = arg5
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_editConversationMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "thread",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["thread"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "message",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["message"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "body",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["body"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg4
 	return args, nil
 }
 
@@ -11311,6 +11590,36 @@ func (ec *executionContext) field_Mutation_postChatMessage_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_postConversationMessage_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "thread",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["thread"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ChatMessageInput, error) {
+			return ec.unmarshalNChatMessageInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatMessageInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg2
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_postEvent_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -11570,6 +11879,44 @@ func (ec *executionContext) field_Mutation_resolveChatThread_args(ctx context.Co
 		return nil, err
 	}
 	args["expectedVersion"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_resolveConversationThread_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "thread",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["thread"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "resolved",
+		func(ctx context.Context, v any) (bool, error) {
+			return ec.unmarshalNBoolean2bool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["resolved"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedVersion",
+		func(ctx context.Context, v any) (*int, error) {
+			return ec.unmarshalOInt2ᚖint(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedVersion"] = arg3
 	return args, nil
 }
 
@@ -12085,6 +12432,28 @@ func (ec *executionContext) field_Mutation_startChatThread_args(ctx context.Cont
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_startConversationThread_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "input",
+		func(ctx context.Context, v any) (ChatThreadInput, error) {
+			return ec.unmarshalNChatThreadInput2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatThreadInput(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["input"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_startDelivery_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12541,6 +12910,28 @@ func (ec *executionContext) field_Organization_artifact_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Organization_conversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Organization_issue_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -12837,6 +13228,28 @@ func (ec *executionContext) field_Repository_commit_args(ctx context.Context, ra
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_conversation_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Repository_deletedBranch_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13032,6 +13445,28 @@ func (ec *executionContext) field_Subscription_chatUpdates_args(ctx context.Cont
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Subscription_conversationUpdates_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "subject",
+		func(ctx context.Context, v any) (ConversationSubject, error) {
+			return ec.unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["subject"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg1
 	return args, nil
 }
 
@@ -13552,6 +13987,50 @@ func (ec *executionContext) fieldContext_Agent_secrets(_ context.Context, field 
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_AgentSecret(ctx, field)
 		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Agent_conversation(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Agent_conversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Agent().Conversation(ctx, obj, fc.Args["first"].(int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatPage) graphql.Marshaler {
+			return ec.marshalNChatPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Agent_conversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Agent",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Agent_conversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -23708,6 +24187,226 @@ func (ec *executionContext) fieldContext_Mutation_requestReview(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Mutation_startConversationThread(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_startConversationThread(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().StartConversationThread(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["input"].(ChatThreadInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatThread) graphql.Marshaler {
+			return ec.marshalNChatThread2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatThread(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_startConversationThread(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatThread(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_startConversationThread_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_postConversationMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_postConversationMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().PostConversationMessage(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["thread"].(string), fc.Args["input"].(ChatMessageInput))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatMessage) graphql.Marshaler {
+			return ec.marshalNChatMessage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatMessage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_postConversationMessage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatMessage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_postConversationMessage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_editConversationMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_editConversationMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().EditConversationMessage(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["thread"].(string), fc.Args["message"].(string), fc.Args["body"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatMessage) graphql.Marshaler {
+			return ec.marshalNChatMessage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatMessage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_editConversationMessage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatMessage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_editConversationMessage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_deleteConversationMessage(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_deleteConversationMessage(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().DeleteConversationMessage(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["thread"].(string), fc.Args["message"].(string), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_deleteConversationMessage(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_deleteConversationMessage_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_resolveConversationThread(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_resolveConversationThread(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ResolveConversationThread(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["thread"].(string), fc.Args["resolved"].(bool), fc.Args["expectedVersion"].(*int))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatThread) graphql.Marshaler {
+			return ec.marshalNChatThread2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatThread(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_resolveConversationThread(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatThread(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_resolveConversationThread_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Mutation_redeliver(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -26492,6 +27191,50 @@ func (ec *executionContext) fieldContext_Organization_artifact(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Organization_conversation(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_conversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Organization().Conversation(ctx, obj, fc.Args["first"].(int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatPage) graphql.Marshaler {
+			return ec.marshalNChatPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_conversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Organization_conversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Organization_issueKey(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -28443,6 +29186,50 @@ func (ec *executionContext) fieldContext_Repository_commitDiff(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Repository_commitDiff_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_conversation(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_conversation(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Conversation(ctx, obj, fc.Args["first"].(int), fc.Args["after"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatPage) graphql.Marshaler {
+			return ec.marshalNChatPage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatPage(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_conversation(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatPage(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_conversation_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -30664,6 +31451,50 @@ func (ec *executionContext) fieldContext_Subscription_issueChatUpdates(ctx conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Subscription_issueChatUpdates_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Subscription_conversationUpdates(ctx context.Context, field graphql.CollectedField) (ret func(ctx context.Context) graphql.Marshaler) {
+	return graphql.ResolveFieldStream(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Subscription_conversationUpdates(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Subscription().ConversationUpdates(ctx, fc.Args["subject"].(ConversationSubject), fc.Args["after"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ChatUpdate) graphql.Marshaler {
+			return ec.marshalNChatUpdate2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐChatUpdate(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Subscription_conversationUpdates(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Subscription",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ChatUpdate(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Subscription_conversationUpdates_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -33761,6 +34592,62 @@ func UnmarshalChatThreadInput(ctx context.Context, raw any) (ChatThreadInput, er
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputConversationSubject(ctx context.Context, obj any) (ConversationSubject, error) {
+	var it ConversationSubject
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	fieldsInOrder := [...]string{"organizationId", "repositoryId", "agentId"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "organizationId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("organizationId"))
+			data, err := ec.unmarshalNID2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.OrganizationID = data
+		case "repositoryId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("repositoryId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.RepositoryID = data
+		case "agentId":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("agentId"))
+			data, err := ec.unmarshalOID2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.AgentID = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalConversationSubject unmarshals raw into the ConversationSubject input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalConversationSubject(ctx context.Context, raw any) (ConversationSubject, error) {
+	var out ConversationSubject
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ConversationSubject", raw, &out)
+	return out, err
+}
+
 func (ec *executionContext) unmarshalInputIssueFilter(ctx context.Context, obj any) (IssueFilter, error) {
 	var it IssueFilter
 	if obj == nil {
@@ -35093,68 +35980,74 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 		case "id":
 			out.Values[i] = ec._Agent_id(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "name":
 			out.Values[i] = ec._Agent_name(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "description":
 			out.Values[i] = ec._Agent_description(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "instructions":
 			out.Values[i] = ec._Agent_instructions(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "builtIn":
 			out.Values[i] = ec._Agent_builtIn(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdBy":
 			out.Values[i] = ec._Agent_createdBy(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdAt":
 			out.Values[i] = ec._Agent_createdAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Agent_updatedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._Agent_version(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "grants":
 			out.Values[i] = ec._Agent_grants(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "provider":
 			out.Values[i] = ec._Agent_provider(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "model":
 			out.Values[i] = ec._Agent_model(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "secrets":
 			out.Values[i] = ec._Agent_secrets(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
+				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "conversation":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Agent_conversation(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -38663,6 +39556,41 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "startConversationThread":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_startConversationThread(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "postConversationMessage":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_postConversationMessage(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "editConversationMessage":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_editConversationMessage(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "deleteConversationMessage":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_deleteConversationMessage(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "resolveConversationThread":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_resolveConversationThread(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "redeliver":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_redeliver(ctx, field)
@@ -39183,6 +40111,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_artifact(ctx, field, obj)
+				})
+		case "conversation":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_conversation(ctx, field, obj)
 				})
 		case "issueKey":
 			out.Values[i] = ec._Organization_issueKey(ctx, field, obj)
@@ -39730,6 +40664,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_commitDiff(ctx, field, obj)
+				})
+		case "conversation":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_conversation(ctx, field, obj)
 				})
 		case "environments":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -40530,6 +41470,8 @@ func (ec *executionContext) _Subscription(ctx context.Context, sel ast.Selection
 		return ec._Subscription_chatUpdates(ctx, fields[0])
 	case "issueChatUpdates":
 		return ec._Subscription_issueChatUpdates(ctx, fields[0])
+	case "conversationUpdates":
+		return ec._Subscription_conversationUpdates(ctx, fields[0])
 	default:
 		panic("unknown field " + strconv.Quote(fields[0].Name))
 	}
@@ -41986,6 +42928,11 @@ func (ec *executionContext) marshalNCommitPrincipal2ᚖcobranchᚗdevᚋinternal
 		return graphql.Null
 	}
 	return ec._CommitPrincipal(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNConversationSubject2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐConversationSubject(ctx context.Context, v any) (ConversationSubject, error) {
+	res, err := ec.unmarshalInputConversationSubject(ctx, v)
+	return res, graphql.ErrorOnPath(ctx, err)
 }
 
 func (ec *executionContext) marshalNDelivery2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐDeliveryᚄ(ctx context.Context, sel ast.SelectionSet, v []*Delivery) graphql.Marshaler {

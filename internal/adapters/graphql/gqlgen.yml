@@ -51,6 +51,7 @@ models:
       artifact: { resolver: true }
       modelProviders: { resolver: true }
       availableModelProviders: { resolver: true }
+      conversation: { resolver: true }
   Issue:
     fields:
       activity: { resolver: true }
@@ -89,6 +90,7 @@ models:
       runs: { resolver: true }
       run: { resolver: true }
       chat: { resolver: true }
+      conversation: { resolver: true }
       branchDiff: { resolver: true }
       commitDiff: { resolver: true }
       environments: { resolver: true }
@@ -103,6 +105,13 @@ models:
     extraFields:
       RepositoryID:
         description: The ID of the environment's repository, which its deliveries read.
+        type: string
+  Agent:
+    fields:
+      conversation: { resolver: true }
+    extraFields:
+      OrganizationID:
+        description: The ID of the agent's organization, which its conversation reads.
         type: string
   Secret:
     fields:
