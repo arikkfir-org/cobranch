@@ -741,6 +741,10 @@ type FileDiff struct {
 	OldMode *string `json:"oldMode,omitempty"`
 	// Its mode after; null for a deleted file.
 	Mode *string `json:"mode,omitempty"`
+	// The object that held its content before; null for an added file.
+	OldObject *string `json:"oldObject,omitempty"`
+	// The object that holds its content after, which a Viewed mark holds on to; null for a deleted file.
+	Object *string `json:"object,omitempty"`
 	// Whether Git reads it as binary, which shows no lines.
 	Binary    bool `json:"binary"`
 	Additions int  `json:"additions"`
@@ -1532,6 +1536,8 @@ type Repository struct {
 	BranchDiff *Diff `json:"branchDiff,omitempty"`
 	// A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE.
 	CommitDiff *Diff `json:"commitDiff,omitempty"`
+	// The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous).
+	ViewedFiles *ViewedFiles `json:"viewedFiles,omitempty"`
 	// A page of the viewer's own conversation about the repository, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes repo.read. first is 1 to 100.
 	Conversation *ChatPage `json:"conversation"`
 	// The repository's environments, by target and then branch, each with its newest delivery; takes repo.read.
@@ -1961,6 +1967,33 @@ type User struct {
 	JoinRequests []*JoinRequest `json:"joinRequests"`
 	// What the viewer takes of what the limits cap; the viewer's own, so it takes no permission.
 	Usage *ViewerUsage `json:"usage"`
+}
+
+// A file of a branch marked Viewed.
+type ViewedFile struct {
+	// The file's path, from the repository's root.
+	Path string `json:"path"`
+	// The object of its content when it was marked, which a file changed since no longer has; null for a file the branch deletes.
+	Object   *string   `json:"object,omitempty"`
+	ViewedAt time.Time `json:"viewedAt"`
+}
+
+// A change to a file's Viewed mark.
+type ViewedFileInput struct {
+	// The file's path, from the repository's root.
+	Path string `json:"path"`
+	// The object of its content to mark it at, as the branch's diff names it; null for a file the branch deletes.
+	Object *string `json:"object,omitempty"`
+	// false takes the file's mark off.
+	Viewed bool `json:"viewed"`
+}
+
+// A person's Viewed marks on a branch's files.
+type ViewedFiles struct {
+	// Names the marks as they are, for updateViewedFiles' expectedTag; the REST API's ETag quotes it.
+	Tag string `json:"tag"`
+	// The marks, by path.
+	Files []*ViewedFile `json:"files"`
 }
 
 // What the viewer takes of what the limits cap.

@@ -103,6 +103,23 @@ func (r *mutationResolver) RequestReview(ctx context.Context, repositoryID strin
 	return aiReview(requested), nil
 }
 
+// UpdateViewedFiles is the resolver for the updateViewedFiles field.
+func (r *mutationResolver) UpdateViewedFiles(ctx context.Context, repositoryID string, branch string, files []*ViewedFileInput, expectedTag *string) (*ViewedFiles, error) {
+	v, repoID, err := codeRepo(ctx, repositoryID)
+	if err != nil {
+		return nil, err
+	}
+	tag := code.AnyViewed
+	if expectedTag != nil {
+		tag = *expectedTag
+	}
+	marks, err := r.Code.UpdateViewed(ctx, v, repoID, branch, tag, viewedChanges(files))
+	if err != nil {
+		return nil, viewedFail(ctx, err, "changing the Viewed marks")
+	}
+	return viewedFiles(marks), nil
+}
+
 // Attention is the resolver for the attention field.
 func (r *organizationResolver) Attention(ctx context.Context, obj *Organization) ([]*AttentionBranch, error) {
 	list, err := resolveOrg(ctx, obj, r.Code.Attention, "listing what needs the viewer")
@@ -357,6 +374,22 @@ func (r *repositoryResolver) CommitDiff(ctx context.Context, obj *Repository, sh
 		return nil, codeFail(ctx, err, "reading the commit's diff")
 	}
 	return diff(d), nil
+}
+
+// ViewedFiles is the resolver for the viewedFiles field.
+func (r *repositoryResolver) ViewedFiles(ctx context.Context, obj *Repository, branch string) (*ViewedFiles, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	marks, err := r.Code.Viewed(ctx, v, repoID, branch)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, viewedFail(ctx, err, "reading the Viewed marks")
+	}
+	return viewedFiles(marks), nil
 }
 
 // Branch returns BranchResolver implementation.

@@ -17,12 +17,18 @@
 .diff-files-path:hover { text-decoration: underline; }
 .diff-files-row :is(.diff-added, .diff-removed) { flex: none; font: var(--text-code-small); }
 .diff-files-binary { flex: none; color: var(--color-fg-muted); font: var(--text-caption); }
+.diff-files-path-viewed { color: var(--color-fg-muted); }
+.diff-files-viewed { display: inline-flex; flex: none; color: var(--color-fg-muted); }
+.diff-files-viewed[hidden] { display: none; }
 .diff-card { scroll-margin-top: var(--space-16); }
 
 .diff-card-header { display: flex; align-items: center; gap: var(--space-8); min-width: 0; padding: var(--space-8) var(--space-16); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-bg-sunken); }
 .diff-card-header > .icon { color: var(--color-fg-muted); }
 .diff-card-path { min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-medium); text-overflow: ellipsis; white-space: nowrap; }
 .diff-card-header :is(.diff-added, .diff-removed) { flex: none; font: var(--text-code-small); }
+.diff-card-header .checkbox { flex: none; }
+/* A file marked Viewed folds to its header. */
+.diff-card-viewed > :not(.diff-card-header) { display: none; }
 .diff-note { display: flex; align-items: center; gap: var(--space-12); margin: 0; padding: var(--space-12) var(--space-16); color: var(--color-fg-muted); font: var(--text-body-small); }
 .diff-note + .diff-note { padding-top: 0; }
 

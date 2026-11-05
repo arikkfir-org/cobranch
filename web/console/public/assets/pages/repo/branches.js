@@ -15,7 +15,7 @@ import { popover } from "../../lib/menu.js";
 import { commitReviews, reviewDrafting } from "../../lib/reviews.js";
 import { go, render } from "../../lib/router.js";
 import { manualJobs, runsPanel } from "../../lib/runs.js";
-import { base, setCarried } from "../../lib/state.js";
+import { base, me, setCarried } from "../../lib/state.js";
 import { mergeCard, repositoryBranches } from "./index.js";
 
 // branches/ shows a branch's page, and the repository's branches without a name: their address before they became
@@ -67,7 +67,9 @@ async function tabContent(ctx, b, tab) {
   const { org, repo, path, at, can, fail } = ctx;
   if (tab === "changes") {
     const drafting = reviewDrafting(path, b, can);
-    return [...await diffView(path + "/branches/" + encodeURIComponent(b.name) + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can)),
+    const branch = path + "/branches/" + encodeURIComponent(b.name);
+    // Only a signed-in viewer keeps Viewed marks.
+    return [...await diffView(branch + "/diff", at, drafting, branchSubject(org, repo, path, at, b.name, can), me ? branch + "/viewed" : null),
       b.commit ? commitReviews(path, b.commit, can, fail, drafting) : null];
   }
   if (tab === "jobs") return [manualJobs(path, at, b, can, fail), await runsPanel(path, at, can, fail, b.head)];

@@ -17,9 +17,9 @@ import (
 	"cobranch.dev/internal/services/repos"
 )
 
-// shape is the version of the shape of a tree's and a file's answers, which their ETags hold beside the commit and the
-// path: a change of what the API answers for them bumps it, so no client keeps an answer of the old shape.
-const shape = "2"
+// shape is the version of the shape of a tree's, a file's and a diff's answers, which their ETags hold beside the commit
+// and the path: a change of what the API answers for them bumps it, so no client keeps an answer of the old shape.
+const shape = "3"
 
 // rawPolicy is raw bytes' Content Security Policy: they load images of their own origin and data URLs alone, and run
 // nothing, so an HTML or SVG file opened on the API's origin, which holds the session cookie, can't act for its

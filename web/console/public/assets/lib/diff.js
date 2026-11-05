@@ -1,11 +1,12 @@
 // A diff, as the Commit and Branch screens draw it: a line counting the files and lines it changes beside the Unified
 // and Split switch, then a card of each file's change (Diff card), its hunks' lines in one column, or the old beside
-// the new. A branch's lists its files first, and draws its chat's open threads under the lines they are on.
+// the new. A branch's lists its files first, and draws its chat's open threads under the lines they are on, and its
+// viewer's Viewed marks, which fold the files they hold.
 
 import { api } from "./api.js";
 import { lineThreads } from "./diffthreads.js";
 import { h } from "./dom.js";
-import { banner } from "./forms.js";
+import { banner, checkbox } from "./forms.js";
 import { plural } from "./format.js";
 import { icon } from "./icons.js";
 import { popover } from "./menu.js";
@@ -26,12 +27,14 @@ const longFile = 500;
 // diffView reads the diff at url and answers what shows it: its counts, the layout switch and its files' cards, or
 // why it couldn't be read. With drafting, a reviewer drafts comments on its lines. With chat, a branch's conversation
 // ({ chat, post, moderate } as its subject has them), a card lists its files first, and the conversation's open
-// threads show under the lines they are on.
-export async function diffView(url, at, drafting, chat) {
-  let d, threads;
+// threads show under the lines they are on. With viewed, the URL of a signed-in viewer's Viewed marks on the branch,
+// each file's card has Viewed, which marks it and folds it.
+export async function diffView(url, at, drafting, chat, viewed) {
+  let d, threads, marks;
   try {
-    // Threads that can't be read leave the diff without them, and say so.
-    [d, threads] = await Promise.all([api("GET", url), chat ? lineThreads(chat).catch((err) => ({ failed: err })) : null]);
+    // Threads or marks that can't be read leave the diff without them, and say so.
+    [d, threads, marks] = await Promise.all([api("GET", url), chat ? lineThreads(chat).catch((err) => ({ failed: err })) : null,
+      viewed ? viewedMarks(viewed).catch((err) => ({ failed: err })) : null]);
   } catch (err) {
     return [banner("warning", null, err.code === "git.unavailable" ? "This installation runs no Git server, so its changes can't be shown."
       : "The changes couldn't be read: " + err.message)];
@@ -40,7 +43,15 @@ export async function diffView(url, at, drafting, chat) {
   const cards = h("div", { class: "diff-cards" });
   const unread = threads && threads.failed ? banner("warning", null, "The branch's threads on these lines couldn't be read: " + threads.failed.message) : null;
   if (unread) threads = null;
-  const draw = () => cards.replaceChildren(...d.files.map((f, i) => diffCard(f, i, at, d, drafting, threads, layout)));
+  const unmarked = marks && marks.failed ? banner("warning", null, "Your Viewed marks couldn't be read: " + marks.failed.message) : null;
+  if (unmarked) marks = null;
+  // Why a mark didn't change, once one didn't.
+  const problem = h("div", { hidden: true });
+  if (marks) {
+    marks.fails((err) => { problem.replaceChildren(banner("warning", null, "The Viewed mark couldn't change: " + err.message)); problem.hidden = false; });
+    marks.listen(() => { problem.hidden = true; });
+  }
+  const draw = () => cards.replaceChildren(...d.files.map((f, i) => diffCard(f, i, at, d, drafting, threads, layout, marks)));
   const choose = (to) => () => {
     layout = to;
     try {
@@ -56,37 +67,90 @@ export async function diffView(url, at, drafting, chat) {
     files ? [h("span", { class: "diff-added" }, "+" + d.additions), h("span", { class: "diff-removed" }, "−" + d.deletions)] : null,
     h("span", { class: "spacer" }), d.files.length ? switcher : null);
   draw();
-  return [stats, unread, chat && d.files.length ? filesCard(d, cards) : null, d.files.length ? cards : null,
+  return [stats, unread, unmarked, problem, chat && d.files.length ? filesCard(d, cards, marks) : null, d.files.length ? cards : null,
     d.filesLeftOut ? h("p", { class: "diff-left-out" }, plural(d.filesLeftOut, "more file") + " changed past the 3,000 a diff shows.") : null];
 }
 
 // pathOf is how a file's change names it: its path, after the one it had for a renamed file.
 const pathOf = (f) => f.oldPath ? f.oldPath + " → " + f.path : f.path;
 
+// viewedMarks reads a viewer's Viewed marks on a branch at url and answers what keeps them: has(f) tells whether the
+// diff's file f is marked at the content it shows, so a file changed since its mark shows unviewed again; set(f, on)
+// marks it there, or takes its mark off, then tells each of listen's listeners; fail(err) and fails(listener) say why
+// a mark didn't change.
+async function viewedMarks(url) {
+  let files = (await api("GET", url)).files;
+  const listeners = [], failures = [];
+  return {
+    has: (f) => !!files[f.path] && (files[f.path].object || "") === (f.object || ""),
+    listen: (fn) => listeners.push(fn),
+    fails: (fn) => failures.push(fn),
+    fail: (err) => failures.forEach((fn) => fn(err)),
+    async set(f, on) {
+      // A file the branch deletes has no object: its mark holds none.
+      const mark = on ? (f.object ? { object: f.object } : {}) : null;
+      files = (await api("PATCH", url, { files: { [f.path]: mark } }, { "Content-Type": "application/merge-patch+json", "If-Match": "*" })).files;
+      listeners.forEach((fn) => fn());
+    },
+  };
+}
+
 // filesCard is the card that lists a diff's files (Files), each with what it adds and removes, and a link down to its
-// change among cards, the n-th file's the n-th card.
-function filesCard(d, cards) {
+// change among cards, the n-th file's the n-th card; with marks, a file marked Viewed shows muted, with a check.
+function filesCard(d, cards, marks) {
   const down = (i) => (e) => {
     e.preventDefault();
     const card = cards.children[i];
     if (card) card.scrollIntoView({ block: "start" });
   };
+  const rows = d.files.map((f, i) => {
+    const link = h("a", { class: "diff-files-path", href: "#file-" + (i + 1), title: pathOf(f), onclick: down(i) }, pathOf(f));
+    const check = h("span", { class: "diff-files-viewed", role: "img", "aria-label": "Viewed", title: "Viewed", hidden: true }, icon("check"));
+    const paint = () => {
+      const on = !!marks && marks.has(f);
+      link.classList.toggle("diff-files-path-viewed", on);
+      check.hidden = !on;
+    };
+    paint();
+    return { paint, el: h("li", { class: "diff-files-row" }, icon("file-code"), link, h("span", { class: "spacer" }),
+      f.binary ? h("span", { class: "diff-files-binary" }, "binary") : [h("span", { class: "diff-added" }, "+" + f.additions), h("span", { class: "diff-removed" }, "−" + f.deletions)],
+      check) };
+  });
+  if (marks) marks.listen(() => rows.forEach((r) => r.paint()));
   return h("section", { class: "card diff-files", "aria-label": "Files" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Files")),
-    h("ul", { class: "diff-files-list" }, d.files.map((f, i) => h("li", { class: "diff-files-row" }, icon("file-code"),
-      h("a", { class: "diff-files-path", href: "#file-" + (i + 1), title: pathOf(f), onclick: down(i) }, pathOf(f)), h("span", { class: "spacer" }),
-      f.binary ? h("span", { class: "diff-files-binary" }, "binary") : [h("span", { class: "diff-added" }, "+" + f.additions), h("span", { class: "diff-removed" }, "−" + f.deletions)]))));
+    h("ul", { class: "diff-files-list" }, rows.map((r) => r.el)));
 }
 
-// diffCard is d's i-th file's change (Diff card): its path, what it adds and removes and a menu to its file, over its
-// hunks, laid out as layout says, or why it shows none; threads draws the threads on its lines under them.
-function diffCard(f, i, at, d, drafting, threads, layout) {
+// viewedBox is a file's Viewed checkbox in its card's header, which folds card while the viewer has f marked Viewed in
+// marks, and marks it, or takes the mark off, when they check it; a mark that doesn't change unfolds it again.
+function viewedBox(f, card, marks) {
+  const fold = (on) => card.classList.toggle("diff-card-viewed", on);
+  const box = h("input", { type: "checkbox", checked: marks.has(f), "aria-label": "Viewed " + f.path, onchange: () => {
+    const on = box.checked;
+    box.disabled = true;
+    fold(on);
+    marks.set(f, on).then(() => { box.disabled = false; }, (err) => {
+      box.disabled = false;
+      box.checked = !on;
+      fold(!on);
+      marks.fail(err);
+    });
+  } });
+  fold(box.checked);
+  return checkbox(box, "Viewed");
+}
+
+// diffCard is d's i-th file's change (Diff card): its path, what it adds and removes, Viewed with marks, and a menu to
+// its file, over its hunks, laid out as layout says, or why it shows none; threads draws the threads on its lines under
+// them.
+function diffCard(f, i, at, d, drafting, threads, layout, marks) {
   const file = f.status === "deleted" ? (d.base ? at.blob(d.base, f.path) : null) : at.blob(d.head, f.path);
   const more = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "More for " + f.path, title: "More", "aria-haspopup": "menu",
     onclick: () => fileMenu(more, f, file) }, icon("ellipsis"));
   const header = h("div", { class: "diff-card-header" }, icon("file-code"),
     h("span", { class: "diff-card-path", title: pathOf(f) }, pathOf(f)),
     f.binary ? null : [h("span", { class: "diff-added" }, "+" + f.additions), h("span", { class: "diff-removed" }, "−" + f.deletions)],
-    h("span", { class: "spacer" }), more);
+    h("span", { class: "spacer" }));
   const notes = [];
   if (f.oldMode && f.mode && f.oldMode !== f.mode) notes.push("Mode " + f.oldMode + " → " + f.mode + ".");
   if (f.binary) notes.push("A binary file: its lines don't show.");
@@ -104,7 +168,10 @@ function diffCard(f, i, at, d, drafting, threads, layout) {
     const wait = h("div", { class: "diff-note" }, h("span", {}, "A long change, folded."), show);
     body = wait;
   }
-  return h("section", { class: "card diff-card", id: "file-" + (i + 1), "aria-label": f.path }, header, notes.map((n) => h("p", { class: "diff-note" }, n)), body);
+  const card = h("section", { class: "card diff-card", id: "file-" + (i + 1), "aria-label": f.path }, header, notes.map((n) => h("p", { class: "diff-note" }, n)), body);
+  if (marks) header.append(viewedBox(f, card, marks));
+  header.append(more);
+  return card;
 }
 
 // fileMenu opens a file's menu under anchor: View file, at the commit that holds it, and Copy path.

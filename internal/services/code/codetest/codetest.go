@@ -49,6 +49,8 @@ type Store struct {
 	// Tasks is the number of the last task a request for a review started.
 	ReviewerOff error
 	Tasks       int64
+	// Viewed holds each principal's Viewed marks on a repository's branch, by path.
+	Viewed map[string][]code.ViewedFile
 }
 
 // NewStore returns an empty Store.
@@ -59,7 +61,7 @@ func NewStore() *Store {
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
 		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
 		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{},
-		Defined: map[uuid.UUID]map[string][]jobs.Job{}, ActivityList: map[uuid.UUID][]code.Activity{}}
+		Defined: map[uuid.UUID]map[string][]jobs.Job{}, ActivityList: map[uuid.UUID][]code.Activity{}, Viewed: map[string][]code.ViewedFile{}}
 }
 
 // Add records commits in the repository, as push brought them.

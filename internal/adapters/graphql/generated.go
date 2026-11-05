@@ -473,7 +473,9 @@ type ComplexityRoot struct {
 		Deletions func(childComplexity int) int
 		Hunks     func(childComplexity int) int
 		Mode      func(childComplexity int) int
+		Object    func(childComplexity int) int
 		OldMode   func(childComplexity int) int
+		OldObject func(childComplexity int) int
 		OldPath   func(childComplexity int) int
 		Path      func(childComplexity int) int
 		Status    func(childComplexity int) int
@@ -797,6 +799,7 @@ type ComplexityRoot struct {
 		UpdateRepository          func(childComplexity int, id string, input RepositoryInput) int
 		UpdateRole                func(childComplexity int, organizationID string, id string, input RoleInput) int
 		UpdateSecret              func(childComplexity int, organizationID string, id string, input SecretChange, expectedVersion *int) int
+		UpdateViewedFiles         func(childComplexity int, repositoryID string, branch string, files []*ViewedFileInput, expectedTag *string) int
 	}
 
 	MyTask struct {
@@ -1007,6 +1010,7 @@ type ComplexityRoot struct {
 		Tags              func(childComplexity int) int
 		Tree              func(childComplexity int, ref string, path string) int
 		TreeCommits       func(childComplexity int, ref string, path string) int
+		ViewedFiles       func(childComplexity int, branch string) int
 		ViewerPermissions func(childComplexity int) int
 		Visibility        func(childComplexity int) int
 	}
@@ -1245,6 +1249,17 @@ type ComplexityRoot struct {
 		Usage          func(childComplexity int) int
 	}
 
+	ViewedFile struct {
+		Object   func(childComplexity int) int
+		Path     func(childComplexity int) int
+		ViewedAt func(childComplexity int) int
+	}
+
+	ViewedFiles struct {
+		Files func(childComplexity int) int
+		Tag   func(childComplexity int) int
+	}
+
 	ViewerUsage struct {
 		Organizations func(childComplexity int) int
 	}
@@ -1318,6 +1333,7 @@ type MutationResolver interface {
 	DeleteBranch(ctx context.Context, repositoryID string, branch string, expectedHead *string) (bool, error)
 	SubmitReview(ctx context.Context, repositoryID string, sha string, input ReviewInput) (*Review, error)
 	RequestReview(ctx context.Context, repositoryID string, branch string) (*AIReview, error)
+	UpdateViewedFiles(ctx context.Context, repositoryID string, branch string, files []*ViewedFileInput, expectedTag *string) (*ViewedFiles, error)
 	StartConversationThread(ctx context.Context, subject ConversationSubject, input ChatThreadInput) (*ChatThread, error)
 	PostConversationMessage(ctx context.Context, subject ConversationSubject, thread string, input ChatMessageInput) (*ChatMessage, error)
 	EditConversationMessage(ctx context.Context, subject ConversationSubject, thread string, message string, body string, expectedVersion *int) (*ChatMessage, error)
@@ -1429,6 +1445,7 @@ type RepositoryResolver interface {
 	Blame(ctx context.Context, obj *Repository, ref string, path string) (*Blame, error)
 	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
+	ViewedFiles(ctx context.Context, obj *Repository, branch string) (*ViewedFiles, error)
 	Conversation(ctx context.Context, obj *Repository, first int, after *string) (*ChatPage, error)
 	Environments(ctx context.Context, obj *Repository) ([]*Environment, error)
 	Environment(ctx context.Context, obj *Repository, id string) (*Environment, error)
@@ -3294,12 +3311,24 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.FileDiff.Mode(childComplexity), true
+	case "FileDiff.object":
+		if e.ComplexityRoot.FileDiff.Object == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.Object(childComplexity), true
 	case "FileDiff.oldMode":
 		if e.ComplexityRoot.FileDiff.OldMode == nil {
 			break
 		}
 
 		return e.ComplexityRoot.FileDiff.OldMode(childComplexity), true
+	case "FileDiff.oldObject":
+		if e.ComplexityRoot.FileDiff.OldObject == nil {
+			break
+		}
+
+		return e.ComplexityRoot.FileDiff.OldObject(childComplexity), true
 	case "FileDiff.oldPath":
 		if e.ComplexityRoot.FileDiff.OldPath == nil {
 			break
@@ -5254,6 +5283,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UpdateSecret(childComplexity, args["organizationId"].(string), args["id"].(string), args["input"].(SecretChange), args["expectedVersion"].(*int)), true
+	case "Mutation.updateViewedFiles":
+		if e.ComplexityRoot.Mutation.UpdateViewedFiles == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_updateViewedFiles_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UpdateViewedFiles(childComplexity, args["repositoryId"].(string), args["branch"].(string), args["files"].([]*ViewedFileInput), args["expectedTag"].(*string)), true
 
 	case "MyTask.agentEmail":
 		if e.ComplexityRoot.MyTask.AgentEmail == nil {
@@ -6361,6 +6401,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.TreeCommits(childComplexity, args["ref"].(string), args["path"].(string)), true
+	case "Repository.viewedFiles":
+		if e.ComplexityRoot.Repository.ViewedFiles == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_viewedFiles_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.ViewedFiles(childComplexity, args["branch"].(string)), true
 	case "Repository.viewerPermissions":
 		if e.ComplexityRoot.Repository.ViewerPermissions == nil {
 			break
@@ -7373,6 +7424,38 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.User.Usage(childComplexity), true
 
+	case "ViewedFile.object":
+		if e.ComplexityRoot.ViewedFile.Object == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewedFile.Object(childComplexity), true
+	case "ViewedFile.path":
+		if e.ComplexityRoot.ViewedFile.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewedFile.Path(childComplexity), true
+	case "ViewedFile.viewedAt":
+		if e.ComplexityRoot.ViewedFile.ViewedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewedFile.ViewedAt(childComplexity), true
+
+	case "ViewedFiles.files":
+		if e.ComplexityRoot.ViewedFiles.Files == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewedFiles.Files(childComplexity), true
+	case "ViewedFiles.tag":
+		if e.ComplexityRoot.ViewedFiles.Tag == nil {
+			break
+		}
+
+		return e.ComplexityRoot.ViewedFiles.Tag(childComplexity), true
+
 	case "ViewerUsage.organizations":
 		if e.ComplexityRoot.ViewerUsage.Organizations == nil {
 			break
@@ -7423,6 +7506,7 @@ func (e *executableSchema) Exec(ctx context.Context) graphql.ResponseHandler {
 			graphql.NewInputUnmarshaler("TaskInput", ec.unmarshalInputTaskInput),
 			graphql.NewInputUnmarshaler("TaskUsageInput", ec.unmarshalInputTaskUsageInput),
 			graphql.NewInputUnmarshaler("TranscriptEntryInput", ec.unmarshalInputTranscriptEntryInput),
+			graphql.NewInputUnmarshaler("ViewedFileInput", ec.unmarshalInputViewedFileInput),
 		)
 	}
 	first := true
@@ -8348,6 +8432,35 @@ extend type Repository {
   branchDiff(name: String!): Diff
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
   commitDiff(sha: String!): Diff
+  "The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous)."
+  viewedFiles(branch: String!): ViewedFiles
+}
+
+"A person's Viewed marks on a branch's files."
+type ViewedFiles {
+  "Names the marks as they are, for updateViewedFiles' expectedTag; the REST API's ETag quotes it."
+  tag: String!
+  "The marks, by path."
+  files: [ViewedFile!]!
+}
+
+"A file of a branch marked Viewed."
+type ViewedFile {
+  "The file's path, from the repository's root."
+  path: String!
+  "The object of its content when it was marked, which a file changed since no longer has; null for a file the branch deletes."
+  object: String
+  viewedAt: Time!
+}
+
+"A change to a file's Viewed mark."
+input ViewedFileInput {
+  "The file's path, from the repository's root."
+  path: String!
+  "The object of its content to mark it at, as the branch's diff names it; null for a file the branch deletes."
+  object: String
+  "false takes the file's mark off."
+  viewed: Boolean! = true
 }
 
 "One of a repository's tags and the object it names, a commit or an annotated tag."
@@ -8519,6 +8632,10 @@ type FileDiff {
   oldMode: String
   "Its mode after; null for a deleted file."
   mode: String
+  "The object that held its content before; null for an added file."
+  oldObject: String
+  "The object that holds its content after, which a Viewed mark holds on to; null for a deleted file."
+  object: String
   "Whether Git reads it as binary, which shows no lines."
   binary: Boolean!
   additions: Int!
@@ -8573,6 +8690,8 @@ extend type Mutation {
   submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
   "Asks the organization's AI reviewer for another review of the branch's head, and answers its task; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. main's pushes are never reviewed, and a branch main's /cobranch-review.yaml leaves out is refused (CONFLICT, review.off); so is a reviewer without a model (CONFLICT, reviewer.no_model) or a suspended one (CONFLICT, reviewer.suspended)."
   requestReview(repositoryId: ID!, branch: String!): AIReview!
+  "Marks files of one of the repository's branches Viewed for the viewer, or takes their marks off, and answers the viewer's marks as they now are; takes repo.read, and a signed-in viewer (FORBIDDEN for Anonymous). A mark already at its object keeps the moment it was made. With expectedTag, marks that changed since it was read are refused (CONFLICT, precondition.failed). At most 3,000 files at once, each once, and a branch keeps at most 10,000 marks of a person's (BAD_USER_INPUT, viewed.too_many)."
+  updateViewedFiles(repositoryId: ID!, branch: String!, files: [ViewedFileInput!]!, expectedTag: String): ViewedFiles!
 }
 
 "The review a principal submits."
@@ -11154,6 +11273,10 @@ func (ec *executionContext) childFields_FileDiff(ctx context.Context, field grap
 		return ec.fieldContext_FileDiff_oldMode(ctx, field)
 	case "mode":
 		return ec.fieldContext_FileDiff_mode(ctx, field)
+	case "oldObject":
+		return ec.fieldContext_FileDiff_oldObject(ctx, field)
+	case "object":
+		return ec.fieldContext_FileDiff_object(ctx, field)
 	case "binary":
 		return ec.fieldContext_FileDiff_binary(ctx, field)
 	case "additions":
@@ -11998,6 +12121,8 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_branchDiff(ctx, field)
 	case "commitDiff":
 		return ec.fieldContext_Repository_commitDiff(ctx, field)
+	case "viewedFiles":
+		return ec.fieldContext_Repository_viewedFiles(ctx, field)
 	case "conversation":
 		return ec.fieldContext_Repository_conversation(ctx, field)
 	case "environments":
@@ -12472,6 +12597,28 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_usage(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type User", field.Name)
+}
+
+func (ec *executionContext) childFields_ViewedFile(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "path":
+		return ec.fieldContext_ViewedFile_path(ctx, field)
+	case "object":
+		return ec.fieldContext_ViewedFile_object(ctx, field)
+	case "viewedAt":
+		return ec.fieldContext_ViewedFile_viewedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ViewedFile", field.Name)
+}
+
+func (ec *executionContext) childFields_ViewedFiles(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "tag":
+		return ec.fieldContext_ViewedFiles_tag(ctx, field)
+	case "files":
+		return ec.fieldContext_ViewedFiles_files(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type ViewedFiles", field.Name)
 }
 
 func (ec *executionContext) childFields_ViewerUsage(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -15434,6 +15581,44 @@ func (ec *executionContext) field_Mutation_updateSecret_args(ctx context.Context
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_updateViewedFiles_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "files",
+		func(ctx context.Context, v any) ([]*ViewedFileInput, error) {
+			return ec.unmarshalNViewedFileInput2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileInputᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["files"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "expectedTag",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["expectedTag"] = arg3
+	return args, nil
+}
+
 func (ec *executionContext) field_Organization_activity_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -16145,6 +16330,20 @@ func (ec *executionContext) field_Repository_tree_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["path"] = arg1
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_viewedFiles_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg0
 	return args, nil
 }
 
@@ -23654,6 +23853,52 @@ func (ec *executionContext) fieldContext_FileDiff_mode(_ context.Context, field 
 	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
 }
 
+func (ec *executionContext) _FileDiff_oldObject(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_oldObject(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.OldObject, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_oldObject(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
+func (ec *executionContext) _FileDiff_object(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_FileDiff_object(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Object, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_FileDiff_object(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("FileDiff", field, false, false, "String")
+}
+
 func (ec *executionContext) _FileDiff_binary(ctx context.Context, field graphql.CollectedField, obj *FileDiff) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -29186,6 +29431,50 @@ func (ec *executionContext) fieldContext_Mutation_requestReview(ctx context.Cont
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_requestReview_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_updateViewedFiles(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_updateViewedFiles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UpdateViewedFiles(ctx, fc.Args["repositoryId"].(string), fc.Args["branch"].(string), fc.Args["files"].([]*ViewedFileInput), fc.Args["expectedTag"].(*string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ViewedFiles) graphql.Marshaler {
+			return ec.marshalNViewedFiles2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFiles(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_updateViewedFiles(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ViewedFiles(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_updateViewedFiles_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -35814,6 +36103,50 @@ func (ec *executionContext) fieldContext_Repository_commitDiff(ctx context.Conte
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_viewedFiles(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_viewedFiles(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().ViewedFiles(ctx, obj, fc.Args["branch"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ViewedFiles) graphql.Marshaler {
+			return ec.marshalOViewedFiles2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFiles(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_viewedFiles(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ViewedFiles(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_viewedFiles_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Repository_conversation(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -40123,6 +40456,130 @@ func (ec *executionContext) fieldContext_User_usage(_ context.Context, field gra
 	return fc, nil
 }
 
+func (ec *executionContext) _ViewedFile_path(ctx context.Context, field graphql.CollectedField, obj *ViewedFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewedFile_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ViewedFile_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ViewedFile", field, false, false, "String")
+}
+
+func (ec *executionContext) _ViewedFile_object(ctx context.Context, field graphql.CollectedField, obj *ViewedFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewedFile_object(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Object, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_ViewedFile_object(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ViewedFile", field, false, false, "String")
+}
+
+func (ec *executionContext) _ViewedFile_viewedAt(ctx context.Context, field graphql.CollectedField, obj *ViewedFile) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewedFile_viewedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ViewedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
+			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ViewedFile_viewedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ViewedFile", field, false, false, "Time")
+}
+
+func (ec *executionContext) _ViewedFiles_tag(ctx context.Context, field graphql.CollectedField, obj *ViewedFiles) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewedFiles_tag(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Tag, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ViewedFiles_tag(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("ViewedFiles", field, false, false, "String")
+}
+
+func (ec *executionContext) _ViewedFiles_files(ctx context.Context, field graphql.CollectedField, obj *ViewedFiles) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_ViewedFiles_files(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Files, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ViewedFile) graphql.Marshaler {
+			return ec.marshalNViewedFile2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_ViewedFiles_files(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "ViewedFiles",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ViewedFile(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _ViewerUsage_organizations(ctx context.Context, field graphql.CollectedField, obj *ViewerUsage) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -43321,6 +43778,66 @@ func UnmarshalTranscriptEntryInput(ctx context.Context, raw any) (TranscriptEntr
 	return out, err
 }
 
+func (ec *executionContext) unmarshalInputViewedFileInput(ctx context.Context, obj any) (ViewedFileInput, error) {
+	var it ViewedFileInput
+	if obj == nil {
+		return it, nil
+	}
+
+	asMap := map[string]any{}
+	for k, v := range obj.(map[string]any) {
+		asMap[k] = v
+	}
+
+	if _, present := asMap["viewed"]; !present {
+		asMap["viewed"] = true
+	}
+
+	fieldsInOrder := [...]string{"path", "object", "viewed"}
+	for _, k := range fieldsInOrder {
+		v, ok := asMap[k]
+		if !ok {
+			continue
+		}
+		switch k {
+		case "path":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("path"))
+			data, err := ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Path = data
+		case "object":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("object"))
+			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Object = data
+		case "viewed":
+			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("viewed"))
+			data, err := ec.unmarshalNBoolean2bool(ctx, v)
+			if err != nil {
+				return it, err
+			}
+			it.Viewed = data
+		}
+	}
+	return it, nil
+}
+
+// UnmarshalViewedFileInput unmarshals raw into the ViewedFileInput input type, using the
+// unmarshaler bound to ctx's request. Call it from a resolver to decode an input
+// object that was not passed as a field argument.
+//
+// ctx must come from a gqlgen request; outside one there is no unmarshaler to use
+// and the returned error says so.
+func UnmarshalViewedFileInput(ctx context.Context, raw any) (ViewedFileInput, error) {
+	var out ViewedFileInput
+	err := graphql.UnmarshalNamedInputFromContext(ctx, "ViewedFileInput", raw, &out)
+	return out, err
+}
+
 // endregion **************************** input.gotpl *****************************
 
 // region    ************************** interface.gotpl ***************************
@@ -46039,6 +46556,16 @@ func (ec *executionContext) _FileDiff(ctx context.Context, sel ast.SelectionSet,
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "oldObject":
+			out.Values[i] = ec._FileDiff_oldObject(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "object":
+			out.Values[i] = ec._FileDiff_object(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		case "binary":
 			out.Values[i] = ec._FileDiff_binary(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -47852,6 +48379,13 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "updateViewedFiles":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_updateViewedFiles(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "startConversationThread":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_startConversationThread(ctx, field)
@@ -49550,6 +50084,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_commitDiff(ctx, field, obj)
 				})
+		case "viewedFiles":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_viewedFiles(ctx, field, obj)
+				})
 		case "conversation":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, true,
@@ -51087,6 +51627,87 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_usage(ctx, field, obj)
 				})
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var viewedFileImplementors = []string{"ViewedFile"}
+
+func (ec *executionContext) _ViewedFile(ctx context.Context, sel ast.SelectionSet, obj *ViewedFile) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, viewedFileImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ViewedFile")
+		case "path":
+			out.Values[i] = ec._ViewedFile_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "object":
+			out.Values[i] = ec._ViewedFile_object(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "viewedAt":
+			out.Values[i] = ec._ViewedFile_viewedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var viewedFilesImplementors = []string{"ViewedFiles"}
+
+func (ec *executionContext) _ViewedFiles(ctx context.Context, sel ast.SelectionSet, obj *ViewedFiles) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, viewedFilesImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("ViewedFiles")
+		case "tag":
+			out.Values[i] = ec._ViewedFiles_tag(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "files":
+			out.Values[i] = ec._ViewedFiles_files(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -53700,6 +54321,57 @@ func (ec *executionContext) marshalNUsage2ᚖcobranchᚗdevᚋinternalᚋadapter
 	return ec._Usage(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNViewedFile2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileᚄ(ctx context.Context, sel ast.SelectionSet, v []*ViewedFile) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNViewedFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFile(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNViewedFile2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFile(ctx context.Context, sel ast.SelectionSet, v *ViewedFile) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ViewedFile!")
+		return graphql.Null
+	}
+	return ec._ViewedFile(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNViewedFileInput2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileInputᚄ(ctx context.Context, v any) ([]*ViewedFileInput, error) {
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*ViewedFileInput, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNViewedFileInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNViewedFileInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFileInput(ctx context.Context, v any) (*ViewedFileInput, error) {
+	res, err := ec.unmarshalInputViewedFileInput(ctx, v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNViewedFiles2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFiles(ctx context.Context, sel ast.SelectionSet, v *ViewedFiles) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "ViewedFiles!")
+		return graphql.Null
+	}
+	return ec._ViewedFiles(ctx, sel, v)
+}
+
 func (ec *executionContext) marshalNViewerUsage2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewerUsage(ctx context.Context, sel ast.SelectionSet, v *ViewerUsage) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "ViewerUsage!")
@@ -54801,6 +55473,13 @@ func (ec *executionContext) marshalOUser2ᚖcobranchᚗdevᚋinternalᚋadapters
 		return graphql.Null
 	}
 	return ec._User(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOViewedFiles2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐViewedFiles(ctx context.Context, sel ast.SelectionSet, v *ViewedFiles) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ViewedFiles(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {

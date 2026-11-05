@@ -49,6 +49,8 @@ type Code interface {
 	StartDelivery(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Delivery, error)
 	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
+	Viewed(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.ViewedFile, error)
+	UpdateViewed(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, tag string, changes []code.ViewedChange) ([]code.ViewedFile, error)
 	RerunRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunJob(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, job string) (code.Run, error)
 	PostEvent(ctx context.Context, v code.Viewer, repoID uuid.UUID, in code.EventInput) ([]code.Run, error)
@@ -155,7 +157,7 @@ func diff(d code.Diff) *Diff {
 
 func fileDiff(f code.FileDiff) *FileDiff {
 	return &FileDiff{Status: fileStatuses[f.Status], Path: f.Path, OldPath: optional(f.OldPath), OldMode: optional(f.OldMode),
-		Mode: optional(f.Mode), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
+		Mode: optional(f.Mode), OldObject: optional(f.OldObject), Object: optional(f.Object), Binary: f.Binary, Additions: f.Additions, Deletions: f.Deletions, Truncated: f.Truncated,
 		Hunks: mapAll(f.Hunks, hunk)}
 }
 

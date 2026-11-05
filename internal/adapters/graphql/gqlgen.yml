@@ -108,6 +108,7 @@ models:
       conversation: { resolver: true }
       branchDiff: { resolver: true }
       commitDiff: { resolver: true }
+      viewedFiles: { resolver: true }
       environments: { resolver: true }
       environment: { resolver: true }
       delivery: { resolver: true }
