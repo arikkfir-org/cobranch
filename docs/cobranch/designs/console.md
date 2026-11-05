@@ -37,7 +37,7 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | --- | --- |
 | `index.html` | The shell: a `<div id="app">`, the configuration and every file's name, which Caddy writes in, and a bootstrap that asks for every file and the viewer at once, imports its release's `console.js`, and loads again when it fails |
 | `assets/console.js` | `start`: the configuration, the viewer, their organizations, every page's module and stylesheet, then the first route |
-| `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, with `fonts.css`) |
+| `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, generated from its Figma file), in its typefaces (`fonts.css`, the files in `fonts/`) |
 | `assets/components.css` | The design system's components, one class for each, which pages compose |
 | `assets/lib/` | The router, the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
 | `assets/pages/` | The pages the router names: `sign-in.js`, `welcome.js`, `settings.js`, `help.js` |
@@ -60,9 +60,10 @@ together. One that still fails shows “The Console couldn’t load” instead o
 Console loads no more modules: every page’s is already in.
 
 - **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
-  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/` and `pages/repo/` (its `templates`, at request
-  time: no build step). The shell then asks for every module (`modulepreload`) and stylesheet (`preload`), and for the
-  viewer from the REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
+  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/` and `fonts/` (its `templates`,
+  at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
+  the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
+  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
   arrive. Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the
   modules before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s.
   At 500 ms, 1.7 s against 5.2 s and 2.1 s.
