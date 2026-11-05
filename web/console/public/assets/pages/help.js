@@ -12,7 +12,7 @@ import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
 // and the brand's marks, in the Figma file's order and under its names, each with the class that draws it, so a
 // reviewer holds the page beside the Figma file's Components page, in either theme, and a designer finds which code a
 // component is. It draws from the classes alone: what differs from Figma is a bug in components.css or in the file.
-// The app shell's own components are drawn around every page, this one included, not as specimens.
+// The app shell's own components are the shell's to draw, not specimens here.
 
 export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
 export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: "help" }, { label: "Components" }] : [{ label: "Help" }];
@@ -46,7 +46,7 @@ const toneName = (t) => t === "ai" ? "AI" : t[0].toUpperCase() + t.slice(1);
 
 function components() {
   return [h("h1", {}, "Components"),
-    h("p", {}, "Every component of the Console's component stylesheet, and the brand's marks, as the design system's Figma file draws them. Hover a control to see its hover state and Tab to it to see its focus ring; the segmented control under Forms switches the theme, to compare both. The app shell's own components (App/*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are the frame around this page."),
+    h("p", {}, "Every component of the Console's component stylesheet, and the brand's marks, as the design system's Figma file draws them. Hover a control to see its hover state and Tab to it to see its focus ring; the segmented control under Forms switches the theme, to compare both. The app shell's own components (App/*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn by the shell, not here."),
     brand(), buttons(), iconButtons(), statusBadges(), tags(), avatars(), inputs(), forms(), tabs(), menus(), tables(), surfaces(), patterns()];
 }
 
