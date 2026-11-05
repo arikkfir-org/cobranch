@@ -351,6 +351,12 @@
 .fact-value > a { color: var(--color-fg-link); text-decoration: none; }
 .fact-value > a:hover { text-decoration: underline; }
 .fact-value > .btn-ghost { flex-wrap: wrap; justify-content: flex-start; height: auto; min-height: var(--size-control-sm); text-align: left; }
+/* Kind=Person (.fact-row-person) is a person as the value: their 32px avatar, then their name in Body/Medium Strong
+   over their email in Body/Small muted (Account's Name). */
+.fact-row-person .fact-value { gap: var(--space-4) var(--space-8); }
+.fact-person { display: flex; flex-direction: column; min-width: 0; }
+.fact-person-name { color: var(--color-fg-default); font: var(--text-body-medium-strong); }
+.fact-person-email { color: var(--color-fg-muted); font: var(--text-body-small); overflow-wrap: anywhere; }
 
 /* Activity/Event: a line of an object's activity (an issue's): who did what, in Caption muted, and when, at its end. */
 .event-row { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-4) var(--space-16); color: var(--color-fg-muted); font: var(--text-caption); }
