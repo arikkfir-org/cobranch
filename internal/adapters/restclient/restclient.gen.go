@@ -633,8 +633,14 @@ type FileDiff struct {
 	// Mode Its mode after; absent for a deleted file.
 	Mode *string `json:"mode,omitempty"`
 
+	// Object The object that holds its content after, which a Viewed mark holds on to; absent for a deleted file.
+	Object *string `json:"object,omitempty"`
+
 	// OldMode Its mode before, as Git writes it; absent for an added file.
 	OldMode *string `json:"oldMode,omitempty"`
+
+	// OldObject The object that held its content before; absent for an added file.
+	OldObject *string `json:"oldObject,omitempty"`
 
 	// OldPath The path it had before, for a renamed file.
 	OldPath *string `json:"oldPath,omitempty"`

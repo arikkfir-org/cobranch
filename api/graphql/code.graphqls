@@ -37,6 +37,35 @@ extend type Repository {
   branchDiff(name: String!): Diff
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
   commitDiff(sha: String!): Diff
+  "The files of the branch of name that the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which a client compares with the diff's to show a file changed since as unviewed again: null unless the branch is there; takes repo.read, and a signed-in viewer, since the marks are theirs (FORBIDDEN for Anonymous)."
+  viewedFiles(branch: String!): ViewedFiles
+}
+
+"A person's Viewed marks on a branch's files."
+type ViewedFiles {
+  "Names the marks as they are, for updateViewedFiles' expectedTag; the REST API's ETag quotes it."
+  tag: String!
+  "The marks, by path."
+  files: [ViewedFile!]!
+}
+
+"A file of a branch marked Viewed."
+type ViewedFile {
+  "The file's path, from the repository's root."
+  path: String!
+  "The object of its content when it was marked, which a file changed since no longer has; null for a file the branch deletes."
+  object: String
+  viewedAt: Time!
+}
+
+"A change to a file's Viewed mark."
+input ViewedFileInput {
+  "The file's path, from the repository's root."
+  path: String!
+  "The object of its content to mark it at, as the branch's diff names it; null for a file the branch deletes."
+  object: String
+  "false takes the file's mark off."
+  viewed: Boolean! = true
 }
 
 "One of a repository's tags and the object it names, a commit or an annotated tag."
@@ -266,6 +295,8 @@ extend type Mutation {
   submitReview(repositoryId: ID!, sha: String!, input: ReviewInput!): Review!
   "Asks the organization's AI reviewer for another review of the branch's head, and answers its task; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. main's pushes are never reviewed, and a branch main's /cobranch-review.yaml leaves out is refused (CONFLICT, review.off); so is a reviewer without a model (CONFLICT, reviewer.no_model) or a suspended one (CONFLICT, reviewer.suspended)."
   requestReview(repositoryId: ID!, branch: String!): AIReview!
+  "Marks files of one of the repository's branches Viewed for the viewer, or takes their marks off, and answers the viewer's marks as they now are; takes repo.read, and a signed-in viewer (FORBIDDEN for Anonymous). A mark already at its object keeps the moment it was made. With expectedTag, marks that changed since it was read are refused (CONFLICT, precondition.failed). At most 3,000 files at once, each once, and a branch keeps at most 10,000 marks of a person's (BAD_USER_INPUT, viewed.too_many)."
+  updateViewedFiles(repositoryId: ID!, branch: String!, files: [ViewedFileInput!]!, expectedTag: String): ViewedFiles!
 }
 
 "The review a principal submits."

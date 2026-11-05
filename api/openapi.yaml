@@ -4905,6 +4905,85 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/branches/{branch}/viewed:
+    get:
+      operationId: getViewedFiles
+      summary: >-
+        The files of the branch the viewer marked Viewed on its Files changed tab, by path, each with the object of its
+        content when they marked it, which the Console compares with the diff's to show a file changed since as unviewed
+        again; takes repo.read, and a signed-in viewer, since the marks are theirs: Anonymous answers 403.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The viewer's marks.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewedFiles"
+        "304":
+          description: The marks are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    patch:
+      operationId: updateViewedFiles
+      summary: >-
+        Marks the viewer's files of the branch Viewed, or takes their marks off, as the merge patch (RFC 7396) names: a
+        path given {"object": …} is marked at that object, {} marks a file the branch deletes, and null takes the mark
+        off. A mark already at its object keeps the moment it was made. The change names the ETag of the marks it was
+        made from in If-Match, or * for whichever are there: without it, the answer is 428, and once they changed, 412.
+        It takes repo.read and a signed-in viewer; at most 3,000 files at once, and a branch keeps at most 10,000 marks
+        of a person's (400 viewed.too_many).
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/branch"
+        - $ref: "#/components/parameters/ifMatchViewed"
+      requestBody:
+        required: true
+        content:
+          application/merge-patch+json:
+            schema:
+              $ref: "#/components/schemas/ViewedFilesPatch"
+      responses:
+        "200":
+          description: The viewer's marks as they now are.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewedFiles"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "412":
+          $ref: "#/components/responses/Problem"
+        "428":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/review:
     post:
       operationId: requestReview
@@ -7228,6 +7307,12 @@ components:
       name: If-Match
       in: header
       description: The head the viewer saw, quoted, such as "4b825dc642cb6eb9a060e54bf8d69288fbee4904", which refuses with 412 a branch that moved from it; * deletes the branch wherever it is, at its new head when it moves meanwhile, and answers 412 only once it kept moving.
+      schema:
+        type: string
+    ifMatchViewed:
+      name: If-Match
+      in: header
+      description: The ETag of the Viewed marks the change was made from, which refuses with 412 a change made meanwhile; * names whichever are there.
       schema:
         type: string
     ifMatchSecret:
@@ -10139,6 +10224,43 @@ components:
           type: integer
           format: int64
           description: A file's or a symlink's size in bytes.
+    ViewedFiles:
+      type: object
+      description: A person's Viewed marks on a branch's files.
+      required: [files]
+      properties:
+        files:
+          type: object
+          description: Each marked file's mark, by its path.
+          additionalProperties:
+            $ref: "#/components/schemas/ViewedMark"
+    ViewedMark:
+      type: object
+      description: >-
+        A file marked Viewed: the object of its content when it was marked, which a file changed since no longer has,
+        and when.
+      required: [viewedAt]
+      properties:
+        object:
+          type: string
+          description: The object's full name; left out for a file the branch deletes.
+        viewedAt:
+          type: string
+          format: date-time
+    ViewedFilesPatch:
+      type: object
+      description: What changes a person's Viewed marks, as a merge patch; a file left out keeps its mark, or its lack of one.
+      properties:
+        files:
+          type: object
+          description: >-
+            By path, {"object": …} to mark a file at its object, {} to mark a file the branch deletes, or null to take
+            a file's mark off.
+          additionalProperties:
+            type: [object, "null"]
+            properties:
+              object:
+                type: string
     Diff:
       type: object
       description: >-

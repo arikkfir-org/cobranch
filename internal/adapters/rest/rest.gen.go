@@ -3811,6 +3811,27 @@ type Version struct {
 	Version string `json:"version"`
 }
 
+// ViewedFiles A person's Viewed marks on a branch's files.
+type ViewedFiles struct {
+	// Files Each marked file's mark, by its path.
+	Files map[string]ViewedMark `json:"files"`
+}
+
+// ViewedFilesPatch What changes a person's Viewed marks, as a merge patch; a file left out keeps its mark, or its lack of one.
+type ViewedFilesPatch struct {
+	// Files By path, {"object": …} to mark a file at its object, {} to mark a file the branch deletes, or null to take a file's mark off.
+	Files *map[string]*struct {
+		Object *string `json:"object,omitempty"`
+	} `json:"files,omitempty"`
+}
+
+// ViewedMark A file marked Viewed: the object of its content when it was marked, which a file changed since no longer has, and when.
+type ViewedMark struct {
+	// Object The object's full name; left out for a file the branch deletes.
+	Object   *string   `json:"object,omitempty"`
+	ViewedAt time.Time `json:"viewedAt"`
+}
+
 // ViewerUsage What the user takes of what the limits cap.
 type ViewerUsage struct {
 	// Organizations The organizations the user created for themselves that still exist, against the most a user may create. Those an administrator created for them count against nobody.
@@ -3873,6 +3894,9 @@ type IfMatchSecret = string
 
 // IfMatchTask defines model for ifMatchTask.
 type IfMatchTask = string
+
+// IfMatchViewed defines model for ifMatchViewed.
+type IfMatchViewed = string
 
 // IfNoneMatch defines model for ifNoneMatch.
 type IfNoneMatch = string
@@ -4440,6 +4464,18 @@ type GetBranchDiffParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetViewedFilesParams defines parameters for GetViewedFiles.
+type GetViewedFilesParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// UpdateViewedFilesParams defines parameters for UpdateViewedFiles.
+type UpdateViewedFilesParams struct {
+	// IfMatch The ETag of the Viewed marks the change was made from, which refuses with 412 a change made meanwhile; * names whichever are there.
+	IfMatch *IfMatchViewed `json:"If-Match,omitempty"`
+}
+
 // ListCommitsParams defines parameters for ListCommits.
 type ListCommitsParams struct {
 	// Branch The branch whose history the page lists, without refs/heads/, unless ref names another start.
@@ -4898,6 +4934,9 @@ type LinkBranchJSONRequestBody = LinkBranchInput
 
 // MergeBranchJSONRequestBody defines body for MergeBranch for application/json ContentType.
 type MergeBranchJSONRequestBody = MergeInput
+
+// UpdateViewedFilesApplicationMergePatchPlusJSONRequestBody defines body for UpdateViewedFiles for application/merge-patch+json ContentType.
+type UpdateViewedFilesApplicationMergePatchPlusJSONRequestBody = ViewedFilesPatch
 
 // SetAnnotationJSONRequestBody defines body for SetAnnotation for application/json ContentType.
 type SetAnnotationJSONRequestBody = AnnotationInput
@@ -5369,6 +5408,12 @@ type ServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
+	// GetViewedFiles The files of the branch the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which the Console compares with the diff's to show a file changed since as unviewed again; takes repo.read, and a signed-in viewer, since the marks are theirs: Anonymous answers 403.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
+	GetViewedFiles(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetViewedFilesParams)
+	// UpdateViewedFiles Marks the viewer's files of the branch Viewed, or takes their marks off, as the merge patch (RFC 7396) names: a path given {"object": …} is marked at that object, {} marks a file the branch deletes, and null takes the mark off. A mark already at its object keeps the moment it was made. The change names the ETag of the marks it was made from in If-Match, or * for whichever are there: without it, the answer is 428, and once they changed, 412. It takes repo.read and a signed-in viewer; at most 3,000 files at once, and a branch keeps at most 10,000 marks of a person's (400 viewed.too_many).
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
+	UpdateViewedFiles(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params UpdateViewedFilesParams)
 	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
@@ -12148,6 +12193,142 @@ func (siw *ServerInterfaceWrapper) RequestReview(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetViewedFiles operation middleware
+func (siw *ServerInterfaceWrapper) GetViewedFiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetViewedFilesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetViewedFiles(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateViewedFiles operation middleware
+func (siw *ServerInterfaceWrapper) UpdateViewedFiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UpdateViewedFilesParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-Match")]; found {
+		var IfMatch IfMatchViewed
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-Match", valueList[0], &IfMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-Match", Err: err})
+			return
+		}
+
+		params.IfMatch = &IfMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateViewedFiles(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListCommits operation middleware
 func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Request) {
 
@@ -16218,6 +16399,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff", wrapper.GetBranchDiff)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/viewed", wrapper.GetViewedFiles)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/viewed", wrapper.UpdateViewedFiles)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/review", wrapper.RequestReview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/deleted-branches/{branch}", wrapper.GetDeletedBranch)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/issue", wrapper.UnlinkBranch)
@@ -30565,6 +30748,251 @@ func (response RequestReviewdefaultApplicationProblemPlusJSONResponse) VisitRequ
 	return err
 }
 
+type GetViewedFilesRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     GetViewedFilesParams
+}
+
+type GetViewedFilesResponseObject interface {
+	VisitGetViewedFilesResponse(w http.ResponseWriter) error
+}
+
+type GetViewedFiles200ResponseHeaders struct {
+	ETag string
+}
+
+type GetViewedFiles200JSONResponse struct {
+	Body    ViewedFiles
+	Headers GetViewedFiles200ResponseHeaders
+}
+
+func (response GetViewedFiles200JSONResponse) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetViewedFiles304ResponseHeaders struct {
+	ETag string
+}
+
+type GetViewedFiles304Response struct {
+	Headers GetViewedFiles304ResponseHeaders
+}
+
+func (response GetViewedFiles304Response) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetViewedFiles401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetViewedFiles401ApplicationProblemPlusJSONResponse) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetViewedFiles403ApplicationProblemPlusJSONResponse Problem
+
+func (response GetViewedFiles403ApplicationProblemPlusJSONResponse) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetViewedFiles404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetViewedFiles404ApplicationProblemPlusJSONResponse) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetViewedFilesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetViewedFilesdefaultApplicationProblemPlusJSONResponse) VisitGetViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFilesRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     UpdateViewedFilesParams
+	Body       *UpdateViewedFilesApplicationMergePatchPlusJSONRequestBody
+}
+
+type UpdateViewedFilesResponseObject interface {
+	VisitUpdateViewedFilesResponse(w http.ResponseWriter) error
+}
+
+type UpdateViewedFiles200ResponseHeaders struct {
+	ETag string
+}
+
+type UpdateViewedFiles200JSONResponse struct {
+	Body    ViewedFiles
+	Headers UpdateViewedFiles200ResponseHeaders
+}
+
+func (response UpdateViewedFiles200JSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response UpdateViewedFiles400ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles401ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateViewedFiles401ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles403ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateViewedFiles403ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(403)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles404ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateViewedFiles404ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles412ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateViewedFiles412ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(412)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFiles428ApplicationProblemPlusJSONResponse Problem
+
+func (response UpdateViewedFiles428ApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(428)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type UpdateViewedFilesdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response UpdateViewedFilesdefaultApplicationProblemPlusJSONResponse) VisitUpdateViewedFilesResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListCommitsRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -38216,6 +38644,12 @@ type StrictServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(ctx context.Context, request RequestReviewRequestObject) (RequestReviewResponseObject, error)
+	// GetViewedFiles The files of the branch the viewer marked Viewed on its Files changed tab, by path, each with the object of its content when they marked it, which the Console compares with the diff's to show a file changed since as unviewed again; takes repo.read, and a signed-in viewer, since the marks are theirs: Anonymous answers 403.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
+	GetViewedFiles(ctx context.Context, request GetViewedFilesRequestObject) (GetViewedFilesResponseObject, error)
+	// UpdateViewedFiles Marks the viewer's files of the branch Viewed, or takes their marks off, as the merge patch (RFC 7396) names: a path given {"object": …} is marked at that object, {} marks a file the branch deletes, and null takes the mark off. A mark already at its object keeps the moment it was made. The change names the ETag of the marks it was made from in If-Match, or * for whichever are there: without it, the answer is 428, and once they changed, 412. It takes repo.read and a signed-in viewer; at most 3,000 files at once, and a branch keeps at most 10,000 marks of a person's (400 viewed.too_many).
+	// (PATCH /orgs/{org}/repos/{repo}/branches/{branch}/viewed)
+	UpdateViewedFiles(ctx context.Context, request UpdateViewedFilesRequestObject) (UpdateViewedFilesResponseObject, error)
 	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them. A query keeps the commits whose message holds it, and the first page counts the whole history.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
@@ -42634,6 +43068,71 @@ func (sh *strictHandler) RequestReview(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(RequestReviewResponseObject); ok {
 		if err := validResponse.VisitRequestReviewResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetViewedFiles operation middleware
+func (sh *strictHandler) GetViewedFiles(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetViewedFilesParams) {
+	var request GetViewedFilesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetViewedFiles(ctx, request.(GetViewedFilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetViewedFiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetViewedFilesResponseObject); ok {
+		if err := validResponse.VisitGetViewedFilesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// UpdateViewedFiles operation middleware
+func (sh *strictHandler) UpdateViewedFiles(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params UpdateViewedFilesParams) {
+	var request UpdateViewedFilesRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	var body UpdateViewedFilesApplicationMergePatchPlusJSONRequestBody
+	if err := runtime.BindJSONBody(r, &body); err != nil {
+		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
+		return
+	}
+	request.Body = &body
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.UpdateViewedFiles(ctx, request.(UpdateViewedFilesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "UpdateViewedFiles")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(UpdateViewedFilesResponseObject); ok {
+		if err := validResponse.VisitUpdateViewedFilesResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

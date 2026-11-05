@@ -42,6 +42,8 @@ type Code interface {
 	Merge(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string, in code.MergeInput) (code.Merged, error)
 	BranchDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) (code.Diff, error)
 	CommitDiff(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string) (code.Diff, error)
+	Viewed(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.ViewedFile, error)
+	UpdateViewed(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch, tag string, changes []code.ViewedChange) ([]code.ViewedFile, error)
 	DeleteBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name, head string) error
 	DeletedBranch(ctx context.Context, v code.Viewer, repoID uuid.UUID, name string) (code.DeletedBranch, error)
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, sha string, before int64, limit int) (code.RunPage, error)
