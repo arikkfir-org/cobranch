@@ -117,14 +117,14 @@ func (s *Store) event(actor, issueID uuid.UUID, kind string, changes []issues.Ch
 		Actor: &issues.Principal{ID: actor, DisplayName: s.Orgs.Names[actor]}, Changes: changes})
 }
 
-func (s *Store) linkEvent(actor, issueID uuid.UUID, kind string, b issues.Branch) {
+func (s *Store) linkEvent(actor, issueID uuid.UUID, kind string, b issues.Branch, by issues.LinkedBy) {
 	s.Events[issueID] = append(s.Events[issueID], issues.Event{ID: uuid.New(), Kind: kind,
 		Actor:  &issues.Principal{ID: actor, DisplayName: s.Orgs.Names[actor]},
-		Branch: &issues.EventBranch{RepositoryID: b.Repository.ID, Repository: b.Repository.Slug, Name: b.Name, LinkedBy: issues.LinkedByHand}})
+		Branch: &issues.EventBranch{RepositoryID: b.Repository.ID, Repository: b.Repository.Slug, Name: b.Name, LinkedBy: by}})
 }
 
 // Create numbers and records the issue, and links the branches that name it.
-func (s *Store) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
+func (s *Store) Create(_ context.Context, actor uuid.UUID, issue issues.Issue) (issues.Issue, error) {
 	if s.Fail != nil {
 		return issues.Issue{}, s.Fail
 	}
@@ -135,7 +135,7 @@ func (s *Store) Create(ctx context.Context, actor uuid.UUID, issue issues.Issue)
 	// As the database does, the organization's live branches with no link whose names name the issue link to it.
 	for _, b := range s.Live {
 		if n, ok := issues.Named(b.Name, s.Orgs.Orgs[issue.OrgID].IssueKey); ok && n == issue.Number && b.IssueID == uuid.Nil {
-			if err := s.Link(ctx, actor, b, &issue.ID); err != nil {
+			if err := s.link(actor, b, &issue.ID, issues.LinkedByName); err != nil {
 				return issues.Issue{}, err
 			}
 		}
@@ -337,6 +337,11 @@ func (s *Store) Branch(_ context.Context, orgID, repoID uuid.UUID, name string) 
 
 // Link links the branch by hand, or unlinks it for nil, and starts the issue it links.
 func (s *Store) Link(_ context.Context, actor uuid.UUID, branch issues.Branch, issueID *uuid.UUID) error {
+	return s.link(actor, branch, issueID, issues.LinkedByHand)
+}
+
+// link links the branch as by says, or unlinks it for nil, and starts the issue it links.
+func (s *Store) link(actor uuid.UUID, branch issues.Branch, issueID *uuid.UUID, by issues.LinkedBy) error {
 	if s.Fail != nil {
 		return s.Fail
 	}
@@ -349,10 +354,10 @@ func (s *Store) Link(_ context.Context, actor uuid.UUID, branch issues.Branch, i
 		to = *issueID
 	}
 	if cur.IssueID != uuid.Nil && cur.IssueID != to {
-		s.linkEvent(actor, cur.IssueID, "issue.branch_unlinked", cur)
+		s.linkEvent(actor, cur.IssueID, "issue.branch_unlinked", cur, issues.LinkedByHand)
 	}
 	was := cur.IssueID
-	cur.IssueID, cur.LinkedBy = to, issues.LinkedByHand
+	cur.IssueID, cur.LinkedBy = to, by
 	s.Live[branch.ID] = cur
 	if was != to {
 		s.links++
@@ -361,7 +366,7 @@ func (s *Store) Link(_ context.Context, actor uuid.UUID, branch issues.Branch, i
 	if to == uuid.Nil || was == to {
 		return nil
 	}
-	s.linkEvent(actor, to, "issue.branch_linked", cur)
+	s.linkEvent(actor, to, "issue.branch_linked", cur, by)
 	i := slices.IndexFunc(s.Issues, func(i issues.Issue) bool { return i.ID == to })
 	if i >= 0 && slices.Contains(issues.StartsFrom, s.Issues[i].State) {
 		from := s.Issues[i].State
