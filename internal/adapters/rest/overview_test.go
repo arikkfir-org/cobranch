@@ -42,9 +42,18 @@ func TestOrganizationOverview(t *testing.T) {
 			}},
 		{name: "this month so far in UTC by default", viewer: maxim, method: "GET", path: onOverview("/v1/orgs/acme/overview"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				today := time.Now().UTC()
-				if got := decode[OrganizationOverview](t, body); got.Zone != "UTC" || got.From != today.Format("2006-01")+"-01" ||
-					got.To != today.Format("2006-01-02") || len(got.Days) != today.Day() || got.ByRepository == nil {
+				got := decode[OrganizationOverview](t, body)
+				last, err := time.Parse("2006-01-02", got.To)
+				if err != nil {
+					t.Fatalf("overview = %s: %v", body, err)
+				}
+				// The handler read the clock before this check did: its today is this one or, across midnight, the day before.
+				now := time.Now().UTC()
+				today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+				if !last.Equal(today) && !last.Equal(today.AddDate(0, 0, -1)) {
+					t.Errorf("to = %s, want today in UTC", got.To)
+				}
+				if got.Zone != "UTC" || got.From != last.Format("2006-01")+"-01" || len(got.Days) != last.Day() || got.ByRepository == nil {
 					t.Errorf("overview = %s", body)
 				}
 			}},
