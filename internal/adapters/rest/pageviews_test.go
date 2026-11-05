@@ -86,6 +86,7 @@ func TestReportPageViews(t *testing.T) {
 // that name, so it isn't counted as another page's.
 func TestPageViewsNameEveryConsolePage(t *testing.T) {
 	for _, dir := range []struct{ glob, prefix string }{
+		{glob: "../../../web/console/public/assets/pages/*.js", prefix: ""},
 		{glob: "../../../web/console/public/assets/pages/org/*.js", prefix: "organization."},
 		{glob: "../../../web/console/public/assets/pages/repo/*.js", prefix: "repository."},
 	} {

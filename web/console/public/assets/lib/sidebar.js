@@ -102,7 +102,7 @@ function switcher(org) {
     orgMark(org), h("span", { class: "app-org-name" }, org.name), icon("chevron-down"));
   button.addEventListener("click", () => popover(button, "start", (close) => [
     ...orgs.map((o) => h("button", { class: "menu-item", type: "button", role: "menuitemradio", "aria-checked": String(o.slug === org.slug),
-      onclick: () => { close(); if (o.slug !== org.slug) go("/" + o.slug); } }, orgMark(o), h("span", {}, o.name), o.slug === org.slug ? icon("check") : null)),
+      onclick: () => { close(); if (o.slug !== org.slug) go("/" + o.slug); } }, orgMark(o), h("span", {}, o.name))),
     h("hr", { class: "menu-divider" }),
     h("button", { class: "menu-item", type: "button", onclick: () => { close(); go("/new"); } }, icon("plus"), h("span", {}, "Create or join an organization")),
   ]));

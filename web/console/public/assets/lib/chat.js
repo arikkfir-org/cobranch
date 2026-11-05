@@ -104,7 +104,7 @@ export async function conversation(s, signal) {
     const edit = () => {
       const entry = v.messages.get(m.id);
       entry.editing = true;
-      const text = h("textarea", { class: "input", required: true, maxlength: 20000, "aria-label": "Message" });
+      const text = h("textarea", { class: "textarea", required: true, maxlength: 20000, "aria-label": "Message" });
       text.value = m.body;
       const save = h("button", { class: "btn btn-primary btn-sm", type: "submit" }, "Save");
       const done = (latest) => {
@@ -168,7 +168,7 @@ export async function conversation(s, signal) {
   };
   const replying = (v) => {
     if (v.reply) return v.reply.querySelector("textarea").focus();
-    const text = h("textarea", { class: "input", name: "body", required: true, maxlength: 20000, rows: 2, placeholder: "Reply in Markdown", "aria-label": "Reply" });
+    const text = h("textarea", { class: "textarea", name: "body", required: true, maxlength: 20000, rows: 2, placeholder: "Reply in Markdown", "aria-label": "Reply" });
     const send = h("button", { class: "btn btn-primary btn-sm", type: "submit" }, "Reply");
     const close = () => { v.reply.remove(); v.reply = null; };
     v.reply = h("form", { class: "app-pane-form", onsubmit: (e) => {

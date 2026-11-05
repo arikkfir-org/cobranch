@@ -13,7 +13,7 @@ import { onThemeChange, setTheme, theme, themes } from "../lib/theme.js";
 // component is. It draws from the classes alone: what differs from Figma is a bug in components.css or in the file.
 // The app shell's own components are the shell's to draw, not specimens here.
 
-export const view = (rest) => rest[0] === "components" ? "help.components" : "help";
+export const view = (rest) => ({ components: "help.components" })[rest[0]] || "help";
 export const crumbs = ({ rest }) => rest[0] === "components" ? [{ label: "Help", href: base + "help" }, { label: "Components" }] : [{ label: "Help" }];
 
 export default function show({ main, rest }) {
