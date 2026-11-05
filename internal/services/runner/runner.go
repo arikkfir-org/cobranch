@@ -92,6 +92,8 @@ type Scheduled struct {
 type Standing struct {
 	RepoID uuid.UUID
 	State  jobs.State
+	// EndedAt is when it ended; nil while it hasn't.
+	EndedAt *time.Time
 }
 
 // Secrets hands a principal the values of the secrets it may read: secrets.Service's Receive.

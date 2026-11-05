@@ -189,7 +189,7 @@ func (s *RunStore) Runs(ctx context.Context, ids []uuid.UUID) (map[uuid.UUID]run
 	}
 	out := make(map[uuid.UUID]runner.Standing, len(rows))
 	for _, r := range rows {
-		out[r.ID] = runner.Standing{RepoID: r.RepoID, State: jobs.State(r.State)}
+		out[r.ID] = runner.Standing{RepoID: r.RepoID, State: jobs.State(r.State), EndedAt: r.EndedAt}
 	}
 	return out, nil
 }

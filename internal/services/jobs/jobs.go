@@ -244,8 +244,8 @@ type Step struct {
 	State StepState
 	// ExitCode is how it exited, once it ended; 0 until then.
 	ExitCode int32
-	// Reason is what the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says
-	// nothing more than its state.
+	// Reason is what the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff, or that its run's
+	// end stopped it; empty when it says nothing more than its state.
 	Reason string
 	// StartedAt is when it started, and EndedAt when it ended; nil until then.
 	StartedAt, EndedAt *time.Time

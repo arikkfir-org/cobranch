@@ -183,10 +183,11 @@ function notStarted(r) {
 }
 
 // stepLog is the card of a step's log (Log/Line): its name, how long it ran and how it exited, Live while it's read
-// from the running pod, and Raw, which opens it as text; each line with its time since the step started.
+// from the running pod, and Raw, which opens it as text; each line with its time since the step started. A step its
+// run's end stopped failed without an exit code, which it doesn't say.
 function stepLog(path, r, s, logs) {
   const log = Array.isArray(logs) ? logs.find((l) => l.container === s.name) : null;
-  const ended = s.state === "failed" ? [s.reason || null, "exited " + s.exitCode].filter(Boolean).join(" · ") : null;
+  const ended = s.state === "failed" ? [s.reason || null, s.exitCode ? "exited " + s.exitCode : null].filter(Boolean).join(" · ") : null;
   const raw = config.restUrl + "/v1" + path + "/runs/" + r.number + "/logs/" + encodeURIComponent(s.name);
   return h("section", { class: "card" },
     h("div", { class: "card-header" }, h("h2", { class: "card-title" }, s.name),

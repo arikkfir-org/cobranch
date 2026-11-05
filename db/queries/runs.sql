@@ -91,7 +91,7 @@ ORDER BY started_at;
 
 -- RunsStanding finds those of ids that are runs, with where each stands and its repository.
 -- name: RunsStanding :many
-SELECT id, repo_id, state FROM job_runs WHERE id = ANY(@ids::uuid[]);
+SELECT id, repo_id, state, ended_at FROM job_runs WHERE id = ANY(@ids::uuid[]);
 
 -- OrganizationsAmong answers which of ids are organizations still.
 -- name: OrganizationsAmong :many

@@ -125,8 +125,8 @@ func (f *runFixture) checkFinish(t *testing.T, run runner.Run, hash []byte) {
 		t.Errorf("Running() = %+v, %v, want none", running, err)
 	}
 	standing, err := f.r.Runs(ctx, []uuid.UUID{run.ID, uuid.New()})
-	if err != nil || len(standing) != 1 || standing[run.ID] != (runner.Standing{RepoID: f.website.ID, State: jobs.StateSucceeded}) {
-		t.Errorf("Runs() = %+v, %v, want the run, succeeded", standing, err)
+	if got := standing[run.ID]; err != nil || len(standing) != 1 || got.RepoID != f.website.ID || got.State != jobs.StateSucceeded || got.EndedAt == nil {
+		t.Errorf("Runs() = %+v, %v, want the run, succeeded and ended", standing, err)
 	}
 	if orgs, err := f.r.Organizations(ctx, []uuid.UUID{f.acme.ID, uuid.New()}); err != nil || !slices.Equal(orgs, []uuid.UUID{f.acme.ID}) {
 		t.Errorf("Organizations() = %v, %v, want Acme", orgs, err)

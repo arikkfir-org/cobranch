@@ -425,13 +425,14 @@ func (q *Queries) RunningWebhookRuns(ctx context.Context) ([]RunningWebhookRunsR
 }
 
 const runsStanding = `-- name: RunsStanding :many
-SELECT id, repo_id, state FROM job_runs WHERE id = ANY($1::uuid[])
+SELECT id, repo_id, state, ended_at FROM job_runs WHERE id = ANY($1::uuid[])
 `
 
 type RunsStandingRow struct {
-	ID     uuid.UUID
-	RepoID uuid.UUID
-	State  string
+	ID      uuid.UUID
+	RepoID  uuid.UUID
+	State   string
+	EndedAt *time.Time
 }
 
 // RunsStanding finds those of ids that are runs, with where each stands and its repository.
@@ -444,7 +445,12 @@ func (q *Queries) RunsStanding(ctx context.Context, ids []uuid.UUID) ([]RunsStan
 	var items []RunsStandingRow
 	for rows.Next() {
 		var i RunsStandingRow
-		if err := rows.Scan(&i.ID, &i.RepoID, &i.State); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepoID,
+			&i.State,
+			&i.EndedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -167,7 +167,9 @@ func (s *Service) sweep(ctx context.Context, orgID uuid.UUID) error {
 		case ok && run.State.Active():
 			continue
 		case ok:
-			if err := s.keep(ctx, orgID, run.RepoID, id, pods[id]); err != nil {
+			pod := pods[id]
+			pod.Steps = stopped(pod.Steps, s.endOf(run))
+			if err := s.keep(ctx, orgID, run.RepoID, id, pod); err != nil {
 				errs = append(errs, err)
 				continue
 			}
@@ -177,6 +179,35 @@ func (s *Service) sweep(ctx context.Context, orgID uuid.UUID) error {
 		}
 	}
 	return errors.Join(errs...)
+}
+
+// stoppedReason is the reason of a step still running when its run ended, which removing its pod stops.
+const stoppedReason = "Stopped when its run ended"
+
+// stopped answers steps with those still running marked failed at end, as their run's end stops them: the sweep finds
+// a cancelled run's pod still running, and keeps its steps before it removes the pod. A step that started after end
+// ends as it started.
+func stopped(steps []jobs.Step, end time.Time) []jobs.Step {
+	out := slices.Clone(steps)
+	for i, step := range out {
+		if step.State != jobs.StepRunning {
+			continue
+		}
+		at := end
+		if step.StartedAt != nil && step.StartedAt.After(at) {
+			at = *step.StartedAt
+		}
+		out[i].State, out[i].Reason, out[i].EndedAt = jobs.StepFailed, stoppedReason, &at
+	}
+	return out
+}
+
+// endOf is when run ended, or now for one the store keeps no end for.
+func (s *Service) endOf(run Standing) time.Time {
+	if run.EndedAt != nil {
+		return *run.EndedAt
+	}
+	return s.now()
 }
 
 // wrapIf wraps err with what was being done, or answers nil without one.
