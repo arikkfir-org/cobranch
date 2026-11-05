@@ -78,6 +78,8 @@ type Store interface {
 	QueueSlot(ctx context.Context, repoID uuid.UUID, job string, slot time.Time) (bool, error)
 	// DropSlots deletes the slots queued before a time, and answers how many.
 	DropSlots(ctx context.Context, before time.Time) (int64, error)
+	// KeepSteps keeps the run's steps as they stood when it ended, in place of any it kept before.
+	KeepSteps(ctx context.Context, runID uuid.UUID, steps []jobs.Step) error
 }
 
 // Scheduled is a repository whose default branch declares jobs with schedules: those jobs.
@@ -132,6 +134,8 @@ type Pod struct {
 	// Reason is how a failed pod failed: the first container that failed and its exit code, its deadline passed, or the
 	// node lost it.
 	Reason string
+	// Steps are its containers, in the order they run, as they stand.
+	Steps []jobs.Step
 }
 
 // ErrNoRoom is a pod the organization's quota refuses for now: its run waits for others to end.
@@ -146,8 +150,8 @@ type Cluster interface {
 	Start(ctx context.Context, l Launch) error
 	// Pods reports the organization's runs' pods, by run ID: a run without one has none.
 	Pods(ctx context.Context, orgID uuid.UUID) (map[uuid.UUID]Pod, error)
-	// Logs reads each of the run's pod's containers' logs, at most limit bytes each and with the run's masked values
-	// hidden, by container; none for a pod that is gone.
+	// Logs reads each of the run's pod's containers' logs, at most limit bytes each, each line with its time before it
+	// (jobs.Stamp) and the run's masked values hidden, by container; none for a pod that is gone.
 	Logs(ctx context.Context, orgID, runID uuid.UUID, limit int64) (map[string][]byte, error)
 	// Remove deletes the run's pod, and its Secret with it.
 	Remove(ctx context.Context, orgID, runID uuid.UUID) error

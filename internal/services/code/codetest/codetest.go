@@ -34,6 +34,8 @@ type Store struct {
 	Names      map[uuid.UUID]string
 	NotPeople  map[uuid.UUID]bool
 	RunList    map[uuid.UUID][]code.Run
+	// Steps are the steps the controller kept of each ended run, by its ID.
+	Steps map[uuid.UUID][]jobs.Step
 	// EnvironmentList and DeliveryList hold each repository's environments and deliveries, in the order added.
 	EnvironmentList map[uuid.UUID][]code.Environment
 	DeliveryList    map[uuid.UUID][]code.Delivery
@@ -59,7 +61,7 @@ func NewStore() *Store {
 		Deleted: map[uuid.UUID][]code.DeletedBranch{}, TagList: map[uuid.UUID][]code.Tag{},
 		Pushes: map[uuid.UUID]code.Push{}, SlugList: map[uuid.UUID][2]string{}, Notes: map[uuid.UUID]map[string][]code.Annotation{},
 		ReviewList: map[uuid.UUID][]code.Review{}, Submitted: map[uuid.UUID]code.ReviewInput{}, Names: map[uuid.UUID]string{},
-		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
+		NotPeople: map[uuid.UUID]bool{}, RunList: map[uuid.UUID][]code.Run{}, Steps: map[uuid.UUID][]jobs.Step{}, EnvironmentList: map[uuid.UUID][]code.Environment{},
 		DeliveryList: map[uuid.UUID][]code.Delivery{}, Renders: map[uuid.UUID][]byte{},
 		Defined: map[uuid.UUID]map[string][]jobs.Job{}, ActivityList: map[uuid.UUID][]code.Activity{}, Viewed: map[string][]code.ViewedFile{}}
 }

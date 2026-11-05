@@ -75,6 +75,12 @@ type Run {
   such as a webhook's.
   """
   logs: [RunLog!]!
+  """
+  Its steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its
+  containers'): as the controller kept them once it ended, from its pod while it runs. None for a run that never started
+  a pod, such as a webhook's.
+  """
+  steps: [RunStep!]!
 }
 
 "One of a run's containers' logs, with the values the run masks hidden."
@@ -82,8 +88,34 @@ type RunLog {
   container: String!
   "The log, its bytes that aren't UTF-8 replaced."
   text: String!
+  """
+  When each line of text was logged, one per line, its lines being text split at its newlines with a last newline
+  ending the last line; null for a log kept before logs kept their times.
+  """
+  times: [Time!]
   "Whether it was read from the running pod, and grows until the run ends."
   live: Boolean!
+}
+
+"One of a run's pod's containers, as it stood when the run ended, or stands while it runs."
+type RunStep {
+  "The container's name, such as cobranch-checkout for the checkout's or main for a script's."
+  name: String!
+  state: RunStepState!
+  "How it exited, once it ended; 0 until then."
+  exitCode: Int!
+  "What the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says nothing more than its state."
+  reason: String!
+  startedAt: Time
+  endedAt: Time
+}
+
+"Where a run's step stands; one still waiting once its run ended never ran."
+enum RunStepState {
+  WAITING
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 "Where a run stands."

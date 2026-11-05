@@ -133,6 +133,42 @@ func (f *runFixture) checkFinish(t *testing.T, run runner.Run, hash []byte) {
 	}
 }
 
+func TestRunStoreKeepsSteps(t *testing.T) {
+	t.Parallel()
+	f := newRunFixture(t)
+	ctx, repo := context.Background(), f.website.ID
+	f.push(t, pushOf(repo, f.olivia, "pack-1", []git.RefUpdate{{Name: "refs/heads/main", Old: git.ZeroSHA, New: shaA}},
+		commit(shaA, person("Olivia", "olivia@example.com"))), tip(t, "main", "blob-1", jobsFile))
+	run := f.claim(t)
+	if steps, err := f.c.RunSteps(ctx, run.ID); err != nil || len(steps) != 0 {
+		t.Errorf("RunSteps() before any were kept = %+v, %v, want none", steps, err)
+	}
+	started, ended := now.Add(-time.Minute), now
+	kept := []jobs.Step{{Name: "cobranch-checkout", State: jobs.StepSucceeded, StartedAt: &started, EndedAt: &ended},
+		{Name: "main", State: jobs.StepFailed, ExitCode: 137, Reason: "OOMKilled", StartedAt: &ended, EndedAt: &ended},
+		{Name: "notify", State: jobs.StepWaiting}}
+	if err := f.r.KeepSteps(ctx, run.ID, kept[:1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.r.KeepSteps(ctx, run.ID, kept); err != nil {
+		t.Fatalf("KeepSteps() again = %v, want it to replace the steps kept before", err)
+	}
+	steps, err := f.c.RunSteps(ctx, run.ID)
+	same := func(a, b jobs.Step) bool {
+		at := func(t *time.Time) int64 {
+			if t == nil {
+				return 0
+			}
+			return t.UnixMicro()
+		}
+		return a.Name == b.Name && a.State == b.State && a.ExitCode == b.ExitCode && a.Reason == b.Reason &&
+			at(a.StartedAt) == at(b.StartedAt) && at(a.EndedAt) == at(b.EndedAt)
+	}
+	if err != nil || !slices.EqualFunc(steps, kept, same) {
+		t.Errorf("RunSteps() = %+v, %v, want %+v", steps, err, kept)
+	}
+}
+
 func TestRunStoreDropsTokens(t *testing.T) {
 	t.Parallel()
 	f := newRunFixture(t)

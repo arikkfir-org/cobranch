@@ -161,6 +161,10 @@ FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p 
   LEFT JOIN principals c ON c.id = coalesce(r.started_by, (r.trigger->>'actor')::uuid)
 WHERE r.repo_id = @repo_id AND r.number = @number;
 
+-- RunSteps lists the steps the controller kept of an ended run, in the order they ran.
+-- name: RunSteps :many
+SELECT * FROM job_run_steps WHERE run_id = $1 ORDER BY position;
+
 -- RunForUpdate finds a run by number with its job's name, and locks it until the transaction ends.
 -- name: RunForUpdate :one
 SELECT sqlc.embed(r), j.name AS job

@@ -113,6 +113,15 @@ func (q *Queries) DeleteDeadRunTokens(ctx context.Context) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const deleteRunSteps = `-- name: DeleteRunSteps :exec
+DELETE FROM job_run_steps WHERE run_id = $1
+`
+
+func (q *Queries) DeleteRunSteps(ctx context.Context, runID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRunSteps, runID)
+	return err
+}
+
 const deleteRunToken = `-- name: DeleteRunToken :exec
 DELETE FROM run_tokens WHERE run_id = $1
 `

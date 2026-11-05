@@ -76,6 +76,14 @@ func (s *Store) Run(_ context.Context, repoID uuid.UUID, number int64) (code.Run
 	return s.RunList[repoID][number-1], nil
 }
 
+// RunSteps lists the steps Steps holds of the run, as code.Store does.
+func (s *Store) RunSteps(_ context.Context, runID uuid.UUID) ([]jobs.Step, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	return s.Steps[runID], nil
+}
+
 // CancelRun cancels a run that hasn't ended, as code.Store does, naming actor by Names.
 func (s *Store) CancelRun(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, number int64) (code.Run, error) {
 	return s.change(ctx, repoID, number, func(r *code.Run) error {

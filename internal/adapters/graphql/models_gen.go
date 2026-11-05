@@ -1689,6 +1689,9 @@ type RunLog struct {
 	Container string `json:"container"`
 	// The log, its bytes that aren't UTF-8 replaced.
 	Text string `json:"text"`
+	// When each line of text was logged, one per line, its lines being text split at its newlines with a last newline
+	// ending the last line; null for a log kept before logs kept their times.
+	Times []*time.Time `json:"times,omitempty"`
 	// Whether it was read from the running pod, and grows until the run ends.
 	Live bool `json:"live"`
 }
@@ -1700,6 +1703,19 @@ type RunPage struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 	// How many runs the filters keep, on every page; on the first page alone, null on the rest.
 	Total *int `json:"total,omitempty"`
+}
+
+// One of a run's pod's containers, as it stood when the run ended, or stands while it runs.
+type RunStep struct {
+	// The container's name, such as cobranch-checkout for the checkout's or main for a script's.
+	Name  string       `json:"name"`
+	State RunStepState `json:"state"`
+	// How it exited, once it ended; 0 until then.
+	ExitCode int `json:"exitCode"`
+	// What the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says nothing more than its state.
+	Reason    string     `json:"reason"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+	EndedAt   *time.Time `json:"endedAt,omitempty"`
 }
 
 // The event that queued a run.
@@ -3985,6 +4001,66 @@ func (e *RunState) UnmarshalJSON(b []byte) error {
 }
 
 func (e RunState) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	e.MarshalGQL(&buf)
+	return buf.Bytes(), nil
+}
+
+// Where a run's step stands; one still waiting once its run ended never ran.
+type RunStepState string
+
+const (
+	RunStepStateWaiting   RunStepState = "WAITING"
+	RunStepStateRunning   RunStepState = "RUNNING"
+	RunStepStateSucceeded RunStepState = "SUCCEEDED"
+	RunStepStateFailed    RunStepState = "FAILED"
+)
+
+var AllRunStepState = []RunStepState{
+	RunStepStateWaiting,
+	RunStepStateRunning,
+	RunStepStateSucceeded,
+	RunStepStateFailed,
+}
+
+func (e RunStepState) IsValid() bool {
+	switch e {
+	case RunStepStateWaiting, RunStepStateRunning, RunStepStateSucceeded, RunStepStateFailed:
+		return true
+	}
+	return false
+}
+
+func (e RunStepState) String() string {
+	return string(e)
+}
+
+func (e *RunStepState) UnmarshalGQL(v any) error {
+	str, ok := v.(string)
+	if !ok {
+		return fmt.Errorf("enums must be strings")
+	}
+
+	*e = RunStepState(str)
+	if !e.IsValid() {
+		return fmt.Errorf("%s is not a valid RunStepState", str)
+	}
+	return nil
+}
+
+func (e RunStepState) MarshalGQL(w io.Writer) {
+	_, _ = fmt.Fprint(w, strconv.Quote(e.String()))
+}
+
+func (e *RunStepState) UnmarshalJSON(b []byte) error {
+	s, err := strconv.Unquote(string(b))
+	if err != nil {
+		return err
+	}
+	return e.UnmarshalGQL(s)
+}
+
+func (e RunStepState) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
 	e.MarshalGQL(&buf)
 	return buf.Bytes(), nil

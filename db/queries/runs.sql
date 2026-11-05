@@ -96,3 +96,11 @@ SELECT id, repo_id, state FROM job_runs WHERE id = ANY(@ids::uuid[]);
 -- OrganizationsAmong answers which of ids are organizations still.
 -- name: OrganizationsAmong :many
 SELECT id FROM organizations WHERE id = ANY(@ids::uuid[]);
+
+-- name: DeleteRunSteps :exec
+DELETE FROM job_run_steps WHERE run_id = $1;
+
+-- InsertRunStep keeps one of a run's steps, at its position.
+-- name: InsertRunStep :batchexec
+INSERT INTO job_run_steps (run_id, position, name, state, exit_code, reason, started_at, ended_at)
+VALUES (@run_id, @position, @name, @state, @exit_code, @reason, @started_at, @ended_at);

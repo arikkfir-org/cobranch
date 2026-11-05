@@ -161,6 +161,69 @@ func (b *InsertMergeRequirementsBatchResults) Close() error {
 	return b.br.Close()
 }
 
+const insertRunStep = `-- name: InsertRunStep :batchexec
+INSERT INTO job_run_steps (run_id, position, name, state, exit_code, reason, started_at, ended_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertRunStepBatchResults struct {
+	br     pgx.BatchResults
+	tot    int
+	closed bool
+}
+
+type InsertRunStepParams struct {
+	RunID     uuid.UUID
+	Position  int32
+	Name      string
+	State     string
+	ExitCode  int32
+	Reason    string
+	StartedAt *time.Time
+	EndedAt   *time.Time
+}
+
+// InsertRunStep keeps one of a run's steps, at its position.
+func (q *Queries) InsertRunStep(ctx context.Context, arg []InsertRunStepParams) *InsertRunStepBatchResults {
+	batch := &pgx.Batch{}
+	for _, a := range arg {
+		vals := []interface{}{
+			a.RunID,
+			a.Position,
+			a.Name,
+			a.State,
+			a.ExitCode,
+			a.Reason,
+			a.StartedAt,
+			a.EndedAt,
+		}
+		batch.Queue(insertRunStep, vals...)
+	}
+	br := q.db.SendBatch(ctx, batch)
+	return &InsertRunStepBatchResults{br, len(arg), false}
+}
+
+func (b *InsertRunStepBatchResults) Exec(f func(int, error)) {
+	defer b.br.Close()
+	for t := 0; t < b.tot; t++ {
+		if b.closed {
+			if f != nil {
+				f(t, ErrBatchAlreadyClosed)
+			}
+			continue
+		}
+		_, err := b.br.Exec()
+		if f != nil {
+			f(t, err)
+		}
+	}
+}
+
+func (b *InsertRunStepBatchResults) Close() error {
+	b.closed = true
+	return b.br.Close()
+}
+
 const insertSettingsFile = `-- name: InsertSettingsFile :batchexec
 INSERT INTO settings_files (repo_id, blob, org_id, settings, error)
 VALUES ($1, $2, $3, $4, $5)

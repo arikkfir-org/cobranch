@@ -5,6 +5,7 @@
 package jobs
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 
@@ -232,4 +233,47 @@ const (
 // Active reports whether a run in state s has yet to end.
 func (s State) Active() bool {
 	return s == StateWaiting || s == StateQueued || s == StateRunning
+}
+
+// Step is one of a run's pod's containers, in the order they run: the checkout's, then the job's init containers', then
+// its containers'. A run's page lists them, each with its log.
+type Step struct {
+	// Name is the container's: cobranch-checkout for the checkout's, main for a script's, and as the job names them for
+	// a pod's.
+	Name  string
+	State StepState
+	// ExitCode is how it exited, once it ended; 0 until then.
+	ExitCode int32
+	// Reason is what the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says
+	// nothing more than its state.
+	Reason string
+	// StartedAt is when it started, and EndedAt when it ended; nil until then.
+	StartedAt, EndedAt *time.Time
+}
+
+// StepState is where a step stands.
+type StepState string
+
+// The states of a step. One still waiting when its run ended never ran.
+const (
+	StepWaiting   StepState = "waiting"
+	StepRunning   StepState = "running"
+	StepSucceeded StepState = "succeeded"
+	StepFailed    StepState = "failed"
+)
+
+// Stamp splits a line of a run's log into the time it was logged and its text, as the controller keeps them: the time in
+// RFC 3339 and a space before the text, as Kubernetes reads a container's log with timestamps. ok is false for a line
+// without one, such as a line of a log kept before logs kept their times, or one the log's limit cut short.
+func Stamp(line []byte) (at time.Time, text []byte, ok bool) {
+	stamp, text, found := bytes.Cut(line, []byte(" "))
+	if !found { // an empty line the limit cut before its space, or a stamp alone
+		stamp = bytes.TrimSuffix(line, []byte("\n"))
+		text = line[len(stamp):]
+	}
+	at, err := time.Parse(time.RFC3339Nano, string(stamp))
+	if err != nil {
+		return time.Time{}, line, false
+	}
+	return at, text, true
 }

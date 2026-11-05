@@ -266,3 +266,25 @@ func (s *RunStore) DropSlots(ctx context.Context, before time.Time) (int64, erro
 	n, err := s.q.DeleteScheduleSlots(ctx, before)
 	return n, wrapIf(err, "deleting the schedules' old slots")
 }
+
+// KeepSteps keeps the run's steps as they stood when it ended, in place of any kept before, in one transaction that
+// names nobody (runner.Store).
+func (s *RunStore) KeepSteps(ctx context.Context, runID uuid.UUID, steps []jobs.Step) error {
+	return transact(ctx, s.pool, s.q, "keeping the run's steps", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		if err := q.DeleteRunSteps(ctx, runID); err != nil {
+			return fmt.Errorf("forgetting run %s's steps: %w", runID, err)
+		}
+		rows := make([]queries.InsertRunStepParams, len(steps))
+		for i, step := range steps {
+			rows[i] = queries.InsertRunStepParams{RunID: runID, Position: int32(i), Name: step.Name, State: string(step.State), //nolint:gosec // a pod holds far fewer than 2^31 containers
+				ExitCode: step.ExitCode, Reason: step.Reason, StartedAt: step.StartedAt, EndedAt: step.EndedAt}
+		}
+		var failed error
+		q.InsertRunStep(ctx, rows).Exec(func(i int, err error) {
+			if err != nil && failed == nil {
+				failed = fmt.Errorf("keeping run %s's step %s: %w", runID, steps[i].Name, err)
+			}
+		})
+		return failed
+	})
+}

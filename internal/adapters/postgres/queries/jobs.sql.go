@@ -489,6 +489,40 @@ func (q *Queries) RunNumber(ctx context.Context, id uuid.UUID) (int64, error) {
 	return number, err
 }
 
+const runSteps = `-- name: RunSteps :many
+SELECT run_id, position, name, state, exit_code, reason, started_at, ended_at FROM job_run_steps WHERE run_id = $1 ORDER BY position
+`
+
+// RunSteps lists the steps the controller kept of an ended run, in the order they ran.
+func (q *Queries) RunSteps(ctx context.Context, runID uuid.UUID) ([]JobRunStep, error) {
+	rows, err := q.db.Query(ctx, runSteps, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []JobRunStep
+	for rows.Next() {
+		var i JobRunStep
+		if err := rows.Scan(
+			&i.RunID,
+			&i.Position,
+			&i.Name,
+			&i.State,
+			&i.ExitCode,
+			&i.Reason,
+			&i.StartedAt,
+			&i.EndedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const runsOf = `-- name: RunsOf :many
 SELECT r.id, r.org_id, r.repo_id, r.number, r.job_id, r.sha, r.ref, r.trigger, r.cause_run_id, r.definition, r.state, r.reason, r.started_by, r.lease_until, r.queued_at, r.started_at, r.ended_at, r.version, r.attempt, r.rerun_of, j.name AS job, p.display_name AS started_by_name, c.id AS caused_by_id, c.display_name AS caused_by_name, c.kind AS caused_by_kind
 FROM job_runs r JOIN jobs j ON j.principal_id = r.job_id LEFT JOIN principals p ON p.id = r.started_by
