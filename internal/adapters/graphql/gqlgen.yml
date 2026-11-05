@@ -107,6 +107,7 @@ models:
       chat: { resolver: true }
       conversation: { resolver: true }
       branchDiff: { resolver: true }
+      branchDiffCounts: { resolver: true }
       commitDiff: { resolver: true }
       viewedFiles: { resolver: true }
       environments: { resolver: true }

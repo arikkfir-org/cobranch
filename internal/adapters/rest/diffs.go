@@ -24,6 +24,24 @@ func (a api) GetBranchDiff(ctx context.Context, req GetBranchDiffRequestObject) 
 	return GetBranchDiff200JSONResponse{Body: diff(d), Headers: GetBranchDiff200ResponseHeaders{ETag: tag}}, nil
 }
 
+// GetBranchDiffCounts answers how much a branch's change changes, without its files, or 304 while the caller holds it.
+func (a api) GetBranchDiffCounts(ctx context.Context, req GetBranchDiffCountsRequestObject) (GetBranchDiffCountsResponseObject, error) {
+	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)
+	if err != nil {
+		return nil, err
+	}
+	c, err := a.code.BranchDiffCounts(ctx, v, repo.ID, req.BranchName)
+	if err != nil {
+		return nil, diffFail(err, "branch")
+	}
+	tag := etag("diff-counts", c.Head, c.Base, c.BaseTip, "", "")
+	if matches(req.Params.IfNoneMatch, tag) {
+		return GetBranchDiffCounts304Response{Headers: GetBranchDiffCounts304ResponseHeaders{ETag: tag}}, nil
+	}
+	return GetBranchDiffCounts200JSONResponse{Body: DiffCounts{Base: optional(c.Base), BaseTip: optional(c.BaseTip), Head: c.Head,
+		Files: c.Files, Additions: c.Additions, Deletions: c.Deletions}, Headers: GetBranchDiffCounts200ResponseHeaders{ETag: tag}}, nil
+}
+
 // GetCommitDiff answers a commit's change against its first parent, or 304 while the caller holds it.
 func (a api) GetCommitDiff(ctx context.Context, req GetCommitDiffRequestObject) (GetCommitDiffResponseObject, error) {
 	v, repo, err := a.viewerAndRepo(ctx, req.Org, req.Repo)

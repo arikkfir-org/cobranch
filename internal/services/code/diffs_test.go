@@ -61,6 +61,41 @@ func TestBranchDiff(t *testing.T) {
 	}
 }
 
+func TestBranchDiffCounts(t *testing.T) {
+	tests := []struct {
+		name    string
+		viewer  func(*fixture) code.Viewer
+		branch  string
+		want    code.DiffCounts
+		wantErr error
+	}{
+		{name: "its files and lines, without them", viewer: func(f *fixture) code.Viewer { return f.max }, branch: "feature/x",
+			want: code.DiffCounts{Base: sha(5), BaseTip: sha(5), Head: sha(6), Files: 2, Additions: 1, Deletions: 3}},
+		{name: "main merges into nothing", viewer: func(f *fixture) code.Viewer { return f.max }, branch: "main",
+			wantErr: &orgs.ValidationError{Code: "branch.default"}},
+		{name: "a viewer who doesn't read the repository finds none", viewer: func(f *fixture) code.Viewer { return f.nia }, branch: "feature/x",
+			wantErr: repos.ErrNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := withDiffs(newFixture())
+			got, err := f.service.BranchDiffCounts(t.Context(), tt.viewer(f), f.repo, tt.branch)
+			if !sameError(err, tt.wantErr) {
+				t.Fatalf("got error %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got != tt.want {
+				t.Errorf("got %+v, want %+v", got, tt.want)
+			}
+			if asked := (code.DiffRequest{Base: "main", Head: sha(6), MergeBase: true, CountsOnly: true}); len(f.objects.Diffs) != 1 || f.objects.Diffs[0] != asked {
+				t.Errorf("asked Git for %v, want %v", f.objects.Diffs, asked)
+			}
+		})
+	}
+}
+
 func TestCommitDiff(t *testing.T) {
 	invalid := func(code string) error { return &orgs.ValidationError{Code: code} }
 	tests := []struct {

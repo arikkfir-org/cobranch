@@ -360,6 +360,23 @@ func (r *repositoryResolver) BranchDiff(ctx context.Context, obj *Repository, na
 	return diff(d), nil
 }
 
+// BranchDiffCounts is the resolver for the branchDiffCounts field.
+func (r *repositoryResolver) BranchDiffCounts(ctx context.Context, obj *Repository, name string) (*DiffCounts, error) {
+	v, repoID, err := repoOf(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	c, err := r.Code.BranchDiffCounts(ctx, v, repoID, name)
+	switch {
+	case errors.Is(err, repos.ErrNotFound):
+		return nil, nil
+	case err != nil:
+		return nil, codeFail(ctx, err, "counting the branch's diff")
+	}
+	return &DiffCounts{Base: optional(c.Base), BaseTip: optional(c.BaseTip), Head: c.Head, Files: c.Files, Additions: c.Additions,
+		Deletions: c.Deletions}, nil
+}
+
 // CommitDiff is the resolver for the commitDiff field.
 func (r *repositoryResolver) CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error) {
 	v, repoID, err := repoOf(ctx, obj)

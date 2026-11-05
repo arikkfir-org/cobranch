@@ -2126,6 +2126,27 @@ type Diff struct {
 	Head string `json:"head"`
 }
 
+// DiffCounts How much a diff changes, without its files, counted in full whatever the limits of a diff.
+type DiffCounts struct {
+	// Additions The lines it adds.
+	Additions int `json:"additions"`
+
+	// Base The commit it runs from: a branch's merge base with its base's tip. Absent when the branch shares no history with its base, so the diff runs from the empty tree.
+	Base *string `json:"base,omitempty"`
+
+	// BaseTip The branch's base's tip, which its merge base is reckoned from.
+	BaseTip *string `json:"baseTip,omitempty"`
+
+	// Deletions The lines it removes.
+	Deletions int `json:"deletions"`
+
+	// Files The files it changes.
+	Files int `json:"files"`
+
+	// Head The commit it runs to.
+	Head string `json:"head"`
+}
+
 // DiffLine One of a hunk's lines, without its newline.
 type DiffLine struct {
 	Kind DiffLineKind `json:"kind"`
@@ -4464,6 +4485,12 @@ type GetBranchDiffParams struct {
 	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
+// GetBranchDiffCountsParams defines parameters for GetBranchDiffCounts.
+type GetBranchDiffCountsParams struct {
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetViewedFilesParams defines parameters for GetViewedFiles.
 type GetViewedFilesParams struct {
 	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
@@ -5393,6 +5420,9 @@ type ServerInterface interface {
 	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffParams)
+	// GetBranchDiffCounts How much the branch's diff changes, without its files: the files and lines it adds and removes, counted in full, which the Console shows on the branch's Files changed tab; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff-counts)
+	GetBranchDiffCounts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffCountsParams)
 	// UnlinkBranch Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write, and repo.read. A branch with no issue answers 204 too.
 	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/issue)
 	UnlinkBranch(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
@@ -11964,6 +11994,74 @@ func (siw *ServerInterfaceWrapper) GetBranchDiff(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetBranchDiffCounts operation middleware
+func (siw *ServerInterfaceWrapper) GetBranchDiffCounts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "branch" -------------
+	var branchName BranchName
+
+	err = runtime.BindStyledParameterWithOptions("simple", "branch", r.PathValue("branch"), &branchName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "branch", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBranchDiffCountsParams
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBranchDiffCounts(w, r, org, repo, branchName, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // UnlinkBranch operation middleware
 func (siw *ServerInterfaceWrapper) UnlinkBranch(w http.ResponseWriter, r *http.Request) {
 
@@ -16399,6 +16497,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.DeleteBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}", wrapper.GetBranch)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff", wrapper.GetBranchDiff)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/diff-counts", wrapper.GetBranchDiffCounts)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/viewed", wrapper.GetViewedFiles)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/viewed", wrapper.UpdateViewedFiles)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/review", wrapper.RequestReview)
@@ -30224,6 +30323,128 @@ func (response GetBranchDiffdefaultApplicationProblemPlusJSONResponse) VisitGetB
 	return err
 }
 
+type GetBranchDiffCountsRequestObject struct {
+	Org        Org        `json:"org"`
+	Repo       Repo       `json:"repo"`
+	BranchName BranchName `json:"branch"`
+	Params     GetBranchDiffCountsParams
+}
+
+type GetBranchDiffCountsResponseObject interface {
+	VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error
+}
+
+type GetBranchDiffCounts200ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranchDiffCounts200JSONResponse struct {
+	Body    DiffCounts
+	Headers GetBranchDiffCounts200ResponseHeaders
+}
+
+func (response GetBranchDiffCounts200JSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffCounts304ResponseHeaders struct {
+	ETag string
+}
+
+type GetBranchDiffCounts304Response struct {
+	Headers GetBranchDiffCounts304ResponseHeaders
+}
+
+func (response GetBranchDiffCounts304Response) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetBranchDiffCounts400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetBranchDiffCounts400ApplicationProblemPlusJSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffCounts401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiffCounts401ApplicationProblemPlusJSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffCounts404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiffCounts404ApplicationProblemPlusJSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffCounts503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBranchDiffCounts503ApplicationProblemPlusJSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBranchDiffCountsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBranchDiffCountsdefaultApplicationProblemPlusJSONResponse) VisitGetBranchDiffCountsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type UnlinkBranchRequestObject struct {
 	Org        Org        `json:"org"`
 	Repo       Repo       `json:"repo"`
@@ -38629,6 +38850,9 @@ type StrictServerInterface interface {
 	// GetBranchDiff The branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff)
 	GetBranchDiff(ctx context.Context, request GetBranchDiffRequestObject) (GetBranchDiffResponseObject, error)
+	// GetBranchDiffCounts How much the branch's diff changes, without its files: the files and lines it adds and removes, counted in full, which the Console shows on the branch's Files changed tab; takes repo.read. Main merges into nothing and answers 400 branch.default. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/branches/{branch}/diff-counts)
+	GetBranchDiffCounts(ctx context.Context, request GetBranchDiffCountsRequestObject) (GetBranchDiffCountsResponseObject, error)
 	// UnlinkBranch Unlinks the branch from its issue by hand, for the viewer, so its name never links it again; takes issues.write, and repo.read. A branch with no issue answers 204 too.
 	// (DELETE /orgs/{org}/repos/{repo}/branches/{branch}/issue)
 	UnlinkBranch(ctx context.Context, request UnlinkBranchRequestObject) (UnlinkBranchResponseObject, error)
@@ -42910,6 +43134,35 @@ func (sh *strictHandler) GetBranchDiff(w http.ResponseWriter, r *http.Request, o
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBranchDiffResponseObject); ok {
 		if err := validResponse.VisitGetBranchDiffResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBranchDiffCounts operation middleware
+func (sh *strictHandler) GetBranchDiffCounts(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName, params GetBranchDiffCountsParams) {
+	var request GetBranchDiffCountsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.BranchName = branchName
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBranchDiffCounts(ctx, request.(GetBranchDiffCountsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBranchDiffCounts")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBranchDiffCountsResponseObject); ok {
+		if err := validResponse.VisitGetBranchDiffCountsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

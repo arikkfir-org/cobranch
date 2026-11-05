@@ -79,14 +79,17 @@ async function tabContent(ctx, b, tab) {
     b.commit ? commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)) : null];
 }
 
-// branchTabBar is b's tabs (Tab), each a link to its page, Jobs with the runs of its head once counted.
+// branchTabBar is b's tabs (Tab), each a link to its page, Files changed with the files its diff changes and Jobs with
+// the runs of its head, once counted.
 function branchTabBar({ path, at }, b, shown) {
   const tabs = Object.entries(branchTabs).filter(([t]) => b.base || t !== "changes");
   return h("nav", { class: "tab-bar", "aria-label": b.name }, tabs.map(([t, { label }]) => {
     const tab = h("a", { class: "tab", href: at.branchPage(b.name, t), "data-nav": "", "aria-current": t === shown ? "page" : null }, label);
+    const count = (n) => n && tab.append(h("span", { class: "tab-count" }, n));
     // A count that fails to arrive leaves the tab without one.
+    if (t === "changes") api("GET", path + "/branches/" + encodeURIComponent(b.name) + "/diff-counts").then((c) => count(c.files), () => {});
     if (t === "jobs") apiPage(path + "/runs?" + new URLSearchParams({ sha: b.head })).then((page) => {
-      if (page.data.runs.length) tab.append(h("span", { class: "tab-count" }, page.data.runs.length + (page.next ? "+" : "")));
+      count(page.data.runs.length && page.data.runs.length + (page.next ? "+" : ""));
     }, () => {});
     return tab;
   }));

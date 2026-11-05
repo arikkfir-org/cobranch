@@ -282,8 +282,8 @@ func (o *Objects) Merge(_ context.Context, _ uuid.UUID, req code.MergeRequest) (
 }
 
 // Diff compares the files of the commits req names, file by file in path order: each changed file is one hunk of its
-// old lines removed and its new ones added. Commits here have no history, so a merge base is the base itself; Diffs
-// lists the diffs asked for.
+// old lines removed and its new ones added, or, for CountsOnly, none, each counted as left out. Commits here have no
+// history, so a merge base is the base itself; Diffs lists the diffs asked for.
 func (o *Objects) Diff(_ context.Context, _ uuid.UUID, req code.DiffRequest) (code.Diff, error) {
 	o.Diffs = append(o.Diffs, req)
 	head, after, err := o.resolve(req.Head)
@@ -317,6 +317,9 @@ func (o *Objects) Diff(_ context.Context, _ uuid.UUID, req code.DiffRequest) (co
 		d.Files = append(d.Files, f)
 		d.Additions += f.Additions
 		d.Deletions += f.Deletions
+	}
+	if req.CountsOnly {
+		d.Files, d.FilesLeftOut = nil, len(d.Files)
 	}
 	return d, nil
 }

@@ -2,6 +2,7 @@ package code
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -104,12 +105,25 @@ type Diff struct {
 	Deletions    int
 }
 
-// DiffRequest is the diff the Git server is asked for: from the commit Base names, or the empty tree when it is "",
-// or, when MergeBase, from the merge base of that commit and Head's; to the commit Head names.
-type DiffRequest struct {
+// DiffCounts is how much a diff changes, without its files: the commits it runs between, as Diff names them, and how
+// many files and lines it changes. A branch's Files changed tab shows them as its count.
+type DiffCounts struct {
 	Base      string
+	BaseTip   string
 	Head      string
-	MergeBase bool
+	Files     int
+	Additions int
+	Deletions int
+}
+
+// DiffRequest is the diff the Git server is asked for: from the commit Base names, or the empty tree when it is "",
+// or, when MergeBase, from the merge base of that commit and Head's; to the commit Head names. CountsOnly asks for
+// its counts alone: it lists no files, and counts every one in FilesLeftOut.
+type DiffRequest struct {
+	Base       string
+	Head       string
+	MergeBase  bool
+	CountsOnly bool
 }
 
 // BranchDiff is a branch's change: from the merge base of its base's tip and its head to its head, so what its base
@@ -118,22 +132,51 @@ func (s *Service) BranchDiff(ctx context.Context, v Viewer, repoID uuid.UUID, br
 	ctx, span := tracer.Start(ctx, "code.Service.BranchDiff")
 	defer span.End()
 	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", branch))
-	if err := s.read(ctx, v, repoID); err != nil {
-		return Diff{}, failed(span, "reading the branch's diff", err)
-	}
-	b, err := s.store.Branch(ctx, repoID, branch)
+	req, err := s.branchDiffRequest(ctx, v, repoID, branch)
 	if err != nil {
 		return Diff{}, failed(span, "reading the branch's diff", err)
 	}
-	if b.Base == "" {
-		return Diff{}, &orgs.ValidationError{Field: "branch", Code: "branch.default",
-			Message: "the default branch merges into nothing, so it has no diff"}
-	}
-	d, err := s.objects.Diff(ctx, repoID, DiffRequest{Base: b.Base, Head: b.Head, MergeBase: true})
+	d, err := s.objects.Diff(ctx, repoID, req)
 	if err != nil {
 		return Diff{}, failed(span, "reading the branch's diff", err)
 	}
 	return d, nil
+}
+
+// BranchDiffCounts is how much a branch's change, as BranchDiff reckons it, changes: its files and lines, counted
+// without reading their hunks; it takes repo.read.
+func (s *Service) BranchDiffCounts(ctx context.Context, v Viewer, repoID uuid.UUID, branch string) (DiffCounts, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.BranchDiffCounts")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.branch", branch))
+	req, err := s.branchDiffRequest(ctx, v, repoID, branch)
+	if err != nil {
+		return DiffCounts{}, failed(span, "counting the branch's diff", err)
+	}
+	req.CountsOnly = true
+	d, err := s.objects.Diff(ctx, repoID, req)
+	if err != nil {
+		return DiffCounts{}, failed(span, "counting the branch's diff", err)
+	}
+	return DiffCounts{Base: d.Base, BaseTip: d.BaseTip, Head: d.Head, Files: len(d.Files) + d.FilesLeftOut, Additions: d.Additions,
+		Deletions: d.Deletions}, nil
+}
+
+// branchDiffRequest is the diff of a branch the viewer reads: from the merge base of its base's tip and its head to its
+// head. The default branch has no base, and answers branch.default.
+func (s *Service) branchDiffRequest(ctx context.Context, v Viewer, repoID uuid.UUID, branch string) (DiffRequest, error) {
+	if err := s.read(ctx, v, repoID); err != nil {
+		return DiffRequest{}, err
+	}
+	b, err := s.store.Branch(ctx, repoID, branch)
+	if err != nil {
+		return DiffRequest{}, fmt.Errorf("finding branch %q: %w", branch, err)
+	}
+	if b.Base == "" {
+		return DiffRequest{}, &orgs.ValidationError{Field: "branch", Code: "branch.default",
+			Message: "the default branch merges into nothing, so it has no diff"}
+	}
+	return DiffRequest{Base: b.Base, Head: b.Head, MergeBase: true}, nil
 }
 
 // CommitDiff is a commit's change against its first parent, or against the empty tree when it has none; it takes

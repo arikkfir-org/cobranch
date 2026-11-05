@@ -180,6 +180,39 @@ func TestInternalDiff(t *testing.T) {
 	}
 }
 
+func TestInternalDiffCounts(t *testing.T) {
+	t.Parallel()
+	d := newDiffed(t)
+	tests := []struct {
+		name    string
+		req     code.DiffRequest
+		want    code.Diff
+		wantErr error
+	}{
+		{name: "a branch's, its files left out", req: code.DiffRequest{Base: "main", Head: "changes", MergeBase: true},
+			want: code.Diff{Base: "prepared", BaseTip: "later", Head: "changes", FilesLeftOut: 8, Additions: 5, Deletions: 3}},
+		{name: "past the files' limit", req: code.DiffRequest{Base: "merge", Head: "many"},
+			want: code.Diff{Base: "merge", Head: "many", FilesLeftOut: code.MaxDiffFiles + 1, Additions: code.MaxDiffFiles + 1}},
+		{name: "a head that names nothing", req: code.DiffRequest{Head: "gone"}, wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := tt.req
+			req.Base, req.Head, req.CountsOnly = d.named(req.Base), d.named(req.Head), true
+			got, err := d.client.Diff(d.ctx(t), website, req)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Diff() error = %v, want %v", err, tt.wantErr)
+			}
+			want := tt.want
+			want.Base, want.BaseTip, want.Head = d.named(want.Base), d.named(want.BaseTip), d.named(want.Head)
+			if err == nil && (len(got.Files) != 0 || got.Base != want.Base || got.BaseTip != want.BaseTip || got.Head != want.Head ||
+				got.FilesLeftOut != want.FilesLeftOut || got.Additions != want.Additions || got.Deletions != want.Deletions) {
+				t.Errorf("Diff() = %+v, want %+v", got, want)
+			}
+		})
+	}
+}
+
 // checkObjects checks that each of d's files names the objects of its content before and after in full, but the
 // side an added or a deleted file lacks.
 func checkObjects(t *testing.T, d code.Diff) {

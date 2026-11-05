@@ -121,6 +121,9 @@ func (c *Client) Diff(ctx context.Context, repoID uuid.UUID, req code.DiffReques
 	if req.MergeBase {
 		query.Set("mergeBase", "true")
 	}
+	if req.CountsOnly {
+		query.Set("counts", "true")
+	}
 	var d Diff
 	if err := c.getJSON(ctx, repoID, "diff", query, &d); err != nil {
 		return code.Diff{}, err
