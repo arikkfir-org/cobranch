@@ -1,6 +1,6 @@
 /* An organization's settings: its usage against its quotas. */
-.gauge { display: grid; gap: 4px; }
-.meter { height: 8px; border-radius: 999px; border: 1px solid var(--color-border-default); background: var(--color-bg-raised); overflow: hidden; }
-.meter span { display: block; height: 100%; background: var(--color-accent); }
-.meter[data-tone="warning"] span { background: var(--color-status-warning-fg); }
-.meter[data-tone="danger"] span { background: var(--color-status-danger-fg); }
+.gauge { display: grid; gap: var(--space-4); }
+.meter { height: 8px; border-radius: var(--radius-full); border: 1px solid var(--color-border-default); background: var(--color-bg-surface); overflow: hidden; }
+.meter span { display: block; height: 100%; background: var(--color-status-info-solid); }
+.meter[data-tone="warning"] span { background: var(--color-status-warning-solid); }
+.meter[data-tone="danger"] span { background: var(--color-status-danger-solid); }

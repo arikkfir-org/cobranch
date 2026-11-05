@@ -1,7 +1,7 @@
 # The Cobranch product design
 
 > **Snapshot.** This design lives in its [product design page](https://claude.ai/artifact/BsCFv8jQ7XunQP2T64Sjoy),
-> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-02, and synced
+> linked with Cobranch's other designs; this file is generated from it, with its diagrams, as of 2026-11-04, and synced
 > again once Cobranch's shape settles.
 
 **Status**: Decided 2026-10-27 · Revised after review, 2026-10-27 · No questions open at this level · Source:
@@ -57,6 +57,7 @@ Each domain has a design of its own, drafted here as a page and linked from this
 | [Quotas](quotas.md) | Limits on organizations, repositories and Git data, set in the Back-office and checked on push. | Proposed |
 | [Issues](issues.md) | Issues, their links to branches, and agents taking them as tasks. | Proposed |
 | [Console](console.md) | The Console as static ES modules: a shell, shared modules and a module per page, with no build step. | Proposed |
+| [Artifacts](https://claude.ai/artifact/GadW2fC9NMBLA86DqcHCBk) | Documents, diagrams, reports and pages agents generate for a repository: versions, grants, and where they render. | Proposed |
 | [Helm chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) | How one chart installs and upgrades Cobranch on any cluster. | Decided |
 | [Repository](repository.md) | The monorepo, its continuous integration and its docs. | Decided |
 | [Design system](design-system.md) | Tokens, type, components and the core screens. | Approved |
@@ -234,7 +235,7 @@ reconciliation are worked out in the subsystem designs.
 
 Each domain gets its own design, drafted as a page like this one and linked under [The designs](#the-designs); they are
 synced into the repository's docs once Cobranch's shape settles. The work is tracked in Linear's [Cobranch
-project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in six milestones of one issue per slice, each
+project](https://linear.app/arikkfir/project/cobranch-56ee907dd1af), in seven milestones of one issue per slice, each
 slice after the ones it waits for. Where it stands:
 
 - **Done:** milestones 1, 2, 3, 5 and 6, and all of milestone 4 but its operators' metrics: the design, the installable
@@ -251,19 +252,28 @@ slice after the ones it waits for. Where it stands:
   [ENG-251](https://linear.app/arikkfir/issue/ENG-251), [design](reviews.md)), issues linked to branches and taken by
   agents ([ENG-217](https://linear.app/arikkfir/issue/ENG-217), [design](issues.md)), delivery of every branch to an
   environment of its own through the built-in GitOps controller ([ENG-218](https://linear.app/arikkfir/issue/ENG-218),
-  [design](delivery.md)), the Console split into a module per page, so slices that each add a page no longer conflict
-  ([ENG-246](https://linear.app/arikkfir/issue/ENG-246), [design](console.md)), and storage and push quotas
+  [design](delivery.md)), the Console split into a module per page, so slices that each add a page no longer conflict,
+  with every file of the first page asked for at once ([ENG-246](https://linear.app/arikkfir/issue/ENG-246),
+  [ENG-252](https://linear.app/arikkfir/issue/ENG-252), [design](console.md)), and storage and push quotas
   ([ENG-238](https://linear.app/arikkfir/issue/ENG-238), [design](quotas.md)), brought forward from phase 2 because an
   installation open to sign-up needs them.
 - **In progress:** operators' metrics for page views, code reads and caches
   ([ENG-235](https://linear.app/arikkfir/issue/ENG-235), [design](monitoring.md)), whose metrics are live and whose
-  alerts come last.
-- **Next:** the Console's first page drawn in fewer round trips ([ENG-252](https://linear.app/arikkfir/issue/ENG-252),
-  [design](console.md)), then the rest of [phase 2](#phase-2).
+  alerts come last; and milestone 7, the Console on the design system the owner approved on 2026-11-04
+  ([design](design-system.md)): its tokens, marks and the rule that Figma leads
+  ([ENG-253](https://linear.app/arikkfir/issue/ENG-253)), its components
+  ([ENG-254](https://linear.app/arikkfir/issue/ENG-254)), the app shell with its sidebar, breadcrumbs and conversation
+  pane ([ENG-255](https://linear.app/arikkfir/issue/ENG-255)), the organization's and a repository's pages redrawn
+  ([ENG-256](https://linear.app/arikkfir/issue/ENG-256), [ENG-258](https://linear.app/arikkfir/issue/ENG-258)), tasks on
+  their agent's page with what each spent under a cap ([ENG-257](https://linear.app/arikkfir/issue/ENG-257)), a
+  conversation on every page, private or shared by its subject ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)),
+  and artifacts that agents generate for repositories and people share by grants
+  ([ENG-259](https://linear.app/arikkfir/issue/ENG-259)).
+- **Next:** the rest of [phase 2](#phase-2).
 
-**The roadmap by milestone, as of 2026-11-02**
+**The roadmap by milestone, as of 2026-11-04**
 
-![The roadmap by milestone, as of 2026-11-02](product/roadmap.svg)
+![The roadmap by milestone, as of 2026-11-04](product/roadmap.svg)
 
 ### Phase 2
 
@@ -300,8 +310,8 @@ Planned after the foundations, each with a design of its own when its turn comes
   and instructions. A push regenerates only the docs it affects, one package's or several levels' when a change
   underpins a rewrite, and the rest come from cache ([ENG-233](https://linear.app/arikkfir/issue/ENG-233)).
 - **An AI side panel:** whoever views a repository in the Console asks it questions about the repository and has it act
-  on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review)
-  ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
+  on it, with the viewer's own permissions and never more; it builds on [agents](#agents-and-ai-review). Brought into
+  milestone 7 as the conversation pane, on every page ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)).
 - **Quotas:** administrators cap what each user and organization may store and push, so an installation open to anyone's
   sign-up keeps its storage in check; built ahead of the rest ([ENG-238](https://linear.app/arikkfir/issue/ENG-238),
   [design](quotas.md)).

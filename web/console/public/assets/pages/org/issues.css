@@ -1,44 +1,44 @@
 /* The issues pages: the list and its filters, an issue's page, and the labels. */
-.filters { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: 8px; align-items: center; }
+.filters { display: grid; grid-template-columns: auto auto auto 1fr auto; gap: var(--space-8); align-items: center; }
 .filters select { width: auto; }
-.groups { display: grid; gap: 16px; }
+.groups { display: grid; gap: var(--space-16); }
 .issues td.priority, .issues td.key, .issues td.when { width: 1%; white-space: nowrap; }
 .issues td.meta { text-align: right; white-space: nowrap; }
-.issues a.subject { color: var(--color-fg-default); font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
-.issues a.subject:hover { color: var(--color-accent); }
-.avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; vertical-align: middle;
-  background: var(--color-status-info-bg); color: var(--color-status-info-fg); border: 1px solid var(--color-status-info-border); font-size: 10px; font-weight: 600; }
-.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
-.issue { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 24px; align-items: start; }
-.issue .column { display: grid; gap: 24px; min-width: 0; }
-aside.side { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-sunken); }
-aside.side .fact { color: var(--color-fg-default); font-size: 14px; }
-.branch-name { display: grid; gap: 6px; }
-.branch-name code { font-size: 12px; overflow-wrap: anywhere; flex: 1; }
+.issues a.subject { color: var(--color-fg-default); font: var(--text-body-medium-strong); text-decoration: none; overflow-wrap: anywhere; }
+.issues a.subject:hover { color: var(--color-fg-link); }
+.avatar { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: var(--radius-full); vertical-align: middle;
+  background: var(--color-avatar-user-bg); color: var(--color-avatar-user-fg); font: var(--text-label-small); }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--space-8); }
+.issue { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: var(--space-24); align-items: start; }
+.issue .column { display: grid; gap: var(--space-24); min-width: 0; }
+aside.side { display: grid; gap: var(--space-12); padding: var(--space-16); border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-bg-sunken); }
+aside.side .fact { color: var(--color-fg-default); font: var(--text-body-medium); }
+.branch-name { display: grid; gap: var(--space-6); }
+.branch-name code { font: var(--text-code-small); overflow-wrap: anywhere; flex: 1; }
 .activity { list-style: none; margin: 0; padding: 0; display: grid; }
-.activity li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+.activity li { display: flex; justify-content: space-between; gap: var(--space-12); padding: var(--space-8) 0; border-top: 1px solid var(--color-border-default); }
 .activity li:first-child { border-top: 0; }
 .activity li .muted { white-space: nowrap; }
 .linked { list-style: none; margin: 0; padding: 0; }
-.linked li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+.linked li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); padding: var(--space-8) 0; border-top: 1px solid var(--color-border-default); }
 .linked li:first-child { border-top: 0; }
 .linked li a { min-width: 0; overflow-wrap: anywhere; }
-.label { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--tone-border);
-  background: var(--tone-bg); color: var(--tone-fg); font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
-.label::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.field { display: grid; gap: 6px; }
-.field strong { font-weight: 500; }
-.label-picks { display: flex; flex-wrap: wrap; gap: 6px 4px; }
-.label-picks label.check { display: inline-flex; gap: 4px; font-weight: 400; }
+.label { display: inline-flex; align-items: center; gap: var(--space-4); padding: var(--space-2) var(--space-8); border-radius: var(--radius-full); border: 1px solid var(--tone-border);
+  background: var(--tone-bg); color: var(--tone-fg); font: var(--text-label-small); white-space: nowrap; margin-right: var(--space-4); }
+.label::before { content: ""; width: 7px; height: 7px; border-radius: var(--radius-full); background: currentColor; }
+.field { display: grid; gap: var(--space-6); }
+.field strong { font: var(--text-body-medium-strong); }
+.label-picks { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-4); }
+.label-picks label.check { display: inline-flex; gap: var(--space-4); font: var(--text-body-medium); }
 .label-picks label.check .label { margin: 0; }
 .labels-table td.what { color: var(--color-fg-muted); overflow-wrap: anywhere; }
 .labels-table td.count, .labels-table td.actions { width: 1%; white-space: nowrap; }
-.labels-table form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr) auto; gap: 8px; align-items: end; }
+.labels-table form { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 2fr) auto; gap: var(--space-8); align-items: end; }
 @media (max-width: 720px) {
   .issue, .filters, .labels-table form { grid-template-columns: minmax(0, 1fr); }
   .issue aside.side { order: -1; }
-  .issues tr, .labels-table tr { display: grid; align-items: center; column-gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--color-border-default); }
-  .issues td, .labels-table td { border-bottom: 0; padding: 2px 0; width: auto; }
+  .issues tr, .labels-table tr { display: grid; align-items: center; column-gap: var(--space-8); padding: var(--space-6) 0; border-bottom: 1px solid var(--color-border-default); }
+  .issues td, .labels-table td { border-bottom: 0; padding: var(--space-2) 0; width: auto; }
   .issues tr:last-child, .labels-table tr:last-child { border-bottom: 0; }
   .issues tr { grid-template-columns: auto auto minmax(0, 1fr) auto; }
   .issues td.priority { grid-area: 1 / 1; }

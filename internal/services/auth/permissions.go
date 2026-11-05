@@ -12,9 +12,12 @@ var (
 		"repo.read", "repo.push", "repo.merge", "repo.bypass", "repo.manage",
 		"annotations.write", "annotations.delete_any", "reviews.submit", "messages.post", "messages.moderate", "jobs.run",
 		"secrets.manage", "secrets.read", "delivery.run",
+		"artifacts.create", "artifacts.read", "artifacts.write", "artifacts.manage",
 	}
 	// SecretPermissions are the repository permissions a grant on one secret may give.
 	SecretPermissions = []string{"secrets.manage", "secrets.read"}
+	// ArtifactPermissions are the repository permissions a grant on one artifact may give.
+	ArtifactPermissions = []string{"artifacts.read", "artifacts.write", "artifacts.manage"}
 )
 
 // Permissions is every permission of the catalog.
