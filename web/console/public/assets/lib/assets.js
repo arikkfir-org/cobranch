@@ -19,14 +19,14 @@ const stylesheet = (path) => new Promise((resolve, reject) => {
   document.head.append(h("link", { rel: "stylesheet", href: new URL(path, assets).href, onload: resolve, onerror: () => reject(new Error("The Console couldn't load " + path)) }));
 });
 
-// load links the Console's stylesheets, fonts.css, tokens.css and console.css first and then each directory's in
-// turn, so the order of their rules is the same on every load, and imports every page, so a session runs one
-// release's modules throughout. named holds the files of each directory, by its path under assets, as the Console's
-// page names them.
+// load links the Console's stylesheets, fonts.css, tokens.css, console.css and components.css first and then each
+// directory's in turn, so the order of their rules is the same on every load, and imports every page, so a session runs
+// one release's modules throughout. named holds the files of each directory, by its path under assets, as the
+// Console's page names them.
 export async function load(named) {
   const dirs = ["lib/", "pages/", "pages/org/", "pages/repo/"];
   const files = dirs.map((dir) => [...named[dir]].sort());
-  const sheets = ["fonts.css", "tokens.css", "console.css", ...dirs.flatMap((dir, i) => files[i].filter((f) => f.endsWith(".css")).map((f) => dir + f))];
+  const sheets = ["fonts.css", "tokens.css", "console.css", "components.css", ...dirs.flatMap((dir, i) => files[i].filter((f) => f.endsWith(".css")).map((f) => dir + f))];
   const pages = (dir, i, into) => Promise.all(files[i].filter((f) => f.endsWith(".js")).map(async (f) => [f === "index.js" ? "" : f.slice(0, -3), await import(new URL(dir + f, assets).href)]))
     .then((loaded) => loaded.forEach(([part, module]) => into.set(part, module)));
   await Promise.all([...sheets.map(stylesheet), pages("pages/org/", 2, orgPages), pages("pages/repo/", 3, repoPages)]);

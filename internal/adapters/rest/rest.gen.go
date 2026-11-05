@@ -754,6 +754,8 @@ func (e PageViewNavigation) Valid() bool {
 
 // Defines values for PageViewPage.
 const (
+	PageViewPageHelp                      PageViewPage = "help"
+	PageViewPageHelpComponents            PageViewPage = "help.components"
 	PageViewPageOrganization              PageViewPage = "organization"
 	PageViewPageOrganizationAgents        PageViewPage = "organization.agents"
 	PageViewPageOrganizationApiKeys       PageViewPage = "organization.api-keys"
@@ -784,6 +786,10 @@ const (
 // Valid indicates whether the value is a known member of the PageViewPage enum.
 func (e PageViewPage) Valid() bool {
 	switch e {
+	case PageViewPageHelp:
+		return true
+	case PageViewPageHelpComponents:
+		return true
 	case PageViewPageOrganization:
 		return true
 	case PageViewPageOrganizationAgents:

@@ -6,7 +6,7 @@ import { icon } from "./icons.js";
 import { render } from "./router.js";
 
 // The review states as the design system draws them, the same way.
-const reviewStates = {
+export const reviewStates = {
   approved: { word: "Approved", icon: "badge-check", tone: "success" },
   changes_requested: { word: "Changes requested", icon: "circle-alert", tone: "warning" },
   neutral: { word: "Neutral", icon: "message-square", tone: "neutral" },
