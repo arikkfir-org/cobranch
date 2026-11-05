@@ -36,10 +36,14 @@ function ago(at) {
 
 // showPreferences draws the viewer's preferences: their theme, light, dark, or the system's, which follows their
 // operating system. The theme is kept with the person (lib/theme.js), so every browser they sign in from follows it,
-// as the avatar menu's switch does; a save that fails is said above it, the choice still drawn here.
+// as the avatar menu's switch does; a save that fails is said above it (Preferences · Save failed), the choice still
+// drawn here, and choosing again retries it.
 function showPreferences(main) {
-  const error = h("div", { class: "banner banner-danger", role: "alert", hidden: true }, icon("circle-x"), h("div", { class: "banner-text" }, h("p", {})));
-  const fail = (err) => { error.querySelector("p").textContent = err.message; error.hidden = false; };
+  const error = h("div", { class: "banner banner-danger", role: "alert", hidden: true }, icon("circle-x"),
+    h("div", { class: "banner-text" }, h("span", { class: "banner-title" }, "Your theme wasn't saved"),
+      h("p", {}, "Cobranch could not keep the theme with your account. It stays as you set it here; choose it again to retry.")),
+    h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Dismiss", title: "Dismiss", onclick: () => { error.hidden = true; } }, icon("x")));
+  const fail = () => { error.hidden = false; };
   main.replaceChildren(pageHeader({ title: "Preferences", description: "How Cobranch looks for you, in every browser you sign in from." }), error,
     card("Appearance", null, null, h("div", { class: "preference" },
       h("div", { class: "row-text" }, h("span", { class: "row-title" }, "Theme"),
