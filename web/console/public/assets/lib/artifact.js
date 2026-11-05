@@ -15,7 +15,7 @@ import { recrumb } from "./layout.js";
 import { rendered } from "./markdown.js";
 import { go } from "./router.js";
 import { remember } from "./sidebar.js";
-import { agents, base, config } from "./state.js";
+import { agents, base, config, me } from "./state.js";
 
 // titles are the titles of the artifacts this browser read, by ID, which the breadcrumbs name before the page reads
 // its artifact again.
@@ -65,7 +65,7 @@ const roles = { owner: "Owner", editor: "Editor", viewer: "Viewer", lister: "Lis
 function reachBadge(a) {
   if (a.organizationAccess && a.organizationAccess !== "none") return h("span", { class: "badge-quiet tone-success" }, "Organization " + reaches[a.organizationAccess]);
   if (a.repositoryAccess && a.repositoryAccess !== "none") return h("span", { class: "badge-quiet tone-info" }, "Repository " + reaches[a.repositoryAccess]);
-  return h("span", { class: "badge-quiet tone-neutral" }, a.audience === "private" && a.permissions.includes("artifacts.manage") ? "Only you" : "Shared with you");
+  return h("span", { class: "badge-quiet tone-neutral" }, a.audience === "private" && a.owner && a.owner.id === me.id ? "Only you" : "Shared with you");
 }
 
 // origin is the line under an artifact's title: who wrote it and from where, the version shown and its last change.
