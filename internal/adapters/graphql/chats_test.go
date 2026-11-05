@@ -36,8 +36,9 @@ func maxAs(role uuid.UUID) func(*orgFixture) *auth.Authenticated {
 	}
 }
 
-// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' counterparts.
-var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage)":\{"id":"([0-9a-f-]{36})"`)
+// startedID finds the ID a startChatThread or postChatMessage answered with, or their issues' or conversations'
+// counterparts.
+var startedID = regexp.MustCompile(`"(start(?:Issue)?ChatThread|post(?:Issue)?ChatMessage|startConversationThread|postConversationMessage)":\{"id":"([0-9a-f-]{36})"`)
 
 // agentOnTask is Scout, a Developer on the website, through the token of its task numbered number, whose number the
 // chats know.
