@@ -188,6 +188,8 @@ type Message struct {
 	DeletedBy *Principal
 	// Task is the task of the agent that posted it; nil for a person's message, and once the task is deleted.
 	Task *TaskRef
+	// Asked is the task it asked an agent for; nil for a message that asked nobody, and once the task is deleted.
+	Asked *Asked
 	// Version counts its changes from 1: it is its ETag, which an edit or a deletion names.
 	Version int64
 }
@@ -198,10 +200,16 @@ type TaskRef struct {
 	Number int64
 }
 
+// Asked is the task a message asked an agent for, and that agent.
+type Asked struct {
+	TaskRef
+	Agent Principal
+}
+
 // Poster is who starts a thread or posts a message: a principal, and, for an agent, the task it works, which its
-// messages link; uuid.Nil for none.
+// messages link; and, for a message that asks an agent, the task it asks for, which it links. uuid.Nil for none.
 type Poster struct {
-	ID, Task uuid.UUID
+	ID, Task, Asks uuid.UUID
 }
 
 // Page is a page of a chat's threads, newest first, each with its messages.
@@ -249,6 +257,9 @@ type ThreadInput struct {
 	Anchor *Anchor
 	// Body is its first message's Markdown.
 	Body string
+	// Ask names one of the organization's agents the message asks, which gets a task that talks in the thread;
+	// uuid.Nil asks nobody, but in an agent's conversation, where it asks that agent.
+	Ask uuid.UUID
 }
 
 // MessageInput posts a message to a thread.
@@ -257,6 +268,9 @@ type MessageInput struct {
 	// one.
 	ID   uuid.UUID
 	Body string
+	// Ask names one of the organization's agents the message asks, which gets a task that talks in the thread, once
+	// no task talks there; uuid.Nil asks nobody.
+	Ask uuid.UUID
 }
 
 // The versions an edit, a deletion or a resolution names that are no message's or thread's own.

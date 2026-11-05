@@ -34,6 +34,9 @@ type cobranch struct {
 	waited  int
 	started uuid.UUID
 	cancel  context.CancelFunc
+	// tasks are the organization's tasks, oldest first, as the task's token sees them; tasksErr fails their listing.
+	tasks    []agents.Task
+	tasksErr error
 }
 
 // wait is what a wait for the chat's updates sees: nothing, a message someone posts to a thread, the task's own when
@@ -131,6 +134,22 @@ func (c *cobranch) mine(id uuid.UUID, body string) harness.ChatMessage {
 }
 
 func (c *cobranch) Work(context.Context) (agents.Work, error) { return c.work, nil }
+
+func (c *cobranch) Tasks(_ context.Context, org string, agent uuid.UUID, states []agents.TaskState, limit int) ([]agents.Task, error) {
+	if org != c.work.OrgSlug {
+		return nil, errors.New("another organization")
+	}
+	if c.tasksErr != nil {
+		return nil, c.tasksErr
+	}
+	var out []agents.Task
+	for _, t := range slices.Backward(c.tasks) {
+		if t.Agent.ID == agent && slices.Contains(states, t.State) && len(out) < limit {
+			out = append(out, t)
+		}
+	}
+	return out, nil
+}
 
 func (c *cobranch) Transcript(_ context.Context, org string, number int64) ([]agents.Entry, error) {
 	if org != c.work.OrgSlug || number != c.work.Task.Number {

@@ -32,6 +32,8 @@ type api struct {
 	unavailable int
 	// chats are the chat calls it took, each its method, its escaped path and its body.
 	chats []string
+	// conversation is the private conversation the token's task talks in; nil for none.
+	conversation *MyTaskConversation
 }
 
 var agentID, assignerID = uuid.New(), uuid.New()
@@ -50,9 +52,12 @@ func (a *api) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		answer(w, http.StatusOK, MyTask{Organization: "acme", AgentInstructions: "Be brief.", AgentEmail: "scout@agents.example", IssueNumber: ptr(int64(12)), IssueKey: ptr("ACME"),
 			Task: Task{Number: 7, Title: "Sweep", State: "running", Agent: Principal{Id: agentID, DisplayName: "Scout"},
 				AssignedBy: &Principal{Id: assignerID, DisplayName: "Olivia"}, RepositorySlug: ptr("website"), Branch: ptr("tidy"),
-				Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())}})
-	case strings.Contains(r.URL.Path, "/chat"):
+				Sha: ptr("0123456789abcdef0123456789abcdef01234567"), CreatedAt: time.Unix(10, 0).UTC(), StartedAt: ptr(time.Unix(20, 0).UTC())},
+			Conversation: a.conversation})
+	case strings.Contains(r.URL.Path, "/chat") || strings.Contains(r.URL.Path, "/conversation"):
 		a.chat(w, r)
+	case r.Method == http.MethodGet && r.URL.Path == "/v1/orgs/acme/tasks":
+		a.tasks(w, r)
 	case r.URL.Path != "/v1/orgs/acme/tasks/7/transcript":
 		problem(w, http.StatusNotFound, "task.not_found", "No such task.")
 	case r.Method == http.MethodGet:
@@ -225,11 +230,11 @@ func (a *api) chat(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case strings.Contains(r.URL.Path, forbiddenID.String()):
 		problem(w, http.StatusForbidden, "auth.forbidden", "You may not post here.")
-	case strings.HasSuffix(r.URL.Path, "/chat"):
+	case strings.HasSuffix(r.URL.Path, "/chat") || strings.HasSuffix(r.URL.Path, "/conversation"):
 		answer(w, http.StatusOK, map[string]any{"after": "c1", "threads": []any{}})
-	case strings.HasSuffix(r.URL.Path, "/chat/updates") && r.URL.Query().Get("after") == "gone":
+	case strings.HasSuffix(r.URL.Path, "/updates") && r.URL.Query().Get("after") == "gone":
 		problem(w, http.StatusBadRequest, "chat.cursor_invalid", "That cursor isn't one.")
-	case strings.HasSuffix(r.URL.Path, "/chat/updates"):
+	case strings.HasSuffix(r.URL.Path, "/updates"):
 		other := uuid.MustParse("0190f1b2-0000-7000-8000-000000000074")
 		answer(w, http.StatusOK, map[string]any{"after": "c2", "updates": []map[string]any{
 			{"cursor": "u1", "kind": "message.posted", "thread": map[string]any{"id": threadID}},

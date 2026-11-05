@@ -73,6 +73,9 @@ func chatMessage(m chats.Message) ChatMessage {
 	if m.Task != nil {
 		out.TaskId, out.TaskNumber = &m.Task.ID, &m.Task.Number
 	}
+	if m.Asked != nil {
+		out.AskedTaskId, out.AskedTaskNumber, out.AskedAgent = &m.Asked.ID, &m.Asked.Number, principal(&m.Asked.Agent)
+	}
 	return out
 }
 
@@ -190,6 +193,9 @@ func (a api) startThread(ctx context.Context, v chats.Viewer, subj chats.Subject
 	if req.Id != nil {
 		in.ID = *req.Id
 	}
+	if req.Ask != nil {
+		in.Ask = *req.Ask
+	}
 	if an := req.Anchor; an != nil {
 		in.Anchor = &chats.Anchor{SHA: an.Sha, Path: an.Path, StartLine: an.StartLine, EndLine: an.EndLine}
 	}
@@ -229,6 +235,9 @@ func (a api) postMessage(ctx context.Context, v chats.Viewer, subj chats.Subject
 	in := chats.MessageInput{Body: req.Body}
 	if req.Id != nil {
 		in.ID = *req.Id
+	}
+	if req.Ask != nil {
+		in.Ask = *req.Ask
 	}
 	m, err := a.chats.Post(ctx, v, subj, threadID, in)
 	if err != nil {

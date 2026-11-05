@@ -69,9 +69,14 @@ RETURNING last;
 
 -- InsertTask records a task, Queued.
 -- name: InsertTask :exec
-INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha)
+INSERT INTO agent_tasks (id, org_id, number, agent_id, kind, assigned_by, title, instructions, repo_id, branch_id, thread_id, issue_id, sha,
+    private)
 VALUES (@id, @org_id, @number, @agent_id, @kind, sqlc.narg(assigned_by), @title, @instructions, sqlc.narg(repo_id), sqlc.narg(branch_id),
-    sqlc.narg(thread_id), sqlc.narg(issue_id), sqlc.narg(sha));
+    sqlc.narg(thread_id), sqlc.narg(issue_id), sqlc.narg(sha), @private);
+
+-- ActiveThreadTask finds the number of a task that talks in the thread and has yet to end.
+-- name: ActiveThreadTask :one
+SELECT number FROM agent_tasks WHERE thread_id = $1 AND state IN ('queued', 'running', 'waiting') ORDER BY number LIMIT 1;
 
 -- Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 -- agent, the states and the repository when they're given, naming no repository or one of readable, and of none of

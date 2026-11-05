@@ -275,6 +275,18 @@ func (s *AgentStore) ThreadBranch(ctx context.Context, threadID uuid.UUID) (uuid
 	return *id, nil
 }
 
+// ActiveTask answers the number of a task that talks in the thread and has yet to end, or orgs.ErrNotFound. Called
+// with the context of another store's transaction, it reads in that transaction (agents.Store).
+func (s *AgentStore) ActiveTask(ctx context.Context, threadID uuid.UUID) (int64, error) {
+	var number int64
+	err := transact(ctx, s.pool, s.q, "finding the thread's task", uuid.Nil, func(ctx context.Context, q *queries.Queries) error {
+		var err error
+		number, err = q.ActiveThreadTask(ctx, &threadID)
+		return notFound(err)
+	})
+	return number, err
+}
+
 // taskRow is what a read of a task answers: the row, the names around it, what it spent and its cap.
 type taskRow struct {
 	t                                   queries.AgentTask
@@ -287,7 +299,7 @@ type taskRow struct {
 func task(r taskRow) agents.Task {
 	t := r.t
 	out := agents.Task{ID: t.ID, OrgID: t.OrgID, Number: t.Number, Agent: agents.Principal{ID: t.AgentID, DisplayName: r.agent}, Kind: t.Kind,
-		Title: t.Title, Instructions: t.Instructions, State: agents.TaskState(t.State), Reason: t.Reason, Summary: t.Summary,
+		Title: t.Title, Instructions: t.Instructions, Private: t.Private, State: agents.TaskState(t.State), Reason: t.Reason, Summary: t.Summary,
 		CreatedAt: t.CreatedAt, StartedAt: zero(t.StartedAt), EndedAt: zero(t.EndedAt), Version: t.Version}
 	out.AssignedBy = taskPrincipal(t.AssignedBy, r.assigner)
 	out.CancelledBy = taskPrincipal(t.CancelledBy, r.canceller)
@@ -384,7 +396,7 @@ func (s *AgentStore) Assign(ctx context.Context, actor uuid.UUID, t agents.Task)
 		}
 		p := queries.InsertTaskParams{ID: t.ID, OrgID: t.OrgID, Number: number, AgentID: t.Agent.ID, Kind: t.Kind, Title: t.Title,
 			Instructions: t.Instructions, RepoID: idOrNil(t.RepoID), BranchID: idOrNil(t.BranchID), ThreadID: idOrNil(t.ThreadID),
-			IssueID: idOrNil(t.IssueID), Sha: optional(t.SHA)}
+			IssueID: idOrNil(t.IssueID), Sha: optional(t.SHA), Private: t.Private}
 		if t.AssignedBy != nil {
 			p.AssignedBy = &t.AssignedBy.ID
 		}

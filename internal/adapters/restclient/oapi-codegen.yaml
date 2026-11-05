@@ -8,5 +8,10 @@ generate:
 output-options:
   include-operation-ids: [getMyTask, listTranscript, appendTranscript, getChatThread, startChatThread, postChatMessage,
     getIssueChatThread, startIssueChatThread, postIssueChatMessage, listChatThreads, listChatUpdates, listIssueChatThreads,
-    listIssueChatUpdates, getBranchDiff, getBlob, getTree, listReviews, submitReview, recordMyTaskSpend]
+    listIssueChatUpdates, getOrganizationConversationThread, startOrganizationConversationThread,
+    postOrganizationConversationMessage, listOrganizationConversationThreads, listOrganizationConversationUpdates,
+    getRepositoryConversationThread, startRepositoryConversationThread, postRepositoryConversationMessage,
+    listRepositoryConversationThreads, listRepositoryConversationUpdates, getAgentConversationThread,
+    startAgentConversationThread, postAgentConversationMessage, listAgentConversationThreads,
+    listAgentConversationUpdates, listTasks, getBranchDiff, getBlob, getTree, listReviews, submitReview, recordMyTaskSpend]
   nullable-type: true

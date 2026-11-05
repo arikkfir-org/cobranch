@@ -359,6 +359,18 @@ func (s *Store) Assign(_ context.Context, actor uuid.UUID, t agents.Task) (agent
 	return t, nil
 }
 
+// ActiveTask answers the number of a task that talks in the thread and has yet to end, or orgs.ErrNotFound.
+func (s *Store) ActiveTask(_ context.Context, threadID uuid.UUID) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, t := range s.tasks {
+		if t.ThreadID == threadID && t.State.Active() {
+			return t.Number, nil
+		}
+	}
+	return 0, orgs.ErrNotFound
+}
+
 // Cancel cancels one of the organization's active tasks at version.
 func (s *Store) Cancel(_ context.Context, actor, orgID uuid.UUID, number, version int64) (agents.Task, error) {
 	s.mu.Lock()

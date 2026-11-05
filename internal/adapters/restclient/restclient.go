@@ -67,8 +67,12 @@ func (c *API) Work(ctx context.Context) (agents.Work, error) {
 		return agents.Work{}, refused("asking which task the token works", resp.StatusCode(), resp.Body)
 	}
 	my := resp.JSON200
-	return agents.Work{Task: task(my.Task), OrgSlug: my.Organization, AgentInstructions: my.AgentInstructions, AgentEmail: my.AgentEmail,
-		IssueNumber: deref(my.IssueNumber, 0), IssueKey: deref(my.IssueKey, "")}, nil
+	w := agents.Work{Task: task(my.Task), OrgSlug: my.Organization, AgentInstructions: my.AgentInstructions, AgentEmail: my.AgentEmail,
+		IssueNumber: deref(my.IssueNumber, 0), IssueKey: deref(my.IssueKey, "")}
+	if c := my.Conversation; c != nil {
+		w.Conversation = &agents.Conversation{RepoSlug: deref(c.RepositorySlug, ""), AgentID: deref(c.AgentId, uuid.Nil)}
+	}
+	return w, nil
 }
 
 // Transcript lists every entry of the organization's task, in order, a page at a time (harness.Cobranch).
@@ -111,6 +115,27 @@ func (c *API) Append(ctx context.Context, org string, number int64, e agents.Ent
 	}
 }
 
+// Tasks lists the tasks of one of the organization's agents in the states named, newest first, at most limit of them
+// (harness.Cobranch).
+func (c *API) Tasks(ctx context.Context, org string, agent uuid.UUID, states []agents.TaskState, limit int) ([]agents.Task, error) {
+	wanted := make([]TaskState, 0, len(states))
+	for _, s := range states {
+		wanted = append(wanted, TaskState(s))
+	}
+	resp, err := c.api.ListTasksWithResponse(ctx, org, &ListTasksParams{AgentID: &agent, State: &wanted, Limit: &limit})
+	if err != nil {
+		return nil, fmt.Errorf("listing the agent's tasks: %w", err)
+	}
+	if resp.JSON200 == nil {
+		return nil, refused("listing the agent's tasks", resp.StatusCode(), resp.Body)
+	}
+	out := make([]agents.Task, 0, len(resp.JSON200.Tasks))
+	for _, t := range resp.JSON200.Tasks {
+		out = append(out, task(t))
+	}
+	return out, nil
+}
+
 // refused is the failure of a call the API answered with status and a problem: harness.ErrRefused when it refused the
 // token.
 func refused(what string, status int, body []byte) error {
@@ -138,7 +163,8 @@ func task(t Task) agents.Task {
 	out.RepoID, out.RepoSlug = deref(t.RepositoryId, uuid.Nil), deref(t.RepositorySlug, "")
 	out.BranchID, out.Branch = deref(t.BranchId, uuid.Nil), deref(t.Branch, "")
 	out.ThreadID, out.SHA = deref(t.ThreadId, uuid.Nil), deref(t.Sha, "")
-	out.CreatedAt, out.StartedAt = t.CreatedAt, deref(t.StartedAt, time.Time{})
+	out.CreatedAt, out.StartedAt, out.EndedAt = t.CreatedAt, deref(t.StartedAt, time.Time{}), deref(t.EndedAt, time.Time{})
+	out.Private = deref(t.Private, false)
 	return out
 }
 
