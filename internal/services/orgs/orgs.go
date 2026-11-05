@@ -117,6 +117,10 @@ var RolePermissionLabels = []PermissionLabel{
 	{ID: "agents.create", Group: "Agents", Label: "Create agents"},
 	{ID: "secrets.read", Group: "Secrets", Label: "Read secrets"},
 	{ID: "secrets.manage", Group: "Secrets", Label: "Manage secrets"},
+	{ID: "artifacts.create", Group: "Artifacts", Label: "Create artifacts"},
+	{ID: "artifacts.read", Group: "Artifacts", Label: "Read artifacts"},
+	{ID: "artifacts.write", Group: "Artifacts", Label: "Edit artifacts"},
+	{ID: "artifacts.manage", Group: "Artifacts", Label: "Share and delete artifacts"},
 }
 
 // ValidateRole checks a custom role's definition and returns it normalized: the name and description trimmed, the

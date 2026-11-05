@@ -255,7 +255,7 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 ([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs. Artifacts add
 `artifacts.create` at the repository and the rest at an artifact or its repository ([artifacts](artifacts.md#access)).
 The API lists the permissions a role may hold with a label for people and the area each is about (Organization,
-Repositories, Reviews, Issues, Agents, Secrets), which the Console's role editor ticks; a test keeps every
+Repositories, Reviews, Issues, Agents, Secrets, Artifacts), which the Console's role editor ticks; a test keeps every
 such permission labelled.
 
 | Permission | Allows |
