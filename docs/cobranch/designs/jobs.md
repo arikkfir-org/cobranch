@@ -423,9 +423,9 @@ job namespaces name the controller’s role as their owner, so uninstalling dele
 
 ## The Console and APIs
 
-**Runs show where their annotations do, and each has a page of its own**
+**Runs show on a branch’s Jobs tab and a commit’s page, and each has a page of its own**
 
-![Runs show where their annotations do, and each has a page of its own](jobs/console.svg)
+![Runs show on a branch’s Jobs tab and a commit’s page, and each has a page of its own](jobs/console.svg)
 
 A waiting run’s Start button says whose push it would run, so a member reads the branch before starting it.
 
@@ -441,9 +441,9 @@ A waiting run’s Start button says whose push it would run, so a member reads t
 | `GET`, `POST /secrets/{id}/access`, `DELETE …/access/{principal}` | `Secret.access`, `grantSecret`, `revokeSecret` | reading: `secrets.manage` on it or `org.grants.manage`; granting: `org.grants.manage` and `secrets.read` on it |
 | `GET /repos/{repo}/jobs` | `Repository.jobPrincipals` | `repo.read` |
 
-- **A repository's Runs tab** lists its runs, newest first; **a commit's page and a branch's** list the runs at the
-  commit, or on the head, beneath its annotations, with Start for a waiting run, Run for a manual job, and Re-run and
-  Cancel.
+- **A repository's Jobs tab** lists its runs, newest first; **a commit's page** lists the runs at the commit beneath
+  its annotations, and **a branch's Jobs tab** (`?tab=jobs`) those on its head, with Start for a waiting run, Run for a
+  manual job, and Re-run and Cancel.
 - **A run's page** shows its trigger, its cause, its definition as it ran, its timeline and its logs, live while it
   runs.
 - **An organization's Secrets page and a repository's Secrets tab** list their secrets, by name, with who is granted

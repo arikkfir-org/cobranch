@@ -28,3 +28,14 @@ export function ago(at) {
   if (minutes < 24 * 60) return Math.floor(minutes / 60) + " h";
   return minutes < 48 * 60 ? "yesterday" : when(at);
 }
+
+// fromNow is how long ago a moment was, as a sentence says it: just now, 14 minutes ago, 2 hours ago, yesterday, 3
+// days ago, then on its date.
+export function fromNow(at) {
+  const minutes = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return plural(minutes, "minute") + " ago";
+  if (minutes < 24 * 60) return plural(Math.floor(minutes / 60), "hour") + " ago";
+  if (minutes < 48 * 60) return "yesterday";
+  return minutes < 7 * 24 * 60 ? Math.floor(minutes / (24 * 60)) + " days ago" : "on " + when(at);
+}

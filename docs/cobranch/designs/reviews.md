@@ -2,7 +2,7 @@
 
 > **Snapshot.** This design lives in its [reviews and AI review
 > page](https://claude.ai/artifact/3xuNVy6ZnQhE4UF11v5jys), linked with Cobranch's other designs; this file is generated
-> from it, with its diagrams, as of 2026-11-02, and synced again once Cobranch's shape settles.
+> from it, with its diagrams, as of 2026-11-05, and synced again once Cobranch's shape settles.
 
 **Status**: Proposed 2026-11-02 · [ENG-216](https://linear.app/arikkfir/issue/ENG-216) · Builds the [product’s AI
 review](product.md#agents-and-ai-review) on [branch status](branch-status.md) and the agents of
@@ -310,11 +310,11 @@ Comments drafted on lines stay in the browser until the review is submitted, so 
 words, icons and tones are [the design system’s](design-system.md#status-language).
 
 - **A branch's page** shows each reviewer's latest verdict on the head, earlier heads' reviews folded, and the AI
-  review's state: Waiting, Queued, Running, Failed with its reason, or its review. **Review** opens the Changes tab
-  ready to review; **Review again** asks the reviewer for another, and **Start review** starts one that waits.
-- **The Changes tab** (`…/changes/<branch>`, since a branch's name may hold `/changes`) shows the branch's diff against
-  `main`, file by file, with the reviews of its head beneath; a reviewer drafts comments on lines, then submits Approve,
-  Request changes or Comment with a body.
+  review's state: Waiting, Queued, Running, Failed with its reason, or its review. Its menu asks the AI reviewer for
+  another review, or starts one that waits.
+- **Its Files changed tab** (`…/branches/<branch>?tab=changes`: a query, since a branch's name may hold `/`;
+  `…/changes/<branch>` sends there) shows the branch's diff against `main`, file by file, with the reviews of its head
+  beneath; a reviewer drafts comments on lines, then submits Approve, Request changes or Comment with a body.
 - **A commit's page** lists its reviews and shows its diff against its parent.
 - **The requirements panel** names `main`'s required approvals and `ai`, and a Blocked branch says which failed, as
   [branch status](branch-status.md#the-console) lists its other checks.
