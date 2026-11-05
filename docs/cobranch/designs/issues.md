@@ -289,8 +289,8 @@ the page instead of overwriting it.
   it shows of the tab's issues. Each row is the issue's state icon, identifier, title and labels, then its repository,
   assignee, branch and when it last changed.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
-  description, its branches with their status as branch rows, its activity, newest first, and its [comments](#comments),
-  live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
+  description, its branches with their status as branch rows, its activity, newest first; its [comments](#comments)
+  are the conversation pane's, live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
   version it was made from, and shows who created it. The assignee menu lists the organization's agents too, for a
   viewer who holds `agents.assign`, and an agent's task shows under it while it is queued, running or waiting, linked to
   the task.
