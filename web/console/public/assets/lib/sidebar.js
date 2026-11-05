@@ -96,16 +96,18 @@ const navItem = (org, part, m, selected) => h("a", { class: "nav-item", href: ba
 // orgMark is an organization's mark: the first letter of its name, on ink.
 export const orgMark = (org) => h("span", { class: "app-org-mark", "aria-hidden": "true" }, (org.name.trim()[0] || "?").toUpperCase());
 
-// switcher opens a menu of the viewer's organizations, the one shown checked, and the page that creates or joins one.
+// switcher opens a menu above it of the viewer's organizations, under its caption, the one shown checked, and the
+// page that creates or joins one.
 function switcher(org) {
   const button = h("button", { class: "app-org-switcher", type: "button", "aria-haspopup": "menu", "aria-label": "Switch organization" },
     orgMark(org), h("span", { class: "app-org-name" }, org.name), icon("chevron-down"));
-  button.addEventListener("click", () => popover(button, "start", (close) => [
+  button.addEventListener("click", () => popover(button, "above", (close) => [
+    h("div", { class: "app-org-menu-heading", "aria-hidden": "true" }, "Switch organization"),
     ...orgs.map((o) => h("button", { class: "menu-item", type: "button", role: "menuitemradio", "aria-checked": String(o.slug === org.slug),
-      onclick: () => { close(); if (o.slug !== org.slug) go("/" + o.slug); } }, orgMark(o), h("span", {}, o.name))),
+      onclick: () => { close(); if (o.slug !== org.slug) go("/" + o.slug); } }, h("span", {}, o.name))),
     h("hr", { class: "menu-divider" }),
-    h("button", { class: "menu-item", type: "button", onclick: () => { close(); go("/new"); } }, icon("plus"), h("span", {}, "Create or join an organization")),
-  ]));
+    h("button", { class: "menu-item", type: "button", role: "menuitem", onclick: () => { close(); go("/new"); } }, icon("plus"), h("span", {}, "Create or join an organization")),
+  ], "app-org-menu"));
   return button;
 }
 

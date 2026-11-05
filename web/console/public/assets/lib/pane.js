@@ -9,9 +9,9 @@
 // set, and scope says under it who sees it. chat is the REST API's path of its conversation, or null while the
 // subject has none yet; post and moderate are what the viewer may do there; placeholder is the composer's text; gone
 // shows the conversation to be read, as it was; at holds the repository's links, for threads on lines of its files;
-// none is what the pane says while the subject has no conversation.
+// none says, under the pane's empty state, what would start the subject's conversation.
 
-import { conversation } from "./chat.js";
+import { conversation, emptyState } from "./chat.js";
 import { h } from "./dom.js";
 import { icon } from "./icons.js";
 import { popover } from "./menu.js";
@@ -61,7 +61,8 @@ export function converse(subject) {
 // modes are what the header's mode menu switches between.
 const modes = { following: ["Following", "The conversation follows the page."], pinned: ["Pinned", "The conversation stays while you move to other pages."] };
 
-// header is the pane's header: Conversation, its subject's title and the mode it is in, then who sees it.
+// header is the pane's header: Conversation, its subject's title, the mode it is in and, while it lies over the
+// content, the button that closes it; then who sees it.
 function header(s) {
   const mode = h("button", { class: "app-pane-mode", type: "button", "aria-haspopup": "menu", title: modes[pinned ? "pinned" : "following"][1] },
     pinned ? icon("pin") : null, h("span", {}, modes[pinned ? "pinned" : "following"][0]), icon("chevron-down"));
@@ -72,7 +73,8 @@ function header(s) {
       pane.querySelector(".app-pane-header").replaceWith(header(s));
     } }, icon(m === "pinned" ? "pin" : "message-square"), h("span", {}, word)))));
   return h("header", { class: "app-pane-header" },
-    h("div", { class: "app-pane-title" }, h("strong", {}, "Conversation"), s.title ? h(s.code ? "code" : "span", { class: "app-pane-subject" }, "· " + s.title) : null, mode),
+    h("div", { class: "app-pane-title" }, h("strong", {}, "Conversation"), s.title ? h(s.code ? "code" : "span", { class: "app-pane-subject" }, s.title) : null, mode,
+      h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm app-pane-close", type: "button", "aria-label": "Close the conversation", title: "Close", onclick: () => setOpen(false) }, icon("x"))),
     h("p", { class: "app-pane-scope" }, s.scope || ""));
 }
 
@@ -86,7 +88,7 @@ function draw() {
   drawn = { key: s.key, stop: signal };
   const body = h("div", { class: "app-pane-body" });
   pane.replaceChildren(header(s), body);
-  if (!s.chat) return void body.append(h("p", { class: "app-pane-none" }, s.none || "There's no conversation here yet."));
+  if (!s.chat) return void body.append(h("div", { class: "app-pane-messages" }, emptyState(s)));
   conversation(s, signal.signal).then((el) => { if (!signal.signal.aborted) body.replaceWith(el); },
     (err) => { if (!signal.signal.aborted) body.replaceChildren(h("p", { class: "alert" }, err.message)); });
 }

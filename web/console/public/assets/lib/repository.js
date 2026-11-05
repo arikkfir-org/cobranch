@@ -13,8 +13,7 @@ export const repoSlugInput = (value) => h("input", { name: "slug", required: tru
 
 // repoSubject is a repository's conversation, which every page of the repository that names no other has: each
 // viewer's own, private to them, which no page has yet.
-const repoSubject = (org, repo) => ({ key: "repo:" + org.slug + "/" + repo.slug, title: repo.slug, code: true, scope: "Only you see this", chat: null,
-  none: "There's no conversation about " + repo.slug + " yet." });
+const repoSubject = (org, repo) => ({ key: "repo:" + org.slug + "/" + repo.slug, title: repo.slug, code: true, scope: "Nothing to follow on this page", chat: null });
 
 // A repository's pages, each a module of pages/repo/ (its code index.js), in the app shell, under the repository's
 // heading and its tabs. A page's module answers the sections it shows from its default export, given the

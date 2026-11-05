@@ -11,14 +11,14 @@ export function closeMenu() {
 }
 
 // popover opens a menu (B's .menu) under anchor, its start or end edge aligned with the anchor's (align "start" or
-// "end"), holding what build(close) returns, and answers it; the anchor's button opens it again once closed, and a
-// second click on it closes it (answering null). It reports itself to assistive technology through the anchor's
-// aria-expanded.
-export function popover(anchor, align, build) {
+// "end"), or above it, aligned with its start (align "above"), holding what build(close) returns, with the shell's
+// class for it, if any, and answers it; the anchor's button opens it again once closed, and a second click on it
+// closes it (answering null). It reports itself to assistive technology through the anchor's aria-expanded.
+export function popover(anchor, align, build, kind = "") {
   const again = open && open.anchor === anchor;
   closeMenu();
   if (again) return null;
-  const el = h("div", { class: "menu app-popover", role: "menu" });
+  const el = h("div", { class: ("menu app-popover " + kind).trim(), role: "menu" });
   const close = () => {
     if (!open || open.el !== el) return;
     open = null;
@@ -47,7 +47,7 @@ export function popover(anchor, align, build) {
   if (align === "end") el.style.right = Math.round(document.documentElement.clientWidth - r.right) + "px";
   else el.style.left = Math.round(r.left) + "px";
   // A menu that would leave the window opens above its button instead.
-  if (el.getBoundingClientRect().bottom > window.innerHeight) el.style.top = Math.max(4, Math.round(r.top - 4 - el.offsetHeight)) + "px";
+  if (align === "above" || el.getBoundingClientRect().bottom > window.innerHeight) el.style.top = Math.max(4, Math.round(r.top - 4 - el.offsetHeight)) + "px";
   open = { el, anchor, close };
   anchor.setAttribute("aria-expanded", "true");
   document.addEventListener("pointerdown", outside, true);

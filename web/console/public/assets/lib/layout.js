@@ -47,15 +47,22 @@ function userMenu(anchor) {
     h("a", { class: "menu-item", href: base + "settings/preferences", "data-nav": "", role: "menuitem", onclick: close }, icon("cog"), h("span", {}, "Preferences")),
     h("hr", { class: "menu-divider" }),
     h("button", { class: "menu-item menu-item-danger", type: "button", role: "menuitem", onclick: () => { close(); signOut(); } }, icon("log-out"), h("span", {}, "Log out")),
-  ])?.classList.add("app-user-menu");
+  ], "app-user-menu");
 }
 
-// pageHeading is the heading a group of pages shares above their tabs, as a repository's and Settings' do: its title,
-// a tag beside it, what it is, the actions at its end, and its tabs (B's Tab), each a link to its page.
+// pageHeading is the heading a group of pages shares above their tabs, as a repository's and Settings' do: B's Page
+// header, its title with a tag beside it, what it is and the actions at its end, then its tabs (B's Tab), each a link
+// to its page.
 export const pageHeading = ({ title, tag, description, actions, tabs }) => h("div", { class: "app-page-heading" },
-  h("div", { class: "app-page-heading-row" }, h("div", { class: "app-page-heading-title" }, h("h1", {}, title), tag || null), actions ? h("div", { class: "app-page-heading-actions" }, actions) : null),
-  description ? h("p", { class: "app-page-heading-description" }, description) : null,
-  tabs && tabs.length ? h("nav", { class: "tab-bar", "aria-label": title }, tabs) : null);
+  pageHeader({ title, tag, description, actions }), tabs && tabs.length ? h("nav", { class: "tab-bar", "aria-label": title }, tabs) : null);
+
+// pageHeader is B's Page header, the top of a page's content: its title, with a tag beside it, a line on what the page
+// holds, and its actions on the right, primary last.
+export const pageHeader = ({ title, tag, description, actions }) => h("header", { class: "page-header" },
+  h("div", { class: "page-header-text" },
+    tag ? h("div", { class: "app-page-heading-title" }, h("h1", { class: "page-header-title" }, title), tag) : h("h1", { class: "page-header-title" }, title),
+    description ? h("p", { class: "page-header-description" }, description) : null),
+  actions ? h("div", { class: "page-header-actions" }, actions) : null);
 
 // crumb is one of the breadcrumbs: a link to its page, or the page shown, the last, in code type, as App/Top bar draws
 // it.

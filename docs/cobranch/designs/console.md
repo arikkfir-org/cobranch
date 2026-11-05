@@ -44,9 +44,9 @@ new page is a new file in `pages/org/` or `pages/repo/`, with its stylesheet bes
 | --- | --- |
 | `index.html` | The shell: a `<div id="app">`, the configuration and every file's name, which Caddy writes in, and a bootstrap that asks for every file and the viewer at once, imports its release's `console.js`, and loads again when it fails |
 | `assets/console.js` | `start`: the configuration, the viewer, their organizations, every page's module and stylesheet, then the first route |
-| `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, with `fonts.css`) |
+| `assets/console.css` | What every page shares: its elements and layout, on the design system's tokens (`tokens.css`, generated from its Figma file), in its typefaces (`fonts.css`, the files in `fonts/`) |
 | `assets/components.css` | The design system's components, one class for each, which pages compose |
-| `assets/lib/` | The router, the app shell (`layout.js`, `sidebar.js`, `pane.js`, `menu.js`, `shell.css`), the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges), each with its stylesheet when it has one |
+| `assets/lib/` | The router, the app shell (`layout.js`, `sidebar.js`, `pane.js`, `menu.js`, `shell.css`), the frames of an organization and a repository, the shared state, the API client, and the parts several pages draw (code, diffs, chats, reviews, runs, issues' badges, dialogs), each with its stylesheet when it has one |
 | `assets/pages/` | The Console's own pages: `sign-in.js` and `welcome.js`, which the router names, and every other module with a default export, which draws in the app shell at `/<part>` (`settings.js`: Account and Preferences; `help.js`) |
 | `assets/pages/org/` | An organization's pages, `<part>.js` for `/acme/<part>/…`; `index.js` its home |
 | `assets/pages/repo/` | A repository's pages, `<part>.js` for `/acme/website/<part>/…`; `index.js` its code |
@@ -67,12 +67,13 @@ together. One that still fails shows “The Console couldn’t load” instead o
 Console loads no more modules: every page’s is already in.
 
 - **The shell comes with what the Console would ask for first.** Caddy writes into it, as JSON, what `config.json` holds
-  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/` and `pages/repo/` (its `templates`, at request
-  time: no build step). The shell then asks for every module (`modulepreload`) and stylesheet (`preload`), and for the
-  viewer from the REST API, all at once, before it imports `console.js`: no import waits for the module that names it to
-  arrive. Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the
-  modules before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s.
-  At 500 ms, 1.7 s against 5.2 s and 2.1 s.
+  and the names of the files in `assets/`, `lib/`, `pages/`, `pages/org/`, `pages/repo/` and `fonts/` (its `templates`,
+  at request time: no build step). The shell then asks for every module (`modulepreload`), stylesheet (`preload`) and
+  the Latin part of each typeface (`preload` as a font, the part every page draws with), and for the viewer from the
+  REST API, all at once, before it imports `console.js`: no import waits for the module that names it to arrive.
+  Measured at 200 ms of added latency over HTTP/2, a signed-out load drew in 0.76 s, against 2.2 s for the modules
+  before and 0.89 s for the single page; a repository's page as its owner in 1.19 s, against 2.41 s and 1.29 s. At 500
+  ms, 1.7 s against 5.2 s and 2.1 s.
 - **The root comes from the configuration.** An operator may mount the Console at a prefix, which its route strips:
   `consoleUrl`'s path is then the root every module and link starts from, as the pages' links already did.
 - **So does the release.** The configuration names the release of the server that answered (`COBRANCH_RELEASE`, which
@@ -138,12 +139,15 @@ at a phone’s width the sidebar goes off-canvas.
 - **The top bar** draws the page's `crumbs` after the organization's (and the repository's), the last one in mono; then
   the pane's toggle and the avatar menu: Account, Theme (Light, Dark, System), Preferences and Log out.
 - **The pane** shows the page's `subject`: the branch's chat on a branch and its commits, files, changes, runs and
-  environments; an issue's comments on the issue; otherwise the organization's, which says there is no conversation yet.
-  A subject is an object or a promise of one, so a file's page can ask which branch its ref is first. Following, the
-  pane changes subject as the viewer moves; Pinned, it keeps the one it shows. Slice G
-  ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)) gives every other page a conversation.
-- **Narrow screens:** below 1100px the pane opens over the content instead of beside it; at a phone's width the sidebar
-  goes off-canvas behind a menu button.
+  environments; an issue's comments on the issue; otherwise the organization's, which has nothing to follow yet. A
+  thread on lines of a file shows them above its messages, with Resolved or Outdated beside them; a resolved thread
+  folds into one row until Show opens it; a deleted branch's conversation stays, read-only; and while the pane can't
+  follow, a banner says it is reconnecting. A subject is an object or a promise of one, so a file's page can ask which
+  branch its ref is first. Following, the pane changes subject as the viewer moves; Pinned, it keeps the one it shows.
+  Slice G ([ENG-234](https://linear.app/arikkfir/issue/ENG-234)) gives every other page a conversation.
+- **Narrow screens:** below 1100px the pane opens over the content instead of beside it, with a close button of its own;
+  at a phone's width the sidebar goes off-canvas behind a menu button and opens over a scrim, and a page's header stacks
+  its actions under its title.
 - **Rejected: a page draws its own heading and chat,** as before: every page repeated the frame, and the chat moved with
   every page's layout. **Rejected: the shell names the sections** (Issues, Repositories, Agents): the list every new
   section would edit.
@@ -236,8 +240,8 @@ components after it ([ENG-256](https://linear.app/arikkfir/issue/ENG-256),
 
 ## Open questions
 
-- **Account and Preferences, the open switcher, the pane's thread states and the narrow widths** have no Figma frames
-  yet; the Console draws them from the file's components until the file does.
+- **Account's facts and Preferences' row** are Table rows until the file's Pattern/Fact row lands; the pages move to it
+  then.
 - **Loading pages lazily** once the Console holds many more modules: every load asks for every file, so the count grows
   with the pages. Measure again when it doubles.
 

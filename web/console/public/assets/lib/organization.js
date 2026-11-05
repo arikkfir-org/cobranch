@@ -27,8 +27,7 @@ export function subjectOf(m, ctx, fallback) {
 
 // orgSubject is an organization's conversation, which every page of the organization that names no other has: each
 // viewer's own, private to them, which no page has yet.
-const orgSubject = (org) => ({ key: "org:" + org.slug, title: org.name, scope: "Only you see this", chat: null,
-  none: "There's no conversation about " + org.name + " yet." });
+const orgSubject = (org) => ({ key: "org:" + org.slug, title: org.name, scope: "Nothing to follow on this page", chat: null });
 
 // tabsOf is the tabs of an organization page that has pages under it, or that is under another (its nav's under, as
 // Members is under Settings): the parent's, labelled by its nav's tab or its label, then those under it, in order of
@@ -86,7 +85,7 @@ export async function showConsolePage(part, rest) {
   const org = known ? await api("GET", "/orgs/" + encodeURIComponent(known.slug)).catch(() => null) : null;
   const can = (p) => !!org && org.viewerPermissions.includes(p);
   const ctx = { org, rest, root: base + part };
-  const none = { key: "console:" + part, title: "", scope: "Only you see this", chat: null, none: "There's no conversation here yet." };
+  const none = { key: "console:" + part, title: "", scope: "Nothing to follow on this page", chat: null };
   const main = frame({ org, can, part: null, crumbs: crumbsOf(m, ctx), subject: subjectOf(m, ctx, none) });
   return m.default({ main, rest, org });
 }

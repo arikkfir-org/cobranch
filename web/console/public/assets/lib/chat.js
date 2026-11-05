@@ -1,4 +1,5 @@
 import { api, apiPage } from "./api.js";
+import { ask } from "./dialog.js";
 import { h } from "./dom.js";
 import { ago, shortSha, whenExactly } from "./format.js";
 import { avatar, icon } from "./icons.js";
@@ -49,7 +50,7 @@ export function branchSubject(org, repo, path, at, name, can) {
   const chat = path + "/branches/" + encodeURIComponent(name) + "/chat";
   return { key: "branch:" + org.slug + "/" + repo.slug + "/" + name, title: name, code: true, scope: "Shared with everyone on the branch", chat, at,
     post: can("messages.post"), moderate: can("messages.moderate"), placeholder: "Message the branch",
-    none: "No threads yet. Start one here, or on lines of a file from its page on this branch.",
+    none: "Start a thread here, or on lines of a file from its page on this branch.",
     gone: () => api("GET", path + "/branches/" + encodeURIComponent(name)).then(() => false, (err) => err.status === 404 ? true : Promise.reject(err)) };
 }
 
@@ -58,7 +59,7 @@ export function branchSubject(org, repo, path, at, name, can) {
 export const issueSubject = (org, number, identifier, can) => ({
   key: "issue:" + org.slug + "/" + number, title: identifier, code: true, scope: "Shared with everyone who can see the issue",
   chat: "/orgs/" + org.slug + "/issues/" + number + "/chat", post: can("issues.write"), moderate: can("issues.manage"),
-  placeholder: "Comment on the issue", none: "No comments yet.",
+  placeholder: "Comment on the issue", none: "Comments on the issue show here, to everyone who can see it.",
 });
 
 // conversation draws a subject's conversation for the pane (lib/pane.js), which it follows live until signal stops it:
@@ -74,9 +75,9 @@ export async function conversation(s, signal) {
   const post = s.post && !gone, moderate = s.moderate && !gone;
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-  const live = h("p", { class: "app-pane-live" });
+  const live = h("div", { class: "banner banner-warning app-pane-live", role: "status", hidden: true }, icon("triangle-alert"), h("div", { class: "banner-text" }, h("p", {})));
   const list = h("div", { class: "app-pane-threads" });
-  const empty = h("p", { class: "app-pane-none" }, gone ? "It had no threads." : s.none || "No threads yet.");
+  const empty = gone ? goneState(s) : emptyState(s);
   const more = h("button", { class: "btn btn-ghost btn-sm", type: "button", hidden: true }, "Older threads");
   const messages = h("div", { class: "app-pane-messages" }, more, empty, list);
   const shown = new Map(); // each thread's view, by its ID: the thread as last read, its element, and its messages'
@@ -121,14 +122,11 @@ export async function conversation(s, signal) {
       content.replaceWith(form);
       text.focus();
     };
-    const remove = (e) => {
-      if (!confirm(mine ? "Delete your message?" : "Delete " + (m.author ? m.author.displayName + "'s" : "this") + " message?")) return;
-      e.target.disabled = true;
-      api("DELETE", target, undefined, { "If-Match": `"${m.version}"` }).then(() => api("GET", target)).then((gone) => message(v, gone))
-        .catch((err) => { e.target.disabled = false; fail(err); });
-    };
-    const actions = m.deletedAt ? [] : [mine && post ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: edit }, "Edit") : null,
-      (mine && post) || moderate ? h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: remove }, "Delete") : null].filter(Boolean);
+    const remove = () => ask(mine ? "Delete your message?" : "Delete " + (m.author ? m.author.displayName + "'s" : "this") + " message?",
+      "It shows as deleted to everyone in the conversation. This can't be undone.", "Delete",
+      () => api("DELETE", target, undefined, { "If-Match": `"${m.version}"` }).then(() => api("GET", target)).then((gone) => message(v, gone)));
+    const act = (glyph, label, onclick) => h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": label, title: label, onclick }, icon(glyph));
+    const actions = m.deletedAt ? [] : [mine && post ? act("pencil", "Edit", edit) : null, (mine && post) || moderate ? act("x", "Delete", remove) : null].filter(Boolean);
     const name = m.author ? m.author.displayName : "Someone since gone";
     const tag = !agent ? null : m.taskNumber ? h("a", { class: "tag tone-ai", href: base + org + "/tasks/" + m.taskNumber, "data-nav": "",
       title: "An agent posted it, working task #" + m.taskNumber + "." }, icon("sparkles"), "Agent") : h("span", { class: "tag tone-ai" }, icon("sparkles"), "Agent");
@@ -140,17 +138,34 @@ export async function conversation(s, signal) {
           actions.length ? h("span", { class: "chat-message-actions" }, actions) : null),
         content));
   };
-  // head is a thread's line, when it has one: the lines it is on, whether the branch has moved on from them, whether
-  // a review opened it, and whether it is resolved.
+  // head is a thread's anchor, when it has one: the lines it is on, whether a review opened it, and whether it is
+  // resolved or the branch has moved on from them, which a line under it explains.
   const head = (t) => {
     const a = t.anchor;
     if (!a && !t.reviewId && !t.outdated && !t.resolvedAt) return null;
+    const state = t.resolvedAt ? h("span", { class: "badge-quiet tone-success" }, "Resolved") : t.outdated ? h("span", { class: "badge-quiet tone-warning" }, "Outdated") : null;
     return h("div", { class: "app-thread-head" },
-      a ? [h("a", { class: "app-thread-lines", href: s.at.blob(a.sha, a.path) + linesAnchor(a.startLine, a.endLine), "data-nav": "", title: "At " + shortSha(a.sha) },
-        icon("file-code"), h("code", {}, lineLabel(a)))] : null,
-      t.reviewId ? h("span", { class: "tag tone-neutral", title: "A comment of a review, which opened this thread." }, "review") : null,
-      t.outdated ? h("span", { class: "tag tone-warning", title: "The branch has moved on from the commit these lines are at." }, "outdated") : null,
-      t.resolvedAt ? h("span", { class: "tag tone-success", title: t.resolvedBy ? "Resolved by " + t.resolvedBy.displayName : "Resolved" }, "Resolved") : null);
+      h("div", { class: "app-thread-anchor" },
+        a ? h("a", { class: "app-thread-lines", href: s.at.blob(a.sha, a.path) + linesAnchor(a.startLine, a.endLine), "data-nav": "", title: "At " + shortSha(a.sha) },
+          icon("file"), h("code", {}, lineLabel(a))) : h("span", { class: "app-thread-lines" }, icon("message-square"), h("span", {}, "Thread")),
+        t.reviewId ? h("span", { class: "tag tone-neutral", title: "A comment of a review, which opened this thread." }, "review") : null, state),
+      t.outdated && a && !t.resolvedAt ? h("p", { class: "app-thread-note" }, "The lines changed after " + shortSha(a.sha) + "; this thread is about that version.") : null);
+  };
+  // resolvedRow stands for a resolved thread's messages, which Show opens: who resolved it, when, and how many it has.
+  const resolvedRow = (v) => {
+    const t = v.t;
+    const show = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-expanded": String(!!v.open), onclick: () => { v.open = !v.open; fold(v); } }, v.open ? "Hide" : "Show");
+    return h("div", { class: "app-thread-resolved" }, icon("circle-check"),
+      h("span", {}, ["Resolved" + (t.resolvedBy ? " by " + t.resolvedBy.displayName : ""), ago(t.resolvedAt), v.messages.size === 1 ? "1 message" : v.messages.size + " messages"].join(" · ")), show);
+  };
+  // fold shows a resolved thread as its row until the viewer opens it, and an open thread whole.
+  const fold = (v) => {
+    const folded = !!v.t.resolvedAt && !v.open;
+    const row = v.t.resolvedAt ? resolvedRow(v) : h("span", { hidden: true });
+    v.row.replaceWith(row);
+    v.row = row;
+    v.list.hidden = folded;
+    v.foot.hidden = folded;
   };
   // foot is a thread's actions: replying, for a viewer who may post, and resolving or reopening it, for its starter
   // or a moderator.
@@ -186,10 +201,10 @@ export async function conversation(s, signal) {
   const place = (t, older) => {
     let v = shown.get(t.id);
     if (!v) {
-      v = { t, list: h("div", { class: "app-thread-messages" }), messages: new Map(), reply: null };
+      v = { t, list: h("div", { class: "app-thread-messages" }), messages: new Map(), reply: null, open: false, row: h("span", { hidden: true }) };
       v.head = head(t) || h("span", { hidden: true });
       v.foot = foot(v) || h("span", { hidden: true });
-      v.el = h("article", { class: "app-thread", id: "thread-" + t.id }, v.head, v.list, v.foot);
+      v.el = h("article", { class: "app-thread", id: "thread-" + t.id }, v.head, v.row, v.list, v.foot);
       shown.set(t.id, v);
       if (older) list.prepend(v.el);
       else list.append(v.el);
@@ -202,8 +217,9 @@ export async function conversation(s, signal) {
       v.foot.replaceWith(after);
       v.foot = after;
     }
-    v.el.classList.toggle("resolved", !!v.t.resolvedAt);
     (t.messages || []).forEach((m) => message(v, m));
+    if (location.hash === "#thread-" + t.id) v.open = true;
+    fold(v);
     empty.hidden = shown.size > 0;
   };
   // An update to a thread of a page not read yet shows when that page is.
@@ -212,6 +228,7 @@ export async function conversation(s, signal) {
     const was = atBottom();
     place(u.thread);
     if (u.message) message(shown.get(u.thread.id), u.message);
+    fold(shown.get(u.thread.id));
     keepDown(was);
   };
   const show = (p) => {
@@ -224,10 +241,11 @@ export async function conversation(s, signal) {
   show(page);
   empty.hidden = shown.size > 0;
 
-  let composer = null;
+  let composer = gone ? h("div", { class: "app-pane-composer", "aria-disabled": "true" },
+    h("textarea", { rows: 1, disabled: true, placeholder: "Read-only: the branch is gone", "aria-label": "New thread" })) : null;
   if (post) {
     const text = h("textarea", { name: "body", required: true, maxlength: 20000, rows: 1, placeholder: s.placeholder || "Message, in Markdown", "aria-label": "New thread" });
-    const send = h("button", { class: "btn btn-ghost btn-sm", type: "submit", title: "Send (Enter), in Markdown; Shift+Enter starts a new line" }, "Send");
+    const send = h("button", { class: "btn btn-primary btn-sm", type: "submit", title: "Send (Enter), in Markdown; Shift+Enter starts a new line" }, "Send");
     const grow = () => { text.style.height = "auto"; text.style.height = Math.min(text.scrollHeight, 200) + "px"; };
     text.addEventListener("input", grow);
     text.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); composer.requestSubmit(); } });
@@ -238,7 +256,7 @@ export async function conversation(s, signal) {
       api("POST", chat + "/threads", { body: text.value }).then((t) => { text.value = ""; grow(); place(t); keepDown(true); }).catch(fail).finally(() => { send.disabled = false; });
     } }, text, send);
   }
-  const el = h("div", { class: "app-pane-conversation" }, error, messages, gone ? h("p", { class: "app-pane-live" }, "As it was when the branch was deleted") : live, composer);
+  const el = h("div", { class: "app-pane-conversation" }, error, gone && shown.size ? goneBanner(s) : null, gone ? null : live, messages, composer);
   if (!gone) followChat(chat, page.data.after, apply, live, signal);
   // The newest messages show first, or the thread a link names.
   setTimeout(() => {
@@ -249,8 +267,21 @@ export async function conversation(s, signal) {
   return el;
 }
 
+// emptyState is what the pane shows while a subject has no conversation, or its conversation no threads yet: B's Empty
+// state, naming the subject, with what would start one.
+export const emptyState = (s) => h("div", { class: "empty app-pane-empty" }, h("div", { class: "empty-icon" }, icon("sparkles")),
+  h("h2", { class: "empty-title" }, s.chat && s.title ? ["There's no conversation about ", h(s.code ? "code" : "span", {}, s.title), " yet"] : "There's no conversation here yet"),
+  h("p", { class: "empty-description" }, s.chat ? s.none : "Pages of the organization get one with conversations; branches have theirs already."));
+
+// goneState is what the pane shows of a deleted branch's conversation that had no threads; goneBanner tops one that
+// had: the branch is gone, and its conversation stays, to be read.
+const goneState = (s) => h("div", { class: "empty app-pane-empty" }, h("div", { class: "empty-icon" }, icon("circle-x")),
+  h("h2", { class: "empty-title" }, "This branch was deleted"), h("p", { class: "empty-description" }, h("code", {}, s.title), " was deleted. Its conversation stays here, read-only."));
+const goneBanner = (s) => h("div", { class: "banner app-pane-live", role: "status" }, icon("info"),
+  h("div", { class: "banner-text" }, h("p", {}, h("code", {}, s.title), " was deleted. Its conversation stays here, read-only.")));
+
 // followChat applies a chat's updates after cursor after as they come, until signal stops it (the pane stops it when it
-// closes or shows another conversation) or the chat is gone; it says on live when it doesn't follow, and tries again,
+// closes or shows another conversation) or the chat is gone; its banner, live, says when it doesn't follow, and it tries again,
 // waiting longer each time, when a read fails.
 async function followChat(chat, after, apply, live, signal) {
   let delay = 1000;
@@ -260,11 +291,12 @@ async function followChat(chat, after, apply, live, signal) {
       d.updates.forEach(apply);
       after = d.after;
       delay = 1000;
-      live.textContent = "";
+      live.hidden = true;
     } catch (err) {
       if (signal.aborted) return;
-      if (err.status === 404) return void (live.textContent = "This conversation is gone.");
-      live.textContent = "Reconnecting…";
+      live.hidden = false;
+      if (err.status === 404) return void (live.querySelector("p").textContent = "This conversation is gone.");
+      live.querySelector("p").textContent = "Reconnecting…";
       await new Promise((resolve) => setTimeout(resolve, delay));
       delay = Math.min(delay * 2, 60000);
     }
