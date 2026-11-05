@@ -2,8 +2,8 @@
 .commits td.graph { position: relative; padding: 0; }
 .commits td.graph svg { position: absolute; top: 0; left: 0; height: 100%; overflow: visible; }
 .commits td.graph line { stroke-width: 2; }
-.lane-0 { stroke: var(--color-accent); fill: var(--color-accent); }
-.lane-1 { stroke: var(--color-status-success-fg); fill: var(--color-status-success-fg); }
-.lane-2 { stroke: var(--color-status-warning-fg); fill: var(--color-status-warning-fg); }
-.lane-3 { stroke: var(--color-status-danger-fg); fill: var(--color-status-danger-fg); }
-.lane-4 { stroke: var(--color-fg-muted); fill: var(--color-fg-muted); }
+.lane-0 { stroke: var(--color-status-info-solid); fill: var(--color-status-info-solid); }
+.lane-1 { stroke: var(--color-status-success-solid); fill: var(--color-status-success-solid); }
+.lane-2 { stroke: var(--color-status-warning-solid); fill: var(--color-status-warning-solid); }
+.lane-3 { stroke: var(--color-status-danger-solid); fill: var(--color-status-danger-solid); }
+.lane-4 { stroke: var(--color-status-neutral-solid); fill: var(--color-status-neutral-solid); }

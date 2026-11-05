@@ -4,6 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Cobranch</title>
+  <!-- The small mark (lib/brand.js) in the theme's colours, as the design system's tokens name them: gray/0 on
+       gray/900, and gray/950 on gray/50 in dark mode. -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><style>.g{fill:%231a1d20}.m{stroke:%23ffffff}@media (prefers-color-scheme:dark){.g{fill:%23f8f9fa}.m{stroke:%23131517}}</style><rect class='g' width='16' height='16' rx='4'/><g class='m' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='6' cy='4.857' r='1.086'/><circle cx='6' cy='11.143' r='1.086'/><circle cx='10.286' cy='6.286' r='1.086'/><path d='M6 5.943V10.057M10.286 7.371C10.286 9.086 6 8.8 6 10.514'/></g></svg>">
+  <!-- Until tokens.css draws the page, the browser's own colours follow the person's theme, as this browser last knew it
+       (lib/theme.js), or the system's. -->
+  <meta name="color-scheme" content="light dark">
+  <script>
+    try {
+      const theme = localStorage.getItem("cobranch.theme");
+      if (theme === "light" || theme === "dark") {
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="color-scheme"]').content = theme;
+      }
+    } catch {}
+  </script>
   <!-- The Console: sign in, the welcome page (create, join, invitations), an organization's pages under its slug, its
        repositories' pages under theirs, and the viewer's own settings, routed in the browser. Caddy serves this page
        for every path, with where the APIs and the Console answer, the release of its files and their names written in
@@ -16,7 +31,7 @@
     "restUrl" (env "COBRANCH_REST_URL") "authUrl" (env "COBRANCH_AUTH_URL") "consoleUrl" (env "COBRANCH_CONSOLE_URL")
     "gitUrl" (env "COBRANCH_GIT_URL") "gitSshUrl" (env "COBRANCH_GIT_SSH_URL") "release" (env "COBRANCH_RELEASE")
     "files" (dict "" (listFiles "/assets") "lib/" (listFiles "/assets/lib") "pages/" (listFiles "/assets/pages")
-      "pages/org/" (listFiles "/assets/pages/org") "pages/repo/" (listFiles "/assets/pages/repo"))
+      "pages/org/" (listFiles "/assets/pages/org") "pages/repo/" (listFiles "/assets/pages/repo") "fonts/" (listFiles "/assets/fonts"))
     | toJson }}</script>
   <script type="module">
     // The configuration names the Console's root, where its modules are, and their release; a page at any depth knows
@@ -47,12 +62,14 @@
       return true;
     };
     // Every file the Console runs is asked for at once, with the viewer, rather than each when a module that imports it
-    // arrives: the requests that wait on each other are this page, then the rest.
+    // arrives: the requests that wait on each other are this page, then the rest. Of the typefaces, only their Latin
+    // parts, which every page draws with (fonts.css).
     const assets = root + "assets/@" + config.release + (tried ? "~" + tried : "") + "/";
     for (const [dir, names] of Object.entries(config.files)) {
-      for (const name of names.filter((n) => /\.(js|css)$/.test(n))) {
-        const preload = name.endsWith(".js") ? { rel: "modulepreload" } : { rel: "preload", as: "style" };
-        document.head.append(Object.assign(document.createElement("link"), preload, { href: assets + dir + name }));
+      for (const name of names) {
+        const preload = name.endsWith(".js") ? { rel: "modulepreload" } : name.endsWith(".css") ? { rel: "preload", as: "style" }
+          : name.endsWith("-latin.woff2") ? { rel: "preload", as: "font", type: "font/woff2", crossOrigin: "anonymous" } : null;
+        if (preload) document.head.append(Object.assign(document.createElement("link"), preload, { href: assets + dir + name }));
       }
     }
     config.me = fetch(config.restUrl + "/v1/me", { credentials: "include", headers: { Accept: "application/json" } });

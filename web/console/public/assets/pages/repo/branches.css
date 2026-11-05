@@ -1,13 +1,13 @@
 /* The branches and a branch's page: its merge requirements, its merge and the issue it works on. */
 .branches td.counts { white-space: nowrap; }
 .checks { list-style: none; margin: 0; padding: 0; display: grid; }
-.checks li { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--color-border-default); }
+.checks li { display: flex; align-items: center; gap: var(--space-8); padding: var(--space-8) 0; border-top: 1px solid var(--color-border-default); }
 .checks li:first-child { border-top: 0; }
-.checks li .detail { margin-left: auto; color: var(--color-fg-muted); font-size: 13px; text-align: right; }
+.checks li .detail { margin-left: auto; color: var(--color-fg-muted); font: var(--text-body-small); text-align: right; }
 section.panel.blocked { border-color: var(--color-status-danger-border); }
-section.panel.blocked pre { margin: 0; white-space: pre-wrap; font: 13px/20px var(--font-mono); }
+section.panel.blocked pre { margin: 0; white-space: pre-wrap; font: var(--text-code-medium); }
 form.merge { justify-content: flex-start; }
 form.merge select { width: auto; }
-.works-on { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 0; }
-.works-on form { display: flex; gap: 8px; align-items: center; }
+.works-on { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-8); margin: var(--space-12) 0 0; }
+.works-on form { display: flex; gap: var(--space-8); align-items: center; }
 .works-on input { width: 9em; }

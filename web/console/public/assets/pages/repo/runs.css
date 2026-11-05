@@ -1,3 +1,3 @@
 /* A run's page: its jobs' logs. */
-pre.log { margin: 8px 0 0; max-height: 600px; overflow: auto; padding: 8px 12px; border-radius: 6px; background: var(--color-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/20px var(--font-mono); color: var(--color-fg-default); }
-.logs { display: grid; gap: 12px; }
+pre.log { margin: var(--space-8) 0 0; max-height: 600px; overflow: auto; padding: var(--space-8) var(--space-12); border-radius: var(--radius-md); background: var(--color-bg-sunken); white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-code-medium); color: var(--color-fg-default); }
+.logs { display: grid; gap: var(--space-12); }
