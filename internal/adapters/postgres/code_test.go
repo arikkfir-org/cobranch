@@ -88,6 +88,35 @@ func TestCodeStoreBranches(t *testing.T) {
 	}
 }
 
+// TestCodeStoreOpenBranches checks that the branches that may need someone are those that stand Blocked, Ready or
+// Processing, never main, with their repository and head commit.
+func TestCodeStoreOpenBranches(t *testing.T) {
+	t.Parallel()
+	f := newCodeFixture(t)
+	ctx := context.Background()
+	got, err := f.c.OpenBranches(ctx, []uuid.UUID{f.website.ID, f.secret.ID}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var open []string
+	for _, b := range got {
+		open = append(open, b.Repo+" "+b.Name+" "+string(b.Status))
+		if b.RepoID != f.website.ID || (b.Name == "feature" && (b.Commit == nil || b.Commit.SHA != shaC)) {
+			t.Errorf("OpenBranches() %s = %+v, want website's, at its head commit", b.Name, b)
+		}
+	}
+	slices.Sort(open) // one push moved both
+	if want := []string{"website feature processing", "website stray processing"}; !slices.Equal(open, want) {
+		t.Errorf("OpenBranches() = %q, want %q", open, want)
+	}
+	if none, err := f.c.OpenBranches(ctx, []uuid.UUID{f.secret.ID}, 10); err != nil || len(none) != 0 {
+		t.Errorf("another repository's OpenBranches() = %v, %v", none, err)
+	}
+	if capped, err := f.c.OpenBranches(ctx, []uuid.UUID{f.website.ID}, 0); err != nil || len(capped) != 0 {
+		t.Errorf("OpenBranches(limit 0) = %v, %v", capped, err)
+	}
+}
+
 // TestCodeStoreDeletedBranch runs its cases in order over one codeFixture, each pushing updates first: the latest
 // deletion of a name answers, and none does while a branch of that name is live.
 func TestCodeStoreDeletedBranch(t *testing.T) {

@@ -59,6 +59,46 @@ func (s *CodeStore) Branches(ctx context.Context, repoID uuid.UUID) ([]code.Bran
 	return out, nil
 }
 
+// OpenBranches lists, latest moved first, at most limit of the live branches of the repositories of repoIDs that stand
+// Blocked, Ready or Processing, each with its head commit and its repository (code.Store).
+func (s *CodeStore) OpenBranches(ctx context.Context, repoIDs []uuid.UUID, limit int) ([]code.RepoBranch, error) {
+	rows, err := s.q.OpenBranchesIn(ctx, repoIDs, int32(min(limit, 1000))) //nolint:gosec // at most 1000
+	if err != nil {
+		return nil, fmt.Errorf("listing the open branches: %w", err)
+	}
+	out := make([]code.RepoBranch, 0, len(rows))
+	heads := map[uuid.UUID][]string{}
+	for _, r := range rows {
+		b, err := branchFrom(liveRow(r))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, code.RepoBranch{RepoID: r.RepoID, Repo: r.RepoSlug, Branch: b})
+		heads[r.RepoID] = append(heads[r.RepoID], r.Head)
+	}
+	for repoID, shas := range heads {
+		commits, err := s.CommitsAt(ctx, repoID, shas)
+		if err != nil {
+			return nil, err
+		}
+		for i := range out {
+			if c, ok := commits[out[i].Head]; ok && out[i].RepoID == repoID {
+				out[i].Commit = &c
+			}
+		}
+	}
+	return out, nil
+}
+
+// liveRow is an open branch's row as LiveBranches reads it, without its repository.
+func liveRow(r queries.OpenBranchesInRow) queries.LiveBranchesRow {
+	return queries.LiveBranchesRow{Name: r.Name, Head: r.Head, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Base: r.Base, Ahead: r.Ahead,
+		Behind: r.Behind, Merges: r.Merges, Status: r.Status, Checks: r.Checks, RequiredAnnotations: r.RequiredAnnotations,
+		LinearHistory: r.LinearHistory, RequiredApprovals: r.RequiredApprovals, RequiredAi: r.RequiredAi, MergedHead: r.MergedHead,
+		MergedBy: r.MergedBy, MergedByName: r.MergedByName, MergedAt: r.MergedAt, SettingsError: r.SettingsError, ManualJobs: r.ManualJobs,
+		ReviewTask: r.ReviewTask, ReviewState: r.ReviewState, ReviewReason: r.ReviewReason}
+}
+
 // Branch finds one of the repository's live branches, with its head commit, its status and what a merge into it
 // needs, or repos.ErrNotFound (code.Store).
 func (s *CodeStore) Branch(ctx context.Context, repoID uuid.UUID, name string) (code.Branch, error) {

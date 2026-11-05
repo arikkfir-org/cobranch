@@ -243,6 +243,24 @@ func (s *Store) Slugs(_ context.Context, repoID uuid.UUID) (org, repo string, er
 	return slugs[0], slugs[1], nil
 }
 
+// OpenBranches lists, latest moved first, at most limit of the branches of the repositories of repoIDs that stand
+// Blocked, Ready or Processing, each with its repository's slug from SlugList.
+func (s *Store) OpenBranches(_ context.Context, repoIDs []uuid.UUID, limit int) ([]code.RepoBranch, error) {
+	if s.Fail != nil {
+		return nil, s.Fail
+	}
+	var out []code.RepoBranch
+	for _, repoID := range repoIDs {
+		for _, b := range s.BranchList[repoID] {
+			if b.Status == code.StatusBlocked || b.Status == code.StatusReady || b.Status == code.StatusProcessing {
+				out = append(out, code.RepoBranch{RepoID: repoID, Repo: s.SlugList[repoID][1], Branch: s.annotatedBranch(repoID, b)})
+			}
+		}
+	}
+	slices.SortStableFunc(out, func(a, b code.RepoBranch) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
+	return out[:min(len(out), limit)], nil
+}
+
 // FirstParents walks the repository's commits from sha along first parents.
 func (s *Store) FirstParents(_ context.Context, repoID uuid.UUID, sha string, limit int) ([]code.Commit, error) {
 	if s.Fail != nil {

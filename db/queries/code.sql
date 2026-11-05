@@ -33,6 +33,28 @@ LEFT JOIN LATERAL (SELECT t.number, t.state, t.reason FROM agent_tasks t
     WHERE t.branch_id = b.id AND t.sha = b.head AND t.kind = 'review' ORDER BY t.number DESC LIMIT 1) rt ON true
 WHERE b.repo_id = $1 AND b.name = $2 AND b.deleted_at IS NULL;
 
+-- OpenBranchesIn lists, latest moved first, at most lim of the live branches of the repositories of ids that stand
+-- Blocked, Ready or Processing as requests to merge into main, each as LiveBranches reads it, with its repository's
+-- slug: what may need someone across an organization.
+-- name: OpenBranchesIn :many
+SELECT b.repo_id, rp.slug AS repo_slug, b.name, b.head, b.created_at, b.updated_at, b.base, b.ahead, b.behind, b.merges, b.status, b.checks,
+    r.annotations AS required_annotations, r.linear_history, r.approvals AS required_approvals, r.ai AS required_ai, b.merged_head, b.merged_by, m.display_name AS merged_by_name, b.merged_at,
+    coalesce(f.error, '')::text AS settings_error,
+    (SELECT coalesce(array_agg(j ->> 'name' ORDER BY j ->> 'name'), '{}') FROM jsonb_array_elements(coalesce(f.settings -> 'jobs', '[]'::jsonb)) j
+     WHERE (j -> 'on' -> 'manual') IS NOT NULL)::text[] AS manual_jobs,
+    coalesce(rt.number, 0)::bigint AS review_task, coalesce(rt.state, '')::text AS review_state,
+    coalesce(rt.reason, '')::text AS review_reason
+FROM branches b JOIN repositories rp ON rp.id = b.repo_id
+LEFT JOIN merge_requirements r ON r.repo_id = b.repo_id AND r.branch = b.name
+LEFT JOIN principals m ON m.id = b.merged_by
+LEFT JOIN settings_files f ON f.repo_id = b.repo_id AND f.blob = b.settings_blob
+LEFT JOIN LATERAL (SELECT t.number, t.state, t.reason FROM agent_tasks t
+    WHERE t.branch_id = b.id AND t.sha = b.head AND t.kind = 'review' ORDER BY t.number DESC LIMIT 1) rt ON true
+WHERE b.repo_id = ANY (@repo_ids::uuid[]) AND b.deleted_at IS NULL AND b.name <> 'main'
+  AND (b.status IS NULL OR b.status IN ('blocked', 'ready', 'processing'))
+ORDER BY b.updated_at DESC, b.id
+LIMIT @lim;
+
 -- DeletedBranch reads the latest deletion of a repository's branch of a name, with the display names of the
 -- principals who merged and deleted it; none while a branch of that name is live.
 -- name: DeletedBranch :one
