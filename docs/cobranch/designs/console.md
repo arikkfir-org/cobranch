@@ -258,8 +258,6 @@ components after it ([ENG-256](https://linear.app/arikkfir/issue/ENG-256),
 
 ## Open questions
 
-- **Account's facts and Preferences' row** are Table rows until the file's Pattern/Fact row lands; the pages move to it
-  then.
 - **Loading pages lazily** once the Console holds many more modules: every load asks for every file, so the count grows
   with the pages. Measure again when it doubles.
 

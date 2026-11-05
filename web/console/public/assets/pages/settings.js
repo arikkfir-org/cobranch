@@ -68,13 +68,12 @@ async function showAccount(main, made = null) {
 // profile is who the viewer is: their name and email as sign-in gave them, and the organizations they are in.
 function profile() {
   const email = me.emails && me.emails.length ? me.emails[0].email : "";
-  const fact = (name, value) => h("tr", {}, h("td", { class: "cell-muted" }, name), h("td", {}, value));
+  const fact = (name, kind, ...value) => h("div", { class: "fact-row" + (kind ? " fact-row-" + kind : "") }, h("span", { class: "fact-label" }, name), h("div", { class: "fact-value" }, value));
   const member = orgs.length ? orgs.map((o) => o.name).join(", ") : "No organization yet";
   return card("Profile", null, button("log-out", "Log out", signOut),
-    h("table", { class: "table facts" }, h("tbody", {},
-      fact("Name", h("div", { class: "cell-person" }, avatar(me.displayName, false, 32),
-        h("div", { class: "row-text" }, h("span", { class: "row-title" }, me.displayName), email ? h("span", { class: "row-meta" }, email) : null))),
-      fact("Member of", member))));
+    fact("Name", "person", avatar(me.displayName, false, 32),
+      h("div", { class: "fact-person" }, h("span", { class: "fact-person-name" }, me.displayName), email ? h("span", { class: "fact-person-email" }, email) : null)),
+    fact("Member of", null, member));
 }
 
 // tokensCard lists the viewer's personal tokens, each with what it may do, when it was made and last used, when it
