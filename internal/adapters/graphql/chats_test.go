@@ -240,7 +240,7 @@ func TestChatUpdatesSubscription(t *testing.T) {
 	f := newOrgFixture()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets)))
+	srv := httptest.NewServer(as(&f.olivia, NewHandler("v1", "https://console.example.com", nil, f.service, f.repos, f.code, f.issues, f.chats, f.agents, f.secrets, f.artifacts)))
 	defer srv.Close()
 	url := "ws" + strings.TrimPrefix(srv.URL, "http")
 	if conn, err := dialWS(ctx, url, "https://elsewhere.example.com"); err == nil {
