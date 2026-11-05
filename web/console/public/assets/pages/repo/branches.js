@@ -55,7 +55,10 @@ async function repositoryBranch(ctx, name) {
     return deletedBranchPage(ctx, name);
   }
   const tab = b.base || tabShown() !== "changes" ? tabShown() : "";
-  return [branchHeader(ctx, b), settingsError(b), b.status ? mergeStatus(ctx, b) : null, branchTabBar(ctx, b, tab), ...await tabContent(ctx, b, tab)].filter(Boolean);
+  // The base's requirements, which b's checks stand against: b's own are those of merges into it.
+  const base = b.base && checking.includes(b.status) ? await api("GET", ctx.path + "/branches/" + encodeURIComponent(b.base)).catch(() => null) : null;
+  return [branchHeader(ctx, b), settingsError(b), b.status ? mergeStatus(ctx, b, base && base.requirements) : null, branchTabBar(ctx, b, tab),
+    ...await tabContent(ctx, b, tab)].filter(Boolean);
 }
 
 // tabContent is what b's tab shows: its overview, its changes with the reviews of its head, the runs of its head
@@ -130,12 +133,16 @@ function settingsError(b) {
 // The tone of each branch status's merge card: Merged and Empty have nothing left to hold them back.
 const statusTones = { blocked: "danger", processing: "info", ready: "success", empty: "neutral", merged: "neutral" };
 
+// checking are the statuses whose merge requirements a branch's page lists, as its checks stand against them.
+const checking = ["blocked", "processing", "ready"];
+
 // mergeStatus is how b's merge stands: why it is Blocked or Processing, or that it is Ready, Empty or Merged, over
-// each of its merge requirements as its status last worked them out, as the Branch screen draws them.
-function mergeStatus(ctx, b) {
+// each of its merge requirements as its status last worked them out, as the Branch screen draws them. required is
+// its base's requirements, when they could be read.
+function mergeStatus(ctx, b, required) {
   const s = branchStatuses[b.status];
   const [title, message, action] = statusReason(ctx, b);
-  const rows = ["blocked", "processing", "ready"].includes(b.status) ? checkRows(ctx, b) : [];
+  const rows = checking.includes(b.status) ? checkRows(ctx, b, required) : [];
   return h("section", { class: "card merge-status tone-" + statusTones[b.status] },
     h("div", { class: "merge-status-reason" }, icon(s.icon), h("div", { class: "banner-text" }, h("strong", { class: "banner-title" }, title),
       message ? h("p", {}, message) : null), action),
@@ -158,7 +165,8 @@ function statusReason({ at }, b) {
 
 // checkRows are b's merge requirements as check rows: its required annotations together, then its reviews, the AI
 // reviewer's approval, being up to date with its base and linear history, each with how it stands on b's head.
-function checkRows({ org }, b) {
+// Where its base, by required, requires reviews and nobody requests changes, a row says so.
+function checkRows({ org }, b, required) {
   const on = " on " + shortSha(b.head);
   const of = (kind) => b.checks.filter((c) => c.kind === kind);
   const rows = [];
@@ -173,7 +181,7 @@ function checkRows({ org }, b) {
   if (approvals) rows.push(checkRow(...met(approvals), "At least " + plural(approvals.required, "approval"), approvals.count + " of " + approvals.required + on));
   const requested = of("changes_requested");
   if (requested.length) rows.push(checkRow("circle-alert", "warning", "No open change requests", requested.map((c) => c.name).join(", ") + " requested changes"));
-  else if (b.requirements && b.requirements.reviews) rows.push(checkRow("circle-check", "success", "No open change requests", "None" + on));
+  else if (required && required.reviews) rows.push(checkRow("circle-check", "success", "No open change requests", "None" + on));
   for (const c of of("ai")) {
     const s = aiCheckStates[c.ai] || aiCheckStates.unreviewed;
     const task = b.aiReview ? h("a", { href: base + org.slug + "/tasks/" + b.aiReview.task, "data-nav": "" }, "task #" + b.aiReview.task) : null;
