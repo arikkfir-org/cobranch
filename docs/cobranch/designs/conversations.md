@@ -156,8 +156,9 @@ The tool lists only what the person may see: their own tasks, and the others the
 person’s private task shows as a place in the queue, nothing more.
 
 - **A tasks tool.** A task asked in a conversation with its own agent gets a `tasks` tool beside its chat tools, and its
-  prompt says so: what the agent works on now and its queue, oldest first as it will take them, each queued task with
-  its place, then the ten it ended last. Each line names the task's number, its state and since when, its title, who
+  prompt says so: what the agent works on now and the head of its queue, the 50 it will take first, oldest first, each
+  with its place, and how many follow them; then the ten it ended last. The list pages newest first, so the tool reads
+  the queue to its end for its head. Each line names the task's number, its state and since when, its title, who
   asked for it and where it works; another person's private task shows its number, state and times alone. A task asked
   of another agent in that conversation gets no such tool.
 - **The same records as the agent's page,** read through the REST API's task list with the task's token, so the agent
