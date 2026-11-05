@@ -246,14 +246,14 @@ No API returns a value: only a job run or an agent task receives it.
 
 ## Permissions
 
-**The core’s twenty-five permissions, each at one scope**
+**The core’s permissions, each at one scope**
 
-![The core’s twenty-five permissions, each at one scope](principals-and-permissions/permissions.svg)
+![The core’s permissions, each at one scope](principals-and-permissions/permissions.svg)
 
 Names are `<object>.<action>`. A release may add permissions but never renames one; later designs add theirs to the
 catalog, at the organization: issues add `issues.read`, `issues.write` and `issues.manage`
-([issues](issues.md#who-may-do-what)), and delivery, agents and artifacts theirs in their own designs
-([artifacts](artifacts.md#access): `artifacts.create`, `artifacts.read`, `artifacts.write`, `artifacts.manage`).
+([issues](issues.md#who-may-do-what)), and delivery and agents theirs in their own designs. Artifacts add
+`artifacts.create` at the repository and the rest at an artifact or its repository ([artifacts](artifacts.md#access)).
 
 | Permission | Allows |
 | --- | --- |
@@ -289,9 +289,9 @@ catalog, at the organization: issues add `issues.read`, `issues.write` and `issu
 
 ## Roles
 
-**Eleven built-in roles; each repository role includes the one before**
+**Fourteen built-in roles; each repository role includes the one before**
 
-![Eleven built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
+![Fourteen built-in roles; each repository role includes the one before](principals-and-permissions/roles.svg)
 
 Whoever creates a repository becomes its Maintainer, with every repository permission; nobody else but the
 organization’s Owners can reach it until someone grants more. Built-in roles are fixed; an organization defines custom
@@ -387,8 +387,9 @@ and their consents add tables in their own slice.
 | Organizations provision their members from their identity provider (SCIM) | Review, 2026-10-27: yes, in phase 2 | Planned |
 | How phase 2's pinned job security meets the job ceiling | Belongs to phase 2's jobs design | Deferred |
 
-The eleven built-in roles and the 25 permissions are agreed too; the review added the two secret permissions, and the AI
-reviewer Automation at an organization.
+The core's eleven built-in roles and 25 permissions are agreed too; the review added the two secret permissions, and the
+AI reviewer Automation at an organization. The three artifact roles and four artifact permissions are proposed
+([artifacts](artifacts.md#access)).
 
 ## Open questions
 
