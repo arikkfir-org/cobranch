@@ -54,6 +54,7 @@ delivery:
     preview:
       branches: ["feature/**", "fix/**"]      # no cluster: this installation's own
       namespace: acme-api-${branch.slug}
+      url: https://${branch.slug}.preview.example.com   # where its environments answer
   roots:                                      # read from the delivered branch's tip
     - path: deploy/chart
       helm:
@@ -84,6 +85,9 @@ The Git server records each tip’s parsed file in the push’s transaction
   Without it, the target is this installation's own cluster ([This installation's
   cluster](#this-installations-cluster)).
 - **`namespace`** is required, and renders to a DNS label: an environment owns exactly one namespace.
+- **`url`** is optional: where the target's environments answer, an `http` or `https` address, which the Console shows
+  and opens. Cobranch routes nothing to it; the render's own ingress does. It takes the variables but the commit's, since
+  an environment keeps one address, and follows `main`'s file: changing it there moves every environment's at once.
 - **A root** is a directory of the commit: `helm` renders the chart there, `kustomize` builds the kustomization there,
   and neither reads every manifest under it, in path order. `targets` limits a root to some targets.
 - **Checked strictly,** as the rest of the file is: a push that brings a broken `delivery` into `main` is refused,
@@ -272,7 +276,9 @@ one that times out fails, naming what remains.
 ![Each object’s status gives the environment its health, and the commit its annotation](delivery/health.svg)
 
 Health is read after each apply, every 15 seconds while Progressing, and at each resync. A merge requirement may name
-`delivery/preview`, so a branch merges only once its preview runs.
+`delivery/preview`, so a branch merges only once its preview runs. Each read also keeps, for each object, how much of it
+is ready as `kubectl` counts it (a Deployment's ready replicas of those it asks for, `2/2`; a DaemonSet's pods; a Job's
+completions) and when its cluster created it, which the Console shows as its Ready and Age.
 
 - **Revision** is the commit of the environment's last successful delivery; **sync** is Synced when the cluster holds
   the branch's head, and Out of sync while a newer commit waits or a delivery failed, however often a resync re-applies
@@ -380,12 +386,18 @@ A waiting delivery’s Start button names whose push it would deliver, as a wait
 | --- | --- | --- |
 | `GET /environments`, `GET /environments/{id}` | `Repository.environments`, `Branch.environments` | `repo.read` |
 | `GET /environments/{id}/objects`, `/deliveries` | `Environment.objects`, `Environment.deliveries` | `repo.read` |
+| `GET /targets` | `Repository.deliveryTargets` | `repo.read` |
 | `GET /deliveries/{n}`, `/manifests`, `/logs` | `Delivery.manifests`, `Delivery.logs` | `repo.read` |
 | `POST /environments/{id}/redeliver`, `/pause`, `/resume` | `redeliver`, `pauseEnvironment`, `resumeEnvironment` | `delivery.run` |
 | `POST /deliveries/{n}/start` | `startDelivery` | `delivery.run` |
 | `POST /deliveries/{n}/manifests` | None | The delivery's own `cbd_…` token, while it renders |
 
 - **`delivery.run`** is a new permission, held by the built-in roles that hold `jobs.run`.
+- **An environment reads as the Console draws it:** its URL, the roots its branch's head renders (`helm deploy/chart`,
+  `kustomize deploy/overlays/preview`), and its cluster's secret by name for a viewer who holds `secrets.manage` where the
+  secret lives, as the list of secrets shows it; others see its ID alone. `/targets` lists `main`'s targets as the file
+  declares them, their variables unexpanded, and `/deliveries?kind=deliver&kind=teardown` leaves the resyncs out. A
+  delivery carries its commit's subject, which the Console lists it by.
 - **An environment's page** shows its objects with their health and kind, its deliveries with each render's manifests
   and its pod's logs, and Redeliver, Pause and Resume.
 
