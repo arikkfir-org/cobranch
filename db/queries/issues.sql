@@ -97,6 +97,16 @@ FROM events e LEFT JOIN principals p ON p.id = e.actor_id
 WHERE e.subject_id = @issue_id AND e.kind LIKE 'issue.%'
 ORDER BY e.seq;
 
+-- IssueTaskStarts lists the tasks an issue's assignments gave agents that have started, oldest first: each with its
+-- number, its agent and the agent's display name, when it started, the repository it works in and its branch's name.
+-- name: IssueTaskStarts :many
+SELECT t.id, t.number, t.started_at::timestamptz AS started_at, t.agent_id, p.display_name AS agent_name, t.repo_id, b.name AS branch_name
+FROM agent_tasks t
+JOIN principals p ON p.id = t.agent_id
+LEFT JOIN branches b ON b.id = t.branch_id
+WHERE t.issue_id = @issue_id AND t.kind = 'issue' AND t.started_at IS NOT NULL
+ORDER BY t.started_at, t.id;
+
 -- IssueAssignee finds whom an organization's issue may be assigned to, by their principal, with their display name and
 -- kind: one of its members, or one of its agents.
 -- name: IssueAssignee :one

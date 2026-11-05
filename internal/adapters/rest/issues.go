@@ -377,6 +377,12 @@ func issueEvent(e issues.Event) IssueEvent {
 			out.Branch.Repository, out.Branch.Name = &b.Repository, &b.Name
 		}
 	}
+	if t := e.Task; t != nil {
+		out.Task = &IssueEventTask{Number: t.Number}
+		if t.Branch != "" {
+			out.Task.Branch = &t.Branch
+		}
+	}
 	return out
 }
 

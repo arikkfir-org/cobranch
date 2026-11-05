@@ -252,6 +252,55 @@ func (q *Queries) IssueEvents(ctx context.Context, issueID *uuid.UUID) ([]IssueE
 	return items, nil
 }
 
+const issueTaskStarts = `-- name: IssueTaskStarts :many
+SELECT t.id, t.number, t.started_at::timestamptz AS started_at, t.agent_id, p.display_name AS agent_name, t.repo_id, b.name AS branch_name
+FROM agent_tasks t
+JOIN principals p ON p.id = t.agent_id
+LEFT JOIN branches b ON b.id = t.branch_id
+WHERE t.issue_id = $1 AND t.kind = 'issue' AND t.started_at IS NOT NULL
+ORDER BY t.started_at, t.id
+`
+
+type IssueTaskStartsRow struct {
+	ID         uuid.UUID
+	Number     int64
+	StartedAt  time.Time
+	AgentID    uuid.UUID
+	AgentName  string
+	RepoID     *uuid.UUID
+	BranchName *string
+}
+
+// IssueTaskStarts lists the tasks an issue's assignments gave agents that have started, oldest first: each with its
+// number, its agent and the agent's display name, when it started, the repository it works in and its branch's name.
+func (q *Queries) IssueTaskStarts(ctx context.Context, issueID *uuid.UUID) ([]IssueTaskStartsRow, error) {
+	rows, err := q.db.Query(ctx, issueTaskStarts, issueID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []IssueTaskStartsRow
+	for rows.Next() {
+		var i IssueTaskStartsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Number,
+			&i.StartedAt,
+			&i.AgentID,
+			&i.AgentName,
+			&i.RepoID,
+			&i.BranchName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listIssues = `-- name: ListIssues :many
 SELECT i.id, i.org_id, i.number, i.title, i.description, i.state, i.priority, i.assignee_id, i.repo_id, i.created_by, i.created_at, i.updated_at, i.closed_at, i.version, o.slug AS org_slug, o.issue_key, a.display_name AS assignee_name, a.kind AS assignee_kind,
        c.display_name AS creator_name, r.slug AS repo_slug, r.name AS repo_name,

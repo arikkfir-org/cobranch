@@ -2185,8 +2185,11 @@ type IssueEvent struct {
 	Changes []IssueChange      `json:"changes"`
 	Id      openapi_types.UUID `json:"id"`
 
-	// Kind issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+	// Kind issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
 	Kind string `json:"kind"`
+
+	// Task The task an issue.task_started names, which its agent assignee started on it; the event is left out for a viewer who doesn't read the task's repository.
+	Task *IssueEventTask `json:"task,omitempty"`
 }
 
 // IssueEventBranch The branch an issue.branch_linked or issue.branch_unlinked names, and how; its repository and name are left out for a viewer who doesn't read the repository.
@@ -2199,6 +2202,15 @@ type IssueEventBranch struct {
 
 	// Repository Its repository's slug.
 	Repository *string `json:"repository,omitempty"`
+}
+
+// IssueEventTask The task an issue.task_started names, which its agent assignee started on it; the event is left out for a viewer who doesn't read the task's repository.
+type IssueEventTask struct {
+	// Branch The name of the branch it works on, without refs/heads/, once it has one.
+	Branch *string `json:"branch,omitempty"`
+
+	// Number Its number in the organization's tasks.
+	Number int64 `json:"number"`
 }
 
 // IssueInput What creates an issue.

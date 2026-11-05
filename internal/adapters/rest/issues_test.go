@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
@@ -179,7 +182,27 @@ func TestIssueActivityAPI(t *testing.T) {
 					t.Errorf("events = %s", body)
 				}
 			}},
+		{name: "a task's start", viewer: withTaskStart(withIssues(maxim)), method: http.MethodGet, path: fixed("/v1/orgs/acme/issues/1/activity"), wantStatus: 200,
+			check: func(t *testing.T, _ *orgFixture, body []byte) {
+				events := decode[struct{ Events []IssueEvent }](t, body).Events
+				if len(events) != 2 || events[1].Kind != "issue.task_started" || events[1].Task == nil || events[1].Task.Number != 318 ||
+					events[1].Task.Branch == nil || *events[1].Task.Branch != "feature/push-worker" {
+					t.Errorf("events = %s", body)
+				}
+			}},
 	})
+}
+
+// withTaskStart is viewer's fixture with an agent's start of task 318 on ACME-1, on website's feature/push-worker.
+func withTaskStart(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		v := viewer(f)
+		for id := range f.issueStore.Events {
+			f.issueStore.Events[id] = append(f.issueStore.Events[id], issues.Event{ID: uuid.New(), Kind: "issue.task_started", At: time.Now(),
+				Task: &issues.EventTask{Number: 318, RepoID: f.website.ID, Branch: "feature/push-worker"}})
+		}
+		return v
+	}
 }
 
 func TestIssueKeyAPI(t *testing.T) {

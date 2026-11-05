@@ -7882,7 +7882,7 @@ components:
           format: uuid
         kind:
           type: string
-          description: issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+          description: issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
         actor:
           $ref: "#/components/schemas/Principal"
         at:
@@ -7895,6 +7895,22 @@ components:
             $ref: "#/components/schemas/IssueChange"
         branch:
           $ref: "#/components/schemas/IssueEventBranch"
+        task:
+          $ref: "#/components/schemas/IssueEventTask"
+    IssueEventTask:
+      type: object
+      description: >-
+        The task an issue.task_started names, which its agent assignee started on it; the event is left out for a
+        viewer who doesn't read the task's repository.
+      required: [number]
+      properties:
+        number:
+          type: integer
+          format: int64
+          description: Its number in the organization's tasks.
+        branch:
+          type: string
+          description: The name of the branch it works on, without refs/heads/, once it has one.
     IssueEventBranch:
       type: object
       description: >-

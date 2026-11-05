@@ -66,7 +66,8 @@ A branch works on one issue at most; an issue has any number of branches, in any
 - **Its activity** is the [architecture](architecture.md#events-and-background-work)'s events with the issue as their
   subject: `issue.created`, `issue.changed` with each field's old and new value (a label's by name),
   `issue.branch_linked` and `issue.branch_unlinked`, each naming its actor, so the issue page shows who moved it and
-  when. A deleted issue's events go with it, and the organization's own event `issue.deleted` keeps its number and
+  when; among them `issue.task_started`, read from the tasks its assignments gave agents, names the agent, the task and
+  its branch, and only to the readers of the task's repository. A deleted issue's events go with it, and the organization's own event `issue.deleted` keeps its number and
   title. Its [comments](#comments) show beside them, a chat of its own; the table carries trigger `audit()`.
 - **Deleting is for mistakes.** `issues.manage` deletes an issue, its links and its activity with it; work that won't be
   done is Canceled, which keeps its history.
@@ -257,7 +258,7 @@ change, merge patches, and lists paged by an opaque cursor with `Link: rel="next
 | Change fields | `PATCH /issues/{number}`, merge patch, `If-Match` | `updateIssue` | `issues.write`, and `agents.assign` for an agent |
 | Its agent's task, number and state | the issue's `task` | `Issue.task` | `issues.read`, and `repo.read` on the task's repository |
 | Delete | `DELETE /issues/{number}`, `If-Match` | `deleteIssue` | `issues.manage` |
-| Its activity, oldest first | `GET /issues/{number}/activity` | `Issue.activity` | `issues.read` |
+| Its activity, oldest first, its tasks' starts among it | `GET /issues/{number}/activity` | `Issue.activity` | `issues.read` |
 | Its branches | `GET /issues/{number}/branches` | `Issue.branches` | `issues.read`, and `repo.read` per branch |
 | A branch's issue | the branch's `issue` | `Branch.issue` | `issues.read` |
 | Link or unlink by hand | `PUT` or `DELETE /repos/{repo}/branches/{branch}/issue` | `linkBranch`, `unlinkBranch` | `issues.write`, `repo.read` |
@@ -287,12 +288,14 @@ the page instead of overwriting it.
   among them), repository, label and text; a switch shows closed ones. Each row is the design system's Issue row:
   identifier, title, priority, labels, assignee's avatar, the linked branches' count.
 - **The issue page** at `/<org>/issues/ACME-42` shows the identifier and state badge, the title and rendered
-  description, its branches with their status as branch rows, its activity, oldest first, and its [comments](#comments),
+  description, its branches with their status as branch rows, its activity, newest first, and its [comments](#comments),
   live; the side column edits state, priority, assignee, labels and repository, each change saved at once with the
   version it was made from, and shows who created it. The assignee menu lists the organization's agents too, for a
-  viewer who holds `agents.assign`, and an agent's task shows under it with its state, linked to the agent's tasks.
+  viewer who holds `agents.assign`, and an agent's task shows under it while it is queued, running or waiting, linked to
+  the task.
 - **Labels** at `/<org>/issues/labels` lists the organization's labels with what each is for and how many issues carry
-  it, linked to the list filtered by it; for `issues.manage`, each row edits or deletes its label, and a form adds one.
+  it, linked to the list filtered by it; for `issues.manage`, each row edits or deletes its label, and a dialog adds
+  one, its name in lower case and its colour picked from swatches of its tag.
 - **New issue** at `/<org>/issues/new` asks for a title, then the rest, as the side column does. `issues` joins the
   repository slugs the Console reserves.
 - **A branch's page** shows its issue under its status, linked to the issue page, with Link and Unlink.

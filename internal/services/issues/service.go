@@ -39,7 +39,7 @@ type Store interface {
 	// Delete deletes the issue at version with its events and records event issue.deleted at the organization, or
 	// ErrChanged when it is at another version now, or ErrNotFound when it is gone.
 	Delete(ctx context.Context, actor uuid.UUID, issue Issue, version int64) error
-	// Activity lists the issue's events, oldest first.
+	// Activity lists the issue's events, its tasks' starts among them, oldest first.
 	Activity(ctx context.Context, issueID uuid.UUID) ([]Event, error)
 	// Assignee finds whom an issue of the organization may be assigned to, one of its members or of its agents, or
 	// ErrNotFound.

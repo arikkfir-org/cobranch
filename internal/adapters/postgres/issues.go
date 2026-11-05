@@ -241,6 +241,23 @@ func (s *IssueStore) Activity(ctx context.Context, issueID uuid.UUID) ([]issues.
 		}
 		out = append(out, e)
 	}
+	tasks, err := s.q.IssueTaskStarts(ctx, &issueID)
+	if err != nil {
+		return nil, fmt.Errorf("listing the issue's tasks: %w", err)
+	}
+	for _, t := range tasks {
+		e := issues.Event{ID: t.ID, Kind: "issue.task_started", At: t.StartedAt,
+			Actor: &issues.Principal{ID: t.AgentID, DisplayName: t.AgentName, Agent: true}, Task: &issues.EventTask{Number: t.Number}}
+		if t.RepoID != nil {
+			e.Task.RepoID = *t.RepoID
+		}
+		if t.BranchName != nil {
+			e.Task.Branch = *t.BranchName
+		}
+		out = append(out, e)
+	}
+	// Both lists are oldest first; a stable sort keeps an event before a task's start at the same instant.
+	slices.SortStableFunc(out, func(a, b issues.Event) int { return a.At.Compare(b.At) })
 	return out, nil
 }
 

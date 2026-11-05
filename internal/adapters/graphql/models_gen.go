@@ -730,7 +730,7 @@ type IssueChange struct {
 // Something that happened to an issue.
 type IssueEvent struct {
 	ID string `json:"id"`
-	// issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked.
+	// issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started.
 	Kind string `json:"kind"`
 	// Who did it; null once they are gone.
 	Actor *IssuePrincipal `json:"actor,omitempty"`
@@ -739,6 +739,8 @@ type IssueEvent struct {
 	Changes []*IssueChange `json:"changes"`
 	// The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds.
 	Branch *IssueEventBranch `json:"branch,omitempty"`
+	// The task an issue.task_started names; null for the other kinds. The event is left out for a viewer who doesn't read the task's repository.
+	Task *IssueEventTask `json:"task,omitempty"`
 }
 
 // The branch an issue.branch_linked or issue.branch_unlinked names.
@@ -748,6 +750,14 @@ type IssueEventBranch struct {
 	// Its name, without refs/heads/; null for a viewer who doesn't read the repository.
 	Name     *string  `json:"name,omitempty"`
 	LinkedBy LinkedBy `json:"linkedBy"`
+}
+
+// The task an agent assignee started on an issue.
+type IssueEventTask struct {
+	// Its number among the organization's tasks.
+	Number int `json:"number"`
+	// The name of the branch it works on, without refs/heads/; null until it has one.
+	Branch *string `json:"branch,omitempty"`
 }
 
 // Which of an organization's issues a list shows.

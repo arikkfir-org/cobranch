@@ -230,8 +230,8 @@ type Change struct {
 	ToID   uuid.UUID
 }
 
-// Event is something that happened to an issue, by whom and when: issue.created, issue.changed with its changes, or
-// issue.branch_linked and issue.branch_unlinked with the branch.
+// Event is something that happened to an issue, by whom and when: issue.created, issue.changed with its changes,
+// issue.branch_linked and issue.branch_unlinked with the branch, or issue.task_started, by an agent, with its task.
 type Event struct {
 	ID   uuid.UUID
 	Kind string
@@ -241,6 +241,16 @@ type Event struct {
 	Changes []Change
 	// Branch is the branch a link or an unlink names; nil for the other kinds.
 	Branch *EventBranch
+	// Task is the task an issue.task_started names; nil for the other kinds.
+	Task *EventTask
+}
+
+// EventTask is the task an agent assignee started on an issue: its number, the repository it works in (uuid.Nil for
+// none), whose readers alone see it, and the name of the branch it works on, once it has one.
+type EventTask struct {
+	Number int64
+	RepoID uuid.UUID
+	Branch string
 }
 
 // The errors the domain answers; an adapter maps each to its status.

@@ -260,9 +260,21 @@ func TestActivityHidesRepositories(t *testing.T) {
 	if _, err := f.service.Update(ctx, f.olivia, f.acme.ID, 1, issues.Patch{RepositoryID: &website}); err != nil {
 		t.Fatal(err)
 	}
+	issue, err := f.service.Get(ctx, f.olivia, f.acme.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tasks' starts in a repository Max doesn't read are left out; those in one he reads, or in none, stay.
+	for _, task := range []issues.EventTask{{Number: 1, RepoID: f.secret.ID}, {Number: 2, RepoID: f.website.ID, Branch: "feature/x"}, {Number: 3}} {
+		f.store.Events[issue.ID] = append(f.store.Events[issue.ID], issues.Event{ID: uuid.New(), Kind: "issue.task_started", At: time.Now(), Task: &task})
+	}
 	activity, err := f.service.Activity(ctx, f.max, f.acme.ID, 1)
-	if err != nil || len(activity) != 2 || activity[1].Changes[0].From != "" || activity[1].Changes[0].To != "website" {
-		t.Errorf("Max's Activity() = %+v, %v; want the move from a repository he doesn't read to website", activity, err)
+	if err != nil || len(activity) != 4 || activity[1].Changes[0].From != "" || activity[1].Changes[0].To != "website" ||
+		activity[2].Task.Number != 2 || activity[3].Task.Number != 3 {
+		t.Errorf("Max's Activity() = %+v, %v; want the move from a repository he doesn't read to website, then tasks 2 and 3", activity, err)
+	}
+	if activity, err := f.service.Activity(ctx, f.olivia, f.acme.ID, 1); err != nil || len(activity) != 5 {
+		t.Errorf("Olivia's Activity() = %+v, %v; want every task's start", activity, err)
 	}
 }
 

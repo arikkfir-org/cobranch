@@ -476,12 +476,18 @@ type ComplexityRoot struct {
 		Changes func(childComplexity int) int
 		ID      func(childComplexity int) int
 		Kind    func(childComplexity int) int
+		Task    func(childComplexity int) int
 	}
 
 	IssueEventBranch struct {
 		LinkedBy   func(childComplexity int) int
 		Name       func(childComplexity int) int
 		Repository func(childComplexity int) int
+	}
+
+	IssueEventTask struct {
+		Branch func(childComplexity int) int
+		Number func(childComplexity int) int
 	}
 
 	IssueLabel struct {
@@ -3143,6 +3149,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IssueEvent.Kind(childComplexity), true
+	case "IssueEvent.task":
+		if e.ComplexityRoot.IssueEvent.Task == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEvent.Task(childComplexity), true
 
 	case "IssueEventBranch.linkedBy":
 		if e.ComplexityRoot.IssueEventBranch.LinkedBy == nil {
@@ -3162,6 +3174,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.IssueEventBranch.Repository(childComplexity), true
+
+	case "IssueEventTask.branch":
+		if e.ComplexityRoot.IssueEventTask.Branch == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEventTask.Branch(childComplexity), true
+	case "IssueEventTask.number":
+		if e.ComplexityRoot.IssueEventTask.Number == nil {
+			break
+		}
+
+		return e.ComplexityRoot.IssueEventTask.Number(childComplexity), true
 
 	case "IssueLabel.color":
 		if e.ComplexityRoot.IssueLabel.Color == nil {
@@ -8072,7 +8097,7 @@ type IssueRepository {
 "Something that happened to an issue."
 type IssueEvent {
   id: ID!
-  "issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked."
+  "issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started."
   kind: String!
   "Who did it; null once they are gone."
   actor: IssuePrincipal
@@ -8081,6 +8106,16 @@ type IssueEvent {
   changes: [IssueChange!]!
   "The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds."
   branch: IssueEventBranch
+  "The task an issue.task_started names; null for the other kinds. The event is left out for a viewer who doesn't read the task's repository."
+  task: IssueEventTask
+}
+
+"The task an agent assignee started on an issue."
+type IssueEventTask {
+  "Its number among the organization's tasks."
+  number: Int!
+  "The name of the branch it works on, without refs/heads/; null until it has one."
+  branch: String
 }
 
 "A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads."
@@ -9680,6 +9715,8 @@ func (ec *executionContext) childFields_IssueEvent(ctx context.Context, field gr
 		return ec.fieldContext_IssueEvent_changes(ctx, field)
 	case "branch":
 		return ec.fieldContext_IssueEvent_branch(ctx, field)
+	case "task":
+		return ec.fieldContext_IssueEvent_task(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type IssueEvent", field.Name)
 }
@@ -9694,6 +9731,16 @@ func (ec *executionContext) childFields_IssueEventBranch(ctx context.Context, fi
 		return ec.fieldContext_IssueEventBranch_linkedBy(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type IssueEventBranch", field.Name)
+}
+
+func (ec *executionContext) childFields_IssueEventTask(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "number":
+		return ec.fieldContext_IssueEventTask_number(ctx, field)
+	case "branch":
+		return ec.fieldContext_IssueEventTask_branch(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type IssueEventTask", field.Name)
 }
 
 func (ec *executionContext) childFields_IssueLabel(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -21835,6 +21882,38 @@ func (ec *executionContext) fieldContext_IssueEvent_branch(_ context.Context, fi
 	return fc, nil
 }
 
+func (ec *executionContext) _IssueEvent_task(ctx context.Context, field graphql.CollectedField, obj *IssueEvent) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEvent_task(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Task, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *IssueEventTask) graphql.Marshaler {
+			return ec.marshalOIssueEventTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueEventTask(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEvent_task(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "IssueEvent",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_IssueEventTask(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _IssueEventBranch_repository(ctx context.Context, field graphql.CollectedField, obj *IssueEventBranch) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -21902,6 +21981,52 @@ func (ec *executionContext) _IssueEventBranch_linkedBy(ctx context.Context, fiel
 }
 func (ec *executionContext) fieldContext_IssueEventBranch_linkedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("IssueEventBranch", field, false, false, "LinkedBy")
+}
+
+func (ec *executionContext) _IssueEventTask_number(ctx context.Context, field graphql.CollectedField, obj *IssueEventTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEventTask_number(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Number, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEventTask_number(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueEventTask", field, false, false, "Int")
+}
+
+func (ec *executionContext) _IssueEventTask_branch(ctx context.Context, field graphql.CollectedField, obj *IssueEventTask) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_IssueEventTask_branch(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Branch, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_IssueEventTask_branch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("IssueEventTask", field, false, false, "String")
 }
 
 func (ec *executionContext) _IssueLabel_id(ctx context.Context, field graphql.CollectedField, obj *IssueLabel) (ret graphql.Marshaler) {
@@ -40351,6 +40476,11 @@ func (ec *executionContext) _IssueEvent(ctx context.Context, sel ast.SelectionSe
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
+		case "task":
+			out.Values[i] = ec._IssueEvent_task(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -40392,6 +40522,44 @@ func (ec *executionContext) _IssueEventBranch(ctx context.Context, sel ast.Selec
 		case "linkedBy":
 			out.Values[i] = ec._IssueEventBranch_linkedBy(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var issueEventTaskImplementors = []string{"IssueEventTask"}
+
+func (ec *executionContext) _IssueEventTask(ctx context.Context, sel ast.SelectionSet, obj *IssueEventTask) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, issueEventTaskImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("IssueEventTask")
+		case "number":
+			out.Values[i] = ec._IssueEventTask_number(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "branch":
+			out.Values[i] = ec._IssueEventTask_branch(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		default:
@@ -46932,6 +47100,13 @@ func (ec *executionContext) marshalOIssueEventBranch2ᚖcobranchᚗdevᚋinterna
 		return graphql.Null
 	}
 	return ec._IssueEventBranch(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOIssueEventTask2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueEventTask(ctx context.Context, sel ast.SelectionSet, v *IssueEventTask) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._IssueEventTask(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOIssueFilter2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐIssueFilter(ctx context.Context, v any) (*IssueFilter, error) {

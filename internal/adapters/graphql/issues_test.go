@@ -4,6 +4,9 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/auth"
 	"cobranch.dev/internal/services/issues"
@@ -123,6 +126,15 @@ func TestBranchLinks(t *testing.T) {
 			document: fixed(`{ organization(slug: "acme") { issue(number: 1) { state branches { repository { slug } name deleted linkedBy } activity { kind branch { repository name linkedBy } } } } }`),
 			want: []string{`"state":"IN_PROGRESS"`, `"branches":[{"repository":{"slug":"website"},"name":"feature","deleted":false,"linkedBy":"HAND"}]`,
 				`{"kind":"issue.branch_linked","branch":{"repository":"website","name":"feature","linkedBy":"HAND"}}`}},
+		{name: "a task's start in an issue's activity", viewer: withIssues(func(f *orgFixture) *auth.Authenticated {
+			for id := range f.issueStore.Events {
+				f.issueStore.Events[id] = append(f.issueStore.Events[id], issues.Event{ID: uuid.New(), Kind: "issue.task_started", At: time.Now(),
+					Task: &issues.EventTask{Number: 318, RepoID: f.website.ID, Branch: "feature/push-worker"}})
+			}
+			return &f.max
+		}),
+			document: fixed(`{ organization(slug: "acme") { issue(number: 1) { activity { kind task { number branch } } } } }`),
+			want:     []string{`{"kind":"issue.task_started","task":{"number":318,"branch":"feature/push-worker"}}`}},
 		{name: "a branch shows its issue", viewer: withLinks(olivia),
 			document: fixed(`{ organization(slug: "acme") { repository(slug: "website") { feature: branch(name: "feature") { issue { issue { identifier } linkedBy } } main: branch(name: "main") { issue { linkedBy } } } } }`),
 			want:     []string{`"feature":{"issue":{"issue":{"identifier":"ACME-1"},"linkedBy":"HAND"}}`, `"main":{"issue":null}`}},

@@ -209,7 +209,7 @@ type IssueRepository {
 "Something that happened to an issue."
 type IssueEvent {
   id: ID!
-  "issue.created, issue.changed, issue.branch_linked or issue.branch_unlinked."
+  "issue.created, issue.changed, issue.branch_linked, issue.branch_unlinked or issue.task_started."
   kind: String!
   "Who did it; null once they are gone."
   actor: IssuePrincipal
@@ -218,6 +218,16 @@ type IssueEvent {
   changes: [IssueChange!]!
   "The branch an issue.branch_linked or issue.branch_unlinked names; null for the other kinds."
   branch: IssueEventBranch
+  "The task an issue.task_started names; null for the other kinds. The event is left out for a viewer who doesn't read the task's repository."
+  task: IssueEventTask
+}
+
+"The task an agent assignee started on an issue."
+type IssueEventTask {
+  "Its number among the organization's tasks."
+  number: Int!
+  "The name of the branch it works on, without refs/heads/; null until it has one."
+  branch: String
 }
 
 "A field a change changed, with its values as people read them: a state's and a priority's names, an assignee's display name, a repository's slug, the labels' names by name, comma-separated. A description's change names no values, and a repository's only those the viewer reads."
