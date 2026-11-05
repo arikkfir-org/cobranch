@@ -73,7 +73,7 @@ func agent(a agents.Agent) *Agent {
 	if a.Provider != "" {
 		out.Provider, out.Model = &a.Provider, &a.Model
 	}
-	out.Cap, out.ModelCap, out.EffectiveCap = optionalUSD(a.Cap), optionalUSD(a.ModelCap), optionalUSD(a.EffectiveCap())
+	out.Cap = optionalUSD(a.Cap)
 	out.Secrets = make([]*AgentSecret, 0, len(a.Secrets))
 	for _, name := range slices.Sorted(maps.Keys(a.Secrets)) {
 		out.Secrets = append(out.Secrets, &AgentSecret{Name: name, SecretID: a.Secrets[name].String()})

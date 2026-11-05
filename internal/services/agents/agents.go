@@ -110,15 +110,8 @@ type Agent struct {
 	// Secrets are the secrets its tasks receive, each an environment variable named by its key from the secret its
 	// value names.
 	Secrets map[string]uuid.UUID
-	// Cap is the most one of its tasks may spend, its own, below its model's; 0 for none.
+	// Cap is the most one of its tasks may spend; 0 for none.
 	Cap USD
-	// ModelCap is the most a task on its model may spend; 0 for none, and while it runs on no model.
-	ModelCap USD
-}
-
-// EffectiveCap is the most one of its tasks may spend: the lower of its own cap and its model's, 0 for none.
-func (a Agent) EffectiveCap() USD {
-	return Lowest(a.Cap, a.ModelCap)
 }
 
 // Input is what a new agent holds: its name, description, instructions and first grants.
@@ -208,7 +201,7 @@ type Task struct {
 	Spent        USD
 	InputTokens  int64
 	OutputTokens int64
-	// Cap is the most it may spend, as its agent and its agent's model now cap it; 0 for none.
+	// Cap is the most it may spend, as its agent now caps it; 0 for none.
 	Cap USD
 }
 

@@ -76,11 +76,11 @@ func (s *AgentStore) Repository(ctx context.Context, orgID, repoID uuid.UUID) (s
 	return slug, nil
 }
 
-// agent is the domain's view of an agents row, with its creator's name and its model's cap.
-func agent(a queries.Agent, creator *string, modelCap *int64) (agents.Agent, error) {
+// agent is the domain's view of an agents row, with its creator's name.
+func agent(a queries.Agent, creator *string) (agents.Agent, error) {
 	out := agents.Agent{ID: a.PrincipalID, OrgID: a.OrgID, Name: a.Name, Description: a.Description, Instructions: a.Instructions,
 		BuiltIn: a.BuiltIn, Purpose: orEmpty(a.Purpose), CreatedAt: a.CreatedAt, UpdatedAt: a.UpdatedAt, Version: a.Version,
-		Secrets: map[string]uuid.UUID{}, Cap: usd(a.Cap), ModelCap: usd(modelCap)}
+		Secrets: map[string]uuid.UUID{}, Cap: usd(a.Cap)}
 	if a.CreatedBy != nil && creator != nil {
 		out.CreatedBy = &agents.Principal{ID: *a.CreatedBy, DisplayName: *creator}
 	}
@@ -123,7 +123,7 @@ func (s *AgentStore) Agents(ctx context.Context, orgID uuid.UUID) ([]agents.Agen
 	}
 	out := make([]agents.Agent, 0, len(rows))
 	for _, r := range rows {
-		a, err := agent(r.Agent, r.CreatorName, r.ModelCap)
+		a, err := agent(r.Agent, r.CreatorName)
 		if err != nil {
 			return nil, err
 		}
@@ -143,7 +143,7 @@ func findAgent(ctx context.Context, q *queries.Queries, orgID, id uuid.UUID) (ag
 	if err != nil {
 		return agents.Agent{}, fmt.Errorf("finding agent %s: %w", id, notFound(err))
 	}
-	a, err := agent(row.Agent, row.CreatorName, row.ModelCap)
+	a, err := agent(row.Agent, row.CreatorName)
 	if err != nil {
 		return agents.Agent{}, err
 	}

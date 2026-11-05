@@ -38,10 +38,13 @@ func newTaskPodFixture(t *testing.T) *taskPodFixture {
 		t.Fatal(err)
 	}
 	if _, _, err := f.a.PutModel(ctx, f.olivia, f.acme.ID, "anthropic", "test-model", agents.ModelInput{InputPrice: 3_000_000,
-		OutputPrice: 15_000_000, Cap: 1_000_000}, agents.NoVersion); err != nil {
+		OutputPrice: 15_000_000}, agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.a.SetModel(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, "anthropic", "test-model"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.a.UpdateAgent(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, agents.Change{Cap: new(agents.USD(1_000_000))}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.a.SetSecrets(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, map[string]uuid.UUID{"TOKEN": f.token}); err != nil {

@@ -64,20 +64,9 @@ func (u USD) String() string {
 	return sign + strconv.FormatInt(int64(u/1_000_000), 10) + "." + fraction
 }
 
-// Lowest is the lowest of the caps that are set, 0 for none: what a task may spend when each of them caps it.
-func Lowest(caps ...USD) USD {
-	var out USD
-	for _, c := range caps {
-		if c > 0 && (out == 0 || c < out) {
-			out = c
-		}
-	}
-	return out
-}
-
 // Model is one of the organization's models, of a provider it added, which its agents may run on: what the
-// organization pays for the tokens it reads and writes, from which Cobranch prices each call of it, and the most a task
-// on it may spend.
+// organization pays for the tokens it reads and writes, from which Cobranch prices each call of it. What a task may
+// spend is its agent's to cap.
 type Model struct {
 	OrgID    uuid.UUID
 	Provider string
@@ -85,8 +74,6 @@ type Model struct {
 	// InputPrice and OutputPrice are what a million tokens the model reads, and writes, cost.
 	InputPrice  USD
 	OutputPrice USD
-	// Cap is the most a task on it may spend; 0 for none. An agent may set a lower cap of its own.
-	Cap USD
 	// Default is whether a new agent starts on it; the organization has at most one.
 	Default bool
 	// Agents are the agents that run on it, by name.
@@ -118,9 +105,7 @@ func (m Model) Cost(input, output int64) USD {
 type ModelInput struct {
 	InputPrice  USD
 	OutputPrice USD
-	// Cap is the most a task on it may spend; 0 for none.
-	Cap     USD
-	Default bool
+	Default     bool
 }
 
 // The model's own errors.
@@ -129,21 +114,15 @@ var (
 	ErrModelInUse = errors.New("agents run on this model")
 )
 
-// ValidateModelInput refuses what a model is set to unless each price is at most MaxPrice and any cap at most MaxCap,
-// and the model has a price once it has a cap, since a cap of a model that costs nothing never stops a task.
+// ValidateModelInput refuses what a model is set to unless each price is at most MaxPrice.
 func ValidateModelInput(in ModelInput) error {
-	switch {
-	case in.InputPrice < 0 || in.InputPrice > MaxPrice || in.OutputPrice < 0 || in.OutputPrice > MaxPrice:
+	if in.InputPrice < 0 || in.InputPrice > MaxPrice || in.OutputPrice < 0 || in.OutputPrice > MaxPrice {
 		return invalid("inputPrice", "model.price_invalid", "a price is $0 to $10000 per million tokens")
-	case in.Cap < 0 || in.Cap > MaxCap:
-		return invalid("cap", "model.cap_invalid", "a cap is $0.000001 to $1000000 a task, or none")
-	case in.Cap > 0 && in.InputPrice == 0 && in.OutputPrice == 0:
-		return invalid("cap", "model.cap_unpriced", "a cap needs the model's prices: Cobranch prices each call from them")
 	}
 	return nil
 }
 
-// ValidateCap refuses an agent's own cap unless it is at most MaxCap; 0 is none.
+// ValidateCap refuses an agent's cap unless it is at most MaxCap; 0 is none.
 func ValidateCap(c USD) error {
 	if c < 0 || c > MaxCap {
 		return invalid("cap", "agent.cap_invalid", "a cap is $0.000001 to $1000000 a task, or none")

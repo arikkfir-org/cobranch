@@ -32,8 +32,8 @@ func (q *Queries) DeleteModelProvider(ctx context.Context, orgID uuid.UUID, prov
 }
 
 const insertModel = `-- name: InsertModel :execrows
-INSERT INTO models (org_id, provider, model, input_price, output_price, cap, is_default, created_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+INSERT INTO models (org_id, provider, model, input_price, output_price, is_default, created_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
 ON CONFLICT (org_id, provider, model) DO NOTHING
 `
 
@@ -43,7 +43,6 @@ type InsertModelParams struct {
 	Model       string
 	InputPrice  int64
 	OutputPrice int64
-	Cap         *int64
 	IsDefault   bool
 	CreatedBy   *uuid.UUID
 }
@@ -56,7 +55,6 @@ func (q *Queries) InsertModel(ctx context.Context, arg InsertModelParams) (int64
 		arg.Model,
 		arg.InputPrice,
 		arg.OutputPrice,
-		arg.Cap,
 		arg.IsDefault,
 		arg.CreatedBy,
 	)
@@ -117,7 +115,7 @@ func (q *Queries) LockModelProvider(ctx context.Context, orgID uuid.UUID, provid
 }
 
 const model = `-- name: Model :one
-SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.cap, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
+SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
 FROM models m LEFT JOIN principals c ON c.id = m.created_by
 WHERE m.org_id = $1 AND m.provider = $2 AND m.model = $3
 `
@@ -137,7 +135,6 @@ func (q *Queries) Model(ctx context.Context, orgID uuid.UUID, provider string, n
 		&i.Model.Model,
 		&i.Model.InputPrice,
 		&i.Model.OutputPrice,
-		&i.Model.Cap,
 		&i.Model.IsDefault,
 		&i.Model.CreatedBy,
 		&i.Model.CreatedAt,
@@ -272,7 +269,7 @@ func (q *Queries) ModelProviders(ctx context.Context, orgID uuid.UUID) ([]ModelP
 }
 
 const models = `-- name: Models :many
-SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.cap, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
+SELECT m.org_id, m.provider, m.model, m.input_price, m.output_price, m.is_default, m.created_by, m.created_at, m.updated_at, m.version, c.display_name AS creator_name
 FROM models m LEFT JOIN principals c ON c.id = m.created_by
 WHERE m.org_id = $1 ORDER BY m.provider, m.model
 `
@@ -298,7 +295,6 @@ func (q *Queries) Models(ctx context.Context, orgID uuid.UUID) ([]ModelsRow, err
 			&i.Model.Model,
 			&i.Model.InputPrice,
 			&i.Model.OutputPrice,
-			&i.Model.Cap,
 			&i.Model.IsDefault,
 			&i.Model.CreatedBy,
 			&i.Model.CreatedAt,
@@ -449,27 +445,24 @@ func (q *Queries) UnsetDefaultModel(ctx context.Context, orgID uuid.UUID, provid
 }
 
 const updateModel = `-- name: UpdateModel :exec
-UPDATE models SET input_price = $1, output_price = $2, cap = $3, is_default = $4,
-    updated_at = now()
-WHERE org_id = $5 AND provider = $6 AND model = $7
+UPDATE models SET input_price = $1, output_price = $2, is_default = $3, updated_at = now()
+WHERE org_id = $4 AND provider = $5 AND model = $6
 `
 
 type UpdateModelParams struct {
 	InputPrice  int64
 	OutputPrice int64
-	Cap         *int64
 	IsDefault   bool
 	OrgID       uuid.UUID
 	Provider    string
 	Model       string
 }
 
-// UpdateModel changes what one of an organization's models costs, its cap and whether it is the default.
+// UpdateModel changes what one of an organization's models costs and whether it is the default.
 func (q *Queries) UpdateModel(ctx context.Context, arg UpdateModelParams) error {
 	_, err := q.db.Exec(ctx, updateModel,
 		arg.InputPrice,
 		arg.OutputPrice,
-		arg.Cap,
 		arg.IsDefault,
 		arg.OrgID,
 		arg.Provider,

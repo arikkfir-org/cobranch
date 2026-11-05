@@ -49,8 +49,8 @@ func (q *Queries) InsertSpend(ctx context.Context, arg InsertSpendParams) (int64
 }
 
 const lockSpendingTask = `-- name: LockSpendingTask :one
-SELECT t.org_id, t.number, t.agent_id, t.state, t.kind, t.repo_id, t.sha, ag.provider, ag.model, ag.cap AS agent_cap,
-    m.input_price, m.output_price, m.cap AS model_cap
+SELECT t.org_id, t.number, t.agent_id, t.state, t.kind, t.repo_id, t.sha, ag.provider, ag.model, ag.cap,
+    m.input_price, m.output_price
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
 WHERE t.id = $1
@@ -67,14 +67,13 @@ type LockSpendingTaskRow struct {
 	Sha         *string
 	Provider    *string
 	Model       *string
-	AgentCap    *int64
+	Cap         *int64
 	InputPrice  *int64
 	OutputPrice *int64
-	ModelCap    *int64
 }
 
 // LockSpendingTask holds a task until the transaction ends, and answers what Cobranch prices its calls and caps it with:
-// its organization, agent and state, its agent's model and cap, and that model's prices and cap.
+// its organization, agent and state, its agent's model and cap, and that model's prices.
 func (q *Queries) LockSpendingTask(ctx context.Context, id uuid.UUID) (LockSpendingTaskRow, error) {
 	row := q.db.QueryRow(ctx, lockSpendingTask, id)
 	var i LockSpendingTaskRow
@@ -88,10 +87,9 @@ func (q *Queries) LockSpendingTask(ctx context.Context, id uuid.UUID) (LockSpend
 		&i.Sha,
 		&i.Provider,
 		&i.Model,
-		&i.AgentCap,
+		&i.Cap,
 		&i.InputPrice,
 		&i.OutputPrice,
-		&i.ModelCap,
 	)
 	return i, err
 }

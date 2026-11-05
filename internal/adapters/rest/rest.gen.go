@@ -1021,16 +1021,13 @@ type Agent struct {
 	// BuiltIn Whether Cobranch made it for the organization; it is never deleted.
 	BuiltIn bool `json:"builtIn"`
 
-	// Cap The most a task of it may spend, in US dollars such as 2.00, which caps it below its model's cap; absent for none of its own.
+	// Cap The most a task of it may spend, in US dollars such as 2.00; absent for none.
 	Cap       *string   `json:"cap,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CreatedBy   *Principal `json:"createdBy,omitempty"`
 	Description string     `json:"description"`
-
-	// EffectiveCap The most a task of it may spend, the lower of its own cap and its model's, in US dollars; absent for none.
-	EffectiveCap *string `json:"effectiveCap,omitempty"`
 
 	// Grants The roles it holds, those at the organization first.
 	Grants []AgentGrant `json:"grants"`
@@ -1043,10 +1040,7 @@ type Agent struct {
 
 	// Model The model it runs on, as its provider names it; absent while it runs on none.
 	Model *string `json:"model,omitempty"`
-
-	// ModelCap The most a task on its model may spend, in US dollars; absent for none.
-	ModelCap *string `json:"modelCap,omitempty"`
-	Name     string  `json:"name"`
+	Name  string  `json:"name"`
 
 	// Provider The model provider it runs on, one the organization added; absent while it runs on none.
 	Provider *string `json:"provider,omitempty"`
@@ -1098,7 +1092,7 @@ type AgentModel struct {
 
 // AgentPatch What changes about an agent; a field left out keeps its value.
 type AgentPatch struct {
-	// Cap The most a task of it may spend, in US dollars such as 2.00, at most $1000000 (400 agent.cap_invalid); its model's cap stays the most it may spend. Null for none of its own.
+	// Cap The most a task of it may spend, in US dollars such as 2.00, at most $1000000 (400 agent.cap_invalid); null for none.
 	Cap          nullable.Nullable[string] `json:"cap,omitempty"`
 	Description  *string                   `json:"description,omitempty"`
 	Instructions *string                   `json:"instructions,omitempty"`
@@ -2088,14 +2082,11 @@ type MergeResult struct {
 	Head string `json:"head"`
 }
 
-// Model One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it, and the most a task on it may spend. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+// Model One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
 type Model struct {
 	// Agents The agents that run on it, by name.
-	Agents []Principal `json:"agents"`
-
-	// Cap The most a task on it may spend, such as 8.00; absent for none. An agent may set a lower cap of its own.
-	Cap       *string   `json:"cap,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
+	Agents    []Principal `json:"agents"`
+	CreatedAt time.Time   `json:"createdAt"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CreatedBy *Principal `json:"createdBy,omitempty"`
@@ -2118,11 +2109,8 @@ type Model struct {
 	Version int64 `json:"version"`
 }
 
-// ModelInput What a model costs, the most a task on it may spend and whether it is the default; it replaces what the model had.
+// ModelInput What a model costs and whether it is the default; it replaces what the model had.
 type ModelInput struct {
-	// Cap The most a task on it may spend, $0.000001 to $1000000, such as 8.00; absent for none. A model with a cap has a price.
-	Cap *string `json:"cap,omitempty"`
-
 	// Default Whether a new agent starts on it; absent for not.
 	Default *bool `json:"default,omitempty"`
 
@@ -2734,7 +2722,7 @@ type Task struct {
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CancelledBy *Principal `json:"cancelledBy,omitempty"`
 
-	// Cap The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; absent for none. It fails once it reaches it.
+	// Cap The most it may spend, its agent's cap, in US dollars; absent for none. It fails once it reaches it.
 	Cap       *string            `json:"cap,omitempty"`
 	CreatedAt time.Time          `json:"createdAt"`
 	EndedAt   *time.Time         `json:"endedAt,omitempty"`
@@ -3742,7 +3730,7 @@ type ServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(w http.ResponseWriter, r *http.Request)
-	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	// (POST /me/task/spend)
 	RecordMyTaskSpend(w http.ResponseWriter, r *http.Request)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
@@ -3922,7 +3910,7 @@ type ServerInterface interface {
 	// GetModel One of the organization's models, with the agents on it; takes org.read.
 	// (GET /orgs/{org}/models/{provider}/{model})
 	GetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params GetModelParams)
-	// SetModel Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, a cap past $1000000 400 model.cap_invalid, a cap of a model without prices 400 model.cap_unpriced, and a request with neither header 428.
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.
@@ -27456,7 +27444,7 @@ type StrictServerInterface interface {
 	// GetMyTask The task the request's task token works, with its organization's slug, for the agent's harness to start from; 403 for any other credential.
 	// (GET /me/task)
 	GetMyTask(ctx context.Context, request GetMyTaskRequestObject) (GetMyTaskResponseObject, error)
-	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	// (POST /me/task/spend)
 	RecordMyTaskSpend(ctx context.Context, request RecordMyTaskSpendRequestObject) (RecordMyTaskSpendResponseObject, error)
 	// ListMyTokens The user's personal tokens that are not revoked, expired ones included, newest first.
@@ -27636,7 +27624,7 @@ type StrictServerInterface interface {
 	// GetModel One of the organization's models, with the agents on it; takes org.read.
 	// (GET /orgs/{org}/models/{provider}/{model})
 	GetModel(ctx context.Context, request GetModelRequestObject) (GetModelResponseObject, error)
-	// SetModel Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, a cap past $1000000 400 model.cap_invalid, a cap of a model without prices 400 model.cap_unpriced, and a request with neither header 428.
+	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
 	// ListRepositories The organization's repositories the viewer reads, by slug; takes org.read.

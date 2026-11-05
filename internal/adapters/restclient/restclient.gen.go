@@ -560,7 +560,7 @@ type Task struct {
 	// CancelledBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CancelledBy *Principal `json:"cancelledBy,omitempty"`
 
-	// Cap The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; absent for none. It fails once it reaches it.
+	// Cap The most it may spend, its agent's cap, in US dollars; absent for none. It fails once it reaches it.
 	Cap       *string            `json:"cap,omitempty"`
 	CreatedAt time.Time          `json:"createdAt"`
 	EndedAt   *time.Time         `json:"endedAt,omitempty"`
@@ -931,14 +931,14 @@ type ClientInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
 	RecordMyTaskSpendWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1100,7 +1100,7 @@ func (c *Client) GetMyTask(ctx context.Context, reqEditors ...RequestEditorFn) (
 	return c.Client.Do(req)
 }
 
-// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+// RecordMyTaskSpendWithBody Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 //
 // Takes any type of body and a specified content type.
 //
@@ -1117,7 +1117,7 @@ func (c *Client) RecordMyTaskSpendWithBody(ctx context.Context, contentType stri
 	return c.Client.Do(req)
 }
 
-// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+// RecordMyTaskSpend Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2870,14 +2870,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /me/task (the `GetMyTask` operationId).
 	GetMyTaskWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetMyTaskResponse, error)
 
-	// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /me/task/spend (the `RecordMyTaskSpend` operationId).
 	RecordMyTaskSpendWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RecordMyTaskSpendResponse, error)
 
-	// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+	// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -4696,7 +4696,7 @@ func (c *ClientWithResponses) GetMyTaskWithResponse(ctx context.Context, reqEdit
 	return ParseGetMyTaskResponse(rsp)
 }
 
-// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+// RecordMyTaskSpendWithBodyWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -4709,7 +4709,7 @@ func (c *ClientWithResponses) RecordMyTaskSpendWithBodyWithResponse(ctx context.
 	return ParseRecordMyTaskSpendResponse(rsp)
 }
 
-// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
+// RecordMyTaskSpendWithResponse Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; 403 for any other credential. Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended answers 409 task.ended.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

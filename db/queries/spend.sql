@@ -1,8 +1,8 @@
 -- LockSpendingTask holds a task until the transaction ends, and answers what Cobranch prices its calls and caps it with:
--- its organization, agent and state, its agent's model and cap, and that model's prices and cap.
+-- its organization, agent and state, its agent's model and cap, and that model's prices.
 -- name: LockSpendingTask :one
-SELECT t.org_id, t.number, t.agent_id, t.state, t.kind, t.repo_id, t.sha, ag.provider, ag.model, ag.cap AS agent_cap,
-    m.input_price, m.output_price, m.cap AS model_cap
+SELECT t.org_id, t.number, t.agent_id, t.state, t.kind, t.repo_id, t.sha, ag.provider, ag.model, ag.cap,
+    m.input_price, m.output_price
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
     LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
 WHERE t.id = @id

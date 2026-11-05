@@ -19,7 +19,7 @@ func TestModelStore(t *testing.T) {
 	if _, _, err := f.a.SetModelProvider(ctx, f.olivia, f.acme.ID, "anthropic", f.addSecret(t, uuid.Nil, "key"), agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
-	priced := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000, Cap: 8_000_000, Default: true}
+	priced := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000, Default: true}
 	steps := []struct {
 		name        string
 		provider    string
@@ -52,7 +52,7 @@ func TestModelStore(t *testing.T) {
 		case !errors.Is(err, s.want):
 			t.Fatalf("%s: PutModel() = %v, want %v", s.name, err, s.want)
 		case err == nil && (created != s.wantCreated || m.Version != s.wantVersion || m.InputPrice != s.in.InputPrice ||
-			m.OutputPrice != s.in.OutputPrice || m.Cap != s.in.Cap || m.Default != s.in.Default || m.CreatedBy == nil || m.CreatedBy.ID != f.olivia):
+			m.OutputPrice != s.in.OutputPrice || m.Default != s.in.Default || m.CreatedBy == nil || m.CreatedBy.ID != f.olivia):
 			t.Errorf("%s: PutModel() = %+v, %v", s.name, m, created)
 		}
 	}
@@ -61,7 +61,7 @@ func TestModelStore(t *testing.T) {
 		t.Errorf("a new agent runs on %q %q, want the default, anthropic b-model", finder.Provider, finder.Model)
 	}
 	list, err := f.a.Models(ctx, f.acme.ID)
-	if err != nil || len(list) != 2 || list[0].Name != "a-model" || list[0].Default || list[0].Cap != 8_000_000 || len(list[0].Agents) != 0 ||
+	if err != nil || len(list) != 2 || list[0].Name != "a-model" || list[0].Default || list[0].InputPrice != 3_000_000 || len(list[0].Agents) != 0 ||
 		list[1].Name != "b-model" || !list[1].Default || len(list[1].Agents) != 1 || list[1].Agents[0].ID != finder.ID {
 		t.Fatalf("Models() = %+v, %v; want a-model, and b-model the default with Finder on it", list, err)
 	}
@@ -98,8 +98,8 @@ func TestAgentCapStore(t *testing.T) {
 	t.Parallel()
 	f := newTaskPodFixture(t)
 	ctx := context.Background()
-	if f.scout, _ = f.a.Agent(ctx, f.acme.ID, f.scout.ID); f.scout.ModelCap != 1_000_000 || f.scout.Cap != 0 || f.scout.EffectiveCap() != 1_000_000 {
-		t.Fatalf("Agent() = cap %d of its model's %d, want none of its own under $1", f.scout.Cap, f.scout.ModelCap)
+	if f.scout, _ = f.a.Agent(ctx, f.acme.ID, f.scout.ID); f.scout.Cap != 1_000_000 {
+		t.Fatalf("Agent() = cap %d, want $1", f.scout.Cap)
 	}
 	task := f.assigned(t, "Look around", false, uuid.Nil)
 	steps := []struct {
@@ -107,19 +107,18 @@ func TestAgentCapStore(t *testing.T) {
 		cap     *agents.USD
 		wantCap agents.USD
 	}{
-		{name: "a lower one of its own", cap: new(agents.USD(250_000)), wantCap: 250_000},
+		{name: "change it", cap: new(agents.USD(250_000)), wantCap: 250_000},
 		{name: "a name alone leaves it", wantCap: 250_000},
-		{name: "none of its own", cap: new(agents.USD(0)), wantCap: 0},
+		{name: "clear it", cap: new(agents.USD(0)), wantCap: 0},
 	}
 	for _, s := range steps {
 		name := "Scout"
 		a, err := f.a.UpdateAgent(ctx, f.olivia, f.acme.ID, f.scout.ID, agents.AnyVersion, agents.Change{Name: &name, Cap: s.cap})
-		if err != nil || a.Cap != s.wantCap || a.ModelCap != 1_000_000 {
-			t.Fatalf("%s: UpdateAgent() = cap %d of its model's %d, %v; want %d", s.name, a.Cap, a.ModelCap, err, s.wantCap)
+		if err != nil || a.Cap != s.wantCap {
+			t.Fatalf("%s: UpdateAgent() = cap %d, %v; want %d", s.name, a.Cap, err, s.wantCap)
 		}
-		got, err := f.a.Task(ctx, f.acme.ID, task.Number)
-		if want := agents.Lowest(s.wantCap, 1_000_000); err != nil || got.Cap != want {
-			t.Errorf("%s: Task() = cap %d, %v; want %d", s.name, got.Cap, err, want)
+		if got, err := f.a.Task(ctx, f.acme.ID, task.Number); err != nil || got.Cap != s.wantCap {
+			t.Errorf("%s: Task() = cap %d, %v; want %d", s.name, got.Cap, err, s.wantCap)
 		}
 	}
 }

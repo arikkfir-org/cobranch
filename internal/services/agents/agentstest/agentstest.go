@@ -129,7 +129,7 @@ func (s *Store) Agents(_ context.Context, orgID uuid.UUID) ([]agents.Agent, erro
 	var out []agents.Agent
 	for _, a := range s.agents {
 		if a.OrgID == orgID {
-			out = append(out, s.capped(a))
+			out = append(out, a)
 		}
 	}
 	slices.SortFunc(out, func(a, b agents.Agent) int {
@@ -146,7 +146,7 @@ func (s *Store) Agent(_ context.Context, orgID, id uuid.UUID) (agents.Agent, err
 	if !ok || a.OrgID != orgID {
 		return agents.Agent{}, orgs.ErrNotFound
 	}
-	return s.capped(a), nil
+	return a, nil
 }
 
 // taken reports whether another of the organization's agents than id has the name, in any case.
@@ -205,7 +205,7 @@ func (s *Store) UpdateAgent(_ context.Context, actor, orgID, id uuid.UUID, versi
 	s.agents[id] = a
 	s.Names[id] = a.Name
 	s.Events = append(s.Events, "agent.updated "+a.Name+" by "+s.Names[actor])
-	return s.capped(a), nil
+	return a, nil
 }
 
 // DeleteAgent deletes one of the organization's agents at version, with its tasks.

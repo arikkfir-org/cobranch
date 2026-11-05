@@ -340,7 +340,6 @@ type Model struct {
 	Model       string
 	InputPrice  int64
 	OutputPrice int64
-	Cap         *int64
 	IsDefault   bool
 	CreatedBy   *uuid.UUID
 	CreatedAt   time.Time

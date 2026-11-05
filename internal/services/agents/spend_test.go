@@ -65,26 +65,6 @@ func TestUSDString(t *testing.T) {
 	}
 }
 
-func TestLowest(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name string
-		caps []agents.USD
-		want agents.USD
-	}{
-		{name: "none", want: 0},
-		{name: "none set", caps: []agents.USD{0, 0}, want: 0},
-		{name: "the model's alone", caps: []agents.USD{0, 8_000_000}, want: 8_000_000},
-		{name: "the agent's lower", caps: []agents.USD{2_000_000, 8_000_000}, want: 2_000_000},
-		{name: "the model's lower", caps: []agents.USD{9_000_000, 8_000_000}, want: 8_000_000},
-	}
-	for _, tt := range tests {
-		if got := agents.Lowest(tt.caps...); got != tt.want {
-			t.Errorf("%s: Lowest(%v) = %d, want %d", tt.name, tt.caps, got, tt.want)
-		}
-	}
-}
-
 func TestCost(t *testing.T) {
 	t.Parallel()
 	priced := agents.Model{InputPrice: 3_000_000, OutputPrice: 15_000_000} // $3 and $15 a million tokens
@@ -111,26 +91,6 @@ func TestCost(t *testing.T) {
 	}
 }
 
-func TestEffectiveCap(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name  string
-		agent agents.Agent
-		want  agents.USD
-	}{
-		{name: "neither", agent: agents.Agent{}, want: 0},
-		{name: "the model's", agent: agents.Agent{ModelCap: 8_000_000}, want: 8_000_000},
-		{name: "the agent's own, lower", agent: agents.Agent{Cap: 2_000_000, ModelCap: 8_000_000}, want: 2_000_000},
-		{name: "the agent's own on a model without one", agent: agents.Agent{Cap: 2_000_000}, want: 2_000_000},
-		{name: "the model's, lower than the agent's", agent: agents.Agent{Cap: 9_000_000, ModelCap: 8_000_000}, want: 8_000_000},
-	}
-	for _, tt := range tests {
-		if got := tt.agent.EffectiveCap(); got != tt.want {
-			t.Errorf("%s: EffectiveCap() = %d, want %d", tt.name, got, tt.want)
-		}
-	}
-}
-
 func TestPutModel(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
@@ -139,7 +99,7 @@ func TestPutModel(t *testing.T) {
 	if _, _, err := f.service.SetModelProvider(ctx, f.olive, f.org, "anthropic", key, agents.NoVersion); err != nil {
 		t.Fatal(err)
 	}
-	priced := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000, Cap: 8_000_000}
+	priced := agents.ModelInput{InputPrice: 3_000_000, OutputPrice: 15_000_000}
 	tests := []struct {
 		name            string
 		viewer          agents.Viewer
@@ -166,11 +126,7 @@ func TestPutModel(t *testing.T) {
 			version: agents.NoVersion, want: invalid("model.price_invalid")},
 		{name: "a price below 0", viewer: f.olive, provider: "anthropic", model: "b-model", in: agents.ModelInput{OutputPrice: -1},
 			version: agents.NoVersion, want: invalid("model.price_invalid")},
-		{name: "a cap past the most", viewer: f.olive, provider: "anthropic", model: "b-model", in: agents.ModelInput{InputPrice: 1, Cap: agents.MaxCap + 1},
-			version: agents.NoVersion, want: invalid("model.cap_invalid")},
-		{name: "a cap without prices", viewer: f.olive, provider: "anthropic", model: "b-model", in: agents.ModelInput{Cap: 8_000_000},
-			version: agents.NoVersion, want: invalid("model.cap_unpriced")},
-		{name: "unpriced, without a cap", viewer: f.olive, provider: "anthropic", model: "b-model", version: agents.NoVersion, wantCreated: true, wantVersion: 1},
+		{name: "unpriced", viewer: f.olive, provider: "anthropic", model: "b-model", version: agents.NoVersion, wantCreated: true, wantVersion: 1},
 		{name: "as a steward, without org.manage", viewer: f.stu, provider: "anthropic", model: "c-model", in: priced, version: agents.NoVersion,
 			want: auth.ErrForbidden},
 		{name: "as an outsider", viewer: f.nia, provider: "anthropic", model: "c-model", in: priced, version: agents.NoVersion, want: orgs.ErrNotFound},
@@ -181,7 +137,7 @@ func TestPutModel(t *testing.T) {
 			t.Fatalf("%s: PutModel() = %v, want %v", tt.name, err, tt.want)
 		}
 		if err == nil && (created != tt.wantCreated || m.Version != tt.wantVersion || m.Provider != "anthropic" || m.InputPrice != tt.in.InputPrice ||
-			m.Cap != tt.in.Cap) {
+			m.OutputPrice != tt.in.OutputPrice) {
 			t.Errorf("%s: PutModel() = %+v, %v", tt.name, m, created)
 		}
 	}
@@ -258,19 +214,19 @@ func TestAgentCap(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
 	ctx := context.Background()
-	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 1, Cap: 8_000_000, Default: true})
+	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 1, Default: true})
 	scout := f.agent(t, f.olive, "Scout")
 	tests := []struct {
-		name          string
-		cap           *agents.USD
-		want          error
-		wantCap       agents.USD
-		wantEffective agents.USD
+		name    string
+		cap     *agents.USD
+		want    error
+		wantCap agents.USD
 	}{
-		{name: "the model's alone", cap: nil, wantEffective: 8_000_000},
-		{name: "a lower one of its own", cap: new(agents.USD(2_000_000)), wantCap: 2_000_000, wantEffective: 2_000_000},
-		{name: "a higher one leaves the model's", cap: new(agents.USD(9_000_000)), wantCap: 9_000_000, wantEffective: 8_000_000},
-		{name: "none of its own", cap: new(agents.USD(0)), wantEffective: 8_000_000},
+		{name: "none to start", cap: nil},
+		{name: "set", cap: new(agents.USD(2_000_000)), wantCap: 2_000_000},
+		{name: "left", cap: nil, wantCap: 2_000_000},
+		{name: "changed", cap: new(agents.USD(9_000_000)), wantCap: 9_000_000},
+		{name: "cleared", cap: new(agents.USD(0))},
 		{name: "below 0", cap: new(agents.USD(-1)), want: invalid("agent.cap_invalid")},
 		{name: "past the most", cap: new(agents.USD(agents.MaxCap + 1)), want: invalid("agent.cap_invalid")},
 	}
@@ -279,8 +235,8 @@ func TestAgentCap(t *testing.T) {
 		if !is(err, tt.want) {
 			t.Fatalf("%s: UpdateAgent() = %v, want %v", tt.name, err, tt.want)
 		}
-		if err == nil && (a.Cap != tt.wantCap || a.EffectiveCap() != tt.wantEffective) {
-			t.Errorf("%s: UpdateAgent() = cap %d, effective %d; want %d, %d", tt.name, a.Cap, a.EffectiveCap(), tt.wantCap, tt.wantEffective)
+		if err == nil && a.Cap != tt.wantCap {
+			t.Errorf("%s: UpdateAgent() = cap %d, want %d", tt.name, a.Cap, tt.wantCap)
 		}
 	}
 }
@@ -288,10 +244,12 @@ func TestAgentCap(t *testing.T) {
 func TestRecordSpend(t *testing.T) {
 	t.Parallel()
 	f := newFixture(t)
-	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 3_000_000, OutputPrice: 15_000_000,
-		Cap: 1_000_000, Default: true})
+	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 3_000_000, OutputPrice: 15_000_000, Default: true})
 	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "b-model", InputPrice: 1_000_000, OutputPrice: 5_000_000})
 	scout := f.agent(t, f.olive, "Scout")
+	if _, err := f.service.UpdateAgent(context.Background(), f.olive, f.org, scout.ID, agents.AnyVersion, agents.Change{Cap: new(agents.USD(1_000_000))}); err != nil {
+		t.Fatal(err)
+	}
 	task, other := f.assign(t, f.mel, scout, "Tidy up", uuid.Nil), f.assign(t, f.mel, scout, "Sweep", uuid.Nil)
 	f.store.SetState(f.org, task.Number, agents.TaskRunning)
 	mine, theirs := working(context.Background(), task), working(context.Background(), other)

@@ -43,12 +43,8 @@ type Agent struct {
 	Provider *string `json:"provider,omitempty"`
 	// The model it runs on, as its provider names it; null while it runs on none.
 	Model *string `json:"model,omitempty"`
-	// The most a task of it may spend, in US dollars such as 2.00, which caps it below its model's cap; null for none of its own.
+	// The most a task of it may spend, in US dollars such as 2.00; null for none.
 	Cap *string `json:"cap,omitempty"`
-	// The most a task on its model may spend, in US dollars; null for none.
-	ModelCap *string `json:"modelCap,omitempty"`
-	// The most a task of it may spend, the lower of its own cap and its model's, in US dollars; null for none.
-	EffectiveCap *string `json:"effectiveCap,omitempty"`
 	// The secrets its tasks receive, by the environment variables they go in.
 	Secrets []*AgentSecret `json:"secrets"`
 }
@@ -85,7 +81,7 @@ type AgentPatch struct {
 	Name         *string `json:"name,omitempty"`
 	Description  *string `json:"description,omitempty"`
 	Instructions *string `json:"instructions,omitempty"`
-	// The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); its model's cap stays the most it may spend. Null for none of its own.
+	// The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); null for none.
 	Cap graphql.Omittable[*string] `json:"cap,omitempty"`
 }
 
@@ -813,7 +809,7 @@ type MergeResult struct {
 	Commit string `json:"commit"`
 }
 
-// One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it, and the most a task on it may spend. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
+// One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00.
 type Model struct {
 	Provider string `json:"provider"`
 	// The model's name, as its provider gives it.
@@ -822,8 +818,6 @@ type Model struct {
 	InputPrice string `json:"inputPrice"`
 	// What a million tokens it writes cost, such as 15.00.
 	OutputPrice string `json:"outputPrice"`
-	// The most a task on it may spend, such as 8.00; null for none. An agent may set a lower cap of its own.
-	Cap *string `json:"cap,omitempty"`
 	// Whether a new agent starts on it; the organization has at most one.
 	Default bool `json:"default"`
 	// The agents that run on it, by name.
@@ -836,14 +830,12 @@ type Model struct {
 	Version int `json:"version"`
 }
 
-// What a model costs, the most a task on it may spend and whether it is the default; it replaces what the model had.
+// What a model costs and whether it is the default; it replaces what the model had.
 type ModelInput struct {
 	// What a million tokens it reads cost, 0 to 10000, such as 3.00.
 	InputPrice string `json:"inputPrice"`
 	// What a million tokens it writes cost, 0 to 10000, such as 15.00.
 	OutputPrice string `json:"outputPrice"`
-	// The most a task on it may spend, 0.000001 to 1000000, such as 8.00; null for none. A model with a cap has a price.
-	Cap *string `json:"cap,omitempty"`
 	// Whether a new agent starts on it; null for not.
 	Default *bool `json:"default,omitempty"`
 }
@@ -1332,7 +1324,7 @@ type Task struct {
 	InputTokens int `json:"inputTokens"`
 	// The tokens its model wrote so far.
 	OutputTokens int `json:"outputTokens"`
-	// The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; null for none. It fails once it reaches it.
+	// The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it.
 	Cap *string `json:"cap,omitempty"`
 	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
 	Transcript []*TranscriptEntry `json:"transcript"`

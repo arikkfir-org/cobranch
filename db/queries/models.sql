@@ -81,14 +81,13 @@ SELECT version FROM models WHERE org_id = @org_id AND provider = @provider AND m
 
 -- InsertModel adds a model to an organization, unless it has it.
 -- name: InsertModel :execrows
-INSERT INTO models (org_id, provider, model, input_price, output_price, cap, is_default, created_by)
-VALUES (@org_id, @provider, @model, @input_price, @output_price, sqlc.narg(cap), @is_default, sqlc.narg(created_by))
+INSERT INTO models (org_id, provider, model, input_price, output_price, is_default, created_by)
+VALUES (@org_id, @provider, @model, @input_price, @output_price, @is_default, sqlc.narg(created_by))
 ON CONFLICT (org_id, provider, model) DO NOTHING;
 
--- UpdateModel changes what one of an organization's models costs, its cap and whether it is the default.
+-- UpdateModel changes what one of an organization's models costs and whether it is the default.
 -- name: UpdateModel :exec
-UPDATE models SET input_price = @input_price, output_price = @output_price, cap = sqlc.narg(cap), is_default = @is_default,
-    updated_at = now()
+UPDATE models SET input_price = @input_price, output_price = @output_price, is_default = @is_default, updated_at = now()
 WHERE org_id = @org_id AND provider = @provider AND model = @model;
 
 -- UnsetDefaultModel makes none of an organization's models but the one named its default.

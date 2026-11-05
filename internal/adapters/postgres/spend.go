@@ -34,7 +34,7 @@ func nullUSD(u agents.USD) *int64 {
 // model is the domain's view of a models row, with its creator's name and the agents on it.
 func model(m queries.Model, creator *string, on []agents.Principal) agents.Model {
 	out := agents.Model{OrgID: m.OrgID, Provider: m.Provider, Name: m.Model, InputPrice: agents.USD(m.InputPrice),
-		OutputPrice: agents.USD(m.OutputPrice), Cap: usd(m.Cap), Default: m.IsDefault, Agents: on, CreatedAt: m.CreatedAt,
+		OutputPrice: agents.USD(m.OutputPrice), Default: m.IsDefault, Agents: on, CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt, Version: m.Version}
 	if out.Agents == nil {
 		out.Agents = []agents.Principal{}
@@ -122,7 +122,7 @@ func (s *AgentStore) PutModel(ctx context.Context, actor, orgID uuid.UUID, provi
 		}
 		kind := map[bool]string{true: "model.added", false: "model.changed"}[created]
 		details := map[string]any{"provider": provider, "model": name, "inputPrice": in.InputPrice.String(),
-			"outputPrice": in.OutputPrice.String(), "cap": in.Cap.String(), "default": in.Default}
+			"outputPrice": in.OutputPrice.String(), "default": in.Default}
 		if err := orgEvent(ctx, q, &orgID, actor, kind, orgID, details); err != nil {
 			return err
 		}
@@ -136,8 +136,7 @@ func (s *AgentStore) PutModel(ctx context.Context, actor, orgID uuid.UUID, provi
 func putModel(ctx context.Context, q *queries.Queries, actor, orgID uuid.UUID, provider, name string, in agents.ModelInput, version int64) (bool, error) {
 	if version == agents.NoVersion {
 		added, err := q.InsertModel(ctx, queries.InsertModelParams{OrgID: orgID, Provider: provider, Model: name,
-			InputPrice: int64(in.InputPrice), OutputPrice: int64(in.OutputPrice), Cap: nullUSD(in.Cap), IsDefault: in.Default,
-			CreatedBy: &actor})
+			InputPrice: int64(in.InputPrice), OutputPrice: int64(in.OutputPrice), IsDefault: in.Default, CreatedBy: &actor})
 		switch {
 		case err != nil:
 			return false, fmt.Errorf("adding model %s of %s: %w", name, provider, err)
@@ -156,7 +155,7 @@ func putModel(ctx context.Context, q *queries.Queries, actor, orgID uuid.UUID, p
 		return false, agents.ErrChanged
 	}
 	err = q.UpdateModel(ctx, queries.UpdateModelParams{InputPrice: int64(in.InputPrice), OutputPrice: int64(in.OutputPrice),
-		Cap: nullUSD(in.Cap), IsDefault: in.Default, OrgID: orgID, Provider: provider, Model: name})
+		IsDefault: in.Default, OrgID: orgID, Provider: provider, Model: name})
 	if err != nil {
 		return false, fmt.Errorf("changing model %s of %s: %w", name, provider, err)
 	}
@@ -219,8 +218,7 @@ func (s *AgentStore) RecordSpend(ctx context.Context, taskID uuid.UUID, u agents
 		if err != nil {
 			return fmt.Errorf("summing task %s's spend: %w", taskID, err)
 		}
-		out = agents.Spend{Spent: agents.USD(sum.Spent), Input: sum.InputTokens, Output: sum.OutputTokens,
-			Cap: agents.Lowest(usd(t.AgentCap), usd(t.ModelCap))}
+		out = agents.Spend{Spent: agents.USD(sum.Spent), Input: sum.InputTokens, Output: sum.OutputTokens, Cap: usd(t.Cap)}
 		if out.Cap == 0 || out.Spent < out.Cap {
 			return nil
 		}

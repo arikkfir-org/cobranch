@@ -55,15 +55,9 @@ func (s *Store) withAgents(m agents.Model) agents.Model {
 	return m
 }
 
-// capped is a with its model's cap, under the lock.
-func (s *Store) capped(a agents.Agent) agents.Agent {
-	a.ModelCap = s.models[modelKey{a.OrgID, a.Provider, a.Model}].Cap
-	return a
-}
-
-// spending is t with the most it may spend, under the lock.
+// spending is t with the most it may spend, its agent's cap, under the lock.
 func (s *Store) spending(t agents.Task) agents.Task {
-	t.Cap = s.capped(s.agents[t.Agent.ID]).EffectiveCap()
+	t.Cap = s.agents[t.Agent.ID].Cap
 	return t
 }
 
@@ -115,7 +109,7 @@ func (s *Store) PutModel(_ context.Context, actor, orgID uuid.UUID, provider, na
 	if in.Default {
 		s.undefault(orgID)
 	}
-	m.InputPrice, m.OutputPrice, m.Cap, m.Default, m.UpdatedAt = in.InputPrice, in.OutputPrice, in.Cap, in.Default, s.Now
+	m.InputPrice, m.OutputPrice, m.Default, m.UpdatedAt = in.InputPrice, in.OutputPrice, in.Default, s.Now
 	s.models[k] = m
 	s.Events = append(s.Events, "model.set "+provider+"/"+name+" by "+s.Names[actor])
 	return s.withAgents(m), !ok, nil

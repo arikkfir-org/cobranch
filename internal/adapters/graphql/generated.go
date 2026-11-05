@@ -58,12 +58,10 @@ type ComplexityRoot struct {
 		CreatedAt    func(childComplexity int) int
 		CreatedBy    func(childComplexity int) int
 		Description  func(childComplexity int) int
-		EffectiveCap func(childComplexity int) int
 		Grants       func(childComplexity int) int
 		ID           func(childComplexity int) int
 		Instructions func(childComplexity int) int
 		Model        func(childComplexity int) int
-		ModelCap     func(childComplexity int) int
 		Name         func(childComplexity int) int
 		Provider     func(childComplexity int) int
 		Secrets      func(childComplexity int) int
@@ -502,7 +500,6 @@ type ComplexityRoot struct {
 
 	Model struct {
 		Agents      func(childComplexity int) int
-		Cap         func(childComplexity int) int
 		CreatedAt   func(childComplexity int) int
 		CreatedBy   func(childComplexity int) int
 		Default     func(childComplexity int) int
@@ -1185,12 +1182,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Description(childComplexity), true
-	case "Agent.effectiveCap":
-		if e.ComplexityRoot.Agent.EffectiveCap == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Agent.EffectiveCap(childComplexity), true
 	case "Agent.grants":
 		if e.ComplexityRoot.Agent.Grants == nil {
 			break
@@ -1215,12 +1206,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Agent.Model(childComplexity), true
-	case "Agent.modelCap":
-		if e.ComplexityRoot.Agent.ModelCap == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Agent.ModelCap(childComplexity), true
 	case "Agent.name":
 		if e.ComplexityRoot.Agent.Name == nil {
 			break
@@ -3060,12 +3045,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Model.Agents(childComplexity), true
-	case "Model.cap":
-		if e.ComplexityRoot.Model.Cap == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Model.Cap(childComplexity), true
 	case "Model.createdAt":
 		if e.ComplexityRoot.Model.CreatedAt == nil {
 			break
@@ -5799,7 +5778,7 @@ type ModelProvider {
   version: Int!
 }
 
-"One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it, and the most a task on it may spend. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
+"One of an organization's models, of a provider it added, which its agents may run on: what the organization pays per million tokens it reads and writes, from which Cobranch prices each call of it. What a task may spend is its agent's to cap. Amounts are US dollars, as decimals with at most six digits after the point, such as 3.00."
 type Model {
   provider: String!
   "The model's name, as its provider gives it."
@@ -5808,8 +5787,6 @@ type Model {
   inputPrice: String!
   "What a million tokens it writes cost, such as 15.00."
   outputPrice: String!
-  "The most a task on it may spend, such as 8.00; null for none. An agent may set a lower cap of its own."
-  cap: String
   "Whether a new agent starts on it; the organization has at most one."
   default: Boolean!
   "The agents that run on it, by name."
@@ -5850,12 +5827,8 @@ type Agent {
   provider: String
   "The model it runs on, as its provider names it; null while it runs on none."
   model: String
-  "The most a task of it may spend, in US dollars such as 2.00, which caps it below its model's cap; null for none of its own."
+  "The most a task of it may spend, in US dollars such as 2.00; null for none."
   cap: String
-  "The most a task on its model may spend, in US dollars; null for none."
-  modelCap: String
-  "The most a task of it may spend, the lower of its own cap and its model's, in US dollars; null for none."
-  effectiveCap: String
   "The secrets its tasks receive, by the environment variables they go in."
   secrets: [AgentSecret!]!
 }
@@ -5930,7 +5903,7 @@ type Task {
   inputTokens: Int!
   "The tokens its model wrote so far."
   outputTokens: Int!
-  "The most it may spend, the lower of its agent's cap and its agent's model's, in US dollars; null for none. It fails once it reaches it."
+  "The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it."
   cap: String
   "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
   transcript(after: Int, first: Int): [TranscriptEntry!]!
@@ -6002,18 +5975,16 @@ input AgentPatch {
   name: String
   description: String
   instructions: String
-  "The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); its model's cap stays the most it may spend. Null for none of its own."
+  "The most a task of it may spend, in US dollars such as 2.00, at most 1000000 (BAD_USER_INPUT, agent.cap_invalid); null for none."
   cap: String
 }
 
-"What a model costs, the most a task on it may spend and whether it is the default; it replaces what the model had."
+"What a model costs and whether it is the default; it replaces what the model had."
 input ModelInput {
   "What a million tokens it reads cost, 0 to 10000, such as 3.00."
   inputPrice: String!
   "What a million tokens it writes cost, 0 to 10000, such as 15.00."
   outputPrice: String!
-  "The most a task on it may spend, 0.000001 to 1000000, such as 8.00; null for none. A model with a cap has a price."
-  cap: String
   "Whether a new agent starts on it; null for not."
   default: Boolean
 }
@@ -6065,7 +6036,7 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description, standing instructions or own cap; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
   "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
@@ -6077,11 +6048,11 @@ extend type Mutation {
   setModelProvider(organizationId: ID!, provider: String!, secretId: ID!, expectedVersion: Int): ModelProvider!
   "Removes a provider from the organization, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model_provider.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   removeModelProvider(organizationId: ID!, provider: String!, expectedVersion: Int): Boolean!
-  "Adds a model of a provider the organization added to its models, with what it costs and the most a task on it may spend, or changes one of them, and answers it; takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added is refused (BAD_USER_INPUT, model.provider_invalid), a price past 10000 (BAD_USER_INPUT, model.price_invalid), a cap past 1000000 (BAD_USER_INPUT, model.cap_invalid) and a cap of a model without prices (BAD_USER_INPUT, model.cap_unpriced). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
+  "Adds a model of a provider the organization added to its models, with what it costs, or changes one of them, and answers it; takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added is refused (BAD_USER_INPUT, model.provider_invalid), and a price past 10000 (BAD_USER_INPUT, model.price_invalid). expectedVersion 0 only adds it, and another only changes it at that version (CONFLICT, precondition.failed)."
   setModel(organizationId: ID!, provider: String!, model: String!, input: ModelInput!, expectedVersion: Int): Model!
   "Removes one of the organization's models, and answers true; takes org.manage. While agents run on it, it is refused (CONFLICT, model.in_use); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   removeModel(organizationId: ID!, provider: String!, model: String!, expectedVersion: Int): Boolean!
-  "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, the lower of its agent's and its model's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
+  "Records a call of the model of the task the request's task token works, as the model proxy of its pod reports it, and answers what the task spent so far; any other credential is refused (FORBIDDEN). Cobranch prices the call at the organization's prices for that model of its agent's provider, or for its agent's model when the organization has none for that one. A report that repeats a call's ID records nothing. The call that brings the task to its cap, its agent's, ends it Failed, saying so, and its token then acts no more; a task that has ended is refused (CONFLICT, task.ended)."
   recordTaskSpend(input: TaskUsageInput!): TaskSpend!
   "Assigns a task to one of the organization's agents, queued until the controller runs it; whatever it does is capped by the assigner's permissions as they are when it acts. Takes agents.assign, and repo.read on the repository it names. An agent assigns no tasks."
   assignTask(organizationId: ID!, input: TaskInput!): Task!
@@ -7936,10 +7907,6 @@ func (ec *executionContext) childFields_Agent(ctx context.Context, field graphql
 		return ec.fieldContext_Agent_model(ctx, field)
 	case "cap":
 		return ec.fieldContext_Agent_cap(ctx, field)
-	case "modelCap":
-		return ec.fieldContext_Agent_modelCap(ctx, field)
-	case "effectiveCap":
-		return ec.fieldContext_Agent_effectiveCap(ctx, field)
 	case "secrets":
 		return ec.fieldContext_Agent_secrets(ctx, field)
 	}
@@ -8814,8 +8781,6 @@ func (ec *executionContext) childFields_Model(ctx context.Context, field graphql
 		return ec.fieldContext_Model_inputPrice(ctx, field)
 	case "outputPrice":
 		return ec.fieldContext_Model_outputPrice(ctx, field)
-	case "cap":
-		return ec.fieldContext_Model_cap(ctx, field)
 	case "default":
 		return ec.fieldContext_Model_default(ctx, field)
 	case "agents":
@@ -12973,52 +12938,6 @@ func (ec *executionContext) _Agent_cap(ctx context.Context, field graphql.Collec
 	)
 }
 func (ec *executionContext) fieldContext_Agent_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
-}
-
-func (ec *executionContext) _Agent_modelCap(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Agent_modelCap(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ModelCap, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Agent_modelCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
-}
-
-func (ec *executionContext) _Agent_effectiveCap(ctx context.Context, field graphql.CollectedField, obj *Agent) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Agent_effectiveCap(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.EffectiveCap, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Agent_effectiveCap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Agent", field, false, false, "String")
 }
 
@@ -20346,29 +20265,6 @@ func (ec *executionContext) _Model_outputPrice(ctx context.Context, field graphq
 	)
 }
 func (ec *executionContext) fieldContext_Model_outputPrice(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
-}
-
-func (ec *executionContext) _Model_cap(ctx context.Context, field graphql.CollectedField, obj *Model) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Model_cap(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.Cap, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
-			return ec.marshalOString2ᚖstring(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Model_cap(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Model", field, false, false, "String")
 }
 
@@ -32775,7 +32671,7 @@ func (ec *executionContext) unmarshalInputModelInput(ctx context.Context, obj an
 		asMap[k] = v
 	}
 
-	fieldsInOrder := [...]string{"inputPrice", "outputPrice", "cap", "default"}
+	fieldsInOrder := [...]string{"inputPrice", "outputPrice", "default"}
 	for _, k := range fieldsInOrder {
 		v, ok := asMap[k]
 		if !ok {
@@ -32796,13 +32692,6 @@ func (ec *executionContext) unmarshalInputModelInput(ctx context.Context, obj an
 				return it, err
 			}
 			it.OutputPrice = data
-		case "cap":
-			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("cap"))
-			data, err := ec.unmarshalOString2ᚖstring(ctx, v)
-			if err != nil {
-				return it, err
-			}
-			it.Cap = data
 		case "default":
 			ctx := graphql.WithPathContext(ctx, graphql.NewPathWithField("default"))
 			data, err := ec.unmarshalOBoolean2ᚖbool(ctx, v)
@@ -33714,16 +33603,6 @@ func (ec *executionContext) _Agent(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "cap":
 			out.Values[i] = ec._Agent_cap(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
-			}
-		case "modelCap":
-			out.Values[i] = ec._Agent_modelCap(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
-				out.Invalids++
-			}
-		case "effectiveCap":
-			out.Values[i] = ec._Agent_effectiveCap(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -36527,11 +36406,6 @@ func (ec *executionContext) _Model(ctx context.Context, sel ast.SelectionSet, ob
 		case "outputPrice":
 			out.Values[i] = ec._Model_outputPrice(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				out.Invalids++
-			}
-		case "cap":
-			out.Values[i] = ec._Model_cap(ctx, field, obj)
-			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "default":

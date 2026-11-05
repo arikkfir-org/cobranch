@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 	"testing"
@@ -17,7 +16,7 @@ func wantModel(version int64, on ...string) func(*testing.T, *orgFixture, []byte
 	return func(t *testing.T, f *orgFixture, body []byte) {
 		t.Helper()
 		m := decode[Model](t, body)
-		if m.Provider != "anthropic" || m.Name != "a-model" || m.InputPrice != "3.00" || m.OutputPrice != "15.00" || m.Cap == nil || *m.Cap != "8.00" ||
+		if m.Provider != "anthropic" || m.Name != "a-model" || m.InputPrice != "3.00" || m.OutputPrice != "15.00" ||
 			m.Version != version || len(m.Agents) != len(on) || m.CreatedBy == nil || m.CreatedBy.Id != f.olivia.User.ID {
 			t.Errorf("model = %s", body)
 		}
@@ -32,7 +31,7 @@ func wantModel(version int64, on ...string) func(*testing.T, *orgFixture, []byte
 func TestModels(t *testing.T) {
 	const models = "/v1/orgs/acme/models"
 	aModel := fixed(models + "/anthropic/a-model")
-	priced := `{"inputPrice":"3.00","outputPrice":"15","cap":"8.00"}`
+	priced := `{"inputPrice":"3.00","outputPrice":"15"}`
 	runOrgCases(t, []orgCase{
 		{name: "list", viewer: maxim, method: "GET", path: onModel(t, fixed(models)), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
@@ -52,10 +51,10 @@ func TestModels(t *testing.T) {
 			headerFor: func(f *orgFixture) http.Header { f.withProvider(t); return held(maxim, aModel)(f) }},
 		{name: "get one not added", viewer: maxim, method: "GET", path: fixed(models + "/anthropic/b-model"), wantStatus: 404, wantCode: "model.not_found"},
 		{name: "add", viewer: olivia, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")), header: http.Header{"If-None-Match": {"*"}},
-			body: `{"inputPrice":"0.80","outputPrice":"4","cap":"0.000150","default":true}`, wantStatus: 201, wantTag: `"1-`,
+			body: `{"inputPrice":"0.80","outputPrice":"4.000150","default":true}`, wantStatus: 201, wantTag: `"1-`,
 			wantHeader: http.Header{"Location": {models + "/anthropic/b-model"}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if m := decode[Model](t, body); m.Name != "b-model" || m.InputPrice != "0.80" || m.OutputPrice != "4.00" || m.Cap == nil || *m.Cap != "0.00015" ||
+				if m := decode[Model](t, body); m.Name != "b-model" || m.InputPrice != "0.80" || m.OutputPrice != "4.00015" ||
 					!m.Default || m.Version != 1 {
 					t.Errorf("model = %s", body)
 				}
@@ -67,10 +66,8 @@ func TestModels(t *testing.T) {
 			body: priced, wantStatus: 400, wantCode: "model.provider_invalid"},
 		{name: "add with a price that isn't an amount", viewer: olivia, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")),
 			header: http.Header{"If-None-Match": {"*"}}, body: `{"inputPrice":"3,00","outputPrice":"15"}`, wantStatus: 400, wantCode: "model.price_invalid"},
-		{name: "add with a cap that isn't an amount", viewer: olivia, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")),
-			header: http.Header{"If-None-Match": {"*"}}, body: `{"inputPrice":"3","outputPrice":"15","cap":"-1"}`, wantStatus: 400, wantCode: "model.cap_invalid"},
-		{name: "add with a cap and no prices", viewer: olivia, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")),
-			header: http.Header{"If-None-Match": {"*"}}, body: `{"inputPrice":"0","outputPrice":"0","cap":"1"}`, wantStatus: 400, wantCode: "model.cap_unpriced"},
+		{name: "add with a price past the most", viewer: olivia, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")),
+			header: http.Header{"If-None-Match": {"*"}}, body: `{"inputPrice":"3","outputPrice":"10000.01"}`, wantStatus: 400, wantCode: "model.price_invalid"},
 		{name: "add as a Member", viewer: maxim, method: "PUT", path: onProvider(t, fixed(models+"/anthropic/b-model")), header: http.Header{"If-None-Match": {"*"}},
 			body: priced, wantStatus: 403, wantCode: "auth.forbidden"},
 		{name: "change at its version", viewer: olivia, method: "PUT", path: onProvider(t, aModel), header: matchHeader(`"1"`), body: priced,
@@ -85,13 +82,11 @@ func TestModels(t *testing.T) {
 	})
 }
 
-// wantCaps checks that the answer is an agent with its own cap, its model's and the lower of the two, nil for none.
-func wantCaps(own, ofModel, effective *string) func(*testing.T, *orgFixture, []byte) {
+// wantCap checks that the answer is an agent with the cap, nil for none.
+func wantCap(want *string) func(*testing.T, *orgFixture, []byte) {
 	return func(t *testing.T, _ *orgFixture, body []byte) {
 		t.Helper()
-		a := decode[Agent](t, body)
-		same := func(got, want *string) bool { return (got == nil) == (want == nil) && (got == nil || *got == *want) }
-		if !same(a.Cap, own) || !same(a.ModelCap, ofModel) || !same(a.EffectiveCap, effective) {
+		if a := decode[Agent](t, body); (a.Cap == nil) != (want == nil) || (a.Cap != nil && *a.Cap != *want) {
 			t.Errorf("agent = %s", body)
 		}
 	}
@@ -101,13 +96,16 @@ func TestAgentCap(t *testing.T) {
 	patch := http.Header{"If-Match": {"*"}, "Content-Type": {"application/merge-patch+json"}}
 	two, eight := new("2.00"), new("8.00")
 	runOrgCases(t, []orgCase{
-		{name: "get on a model with a cap", viewer: maxim, method: "GET", path: onModel(t, scoutPath), wantStatus: 200, check: wantCaps(nil, eight, eight)},
-		{name: "set a lower one", viewer: olivia, method: "PATCH", path: onModel(t, scoutPath), header: patch, body: `{"cap":"2"}`, wantStatus: 200,
-			check: wantCaps(two, eight, two)},
+		{name: "get none", viewer: maxim, method: "GET", path: scoutPath, wantStatus: 200, check: wantCap(nil)},
+		{name: "get one", viewer: maxim, method: "GET", path: onModel(t, scoutPath), wantStatus: 200, check: wantCap(eight)},
+		{name: "change it", viewer: olivia, method: "PATCH", path: onModel(t, scoutPath), header: patch, body: `{"cap":"2"}`, wantStatus: 200,
+			check: wantCap(two)},
 		{name: "set one without a model", viewer: olivia, method: "PATCH", path: scoutPath, header: patch, body: `{"cap":"2"}`, wantStatus: 200,
-			check: wantCaps(two, nil, two)},
+			check: wantCap(two)},
+		{name: "leave it", viewer: olivia, method: "PATCH", path: onModel(t, scoutPath), header: patch, body: `{"name":"Scout"}`, wantStatus: 200,
+			check: wantCap(eight)},
 		{name: "clear it", viewer: olivia, method: "PATCH", path: onModel(t, scoutPath), header: patch, body: `{"cap":null}`, wantStatus: 200,
-			check: wantCaps(nil, eight, eight)},
+			check: wantCap(nil)},
 		{name: "one that isn't an amount", viewer: olivia, method: "PATCH", path: scoutPath, header: patch, body: `{"cap":"two"}`, wantStatus: 400,
 			wantCode: "agent.cap_invalid"},
 		{name: "one past the most", viewer: olivia, method: "PATCH", path: scoutPath, header: patch, body: `{"cap":"1000000.000001"}`, wantStatus: 400,
@@ -115,13 +113,12 @@ func TestAgentCap(t *testing.T) {
 	})
 }
 
-// spending is a viewer under a task token of Scout's, on a-model, for Acme's running task number.
+// spending is a viewer under a task token of Scout's, on a-model with a cap of $8 a task, for Acme's running task
+// number.
 func spending(t *testing.T, number int64) func(f *orgFixture) *auth.Authenticated {
 	return func(f *orgFixture) *auth.Authenticated {
 		f.withProvider(t)
-		if _, err := f.agents.SetModel(context.Background(), f.olivia.User, f.acme.ID, f.scout.ID, "anthropic", "a-model", agents.AnyVersion); err != nil {
-			t.Fatal(err)
-		}
+		f.withScoutOnModel(t)
 		f.agentStore.SetState(f.acme.ID, number, agents.TaskRunning)
 		return working(number)(f)
 	}

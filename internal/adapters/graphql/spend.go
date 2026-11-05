@@ -28,7 +28,7 @@ func parseUSD(ctx context.Context, s, code string) (agents.USD, error) {
 
 // modelOf is m as the API shows it; SetModel's model parameter shadows a function named model.
 func modelOf(m agents.Model) *Model {
-	out := &Model{Provider: m.Provider, Name: m.Name, InputPrice: m.InputPrice.String(), OutputPrice: m.OutputPrice.String(), Cap: optionalUSD(m.Cap),
+	out := &Model{Provider: m.Provider, Name: m.Name, InputPrice: m.InputPrice.String(), OutputPrice: m.OutputPrice.String(),
 		Default: m.Default, Agents: make([]*CommitPrincipal, 0, len(m.Agents)), CreatedBy: agentPrincipal(m.CreatedBy), CreatedAt: m.CreatedAt.UTC(),
 		UpdatedAt: m.UpdatedAt.UTC(), Version: int(m.Version)}
 	for _, a := range m.Agents {
@@ -44,12 +44,7 @@ func modelInput(ctx context.Context, in ModelInput) (agents.ModelInput, error) {
 	if out.InputPrice, err = parseUSD(ctx, in.InputPrice, "model.price_invalid"); err != nil {
 		return out, err
 	}
-	if out.OutputPrice, err = parseUSD(ctx, in.OutputPrice, "model.price_invalid"); err != nil {
-		return out, err
-	}
-	if in.Cap != nil {
-		out.Cap, err = parseUSD(ctx, *in.Cap, "model.cap_invalid")
-	}
+	out.OutputPrice, err = parseUSD(ctx, in.OutputPrice, "model.price_invalid")
 	return out, err
 }
 

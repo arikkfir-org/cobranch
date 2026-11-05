@@ -12,19 +12,17 @@ import (
 )
 
 const agent = `-- name: Agent :one
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name, m.cap AS model_cap
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.principal_id = $1 AND a.org_id = $2
 `
 
 type AgentRow struct {
 	Agent       Agent
 	CreatorName *string
-	ModelCap    *int64
 }
 
-// Agent finds one of an organization's agents, with the display name of its creator and its model's cap.
+// Agent finds one of an organization's agents, with the display name of its creator.
 func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (AgentRow, error) {
 	row := q.db.QueryRow(ctx, agent, iD, orgID)
 	var i AgentRow
@@ -45,7 +43,6 @@ func (q *Queries) Agent(ctx context.Context, iD uuid.UUID, orgID uuid.UUID) (Age
 		&i.Agent.Purpose,
 		&i.Agent.Cap,
 		&i.CreatorName,
-		&i.ModelCap,
 	)
 	return i, err
 }
@@ -94,19 +91,17 @@ func (q *Queries) AgentGrants(ctx context.Context, ids []uuid.UUID) ([]AgentGran
 }
 
 const agents = `-- name: Agents :many
-SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name, m.cap AS model_cap
+SELECT a.principal_id, a.org_id, a.name, a.description, a.instructions, a.built_in, a.created_by, a.created_at, a.updated_at, a.version, a.provider, a.model, a.secrets, a.purpose, a.cap, c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.org_id = $1 ORDER BY lower(a.name), a.principal_id
 `
 
 type AgentsRow struct {
 	Agent       Agent
 	CreatorName *string
-	ModelCap    *int64
 }
 
-// Agents lists an organization's agents by name, with the display names of their creators and their models' caps.
+// Agents lists an organization's agents by name, with the display names of their creators.
 func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, error) {
 	rows, err := q.db.Query(ctx, agents, orgID)
 	if err != nil {
@@ -133,7 +128,6 @@ func (q *Queries) Agents(ctx context.Context, orgID uuid.UUID) ([]AgentsRow, err
 			&i.Agent.Purpose,
 			&i.Agent.Cap,
 			&i.CreatorName,
-			&i.ModelCap,
 		); err != nil {
 			return nil, err
 		}
@@ -356,9 +350,8 @@ func (q *Queries) RepositorySlug(ctx context.Context, iD uuid.UUID, orgID uuid.U
 const task = `-- name: Task :one
 SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
-    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     CROSS JOIN LATERAL (
@@ -383,8 +376,7 @@ type TaskRow struct {
 }
 
 // Task finds one of an organization's tasks by its number, with the names of its agent, assigner, canceller,
-// repository and branch, what it spent and the most it may spend: the lower of its agent's cap and its model's, or 0
-// for none.
+// repository and branch, what it spent and the most it may spend: its agent's cap, or 0 for none.
 func (q *Queries) Task(ctx context.Context, orgID uuid.UUID, number int64) (TaskRow, error) {
 	row := q.db.QueryRow(ctx, task, orgID, number)
 	var i TaskRow
@@ -444,9 +436,8 @@ func (q *Queries) TaskBranch(ctx context.Context, repoID uuid.UUID, iD *uuid.UUI
 const tasks = `-- name: Tasks :many
 SELECT t.id, t.org_id, t.number, t.agent_id, t.kind, t.assigned_by, t.title, t.instructions, t.repo_id, t.branch_id, t.thread_id, t.state, t.reason, t.summary, t.cancelled_by, t.created_at, t.started_at, t.ended_at, t.version, t.issue_id, t.sha, ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
-    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     CROSS JOIN LATERAL (
@@ -491,7 +482,7 @@ type TasksRow struct {
 // Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 // agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
 // the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, what each
-// spent and the most it may spend: the lower of its agent's cap and its model's, or 0 for none.
+// spent and the most it may spend: its agent's cap, or 0 for none.
 func (q *Queries) Tasks(ctx context.Context, arg TasksParams) ([]TasksRow, error) {
 	rows, err := q.db.Query(ctx, tasks,
 		arg.OrgID,

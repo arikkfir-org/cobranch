@@ -7,18 +7,16 @@ INSERT INTO principals (id, kind, display_name, org_id, created_by) VALUES (@id,
 INSERT INTO agents (principal_id, org_id, name, description, instructions, built_in, purpose, created_by)
 VALUES (@id, @org_id, @name, @description, @instructions, @built_in, sqlc.narg(purpose), sqlc.narg(created_by));
 
--- Agents lists an organization's agents by name, with the display names of their creators and their models' caps.
+-- Agents lists an organization's agents by name, with the display names of their creators.
 -- name: Agents :many
-SELECT sqlc.embed(a), c.display_name AS creator_name, m.cap AS model_cap
+SELECT sqlc.embed(a), c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.org_id = @org_id ORDER BY lower(a.name), a.principal_id;
 
--- Agent finds one of an organization's agents, with the display name of its creator and its model's cap.
+-- Agent finds one of an organization's agents, with the display name of its creator.
 -- name: Agent :one
-SELECT sqlc.embed(a), c.display_name AS creator_name, m.cap AS model_cap
+SELECT sqlc.embed(a), c.display_name AS creator_name
 FROM agents a LEFT JOIN principals c ON c.id = a.created_by
-    LEFT JOIN models m ON m.org_id = a.org_id AND m.provider = a.provider AND m.model = a.model
 WHERE a.principal_id = @id AND a.org_id = @org_id;
 
 -- AgentGrants lists the roles the agents ids name hold at their organization and on its repositories, those at the
@@ -78,13 +76,12 @@ VALUES (@id, @org_id, @number, @agent_id, @kind, sqlc.narg(assigned_by), @title,
 -- Tasks lists at most lim of an organization's tasks, newest first, numbered below before when it isn't null, of the
 -- agent, the states and the repository when they're given, naming no repository or one of readable, and of none of
 -- the kinds in hidden, with the names of their agents, assigners, cancellers, repositories and branches, what each
--- spent and the most it may spend: the lower of its agent's cap and its model's, or 0 for none.
+-- spent and the most it may spend: its agent's cap, or 0 for none.
 -- name: Tasks :many
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
-    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     CROSS JOIN LATERAL (
@@ -102,14 +99,12 @@ WHERE t.org_id = @org_id
 ORDER BY t.number DESC LIMIT @lim;
 
 -- Task finds one of an organization's tasks by its number, with the names of its agent, assigner, canceller,
--- repository and branch, what it spent and the most it may spend: the lower of its agent's cap and its model's, or 0
--- for none.
+-- repository and branch, what it spent and the most it may spend: its agent's cap, or 0 for none.
 -- name: Task :one
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, sp.spent, sp.input_tokens, sp.output_tokens,
-    coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
+    coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id
-    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     CROSS JOIN LATERAL (

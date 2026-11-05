@@ -133,7 +133,7 @@ func (s *Store) changeAgent(actor, orgID, id uuid.UUID, version int64, event str
 	a.Version++
 	s.agents[id] = a
 	s.Events = append(s.Events, event+" "+a.Name+" by "+s.Names[actor])
-	return s.capped(a), nil
+	return a, nil
 }
 
 // SetModel puts one of the organization's agents on a model of a provider it added, or on none.

@@ -3,9 +3,8 @@
 -- name: TaskByID :one
 SELECT sqlc.embed(t), ag.name AS agent_name, asg.display_name AS assigner_name, cn.display_name AS canceller_name,
     rp.slug AS repo_slug, b.name AS branch_name, o.slug AS org_slug, o.issue_key, ag.instructions AS agent_instructions,
-    i.number AS issue_number, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(least(ag.cap, m.cap), 0)::bigint AS cap
+    i.number AS issue_number, sp.spent, sp.input_tokens, sp.output_tokens, coalesce(ag.cap, 0)::bigint AS cap
 FROM agent_tasks t JOIN agents ag ON ag.principal_id = t.agent_id JOIN organizations o ON o.id = t.org_id
-    LEFT JOIN models m ON m.org_id = ag.org_id AND m.provider = ag.provider AND m.model = ag.model
     LEFT JOIN principals asg ON asg.id = t.assigned_by LEFT JOIN principals cn ON cn.id = t.cancelled_by
     LEFT JOIN repositories rp ON rp.id = t.repo_id LEFT JOIN branches b ON b.id = t.branch_id
     LEFT JOIN issues i ON i.id = t.issue_id

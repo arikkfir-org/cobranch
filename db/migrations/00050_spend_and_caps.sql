@@ -1,20 +1,19 @@
--- Spend and caps: the models an organization's agents run on, each with what the organization pays for it and the most a
--- task on it may spend; an agent's own lower cap; and what each task spent, call by call, which the model proxy of the
--- task's pod reports (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Spend and
--- caps"). Amounts are millionths of a US dollar: 1000000 is $1.
+-- Spend and caps: the models an organization's agents run on, each with what the organization pays for it; the most a
+-- task of an agent may spend; and what each task spent, call by call, which the model proxy of the task's pod reports
+-- (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/agents.md, "Spend and caps"). Amounts are
+-- millionths of a US dollar: 1000000 is $1.
 -- +goose Up
 
 -- A model of a provider an organization added, which its agents may run on: what the organization pays per million
--- tokens the model reads and writes, from which Cobranch prices each call of it, and the most one task on it may spend,
--- or none. One of the organization's models is the default a new agent starts on. A model an agent runs on can't be
--- removed. Each change bumps its version, which is its ETag.
+-- tokens the model reads and writes, from which Cobranch prices each call of it. One of the organization's models is the
+-- default a new agent starts on. A model an agent runs on can't be removed. Each change bumps its version, which is its
+-- ETag.
 CREATE TABLE models (
     org_id uuid NOT NULL,
     provider text NOT NULL,
     model text NOT NULL CHECK (char_length(model) BETWEEN 1 AND 200),
     input_price bigint NOT NULL DEFAULT 0 CHECK (input_price BETWEEN 0 AND 10000000000),
     output_price bigint NOT NULL DEFAULT 0 CHECK (output_price BETWEEN 0 AND 10000000000),
-    cap bigint CHECK (cap BETWEEN 1 AND 1000000000000),
     is_default boolean NOT NULL DEFAULT false,
     created_by uuid REFERENCES principals (id) ON DELETE SET NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -28,13 +27,11 @@ CREATE INDEX models_created_by ON models (created_by) WHERE created_by IS NOT NU
 CREATE TRIGGER bump_version BEFORE UPDATE ON models FOR EACH ROW EXECUTE FUNCTION bump_version();
 CREATE TRIGGER audit AFTER INSERT OR UPDATE OR DELETE ON models FOR EACH ROW EXECUTE FUNCTION audit();
 
--- Every model an agent runs on already becomes one of its organization's models, without prices or a cap, as it ran
--- until now.
+-- Every model an agent runs on already becomes one of its organization's models, without prices, as it ran until now.
 INSERT INTO models (org_id, provider, model)
 SELECT DISTINCT org_id, provider, model FROM agents WHERE provider IS NOT NULL;
 
--- An agent runs only on one of its organization's models, and may spend less on a task than its model allows: its own
--- cap, or none.
+-- An agent runs only on one of its organization's models, and has a cap, the most one of its tasks may spend, or none.
 ALTER TABLE agents
     ADD COLUMN cap bigint CHECK (cap BETWEEN 1 AND 1000000000000),
     ADD CONSTRAINT agents_catalog_model FOREIGN KEY (org_id, provider, model) REFERENCES models (org_id, provider, model);

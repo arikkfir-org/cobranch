@@ -29,7 +29,7 @@ func parseUSD(s, field, code string) (agents.USD, error) {
 }
 
 func model(m agents.Model) Model {
-	out := Model{Provider: m.Provider, Name: m.Name, InputPrice: usd(m.InputPrice), OutputPrice: usd(m.OutputPrice), Cap: optionalUSD(m.Cap),
+	out := Model{Provider: m.Provider, Name: m.Name, InputPrice: usd(m.InputPrice), OutputPrice: usd(m.OutputPrice),
 		Default: m.Default, Agents: make([]Principal, 0, len(m.Agents)), CreatedBy: agentPrincipal(m.CreatedBy), CreatedAt: m.CreatedAt.UTC(),
 		UpdatedAt: m.UpdatedAt.UTC(), Version: m.Version}
 	for _, a := range m.Agents {
@@ -57,12 +57,7 @@ func modelInput(b ModelInput) (agents.ModelInput, error) {
 	if in.InputPrice, err = parseUSD(b.InputPrice, "input price", "model.price_invalid"); err != nil {
 		return in, err
 	}
-	if in.OutputPrice, err = parseUSD(b.OutputPrice, "output price", "model.price_invalid"); err != nil {
-		return in, err
-	}
-	if b.Cap != nil {
-		in.Cap, err = parseUSD(*b.Cap, "cap", "model.cap_invalid")
-	}
+	in.OutputPrice, err = parseUSD(b.OutputPrice, "output price", "model.price_invalid")
 	return in, err
 }
 

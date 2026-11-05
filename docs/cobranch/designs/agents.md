@@ -152,8 +152,8 @@ Google and xAI are added the same way. Model names are the provider’s; Cobranc
   Cobranch never checks a name against the provider, and the Console suggests none, which would date: a new model works
   the day it ships.
 - **The organization's models** (**Proposed**, [ENG-257](https://linear.app/arikkfir/issue/ENG-257)) are rows of
-  `models`: a provider's model, its prices per million tokens read and written, the most a task on it may spend, and
-  whether it is the model new agents start on. `org.manage` adds, changes and removes one; one an agent runs on stays
+  `models`: a provider's model, its prices per million tokens read and written, and whether it is the model new agents
+  start on. `org.manage` adds, changes and removes one; one an agent runs on stays
   until no agent does. The agents of an organization when it arrived kept their models, added unpriced, so nothing
   stopped; an admin prices them. See [Spend and caps](#spend-and-caps).
 - **The agent must read the key.** The controller gives a task its provider's key only if the agent holds `secrets.read`
@@ -362,17 +362,18 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
 - **Cobranch prices the call.** The report carries tokens, never dollars: the REST API prices it at the organization's
   prices for that model, or its agent's model's, in micro-dollars, and adds it to the task once, however often the
   report repeats. Amounts travel as decimal strings in US dollars (`"8.00"`).
-- **The cap is the lower of two.** A model's cap is the most a task on it may spend; an agent may set one of its own,
-  and the lower of the two holds, so an agent's only ever tightens its model's; an unset or zero cap is none. The call
-  that brings a task's spend to its cap fails the task, Failed with “It spent $1.01, reaching its cap of $1.00 a task.”,
+- **The cap is the agent's** (**Agreed**, 2026-11-05): each agent's settings carry the most one of its tasks may spend,
+  since two agents on one model may deserve different limits; models carry prices only, and an unset or zero cap is
+  none. A task's cap is its agent's as it now stands, so raising it lets a task that ran out go further next time. The
+  call that brings a task's spend to its cap fails the task, Failed with “It spent $1.01, reaching its cap of $1.00 a task.”,
   in its transcript and an event in its agent's name, and the proxy refuses every turn after.
 - **At most one turn over.** A turn's price is known only once it is answered, so the turn that crosses the cap still
   answers. A report that fails is kept and sent again before the next turn, which waits for it; a turn never starts
   while the last one is unreported.
 - **Tasks live on their agent's page** (**Agreed**, 2026-11-04): a task is work given to an agent, explicitly or by
   being asked, so the agent's page shows what it is working on, its queue and its history, each task with what it spent
-  against its cap; the Agents page gains Activity and Quotas tabs, and the old Tasks page gives way, its addresses
-  opening the task on its agent's page.
+  against its cap, and the agent's facts show what it spent this month; the Agents page gains Activity and Quotas tabs,
+  and the old Tasks page gives way, its addresses opening the task on its agent's page.
 
 ## Agents act as principals
 
@@ -532,8 +533,8 @@ land.
 | A task's first thread in its branch's or issue's chat becomes its thread, and its messages link the task | A restarted pod finds the thread it started; readers see which task spoke | Proposed |
 | Mentions, agents waking on chat messages by themselves, and agents' files in the object store come later | Keeps this slice to its issue | Proposed |
 | A task is work given to an agent, and shows on its agent's page, with what it spent | The owner's call, 2026-11-04 | Agreed |
-| The organization keeps a catalog of models with prices and a cap per task; an agent runs only on one of them | Prices and caps need a place; one default for new agents | Proposed |
-| The model's cap is the ceiling; an agent may set a lower one | The owner's call, 2026-11-04 | Agreed |
+| The organization keeps a catalog of models with their prices; an agent runs only on one of them | Prices need a place; one default for new agents | Proposed |
+| The cap lives on the agent alone, not on its model | Two agents on one model may deserve different limits; the owner's call, 2026-11-05, over a model's cap as a ceiling | Agreed |
 | The model proxy meters each turn and reports tokens; Cobranch prices them | The proxy alone sees every turn; prices stay on the server | Proposed |
 | Money is integer micro-dollars, sent as decimal strings | No floating point; exact sums | Proposed |
 

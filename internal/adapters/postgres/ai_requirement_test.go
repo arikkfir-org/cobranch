@@ -174,7 +174,8 @@ func TestAIRequirementStatus(t *testing.T) {
 	requiresAI(t, f, f.website.ID)
 	exec(context.Background(), t, f.pool, "INSERT INTO model_providers (org_id, provider) VALUES ($1, 'acme-models')", f.acme.ID)
 	exec(context.Background(), t, f.pool, "INSERT INTO models (org_id, provider, model) VALUES ($1, 'acme-models', 'review-1')", f.acme.ID)
-	exec(context.Background(), t, f.pool, "UPDATE models SET input_price = 3000000, cap = 250000 WHERE org_id = $1", f.acme.ID)
+	exec(context.Background(), t, f.pool, "UPDATE models SET input_price = 3000000 WHERE org_id = $1", f.acme.ID)
+	exec(context.Background(), t, f.pool, "UPDATE agents SET cap = 250000 WHERE principal_id = $1", s.reviewer)
 	shaD, failure := strings.Repeat("d", 40), "The model's provider refused the credentials."
 	lost, capped := "Its pod was lost.", "It spent $0.30, reaching its cap of $0.25 a task."
 	steps := []struct {
