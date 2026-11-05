@@ -19,6 +19,10 @@ const sectionHeader = (title, description, action) => h("header", { class: "sect
 const whoAvatar = (a) => a.kind === "user" || a.kind === "agent" ? avatar(a.displayName, a.kind === "agent")
   : machineAvatar(a.displayName, 20, a.kind === "api_key" ? "key-round" : "cog");
 
+// grantsOf are the roles that reach the repository for a's principal. A rest-server of the release before, which a
+// rollout may still answer from, says only the roles held on the repository, and not since when.
+const grantsOf = (a) => a.grants || a.roles.map((role) => ({ role, through: "repository", since: null }));
+
 // showAccess lists every role that reaches the repository, a row each: who holds it, how (granted here, or a role at
 // the organization, which reaches every repository of it) and since when. A viewer who manages the organization's
 // grants grants roles here, and revokes those granted here, but their own; the organization's roles change on its
@@ -32,14 +36,14 @@ async function showAccess(org, repo, path, manage, fail) {
     h("td", {}, h("span", { class: "cell-person" }, whoAvatar(a), a.displayName)),
     h("td", {}, g.role.name),
     h("td", { class: g.through === "repository" ? null : "cell-muted" }, through(g)),
-    h("td", { class: "cell-muted", title: new Date(g.since).toLocaleString() }, since(g.since)),
+    h("td", { class: "cell-muted", title: g.since ? new Date(g.since).toLocaleString() : null }, g.since ? since(g.since) : ""),
     h("td", { class: "cell-actions" }, manage && g.through === "repository" && a.principalId !== me.id ? revoke(a, g) : null));
   const grant = manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => grantRole(org, path) }, icon("plus"), "Grant role") : null;
   return [
     sectionHeader("Access", "Who holds this repository's roles: granted here, or through a role at " + org.name + ", which changes on its Members page.", grant),
     h("div", { class: "card" }, h("table", { class: "table access-table" },
       h("thead", {}, h("tr", {}, h("th", {}, "Who"), h("th", {}, "Role"), h("th", {}, "Through"), h("th", {}, "Since"), h("th", { "aria-label": "Actions" }))),
-      h("tbody", {}, access.flatMap((a) => a.grants.map((g) => row(a, g)))))),
+      h("tbody", {}, access.flatMap((a) => grantsOf(a).map((g) => row(a, g)))))),
   ];
 }
 

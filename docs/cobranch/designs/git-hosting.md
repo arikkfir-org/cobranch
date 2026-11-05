@@ -95,7 +95,7 @@ principal reads, in one query too.
 - **Repository grants** give a built-in repository role (Reader, Developer, Maintainer, Automation) or one of the
   organization's custom roles, whose repository permissions apply there. Granting takes `org.grants.manage` and every
   permission of the role ([grants](sign-in-and-organizations.md#roles-and-grants)); members and the organization's API
-  keys receive them.
+  keys and agents receive them.
 - **Visibility is a label** the API infers from grants: Private, or Internal once a user besides the creator and the
   Owners holds a grant that reaches it. Public needs grants to Anonymous, which come later with the settings that refuse
   them.
@@ -248,7 +248,7 @@ may take.
   `repos.create`.
 - **A repository's page** shows its clone URL with how to make a personal token, its branches, and the default branch's
   history: first-parent, from PostgreSQL, a page at a time, until [code browsing](code-browsing.md#history) follows
-  every parent. Its **Access** page lists and changes its grants; its **Settings** page renames it.
+  every parent. Its **Settings** page renames it (General), lists every role that reaches it, granted on it or at the organization, and changes its grants (Access), and keeps its secrets (Secrets).
 - **A commit's page** shows its message, author and committer with the principals behind them, its parents, and the push
   that first brought it, with its pusher and the branches it moved.
 - **As soon as the push returns.** The push's transaction committed before Git returned, so the next page load shows it;
