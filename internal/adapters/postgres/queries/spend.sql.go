@@ -14,7 +14,7 @@ import (
 
 const agentSpend = `-- name: AgentSpend :many
 WITH queued AS (
-    SELECT t.agent_id, t.number, t.title, t.state,
+    SELECT t.agent_id, t.number, t.title, t.state, t.cap_reached,
         (SELECT coalesce(sum(s.cost), 0) FROM task_spend s WHERE s.task_id = t.id)::bigint AS spent,
         ((t.repo_id IS NULL OR t.repo_id = ANY ($2::uuid[])) AND NOT (t.kind = ANY ($3::text[])))::boolean AS shown
     FROM agent_tasks t
@@ -31,7 +31,7 @@ WITH queued AS (
 )
 SELECT ag.principal_id, ag.name, ag.provider, ag.model, coalesce(ag.cap, 0)::bigint AS cap,
     count(q.number)::bigint AS tasks,
-    count(q.number) FILTER (WHERE q.state = 'failed' AND q.spent >= ag.cap)::bigint AS failed_on_cap,
+    count(q.number) FILTER (WHERE q.cap_reached)::bigint AS failed_on_cap,
     count(q.number) FILTER (WHERE q.state IN ('queued', 'running', 'waiting'))::bigint AS active,
     coalesce(max(c.spent), 0)::bigint AS spent,
     coalesce(max(cl.number), 0)::bigint AS costliest_number, coalesce(max(cl.title), '')::text AS costliest_title,
@@ -71,8 +71,8 @@ type AgentSpendRow struct {
 // AgentSpend answers each of an organization's agents, by name, with its model and cap and what it spent in
 // [since, until): its tasks queued then, of every repository and kind, counted by how they stand, what its calls then
 // cost, and the costliest of those tasks that names no repository or one of readable, and is of none of the kinds in
-// hidden, with what it spent in all, number 0 for none. A task failed on its cap when it failed having spent its
-// agent's cap.
+// hidden, with what it spent in all, number 0 for none. A task failed on its cap when it reached its agent's cap then,
+// whatever the cap is now.
 func (q *Queries) AgentSpend(ctx context.Context, arg AgentSpendParams) ([]AgentSpendRow, error) {
 	rows, err := q.db.Query(ctx, agentSpend,
 		arg.OrgID,
@@ -193,6 +193,16 @@ func (q *Queries) LockSpendingTask(ctx context.Context, id uuid.UUID) (LockSpend
 		&i.OutputPrice,
 	)
 	return i, err
+}
+
+const markCapReached = `-- name: MarkCapReached :exec
+UPDATE agent_tasks SET cap_reached = true WHERE id = $1
+`
+
+// MarkCapReached records that a task failed on reaching its agent's cap.
+func (q *Queries) MarkCapReached(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markCapReached, id)
+	return err
 }
 
 const modelPrices = `-- name: ModelPrices :one

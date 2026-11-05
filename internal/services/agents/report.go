@@ -62,8 +62,8 @@ type AgentSpend struct {
 	Provider string
 	Model    string
 	Cap      USD
-	// Tasks counts its tasks queued in the span, and FailedOnCap and Active those of them that failed having spent its
-	// cap, and that are queued, running or waiting.
+	// Tasks counts its tasks queued in the span, and FailedOnCap and Active those of them that failed on reaching its
+	// cap then, whatever it is now, and that are queued, running or waiting.
 	Tasks       int64
 	FailedOnCap int64
 	Active      int64

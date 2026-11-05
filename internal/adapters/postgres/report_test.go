@@ -36,11 +36,22 @@ func spendTasks(t *testing.T, f *taskPodFixture) (around, again, later agents.Ta
 	return around, again, later, f.created(t, "Finder")
 }
 
-func TestSpendStore(t *testing.T) {
-	t.Parallel()
-	f := newTaskPodFixture(t)
-	ctx := context.Background()
-	around, again, later, finder := spendTasks(t, f)
+// spendStep is a report TestSpendStore asks for: its span, the repositories the viewer reads and the kinds hidden from
+// them, whether the calls and the task of moveBack move back and Scout's cap is raised to $5.00 first, and what Scout
+// and the models should have spent.
+type spendStep struct {
+	name         string
+	since, until time.Time
+	readable     []uuid.UUID
+	hidden       []string
+	moved        bool
+	raised       bool
+	wantScout    agents.AgentSpend
+	wantModels   []agents.ModelSpend
+}
+
+// spendSteps are TestSpendStore's steps over spendTasks' tasks, in order.
+func spendSteps(f *taskPodFixture, around, again, later agents.Task) []spendStep {
 	now := time.Now()
 	hour, earlier := now.Add(-time.Hour), now.AddDate(0, 0, -40)
 	scout := agents.AgentSpend{Agent: agents.Principal{ID: f.scout.ID, DisplayName: "Scout"}, Provider: "anthropic", Model: "test-model", Cap: 1_000_000,
@@ -49,15 +60,11 @@ func TestSpendStore(t *testing.T) {
 	unread.Costliest, hidden.Costliest = &agents.TaskCost{Number: around.Number, Title: "Look around", Spent: 600_000}, nil
 	models := []agents.ModelSpend{{Provider: "anthropic", Model: "other-model", Tasks: 1, Output: 20_000, Spent: 300_000},
 		{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}
-	steps := []struct {
-		name         string
-		since, until time.Time
-		readable     []uuid.UUID
-		hidden       []string
-		moved        bool
-		wantScout    agents.AgentSpend
-		wantModels   []agents.ModelSpend
-	}{
+	stayed := agents.AgentSpend{Agent: scout.Agent, Provider: "anthropic", Model: "test-model", Cap: 1_000_000, Tasks: 2, FailedOnCap: 1, Active: 1,
+		Spent: 1_500_000, Costliest: scout.Costliest}
+	raised := stayed
+	raised.Cap = 5_000_000
+	return []spendStep{
 		{name: "every task the viewer reads", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, wantScout: scout, wantModels: models},
 		{name: "the costliest on a repository the viewer doesn't read isn't named", since: hour, until: now.Add(time.Hour), wantScout: unread, wantModels: models},
 		{name: "nor one of a hidden kind", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, hidden: []string{agents.KindAssigned},
@@ -69,14 +76,27 @@ func TestSpendStore(t *testing.T) {
 			wantScout: agents.AgentSpend{Agent: scout.Agent, Provider: "anthropic", Model: "test-model", Cap: 1_000_000, Tasks: 1, Active: 1, Spent: 300_000,
 				Costliest: &agents.TaskCost{Number: later.Number, Title: "Look later"}},
 			wantModels: []agents.ModelSpend{{Provider: "anthropic", Model: "other-model", Tasks: 1, Output: 20_000, Spent: 300_000}, {Provider: "anthropic", Model: "test-model"}}},
-		{name: "and no longer here", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, moved: true,
-			wantScout: agents.AgentSpend{Agent: scout.Agent, Provider: "anthropic", Model: "test-model", Cap: 1_000_000, Tasks: 2, FailedOnCap: 1, Active: 1,
-				Spent: 1_500_000, Costliest: scout.Costliest},
+		{name: "and no longer here", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID}, moved: true, wantScout: stayed,
+			wantModels: []agents.ModelSpend{{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}},
+		{name: "a raised cap still counts the task that reached the old one", since: hour, until: now.Add(time.Hour), readable: []uuid.UUID{f.website.ID},
+			raised: true, wantScout: raised,
 			wantModels: []agents.ModelSpend{{Provider: "anthropic", Model: "test-model", Tasks: 2, Input: 500_000, Spent: 1_500_000}}},
 	}
-	for _, s := range steps {
+}
+
+func TestSpendStore(t *testing.T) {
+	t.Parallel()
+	f := newTaskPodFixture(t)
+	ctx := context.Background()
+	around, again, later, finder := spendTasks(t, f)
+	for _, s := range spendSteps(f, around, again, later) {
 		if s.moved {
 			moveBack(t, f, around.ID, later.ID)
+		}
+		if s.raised {
+			if _, err := f.pool.Exec(ctx, "UPDATE agents SET cap = 5000000 WHERE principal_id = $1", f.scout.ID); err != nil {
+				t.Fatal(err)
+			}
 		}
 		got, err := f.a.Spend(ctx, f.acme.ID, s.since, s.until, s.readable, append([]string{}, s.hidden...))
 		if err != nil {

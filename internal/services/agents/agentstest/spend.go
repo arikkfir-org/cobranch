@@ -163,6 +163,7 @@ func (s *Store) RecordSpend(_ context.Context, taskID uuid.UUID, u agents.Usage)
 	if out.Cap > 0 && out.Spent >= out.Cap {
 		out.Ended = true
 		t.State, t.Reason, t.EndedAt = agents.TaskFailed, agents.CapReason(out.Spent, out.Cap), s.Now
+		s.capped[t.ID] = true
 		t.Version++
 		s.Events = append(s.Events, "task.failed "+t.Agent.DisplayName)
 	}
@@ -219,7 +220,7 @@ func (s *Store) agentSpend(a agents.Agent, in func(time.Time) bool, shown func(a
 		}
 		out.Tasks++
 		switch {
-		case t.State == agents.TaskFailed && a.Cap > 0 && t.Spent >= a.Cap:
+		case s.capped[t.ID]:
 			out.FailedOnCap++
 		case t.State.Active():
 			out.Active++
