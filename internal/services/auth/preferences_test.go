@@ -21,11 +21,13 @@ func TestUpdatePreferences(t *testing.T) {
 	tests := []struct {
 		name string
 		as   auth.Authenticated
-		// saved is what the person saved before, if anything.
-		saved *auth.Preferences
-		patch auth.PreferencesPatch
-		want  auth.Preferences
-		err   error
+		// saved is what the person saved before, if anything, and racing the changes that land between a read and a
+		// save.
+		saved  *auth.Preferences
+		racing int
+		patch  auth.PreferencesPatch
+		want   auth.Preferences
+		err    error
 		// invalid is the field a ValidationError names.
 		invalid string
 	}{
@@ -35,6 +37,13 @@ func TestUpdatePreferences(t *testing.T) {
 			want: auth.Preferences{Theme: auth.ThemeLight, Version: 4, UpdatedAt: now}},
 		{name: "any version changes the one there", as: person, saved: &dark, patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeSystem), Version: auth.AnyPreferences},
 			want: auth.Preferences{Theme: auth.ThemeSystem, Version: 4, UpdatedAt: now}},
+		{name: "any version reads again when another change lands first", as: person, saved: &dark, racing: 1,
+			patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeSystem), Version: auth.AnyPreferences},
+			want:  auth.Preferences{Theme: auth.ThemeSystem, Version: 5, UpdatedAt: now}},
+		{name: "any version gives up to changes that keep landing first", as: person, saved: &dark, racing: 10,
+			patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeSystem), Version: auth.AnyPreferences}, err: auth.ErrPreferencesChanged},
+		{name: "the version read is refused when another change lands first", as: person, saved: &dark, racing: 1,
+			patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeLight), Version: 3}, err: auth.ErrPreferencesChanged},
 		{name: "a change from another version is refused", as: person, saved: &dark, patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeLight), Version: 2},
 			err: auth.ErrPreferencesChanged},
 		{name: "a first change from a version there never was is refused", as: person, patch: auth.PreferencesPatch{Theme: themeOf(auth.ThemeLight), Version: 1},
@@ -54,6 +63,7 @@ func TestUpdatePreferences(t *testing.T) {
 			if tt.saved != nil {
 				store.Saved[tt.as.User.ID] = *tt.saved
 			}
+			store.Racing = tt.racing
 			got, err := s.UpdatePreferences(context.Background(), tt.as, tt.patch)
 			if !answered(t, got, err, tt.want, tt.err, tt.invalid) {
 				return

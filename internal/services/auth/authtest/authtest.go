@@ -64,9 +64,12 @@ type Store struct {
 	// Tasks are the agents' tasks that task tokens work, by ID, and TaskTokens those tokens by hash.
 	Tasks      map[uuid.UUID]*Task
 	TaskTokens map[string]auth.Credential
-	// Saved are the people's preferences once they change one, by user.
-	Saved map[uuid.UUID]auth.Preferences
-	Fail  error
+	// Saved are the people's preferences once they change one, by user, and Racing the changes that land between a
+	// read of them and their save: while it is above zero, each SavePreferences meets one first, which bumps the
+	// version as another browser's change would.
+	Saved  map[uuid.UUID]auth.Preferences
+	Racing int
+	Fail   error
 }
 
 // Task is an agent's task as task tokens see it: what it grants, its agent, and whether it ended.
@@ -450,6 +453,11 @@ func (s *Store) SavePreferences(ctx context.Context, userID uuid.UUID, p auth.Pr
 	current, err := s.Preferences(ctx, userID)
 	if err != nil {
 		return auth.Preferences{}, err
+	}
+	if s.Racing > 0 {
+		s.Racing--
+		current.Version++
+		s.Saved[userID] = current
 	}
 	if current.Version != version {
 		return auth.Preferences{}, auth.ErrPreferencesChanged
