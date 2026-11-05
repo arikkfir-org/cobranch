@@ -224,7 +224,7 @@ their versions and the grants on them.
 - **One artifact, one address.** An artifact is addressed under its organization by its ID, as a secret is, so someone
   it is shared with who can't read its repository still opens it, and one attached to no repository has an address too.
 - **A listed item says what the viewer may do:** its permissions, `artifacts.list` alone when it may be listed but not
-  opened.
+  opened, and then it holds only its ID, title, kind and owner; the other fields are absent, or null in GraphQL.
 - **GraphQL** answers the same: `Organization.artifacts`, `Repository.artifacts`, `Organization.artifact`, `Artifact`
   with its owner, versions and access, `User.artifactAccess` on `viewer`, and mutations `createArtifact` (with or
   without a repository), `updateArtifact`, `addArtifactVersion`, `deleteArtifact`, `shareArtifact`, `unshareArtifact`,

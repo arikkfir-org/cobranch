@@ -168,7 +168,7 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
-// A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it.
+// A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null.
 type Artifact struct {
 	ID             string `json:"id"`
 	OrganizationID string `json:"organizationId"`
@@ -179,32 +179,32 @@ type Artifact struct {
 	// 1 to 200 characters.
 	Title string `json:"title"`
 	// At most 500 characters.
-	Summary string       `json:"summary"`
+	Summary *string      `json:"summary,omitempty"`
 	Kind    ArtifactKind `json:"kind"`
 	// How far the principals reading its repository reach it.
-	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
 	// How far the principals reading its organization reach it.
-	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
 	// Its widest audience, as the list's badge names it.
-	Audience ArtifactAudience `json:"audience"`
+	Audience *ArtifactAudience `json:"audience,omitempty"`
 	// The agent that wrote it; null when a person or a script wrote it, or once the agent is gone.
 	Agent *ArtifactPrincipal `json:"agent,omitempty"`
 	// The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone.
 	TaskNumber *int64 `json:"taskNumber,omitempty"`
 	// The branch it came from; empty for none.
-	Branch string `json:"branch"`
+	Branch *string `json:"branch,omitempty"`
 	// Its newest version's number, the one it shows.
-	Head int `json:"head"`
+	Head *int `json:"head,omitempty"`
 	// The format of its newest version: text/markdown, image/svg+xml or text/html.
-	MediaType string `json:"mediaType"`
+	MediaType *string `json:"mediaType,omitempty"`
 	// Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile.
-	Version int `json:"version"`
+	Version *int `json:"version,omitempty"`
 	// Who made it; null once they are gone.
 	CreatedBy *ArtifactPrincipal `json:"createdBy,omitempty"`
-	CreatedAt time.Time          `json:"createdAt"`
+	CreatedAt *time.Time         `json:"createdAt,omitempty"`
 	// Who last changed it or added a version; null once they are gone.
 	UpdatedBy *ArtifactPrincipal `json:"updatedBy,omitempty"`
-	UpdatedAt time.Time          `json:"updatedAt"`
+	UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
 	// What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read.
 	Permissions []string `json:"permissions,omitempty"`
 	// Its versions, newest first, without their bodies.

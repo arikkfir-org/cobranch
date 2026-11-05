@@ -3,6 +3,7 @@ package artifacts_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -149,6 +150,23 @@ func TestListedWithoutRead(t *testing.T) {
 				t.Errorf("List() = %v, want %v", listedOf(list), want)
 			}
 			return passed(err)
+		}},
+		{name: "one listed shows only its title, kind and owner", run: func(ctx context.Context, t *testing.T, f *fixture) error {
+			f.orgs.Grant(f.gwen.ID, auth.RoleArtifactLister, auth.ScopeUser, f.olivia.ID)
+			list, err := f.service.ListOrganization(ctx, f.gwen, f.acme, artifacts.Filter{})
+			i := slices.IndexFunc(list, func(a artifacts.Artifact) bool { return a.ID == f.plan.ID })
+			if err != nil {
+				return passed(err)
+			}
+			if i < 0 {
+				t.Fatalf("listed %v, want Plan in it", listedOf(list))
+			}
+			want := artifacts.Artifact{ID: f.plan.ID, OrgID: f.acme, OrgSlug: list[i].OrgSlug, Owner: f.plan.Owner, Title: "Plan", Kind: artifacts.KindDocument,
+				Permissions: []string{artifacts.PermList}}
+			if !reflect.DeepEqual(list[i], want) {
+				t.Errorf("listed %+v, want %+v", list[i], want)
+			}
+			return nil
 		}},
 		{name: "one listed opens to nobody who may only list it", wantErr: artifacts.ErrNotFound, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
 			f.orgs.Grant(f.gwen.ID, auth.RoleArtifactLister, auth.ScopeRepository, f.website)

@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -175,6 +176,17 @@ type Artifact struct {
 	// Permissions are those the viewer holds on it, sorted: Get answers them all, a list which of artifacts.list and
 	// artifacts.read, so that one listed without artifacts.read shows as one that doesn't open.
 	Permissions []string
+}
+
+// Listed is a as a list shows it to a viewer who may list it but not read it: its ID, organization, title, kind and
+// owner, with what they hold on it. The rest of it, its summary and repository among them, is for its readers.
+func (a Artifact) Listed() Artifact {
+	return Artifact{ID: a.ID, OrgID: a.OrgID, OrgSlug: a.OrgSlug, Owner: a.Owner, Title: a.Title, Kind: a.Kind, Permissions: a.Permissions}
+}
+
+// Withheld reports whether a is listed to a viewer who may not read it, and so holds only what Listed keeps.
+func (a Artifact) Withheld() bool {
+	return a.Permissions != nil && !slices.Contains(a.Permissions, PermRead)
 }
 
 // Audience is the widest audience it has, as the list's badge names it: "organization", "repository" or "private".

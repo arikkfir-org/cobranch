@@ -62,18 +62,24 @@ func taskNumber(n int64) *int64 {
 	return &n
 }
 
-// artifact is a as the API shows it.
+// artifact is a as the API shows it: to a caller who may only list it, its ID, organization, title, kind and owner.
 func artifact(a artifacts.Artifact) Artifact {
-	out := Artifact{Id: a.ID, OrgId: a.OrgID, Owner: artifactPrincipal(a.Owner), Title: a.Title, Summary: a.Summary,
-		Kind: ArtifactKind(a.Kind), RepositoryAccess: ArtifactReach(a.RepositoryAccess), OrganizationAccess: ArtifactReach(a.OrganizationAccess),
-		Audience: ArtifactAudience(a.Audience()), Agent: artifactPrincipal(a.Agent), TaskNumber: taskNumber(a.TaskNumber), Branch: a.Branch,
-		Head: a.Head, MediaType: ArtifactMediaType(a.MediaType), Version: a.Version, CreatedBy: artifactPrincipal(a.CreatedBy),
-		CreatedAt: a.CreatedAt.UTC(), UpdatedBy: artifactPrincipal(a.UpdatedBy), UpdatedAt: a.UpdatedAt.UTC()}
-	if a.RepoID != uuid.Nil {
-		out.Repository = &ArtifactRepository{Id: a.RepoID, Slug: a.RepoSlug}
-	}
+	out := Artifact{Id: a.ID, OrgId: a.OrgID, Owner: artifactPrincipal(a.Owner), Title: a.Title, Kind: ArtifactKind(a.Kind)}
 	if a.Permissions != nil {
 		out.Permissions = &a.Permissions
+	}
+	if a.Withheld() {
+		return out
+	}
+	repoAccess, orgAccess, audience, media := ArtifactReach(a.RepositoryAccess), ArtifactReach(a.OrganizationAccess), ArtifactAudience(a.Audience()),
+		ArtifactMediaType(a.MediaType)
+	created, updated := a.CreatedAt.UTC(), a.UpdatedAt.UTC()
+	out.Summary, out.RepositoryAccess, out.OrganizationAccess, out.Audience = &a.Summary, &repoAccess, &orgAccess, &audience
+	out.Agent, out.TaskNumber, out.Branch, out.Head, out.MediaType = artifactPrincipal(a.Agent), taskNumber(a.TaskNumber), &a.Branch, &a.Head, &media
+	out.Version, out.CreatedBy, out.CreatedAt, out.UpdatedBy, out.UpdatedAt = &a.Version, artifactPrincipal(a.CreatedBy), &created,
+		artifactPrincipal(a.UpdatedBy), &updated
+	if a.RepoID != uuid.Nil {
+		out.Repository = &ArtifactRepository{Id: a.RepoID, Slug: a.RepoSlug}
 	}
 	return out
 }

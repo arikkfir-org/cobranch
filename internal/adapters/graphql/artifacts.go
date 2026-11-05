@@ -45,17 +45,24 @@ func taskNumber(n int64) *int64 {
 	return &n
 }
 
-// artifact is a as the API shows it; its versions and who reaches it resolve on their own.
+// artifact is a as the API shows it, to a viewer who may only list it its ID, organization, title, kind and owner; its
+// versions and who reaches it resolve on their own.
 func artifact(a artifacts.Artifact) *Artifact {
-	var repo *ArtifactRepository
-	if a.RepoID != uuid.Nil {
-		repo = &ArtifactRepository{ID: a.RepoID.String(), Slug: a.RepoSlug}
+	out := &Artifact{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Owner: artifactPrincipal(a.Owner), Title: a.Title,
+		Kind: ArtifactKind(strings.ToUpper(string(a.Kind))), Permissions: a.Permissions}
+	if a.Withheld() {
+		return out
 	}
-	return &Artifact{ID: a.ID.String(), OrganizationID: a.OrgID.String(), Repository: repo, Owner: artifactPrincipal(a.Owner), Title: a.Title, Summary: a.Summary, Kind: ArtifactKind(strings.ToUpper(string(a.Kind))),
-		RepositoryAccess: reach(a.RepositoryAccess), OrganizationAccess: reach(a.OrganizationAccess),
-		Audience: ArtifactAudience(strings.ToUpper(a.Audience())), Agent: artifactPrincipal(a.Agent), TaskNumber: taskNumber(a.TaskNumber),
-		Branch: a.Branch, Head: int(a.Head), MediaType: a.MediaType, Version: int(a.Version), CreatedBy: artifactPrincipal(a.CreatedBy),
-		CreatedAt: a.CreatedAt.UTC(), UpdatedBy: artifactPrincipal(a.UpdatedBy), UpdatedAt: a.UpdatedAt.UTC(), Permissions: a.Permissions}
+	if a.RepoID != uuid.Nil {
+		out.Repository = &ArtifactRepository{ID: a.RepoID.String(), Slug: a.RepoSlug}
+	}
+	repoAccess, orgAccess, audience := reach(a.RepositoryAccess), reach(a.OrganizationAccess), ArtifactAudience(strings.ToUpper(a.Audience()))
+	head, version, created, updated := int(a.Head), int(a.Version), a.CreatedAt.UTC(), a.UpdatedAt.UTC()
+	out.Summary, out.RepositoryAccess, out.OrganizationAccess, out.Audience = &a.Summary, &repoAccess, &orgAccess, &audience
+	out.Agent, out.TaskNumber, out.Branch, out.Head, out.MediaType = artifactPrincipal(a.Agent), taskNumber(a.TaskNumber), &a.Branch, &head, &a.MediaType
+	out.Version, out.CreatedBy, out.CreatedAt, out.UpdatedBy, out.UpdatedAt = &version, artifactPrincipal(a.CreatedBy), &created,
+		artifactPrincipal(a.UpdatedBy), &updated
+	return out
 }
 
 // artifactVersion is ver as the API shows it, with its body and HTML only when it has them.

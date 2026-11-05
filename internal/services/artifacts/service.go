@@ -127,7 +127,7 @@ func (s *Service) ListOrganization(ctx context.Context, v Viewer, orgID uuid.UUI
 }
 
 // listed lists the organization's artifacts that f keeps and v may list or read, each with which of artifacts.list and
-// artifacts.read v holds on it.
+// artifacts.read v holds on it; one v may only list holds only what Listed keeps.
 func (s *Service) listed(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter) ([]Artifact, error) {
 	held := map[uuid.UUID][]string{}
 	for _, permission := range []string{PermList, PermRead} {
@@ -153,6 +153,9 @@ func (s *Service) listed(ctx context.Context, v Viewer, orgID uuid.UUID, f Filte
 	})
 	for i := range list {
 		list[i].Permissions = held[list[i].ID]
+		if list[i].Withheld() {
+			list[i] = list[i].Listed()
+		}
 	}
 	return list, nil
 }

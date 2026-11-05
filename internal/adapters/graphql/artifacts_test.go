@@ -156,8 +156,24 @@ func TestOrganizationArtifacts(t *testing.T) {
 			return list(`(kind: DIAGRAM, repositoryId: "`+f.website.ID.String()+`")`, `{ title }`)(f)
 		}, want: []string{`"artifacts":[{"title":"Chart"}]`}},
 		{name: "attached to an ID that isn't one", viewer: olivia, document: list(`(repositoryId: "x")`, `{ title }`), want: []string{`"artifacts":[]`}},
+		{name: "one the viewer may only list, through its owner", viewer: maxim, document: func(f *orgFixture) string {
+			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeUser, f.olivia.User.ID)
+			return list(``, listedFields)(f)
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"]}`}},
+		{name: "one the viewer may only list, in its repository", viewer: maxim, document: func(f *orgFixture) string {
+			f.withArtifacts()
+			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeRepository, f.website.ID)
+			return `{ organization(slug: "acme") { repository(slug: "website") { artifacts ` + listedFields + ` } } }`
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"]}`}},
 	})
 }
+
+// listedFields selects every field of an artifact a list may show, and listedNulls is what a viewer who may only list
+// it gets of those its readers alone see.
+const (
+	listedFields = `{ title kind owner { displayName } summary repository { slug } repositoryAccess organizationAccess audience agent { id } taskNumber branch head mediaType version createdBy { id } createdAt updatedBy { id } updatedAt permissions }`
+	listedNulls  = `"summary":null,"repository":null,"repositoryAccess":null,"organizationAccess":null,"audience":null,"agent":null,"taskNumber":null,"branch":null,"head":null,"mediaType":null,"version":null,"createdBy":null,"createdAt":null,"updatedBy":null,"updatedAt":null`
+)
 
 // signedInAs is viewer signed in with a session, which sharing one's own artifacts takes.
 func signedInAs(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {

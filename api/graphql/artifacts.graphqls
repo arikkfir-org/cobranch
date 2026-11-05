@@ -69,7 +69,7 @@ enum ArtifactRole {
   LISTER
 }
 
-"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it."
+"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null."
 type Artifact {
   id: ID!
   organizationId: ID!
@@ -80,32 +80,32 @@ type Artifact {
   "1 to 200 characters."
   title: String!
   "At most 500 characters."
-  summary: String!
+  summary: String
   kind: ArtifactKind!
   "How far the principals reading its repository reach it."
-  repositoryAccess: ArtifactReach!
+  repositoryAccess: ArtifactReach
   "How far the principals reading its organization reach it."
-  organizationAccess: ArtifactReach!
+  organizationAccess: ArtifactReach
   "Its widest audience, as the list's badge names it."
-  audience: ArtifactAudience!
+  audience: ArtifactAudience
   "The agent that wrote it; null when a person or a script wrote it, or once the agent is gone."
   agent: ArtifactPrincipal
   "The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone."
   taskNumber: Int64
   "The branch it came from; empty for none."
-  branch: String!
+  branch: String
   "Its newest version's number, the one it shows."
-  head: Int!
+  head: Int
   "The format of its newest version: text/markdown, image/svg+xml or text/html."
-  mediaType: String!
+  mediaType: String
   "Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile."
-  version: Int!
+  version: Int
   "Who made it; null once they are gone."
   createdBy: ArtifactPrincipal
-  createdAt: Time!
+  createdAt: Time
   "Who last changed it or added a version; null once they are gone."
   updatedBy: ArtifactPrincipal
-  updatedAt: Time!
+  updatedAt: Time
   "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
   "Its versions, newest first, without their bodies."

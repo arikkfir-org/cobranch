@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -81,7 +82,7 @@ func TestArtifactsAPI(t *testing.T) {
 			wantHeader: http.Header{"Etag": []string{`"1"`}, "Location": []string{"/v1/orgs/acme/artifacts/" + notesID.String()}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Id != notesID || got.Repository == nil || got.Repository.Slug != "website" || got.Audience != ArtifactAudienceRepository || got.Head != 1 ||
+				if got.Id != notesID || got.Repository == nil || got.Repository.Slug != "website" || val(got.Audience) != ArtifactAudienceRepository || val(got.Head) != 1 ||
 					got.CreatedBy == nil || got.CreatedBy.DisplayName != "Max" || got.Owner == nil || got.Owner.DisplayName != "Max" || got.Agent != nil ||
 					got.Permissions != nil {
 					t.Errorf("made %s", body)
@@ -111,7 +112,7 @@ func TestArtifactsAPI(t *testing.T) {
 		{name: "an agent's task makes one", viewer: scoutOnTask, method: "POST", path: repoArtifacts(t, ""), body: notes, wantStatus: 201,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Agent == nil || got.Agent.DisplayName != "Scout" || got.TaskNumber == nil || *got.TaskNumber != 12 || got.Branch != "scout/notes" {
+				if got.Agent == nil || got.Agent.DisplayName != "Scout" || got.TaskNumber == nil || *got.TaskNumber != 12 || val(got.Branch) != "scout/notes" {
 					t.Errorf("made %s", body)
 				}
 			}},
@@ -125,6 +126,12 @@ func TestArtifactsAPI(t *testing.T) {
 				t.Errorf("listed %s", body)
 			}
 		}},
+		{name: "list one the caller may only list", viewer: maxim, method: "GET", wantStatus: 200, check: listedOnly(planID),
+			path: func(f *orgFixture) string {
+				p := repoArtifacts(t, "")(f)
+				f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeRepository, f.website.ID)
+				return p
+			}},
 		{name: "list what a Developer reads", viewer: maxim, method: "GET", path: repoArtifacts(t, ""), wantStatus: 200, check: func(t *testing.T, _ *orgFixture, body []byte) {
 			if got := decode[ArtifactList](t, body).Artifacts; len(got) != 1 || got[0].Id != chartID || got[0].Permissions == nil ||
 				strings.Join(*got[0].Permissions, ",") != "artifacts.read" {
@@ -139,7 +146,7 @@ func TestArtifactAPI(t *testing.T) {
 		{name: "get one", viewer: olivia, method: "GET", path: artifactPath(t, planID, ""), wantStatus: 200, wantHeader: http.Header{"Etag": []string{`"1"`}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Audience != ArtifactAudiencePrivate || got.Permissions == nil || len(*got.Permissions) != 4 || got.MediaType != Textmarkdown ||
+				if val(got.Audience) != ArtifactAudiencePrivate || got.Permissions == nil || len(*got.Permissions) != 4 || val(got.MediaType) != Textmarkdown ||
 					got.Owner == nil || got.Owner.DisplayName != "Olivia" {
 					t.Errorf("got %s", body)
 				}
@@ -152,7 +159,7 @@ func TestArtifactAPI(t *testing.T) {
 		{name: "change one", viewer: olivia, method: "PATCH", path: artifactPath(t, planID, ""), body: `{"title":"Roadmap","organizationAccess":"edit"}`,
 			header: ifMatchHeader(`"1"`), wantStatus: 200, wantHeader: http.Header{"Etag": []string{`"2"`}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
-				if got := decode[Artifact](t, body); got.Title != "Roadmap" || got.Audience != ArtifactAudienceOrganization {
+				if got := decode[Artifact](t, body); got.Title != "Roadmap" || val(got.Audience) != ArtifactAudienceOrganization {
 					t.Errorf("changed %s", body)
 				}
 			}},
@@ -268,7 +275,7 @@ func TestOrganizationArtifactsAPI(t *testing.T) {
 			wantHeader: http.Header{"Etag": []string{`"1"`}, "Location": []string{"/v1/orgs/acme/artifacts/" + notesID.String()}},
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				got := decode[Artifact](t, body)
-				if got.Id != notesID || got.Repository != nil || got.Owner == nil || got.Owner.DisplayName != "Max" || got.Audience != ArtifactAudiencePrivate {
+				if got.Id != notesID || got.Repository != nil || got.Owner == nil || got.Owner.DisplayName != "Max" || val(got.Audience) != ArtifactAudiencePrivate {
 					t.Errorf("made %s", body)
 				}
 			}},
@@ -288,6 +295,12 @@ func TestOrganizationArtifactsAPI(t *testing.T) {
 				t.Errorf("listed %s", body)
 			}
 		}},
+		{name: "list one the caller may only list through its owner", viewer: maxim, method: "GET", wantStatus: 200, check: listedOnly(planID),
+			path: func(f *orgFixture) string {
+				p := orgArtifacts(t, "")(f)
+				f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeUser, f.olivia.User.ID)
+				return p
+			}},
 		{name: "list the caller's own", viewer: maxim, method: "GET", path: orgArtifacts(t, "?mine=true"), wantStatus: 200,
 			check: func(t *testing.T, _ *orgFixture, body []byte) {
 				if got := decode[ArtifactList](t, body).Artifacts; len(got) != 0 {
@@ -350,4 +363,33 @@ func TestMyArtifactAccessAPI(t *testing.T) {
 				}
 			}},
 	})
+}
+
+// listedOnly checks that a list holds id as one its caller may only list: its title, kind and owner, and nothing a
+// reader alone sees.
+func listedOnly(id uuid.UUID) func(t *testing.T, _ *orgFixture, body []byte) {
+	return func(t *testing.T, _ *orgFixture, body []byte) {
+		t.Helper()
+		list := decode[ArtifactList](t, body).Artifacts
+		i := slices.IndexFunc(list, func(a Artifact) bool { return a.Id == id })
+		if i < 0 {
+			t.Fatalf("listed %s, want %s in it", body, id)
+		}
+		got := list[i]
+		if got.Title == "" || got.Kind == "" || got.Owner == nil || got.Permissions == nil || strings.Join(*got.Permissions, ",") != "artifacts.list" ||
+			got.Summary != nil || got.Repository != nil || got.RepositoryAccess != nil || got.OrganizationAccess != nil || got.Audience != nil ||
+			got.Agent != nil || got.TaskNumber != nil || got.Branch != nil || got.Head != nil || got.MediaType != nil || got.Version != nil ||
+			got.CreatedBy != nil || got.CreatedAt != nil || got.UpdatedBy != nil || got.UpdatedAt != nil {
+			t.Errorf("listed %+v, want its title, kind and owner alone", got)
+		}
+	}
+}
+
+// val is what p points at, or T's zero for nil.
+func val[T any](p *T) T {
+	var zero T
+	if p == nil {
+		return zero
+	}
+	return *p
 }

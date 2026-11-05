@@ -1330,34 +1330,34 @@ type ApiKeySecret struct {
 	RevokedAt  *time.Time         `json:"revokedAt,omitempty"`
 }
 
-// Artifact A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it: its versions' bodies come from getArtifactVersion.
+// Artifact A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it: its versions' bodies come from getArtifactVersion. One a list shows to a caller who may list it but not read it has only its id, orgId, title, kind, owner and permissions.
 type Artifact struct {
 	// Agent Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Agent *Principal `json:"agent,omitempty"`
 
 	// Audience Its widest audience, as the list's badge names it.
-	Audience ArtifactAudience `json:"audience"`
+	Audience *ArtifactAudience `json:"audience,omitempty"`
 
 	// Branch The branch it came from; empty for none.
-	Branch    string    `json:"branch"`
-	CreatedAt time.Time `json:"createdAt"`
+	Branch    *string    `json:"branch,omitempty"`
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
 
 	// CreatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	CreatedBy *Principal `json:"createdBy,omitempty"`
 
 	// Head Its newest version's number, the one it shows.
-	Head int32              `json:"head"`
+	Head *int32             `json:"head,omitempty"`
 	Id   openapi_types.UUID `json:"id"`
 
 	// Kind What an artifact is for, which picks its icon and its filter, never its format.
 	Kind ArtifactKind `json:"kind"`
 
 	// MediaType The format a version is written in.
-	MediaType ArtifactMediaType  `json:"mediaType"`
+	MediaType *ArtifactMediaType `json:"mediaType,omitempty"`
 	OrgId     openapi_types.UUID `json:"orgId"`
 
 	// OrganizationAccess How far an audience reaches an artifact.
-	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
 
 	// Owner Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	Owner *Principal `json:"owner,omitempty"`
@@ -1369,19 +1369,19 @@ type Artifact struct {
 	Repository *ArtifactRepository `json:"repository,omitempty"`
 
 	// RepositoryAccess How far an audience reaches an artifact.
-	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
-	Summary          string        `json:"summary"`
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
+	Summary          *string        `json:"summary,omitempty"`
 
 	// TaskNumber The number of the agent's task it was written in; absent when a person or a script wrote it, or once the task is gone.
-	TaskNumber *int64    `json:"taskNumber,omitempty"`
-	Title      string    `json:"title"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	TaskNumber *int64     `json:"taskNumber,omitempty"`
+	Title      string     `json:"title"`
+	UpdatedAt  *time.Time `json:"updatedAt,omitempty"`
 
 	// UpdatedBy Who is behind a commit's author or committer, a push, an annotation, a review, a merge or a deletion, and who an issue is assigned to, created it or changed it; absent from a person until the push worker maps their email, and from the rest once its principal is gone.
 	UpdatedBy *Principal `json:"updatedBy,omitempty"`
 
 	// Version Its version, which every change and every new version bumps, and its ETag carries.
-	Version int64 `json:"version"`
+	Version *int64 `json:"version,omitempty"`
 }
 
 // ArtifactAudience Its widest audience, as the list's badge names it.

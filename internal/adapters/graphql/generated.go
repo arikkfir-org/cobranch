@@ -6493,7 +6493,7 @@ enum ArtifactRole {
   LISTER
 }
 
-"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it."
+"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null."
 type Artifact {
   id: ID!
   organizationId: ID!
@@ -6504,32 +6504,32 @@ type Artifact {
   "1 to 200 characters."
   title: String!
   "At most 500 characters."
-  summary: String!
+  summary: String
   kind: ArtifactKind!
   "How far the principals reading its repository reach it."
-  repositoryAccess: ArtifactReach!
+  repositoryAccess: ArtifactReach
   "How far the principals reading its organization reach it."
-  organizationAccess: ArtifactReach!
+  organizationAccess: ArtifactReach
   "Its widest audience, as the list's badge names it."
-  audience: ArtifactAudience!
+  audience: ArtifactAudience
   "The agent that wrote it; null when a person or a script wrote it, or once the agent is gone."
   agent: ArtifactPrincipal
   "The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone."
   taskNumber: Int64
   "The branch it came from; empty for none."
-  branch: String!
+  branch: String
   "Its newest version's number, the one it shows."
-  head: Int!
+  head: Int
   "The format of its newest version: text/markdown, image/svg+xml or text/html."
-  mediaType: String!
+  mediaType: String
   "Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile."
-  version: Int!
+  version: Int
   "Who made it; null once they are gone."
   createdBy: ArtifactPrincipal
-  createdAt: Time!
+  createdAt: Time
   "Who last changed it or added a version; null once they are gone."
   updatedBy: ArtifactPrincipal
-  updatedAt: Time!
+  updatedAt: Time
   "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
   "Its versions, newest first, without their bodies."
@@ -15093,11 +15093,11 @@ func (ec *executionContext) _Artifact_summary(ctx context.Context, field graphql
 			return obj.Summary, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_summary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15139,11 +15139,11 @@ func (ec *executionContext) _Artifact_repositoryAccess(ctx context.Context, fiel
 			return obj.RepositoryAccess, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactReach) graphql.Marshaler {
-			return ec.marshalNArtifactReach2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactReach) graphql.Marshaler {
+			return ec.marshalOArtifactReach2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_repositoryAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15162,11 +15162,11 @@ func (ec *executionContext) _Artifact_organizationAccess(ctx context.Context, fi
 			return obj.OrganizationAccess, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactReach) graphql.Marshaler {
-			return ec.marshalNArtifactReach2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactReach) graphql.Marshaler {
+			return ec.marshalOArtifactReach2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_organizationAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15185,11 +15185,11 @@ func (ec *executionContext) _Artifact_audience(ctx context.Context, field graphq
 			return obj.Audience, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactAudience) graphql.Marshaler {
-			return ec.marshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactAudience) graphql.Marshaler {
+			return ec.marshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_audience(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15263,11 +15263,11 @@ func (ec *executionContext) _Artifact_branch(ctx context.Context, field graphql.
 			return obj.Branch, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_branch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15286,11 +15286,11 @@ func (ec *executionContext) _Artifact_head(ctx context.Context, field graphql.Co
 			return obj.Head, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15309,11 +15309,11 @@ func (ec *executionContext) _Artifact_mediaType(ctx context.Context, field graph
 			return obj.MediaType, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_mediaType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15332,11 +15332,11 @@ func (ec *executionContext) _Artifact_version(ctx context.Context, field graphql
 			return obj.Version, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15387,11 +15387,11 @@ func (ec *executionContext) _Artifact_createdAt(ctx context.Context, field graph
 			return obj.CreatedAt, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
-			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15442,11 +15442,11 @@ func (ec *executionContext) _Artifact_updatedAt(ctx context.Context, field graph
 			return obj.UpdatedAt, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
-			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -36768,7 +36768,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "summary":
 			out.Values[i] = ec._Artifact_summary(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "kind":
@@ -36778,17 +36778,17 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "repositoryAccess":
 			out.Values[i] = ec._Artifact_repositoryAccess(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "organizationAccess":
 			out.Values[i] = ec._Artifact_organizationAccess(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "audience":
 			out.Values[i] = ec._Artifact_audience(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "agent":
@@ -36803,22 +36803,22 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "branch":
 			out.Values[i] = ec._Artifact_branch(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "head":
 			out.Values[i] = ec._Artifact_head(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "mediaType":
 			out.Values[i] = ec._Artifact_mediaType(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._Artifact_version(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdBy":
@@ -36828,7 +36828,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "createdAt":
 			out.Values[i] = ec._Artifact_createdAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updatedBy":
@@ -36838,7 +36838,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Artifact_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "permissions":
@@ -43004,16 +43004,6 @@ func (ec *executionContext) marshalNArtifactAccess2ᚖcobranchᚗdevᚋinternal�
 	return ec._ArtifactAccess(ctx, sel, v)
 }
 
-func (ec *executionContext) unmarshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, v any) (ArtifactAudience, error) {
-	var res ArtifactAudience
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, sel ast.SelectionSet, v ArtifactAudience) graphql.Marshaler {
-	return v
-}
-
 func (ec *executionContext) marshalNArtifactGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactGrantᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactGrant) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -44862,6 +44852,22 @@ func (ec *executionContext) marshalOArtifact2ᚖcobranchᚗdevᚋinternalᚋadap
 		return graphql.Null
 	}
 	return ec._Artifact(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, v any) (*ArtifactAudience, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(ArtifactAudience)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, sel ast.SelectionSet, v *ArtifactAudience) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
 }
 
 func (ec *executionContext) unmarshalOArtifactKind2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactKind(ctx context.Context, v any) (*ArtifactKind, error) {

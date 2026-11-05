@@ -8745,8 +8745,9 @@ components:
       type: object
       description: >-
         A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none,
-        as its readers see it: its versions' bodies come from getArtifactVersion.
-      required: [id, orgId, title, summary, kind, repositoryAccess, organizationAccess, audience, branch, head, mediaType, version, createdAt, updatedAt]
+        as its readers see it: its versions' bodies come from getArtifactVersion. One a list shows to a caller who may
+        list it but not read it has only its id, orgId, title, kind, owner and permissions.
+      required: [id, orgId, title, kind]
       properties:
         id:
           type: string
