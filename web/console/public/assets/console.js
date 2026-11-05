@@ -7,6 +7,7 @@ import { h } from "./lib/dom.js";
 import { showCard } from "./lib/layout.js";
 import { show } from "./lib/router.js";
 import { setBase, setConfig, setMe, setOrgs, setPermissions } from "./lib/state.js";
+import { followPreferences } from "./lib/theme.js";
 
 // unavailable says the Console couldn't load its pages.
 const unavailable = () => showCard(h("span", { class: "status" }, "Console unavailable"), h("p", {}, "The Console couldn't load its pages. Try again in a moment."));
@@ -23,6 +24,7 @@ export function start(loaded, root, again) {
     setConfig({ restUrl: c.restUrl || "", authUrl: c.authUrl || "", gitUrl: (c.gitUrl || "").replace(/\/$/, ""), gitSshUrl: (c.gitSshUrl || "").replace(/\/$/, "") });
     try {
       setMe(await answer(c.me));
+      followPreferences();
       const [orgs, permissions] = await Promise.all([api("GET", "/me/organizations").then((d) => d.organizations), api("GET", "/permissions?scope=organization").then((d) => d.permissions)]);
       setOrgs(orgs);
       setPermissions(permissions);

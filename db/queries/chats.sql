@@ -13,6 +13,37 @@ SELECT i.id, i.org_id, i.number, o.slug AS org_slug, o.issue_key
 FROM issues i JOIN organizations o ON o.id = i.org_id
 WHERE i.org_id = $1 AND i.number = $2;
 
+-- OrganizationConversationSubject finds an organization, as the subject of a person's conversation about it, with its
+-- slug.
+-- name: OrganizationConversationSubject :one
+SELECT id, slug FROM organizations WHERE id = $1;
+
+-- RepositoryConversationSubject finds one of an organization's repositories, as the subject of a person's conversation
+-- about it, with its slug and its organization's, and the commit its live default branch is at, if it has one.
+-- name: RepositoryConversationSubject :one
+SELECT r.id, r.org_id, r.slug AS repo_slug, o.slug AS org_slug, b.head
+FROM repositories r JOIN organizations o ON o.id = r.org_id
+    LEFT JOIN branches b ON b.repo_id = r.id AND b.name = @default_branch AND b.deleted_at IS NULL
+WHERE r.org_id = @org_id AND r.id = @repo_id;
+
+-- AgentConversationSubject finds one of an organization's agents, as the subject of a person's conversation with it,
+-- with its name and its organization's slug.
+-- name: AgentConversationSubject :one
+SELECT a.principal_id, a.org_id, a.name, o.slug AS org_slug
+FROM agents a JOIN organizations o ON o.id = a.org_id
+WHERE a.org_id = $1 AND a.principal_id = $2;
+
+-- EnsureConversation makes a person's conversation about a subject, unless it is there already.
+-- name: EnsureConversation :exec
+INSERT INTO conversations (id, org_id, owner_id, repo_id, agent_id)
+VALUES (@id, @org_id, @owner_id, sqlc.narg(repo_id), sqlc.narg(agent_id))
+ON CONFLICT DO NOTHING;
+
+-- HoldConversation finds a conversation and keeps it from being deleted until the transaction ends, so that a change to
+-- it doesn't race the deletion of its subject or its owner.
+-- name: HoldConversation :one
+SELECT id FROM conversations WHERE id = $1 FOR KEY SHARE;
+
 -- HasCommit reports whether a repository holds a commit.
 -- name: HasCommit :one
 SELECT EXISTS (SELECT 1 FROM commits WHERE repo_id = $1 AND sha = $2);
@@ -41,24 +72,24 @@ SELECT seq::bigint AS seq, kind, details FROM events
 WHERE subject_id = @subject_id AND kind LIKE 'chat.%' AND seq > @after::bigint
 ORDER BY seq LIMIT @lim;
 
--- ChatThreads lists at most lim of the chat threads of an organization's subject, a branch or an issue, newest first,
--- from the one before before names, or from the newest when it is null, with the display names of their starters and
--- resolvers, and the commit each one's review reviewed.
+-- ChatThreads lists at most lim of the chat threads of an organization's subject, a branch, an issue or a conversation,
+-- newest first, from the one before before names, or from the newest when it is null, with the display names of their
+-- starters and resolvers, and the commit each one's review reviewed.
 -- name: ChatThreads :many
 SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
 LEFT JOIN reviews rv ON rv.id = t.review_id
-WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid)
+WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid OR t.conversation_id = @subject_id::uuid)
   AND (sqlc.narg(before)::uuid IS NULL OR t.id < sqlc.narg(before)::uuid)
 ORDER BY t.id DESC LIMIT @lim;
 
--- ChatThreadsByID finds those of the chat threads of an organization's subject, a branch or an issue, that ids name,
--- with the display names of their starters and resolvers, and the commit each one's review reviewed.
+-- ChatThreadsByID finds those of the chat threads of an organization's subject, a branch, an issue or a conversation,
+-- that ids name, with the display names of their starters and resolvers, and the commit each one's review reviewed.
 -- name: ChatThreadsByID :many
 SELECT sqlc.embed(t), s.display_name AS starter_name, rb.display_name AS resolver_name, rv.sha AS reviewed_sha
 FROM chat_threads t LEFT JOIN principals s ON s.id = t.created_by LEFT JOIN principals rb ON rb.id = t.resolved_by
 LEFT JOIN reviews rv ON rv.id = t.review_id
-WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid) AND t.id = ANY (@ids::uuid[]);
+WHERE t.org_id = @org_id AND (t.branch_id = @subject_id::uuid OR t.issue_id = @subject_id::uuid OR t.conversation_id = @subject_id::uuid) AND t.id = ANY (@ids::uuid[]);
 
 -- ChatMessagesOf lists the messages of the threads that thread_ids name, by thread and then in the order they were
 -- posted, with the display names of their authors and deleters, and the number of the task each came from.
@@ -77,12 +108,12 @@ FROM chat_messages m LEFT JOIN principals a ON a.id = m.author_id LEFT JOIN prin
     LEFT JOIN agent_tasks tk ON tk.id = m.task_id
 WHERE m.id = ANY (@ids::uuid[]);
 
--- InsertChatThread starts a thread of a branch's chat, in its repository, or of an issue's, perhaps a comment of a
--- review: none when one of its ID is there already.
+-- InsertChatThread starts a thread of a branch's chat, in its repository, of an issue's or of a conversation, perhaps a
+-- comment of a review: none when one of its ID is there already.
 -- name: InsertChatThread :one
-INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, sha, path, start_line, end_line, created_by, review_id)
-VALUES (@id, @org_id, sqlc.narg(repo_id), sqlc.narg(branch_id), sqlc.narg(issue_id), sqlc.narg(sha), sqlc.narg(path), sqlc.narg(start_line),
-        sqlc.narg(end_line), @created_by, sqlc.narg(review_id))
+INSERT INTO chat_threads (id, org_id, repo_id, branch_id, issue_id, conversation_id, sha, path, start_line, end_line, created_by, review_id)
+VALUES (@id, @org_id, sqlc.narg(repo_id), sqlc.narg(branch_id), sqlc.narg(issue_id), sqlc.narg(conversation_id), sqlc.narg(sha), sqlc.narg(path),
+        sqlc.narg(start_line), sqlc.narg(end_line), @created_by, sqlc.narg(review_id))
 ON CONFLICT (id) DO NOTHING
 RETURNING *;
 

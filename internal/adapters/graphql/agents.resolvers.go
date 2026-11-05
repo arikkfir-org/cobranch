@@ -361,7 +361,13 @@ func (r *taskResolver) Transcript(ctx context.Context, obj *Task, after *int, fi
 	return out, nil
 }
 
+// Agent returns AgentResolver implementation.
+func (r *Resolver) Agent() AgentResolver { return &agentResolver{r} }
+
 // Task returns TaskResolver implementation.
 func (r *Resolver) Task() TaskResolver { return &taskResolver{r} }
 
-type taskResolver struct{ *Resolver }
+type (
+	agentResolver struct{ *Resolver }
+	taskResolver  struct{ *Resolver }
+)

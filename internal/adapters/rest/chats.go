@@ -21,6 +21,9 @@ import (
 type Chats interface {
 	Branch(ctx context.Context, v chats.Viewer, repoID uuid.UUID, name string) (chats.Subject, error)
 	Issue(ctx context.Context, v chats.Viewer, orgID uuid.UUID, number int) (chats.Subject, error)
+	Organization(ctx context.Context, v chats.Viewer, orgID uuid.UUID) (chats.Subject, error)
+	Repository(ctx context.Context, v chats.Viewer, orgID, repoID uuid.UUID) (chats.Subject, error)
+	Agent(ctx context.Context, v chats.Viewer, orgID, agentID uuid.UUID) (chats.Subject, error)
 	Threads(ctx context.Context, v chats.Viewer, subj chats.Subject, before uuid.UUID, limit int) (chats.Page, error)
 	Thread(ctx context.Context, v chats.Viewer, subj chats.Subject, id uuid.UUID) (chats.Thread, error)
 	Message(ctx context.Context, v chats.Viewer, subj chats.Subject, threadID, id uuid.UUID) (chats.Message, error)
@@ -110,9 +113,19 @@ func taggedMessage(m chats.Message) (ChatMessage, string, error) {
 
 // chatPath is the path of the subject's chat from the API's base, by the current slugs, with the parts that follow.
 func chatPath(subj chats.Subject, parts ...string) string {
-	p := BaseURL + "/orgs/" + url.PathEscape(subj.Org) + "/repos/" + url.PathEscape(subj.Repo) + "/branches/" + url.PathEscape(subj.Branch) + "/chat"
-	if subj.OfIssue() {
-		p = BaseURL + "/orgs/" + url.PathEscape(subj.Org) + "/issues/" + strconv.Itoa(subj.Number) + "/chat"
+	org := BaseURL + "/orgs/" + url.PathEscape(subj.Org)
+	var p string
+	switch subj.Kind() {
+	case chats.KindIssue:
+		p = org + "/issues/" + strconv.Itoa(subj.Number) + "/chat"
+	case chats.KindOrganization:
+		p = org + "/conversation"
+	case chats.KindRepository:
+		p = org + "/repos/" + url.PathEscape(subj.Repo) + "/conversation"
+	case chats.KindAgent:
+		p = org + "/agents/" + subj.AgentID.String() + "/conversation"
+	default:
+		p = org + "/repos/" + url.PathEscape(subj.Repo) + "/branches/" + url.PathEscape(subj.Branch) + "/chat"
 	}
 	for _, part := range parts {
 		p += "/" + url.PathEscape(part)
@@ -122,10 +135,7 @@ func chatPath(subj chats.Subject, parts ...string) string {
 
 // subjectKind is what the subject is, as a refusal names what isn't there.
 func subjectKind(subj chats.Subject) string {
-	if subj.OfIssue() {
-		return "issue"
-	}
-	return "branch"
+	return string(subj.Kind())
 }
 
 // chat finds the chat of the branch the path names, for a viewer with repo.read on its repository.

@@ -35,6 +35,8 @@ type api struct {
 	agents Agents
 	// secrets is the service of the organizations' and repositories' secrets.
 	secrets Secrets
+	// artifacts is the service of the repositories' artifacts.
+	artifacts Artifacts
 	// pages records the Console's page views.
 	pages pageMetrics
 }
@@ -46,19 +48,19 @@ func (a api) GetVersion(context.Context, GetVersionRequestObject) (GetVersionRes
 
 // NewHandler serves the API under BaseURL, for a server built as version, with sessions for the viewer's,
 // organizations and repositories for theirs, code for the repositories' branches, commits and files, issues for the
-// organizations' issues, chats for the branches' chats, agents for the organizations' agents and tasks, and secrets for
-// their secrets. Every other path answers 404, and a request the API can't read 400, both as problem details. A GET's
-// answer is the viewer's, and revalidated each time (Cache-Control: private, no-cache). Each request's duration is
-// recorded by its route.
+// organizations' issues, chats for the branches' chats, agents for the organizations' agents and tasks, secrets for
+// their secrets, and artifacts for the repositories' artifacts. Every other path answers 404, and a request the API
+// can't read 400, both as problem details. A GET's answer is the viewer's, and revalidated each time (Cache-Control:
+// private, no-cache). Each request's duration is recorded by its route.
 func NewHandler(version string, sessions Sessions, organizations Organizations, repositories Repositories, code Code, issues Issues, chats Chats,
-	agents Agents, secrets Secrets, opts ...Option,
+	agents Agents, secrets Secrets, artifacts Artifacts, opts ...Option,
 ) http.Handler {
 	var o options
 	for _, opt := range opts {
 		opt(&o)
 	}
 	a := api{version: version, sessions: sessions, orgs: organizations, repos: repositories, code: code, issues: issues, chats: chats, agents: agents,
-		secrets: secrets, pages: newPageMetrics(o.meter)}
+		secrets: secrets, artifacts: artifacts, pages: newPageMetrics(o.meter)}
 	strict := NewStrictHandlerWithOptions(a, nil, StrictHTTPServerOptions{
 		RequestErrorHandlerFunc:  badRequest,
 		ResponseErrorHandlerFunc: internalError,

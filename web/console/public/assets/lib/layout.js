@@ -28,10 +28,11 @@ export function notFound(slug) {
 // themeNames name the themes lib/theme.js knows.
 export const themeNames = { light: "Light", dark: "Dark", system: "System" };
 
-// themeSwitch is the theme as a segmented control (Light, Dark, System), which changes it at once.
-export function themeSwitch() {
+// themeSwitch is the theme as a segmented control (Light, Dark, System), which changes it at once and saves it with
+// the person; fail shows a save that failed, which the avatar menu's switch leaves to Preferences to report.
+export function themeSwitch(fail = () => {}) {
   const buttons = themes.map((value) => h("button", { type: "button", "aria-pressed": String(theme() === value), onclick: () => {
-    setTheme(value);
+    setTheme(value).catch(fail);
     buttons.forEach((b, i) => b.setAttribute("aria-pressed", String(themes[i] === value)));
   } }, themeNames[value]));
   return h("div", { class: "segmented", role: "group", "aria-label": "Theme" }, buttons);

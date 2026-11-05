@@ -35,13 +35,16 @@ function ago(at) {
 }
 
 // showPreferences draws the viewer's preferences: their theme, light, dark, or the system's, which follows their
-// operating system. The theme lives in this browser, as the avatar menu's does.
+// operating system. The theme is kept with the person (lib/theme.js), so every browser they sign in from follows it,
+// as the avatar menu's switch does; a save that fails is said above it, the choice still drawn here.
 function showPreferences(main) {
-  main.replaceChildren(pageHeader({ title: "Preferences", description: "How Cobranch looks for you, in this browser." }),
+  const error = h("div", { class: "banner banner-danger", role: "alert", hidden: true }, icon("circle-x"), h("div", { class: "banner-text" }, h("p", {})));
+  const fail = (err) => { error.querySelector("p").textContent = err.message; error.hidden = false; };
+  main.replaceChildren(pageHeader({ title: "Preferences", description: "How Cobranch looks for you, in every browser you sign in from." }), error,
     card("Appearance", null, null, h("div", { class: "preference" },
       h("div", { class: "row-text" }, h("span", { class: "row-title" }, "Theme"),
         h("span", { class: "row-meta" }, "System follows your device; Light and Dark override it. The same switch is in the avatar menu.")),
-      themeSwitch())));
+      themeSwitch(fail))));
 }
 
 // showAccount draws the viewer's account: who they are, their personal tokens, which act as them wherever a password

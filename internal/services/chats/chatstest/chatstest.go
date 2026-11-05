@@ -16,13 +16,17 @@ import (
 )
 
 // Store is a chats.Store in memory: each repository's branches by name, the commits it holds, each organization's
-// issues by number, and the chats' threads, messages and updates. Names names the principals by ID, and Tasks numbers
+// issues by number, the organizations, repositories and agents conversations are about, and the chats' threads,
+// messages and updates. Names names the principals by ID, and Tasks numbers
 // the agents' tasks by ID; Now is the time it records changes at. It is safe for concurrent use, so a test may change
 // it while a follower reads.
 type Store struct {
 	mu       sync.Mutex
 	branches map[uuid.UUID]map[string]chats.Subject
 	issues   map[uuid.UUID]map[int]chats.Subject
+	orgs     map[uuid.UUID]string
+	repos    map[uuid.UUID]map[uuid.UUID]chats.Subject
+	agents   map[uuid.UUID]map[uuid.UUID]string
 	heads    map[uuid.UUID]string
 	commits  map[uuid.UUID]map[string]bool
 	threads  map[uuid.UUID]*thread
@@ -50,7 +54,8 @@ var _ chats.Store = (*Store)(nil)
 
 // NewStore returns an empty Store.
 func NewStore() *Store {
-	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
+	return &Store{branches: map[uuid.UUID]map[string]chats.Subject{}, issues: map[uuid.UUID]map[int]chats.Subject{}, orgs: map[uuid.UUID]string{},
+		repos: map[uuid.UUID]map[uuid.UUID]chats.Subject{}, agents: map[uuid.UUID]map[uuid.UUID]string{}, heads: map[uuid.UUID]string{}, commits: map[uuid.UUID]map[string]bool{},
 		threads: map[uuid.UUID]*thread{}, messages: map[uuid.UUID]*chats.Message{}, Names: map[uuid.UUID]string{},
 		Tasks: map[uuid.UUID]int64{}}
 }
@@ -85,6 +90,41 @@ func (s *Store) SetIssue(subj chats.Subject) chats.Subject {
 	}
 	s.issues[subj.OrgID][subj.Number] = subj
 	return subj
+}
+
+// SetOrganization makes an organization of its ID and slug, which conversations may be about.
+func (s *Store) SetOrganization(orgID uuid.UUID, slug string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.orgs[orgID] = slug
+}
+
+// SetRepository makes a repository of its organization, by its ID and slug, which conversations may be about; head is
+// the commit its default branch is at, empty for none.
+func (s *Store) SetRepository(orgID, repoID uuid.UUID, slug, head string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.repos[orgID] == nil {
+		s.repos[orgID] = map[uuid.UUID]chats.Subject{}
+	}
+	s.repos[orgID][repoID] = chats.Subject{RepoID: repoID, Repo: slug, Branch: "main", Head: head}
+}
+
+// DeleteRepository deletes one of an organization's repositories, as a conversation's subject.
+func (s *Store) DeleteRepository(orgID, repoID uuid.UUID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.repos[orgID], repoID)
+}
+
+// SetAgent makes an agent of its organization, by its principal and name, which conversations may be with.
+func (s *Store) SetAgent(orgID, agentID uuid.UUID, name string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.agents[orgID] == nil {
+		s.agents[orgID] = map[uuid.UUID]string{}
+	}
+	s.agents[orgID][agentID] = name
 }
 
 // DeleteIssue deletes an issue, as its chat's subject, by its organization and number.
@@ -141,6 +181,33 @@ func (s *Store) Issue(_ context.Context, orgID uuid.UUID, number int) (chats.Sub
 	subj, ok := s.issues[orgID][number]
 	if !ok {
 		return chats.Subject{}, repos.ErrNotFound
+	}
+	return subj, nil
+}
+
+// Conversation finds owner's private conversation about the organization, its repository repoID or with its agent
+// agentID as a chat's subject, or repos.ErrNotFound.
+func (s *Store) Conversation(_ context.Context, owner, orgID, repoID, agentID uuid.UUID) (chats.Subject, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	slug, ok := s.orgs[orgID]
+	if !ok {
+		return chats.Subject{}, repos.ErrNotFound
+	}
+	subj := chats.Subject{OrgID: orgID, Org: slug, OwnerID: owner, ConversationID: chats.ConversationID(owner, orgID, repoID, agentID)}
+	switch {
+	case repoID != uuid.Nil:
+		repo, ok := s.repos[orgID][repoID]
+		if !ok {
+			return chats.Subject{}, repos.ErrNotFound
+		}
+		subj.RepoID, subj.Repo, subj.Branch, subj.Head = repo.RepoID, repo.Repo, repo.Branch, repo.Head
+	case agentID != uuid.Nil:
+		name, ok := s.agents[orgID][agentID]
+		if !ok {
+			return chats.Subject{}, repos.ErrNotFound
+		}
+		subj.AgentID, subj.Agent = agentID, name
 	}
 	return subj, nil
 }

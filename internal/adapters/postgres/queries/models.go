@@ -106,21 +106,22 @@ type ChatMessage struct {
 }
 
 type ChatThread struct {
-	ID         uuid.UUID
-	OrgID      uuid.UUID
-	RepoID     *uuid.UUID
-	BranchID   *uuid.UUID
-	Sha        *string
-	Path       *string
-	StartLine  *int32
-	EndLine    *int32
-	CreatedBy  *uuid.UUID
-	CreatedAt  time.Time
-	ResolvedAt *time.Time
-	ResolvedBy *uuid.UUID
-	Version    int64
-	ReviewID   *uuid.UUID
-	IssueID    *uuid.UUID
+	ID             uuid.UUID
+	OrgID          uuid.UUID
+	RepoID         *uuid.UUID
+	BranchID       *uuid.UUID
+	Sha            *string
+	Path           *string
+	StartLine      *int32
+	EndLine        *int32
+	CreatedBy      *uuid.UUID
+	CreatedAt      time.Time
+	ResolvedAt     *time.Time
+	ResolvedBy     *uuid.UUID
+	Version        int64
+	ReviewID       *uuid.UUID
+	IssueID        *uuid.UUID
+	ConversationID *uuid.UUID
 }
 
 type Commit struct {
@@ -362,6 +363,13 @@ type OrganizationLimit struct {
 	Version      int64
 	UpdatedAt    time.Time
 	UpdatedBy    *uuid.UUID
+}
+
+type Preference struct {
+	PrincipalID uuid.UUID
+	Theme       string
+	UpdatedAt   time.Time
+	Version     int64
 }
 
 type Principal struct {
