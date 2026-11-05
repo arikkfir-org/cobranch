@@ -6754,6 +6754,43 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/paths:
+    get:
+      operationId: getPaths
+      summary: >-
+        The path of every file and symlink in the commit a ref names, for a viewer to find a file by its path, in the
+        order Git keeps them, up to 50,000 of them; takes repo.read. It reads the Git server: an installation without
+        one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The paths.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Paths"
+        "304":
+          description: The paths are still the ones If-None-Match names.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/blob:
     get:
       operationId: getBlob
@@ -6786,6 +6823,56 @@ paths:
           headers:
             ETag:
               $ref: "#/components/headers/ETag"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "503":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/blame:
+    get:
+      operationId: getBlame
+      summary: >-
+        Which commit last changed each line of the file at a path of the commit a ref names, as git blame tells it, for
+        the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink,
+        a binary file or one over 1 MiB is a 400 whose code is path.text. It reads the Git server: an installation
+        without one answers 503.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/ref"
+        - name: path
+          in: query
+          required: true
+          description: The file's path from the repository's root, as names separated by /.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifNoneMatch"
+      responses:
+        "200":
+          description: The file's lines in runs, each with the commit that last changed it.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Blame"
+        "304":
+          description: The answer is still the one If-None-Match names.
+          headers:
+            ETag:
+              description: A strong entity tag of the answer, which its commits, their annotations and reviews fix.
+              required: true
+              schema:
+                type: string
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -9538,6 +9625,59 @@ components:
           description: Every commit latest and entries name, once, the most recently committed first.
           items:
             $ref: "#/components/schemas/Commit"
+    Paths:
+      type: object
+      description: The path of every file and symlink in a commit's tree, without its submodules'.
+      required: [commit, paths, truncated]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        paths:
+          type: array
+          description: The paths from the repository's root, in the order Git keeps them, up to 50,000 of them.
+          items:
+            type: string
+        truncated:
+          type: boolean
+          description: Whether the tree holds more paths than paths lists.
+    Blame:
+      type: object
+      description: >-
+        Which commit last changed each line of a file at a commit. A run whose commit no push recorded keeps its name,
+        with no commit of commits to show.
+      required: [commit, path, ranges, commits]
+      properties:
+        commit:
+          type: string
+          description: The commit the ref resolved to.
+        path:
+          type: string
+          description: The file's path from the repository's root.
+        ranges:
+          type: array
+          description: The file's lines in runs, in order, each the lines one commit last changed.
+          items:
+            $ref: "#/components/schemas/BlameRange"
+        commits:
+          type: array
+          description: Every commit a push recorded of those ranges name, once, the most recently committed first.
+          items:
+            $ref: "#/components/schemas/Commit"
+    BlameRange:
+      type: object
+      description: A run of a file's lines that one commit last changed.
+      required: [sha, start, lines]
+      properties:
+        sha:
+          type: string
+          description: The commit's full name.
+        start:
+          type: integer
+          description: The run's first line, counted from 1.
+        lines:
+          type: integer
+          description: How many lines the run holds.
     TreeEntry:
       type: object
       description: One of a directory's entries.

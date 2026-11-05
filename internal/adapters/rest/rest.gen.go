@@ -1559,6 +1559,33 @@ type ArtifactVersionList struct {
 	Versions []ArtifactVersion `json:"versions"`
 }
 
+// Blame Which commit last changed each line of a file at a commit. A run whose commit no push recorded keeps its name, with no commit of commits to show.
+type Blame struct {
+	// Commit The commit the ref resolved to.
+	Commit string `json:"commit"`
+
+	// Commits Every commit a push recorded of those ranges name, once, the most recently committed first.
+	Commits []Commit `json:"commits"`
+
+	// Path The file's path from the repository's root.
+	Path string `json:"path"`
+
+	// Ranges The file's lines in runs, in order, each the lines one commit last changed.
+	Ranges []BlameRange `json:"ranges"`
+}
+
+// BlameRange A run of a file's lines that one commit last changed.
+type BlameRange struct {
+	// Lines How many lines the run holds.
+	Lines int `json:"lines"`
+
+	// Sha The commit's full name.
+	Sha string `json:"sha"`
+
+	// Start The run's first line, counted from 1.
+	Start int `json:"start"`
+}
+
 // Branch One of a repository's live branches and the commit it is at. Every branch but main is a request to merge into its base, main, and carries its status; main carries none of base, status, ahead and behind, and its checks are empty.
 type Branch struct {
 	// Ahead How many commits it has that its base lacks; left out until a push works it out.
@@ -2751,6 +2778,18 @@ type PageViewPage string
 // PageViews defines model for PageViews.
 type PageViews struct {
 	Views []PageView `json:"views"`
+}
+
+// Paths The path of every file and symlink in a commit's tree, without its submodules'.
+type Paths struct {
+	// Commit The commit the ref resolved to.
+	Commit string `json:"commit"`
+
+	// Paths The paths from the repository's root, in the order Git keeps them, up to 50,000 of them.
+	Paths []string `json:"paths"`
+
+	// Truncated Whether the tree holds more paths than paths lists.
+	Truncated bool `json:"truncated"`
 }
 
 // PermissionLabel A permission as people read it, the area of Cobranch it is about and what it lets its holder do.
@@ -3980,6 +4019,18 @@ type ListArtifactsParams struct {
 	Kind *ArtifactKind `form:"kind,omitempty" json:"kind,omitempty"`
 }
 
+// GetBlameParams defines parameters for GetBlame.
+type GetBlameParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Path The file's path from the repository's root, as names separated by /.
+	Path string `form:"path" json:"path"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GetBlobParams defines parameters for GetBlob.
 type GetBlobParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
@@ -4185,6 +4236,15 @@ type ListDeliveriesParams struct {
 
 	// Limit How many deliveries the page holds at most.
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetPathsParams defines parameters for GetPaths.
+type GetPathsParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
 }
 
 // GetRawParams defines parameters for GetRaw.
@@ -4900,6 +4960,9 @@ type ServerInterface interface {
 	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
 	// (POST /orgs/{org}/repos/{repo}/artifacts)
 	CreateArtifact(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// GetBlame Which commit last changed each line of the file at a path of the commit a ref names, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a 400 whose code is path.text. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/blame)
+	GetBlame(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlameParams)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams)
@@ -5044,6 +5107,9 @@ type ServerInterface interface {
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
+	// GetPaths The path of every file and symlink in the commit a ref names, for a viewer to find a file by its path, in the order Git keeps them, up to 50,000 of them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/paths)
+	GetPaths(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetPathsParams)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetRawParams)
@@ -10294,6 +10360,91 @@ func (siw *ServerInterfaceWrapper) CreateArtifact(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetBlame operation middleware
+func (siw *ServerInterfaceWrapper) GetBlame(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetBlameParams
+
+	// ------------- Optional query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	// ------------- Required query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBlame(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetBlob operation middleware
 func (siw *ServerInterfaceWrapper) GetBlob(w http.ResponseWriter, r *http.Request) {
 
@@ -13250,6 +13401,78 @@ func (siw *ServerInterfaceWrapper) ListRepositoryJobs(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// GetPaths operation middleware
+func (siw *ServerInterfaceWrapper) GetPaths(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetPathsParams
+
+	// ------------- Optional query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetPaths(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetRaw operation middleware
 func (siw *ServerInterfaceWrapper) GetRaw(w http.ResponseWriter, r *http.Request) {
 
@@ -15513,7 +15736,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree/commits", wrapper.GetTreeCommits)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/paths", wrapper.GetPaths)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blame", wrapper.GetBlame)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/raw", wrapper.GetRaw)
 
 	return m
@@ -27318,6 +27543,127 @@ func (response CreateArtifactdefaultApplicationProblemPlusJSONResponse) VisitCre
 	return err
 }
 
+type GetBlameRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params GetBlameParams
+}
+
+type GetBlameResponseObject interface {
+	VisitGetBlameResponse(w http.ResponseWriter) error
+}
+
+type GetBlame200ResponseHeaders struct {
+	ETag string
+}
+
+type GetBlame200JSONResponse struct {
+	Body    Blame
+	Headers GetBlame200ResponseHeaders
+}
+
+func (response GetBlame200JSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlame304ResponseHeaders struct {
+	ETag string
+}
+
+type GetBlame304Response struct {
+	Headers GetBlame304ResponseHeaders
+}
+
+func (response GetBlame304Response) VisitGetBlameResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetBlame400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetBlame400ApplicationProblemPlusJSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlame401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBlame401ApplicationProblemPlusJSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlame404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBlame404ApplicationProblemPlusJSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlame503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetBlame503ApplicationProblemPlusJSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetBlamedefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetBlamedefaultApplicationProblemPlusJSONResponse) VisitGetBlameResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetBlobRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -32576,6 +32922,127 @@ func (response ListRepositoryJobsdefaultApplicationProblemPlusJSONResponse) Visi
 	return err
 }
 
+type GetPathsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params GetPathsParams
+}
+
+type GetPathsResponseObject interface {
+	VisitGetPathsResponse(w http.ResponseWriter) error
+}
+
+type GetPaths200ResponseHeaders struct {
+	ETag string
+}
+
+type GetPaths200JSONResponse struct {
+	Body    Paths
+	Headers GetPaths200ResponseHeaders
+}
+
+func (response GetPaths200JSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaths304ResponseHeaders struct {
+	ETag string
+}
+
+type GetPaths304Response struct {
+	Headers GetPaths304ResponseHeaders
+}
+
+func (response GetPaths304Response) VisitGetPathsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetPaths400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetPaths400ApplicationProblemPlusJSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaths401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPaths401ApplicationProblemPlusJSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaths404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPaths404ApplicationProblemPlusJSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPaths503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetPaths503ApplicationProblemPlusJSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetPathsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetPathsdefaultApplicationProblemPlusJSONResponse) VisitGetPathsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type GetRawRequestObject struct {
 	Org    Org  `json:"org"`
 	Repo   Repo `json:"repo"`
@@ -36867,6 +37334,9 @@ type StrictServerInterface interface {
 	// CreateArtifact Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository. Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository took is refused with 409.
 	// (POST /orgs/{org}/repos/{repo}/artifacts)
 	CreateArtifact(ctx context.Context, request CreateArtifactRequestObject) (CreateArtifactResponseObject, error)
+	// GetBlame Which commit last changed each line of the file at a path of the commit a ref names, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a 400 whose code is path.text. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/blame)
+	GetBlame(ctx context.Context, request GetBlameRequestObject) (GetBlameResponseObject, error)
 	// GetBlob The file or symlink at a path of the commit a ref names: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at raw. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/blob)
 	GetBlob(ctx context.Context, request GetBlobRequestObject) (GetBlobResponseObject, error)
@@ -37011,6 +37481,9 @@ type StrictServerInterface interface {
 	// ListRepositoryJobs The repository's jobs, the principals its secrets are granted to, by name; takes repo.read. A job becomes a principal when it first queues a run.
 	// (GET /orgs/{org}/repos/{repo}/jobs)
 	ListRepositoryJobs(ctx context.Context, request ListRepositoryJobsRequestObject) (ListRepositoryJobsResponseObject, error)
+	// GetPaths The path of every file and symlink in the commit a ref names, for a viewer to find a file by its path, in the order Git keeps them, up to 50,000 of them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/paths)
+	GetPaths(ctx context.Context, request GetPathsRequestObject) (GetPathsResponseObject, error)
 	// GetRaw The bytes of the file or symlink at a path of the commit a ref names, served as nothing that runs: an image as its type, text as text/plain, anything else as an attachment; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/raw)
 	GetRaw(ctx context.Context, request GetRawRequestObject) (GetRawResponseObject, error)
@@ -40643,6 +41116,34 @@ func (sh *strictHandler) CreateArtifact(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
+// GetBlame operation middleware
+func (sh *strictHandler) GetBlame(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlameParams) {
+	var request GetBlameRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBlame(ctx, request.(GetBlameRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBlame")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBlameResponseObject); ok {
+		if err := validResponse.VisitGetBlameResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetBlob operation middleware
 func (sh *strictHandler) GetBlob(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetBlobParams) {
 	var request GetBlobRequestObject
@@ -42108,6 +42609,34 @@ func (sh *strictHandler) ListRepositoryJobs(w http.ResponseWriter, r *http.Reque
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ListRepositoryJobsResponseObject); ok {
 		if err := validResponse.VisitListRepositoryJobsResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetPaths operation middleware
+func (sh *strictHandler) GetPaths(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetPathsParams) {
+	var request GetPathsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetPaths(ctx, request.(GetPathsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetPaths")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetPathsResponseObject); ok {
+		if err := validResponse.VisitGetPathsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

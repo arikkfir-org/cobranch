@@ -198,6 +198,19 @@ type ComplexityRoot struct {
 		TaskNumber func(childComplexity int) int
 	}
 
+	Blame struct {
+		Commit func(childComplexity int) int
+		Path   func(childComplexity int) int
+		Ranges func(childComplexity int) int
+	}
+
+	BlameRange struct {
+		Commit func(childComplexity int) int
+		Lines  func(childComplexity int) int
+		Sha    func(childComplexity int) int
+		Start  func(childComplexity int) int
+	}
+
 	Branch struct {
 		AIReview      func(childComplexity int) int
 		Ahead         func(childComplexity int) int
@@ -787,6 +800,12 @@ type ComplexityRoot struct {
 		Repositories func(childComplexity int) int
 	}
 
+	Paths struct {
+		Commit    func(childComplexity int) int
+		Paths     func(childComplexity int) int
+		Truncated func(childComplexity int) int
+	}
+
 	Person struct {
 		At        func(childComplexity int) int
 		Email     func(childComplexity int) int
@@ -834,6 +853,7 @@ type ComplexityRoot struct {
 	Repository struct {
 		Access            func(childComplexity int) int
 		Artifacts         func(childComplexity int, kind *ArtifactKind) int
+		Blame             func(childComplexity int, ref string, path string) int
 		Blob              func(childComplexity int, ref string, path string) int
 		Branch            func(childComplexity int, name string) int
 		BranchDiff        func(childComplexity int, name string) int
@@ -855,6 +875,7 @@ type ComplexityRoot struct {
 		Name              func(childComplexity int) int
 		ObjectFormat      func(childComplexity int) int
 		OrganizationID    func(childComplexity int) int
+		Paths             func(childComplexity int, ref string) int
 		Review            func(childComplexity int, id string) int
 		Roles             func(childComplexity int) int
 		Run               func(childComplexity int, number int) int
@@ -1270,7 +1291,9 @@ type RepositoryResolver interface {
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
 	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
 	TreeCommits(ctx context.Context, obj *Repository, ref string, path string) (*TreeCommits, error)
+	Paths(ctx context.Context, obj *Repository, ref string) (*Paths, error)
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
+	Blame(ctx context.Context, obj *Repository, ref string, path string) (*Blame, error)
 	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
 	Conversation(ctx context.Context, obj *Repository, first int, after *string) (*ChatPage, error)
@@ -1981,6 +2004,50 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.ArtifactVersion.TaskNumber(childComplexity), true
+
+	case "Blame.commit":
+		if e.ComplexityRoot.Blame.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blame.Commit(childComplexity), true
+	case "Blame.path":
+		if e.ComplexityRoot.Blame.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blame.Path(childComplexity), true
+	case "Blame.ranges":
+		if e.ComplexityRoot.Blame.Ranges == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Blame.Ranges(childComplexity), true
+
+	case "BlameRange.commit":
+		if e.ComplexityRoot.BlameRange.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BlameRange.Commit(childComplexity), true
+	case "BlameRange.lines":
+		if e.ComplexityRoot.BlameRange.Lines == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BlameRange.Lines(childComplexity), true
+	case "BlameRange.sha":
+		if e.ComplexityRoot.BlameRange.Sha == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BlameRange.Sha(childComplexity), true
+	case "BlameRange.start":
+		if e.ComplexityRoot.BlameRange.Start == nil {
+			break
+		}
+
+		return e.ComplexityRoot.BlameRange.Start(childComplexity), true
 
 	case "Branch.aiReview":
 		if e.ComplexityRoot.Branch.AIReview == nil {
@@ -5179,6 +5246,25 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.OrganizationUsage.Repositories(childComplexity), true
 
+	case "Paths.commit":
+		if e.ComplexityRoot.Paths.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Paths.Commit(childComplexity), true
+	case "Paths.paths":
+		if e.ComplexityRoot.Paths.Paths == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Paths.Paths(childComplexity), true
+	case "Paths.truncated":
+		if e.ComplexityRoot.Paths.Truncated == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Paths.Truncated(childComplexity), true
+
 	case "Person.at":
 		if e.ComplexityRoot.Person.At == nil {
 			break
@@ -5373,6 +5459,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Artifacts(childComplexity, args["kind"].(*ArtifactKind)), true
+	case "Repository.blame":
+		if e.ComplexityRoot.Repository.Blame == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_blame_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Blame(childComplexity, args["ref"].(string), args["path"].(string)), true
 	case "Repository.blob":
 		if e.ComplexityRoot.Repository.Blob == nil {
 			break
@@ -5554,6 +5651,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.OrganizationID(childComplexity), true
+	case "Repository.paths":
+		if e.ComplexityRoot.Repository.Paths == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_paths_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.Paths(childComplexity, args["ref"].(string)), true
 	case "Repository.review":
 		if e.ComplexityRoot.Repository.Review == nil {
 			break
@@ -7585,8 +7693,12 @@ extend type Repository {
   tree(ref: String! = "main", path: String! = ""): Tree
   "What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree."
   treeCommits(ref: String! = "main", path: String! = ""): TreeCommits
+  "The path of every file and symlink of the commit ref names, as tree takes it, in the order Git keeps them, up to 50,000 of them, for a viewer to find a file by its path; takes repo.read. A ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found; an installation without a Git server answers UNAVAILABLE."
+  paths(ref: String! = "main"): Paths
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
+  "Which commit last changed each line of the file at path of the commit ref names, as tree takes them, as git blame tells it, for the file's page to show beside its lines; takes repo.read. Only a file whose text blob shows has one: a symlink, a binary file or one over 1 MiB is a BAD_USER_INPUT error whose reason is path.text. A ref or a path that finds nothing is an error, as for blob."
+  blame(ref: String! = "main", path: String!): Blame
   "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
   branchDiff(name: String!): Diff
   "A commit's change against its first parent, or against the empty tree when it has none: null unless the repository holds it; takes repo.read. It reads the Git server: an installation without one answers UNAVAILABLE."
@@ -7613,6 +7725,38 @@ type Tree {
   entries: [TreeEntry!]!
   "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
   readme: File
+}
+
+"The path of every file and symlink in a commit's tree, without its submodules'."
+type Paths {
+  "The commit the ref resolved to."
+  commit: String!
+  "The paths from the repository's root, in the order Git keeps them, up to 50,000 of them."
+  paths: [String!]!
+  "Whether the tree holds more paths than paths lists."
+  truncated: Boolean!
+}
+
+"Which commit last changed each line of a file at a commit."
+type Blame {
+  "The commit the ref resolved to."
+  commit: String!
+  "The file's path from the repository's root."
+  path: String!
+  "The file's lines in runs, in order, each the lines one commit last changed."
+  ranges: [BlameRange!]!
+}
+
+"A run of a file's lines that one commit last changed."
+type BlameRange {
+  "The run's first line, counted from 1."
+  start: Int!
+  "How many lines the run holds."
+  lines: Int!
+  "The commit's full name."
+  sha: String!
+  "The commit, with the push that first brought it: null when no push recorded it."
+  commit: Commit
 }
 
 "What last changed a directory at a commit."
@@ -9582,6 +9726,32 @@ func (ec *executionContext) childFields_ArtifactVersion(ctx context.Context, fie
 	return nil, fmt.Errorf("no field named %q was found under type ArtifactVersion", field.Name)
 }
 
+func (ec *executionContext) childFields_Blame(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commit":
+		return ec.fieldContext_Blame_commit(ctx, field)
+	case "path":
+		return ec.fieldContext_Blame_path(ctx, field)
+	case "ranges":
+		return ec.fieldContext_Blame_ranges(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Blame", field.Name)
+}
+
+func (ec *executionContext) childFields_BlameRange(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "start":
+		return ec.fieldContext_BlameRange_start(ctx, field)
+	case "lines":
+		return ec.fieldContext_BlameRange_lines(ctx, field)
+	case "sha":
+		return ec.fieldContext_BlameRange_sha(ctx, field)
+	case "commit":
+		return ec.fieldContext_BlameRange_commit(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type BlameRange", field.Name)
+}
+
 func (ec *executionContext) childFields_Branch(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "name":
@@ -10566,6 +10736,18 @@ func (ec *executionContext) childFields_OrganizationUsage(ctx context.Context, f
 	return nil, fmt.Errorf("no field named %q was found under type OrganizationUsage", field.Name)
 }
 
+func (ec *executionContext) childFields_Paths(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commit":
+		return ec.fieldContext_Paths_commit(ctx, field)
+	case "paths":
+		return ec.fieldContext_Paths_paths(ctx, field)
+	case "truncated":
+		return ec.fieldContext_Paths_truncated(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type Paths", field.Name)
+}
+
 func (ec *executionContext) childFields_Person(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "name":
@@ -10684,8 +10866,12 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_tree(ctx, field)
 	case "treeCommits":
 		return ec.fieldContext_Repository_treeCommits(ctx, field)
+	case "paths":
+		return ec.fieldContext_Repository_paths(ctx, field)
 	case "blob":
 		return ec.fieldContext_Repository_blob(ctx, field)
+	case "blame":
+		return ec.fieldContext_Repository_blame(ctx, field)
 	case "branchDiff":
 		return ec.fieldContext_Repository_branchDiff(ctx, field)
 	case "commitDiff":
@@ -14402,6 +14588,28 @@ func (ec *executionContext) field_Repository_artifacts_args(ctx context.Context,
 	return args, nil
 }
 
+func (ec *executionContext) field_Repository_blame_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ref"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "path",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Repository_blob_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -14625,6 +14833,20 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["after"] = arg5
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_paths_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ref"] = arg0
 	return args, nil
 }
 
@@ -17525,6 +17747,185 @@ func (ec *executionContext) _ArtifactVersion_html(ctx context.Context, field gra
 }
 func (ec *executionContext) fieldContext_ArtifactVersion_html(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("ArtifactVersion", field, false, false, "String")
+}
+
+func (ec *executionContext) _Blame_commit(ctx context.Context, field graphql.CollectedField, obj *Blame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blame_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blame_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blame", field, false, false, "String")
+}
+
+func (ec *executionContext) _Blame_path(ctx context.Context, field graphql.CollectedField, obj *Blame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blame_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blame_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Blame", field, false, false, "String")
+}
+
+func (ec *executionContext) _Blame_ranges(ctx context.Context, field graphql.CollectedField, obj *Blame) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Blame_ranges(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Ranges, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*BlameRange) graphql.Marshaler {
+			return ec.marshalNBlameRange2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlameRangeᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Blame_ranges(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Blame",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_BlameRange(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _BlameRange_start(ctx context.Context, field graphql.CollectedField, obj *BlameRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BlameRange_start(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Start, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BlameRange_start(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BlameRange", field, false, false, "Int")
+}
+
+func (ec *executionContext) _BlameRange_lines(ctx context.Context, field graphql.CollectedField, obj *BlameRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BlameRange_lines(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Lines, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BlameRange_lines(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BlameRange", field, false, false, "Int")
+}
+
+func (ec *executionContext) _BlameRange_sha(ctx context.Context, field graphql.CollectedField, obj *BlameRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BlameRange_sha(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Sha, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_BlameRange_sha(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("BlameRange", field, false, false, "String")
+}
+
+func (ec *executionContext) _BlameRange_commit(ctx context.Context, field graphql.CollectedField, obj *BlameRange) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_BlameRange_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_BlameRange_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "BlameRange",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Branch_name(ctx context.Context, field graphql.CollectedField, obj *Branch) (ret graphql.Marshaler) {
@@ -30444,6 +30845,75 @@ func (ec *executionContext) fieldContext_OrganizationUsage_byRepository(_ contex
 	return fc, nil
 }
 
+func (ec *executionContext) _Paths_commit(ctx context.Context, field graphql.CollectedField, obj *Paths) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Paths_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Paths_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Paths", field, false, false, "String")
+}
+
+func (ec *executionContext) _Paths_paths(ctx context.Context, field graphql.CollectedField, obj *Paths) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Paths_paths(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Paths, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []string) graphql.Marshaler {
+			return ec.marshalNString2ᚕstringᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Paths_paths(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Paths", field, false, false, "String")
+}
+
+func (ec *executionContext) _Paths_truncated(ctx context.Context, field graphql.CollectedField, obj *Paths) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Paths_truncated(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Truncated, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Paths_truncated(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Paths", field, false, false, "Boolean")
+}
+
 func (ec *executionContext) _Person_name(ctx context.Context, field graphql.CollectedField, obj *Person) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -31980,6 +32450,50 @@ func (ec *executionContext) fieldContext_Repository_treeCommits(ctx context.Cont
 	return fc, nil
 }
 
+func (ec *executionContext) _Repository_paths(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_paths(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Paths(ctx, obj, fc.Args["ref"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Paths) graphql.Marshaler {
+			return ec.marshalOPaths2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPaths(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_paths(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Paths(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_paths_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Repository_blob(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -32018,6 +32532,50 @@ func (ec *executionContext) fieldContext_Repository_blob(ctx context.Context, fi
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Repository_blob_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_blame(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_blame(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().Blame(ctx, obj, fc.Args["ref"].(string), fc.Args["path"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Blame) graphql.Marshaler {
+			return ec.marshalOBlame2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlame(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_blame(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Blame(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_blame_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -40484,6 +41042,97 @@ func (ec *executionContext) _ArtifactVersion(ctx context.Context, sel ast.Select
 	return out
 }
 
+var blameImplementors = []string{"Blame"}
+
+func (ec *executionContext) _Blame(ctx context.Context, sel ast.SelectionSet, obj *Blame) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, blameImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Blame")
+		case "commit":
+			out.Values[i] = ec._Blame_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._Blame_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "ranges":
+			out.Values[i] = ec._Blame_ranges(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var blameRangeImplementors = []string{"BlameRange"}
+
+func (ec *executionContext) _BlameRange(ctx context.Context, sel ast.SelectionSet, obj *BlameRange) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, blameRangeImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("BlameRange")
+		case "start":
+			out.Values[i] = ec._BlameRange_start(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "lines":
+			out.Values[i] = ec._BlameRange_lines(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "sha":
+			out.Values[i] = ec._BlameRange_sha(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commit":
+			out.Values[i] = ec._BlameRange_commit(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var branchImplementors = []string{"Branch"}
 
 func (ec *executionContext) _Branch(ctx context.Context, sel ast.SelectionSet, obj *Branch) graphql.Marshaler {
@@ -44318,6 +44967,49 @@ func (ec *executionContext) _OrganizationUsage(ctx context.Context, sel ast.Sele
 	return out
 }
 
+var pathsImplementors = []string{"Paths"}
+
+func (ec *executionContext) _Paths(ctx context.Context, sel ast.SelectionSet, obj *Paths) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, pathsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Paths")
+		case "commit":
+			out.Values[i] = ec._Paths_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "paths":
+			out.Values[i] = ec._Paths_paths(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "truncated":
+			out.Values[i] = ec._Paths_truncated(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var personImplementors = []string{"Person"}
 
 func (ec *executionContext) _Person(ctx context.Context, sel ast.SelectionSet, obj *Person) graphql.Marshaler {
@@ -44784,11 +45476,23 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_treeCommits(ctx, field, obj)
 				})
+		case "paths":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_paths(ctx, field, obj)
+				})
 		case "blob":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_blob(ctx, field, obj)
+				})
+		case "blame":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_blame(ctx, field, obj)
 				})
 		case "branchDiff":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -47042,6 +47746,30 @@ func (ec *executionContext) marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternal
 	return ec._ArtifactVersion(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNBlameRange2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlameRangeᚄ(ctx context.Context, sel ast.SelectionSet, v []*BlameRange) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNBlameRange2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlameRange(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNBlameRange2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlameRange(ctx context.Context, sel ast.SelectionSet, v *BlameRange) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "BlameRange!")
+		return graphql.Null
+	}
+	return ec._BlameRange(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -49031,6 +49759,13 @@ func (ec *executionContext) marshalOArtifactVersion2ᚖcobranchᚗdevᚋinternal
 	return ec._ArtifactVersion(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOBlame2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐBlame(ctx context.Context, sel ast.SelectionSet, v *Blame) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Blame(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOBoolean2bool(ctx context.Context, v any) (bool, error) {
 	res, err := graphql.UnmarshalBoolean(v)
 	return res, graphql.ErrorOnPath(ctx, err)
@@ -49495,6 +50230,13 @@ func (ec *executionContext) marshalOOrganization2ᚖcobranchᚗdevᚋinternalᚋ
 		return graphql.Null
 	}
 	return ec._Organization(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOPaths2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPaths(ctx context.Context, sel ast.SelectionSet, v *Paths) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Paths(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOPush2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐPush(ctx context.Context, sel ast.SelectionSet, v *Push) graphql.Marshaler {

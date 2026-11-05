@@ -313,6 +313,75 @@ func TestInternalLastCommits(t *testing.T) {
 	}
 }
 
+func TestInternalBlame(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	mustGit(t, b.dir, "checkout", "-q", "-b", "blamed", b.merge)
+	more := commit(t, b.dir, "README.md", "# Website\nMore\n")
+	mustGit(t, b.dir, "push", "-q", "origin", "blamed")
+	tests := []struct {
+		name, ref, path string
+		wantCommit      string
+		want            []code.BlameRange
+		wantErr         error
+	}{
+		{name: "a line each commit added, by line", ref: "blamed", path: "README.md", wantCommit: more,
+			want: []code.BlameRange{{SHA: b.first, Start: 1, Lines: 1}, {SHA: more, Start: 2, Lines: 1}}},
+		{name: "a file a merged branch added", ref: "main", path: "feature.txt", wantCommit: b.merge, want: []code.BlameRange{{SHA: b.feature, Start: 1, Lines: 1}}},
+		{name: "a name Git's pathspecs would read as a pattern", ref: "v1", path: "docs/*.md", wantCommit: b.first,
+			want: []code.BlameRange{{SHA: b.first, Start: 1, Lines: 1}}},
+		{name: "a directory", ref: "main", path: "docs", wantErr: code.ErrNotBlob},
+		{name: "a submodule", ref: "main", path: "vendor/lib", wantErr: code.ErrSubmodule},
+		{name: "a path the commit doesn't hold", ref: "v1", path: "feature.txt", wantErr: code.ErrPathNotFound},
+		{name: "a ref that names nothing", ref: "gone", path: "README.md", wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.client.Blame(b.ctx(t), website, tt.ref, tt.path)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Blame() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.Commit != tt.wantCommit || got.Path != tt.path || !slices.Equal(got.Ranges, tt.want) {
+				t.Errorf("Blame() = %+v, want commit %s and runs %+v", got, tt.wantCommit, tt.want)
+			}
+		})
+	}
+}
+
+func TestInternalPaths(t *testing.T) {
+	t.Parallel()
+	b := newBrowsed(t)
+	tests := []struct {
+		name, ref  string
+		wantCommit string
+		want       []string
+		wantErr    error
+	}{
+		{name: "every file and symlink, in Git's order, without the submodule", ref: "main", wantCommit: b.merge,
+			want: []string{"README.md", "big.txt", "bin/tool", "docs/*.md", "docs/guide.md", "docs/with space ü.md", "feature.txt", "link", "logo.png"}},
+		{name: "at an annotated tag", ref: "v1", wantCommit: b.first,
+			want: []string{"README.md", "big.txt", "bin/tool", "docs/*.md", "docs/guide.md", "docs/with space ü.md", "link", "logo.png"}},
+		{name: "a ref that names nothing", ref: "gone", wantErr: code.ErrRefNotFound},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := b.client.Paths(b.ctx(t), website, tt.ref)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("Paths() error = %v, want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.Commit != tt.wantCommit || got.Truncated || !slices.Equal(got.Paths, tt.want) {
+				t.Errorf("Paths() = %+v, want commit %s and paths %q", got, tt.wantCommit, tt.want)
+			}
+		})
+	}
+}
+
 // sameLog reports whether got and want name the same commits with the same parents, in the same order.
 func sameLog(got, want []code.LogEntry) bool {
 	return slices.EqualFunc(got, want, func(a, b code.LogEntry) bool { return a.SHA == b.SHA && slices.Equal(a.Parents, b.Parents) })

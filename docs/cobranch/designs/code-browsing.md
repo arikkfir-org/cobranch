@@ -29,7 +29,7 @@ first-parent history and commits from PostgreSQL, and left the rest here, since 
 Git hosting ([ENG-198](https://linear.app/arikkfir/issue/ENG-198)) recorded every push’s commits and branches; this
 slice reads the files those commits hold.
 
-Since built: each entry's last commit and a path's history, for the Files screen
+Since built: each entry's last commit, a path's history, blame and every path of a tree, for the Files screens
 ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)); see [Trees and files](#trees-and-files) and [History](#history).
 
 Choices beyond the agreed designs are collected under [Decisions](#decisions).
@@ -66,6 +66,8 @@ whenever it runs the Git server.
 | `GET /internal/v1/repos/{id}/raw?ref=&path=` | The blob's bytes, streamed, with its commit and object in headers |
 | `GET /internal/v1/repos/{id}/log?ref=&skip=&limit=&path=` | The commits reachable from the ref, every parent followed, in `git rev-list --date-order`: each one's name and its parents'; with a path, only those that changed it |
 | `GET /internal/v1/repos/{id}/last-commits?ref=&path=` | How many commits changed the directory at the path, the latest of them, and the latest that changed each of its entries, from one walk of `git log -- <path>` of at most 10,000 commits. Added for the Files screen ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
+| `GET /internal/v1/repos/{id}/paths?ref=` | The paths of the ref's files and symlinks, sorted, from `git ls-tree -r`, up to 50,000, and whether it stopped there. Added for Go to file ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
+| `GET /internal/v1/repos/{id}/blame?ref=&path=` | The runs of the file's lines, each with the commit that last changed it, from `git blame --incremental`, neighbours one commit changed joined. Added for Blame ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)) |
 | `POST /internal/v1/repos/{id}/merge` | Merges a branch into its base for its requester, by a merge commit or a fast-forward, recorded as a push ([by asking Cobranch](branch-status.md#by-asking-cobranch)) |
 | `POST /internal/v1/repos/{id}/delete` | Deletes a branch at its head for its requester, recorded as a push of its ref to nothing, and answers 204 ([deleting a branch](branch-status.md#deleting-a-branch)) |
 | `GET /internal/v1/repos/{id}/diff?ref=&base=&mergeBase=` | The change from the base (or the merge base of the base and the ref, or the empty tree without a base) to the ref: its files, their counts and hunks, up to a diff's limits. Added with reviews ([diffs](reviews.md#diffs)) |
@@ -126,8 +128,17 @@ answers 304 without a body.
   recorded them, newest first. The Git server walks `git log -- <path>` from the commit, newest first, and stops once
   every entry has its commit, or after 10,000 commits, so an entry nobody changed in that long shows none. The Files
   screen draws them ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
-- **GraphQL** answers the same: `Repository.tags`, `tree(ref, path)`, `blob(ref, path)` and `treeCommits(ref, path)`, a
-  tree's README included.
+- **Every path of a tree.** `GET …/paths?ref=` answers the paths of the ref's files, sorted, submodules left out, up to
+  50,000 of them, and says when it stopped there. The Git server reads them with `git ls-tree -r -z` from the commit.
+  The Files screen's Go to file matches its viewer's letters against them in the browser, so it asks once per ref
+  ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
+- **A file's blame.** `GET …/blame?ref=&path=` answers, for a file the Console shows as text, the runs of its lines
+  each commit last changed, from its first line, and those commits once each, as pushes recorded them, newest first;
+  any other file is refused (`400`, `path.text`). The Git server runs `git blame --incremental` at the commit and
+  joins neighbouring runs of one commit. The File screen's Blame draws them
+  ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
+- **GraphQL** answers the same: `Repository.tags`, `tree(ref, path)`, `blob(ref, path)`, `treeCommits(ref, path)`,
+  `paths(ref)` and `blame(ref, path)`, a tree's README included.
 
 ## Markdown
 
@@ -209,7 +220,7 @@ on.
 - **Any ref.** History takes `ref` (a branch, a tag or a commit) beside today's `branch`, and its cursor is opaque: for
   every parent, the commit it started from and how many it has listed, so pages hold still while the branch moves.
 - **A path's history.** `path` narrows every-parent history to the commits that changed what is at a path, as `git
-  rev-list -- <path>` simplifies it, and its cursor keeps the path. Along first parents it is refused (`400`,
+  rev-list -- <path>` simplifies it; a caller repeats `path` with its cursor, as it repeats `parents=all`. Along first parents it is refused (`400`,
   `parents.path`), since PostgreSQL holds no paths. Built for the Files screen's History links
   ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)).
 
@@ -237,10 +248,13 @@ The ref picker lists branches and tags; a file links its permanent URL at the co
 - **The Files tab** (`…/tree`) opens on `main`'s root, as the Files screen draws it: the Ref picker, a menu of branches
   and tags; the path from the repository's slug; a card of the latest commit that changed the directory, with how many
   did, which links to their history; each entry beside the commit that last changed it, and when; and the README in a
-  card of its own. The repository itself opens on its Branches tab
+  card of its own. Go to file, at the toolbar's end, lists the ten files of the ref whose paths best hold the letters
+  typed, in order, those under the directory shown first among equals, and opens one with Enter. The repository itself
+  opens on its Branches tab
   ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)), and its heading's Clone button holds the clone URLs.
-- **A file** is one card, as the File screen draws it: its name, lines, size and language, then Raw, History and a
-  button that copies its text, over its numbered lines. A click on a line's number picks it and a shift-click a range,
+- **A file** is one card, as the File screen draws it: its name, lines, size and language, then Raw, Blame, History and
+  a button that copies its text, over its numbered lines. Blame shows beside each run of lines the commit that last
+  changed it, its author and when, over a strip that fades with its age among the file's commits; `?blame` keeps it on. A click on a line's number picks it and a shift-click a range,
   which the URL's anchor (`#L3-L5`) keeps and a link button copies; on a branch, the lines picked start a thread of its
   chat, and its threads on the file are listed under the card. Markdown switches between Preview and Source; an image
   shows on a stage; a binary file, or one past 1 MiB, isn't shown, and offers its download; a symlink links its target
@@ -320,6 +334,8 @@ Nothing of an installation is in the product: the chart wires the internal call 
 | Raw bytes at the full name of their commit are cached as immutable; everything else is `private, no-cache` | A README's images load once; the house rules' default stays for whatever can change | Agreed (owner, 2026-11-01) |
 | Syntax colouring, each entry's last commit, blame, a file's history, diffs (since built by [reviews](reviews.md#diffs)), a setting that turns images from elsewhere off and code search come later | Keeps this slice to its issue | Agreed (owner, 2026-11-01) |
 | Each entry's last commit comes from one walk of the directory's history, stopped at 10,000 commits; a path's history follows every parent only | One request per directory however many entries it holds; an entry untouched that long shows no commit rather than slowing the page. First parents live in PostgreSQL, which holds no paths | Built for the Files screen ([ENG-258](https://linear.app/arikkfir/issue/ENG-258), 2026-11-05) |
+| Go to file reads every path of the ref once and matches in the browser; the list stops at 50,000 paths | Each keystroke answers at once with no request; a tree past that size is rare, and its list says it stopped | Built for the Files screen ([ENG-258](https://linear.app/arikkfir/issue/ENG-258), 2026-11-05) |
+| Blame is asked only for a file shown as text, and at the commit the page shows | Its runs line up with the lines on screen; a binary or truncated file has no lines to blame | Built for the File screen ([ENG-258](https://linear.app/arikkfir/issue/ENG-258), 2026-11-05) |
 
 ## Open questions
 

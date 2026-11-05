@@ -92,6 +92,24 @@ func (c *Client) LastCommits(ctx context.Context, repoID uuid.UUID, ref, path st
 	return last.Domain(), nil
 }
 
+// Blame reads which commit last changed each line of the file at path in the commit ref names (code.Objects).
+func (c *Client) Blame(ctx context.Context, repoID uuid.UUID, ref, path string) (code.Blame, error) {
+	var blame Blame
+	if err := c.getJSON(ctx, repoID, "blame", url.Values{"ref": {ref}, "path": {path}}, &blame); err != nil {
+		return code.Blame{}, err
+	}
+	return blame.Domain(), nil
+}
+
+// Paths reads the path of every file and symlink in the commit ref names, up to code.MaxPaths of them (code.Objects).
+func (c *Client) Paths(ctx context.Context, repoID uuid.UUID, ref string) (code.Paths, error) {
+	var paths Paths
+	if err := c.getJSON(ctx, repoID, "paths", url.Values{"ref": {ref}}, &paths); err != nil {
+		return code.Paths{}, err
+	}
+	return paths.Domain(), nil
+}
+
 // Diff reads the change req asks for, up to the limits of a diff (code.Objects).
 func (c *Client) Diff(ctx context.Context, repoID uuid.UUID, req code.DiffRequest) (code.Diff, error) {
 	query := url.Values{"ref": {req.Head}, "base": {req.Base}}

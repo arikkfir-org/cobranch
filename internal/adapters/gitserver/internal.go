@@ -31,7 +31,8 @@ const (
 )
 
 // InternalHandler serves the internal call (package gitinternal): the REST and GraphQL servers' reads of a
-// repository's trees, files, history and diffs, each from one snapshot, and their merges and branch deletions. Its
+// repository's trees, files, paths, blame, history and diffs, each from one snapshot, and their merges and branch
+// deletions. Its
 // callers send on their viewer's token, and it serves only what that viewer may read, merge or delete, as Git's own
 // port does, so it holds up whoever calls it.
 func (s *Server) InternalHandler() http.Handler {
@@ -41,6 +42,8 @@ func (s *Server) InternalHandler() http.Handler {
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/raw", s.internal("raw", s.readRaw))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/log", s.internal("log", s.readLog))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/last-commits", s.internal("last-commits", s.readLastCommits))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/blame", s.internal("blame", s.readBlame))
+	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/paths", s.internal("paths", s.readPaths))
 	mux.HandleFunc("GET "+gitinternal.ReposPath+"{id}/diff", s.internal("diff", s.readDiff))
 	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/merge", s.mergeHandler())
 	mux.HandleFunc("POST "+gitinternal.ReposPath+"{id}/delete", s.deleteHandler())
