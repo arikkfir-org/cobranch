@@ -1,7 +1,7 @@
 import { api } from "../../../lib/api.js";
 import { openDialog } from "../../../lib/dialog.js";
 import { h } from "../../../lib/dom.js";
-import { checkbox, failure, field, input, selectBox } from "../../../lib/forms.js";
+import { checkbox, copyField, failure, field, input, selectBox } from "../../../lib/forms.js";
 import { ago, plural, when } from "../../../lib/format.js";
 import { icon } from "../../../lib/icons.js";
 import { roles } from "../../../lib/state.js";
@@ -42,7 +42,7 @@ async function showApiKeys(org, main, can, actions, made = null) {
     const revoked = newest(k, (s) => s.revokedAt);
     const used = newest(k, (s) => s.lastUsedAt);
     const gone = !working.length;
-    return h("tr", { "data-filter": k.name.toLowerCase() },
+    return h("tr", { class: gone ? "row-muted" : "", "data-filter": k.name.toLowerCase() },
       h("td", { class: "cell-two-lines" }, h("span", {}, k.name), hint ? h("code", {}, "cbk_…" + hint) : null),
       h("td", {}, gone ? h("span", { class: "tag" }, revoked ? "Revoked" : "Expired")
         : k.roles.length ? k.roles.map((r) => h("span", { class: "tag tone-info" }, r.name)) : h("span", { class: "cell-muted" }, "No role")),
@@ -75,16 +75,13 @@ async function showApiKeys(org, main, can, actions, made = null) {
         h("p", { class: "empty-description" }, "Make a key for a script that calls " + org.name + "'s API as itself.")))]));
 }
 
-// reveal announces a key just made or rotated in a Card (Tone=Success) with its secret, which the API never shows
-// again, and a button that copies it; done hides it.
+// reveal announces a key just made or rotated in a Card (Tone=Success) with its secret in a Copy field, as the API
+// never shows it again; done hides it.
 function reveal(made, done) {
-  const secret = h("input", { readonly: true, value: made.secret, "aria-label": "The key's secret" });
-  const copy = h("button", { class: "btn btn-sm", type: "button", onclick: () => navigator.clipboard.writeText(made.secret)
-    .then(() => { copy.textContent = "Copied"; }).catch(() => secret.select()) }, icon("copy"), "Copy");
   const roleNames = made.apiKey.roles.map((r) => r.name);
   return h("section", { class: "card card-success" },
     h("header", { class: "card-header" }, icon("circle-check"), h("h2", { class: "card-title" }, "Key \"" + made.apiKey.name + "\" made. Copy its secret now: it is shown this once.")),
-    h("div", { class: "card-body" }, h("div", { class: "input" }, secret, copy),
+    h("div", { class: "card-body" }, copyField("Secret", made.secret, "Shown once. Copy it now; Cobranch keeps only its hash."),
       h("p", { class: "card-meta" }, (roleNames.length ? (roleNames.length > 1 ? "Roles " : "Role ") + roleNames.join(", ") : "No role") +
         " · scripts send it as a Bearer token; a lost secret can't be recovered, so rotate the key instead.")),
     h("footer", { class: "card-footer" }, h("button", { class: "btn btn-primary", type: "button", onclick: done }, "I copied it")));

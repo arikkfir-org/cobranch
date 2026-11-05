@@ -1,5 +1,5 @@
 // The pieces of a form and its notices, as B's components draw them (components.css): a field's label, control and
-// help (Input, Select, Textarea), a checkbox beside its label, and a banner that says what happened.
+// help (Input, Select, Textarea, Copy field), a checkbox beside its label, and a banner that says what happened.
 
 import { h } from "./dom.js";
 import { icon } from "./icons.js";
@@ -12,6 +12,17 @@ export const field = (label, control, help) => h("label", { class: "field" }, h(
 export const input = (attrs) => h("input", { class: "input", ...attrs });
 export const selectBox = (select) => h("div", { class: "select" }, select);
 export const textarea = (attrs) => h("textarea", { class: "textarea", ...attrs });
+
+// copyField is a Copy field: value, read-only, with a button that copies it, under its label and over its help; where
+// the clipboard refuses, the button selects the value instead, for the viewer to copy.
+export function copyField(label, value, help) {
+  const text = h("code", {}, value);
+  const copy = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Copy", title: "Copy",
+    onclick: () => navigator.clipboard.writeText(value).then(() => { copy.replaceChildren(icon("check")); copy.title = "Copied"; })
+      .catch(() => getSelection().selectAllChildren(text)) }, icon("copy"));
+  return h("div", { class: "field" }, label ? h("span", { class: "field-label" }, label) : null, h("div", { class: "copy-field" }, text, copy),
+    help ? h("span", { class: "field-help" }, help) : null);
+}
 
 // checkbox is a Checkbox, the box before its label.
 export const checkbox = (box, label) => h("label", { class: "checkbox" }, box, label);

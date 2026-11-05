@@ -123,6 +123,14 @@
 .input:is(:disabled, :has(> input:disabled))::placeholder, .input > input:disabled::placeholder { color: var(--color-fg-disabled); }
 .field:has(:disabled) .field-label { color: var(--color-fg-disabled); }
 
+/* Copy field: a read-only value to copy (a key shown once, a clone URL) in Code/Medium, truncating, on bg/sunken, with a
+   Ghost Small copy Icon button inside; never editable. Label and help as on Input. */
+.copy-field {
+  display: flex; align-items: center; gap: var(--space-8); min-width: 0; padding: var(--space-6) var(--space-12);
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-sunken);
+}
+.copy-field > code { flex: 1; min-width: 0; overflow: hidden; color: var(--color-fg-default); font: var(--text-code-medium); text-overflow: ellipsis; white-space: nowrap; }
+
 /* Select: a closed choice, an Input with a chevron; .select holds a native select, whose open list is the browser's. */
 .select { position: relative; display: flex; align-items: center; width: 100%; min-width: 0; }
 .select > select {
@@ -237,6 +245,11 @@
 .table td { height: var(--size-row-sm); padding: 0 var(--space-16); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-fg-default); font: var(--text-body-small); text-align: left; vertical-align: middle; }
 .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td { background: var(--color-bg-hover); }
+/* Table/Row: State=Muted for a row that no longer counts (a revoked key, an archived repository), its cells muted;
+   State=Selected for the row a pane or detail shows. */
+.table tr.row-muted td { background: var(--color-bg-sunken); color: var(--color-fg-muted); }
+.table tr.row-muted .cell-two-lines > :first-child { color: var(--color-fg-muted); }
+.table tr.row-selected td { background: var(--color-bg-selected); }
 .table .cell-muted { color: var(--color-fg-muted); }
 .table .cell-mono { font: var(--text-code-small); }
 .table .cell-person { display: flex; align-items: center; gap: var(--space-8); }

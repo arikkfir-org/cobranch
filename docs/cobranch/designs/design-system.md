@@ -244,12 +244,13 @@ plan.
 | Button | Style: Primary, Secondary, Ghost, Danger × Size: Medium 32, Small 28 × State: Default, Hover, Disabled | Label, leading icon, trailing icon (each optional, swappable) | `.btn`, `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.btn-danger`, `.btn-sm` |
 | Icon button | Style: Secondary, Ghost × Size: Medium, Small | Icon | `.icon-btn`, `.icon-btn-ghost`, `.icon-btn-sm` |
 | Input, Select, Textarea | State: Default, Focus, Error, Disabled | Label, value, helper text (each optional); Input also a leading icon | `.field` with `.field-label` and `.field-help`, around `.input`, `.select` or `.textarea` |
+| Copy field | None | Label, value, helper text; a Ghost Small copy Icon button inside | `.copy-field` in a `.field`, holding a `code` and an `.icon-btn` (`copyField()` in `lib/forms.js`) |
 | Checkbox, Radio | Checked: Off, On × State: Default, Disabled | Label | `.checkbox`, `.radio`: a label around the native input |
 | Segmented control | Selected: 1, 2, 3 | Three options (the theme: Light, Dark, System) | `.segmented`, with `aria-pressed` on the chosen button |
 | Tab | State: Default, Selected | Label, icon, count | `.tab-bar`, `.tab`, `.tab-count` |
 | Menu, Menu item | Item: Tone Default, Danger × State Default, Hover, Disabled | Label, icon, shortcut, checked | `.menu`, `.menu-item`, `.menu-item-danger`, `.menu-shortcut`, `.menu-divider` |
 | Nav item, Nav/Sub item | State: Default, Hover, Selected (Sub item: Default, Selected) | Label, icon, count; Sub item a leading glyph and a status dot | `.nav-item`, `.nav-sub-item` (`lib/shell.css`) |
-| Table/Header cell, Table/Cell | Cell kind: Text, Muted, Mono, Number, Actions, Two lines | Text; Actions a small Ghost button | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines` |
+| Table/Header cell, Table/Cell, Table/Row | Cell kind: Text, Muted, Mono, Number, Actions, Two lines; Row state: Default, Muted, Selected | Text; Actions a small Ghost button; Two lines a title over its meta | `.table`, `.cell-muted`, `.cell-mono`, `.cell-number`, `.cell-actions`, `.cell-two-lines`; `.row-muted`, `.row-selected` on a `tr` |
 | Badge/Branch status | Processing, Blocked, Empty, Merged, Ready | None: the status sets icon, word and tone | `.badge` with a `.tone-*` class |
 | Badge/Annotation | Pending, In progress, Failed, Successful | None | `.badge` with a `.tone-*` class |
 | Badge/Review | Approved, Changes requested, Neutral | None | `.badge` with a `.tone-*` class |
