@@ -30,6 +30,7 @@ type Run struct {
 	State      RunState         `json:"state"`
 	Reason     string           `json:"reason"`
 	StartedBy  *CommitPrincipal `json:"startedBy,omitempty"`
+	CausedBy   *CommitPrincipal `json:"causedBy,omitempty"`
 	QueuedAt   time.Time        `json:"queuedAt"`
 	StartedAt  *time.Time       `json:"startedAt,omitempty"`
 	EndedAt    *time.Time       `json:"endedAt,omitempty"`
@@ -45,7 +46,7 @@ func run(r code.Run) (*Run, error) {
 	}
 	out := &Run{ID: r.ID.String(), Number: int(r.Number), Job: commitPrincipal(&r.Job), Sha: r.SHA, Ref: r.Ref,
 		Trigger: trigger(r.Trigger), Definition: def, State: RunState(strings.ToUpper(string(r.State))), Reason: r.Reason,
-		StartedBy: commitPrincipal(r.StartedBy), QueuedAt: r.QueuedAt.UTC(), StartedAt: utc(r.StartedAt),
+		StartedBy: commitPrincipal(r.StartedBy), CausedBy: commitPrincipal(r.CausedBy), QueuedAt: r.QueuedAt.UTC(), StartedAt: utc(r.StartedAt),
 		EndedAt: utc(r.EndedAt), Version: int(r.Version), repoID: r.RepoID}
 	if r.CauseRun != 0 {
 		cause := int(r.CauseRun)
@@ -147,7 +148,7 @@ func runsCursor(ctx context.Context, after *string) (int64, error) {
 
 // runPage is page as the API shows it.
 func runPage(page code.RunPage) (*RunPage, error) {
-	out := &RunPage{Runs: make([]*Run, 0, len(page.Runs))}
+	out := &RunPage{Runs: make([]*Run, 0, len(page.Runs)), Total: page.Total}
 	for _, r := range page.Runs {
 		shown, err := run(r)
 		if err != nil {

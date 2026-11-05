@@ -116,8 +116,9 @@ func insertRun(ctx context.Context, q *queries.Queries, r newRun, jobID uuid.UUI
 
 // Runs lists at most limit of the repository's runs, newest first, numbered before before (0 for the newest), at
 // commit sha unless it is empty (code.Store).
-func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, sha string, before int64, limit int) ([]code.Run, error) {
-	rows, err := s.q.RunsOf(ctx, queries.RunsOfParams{RepoID: repoID, Before: before, Sha: sha, Lim: int32(limit)})
+func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, q code.RunsQuery) ([]code.Run, error) {
+	rows, err := s.q.RunsOf(ctx, queries.RunsOfParams{RepoID: repoID, Before: q.Before, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch),
+		States: statesOf(q.States), Query: q.Query, Lim: int32(q.Limit)})
 	if err != nil {
 		return nil, fmt.Errorf("listing the runs: %w", err)
 	}
@@ -127,9 +128,37 @@ func (s *CodeStore) Runs(ctx context.Context, repoID uuid.UUID, sha string, befo
 		if err != nil {
 			return nil, err
 		}
+		run.CausedBy = principalOf(r.CausedByID, r.CausedByName)
 		out = append(out, run)
 	}
 	return out, nil
+}
+
+// CountRuns counts the repository's runs that q's filters keep, whatever its page (code.Store).
+func (s *CodeStore) CountRuns(ctx context.Context, repoID uuid.UUID, q code.RunsQuery) (int, error) {
+	n, err := s.q.CountRuns(ctx, queries.CountRunsParams{RepoID: repoID, Sha: q.SHA, Job: q.Job, Ref: refOf(q.Branch), States: statesOf(q.States),
+		Query: q.Query})
+	if err != nil {
+		return 0, fmt.Errorf("counting the runs: %w", err)
+	}
+	return int(n), nil
+}
+
+// refOf is a branch's ref in full, or "" for none.
+func refOf(branch string) string {
+	if branch == "" {
+		return ""
+	}
+	return "refs/heads/" + branch
+}
+
+// statesOf is states as the queries take them.
+func statesOf(states []jobs.State) []string {
+	out := make([]string, 0, len(states))
+	for _, s := range states {
+		out = append(out, string(s))
+	}
+	return out
 }
 
 // Run finds one of the repository's runs by number, or repos.ErrNotFound (code.Store).
@@ -141,7 +170,12 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 	if err != nil {
 		return code.Run{}, fmt.Errorf("finding run #%d: %w", number, err)
 	}
-	return runOf(ctx, s.q, row.JobRun, row.Job, row.StartedByName)
+	run, err := runOf(ctx, s.q, row.JobRun, row.Job, row.StartedByName)
+	if err != nil {
+		return code.Run{}, err
+	}
+	run.CausedBy = principalOf(row.CausedByID, row.CausedByName)
+	return run, nil
 }
 
 // CancelRun cancels a run that hasn't ended, for actor, in one transaction that acts for actor: its job's annotation

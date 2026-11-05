@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -53,6 +56,8 @@ type Run struct {
 	Reason string
 	// StartedBy is who started it from Waiting, or re-ran it; nil for any other run.
 	StartedBy *Principal
+	// CausedBy is who caused it: StartedBy, or else its trigger's actor; nil for a schedule's run, or once they are gone.
+	CausedBy  *Principal
 	QueuedAt  time.Time
 	StartedAt *time.Time
 	EndedAt   *time.Time
@@ -60,11 +65,26 @@ type Run struct {
 	Version int64
 }
 
+// RunsQuery picks a page of a repository's runs, newest first: those before the run numbered Before (0 for the
+// newest), at most Limit of them (0 for DefaultPageSize), kept by each filter that isn't empty: at commit SHA, of the
+// job named Job, on branch Branch, in one of States, and those whose job's name or branch or tag holds Query, ignoring
+// case, or whose commit starts with it.
+type RunsQuery struct {
+	SHA    string
+	Job    string
+	Branch string
+	States []jobs.State
+	Query  string
+	Before int64
+	Limit  int
+}
+
 // RunPage is a page of a repository's runs, newest first, and the number the next page lists runs before; 0 after the
-// last.
+// last. The first page counts every run its query keeps in Total; a later page counts none.
 type RunPage struct {
-	Runs []Run
-	Next int64
+	Runs  []Run
+	Next  int64
+	Total *int
 }
 
 // Errors of runs.
@@ -89,9 +109,11 @@ type EventInput struct {
 
 // RunStore keeps a repository's runs.
 type RunStore interface {
-	// Runs lists at most limit of the repository's runs, newest first, numbered before before (0 for the newest), at
-	// commit sha unless it is empty.
-	Runs(ctx context.Context, repoID uuid.UUID, sha string, before int64, limit int) ([]Run, error)
+	// Runs lists at most q.Limit of the repository's runs that q keeps, newest first, numbered before q.Before (0 for the
+	// newest).
+	Runs(ctx context.Context, repoID uuid.UUID, q RunsQuery) ([]Run, error)
+	// CountRuns counts the repository's runs that q's filters keep, whatever its page.
+	CountRuns(ctx context.Context, repoID uuid.UUID, q RunsQuery) (int, error)
 	// Run finds one of the repository's runs by number, or repos.ErrNotFound.
 	Run(ctx context.Context, repoID uuid.UUID, number int64) (Run, error)
 	// CancelRun cancels a run that hasn't ended, for actor, in one transaction that sets its job's annotation Failed,
@@ -115,27 +137,25 @@ type RunStore interface {
 	PostEvent(ctx context.Context, actor uuid.UUID, repoID uuid.UUID, in EventInput) ([]Run, error)
 }
 
-// Runs lists a page of the repository's runs, newest first, at commit sha unless it is empty, before the run numbered
-// before (0 for the newest); it takes repo.read. limit 0 asks for DefaultPageSize.
-func (s *Service) Runs(ctx context.Context, v Viewer, repoID uuid.UUID, sha string, before int64, limit int) (RunPage, error) {
+// Runs lists a page of the repository's runs that q keeps, newest first, and on the first page counts them all; it takes
+// repo.read.
+func (s *Service) Runs(ctx context.Context, v Viewer, repoID uuid.UUID, q RunsQuery) (RunPage, error) {
 	ctx, span := tracer.Start(ctx, "code.Service.Runs")
 	defer span.End()
-	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.commit.sha", sha))
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.String("cobranch.commit.sha", q.SHA),
+		attribute.String("cobranch.job", q.Job), attribute.String("cobranch.branch", q.Branch))
 	if err := s.read(ctx, v, repoID); err != nil {
 		return RunPage{}, failed(span, "reading the runs", err)
 	}
-	if sha != "" {
-		if err := ValidateSHA("sha", sha); err != nil {
-			return RunPage{}, err
-		}
+	if err := validateRunsQuery(q); err != nil {
+		return RunPage{}, err
 	}
-	if limit < 0 || limit > MaxRunsPage || before < 0 {
-		return RunPage{}, &orgs.ValidationError{Field: "limit", Code: "limit.invalid", Message: fmt.Sprintf("at most %d runs a page", MaxRunsPage)}
+	if q.Limit == 0 {
+		q.Limit = DefaultPageSize
 	}
-	if limit == 0 {
-		limit = DefaultPageSize
-	}
-	list, err := s.store.Runs(ctx, repoID, sha, before, limit+1)
+	limit := q.Limit
+	q.Limit++
+	list, err := s.store.Runs(ctx, repoID, q)
 	if err != nil {
 		return RunPage{}, failed(span, "reading the runs", err)
 	}
@@ -144,8 +164,46 @@ func (s *Service) Runs(ctx context.Context, v Viewer, repoID uuid.UUID, sha stri
 		page.Runs = list[:limit]
 		page.Next = list[limit-1].Number
 	}
+	if q.Before == 0 {
+		n, err := s.store.CountRuns(ctx, repoID, q)
+		if err != nil {
+			return RunPage{}, failed(span, "counting the runs", err)
+		}
+		page.Total = &n
+	}
 	return page, nil
 }
+
+// validateRunsQuery answers what is wrong with q: a commit that isn't one's full name, a job's or a branch's name past
+// 255 bytes or holding a control character, a state no run is in, a query MaxQuery doesn't allow, or a page out of
+// bounds.
+func validateRunsQuery(q RunsQuery) error {
+	if q.SHA != "" {
+		if err := ValidateSHA("sha", q.SHA); err != nil {
+			return err
+		}
+	}
+	for field, name := range map[string]string{"job": q.Job, "branch": q.Branch} {
+		if len(name) > 255 || strings.ContainsFunc(name, unicode.IsControl) || !utf8.ValidString(name) {
+			return &orgs.ValidationError{Field: field, Code: field + ".invalid", Message: "a name of up to 255 bytes, on one line"}
+		}
+	}
+	for _, st := range q.States {
+		if !slices.Contains(runStates, st) {
+			return &orgs.ValidationError{Field: "state", Code: "state.invalid", Message: fmt.Sprintf("one of %v", runStates)}
+		}
+	}
+	if err := validateQuery(q.Query); err != nil {
+		return err
+	}
+	if q.Limit < 0 || q.Limit > MaxRunsPage || q.Before < 0 {
+		return &orgs.ValidationError{Field: "limit", Code: "limit.invalid", Message: fmt.Sprintf("at most %d runs a page", MaxRunsPage)}
+	}
+	return nil
+}
+
+// runStates are the states a run may be in, which a RunsQuery may keep.
+var runStates = []jobs.State{jobs.StateWaiting, jobs.StateQueued, jobs.StateRunning, jobs.StateSucceeded, jobs.StateFailed, jobs.StateCancelled}
 
 // Run finds one of the repository's runs by its number; it takes repo.read. A run that isn't there is
 // repos.ErrNotFound.

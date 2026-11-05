@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -72,12 +73,46 @@ func TestListRunsAPI(t *testing.T) {
 					t.Errorf("runs = %s", body)
 				}
 			}},
+		{name: "in either of two states, counted", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?state=waiting&state=queued"),
+			wantStatus: 200, check: listed([]int64{3, 2}, 2)},
+		{name: "a job's on a branch", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?job=ci%2Fbuild&branch=main"),
+			wantStatus: 200, check: listed([]int64{3, 2, 1}, 3)},
+		{name: "on a branch that has none", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?branch=feature"),
+			wantStatus: 200, check: listed(nil, 0)},
+		{name: "a query its job's name holds, ignoring case", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=BUILD"),
+			wantStatus: 200, check: listed([]int64{3, 2, 1}, 3)},
+		{name: "a query its commit starts with", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=" + shaOf("b")[:7]),
+			wantStatus: 200, check: listed([]int64{1}, 1)},
+		{name: "a filtered page links the next with its filters, which counts none", viewer: withRuns(maxReading), method: http.MethodGet,
+			path: fixed(runsPath + "?state=waiting&state=queued&q=ci&limit=1"), wantStatus: 200,
+			wantHeader: http.Header{"Link": {`<?cursor=3&limit=1&q=ci&state=waiting&state=queued>; rel="next"`}}, check: listed([]int64{3}, 2)},
+		{name: "the next filtered page", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?cursor=3&limit=1&q=ci&state=waiting&state=queued"),
+			wantStatus: 200, check: listed([]int64{2}, -1)},
+		{name: "a state no run is in", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?state=done"), wantStatus: 400},
+		{name: "a query over two lines", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?q=a%0Ab"), wantStatus: 400, wantCode: "q.invalid"},
 		{name: "a cursor of nothing", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?cursor=next"), wantStatus: 400, wantCode: "cursor.invalid"},
 		{name: "a commit that isn't one", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?sha=main"), wantStatus: 400},
 		{name: "too many a page", viewer: withRuns(maxReading), method: http.MethodGet, path: fixed(runsPath + "?limit=101"), wantStatus: 400},
 		{name: "someone who can't read it", viewer: withRuns(nia), method: http.MethodGet, path: fixed(runsPath), wantStatus: 404},
 		{name: "anonymous", viewer: withRuns(nil), method: http.MethodGet, path: fixed(runsPath), wantStatus: 401, wantCode: "auth.unauthenticated"},
 	})
+}
+
+// listed checks that a page lists the runs numbered want, in order, and counts total, or none for -1.
+func listed(want []int64, total int) func(t *testing.T, f *orgFixture, body []byte) {
+	return func(t *testing.T, _ *orgFixture, body []byte) {
+		got := decode[struct {
+			Runs  []Run
+			Total *int
+		}](t, body)
+		var numbers []int64
+		for _, r := range got.Runs {
+			numbers = append(numbers, r.Number)
+		}
+		if !slices.Equal(numbers, want) || (total < 0) != (got.Total == nil) || (got.Total != nil && *got.Total != total) {
+			t.Errorf("runs = %s, want %v of %d", body, want, total)
+		}
+	}
 }
 
 func TestRunAPI(t *testing.T) {

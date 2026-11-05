@@ -1013,7 +1013,7 @@ type ComplexityRoot struct {
 		Review            func(childComplexity int, id string) int
 		Roles             func(childComplexity int) int
 		Run               func(childComplexity int, number int) int
-		Runs              func(childComplexity int, sha *string, first int, after *string) int
+		Runs              func(childComplexity int, sha *string, job *string, branch *string, states []RunState, query *string, first int, after *string) int
 		Secrets           func(childComplexity int) int
 		Slug              func(childComplexity int) int
 		Summary           func(childComplexity int) int
@@ -1072,6 +1072,7 @@ type ComplexityRoot struct {
 	Run struct {
 		Attempt    func(childComplexity int) int
 		CauseRun   func(childComplexity int) int
+		CausedBy   func(childComplexity int) int
 		Definition func(childComplexity int) int
 		EndedAt    func(childComplexity int) int
 		ID         func(childComplexity int) int
@@ -1099,6 +1100,7 @@ type ComplexityRoot struct {
 	RunPage struct {
 		NextCursor func(childComplexity int) int
 		Runs       func(childComplexity int) int
+		Total      func(childComplexity int) int
 	}
 
 	RunTrigger struct {
@@ -1461,7 +1463,7 @@ type RepositoryResolver interface {
 	Environments(ctx context.Context, obj *Repository) ([]*Environment, error)
 	Environment(ctx context.Context, obj *Repository, id string) (*Environment, error)
 	Delivery(ctx context.Context, obj *Repository, number int) (*Delivery, error)
-	Runs(ctx context.Context, obj *Repository, sha *string, first int, after *string) (*RunPage, error)
+	Runs(ctx context.Context, obj *Repository, sha *string, job *string, branch *string, states []RunState, query *string, first int, after *string) (*RunPage, error)
 	Run(ctx context.Context, obj *Repository, number int) (*Run, error)
 	Secrets(ctx context.Context, obj *Repository) ([]*Secret, error)
 	JobPrincipals(ctx context.Context, obj *Repository) ([]*Grantee, error)
@@ -6413,7 +6415,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Repository.Runs(childComplexity, args["sha"].(*string), args["first"].(int), args["after"].(*string)), true
+		return e.ComplexityRoot.Repository.Runs(childComplexity, args["sha"].(*string), args["job"].(*string), args["branch"].(*string), args["states"].([]RunState), args["query"].(*string), args["first"].(int), args["after"].(*string)), true
 	case "Repository.secrets":
 		if e.ComplexityRoot.Repository.Secrets == nil {
 			break
@@ -6658,6 +6660,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.CauseRun(childComplexity), true
+	case "Run.causedBy":
+		if e.ComplexityRoot.Run.CausedBy == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.CausedBy(childComplexity), true
 	case "Run.definition":
 		if e.ComplexityRoot.Run.Definition == nil {
 			break
@@ -6786,6 +6794,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RunPage.Runs(childComplexity), true
+	case "RunPage.total":
+		if e.ComplexityRoot.RunPage.Total == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunPage.Total(childComplexity), true
 
 	case "RunTrigger.actor":
 		if e.ComplexityRoot.RunTrigger.Actor == nil {
@@ -9733,8 +9747,8 @@ scalar Map
 scalar Any
 
 extend type Repository {
-  "A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100."
-  runs(sha: String, first: Int! = 30, after: String): RunPage!
+  "A page of the repository's runs, newest first, those the filters given keep: at commit sha, of the job named job, on the branch named branch, in one of states, and those whose job's name or branch or tag holds query, ignoring case, or whose commit's name starts with it (up to 200 characters, on one line); from the newest, or from after, where the previous page's nextCursor says the next one starts. The first page counts them all. Takes repo.read. first is 1 to 100."
+  runs(sha: String, job: String, branch: String, states: [RunState!], query: String, first: Int! = 30, after: String): RunPage!
   "One of the repository's runs by number: null unless it is there; takes repo.read."
   run(number: Int!): Run
 }
@@ -9757,6 +9771,8 @@ type RunPage {
   runs: [Run!]!
   "Where the next page starts, as runs' after; null after the last page."
   nextCursor: String
+  "How many runs the filters keep, on every page; on the first page alone, null on the rest."
+  total: Int
 }
 
 "One run of a repository's job: at a commit and a ref, for the event that queued it, of the job as it was declared then."
@@ -9784,6 +9800,8 @@ type Run {
   reason: String!
   "Who started it from WAITING, or re-ran it; null for any other run."
   startedBy: CommitPrincipal
+  "Who caused it: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that queued it; null for a schedule's run, or once they are gone."
+  causedBy: CommitPrincipal
   queuedAt: Time!
   startedAt: Time
   endedAt: Time
@@ -12356,6 +12374,8 @@ func (ec *executionContext) childFields_Run(ctx context.Context, field graphql.C
 		return ec.fieldContext_Run_reason(ctx, field)
 	case "startedBy":
 		return ec.fieldContext_Run_startedBy(ctx, field)
+	case "causedBy":
+		return ec.fieldContext_Run_causedBy(ctx, field)
 	case "queuedAt":
 		return ec.fieldContext_Run_queuedAt(ctx, field)
 	case "startedAt":
@@ -12388,6 +12408,8 @@ func (ec *executionContext) childFields_RunPage(ctx context.Context, field graph
 		return ec.fieldContext_RunPage_runs(ctx, field)
 	case "nextCursor":
 		return ec.fieldContext_RunPage_nextCursor(ctx, field)
+	case "total":
+		return ec.fieldContext_RunPage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RunPage", field.Name)
 }
@@ -16381,22 +16403,54 @@ func (ec *executionContext) field_Repository_runs_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["sha"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (int, error) {
-			return ec.unmarshalNInt2int(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["first"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "job",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg2
+	args["job"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "branch",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["branch"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "states",
+		func(ctx context.Context, v any) ([]RunState, error) {
+			return ec.unmarshalORunState2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStateᚄ(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["states"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "query",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["query"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg5
+	arg6, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg6
 	return args, nil
 }
 
@@ -36614,7 +36668,7 @@ func (ec *executionContext) _Repository_runs(ctx context.Context, field graphql.
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Repository().Runs(ctx, obj, fc.Args["sha"].(*string), fc.Args["first"].(int), fc.Args["after"].(*string))
+			return ec.Resolvers.Repository().Runs(ctx, obj, fc.Args["sha"].(*string), fc.Args["job"].(*string), fc.Args["branch"].(*string), fc.Args["states"].([]RunState), fc.Args["query"].(*string), fc.Args["first"].(int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *RunPage) graphql.Marshaler {
@@ -37716,6 +37770,38 @@ func (ec *executionContext) fieldContext_Run_startedBy(_ context.Context, field 
 	return fc, nil
 }
 
+func (ec *executionContext) _Run_causedBy(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_causedBy(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.CausedBy, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *CommitPrincipal) graphql.Marshaler {
+			return ec.marshalOCommitPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommitPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Run_causedBy(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Run",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_CommitPrincipal(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _Run_queuedAt(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -37962,6 +38048,29 @@ func (ec *executionContext) _RunPage_nextCursor(ctx context.Context, field graph
 }
 func (ec *executionContext) fieldContext_RunPage_nextCursor(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("RunPage", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunPage_total(ctx context.Context, field graphql.CollectedField, obj *RunPage) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunPage_total(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Total, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunPage", field, false, false, "Int")
 }
 
 func (ec *executionContext) _RunTrigger_kind(ctx context.Context, field graphql.CollectedField, obj *RunTrigger) (ret graphql.Marshaler) {
@@ -50886,6 +50995,11 @@ func (ec *executionContext) _Run(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
+		case "causedBy":
+			out.Values[i] = ec._Run_causedBy(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
 		case "queuedAt":
 			out.Values[i] = ec._Run_queuedAt(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -50990,6 +51104,11 @@ func (ec *executionContext) _RunPage(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "nextCursor":
 			out.Values[i] = ec._RunPage_nextCursor(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "total":
+			out.Values[i] = ec._RunPage_total(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -55671,6 +55790,42 @@ func (ec *executionContext) marshalORun2ᚖcobranchᚗdevᚋinternalᚋadapters�
 		return graphql.Null
 	}
 	return ec._Run(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalORunState2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStateᚄ(ctx context.Context, v any) ([]RunState, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]RunState, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNRunState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunState(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalORunState2ᚕcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStateᚄ(ctx context.Context, sel ast.SelectionSet, v []RunState) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRunState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunState(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOSecretInput2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐSecretInput(ctx context.Context, v any) (*SecretInput, error) {

@@ -6307,7 +6307,9 @@ paths:
   /orgs/{org}/repos/{repo}/runs:
     get:
       operationId: listRuns
-      summary: A page of the repository's runs of its jobs, newest first; takes repo.read.
+      summary: >-
+        A page of the repository's runs of its jobs, newest first, those its filters keep; the first page counts them
+        all. Takes repo.read.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -6315,6 +6317,33 @@ paths:
           in: query
           description: Only the runs at this commit, by its full name.
           x-go-name: SHA
+          schema:
+            type: string
+        - name: job
+          in: query
+          description: Only the runs of the job of this name.
+          schema:
+            type: string
+            maxLength: 255
+        - name: branch
+          in: query
+          description: Only the runs on the branch of this name.
+          schema:
+            type: string
+            maxLength: 255
+        - name: state
+          in: query
+          description: Only the runs in one of these states; repeat it for each.
+          explode: true
+          schema:
+            type: array
+            items:
+              $ref: "#/components/schemas/RunState"
+        - name: q
+          in: query
+          description: >-
+            Only the runs whose job's name or branch or tag holds this text, ignoring case, or whose commit's name starts
+            with it: up to 200 characters, on one line.
           schema:
             type: string
         - name: cursor
@@ -6348,6 +6377,9 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Run"
+                  total:
+                    type: integer
+                    description: How many runs the filters keep, on every page; on the first page alone.
         "400":
           $ref: "#/components/responses/Problem"
         "401":
@@ -9111,6 +9143,12 @@ components:
           description: Why it waits, failed or was cancelled; empty otherwise.
         startedBy:
           description: Who started it from Waiting, or re-ran it; absent for any other run.
+          allOf:
+            - $ref: "#/components/schemas/Principal"
+        causedBy:
+          description: >-
+            Who caused it: who started or re-ran it, or else who pushed, annotated, reviewed or posted the event that
+            queued it; absent for a schedule's run, or once they are gone.
           allOf:
             - $ref: "#/components/schemas/Principal"
         queuedAt:

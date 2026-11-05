@@ -1564,7 +1564,7 @@ type Repository struct {
 	Environment *Environment `json:"environment,omitempty"`
 	// One of the repository's deliveries by number: null unless it is there; takes repo.read.
 	Delivery *Delivery `json:"delivery,omitempty"`
-	// A page of the repository's runs, newest first, at commit sha when it is given: from the newest, or from after, where the previous page's nextCursor says the next one starts; takes repo.read. first is 1 to 100.
+	// A page of the repository's runs, newest first, those the filters given keep: at commit sha, of the job named job, on the branch named branch, in one of states, and those whose job's name or branch or tag holds query, ignoring case, or whose commit's name starts with it (up to 200 characters, on one line); from the newest, or from after, where the previous page's nextCursor says the next one starts. The first page counts them all. Takes repo.read. first is 1 to 100.
 	Runs *RunPage `json:"runs"`
 	// One of the repository's runs by number: null unless it is there; takes repo.read.
 	Run *Run `json:"run,omitempty"`
@@ -1687,6 +1687,8 @@ type RunPage struct {
 	Runs []*Run `json:"runs"`
 	// Where the next page starts, as runs' after; null after the last page.
 	NextCursor *string `json:"nextCursor,omitempty"`
+	// How many runs the filters keep, on every page; on the first page alone, null on the rest.
+	Total *int `json:"total,omitempty"`
 }
 
 // The event that queued a run.

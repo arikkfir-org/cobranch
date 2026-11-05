@@ -72,7 +72,7 @@ func (f *jobsFixture) push(t *testing.T, p git.Push, settings ...git.TipSettings
 // runs lists the repository's runs, oldest first, as "#n job ref@sha state: reason".
 func (f *jobsFixture) runs(t *testing.T, repoID uuid.UUID) []string {
 	t.Helper()
-	list, err := f.c.Runs(context.Background(), repoID, "", 0, 100)
+	list, err := f.c.Runs(context.Background(), repoID, code.RunsQuery{Limit: 100})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -432,12 +432,58 @@ func TestCodeStoreReadsRuns(t *testing.T) {
 	if err != nil || run.Trigger.Kind != jobs.EventPush || run.Trigger.ActorID != f.olivia || run.Definition.Script != "make" || run.Job.DisplayName != "ci/build" {
 		t.Errorf("Run(#1) = %+v, %v", run, err)
 	}
-	page, err := f.c.Runs(ctx, repo, shaB, 0, 10)
-	if err != nil || len(page) != 1 || page[0].Number != 2 {
-		t.Errorf("Runs(at b) = %+v, %v", page, err)
+	if run.CausedBy == nil || run.CausedBy.ID != f.olivia || run.CausedBy.DisplayName == "" {
+		t.Errorf("Run(#1) caused by %+v, want Olivia, who pushed it", run.CausedBy)
 	}
-	if page, err = f.c.Runs(ctx, repo, "", 2, 10); err != nil || len(page) != 1 || page[0].Number != 1 {
-		t.Errorf("Runs(before #2) = %+v, %v", page, err)
+}
+
+func TestCodeStoreFiltersRuns(t *testing.T) {
+	t.Parallel()
+	f := newJobsFixture(t)
+	repo := f.website.ID
+	f.pushTwoRuns(t) // #1 ci/build on main at a, queued, pushed by Olivia; #2 on feature at b, waiting, pushed by Nia
+	tests := []struct {
+		name  string
+		q     code.RunsQuery
+		want  []int64
+		count int
+	}{
+		{name: "every run, newest first", q: code.RunsQuery{}, want: []int64{2, 1}, count: 2},
+		{name: "at a commit", q: code.RunsQuery{SHA: shaB}, want: []int64{2}, count: 1},
+		{name: "before a run, counted whatever the page", q: code.RunsQuery{Before: 2}, want: []int64{1}, count: 2},
+		{name: "of a job", q: code.RunsQuery{Job: "ci/build"}, want: []int64{2, 1}, count: 2},
+		{name: "of a job that has none", q: code.RunsQuery{Job: "ci"}, count: 0},
+		{name: "on a branch", q: code.RunsQuery{Branch: "feature"}, want: []int64{2}, count: 1},
+		{name: "in a state", q: code.RunsQuery{States: []jobs.State{jobs.StateWaiting}}, want: []int64{2}, count: 1},
+		{name: "in either of two states", q: code.RunsQuery{States: []jobs.State{jobs.StateQueued, jobs.StateRunning}}, want: []int64{1}, count: 1},
+		{name: "a query its branch holds, ignoring case", q: code.RunsQuery{Query: "FEAT"}, want: []int64{2}, count: 1},
+		{name: "a query its job's name holds", q: code.RunsQuery{Query: "build"}, want: []int64{2, 1}, count: 2},
+		{name: "a query its commit starts with", q: code.RunsQuery{Query: shaA[:7]}, want: []int64{1}, count: 1},
+		{name: "a query only the ref's prefix holds", q: code.RunsQuery{Query: "refs/"}, count: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := tt.q
+			q.Limit = 10
+			list, err := f.c.Runs(t.Context(), repo, q)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []int64
+			for _, r := range list {
+				got = append(got, r.Number)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("Runs() = %v, want %v", got, tt.want)
+			}
+			if n, err := f.c.CountRuns(t.Context(), repo, q); err != nil || n != tt.count {
+				t.Errorf("CountRuns() = %d, %v, want %d", n, err, tt.count)
+			}
+		})
+	}
+	list, err := f.c.Runs(t.Context(), repo, code.RunsQuery{Limit: 10})
+	if err != nil || len(list) != 2 || list[0].CausedBy == nil || list[0].CausedBy.ID != f.nia {
+		t.Errorf("Runs() = %+v, %v, want #2 caused by Nia, who pushed it", list, err)
 	}
 }
 

@@ -10,13 +10,14 @@ import (
 	"time"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 )
 
 // run is r as the API shows it. Its definition and trigger travel as the domain encodes them, the shape the contract
 // gives them.
 func run(r code.Run) (Run, error) {
 	out := Run{Id: r.ID, Number: r.Number, Job: Principal{Id: r.Job.ID, DisplayName: r.Job.DisplayName}, Sha: r.SHA, Ref: r.Ref,
-		State: RunState(r.State), Reason: r.Reason, StartedBy: principal(r.StartedBy), QueuedAt: r.QueuedAt.UTC(),
+		State: RunState(r.State), Reason: r.Reason, StartedBy: principal(r.StartedBy), CausedBy: principal(r.CausedBy), QueuedAt: r.QueuedAt.UTC(),
 		StartedAt: utc(r.StartedAt), EndedAt: utc(r.EndedAt), Version: r.Version}
 	if r.CauseRun != 0 {
 		out.CauseRun = &r.CauseRun
@@ -62,24 +63,17 @@ func (a api) ListRuns(ctx context.Context, req ListRunsRequestObject) (ListRunsR
 	if err != nil {
 		return nil, err
 	}
-	sha, before, limit := "", int64(0), 0
-	if p := req.Params; p.SHA != nil {
-		sha = *p.SHA
+	q, err := runsQuery(req.Params)
+	if err != nil {
+		return nil, err
 	}
-	if p := req.Params; p.Cursor != nil {
-		if before, err = strconv.ParseInt(*p.Cursor, 10, 64); err != nil || before < 1 {
-			return nil, refuse(http.StatusBadRequest, "cursor.invalid", "Start from the cursor the previous page's Link names.")
-		}
-	}
-	if p := req.Params; p.Limit != nil {
-		limit = *p.Limit
-	}
-	page, err := a.code.Runs(ctx, v, repo.ID, sha, before, limit)
+	page, err := a.code.Runs(ctx, v, repo.ID, q)
 	if err != nil {
 		return nil, fail(err, "repository")
 	}
 	out := ListRuns200JSONResponse{}
 	out.Body.Runs = make([]Run, 0, len(page.Runs))
+	out.Body.Total = page.Total
 	for _, r := range page.Runs {
 		shown, err := run(r)
 		if err != nil {
@@ -88,17 +82,51 @@ func (a api) ListRuns(ctx context.Context, req ListRunsRequestObject) (ListRunsR
 		out.Body.Runs = append(out.Body.Runs, shown)
 	}
 	if page.Next != 0 {
-		next := url.Values{"cursor": {strconv.FormatInt(page.Next, 10)}}
-		if sha != "" {
-			next.Set("sha", sha)
-		}
-		if limit != 0 {
-			next.Set("limit", strconv.Itoa(limit))
-		}
-		link := `<?` + next.Encode() + `>; rel="next"`
+		link := `<?` + runsNext(req.Params, page.Next).Encode() + `>; rel="next"`
 		out.Headers.Link = &link
 	}
 	return out, nil
+}
+
+// runsQuery is the page of runs p asks for: its filters, where it starts and how long it is.
+func runsQuery(p ListRunsParams) (code.RunsQuery, error) {
+	q := code.RunsQuery{SHA: orEmpty(p.SHA), Job: orEmpty(p.Job), Branch: orEmpty(p.Branch), Query: orEmpty(p.Q)}
+	if p.State != nil {
+		for _, st := range *p.State {
+			q.States = append(q.States, jobs.State(st))
+		}
+	}
+	if p.Cursor != nil {
+		before, err := strconv.ParseInt(*p.Cursor, 10, 64)
+		if err != nil || before < 1 {
+			return code.RunsQuery{}, refuse(http.StatusBadRequest, "cursor.invalid", "Start from the cursor the previous page's Link names.")
+		}
+		q.Before = before
+	}
+	if p.Limit != nil {
+		q.Limit = *p.Limit
+	}
+	return q, nil
+}
+
+// runsNext is the query of the page after the one p asks for, which starts before run number next: the same filters and
+// length.
+func runsNext(p ListRunsParams, next int64) url.Values {
+	out := url.Values{"cursor": {strconv.FormatInt(next, 10)}}
+	for name, v := range map[string]*string{"sha": p.SHA, "job": p.Job, "branch": p.Branch, "q": p.Q} {
+		if v != nil && *v != "" {
+			out.Set(name, *v)
+		}
+	}
+	if p.State != nil {
+		for _, st := range *p.State {
+			out.Add("state", string(st))
+		}
+	}
+	if p.Limit != nil {
+		out.Set("limit", strconv.Itoa(*p.Limit))
+	}
+	return out
 }
 
 // GetRun answers one of the repository's runs, or 304 while the caller holds its version.
