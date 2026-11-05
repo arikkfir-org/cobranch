@@ -350,6 +350,10 @@
 .empty-icon .icon svg { width: var(--space-24); height: var(--space-24); }
 .empty-title { margin: 0; color: var(--color-fg-default); font: var(--text-heading-small); letter-spacing: var(--text-heading-small-tracking); }
 .empty-description { color: var(--color-fg-muted); font: var(--text-body-medium); }
+/* A card, a card's body under its header, or a screen that shows nothing but an Empty state, and what may follow it (a
+   Clone field), holds the state at the 480px it is drawn, centred, 48px above it and below the rest. */
+.empty-centred { padding-block: var(--space-48); }
+.empty-centred > .empty { width: 480px; max-width: 100%; margin-inline: auto; }
 
 /* Tooltip: a one-line label on hover or focus, for an icon button or a truncated value. .tooltip draws one; an element
    with data-tooltip shows its value below itself. */

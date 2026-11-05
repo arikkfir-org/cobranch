@@ -90,9 +90,10 @@ export function cloneMenu(anchor, org, repo, push) {
 // command that clones it over HTTPS, when the installation's Git server has an address.
 function noFiles(org, repo) {
   const command = config.gitUrl ? "git clone " + config.gitUrl + "/" + org.slug + "/" + repo.slug + ".git" : null;
-  return h("div", { class: "empty files-empty" }, h("span", { class: "empty-icon" }, icon("folder-git-2")), h("h2", { class: "empty-title" }, "No files yet"),
+  return h("div", { class: "empty-centred files-empty" }, h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon("folder-git-2")),
+    h("h2", { class: "empty-title" }, "No files yet"),
     h("p", { class: "empty-description" }, command ? "Push a branch and its files show here. The clone path is below; main becomes the default branch with the first push."
-      : "Push a branch and its files show here; main becomes the default branch with the first push."),
+      : "Push a branch and its files show here; main becomes the default branch with the first push.")),
     command ? h("div", { class: "field files-clone" }, h("span", { class: "field-label" }, "Clone"),
       h("div", { class: "clone-url" }, h("code", { title: command }, command), copyIcon(command, "Copy the clone command"))) : null);
 }
@@ -150,7 +151,7 @@ async function repositoryTree(repo, path, at, ref, dir) {
     tree = await api("GET", path + "/tree?" + query);
   } catch (err) {
     if (err.code === "path.file") return go(at.blob(ref, dir).slice(base.length - 1), true), [];
-    return [h("section", { class: "card" }, unreadable(err, repo, ref, dir, false))];
+    return [h("section", { class: "card empty-centred" }, unreadable(err, repo, ref, dir, false))];
   }
   const last = await reading;
   // Entries come directories first, each group by name as people sort them, whatever their case.
@@ -236,7 +237,7 @@ async function repositoryFile(repo, path, at, ref, file, branch, can) {
   } catch (err) {
     if (err.code === "path.directory") return go(at.tree(ref, file).slice(base.length - 1), true), [];
     const raw = h("a", { class: "btn btn-ghost btn-sm", href: at.raw(ref, file), target: "_blank", rel: "noopener" }, "Raw");
-    return [card("file-code", [language(name)], [raw, historyLink], unreadable(err, repo, ref, file, true))];
+    return [card("file-code", [language(name)], [raw, historyLink], h("div", { class: "empty-centred" }, unreadable(err, repo, ref, file, true)))];
   }
   const download = (cls, label) => h("a", { class: cls, href: at.raw(f.commit, f.path, true) }, label);
   const type = f.name.includes(".") ? f.name.split(".").pop().toUpperCase() : null;
@@ -255,8 +256,8 @@ async function repositoryFile(repo, path, at, ref, file, branch, can) {
   }
   if (f.binary || f.truncated) {
     return [card("file-code", [size(f.size), f.binary ? "binary" : language(f.name)], [download("btn btn-sm", "Download"), historyLink],
-      empty("file", "Not shown", "Files over 1 MiB, and binary files of any size, aren't shown. Download it, or clone the repository.",
-        download("btn btn-primary", "Download " + size(f.size))))];
+      h("div", { class: "empty-centred" }, empty("file", "Not shown", "Files over 1 MiB, and binary files of any size, aren't shown. Download it, or clone the repository.",
+        download("btn btn-primary", "Download " + size(f.size)))))];
   }
   const lines = linePicker(path, at, branch, f, can);
   const count = f.text === "" ? 0 : f.text.replace(/\n$/, "").split("\n").length;
