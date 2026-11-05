@@ -229,6 +229,19 @@ func TestCreateOfNoRepository(t *testing.T) {
 			_, _, err := f.service.Create(ctx, f.nia, f.acme, uuid.Nil, input("Notes"))
 			return passed(err)
 		}},
+		{name: "a run's token makes none", wantErr: auth.ErrForbidden, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			build := principal("build", auth.KindJob)
+			ctx = as(ctx, build, auth.Credential{ID: uuid.New(), Kind: auth.CredentialRunToken, PrincipalID: build.ID, OrgID: f.acme, RepoID: f.website})
+			_, _, err := f.service.Create(ctx, build, f.acme, uuid.Nil, input("Notes"))
+			return passed(err)
+		}},
+		{name: "a delivery's token makes none", wantErr: auth.ErrForbidden, run: func(ctx context.Context, _ *testing.T, f *fixture) error {
+			production := principal("production", auth.KindTarget)
+			ctx = as(ctx, production, auth.Credential{ID: uuid.New(), Kind: auth.CredentialDeliveryToken, PrincipalID: production.ID, OrgID: f.acme,
+				RepoID: f.website})
+			_, _, err := f.service.Create(ctx, production, f.acme, uuid.Nil, input("Notes"))
+			return passed(err)
+		}},
 	})
 }
 

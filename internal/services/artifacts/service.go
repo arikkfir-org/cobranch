@@ -176,14 +176,17 @@ func (s *Service) Get(ctx context.Context, v Viewer, orgID, id uuid.UUID) (_ Art
 // Create makes an artifact of the organization with its first version, attached to one of its repositories or, for
 // uuid.Nil, to none, and answers whether it made it: an ID that v made there already answers that artifact, as it is,
 // so a call run again makes nothing more. Attaching it to a repository takes artifacts.create there, and one attached
-// to none takes org.read, since it reaches nobody else until shared. Its maker owns it; an agent's task makes its
-// assigner the owner and the agent an editor.
+// to none takes org.read, since it reaches nobody else until shared; a job or a target makes none. Its maker owns it;
+// an agent's task makes its assigner the owner and the agent an editor.
 func (s *Service) Create(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, in Input) (_ Artifact, created bool, err error) {
 	ctx, span := tracer.Start(ctx, "artifacts.Service.Create", trace.WithAttributes(orgAttr(orgID), repoAttr(repoID)))
 	defer span.End()
 	defer func() { record(span, err) }()
 	if err := s.reads(ctx, v, orgID, repoID); err != nil {
 		return Artifact{}, false, err
+	}
+	if !holdsArtifacts(v.Kind) {
+		return Artifact{}, false, fmt.Errorf("%w: a job or a target makes no artifact", auth.ErrForbidden)
 	}
 	if in, err = Validate(in); err != nil {
 		return Artifact{}, false, err
@@ -209,6 +212,13 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID, repoID uuid.UUID,
 		return Artifact{}, false, wrap("creating the artifact", err)
 	}
 	return a, true, nil
+}
+
+// holdsArtifacts reports whether a principal of kind may hold a role on an artifact, and so make one: a person, an API
+// key or an agent. A job or a target holds none; its run's or delivery's token reads the organization while it runs, but
+// makes no artifact, which it would own and reach from every later run.
+func holdsArtifacts(kind auth.Kind) bool {
+	return kind == auth.KindUser || kind == auth.KindAPIKey || kind == auth.KindAgent
 }
 
 // made is the artifact in makes, with its owner and its makers' roles: v owns it, unless v is an agent on a task, whose
@@ -427,7 +437,7 @@ func (s *Service) Share(ctx context.Context, v Viewer, orgID, id, principalID uu
 	if err != nil {
 		return wrap("finding the principal", err)
 	}
-	if p.Kind != auth.KindUser && p.Kind != auth.KindAPIKey && p.Kind != auth.KindAgent {
+	if !holdsArtifacts(p.Kind) {
 		return invalid("principalId", "artifact.grantee_invalid", "an artifact is shared with the organization's members, API keys and agents")
 	}
 	return wrap("sharing the artifact", s.store.Share(ctx, v.ID, a, principalID, roleID))

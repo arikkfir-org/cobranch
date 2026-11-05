@@ -133,7 +133,7 @@ artifact answers 404, as if it weren’t there; with `artifacts.list` alone it s
   agent, from their account: the grantee then lists, or reads, every artifact they own, in each organization both belong
   to, since every check starts from `org.read`. Nobody else grants on a person.
 - **Narrowed by the credential.** A personal token uses only the artifact permissions it lists; a task token only those
-  the task's assigner holds on the artifact too; a job's run token reaches no artifact.
+  the task's assigner holds on the artifact too; a job's run token and a delivery's token reach no artifact, and make none.
 - **Invisible without `artifacts.read`.** An artifact the viewer can't read answers 404, as one that isn't there does,
   and a list leaves it out unless the viewer may list it.
 - **The list's badge** names the widest audience: Organization, Repository, or Only you when neither is set, whatever
@@ -202,7 +202,8 @@ their versions and the grants on them.
   or many; an artifact is none of these, and moving bodies there later changes only the store.
 - **Every change is audited,** a version's body left out of the audit log, and recorded as an event of the organization:
   `artifact.created`, `artifact.changed`, `artifact.version_added`, `artifact.shared`, `artifact.unshared`,
-  `artifact.deleted`.
+  `artifact.deleted`; sharing or unsharing all of one's artifacts is an event of the installation,
+  `artifacts.person_shared` or `artifacts.person_unshared`, since they span one's organizations.
 
 ## API
 

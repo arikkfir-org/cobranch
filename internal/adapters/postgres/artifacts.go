@@ -352,7 +352,8 @@ func (s *ArtifactStore) Unshare(ctx context.Context, actor uuid.UUID, a artifact
 	})
 }
 
-// SharePerson gives the principal the role on actor in place of any role it held there.
+// SharePerson gives the principal the role on actor in place of any role it held there, and records it as an event of
+// the installation's, since a person's artifacts span their organizations.
 func (s *ArtifactStore) SharePerson(ctx context.Context, actor, principalID, roleID uuid.UUID) error {
 	return s.transact(ctx, "sharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
 		if _, err := q.DeletePersonGrants(ctx, principalID, actor); err != nil {
@@ -362,11 +363,11 @@ func (s *ArtifactStore) SharePerson(ctx context.Context, actor, principalID, rol
 			Scope: string(auth.ScopeUser), ScopeID: &actor, Source: string(auth.SourceGrant)}); err != nil {
 			return fmt.Errorf("inserting the grant: %w", err)
 		}
-		return nil
+		return orgEvent(ctx, q, nil, actor, "artifacts.person_shared", principalID, map[string]any{"role": roleID})
 	})
 }
 
-// UnsharePerson takes every role the principal holds on actor.
+// UnsharePerson takes every role the principal holds on actor, and records it as SharePerson does.
 func (s *ArtifactStore) UnsharePerson(ctx context.Context, actor, principalID uuid.UUID) error {
 	return s.transact(ctx, "unsharing the person's artifacts", actor, func(ctx context.Context, q *queries.Queries) error {
 		n, err := q.DeletePersonGrants(ctx, principalID, actor)
@@ -376,6 +377,6 @@ func (s *ArtifactStore) UnsharePerson(ctx context.Context, actor, principalID uu
 		if n == 0 {
 			return artifacts.ErrNotFound
 		}
-		return nil
+		return orgEvent(ctx, q, nil, actor, "artifacts.person_unshared", principalID, nil)
 	})
 }

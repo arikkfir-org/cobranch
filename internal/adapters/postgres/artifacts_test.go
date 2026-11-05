@@ -382,6 +382,11 @@ func TestArtifactGrantsOnPeople(t *testing.T) {
 	if n := count(t, f.pool, "SELECT count(*) FROM audit_log WHERE table_name = 'grants' AND principal_id = $1 AND after->>'scope' = 'user'", f.max); n != 3 {
 		t.Errorf("%d audit rows of grants on Max name Max, want 3", n)
 	}
+	for kind, want := range map[string]int{"artifacts.person_shared": 3, "artifacts.person_unshared": 1} {
+		if n := count(t, f.pool, "SELECT count(*) FROM events WHERE kind = $1 AND actor_id = $2 AND org_id IS NULL", kind, f.max); n != want {
+			t.Errorf("%d events %s name Max at no organization, want %d", n, kind, want)
+		}
+	}
 }
 
 // TestArtifactOwnersMigration checks that migration 00055 gives each artifact already there the owner its first
