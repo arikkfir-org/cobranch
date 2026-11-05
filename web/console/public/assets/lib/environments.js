@@ -83,15 +83,14 @@ function statusText(e, list, head) {
 }
 
 // statusLines are e's status: its health and how it stands, the commit it holds and what its deliveries say, then its
-// URL; while a teardown runs, that alone, with how many objects remain.
-function statusLines(at, e, list, objects, head) {
+// URL; while a teardown runs, that alone. Its objects are those of the last apply until the teardown ends, so the line
+// counts none as remaining.
+function statusLines(at, e, list, head) {
   const teardown = list[0] && list[0].kind === "teardown" && !ended(list[0]) ? list[0] : null;
   const url = e.url ? h("p", { class: "environment-line" }, icon("globe"), h("a", { href: e.url, target: "_blank", rel: "noopener" }, e.url)) : null;
   if (teardown) {
-    const remain = objects.length === 1 ? "1 object remains" : objects.length + " objects remain";
     return [h("p", { class: "environment-line" }, quiet("info", "Deleting"), h("span", { class: "environment-text" }, "Teardown #" + teardown.number +
-      " deletes what the environment holds · " + (teardown.startedAt ? "started " + fromNow(teardown.startedAt) : "queued " + fromNow(teardown.queuedAt)) +
-      " · " + remain))];
+      " deletes what the environment holds · " + (teardown.startedAt ? "started " + fromNow(teardown.startedAt) : "queued " + fromNow(teardown.queuedAt))))];
   }
   const [text, danger] = statusText(e, list, head);
   return [h("p", { class: "environment-line" }, healthBadge(e.health), syncBadge(e, list[0]), e.revision ? ["at", sha(at, e.revision)] : null,
@@ -215,7 +214,8 @@ function actions(ctx, e, list, page) {
     onclick: (ev) => act(ctx, e, "resume", ev.currentTarget) }, icon("play"), "Resume")
     : h("button", { class: "btn btn-sm", type: "button", disabled: tearing, title: "Deliver the head of " + e.branch + " to " + name + " again",
       onclick: (ev) => act(ctx, e, "redeliver", ev.currentTarget) }, icon("refresh-cw"), "Redeliver");
-  if (!may && page) return [open, main];
+  // On its own page, the menu holds only Pause or Resume, which a teardown takes away.
+  if (page && (!may || tearing)) return [open, main];
   const more = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-haspopup": "menu", "aria-label": "More", title: "More" }, icon("ellipsis"));
   more.onclick = () => popover(more, "end", (close) => [
     page ? null : h("a", { class: "menu-item", role: "menuitem", href: at.environment(e.id), "data-nav": "", onclick: close }, icon("globe"), h("span", {}, "Open its page")),
@@ -237,7 +237,7 @@ export async function environmentCard(ctx, e, { page = false, head = "", live = 
     h("a", { class: "environment-branch", href: at.branchPage(e.branch), "data-nav": "" }, e.branch)] : null);
   return h("section", { class: "card environment-card", "aria-label": e.target.displayName + " of " + e.branch },
     h("div", { class: "card-header" }, title, actions(ctx, e, list, page)),
-    h("div", { class: "environment-status" }, statusLines(at, e, list, objects, head)),
+    h("div", { class: "environment-status" }, statusLines(at, e, list, head)),
     facts(e, list, live), objectsTable(objects), deliveriesList(ctx, e, first, live));
 }
 

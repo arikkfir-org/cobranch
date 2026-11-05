@@ -105,6 +105,10 @@ Dark uses 300, 950, 800 and 400. Neutral differs slightly: its `bg` is gray/100 
 | `danger` | red | Failed, blocked |
 | `ai` | violet | Made by or about an agent |
 
+An environment's Badge/Quiet pair keeps its sync quiet: its health carries the green, so Synced is neutral beside it, and
+Paused, Out of sync and a Missing object are warning, each waiting on a person; Out of sync turns danger once the
+newest delivery failed. The Repository screen's tags keep Synced success and Paused neutral.
+
 Contrast: body and metadata text pass WCAG AA in both modes (`fg/muted` 4.8:1 light, 8.8:1 dark), and every status `fg`
 on its `bg` is at least 6:1. `fg/subtle` is 3.1:1 in light, so it holds placeholders only, never information.
 
@@ -223,7 +227,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 | Agent, AI | `sparkles` |
 | Job, key, app | `cog`, `key-round` |
 | Chat | `message-square` |
-| Delivery, environment | `rocket` |
+| Delivery, environment | `globe` |
 
 ![The Icons page](design-system/icons.png)
 
