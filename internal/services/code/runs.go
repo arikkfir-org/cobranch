@@ -117,6 +117,8 @@ type RunStore interface {
 	CountRuns(ctx context.Context, repoID uuid.UUID, q RunsQuery) (int, error)
 	// Run finds one of the repository's runs by number, or repos.ErrNotFound.
 	Run(ctx context.Context, repoID uuid.UUID, number int64) (Run, error)
+	// RunSteps lists the steps the controller kept of an ended run, in the order they ran; none when it kept none.
+	RunSteps(ctx context.Context, runID uuid.UUID) ([]jobs.Step, error)
 	// CancelRun cancels a run that hasn't ended, for actor, in one transaction that sets its job's annotation Failed,
 	// appends event run.cancelled and works out again the status of the branches at its commit: repos.ErrNotFound
 	// without it, ErrRunEnded once it ended.

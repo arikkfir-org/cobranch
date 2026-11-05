@@ -367,6 +367,32 @@
 .event-row > :first-child { flex: 1; min-width: 0; }
 .event-row > time { flex: none; white-space: nowrap; }
 
+/* Run/Step row: a step of a run in its Steps card, a link to its log: its status icon in its tone (Successful,
+   Failed, Running), its name in Code/Small and how long it took in Body/Small fg/muted. A step not started, and the
+   Definition row (.step-row-quiet), have their icon and name in fg/muted and no duration. Selected is bg/selected;
+   rows divide with border/subtle. */
+.step-row {
+  display: flex; align-items: center; gap: var(--space-12); min-width: 0;
+  padding: calc(var(--space-8) + var(--space-2)) var(--space-16); border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-surface); color: var(--color-fg-default); text-decoration: none;
+}
+.step-row:last-child { border-bottom: 0; }
+.step-row:hover { background: var(--color-bg-hover); }
+.step-row[aria-current="true"] { background: var(--color-bg-selected); }
+.step-row-quiet { color: var(--color-fg-muted); }
+.step-row-name { flex: 1; min-width: 0; overflow: hidden; font: var(--text-code-small); text-overflow: ellipsis; white-space: nowrap; }
+.step-row-time { flex: none; color: var(--color-fg-muted); font: var(--text-body-small); white-space: nowrap; }
+
+/* Log/Line: one line of a step's log, 22px, its text wrapping when longer than the card: the time since the step
+   started (m:ss, h:mm:ss in a step past an hour) in Code/Small fg/subtle, in a 36px column that widens for the hours,
+   then the text in Code/Small fg/default, never coloured by what it says. Lines stack in a .log block on bg/sunken,
+   8px above and below; .log-note is the muted Body/Small line a step with no log shows there instead. */
+.log { display: flex; flex-direction: column; padding: var(--space-8) 0; background: var(--color-bg-sunken); }
+.log-line { display: flex; gap: var(--space-16); padding: calc(var(--space-6) / 2) var(--space-16); color: var(--color-fg-default); font: var(--text-code-small); }
+.log-time { flex: none; min-width: 36px; color: var(--color-fg-subtle); font-variant-numeric: tabular-nums; user-select: none; }
+.log-text { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.log-note { margin: 0; padding: var(--space-4) var(--space-16); color: var(--color-fg-muted); font: var(--text-body-small); }
+
 /* Meter: a share of a quota or a cap. Kind=Full is its label and value over a 6px track; Kind=Share (.meter-share) the
    4px track alone, for a table cell that says the value. The bar's width is the share, set by the page; Tone=Warning
    from 80%, Tone=Danger at or over the cap, when the value turns the tone's colour too. */

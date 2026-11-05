@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -378,7 +379,7 @@ func TestPods(t *testing.T) {
 				Spec: corev1.PodSpec{ActiveDeadlineSeconds: &deadline}, Status: tt.status}
 			stray := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: ns}}
 			pods, err := New(fake.NewClientset(pod, stray), config()).Pods(context.Background(), org)
-			if err != nil || len(pods) != 1 || pods[run] != tt.want {
+			if got := pods[run]; err != nil || len(pods) != 1 || got.Outcome != tt.want.Outcome || got.Reason != tt.want.Reason {
 				t.Errorf("Pods() = %+v, %v, want %+v", pods, err, tt.want)
 			}
 		})
@@ -428,6 +429,55 @@ func TestMask(t *testing.T) {
 				t.Errorf("mask() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestMaskLines(t *testing.T) {
+	const stamp = "2026-11-05T08:00:01.123456789Z"
+	tests := []struct {
+		name    string
+		log     string
+		stamped bool
+		want    string
+	}{
+		{name: "each line's text, never its time", log: stamp + " key 2026\n" + stamp + " ok\n", stamped: true, want: stamp + " key ***\n" + stamp + " ok\n"},
+		{name: "a line without its time, whole", log: stamp + " one\n2026 cut", stamped: true, want: stamp + " one\n*** cut"},
+		{name: "a log without times, whole", log: "key 2026\n", want: "key ***\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := string(maskLines([]byte(tt.log), []string{"2026"}, tt.stamped)); got != tt.want {
+				t.Errorf("maskLines() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSteps(t *testing.T) {
+	started, ended := metav1.NewTime(time.Date(2026, 11, 5, 8, 0, 0, 0, time.UTC)), metav1.NewTime(time.Date(2026, 11, 5, 8, 0, 6, 0, time.UTC))
+	pod := &corev1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "run-" + run.String(), Namespace: ns, Labels: map[string]string{labelRun: run.String()}},
+		Spec: corev1.PodSpec{InitContainers: []corev1.Container{{Name: "cobranch-checkout"}, {Name: "deps"}, {Name: "lint"}},
+			Containers: []corev1.Container{{Name: "test"}, {Name: "build"}, {Name: "notify"}}},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning,
+			InitContainerStatuses: []corev1.ContainerStatus{
+				{Name: "cobranch-checkout", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{Reason: "Completed", StartedAt: started, FinishedAt: ended}}},
+				{Name: "deps", State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{ExitCode: 137, Reason: "OOMKilled", StartedAt: started, FinishedAt: ended}}},
+				{Name: "lint", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "PodInitializing"}}}},
+			ContainerStatuses: []corev1.ContainerStatus{
+				{Name: "test", State: corev1.ContainerState{Running: &corev1.ContainerStateRunning{StartedAt: started}}},
+				{Name: "build", State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "ImagePullBackOff"}}}}}}
+	steps, err := New(fake.NewClientset(pod), config()).Steps(context.Background(), org, run)
+	var got []string
+	for _, s := range steps {
+		got = append(got, fmt.Sprintf("%s %s %d %q %v %v", s.Name, s.State, s.ExitCode, s.Reason, s.StartedAt != nil, s.EndedAt != nil))
+	}
+	want := []string{`cobranch-checkout succeeded 0 "" true true`, `deps failed 137 "OOMKilled" true true`, `lint waiting 0 "" false false`,
+		`test running 0 "" true false`, `build waiting 0 "ImagePullBackOff" false false`, `notify waiting 0 "" false false`}
+	if err != nil || !slices.Equal(got, want) {
+		t.Errorf("Steps() = %q, %v, want %q", got, err, want)
+	}
+	if steps, err := New(fake.NewClientset(), config()).Steps(context.Background(), org, run); err != nil || steps != nil {
+		t.Errorf("Steps() of a pod that is gone = %v, %v, want none", steps, err)
 	}
 }
 

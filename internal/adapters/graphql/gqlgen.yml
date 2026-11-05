@@ -76,6 +76,7 @@ models:
     model: cobranch.dev/internal/adapters/graphql.Run
     fields:
       logs: { resolver: true }
+      steps: { resolver: true }
   # A null clears an issue's assignee or repository; a field left out keeps it.
   IssuePatch:
     fields:

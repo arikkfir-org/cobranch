@@ -83,7 +83,8 @@ public, so the run holds no token. The tasks run as `ci-cobranch-ci`, which may 
 Task `chart` installs the [chart](https://claude.ai/artifact/LyMHXgSoNQNgHtHNfEjvA8) as an operator would, on a
 throwaway kind cluster. A privileged Docker daemon runs beside its steps and listens only on a socket they share. `lint`
 lints the chart and validates what it renders, both with a host per workload and with paths on one host. `kind` fetches
-kind's release binary and checks it against the checksum its script pins. `cluster` builds `cobranch`,
+kind's release binary, trying again a few times when GitHub fails to answer, and checks it against the checksum its
+script pins. `cluster` builds `cobranch`,
 `cobranch-console` and `cobranch-back-office` in the daemon, tagged with the commit, while it creates the cluster there,
 which needs none of them, then loads them, with the bundled PostgreSQL's image, so its pods never pull. `install` waits
 for the migrate Job and every pod, and `test` runs the chart's tests: every server answers with the build's version, the

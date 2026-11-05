@@ -1094,6 +1094,30 @@ func (e RunState) Valid() bool {
 	}
 }
 
+// Defines values for RunStepState.
+const (
+	RunStepStateFailed    RunStepState = "failed"
+	RunStepStateRunning   RunStepState = "running"
+	RunStepStateSucceeded RunStepState = "succeeded"
+	RunStepStateWaiting   RunStepState = "waiting"
+)
+
+// Valid indicates whether the value is a known member of the RunStepState enum.
+func (e RunStepState) Valid() bool {
+	switch e {
+	case RunStepStateFailed:
+		return true
+	case RunStepStateRunning:
+		return true
+	case RunStepStateSucceeded:
+		return true
+	case RunStepStateWaiting:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RunTriggerKind.
 const (
 	RunTriggerKindAnnotation RunTriggerKind = "annotation"
@@ -3505,6 +3529,9 @@ type RunLog struct {
 
 	// Text The log, its bytes that aren't UTF-8 replaced.
 	Text string `json:"text"`
+
+	// Times When each line of text was logged, one per line, its lines being text split at its newlines with a last newline ending the last line; absent for a log kept before logs kept their times.
+	Times *[]time.Time `json:"times,omitempty"`
 }
 
 // RunLogs defines model for RunLogs.
@@ -3514,6 +3541,32 @@ type RunLogs struct {
 
 // RunState Where a run stands. Waiting runs wait for a member to start them; queued ones for the controller.
 type RunState string
+
+// RunStep One of a run's pod's containers, as it stood when the run ended, or stands while it runs.
+type RunStep struct {
+	EndedAt *time.Time `json:"endedAt,omitempty"`
+
+	// ExitCode How it exited, once it ended; 0 until then.
+	ExitCode int32 `json:"exitCode"`
+
+	// Name The container's name, such as cobranch-checkout for the checkout's or main for a script's.
+	Name string `json:"name"`
+
+	// Reason What the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says nothing more than its state.
+	Reason    string     `json:"reason"`
+	StartedAt *time.Time `json:"startedAt,omitempty"`
+
+	// State Where it stands; one still waiting once its run ended never ran.
+	State RunStepState `json:"state"`
+}
+
+// RunStepState Where it stands; one still waiting once its run ended never ran.
+type RunStepState string
+
+// RunSteps defines model for RunSteps.
+type RunSteps struct {
+	Steps []RunStep `json:"steps"`
+}
 
 // RunTrigger The event that queued a run.
 type RunTrigger struct {
@@ -5615,6 +5668,9 @@ type ServerInterface interface {
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
+	// GetRunSteps One of the repository's runs' steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its containers'): as the controller kept them once it ended, from its pod while it runs; takes repo.read. A run that never started a pod, such as a webhook's, has none.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/steps)
+	GetRunSteps(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber)
 	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
 	// (GET /orgs/{org}/repos/{repo}/secrets)
 	ListRepositorySecrets(w http.ResponseWriter, r *http.Request, org Org, repo Repo)
@@ -14962,6 +15018,50 @@ func (siw *ServerInterfaceWrapper) StartRun(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// GetRunSteps operation middleware
+func (siw *ServerInterfaceWrapper) GetRunSteps(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "number" -------------
+	var number RunNumber
+
+	err = runtime.BindStyledParameterWithOptions("simple", "number", r.PathValue("number"), &number, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "integer", Format: "int64", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "number", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRunSteps(w, r, org, repo, number)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRepositorySecrets operation middleware
 func (siw *ServerInterfaceWrapper) ListRepositorySecrets(w http.ResponseWriter, r *http.Request) {
 
@@ -16651,6 +16751,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/rerun", wrapper.RerunRun)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs", wrapper.GetRunLogs)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/logs/{container}", wrapper.GetRunLog)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/runs/{number}/steps", wrapper.GetRunSteps)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs", wrapper.RunJob)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/events", wrapper.PostEvent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
@@ -35602,6 +35703,77 @@ func (response StartRundefaultApplicationProblemPlusJSONResponse) VisitStartRunR
 	return err
 }
 
+type GetRunStepsRequestObject struct {
+	Org    Org       `json:"org"`
+	Repo   Repo      `json:"repo"`
+	Number RunNumber `json:"number"`
+}
+
+type GetRunStepsResponseObject interface {
+	VisitGetRunStepsResponse(w http.ResponseWriter) error
+}
+
+type GetRunSteps200JSONResponse RunSteps
+
+func (response GetRunSteps200JSONResponse) VisitGetRunStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunSteps401ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetRunSteps401ApplicationProblemPlusJSONResponse) VisitGetRunStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunSteps404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetRunSteps404ApplicationProblemPlusJSONResponse) VisitGetRunStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetRunStepsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetRunStepsdefaultApplicationProblemPlusJSONResponse) VisitGetRunStepsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositorySecretsRequestObject struct {
 	Org  Org  `json:"org"`
 	Repo Repo `json:"repo"`
@@ -39100,6 +39272,9 @@ type StrictServerInterface interface {
 	// StartRun Queues one of the repository's runs that waits for a member, its tip pushed from outside the organization, for the viewer; takes jobs.run. A run that doesn't wait answers 409 run.not_waiting.
 	// (POST /orgs/{org}/repos/{repo}/runs/{number}/start)
 	StartRun(ctx context.Context, request StartRunRequestObject) (StartRunResponseObject, error)
+	// GetRunSteps One of the repository's runs' steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its containers'): as the controller kept them once it ended, from its pod while it runs; takes repo.read. A run that never started a pod, such as a webhook's, has none.
+	// (GET /orgs/{org}/repos/{repo}/runs/{number}/steps)
+	GetRunSteps(ctx context.Context, request GetRunStepsRequestObject) (GetRunStepsResponseObject, error)
 	// ListRepositorySecrets The repository's own secrets, by name and never with their values; takes secrets.manage on the repository. Each is read, changed and granted under /orgs/{org}/secrets/{id}.
 	// (GET /orgs/{org}/repos/{repo}/secrets)
 	ListRepositorySecrets(ctx context.Context, request ListRepositorySecretsRequestObject) (ListRepositorySecretsResponseObject, error)
@@ -44679,6 +44854,34 @@ func (sh *strictHandler) StartRun(w http.ResponseWriter, r *http.Request, org Or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(StartRunResponseObject); ok {
 		if err := validResponse.VisitStartRunResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetRunSteps operation middleware
+func (sh *strictHandler) GetRunSteps(w http.ResponseWriter, r *http.Request, org Org, repo Repo, number RunNumber) {
+	var request GetRunStepsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Number = number
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetRunSteps(ctx, request.(GetRunStepsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetRunSteps")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetRunStepsResponseObject); ok {
+		if err := validResponse.VisitGetRunStepsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

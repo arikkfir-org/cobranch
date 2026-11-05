@@ -1094,6 +1094,7 @@ type ComplexityRoot struct {
 		StartedAt  func(childComplexity int) int
 		StartedBy  func(childComplexity int) int
 		State      func(childComplexity int) int
+		Steps      func(childComplexity int) int
 		Trigger    func(childComplexity int) int
 		Version    func(childComplexity int) int
 	}
@@ -1102,12 +1103,22 @@ type ComplexityRoot struct {
 		Container func(childComplexity int) int
 		Live      func(childComplexity int) int
 		Text      func(childComplexity int) int
+		Times     func(childComplexity int) int
 	}
 
 	RunPage struct {
 		NextCursor func(childComplexity int) int
 		Runs       func(childComplexity int) int
 		Total      func(childComplexity int) int
+	}
+
+	RunStep struct {
+		EndedAt   func(childComplexity int) int
+		ExitCode  func(childComplexity int) int
+		Name      func(childComplexity int) int
+		Reason    func(childComplexity int) int
+		StartedAt func(childComplexity int) int
+		State     func(childComplexity int) int
 	}
 
 	RunTrigger struct {
@@ -1477,6 +1488,7 @@ type RepositoryResolver interface {
 }
 type RunResolver interface {
 	Logs(ctx context.Context, obj *Run) ([]*RunLog, error)
+	Steps(ctx context.Context, obj *Run) ([]*RunStep, error)
 }
 type SecretResolver interface {
 	Access(ctx context.Context, obj *Secret) ([]*Grantee, error)
@@ -6782,6 +6794,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Run.State(childComplexity), true
+	case "Run.steps":
+		if e.ComplexityRoot.Run.Steps == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Run.Steps(childComplexity), true
 	case "Run.trigger":
 		if e.ComplexityRoot.Run.Trigger == nil {
 			break
@@ -6813,6 +6831,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RunLog.Text(childComplexity), true
+	case "RunLog.times":
+		if e.ComplexityRoot.RunLog.Times == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunLog.Times(childComplexity), true
 
 	case "RunPage.nextCursor":
 		if e.ComplexityRoot.RunPage.NextCursor == nil {
@@ -6832,6 +6856,43 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.RunPage.Total(childComplexity), true
+
+	case "RunStep.endedAt":
+		if e.ComplexityRoot.RunStep.EndedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.EndedAt(childComplexity), true
+	case "RunStep.exitCode":
+		if e.ComplexityRoot.RunStep.ExitCode == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.ExitCode(childComplexity), true
+	case "RunStep.name":
+		if e.ComplexityRoot.RunStep.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.Name(childComplexity), true
+	case "RunStep.reason":
+		if e.ComplexityRoot.RunStep.Reason == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.Reason(childComplexity), true
+	case "RunStep.startedAt":
+		if e.ComplexityRoot.RunStep.StartedAt == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.StartedAt(childComplexity), true
+	case "RunStep.state":
+		if e.ComplexityRoot.RunStep.State == nil {
+			break
+		}
+
+		return e.ComplexityRoot.RunStep.State(childComplexity), true
 
 	case "RunTrigger.actor":
 		if e.ComplexityRoot.RunTrigger.Actor == nil {
@@ -9845,6 +9906,12 @@ type Run {
   such as a webhook's.
   """
   logs: [RunLog!]!
+  """
+  Its steps, its pod's containers in the order they run (the checkout's, the job's init containers', then its
+  containers'): as the controller kept them once it ended, from its pod while it runs. None for a run that never started
+  a pod, such as a webhook's.
+  """
+  steps: [RunStep!]!
 }
 
 "One of a run's containers' logs, with the values the run masks hidden."
@@ -9852,8 +9919,34 @@ type RunLog {
   container: String!
   "The log, its bytes that aren't UTF-8 replaced."
   text: String!
+  """
+  When each line of text was logged, one per line, its lines being text split at its newlines with a last newline
+  ending the last line; null for a log kept before logs kept their times.
+  """
+  times: [Time!]
   "Whether it was read from the running pod, and grows until the run ends."
   live: Boolean!
+}
+
+"One of a run's pod's containers, as it stood when the run ended, or stands while it runs."
+type RunStep {
+  "The container's name, such as cobranch-checkout for the checkout's or main for a script's."
+  name: String!
+  state: RunStepState!
+  "How it exited, once it ended; 0 until then."
+  exitCode: Int!
+  "What the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says nothing more than its state."
+  reason: String!
+  startedAt: Time
+  endedAt: Time
+}
+
+"Where a run's step stands; one still waiting once its run ended never ran."
+enum RunStepState {
+  WAITING
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 "Where a run stands."
@@ -12443,6 +12536,8 @@ func (ec *executionContext) childFields_Run(ctx context.Context, field graphql.C
 		return ec.fieldContext_Run_version(ctx, field)
 	case "logs":
 		return ec.fieldContext_Run_logs(ctx, field)
+	case "steps":
+		return ec.fieldContext_Run_steps(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Run", field.Name)
 }
@@ -12453,6 +12548,8 @@ func (ec *executionContext) childFields_RunLog(ctx context.Context, field graphq
 		return ec.fieldContext_RunLog_container(ctx, field)
 	case "text":
 		return ec.fieldContext_RunLog_text(ctx, field)
+	case "times":
+		return ec.fieldContext_RunLog_times(ctx, field)
 	case "live":
 		return ec.fieldContext_RunLog_live(ctx, field)
 	}
@@ -12469,6 +12566,24 @@ func (ec *executionContext) childFields_RunPage(ctx context.Context, field graph
 		return ec.fieldContext_RunPage_total(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type RunPage", field.Name)
+}
+
+func (ec *executionContext) childFields_RunStep(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_RunStep_name(ctx, field)
+	case "state":
+		return ec.fieldContext_RunStep_state(ctx, field)
+	case "exitCode":
+		return ec.fieldContext_RunStep_exitCode(ctx, field)
+	case "reason":
+		return ec.fieldContext_RunStep_reason(ctx, field)
+	case "startedAt":
+		return ec.fieldContext_RunStep_startedAt(ctx, field)
+	case "endedAt":
+		return ec.fieldContext_RunStep_endedAt(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type RunStep", field.Name)
 }
 
 func (ec *executionContext) childFields_RunTrigger(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -38093,6 +38208,38 @@ func (ec *executionContext) fieldContext_Run_logs(_ context.Context, field graph
 	return fc, nil
 }
 
+func (ec *executionContext) _Run_steps(ctx context.Context, field graphql.CollectedField, obj *Run) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Run_steps(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.Run().Steps(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*RunStep) graphql.Marshaler {
+			return ec.marshalNRunStep2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStepᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Run_steps(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Run",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_RunStep(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _RunLog_container(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -38137,6 +38284,29 @@ func (ec *executionContext) _RunLog_text(ctx context.Context, field graphql.Coll
 }
 func (ec *executionContext) fieldContext_RunLog_text(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("RunLog", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunLog_times(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunLog_times(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Times, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚕᚖtimeᚐTimeᚄ(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunLog_times(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunLog", field, false, false, "Time")
 }
 
 func (ec *executionContext) _RunLog_live(ctx context.Context, field graphql.CollectedField, obj *RunLog) (ret graphql.Marshaler) {
@@ -38238,6 +38408,144 @@ func (ec *executionContext) _RunPage_total(ctx context.Context, field graphql.Co
 }
 func (ec *executionContext) fieldContext_RunPage_total(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("RunPage", field, false, false, "Int")
+}
+
+func (ec *executionContext) _RunStep_name(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunStep_state(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_state(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.State, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v RunStepState) graphql.Marshaler {
+			return ec.marshalNRunStepState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStepState(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_state(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "RunStepState")
+}
+
+func (ec *executionContext) _RunStep_exitCode(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_exitCode(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.ExitCode, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_exitCode(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "Int")
+}
+
+func (ec *executionContext) _RunStep_reason(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_reason(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Reason, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_reason(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "String")
+}
+
+func (ec *executionContext) _RunStep_startedAt(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_startedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.StartedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_startedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "Time")
+}
+
+func (ec *executionContext) _RunStep_endedAt(ctx context.Context, field graphql.CollectedField, obj *RunStep) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_RunStep_endedAt(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.EndedAt, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_RunStep_endedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("RunStep", field, false, false, "Time")
 }
 
 func (ec *executionContext) _RunTrigger_kind(ctx context.Context, field graphql.CollectedField, obj *RunTrigger) (ret graphql.Marshaler) {
@@ -51241,6 +51549,12 @@ func (ec *executionContext) _Run(ctx context.Context, sel ast.SelectionSet, obj 
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Run_logs(ctx, field, obj)
 				})
+		case "steps":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Run_steps(ctx, field, obj)
+				})
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -51277,6 +51591,11 @@ func (ec *executionContext) _RunLog(ctx context.Context, sel ast.SelectionSet, o
 		case "text":
 			out.Values[i] = ec._RunLog_text(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "times":
+			out.Values[i] = ec._RunLog_times(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
 		case "live":
@@ -51324,6 +51643,64 @@ func (ec *executionContext) _RunPage(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "total":
 			out.Values[i] = ec._RunPage_total(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var runStepImplementors = []string{"RunStep"}
+
+func (ec *executionContext) _RunStep(ctx context.Context, sel ast.SelectionSet, obj *RunStep) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, runStepImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("RunStep")
+		case "name":
+			out.Values[i] = ec._RunStep_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "state":
+			out.Values[i] = ec._RunStep_state(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "exitCode":
+			out.Values[i] = ec._RunStep_exitCode(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "reason":
+			out.Values[i] = ec._RunStep_reason(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "startedAt":
+			out.Values[i] = ec._RunStep_startedAt(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "endedAt":
+			out.Values[i] = ec._RunStep_endedAt(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
 				out.Invalids++
 			}
@@ -54724,6 +55101,40 @@ func (ec *executionContext) marshalNRunState2cobranchᚗdevᚋinternalᚋadapter
 	return v
 }
 
+func (ec *executionContext) marshalNRunStep2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStepᚄ(ctx context.Context, sel ast.SelectionSet, v []*RunStep) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNRunStep2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStep(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNRunStep2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStep(ctx context.Context, sel ast.SelectionSet, v *RunStep) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "RunStep!")
+		return graphql.Null
+	}
+	return ec._RunStep(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNRunStepState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStepState(ctx context.Context, v any) (RunStepState, error) {
+	var res RunStepState
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNRunStepState2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunStepState(ctx context.Context, sel ast.SelectionSet, v RunStepState) graphql.Marshaler {
+	return v
+}
+
 func (ec *executionContext) marshalNRunTrigger2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐRunTrigger(ctx context.Context, sel ast.SelectionSet, v *RunTrigger) graphql.Marshaler {
 	if v == nil {
 		graphql.AddInvalidNullError(ctx, "RunTrigger!")
@@ -54959,6 +55370,24 @@ func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v an
 func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel ast.SelectionSet, v time.Time) graphql.Marshaler {
 	_ = sel
 	res := graphql.MarshalTime(v)
+	if res == graphql.Null {
+		graphql.AddInvalidNullFromMarshaler(ctx, "Time!")
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNTime2ᚖtimeᚐTime(ctx context.Context, v any) (*time.Time, error) {
+	res, err := graphql.UnmarshalTime(v)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalNTime2ᚖtimeᚐTime(ctx context.Context, sel ast.SelectionSet, v *time.Time) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "Time!")
+		return graphql.Null
+	}
+	_ = sel
+	res := graphql.MarshalTime(*v)
 	if res == graphql.Null {
 		graphql.AddInvalidNullFromMarshaler(ctx, "Time!")
 	}
@@ -56199,6 +56628,41 @@ func (ec *executionContext) marshalOTheme2ᚖcobranchᚗdevᚋinternalᚋadapter
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) unmarshalOTime2ᚕᚖtimeᚐTimeᚄ(ctx context.Context, v any) ([]*time.Time, error) {
+	if v == nil {
+		return nil, nil
+	}
+	vSlice := graphql.CoerceList(v)
+	var err error
+	res := make([]*time.Time, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNTime2ᚖtimeᚐTime(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalOTime2ᚕᚖtimeᚐTimeᚄ(ctx context.Context, sel ast.SelectionSet, v []*time.Time) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNTime2ᚖtimeᚐTime(ctx, sel, v[i])
+	}
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v any) (*time.Time, error) {

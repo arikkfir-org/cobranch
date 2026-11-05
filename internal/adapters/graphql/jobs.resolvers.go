@@ -145,6 +145,19 @@ func (r *runResolver) Logs(ctx context.Context, obj *Run) ([]*RunLog, error) {
 	return runLogs(logs), nil
 }
 
+// Steps is the resolver for the steps field.
+func (r *runResolver) Steps(ctx context.Context, obj *Run) ([]*RunStep, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	steps, err := r.Code.RunSteps(ctx, v.User, obj.repoID, int64(obj.Number))
+	if err != nil {
+		return nil, fail(ctx, err, "run", "reading the run's steps")
+	}
+	return runSteps(steps), nil
+}
+
 // Run returns RunResolver implementation.
 func (r *Resolver) Run() RunResolver { return &runResolver{r} }
 

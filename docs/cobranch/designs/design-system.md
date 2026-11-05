@@ -23,8 +23,8 @@ the screens are [ENG-200](https://linear.app/arikkfir/issue/ENG-200); bringing i
 | Cover | Title, status, a sample of the language, credit |
 | Foundations | Principles, colour in light and dark, type scale, spacing, radii, elevation, layout |
 | Icons | 70 Lucide icons as components |
-| Components | 55 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
-| Screens | 62 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
+| Components | 57 components: controls, badges, tags, avatars, menus, tables, cards, meters, counters, charts, dialogs, the app shell, list rows, brand |
+| Screens | 63 screens: sign-in, sign-up, the organization's pages, the repository's, the branch (light and dark), the issue's, the agents', artifacts and settings |
 
 ## Principles
 
@@ -229,7 +229,7 @@ bound to `fg/default`, and an instance takes the colour of its context.
 
 ## Components
 
-The Components page holds 55 components built only from the tokens above; screens are assembled from their instances,
+The Components page holds 57 components built only from the tokens above; screens are assembled from their instances,
 so a fix to a component reaches every screen. In the Console each maps to one class named after it (`Badge/Quiet` is
 `.badge-quiet`), in `components.css`, and a page composes those classes and styles no component of its own; the app
 shell's components (App/\*, Nav item, Nav/Sub item, Chat message and Brand/Credit) are drawn around every page by
@@ -274,6 +274,7 @@ plan.
 | Activity/Event | None | Who did what, and when | `.event-row` |
 | Activity/Item | None | Whoever did it as Avatar 20 of any kind, the sentence, which wraps, and how long ago | `.activity-item` in an `.activity-list` |
 | Pattern/Agent row | Status: Working (Info), Watching (AI), Idle (Neutral) | Name, what it does now, which wraps; Avatar Agent 24 and the status Tag nested | `.agent-row` in a `.list` |
+| Run/Step row, Log/Line | Step row: Status Successful, Failed, Running, Not started, Unknown (a step of a run kept before runs kept their steps' states), Definition; State Default, Selected | A step's status icon, name and how long it ran; a log line's time since its step started, and its text | `.step-row` (`.step-row-name`, `.step-row-time`, `.step-row-quiet`) in a `.card`; `.log` of `.log-line` (`.log-time`, `.log-text`), `.log-note` |
 | Swatch | State: Default, Chosen | A label's colour as the Tag it gives, padded inside 1px of transparent border; Chosen ringed 2px in border/focus, its Tag with the check | `.swatches` of `.swatch` (a radio and its `.tag`), `.is-chosen` |
 | Meter | Kind Full, Share; Tone Default, Warning (from 80%), Danger (at the cap) | Label, value | `.meter` (`.meter-head`, `.meter-label`, `.meter-value`, `.meter-track`), `.meter-share`, `.meter-bar`; `.meter-warning`, `.meter-danger` |
 | Stat | None | A counter: its label in Label/Small with its icon at the end, its value in Heading/Large, and a Badge/Quiet under it that says more | `.stat` (`.stat-label`, `.stat-value`) and a `.badge-quiet` |
@@ -333,7 +334,7 @@ only cue.
 
 ## Screens
 
-Sixty-two screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
+Sixty-three screens on the Screens page, at 1440 wide unless named for a narrower one, and built only from library instances. They follow one
 organization, Kfirs, its repositories and its three agents: Builder implements issues, Reviewer reviews every push, and
 Researcher waits for a task.
 
@@ -358,6 +359,7 @@ Researcher waits for a task.
 | [Branch · Files changed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14230) | Its files listed, then each file's change with the chat's threads under their lines; a thread with replies, a reply open, a resolved thread and a file marked Viewed, folded and checked off, beside it |
 | [Branch · Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=135-14769) | Its pushes, newest first, each a card of its jobs' runs as Annotation rows, the head's with Re-run all, and a link that opens the earlier pushes |
 | [Jobs](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15120) | A repository's runs as a table: job, branch, commit, status, when, how long and who caused it, under a filter, Any job, Any branch, Any status and the count; empty, no-match and status menu states beside it |
+| [Run](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=138-15661) | One run: its job, status and actions, what it ran and why, its steps beside the selected step's log, each line with its time, or its job's definition; running, failed, waiting, webhook, no-logs and not-found states beside it |
 | [Issues](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=70-3370) | The organization's open issues as a table: labels, repository, assignee, branch, last change |
 | [Issues · Closed](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-16863) | The Closed tab: done issues and canceled ones, each by its state's icon |
 | [Issues · Filter set](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=156-17300) | A filter picked from its menu, which the button then names |
@@ -402,7 +404,7 @@ Researcher waits for a task.
 | [Settings · Models · Add model](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4735) | Adding a model, in a dialog |
 | [Settings · Models · Empty](https://www.figma.com/design/ZJVoycorwQStSjh89hnSrK/Cobranch?node-id=92-4960) | Models before any provider is added |
 
-The repository's other screens (a branch's Environment, Run and Delivery) are drawn, and join this table as the Console takes them on ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)). Error states are drawn beside the screen they belong to.
+The repository's other screens (a branch's Environment, and Delivery) are drawn, and join this table as the Console takes them on ([ENG-258](https://linear.app/arikkfir/issue/ENG-258)). Error states are drawn beside the screen they belong to.
 
 ### Sign in
 

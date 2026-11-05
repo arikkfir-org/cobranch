@@ -117,6 +117,22 @@ func (s *store) DropSlots(_ context.Context, before time.Time) (int64, error) {
 	return 1, nil
 }
 
+func (s *store) KeepSteps(_ context.Context, runID uuid.UUID, steps []jobs.Step) error {
+	kept := make([]string, 0, len(steps))
+	for _, step := range steps {
+		k := step.Name + " " + string(step.State)
+		if step.Reason != "" {
+			k += " (" + step.Reason + ")"
+		}
+		if step.EndedAt != nil {
+			k += " until " + step.EndedAt.Format("15:04")
+		}
+		kept = append(kept, k)
+	}
+	s.events = append(s.events, "kept "+runID.String()[:4]+"'s steps: "+strings.Join(kept, ", "))
+	return nil
+}
+
 // cluster is a runner.Cluster in memory: each organization's runs' pods, and what the Service asked of it.
 type cluster struct {
 	pods     map[uuid.UUID]map[uuid.UUID]runner.Pod
@@ -388,15 +404,22 @@ func TestFollow(t *testing.T) {
 		{name: "a pod that succeeded", running: []runner.Running{running("aaaa", org, started, 0)},
 			pods:       map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Succeeded}}},
 			wantEvents: []string{"succeeded: succeeded"}, wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
-		{name: "a pod that failed", running: []runner.Running{running("aaaa", org, started, 0)},
-			pods:       map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Failed, Reason: "container main exited 2"}}},
-			wantEvents: []string{"failed: container main exited 2"}, wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
+		{name: "a pod that failed, its steps kept", running: []runner.Running{running("aaaa", org, started, 0)},
+			pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Failed, Reason: "container main exited 2",
+				Steps: []jobs.Step{{Name: "cobranch-checkout", State: jobs.StepSucceeded}, {Name: "main", State: jobs.StepFailed, ExitCode: 2}}}}},
+			wantEvents:  []string{"kept aaaa's steps: cobranch-checkout succeeded, main failed", "failed: container main exited 2"},
+			wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
 		{name: "a pod not there yet", running: []runner.Running{running("aaaa", org, now.Add(-time.Second), 0)}},
 		{name: "a pod that vanished", running: []runner.Running{running("aaaa", org, started, 0)},
 			wantEvents: []string{"failed: its pod vanished"}, wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
 		{name: "a pod that never ran past its timeout", running: []runner.Running{running("aaaa", org, now.Add(-16*time.Minute), 10*time.Minute)},
 			pods:       map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Pending}}},
 			wantEvents: []string{"failed: timed out after 10m0s without its pod running"}, wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
+		{name: "a pod still running past its timeout, its running step stopped", running: []runner.Running{running("aaaa", org, now.Add(-16*time.Minute), 10*time.Minute)},
+			pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Pending,
+				Steps: []jobs.Step{{Name: "cobranch-checkout", State: jobs.StepSucceeded}, {Name: "main", State: jobs.StepRunning, StartedAt: &started}}}}},
+			wantEvents: []string{"kept aaaa's steps: cobranch-checkout succeeded, main failed (Stopped when its run ended) until 09:00",
+				"failed: timed out after 10m0s without its pod running"}, wantCluster: []string{"removed aaaa"}, wantLogs: []string{"aaaa/main"}},
 		{name: "a pod within its timeout's slack", running: []runner.Running{running("aaaa", org, now.Add(-14*time.Minute), 10*time.Minute)},
 			pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {id("aaaa"): {Outcome: runner.Pending}}}},
 		{name: "an organization whose pods can't be listed", running: []runner.Running{running("aaaa", org, started, 0), running("bbbb", other, started, 0)},
@@ -444,7 +467,8 @@ func TestSweep(t *testing.T) {
 	org, gone := id("0001"), id("0009")
 	pods := func() map[uuid.UUID]map[uuid.UUID]runner.Pod {
 		return map[uuid.UUID]map[uuid.UUID]runner.Pod{
-			org:  {id("aaaa"): {Outcome: runner.Pending}, id("bbbb"): {Outcome: runner.Pending}, id("cccc"): {}, id("dddd"): {}},
+			org: {id("aaaa"): {Outcome: runner.Pending}, id("bbbb"): {Outcome: runner.Pending, Steps: []jobs.Step{{Name: "main", State: jobs.StepRunning}}},
+				id("cccc"): {}, id("dddd"): {}},
 			gone: {id("eeee"): {}},
 		}
 	}
@@ -461,12 +485,54 @@ func TestSweep(t *testing.T) {
 	if err := svc.Sweep(context.Background()); err != nil {
 		t.Fatalf("Sweep() = %v", err)
 	}
-	// A cancelled run's pod goes, its logs kept; a pod with no run goes; a running and a queued run's stay; the gone
-	// organization's namespace goes.
+	// A cancelled run's pod goes, its steps and logs kept; a pod with no run goes; a running and a queued run's stay; the
+	// gone organization's namespace goes.
 	wantCluster := []string{"removed bbbb", "removed dddd", "dropped 0009"}
 	slices.Sort(c.events)
 	slices.Sort(wantCluster)
-	checkSwept(t, s, c, a, []string{"dropped dead tokens", "dropped slots before 2026-11-01 09:00:00"}, wantCluster, []string{"bbbb/main"})
+	checkSwept(t, s, c, a, []string{"dropped dead tokens", "dropped slots before 2026-11-01 09:00:00", "kept bbbb's steps: main failed (Stopped when its run ended) until 09:00"}, wantCluster,
+		[]string{"bbbb/main"})
+}
+
+// TestSweepStopsSteps keeps the steps of a run cancelled while its pod ran as they ended: one still running fails when
+// the run ended, or when it started if that was later, or now when the run keeps no end; the rest stay as they were.
+func TestSweepStopsSteps(t *testing.T) {
+	org, run := id("0001"), id("bbbb")
+	at := func(hour, minute int) *time.Time {
+		at := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, time.UTC)
+		return &at
+	}
+	tests := []struct {
+		name  string
+		ended *time.Time
+		steps []jobs.Step
+		want  string
+	}{
+		{name: "a step still running ends when its run did", ended: at(8, 55),
+			steps: []jobs.Step{{Name: "cobranch-checkout", State: jobs.StepSucceeded, EndedAt: at(8, 51)},
+				{Name: "main", State: jobs.StepRunning, StartedAt: at(8, 51)}, {Name: "after", State: jobs.StepWaiting}},
+			want: "cobranch-checkout succeeded until 08:51, main failed (Stopped when its run ended) until 08:55, after waiting"},
+		{name: "a step that started after its run ended ends as it started", ended: at(8, 55),
+			steps: []jobs.Step{{Name: "main", State: jobs.StepRunning, StartedAt: at(8, 57)}},
+			want:  "main failed (Stopped when its run ended) until 08:57"},
+		{name: "a run that keeps no end stops its steps now",
+			steps: []jobs.Step{{Name: "main", State: jobs.StepRunning, StartedAt: at(8, 51)}},
+			want:  "main failed (Stopped when its run ended) until 09:00"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &store{standing: map[uuid.UUID]runner.Standing{run: {RepoID: id("0002"), State: jobs.StateCancelled, EndedAt: tt.ended}}, orgs: []uuid.UUID{org}}
+			c := &cluster{pods: map[uuid.UUID]map[uuid.UUID]runner.Pod{org: {run: {Outcome: runner.Pending, Steps: tt.steps}}}}
+			a := archive{}
+			svc := runner.NewService(s, c, vault{}, a, &poster{}, settings)
+			svc.SetClock(func() time.Time { return now })
+			if err := svc.Sweep(context.Background()); err != nil {
+				t.Fatalf("Sweep() = %v", err)
+			}
+			checkSwept(t, s, c, a, []string{"dropped dead tokens", "dropped slots before 2026-11-01 09:00:00", "kept bbbb's steps: " + tt.want},
+				[]string{"removed bbbb"}, []string{"bbbb/main"})
+		})
+	}
 }
 
 func TestSchedule(t *testing.T) {

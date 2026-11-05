@@ -310,6 +310,17 @@ type JobRun struct {
 	RerunOf    *uuid.UUID
 }
 
+type JobRunStep struct {
+	RunID     uuid.UUID
+	Position  int32
+	Name      string
+	State     string
+	ExitCode  int32
+	Reason    string
+	StartedAt *time.Time
+	EndedAt   *time.Time
+}
+
 type JoinRequest struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID

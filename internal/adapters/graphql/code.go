@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"cobranch.dev/internal/services/code"
+	"cobranch.dev/internal/services/jobs"
 	"cobranch.dev/internal/services/orgs"
 )
 
@@ -37,6 +38,7 @@ type Code interface {
 	Runs(ctx context.Context, v code.Viewer, repoID uuid.UUID, q code.RunsQuery) (code.RunPage, error)
 	Run(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	RunLogs(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]code.RunLog, error)
+	RunSteps(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) ([]jobs.Step, error)
 	CancelRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	StartRun(ctx context.Context, v code.Viewer, repoID uuid.UUID, number int64) (code.Run, error)
 	Environments(ctx context.Context, v code.Viewer, repoID uuid.UUID, branch string) ([]code.Environment, error)

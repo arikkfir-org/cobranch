@@ -6868,6 +6868,30 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /orgs/{org}/repos/{repo}/runs/{number}/steps:
+    get:
+      operationId: getRunSteps
+      summary: >-
+        One of the repository's runs' steps, its pod's containers in the order they run (the checkout's, the job's init
+        containers', then its containers'): as the controller kept them once it ended, from its pod while it runs; takes
+        repo.read. A run that never started a pod, such as a webhook's, has none.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - $ref: "#/components/parameters/repo"
+        - $ref: "#/components/parameters/runNumber"
+      responses:
+        "200":
+          description: The run's steps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSteps"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /orgs/{org}/repos/{repo}/branches/{branch}/jobs/{job}/runs:
     post:
       operationId: runJob
@@ -9118,9 +9142,50 @@ components:
         text:
           type: string
           description: The log, its bytes that aren't UTF-8 replaced.
+        times:
+          type: array
+          description: >-
+            When each line of text was logged, one per line, its lines being text split at its newlines with a last newline
+            ending the last line; absent for a log kept before logs kept their times.
+          items:
+            type: string
+            format: date-time
         live:
           type: boolean
           description: Whether it was read from the running pod, and grows until the run ends.
+    RunSteps:
+      type: object
+      required: [steps]
+      properties:
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunStep"
+    RunStep:
+      type: object
+      description: One of a run's pod's containers, as it stood when the run ended, or stands while it runs.
+      required: [name, state, exitCode, reason]
+      properties:
+        name:
+          type: string
+          description: The container's name, such as cobranch-checkout for the checkout's or main for a script's.
+        state:
+          type: string
+          enum: [waiting, running, succeeded, failed]
+          description: Where it stands; one still waiting once its run ended never ran.
+        exitCode:
+          type: integer
+          format: int32
+          description: How it exited, once it ended; 0 until then.
+        reason:
+          type: string
+          description: What the cluster says of why it ended or waits, such as OOMKilled or ImagePullBackOff; empty when it says nothing more than its state.
+        startedAt:
+          type: string
+          format: date-time
+        endedAt:
+          type: string
+          format: date-time
     Run:
       type: object
       description: One run of a repository's job, at a commit and ref, for the event that queued it, of the job's definition as it was then. Its job's annotation on the commit says how it goes.

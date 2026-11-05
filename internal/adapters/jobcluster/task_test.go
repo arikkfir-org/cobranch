@@ -3,6 +3,7 @@ package jobcluster
 import (
 	"context"
 	"errors"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -192,7 +193,10 @@ func TestTaskPods(t *testing.T) {
 	pods, err := New(fake.NewClientset(append(objects, runPod, stray)...), taskConfig()).TaskPods(context.Background(), org)
 	want := map[uuid.UUID]taskrunner.Pod{taskID: {Number: 2, Pod: runner.Pod{Outcome: runner.Pending}},
 		otherTask: {Number: 1, Pod: runner.Pod{Outcome: runner.Succeeded}}}
-	if err != nil || len(pods) != len(want) || pods[taskID] != want[taskID] || pods[otherTask] != want[otherTask] {
+	same := func(a, b taskrunner.Pod) bool {
+		return a.Number == b.Number && a.Outcome == b.Outcome && a.Reason == b.Reason
+	}
+	if err != nil || !maps.EqualFunc(pods, want, same) {
 		t.Errorf("TaskPods() = %+v, %v, want %+v", pods, err, want)
 	}
 }

@@ -184,7 +184,21 @@ func nonEmpty(s string) *string {
 func runLogs(logs []code.RunLog) []*RunLog {
 	out := make([]*RunLog, 0, len(logs))
 	for _, l := range logs {
-		out = append(out, &RunLog{Container: l.Container, Text: strings.ToValidUTF8(string(l.Text), "\uFFFD"), Live: l.Live})
+		var times []*time.Time
+		for _, at := range l.Times {
+			times = append(times, &at)
+		}
+		out = append(out, &RunLog{Container: l.Container, Text: strings.ToValidUTF8(string(l.Text), "\uFFFD"), Times: times, Live: l.Live})
+	}
+	return out
+}
+
+// runSteps are a run's steps as the API shows them.
+func runSteps(steps []jobs.Step) []*RunStep {
+	out := make([]*RunStep, 0, len(steps))
+	for _, s := range steps {
+		out = append(out, &RunStep{Name: s.Name, State: RunStepState(strings.ToUpper(string(s.State))), ExitCode: int(s.ExitCode), Reason: s.Reason,
+			StartedAt: utc(s.StartedAt), EndedAt: utc(s.EndedAt)})
 	}
 	return out
 }

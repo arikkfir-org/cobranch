@@ -1,10 +1,12 @@
 package code
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/attribute"
@@ -21,6 +23,8 @@ const CheckoutContainer = "cobranch-checkout"
 type RunLog struct {
 	Container string
 	Text      []byte
+	// Times are when each line of Text was logged, one per line; none for a log kept before logs kept their times.
+	Times []time.Time
 	// Live reports it was read from the running pod: it grows until the run ends.
 	Live bool
 }
@@ -31,11 +35,14 @@ type ArchivedLogs interface {
 	Read(ctx context.Context, repoID, runID uuid.UUID) (map[string][]byte, error)
 }
 
-// LiveLogs reads running runs' logs from their pods: Kubernetes.
+// LiveLogs reads running runs' logs and steps from their pods: Kubernetes.
 type LiveLogs interface {
-	// Logs reads each of the run's pod's containers' logs so far, at most limit bytes each, with the run's masked values
-	// hidden, by container; none once its pod is gone, or for a container that never started.
+	// Logs reads each of the run's pod's containers' logs so far, at most limit bytes each, each line with its time
+	// before it (jobs.Stamp) and the run's masked values hidden, by container; none once its pod is gone, or for a
+	// container that never started.
 	Logs(ctx context.Context, orgID, runID uuid.UUID, limit int64) (map[string][]byte, error)
+	// Steps reads the run's pod's containers as its steps, in the order they run; none once its pod is gone.
+	Steps(ctx context.Context, orgID, runID uuid.UUID) ([]jobs.Step, error)
 }
 
 // runLogs are where the Service reads runs' logs, and the most of each container's it reads from a pod.
@@ -69,8 +76,9 @@ func (s *Service) RunLogs(ctx context.Context, v Viewer, repoID uuid.UUID, numbe
 		return nil, failed(span, "reading the run's logs", err)
 	}
 	out := make([]RunLog, 0, len(logs))
-	for container, text := range logs {
-		out = append(out, RunLog{Container: container, Text: text, Live: live})
+	for container, log := range logs {
+		text, times := unstamp(log)
+		out = append(out, RunLog{Container: container, Text: text, Times: times, Live: live})
 	}
 	slices.SortFunc(out, func(a, b RunLog) int {
 		return cmp.Or(cmp.Compare(logRank(a.Container), logRank(b.Container)), cmp.Compare(a.Container, b.Container))
@@ -124,4 +132,55 @@ func logRank(container string) int {
 		return 0
 	}
 	return 1
+}
+
+// unstamp splits a log the controller kept into its text and when each of its lines was logged (jobs.Stamp). A log kept
+// before logs kept their times answers as it is, with none; a line without its time, which the log's limit cut short,
+// takes the time of the line before.
+func unstamp(log []byte) ([]byte, []time.Time) {
+	lines := bytes.SplitAfter(log, []byte("\n"))
+	if len(lines[len(lines)-1]) == 0 {
+		lines = lines[:len(lines)-1]
+	}
+	if len(lines) == 0 {
+		return log, nil
+	}
+	if _, _, ok := jobs.Stamp(lines[0]); !ok {
+		return log, nil
+	}
+	text, times := make([]byte, 0, len(log)), make([]time.Time, 0, len(lines))
+	var last time.Time
+	for _, line := range lines {
+		if at, rest, ok := jobs.Stamp(line); ok {
+			last, line = at.UTC(), rest
+		}
+		text = append(text, line...)
+		times = append(times, last)
+	}
+	return text, times
+}
+
+// RunSteps lists one of the repository's runs' steps, its pod's containers in the order they run: as the controller
+// kept them once it ended, from its pod while it runs; it takes repo.read. A run that isn't there is
+// repos.ErrNotFound; one that never started a pod, such as a webhook's, has none.
+func (s *Service) RunSteps(ctx context.Context, v Viewer, repoID uuid.UUID, number int64) ([]jobs.Step, error) {
+	ctx, span := tracer.Start(ctx, "code.Service.RunSteps")
+	defer span.End()
+	span.SetAttributes(attribute.String("cobranch.repository.id", repoID.String()), attribute.Int64("cobranch.run.number", number))
+	r, err := s.Run(ctx, v, repoID, number)
+	if err != nil {
+		return nil, err
+	}
+	var steps []jobs.Step
+	switch {
+	case r.Definition.Kind() == jobs.KindWebhook || r.StartedAt == nil:
+	case r.State == jobs.StateRunning && s.logs.live != nil:
+		steps, err = s.logs.live.Steps(ctx, r.OrgID, r.ID)
+	case !r.State.Active():
+		steps, err = s.store.RunSteps(ctx, r.ID)
+	}
+	if err != nil {
+		return nil, failed(span, "reading the run's steps", err)
+	}
+	return steps, nil
 }

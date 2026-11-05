@@ -91,8 +91,16 @@ ORDER BY started_at;
 
 -- RunsStanding finds those of ids that are runs, with where each stands and its repository.
 -- name: RunsStanding :many
-SELECT id, repo_id, state FROM job_runs WHERE id = ANY(@ids::uuid[]);
+SELECT id, repo_id, state, ended_at FROM job_runs WHERE id = ANY(@ids::uuid[]);
 
 -- OrganizationsAmong answers which of ids are organizations still.
 -- name: OrganizationsAmong :many
 SELECT id FROM organizations WHERE id = ANY(@ids::uuid[]);
+
+-- name: DeleteRunSteps :exec
+DELETE FROM job_run_steps WHERE run_id = $1;
+
+-- InsertRunStep keeps one of a run's steps, at its position.
+-- name: InsertRunStep :batchexec
+INSERT INTO job_run_steps (run_id, position, name, state, exit_code, reason, started_at, ended_at)
+VALUES (@run_id, @position, @name, @state, @exit_code, @reason, @started_at, @ended_at);

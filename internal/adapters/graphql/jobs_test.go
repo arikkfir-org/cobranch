@@ -151,13 +151,16 @@ func (a logArchive) Read(_ context.Context, _, runID uuid.UUID) (map[string][]by
 	return a[runID], nil
 }
 
-// withLogs keeps logs of #1, which withRuns adds, as it ended: its checkout's, and its script's, which isn't UTF-8.
+// withLogs keeps the steps and logs of #1, which withRuns adds, as it ended: its checkout's, its line with its time,
+// and its script's, kept without them, which isn't UTF-8.
 func withLogs(next func(*orgFixture) *auth.Authenticated) func(*orgFixture) *auth.Authenticated {
 	return withRuns(func(f *orgFixture) *auth.Authenticated {
 		first := &f.codeStore.RunList[f.website.ID][0]
 		started := first.QueuedAt
 		first.StartedAt = &started
-		f.code.WithRunLogs(logArchive{first.ID: {"main": []byte("built \xff"), "cobranch-checkout": []byte("checked out")}}, nil, 0)
+		f.codeStore.Steps[first.ID] = []jobs.Step{{Name: "cobranch-checkout", State: jobs.StepSucceeded, StartedAt: &started},
+			{Name: "main", State: jobs.StepFailed, ExitCode: 2, Reason: "OOMKilled"}}
+		f.code.WithRunLogs(logArchive{first.ID: {"main": []byte("built \xff"), "cobranch-checkout": []byte("2026-11-01T07:00:03.5Z checked out")}}, nil, 0)
 		return next(f)
 	})
 }
@@ -168,8 +171,15 @@ func TestRunLogs(t *testing.T) {
 	}
 	runOrgCases(t, []orgCase{
 		{name: "a Reader reads an ended run's, the checkout's first", viewer: withLogs(maxHolding(auth.RoleReader)),
-			document: repo(`run(number: 1) { logs { container text live } }`),
-			want:     []string{`"logs":[{"container":"cobranch-checkout","text":"checked out","live":false},{"container":"main","text":"built �","live":false}]`}},
+			document: repo(`run(number: 1) { logs { container text times live } }`),
+			want: []string{`"logs":[{"container":"cobranch-checkout","text":"checked out","times":["2026-11-01T07:00:03.5Z"],"live":false},` +
+				`{"container":"main","text":"built �","times":null,"live":false}]`}},
+		{name: "a Reader reads an ended run's steps, as they were kept", viewer: withLogs(maxHolding(auth.RoleReader)),
+			document: repo(`run(number: 1) { steps { name state exitCode reason endedAt } }`),
+			want: []string{`"steps":[{"name":"cobranch-checkout","state":"SUCCEEDED","exitCode":0,"reason":"","endedAt":null},` +
+				`{"name":"main","state":"FAILED","exitCode":2,"reason":"OOMKilled","endedAt":null}]`}},
+		{name: "no steps of a run that hasn't started", viewer: withLogs(maxHolding(auth.RoleReader)),
+			document: repo(`run(number: 3) { steps { name } }`), want: []string{`"steps":[]`}},
 		{name: "none of a run that hasn't started", viewer: withLogs(maxHolding(auth.RoleReader)),
 			document: repo(`runs { runs { number logs { container } } }`),
 			want:     []string{`{"number":3,"logs":[]},{"number":2,"logs":[]},{"number":1,"logs":[{"container":"cobranch-checkout"},{"container":"main"}]}`}},

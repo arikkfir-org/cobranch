@@ -14,12 +14,6 @@ export const runStates = {
   failed: { word: "Failed", icon: "circle-x", tone: "danger" },
   cancelled: { word: "Cancelled", icon: "ban", tone: "neutral" },
 };
-// runBadge is a run's state as a badge, as annotationBadge draws an annotation's status.
-export function runBadge(state) {
-  const s = runStates[state];
-  return h("span", { class: "badge tone-" + s.tone }, icon(s.icon), s.word);
-}
-
 // runStatuses are the words a run's state reads as, the annotations' that the jobs design maps runs onto: Pending while
 // it waits or is queued, In progress while it runs, then Successful or Failed, a cancellation reading Failed.
 export const runStatuses = {
@@ -222,8 +216,8 @@ const causer = (r) => r.causedBy ? actorAvatar(r.causedBy)
   : r.trigger.kind === "schedule" ? machineAvatar(r.job.displayName + ", on its schedule")
   : h("span", { class: "cell-unassigned", title: "Someone since gone" }, "–");
 
-// runActions are Start for a waiting run, Cancel for one that hasn't ended, and Re-run for one that has, which opens
-// the new run, for a viewer holding jobs.run.
+// runActions are, for a viewer holding jobs.run, Start for a waiting run, Cancel for one that hasn't ended, which
+// asks first, and Re-run for one that has, which opens the new run.
 export function runActions(path, at, r, can, fail) {
   if (!can("jobs.run")) return null;
   const act = (verb, button, then) => {
@@ -232,17 +226,11 @@ export function runActions(path, at, r, can, fail) {
   };
   const name = r.job.displayName + " #" + r.number;
   const active = ["waiting", "queued", "running"].includes(r.state);
-  const start = r.state === "waiting" ? h("button", { class: "button small primary", type: "button", title: "Start " + name,
-    onclick: (e) => act("start", e.currentTarget, render) }, "Start") : null;
-  const cancel = active ? h("button", { class: "button small danger", type: "button", title: "Cancel " + name,
+  const start = r.state === "waiting" ? h("button", { class: "btn btn-primary", type: "button", title: "Start " + name,
+    onclick: (e) => act("start", e.currentTarget, render) }, icon("play"), "Start") : null;
+  const cancel = active ? h("button", { class: "btn", type: "button", title: "Cancel " + name,
     onclick: (e) => confirm("Cancel " + name + "?") && act("cancel", e.currentTarget, render) }, "Cancel") : null;
-  const rerun = active ? null : h("button", { class: "button small", type: "button", title: "Run " + name + "'s definition again at its commit",
+  const rerun = active ? null : h("button", { class: "btn", type: "button", title: "Run " + name + "'s definition again at its commit",
     onclick: (e) => act("rerun", e.currentTarget, (n) => go(at.run(n.number))) }, "Re-run");
-  return [start, start && cancel ? " " : null, cancel, rerun];
+  return [start, cancel, rerun];
 }
-
-// refName is a ref by the name its kind gives it: a branch's or a tag's.
-export const refName = (ref) => ref.startsWith("refs/heads/") ? ["branch ", h("code", {}, ref.slice(11))] : ref.startsWith("refs/tags/") ? ["tag ", h("code", {}, ref.slice(10))] : h("code", {}, ref);
-// triggered says what queued a run.
-export const triggered = (r) => (r.rerunOf ? "a re-run of #" + r.rerunOf + ", " : "") + (({ push: "a push", tag: "a tag's push", annotation: "annotation " + r.trigger.name,
-  review: "a review", event: "event " + r.trigger.name, schedule: "its schedule", manual: "a member" })[r.trigger.kind] || r.trigger.kind);

@@ -178,6 +178,20 @@ func (s *CodeStore) Run(ctx context.Context, repoID uuid.UUID, number int64) (co
 	return run, nil
 }
 
+// RunSteps lists the steps the controller kept of an ended run, in the order they ran; none when it kept none
+// (code.Store).
+func (s *CodeStore) RunSteps(ctx context.Context, runID uuid.UUID) ([]jobs.Step, error) {
+	rows, err := s.q.RunSteps(ctx, runID)
+	if err != nil {
+		return nil, fmt.Errorf("listing run %s's steps: %w", runID, err)
+	}
+	steps := make([]jobs.Step, len(rows))
+	for i, r := range rows {
+		steps[i] = jobs.Step{Name: r.Name, State: jobs.StepState(r.State), ExitCode: r.ExitCode, Reason: r.Reason, StartedAt: r.StartedAt, EndedAt: r.EndedAt}
+	}
+	return steps, nil
+}
+
 // CancelRun cancels a run that hasn't ended, for actor, in one transaction that acts for actor: its job's annotation
 // fails naming them, event run.cancelled names the run, and the branches at its commit get their status worked out
 // again (code.Store).
