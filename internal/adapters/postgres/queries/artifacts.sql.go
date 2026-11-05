@@ -23,11 +23,13 @@ func (q *Queries) AdvanceArtifact(ctx context.Context, number int32, actor uuid.
 }
 
 const artifact = `-- name: Artifact :one
-SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.title, a.summary, a.kind, a.repository_access, a.organization_access,
-       a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head, v.media_type,
-       a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name, a.updated_at
-FROM artifacts a JOIN organizations o ON o.id = a.org_id JOIN repositories rp ON rp.id = a.repo_id
+SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.owner_id, ow.display_name AS owner_name, a.title, a.summary, a.kind,
+       a.repository_access, a.organization_access, a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head,
+       v.media_type, a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name,
+       a.updated_at
+FROM artifacts a JOIN organizations o ON o.id = a.org_id LEFT JOIN repositories rp ON rp.id = a.repo_id
 JOIN artifact_versions v ON v.artifact_id = a.id AND v.number = a.head
+LEFT JOIN principals ow ON ow.id = a.owner_id
 LEFT JOIN principals ag ON ag.id = a.agent_id
 LEFT JOIN agent_tasks t ON t.id = a.task_id
 LEFT JOIN principals cb ON cb.id = a.created_by
@@ -39,8 +41,10 @@ type ArtifactRow struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID
 	OrgSlug            string
-	RepoID             uuid.UUID
-	RepoSlug           string
+	RepoID             *uuid.UUID
+	RepoSlug           *string
+	OwnerID            *uuid.UUID
+	OwnerName          *string
 	Title              string
 	Summary            string
 	Kind               string
@@ -71,6 +75,8 @@ func (q *Queries) Artifact(ctx context.Context, id uuid.UUID) (ArtifactRow, erro
 		&i.OrgSlug,
 		&i.RepoID,
 		&i.RepoSlug,
+		&i.OwnerID,
+		&i.OwnerName,
 		&i.Title,
 		&i.Summary,
 		&i.Kind,
@@ -101,7 +107,7 @@ SELECT id, org_id, repo_id, title, head, version, created_by FROM artifacts WHER
 type ArtifactForUpdateRow struct {
 	ID        uuid.UUID
 	OrgID     uuid.UUID
-	RepoID    uuid.UUID
+	RepoID    *uuid.UUID
 	Title     string
 	Head      int32
 	Version   int64
@@ -163,37 +169,13 @@ func (q *Queries) ArtifactGrantees(ctx context.Context, artifactID uuid.UUID) ([
 }
 
 const artifactPermissions = `-- name: ArtifactPermissions :many
-SELECT DISTINCT p.permission::text AS permission FROM (
-    SELECT unnest(r.permissions) AS permission FROM grants g JOIN roles r ON r.id = g.role_id
-    WHERE g.principal_id = $1 AND g.scope = 'artifact' AND g.scope_id = $2::uuid
-    UNION ALL
-    SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN artifacts a ON a.repo_id = g.scope_id
-    WHERE g.principal_id = $1 AND g.scope = 'repository' AND a.id = $2::uuid
-    UNION ALL
-    SELECT unnest(r.permissions) FROM grants g JOIN roles r ON r.id = g.role_id JOIN artifacts a ON a.org_id = g.scope_id
-    WHERE g.principal_id = $1 AND g.scope = 'organization' AND a.id = $2::uuid
-    UNION ALL
-    SELECT unnest(CASE x.access WHEN 'edit' THEN '{artifacts.read,artifacts.write}'::text[] ELSE '{artifacts.read}'::text[] END)
-    FROM (
-        SELECT a.repository_access AS access FROM artifacts a
-        WHERE a.id = $2::uuid AND a.repository_access <> 'none' AND EXISTS (
-            SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = $1 AND 'repo.read' = ANY (r.permissions)
-              AND ((g.scope = 'repository' AND g.scope_id = a.repo_id) OR (g.scope = 'organization' AND g.scope_id = a.org_id)))
-        UNION ALL
-        SELECT a.organization_access FROM artifacts a
-        WHERE a.id = $2::uuid AND a.organization_access <> 'none' AND EXISTS (
-            SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = $1 AND 'org.read' = ANY (r.permissions) AND g.scope = 'organization' AND g.scope_id = a.org_id)
-    ) x
-) p WHERE p.permission = ANY ($3::text[])
+SELECT DISTINCT ap.permission::text AS permission FROM artifact_permissions($1::uuid, $2::uuid) ap
+WHERE ap.permission = ANY ($3::text[])
 ORDER BY 1
 `
 
-// ArtifactPermissions lists the permissions the principal holds on an artifact: those of the roles its grants give
-// on the artifact, on its repository and at its organization, and those its audiences give a principal that reads its
-// repository, or its organization, view artifacts.read and edit artifacts.write besides; each kept to the artifact
-// permissions, which permissions lists.
+// ArtifactPermissions lists the permissions the principal holds on an artifact, as artifact_permissions answers them
+// (db/migrations/00055_artifact_owners.sql), kept to the artifact permissions, which permissions lists.
 func (q *Queries) ArtifactPermissions(ctx context.Context, principalID uuid.UUID, artifactID uuid.UUID, permissions []string) ([]string, error) {
 	rows, err := q.db.Query(ctx, artifactPermissions, principalID, artifactID, permissions)
 	if err != nil {
@@ -327,11 +309,13 @@ func (q *Queries) ArtifactVersions(ctx context.Context, artifactID uuid.UUID) ([
 }
 
 const artifacts = `-- name: Artifacts :many
-SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.title, a.summary, a.kind, a.repository_access, a.organization_access,
-       a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head, v.media_type,
-       a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name, a.updated_at
-FROM artifacts a JOIN organizations o ON o.id = a.org_id JOIN repositories rp ON rp.id = a.repo_id
+SELECT a.id, a.org_id, o.slug AS org_slug, a.repo_id, rp.slug AS repo_slug, a.owner_id, ow.display_name AS owner_name, a.title, a.summary, a.kind,
+       a.repository_access, a.organization_access, a.agent_id, ag.display_name AS agent_name, a.task_id, t.number AS task_number, a.branch, a.head,
+       v.media_type, a.version, a.created_by, cb.display_name AS created_by_name, a.created_at, a.updated_by, ub.display_name AS updated_by_name,
+       a.updated_at
+FROM artifacts a JOIN organizations o ON o.id = a.org_id LEFT JOIN repositories rp ON rp.id = a.repo_id
 JOIN artifact_versions v ON v.artifact_id = a.id AND v.number = a.head
+LEFT JOIN principals ow ON ow.id = a.owner_id
 LEFT JOIN principals ag ON ag.id = a.agent_id
 LEFT JOIN agent_tasks t ON t.id = a.task_id
 LEFT JOIN principals cb ON cb.id = a.created_by
@@ -344,8 +328,10 @@ type ArtifactsRow struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID
 	OrgSlug            string
-	RepoID             uuid.UUID
-	RepoSlug           string
+	RepoID             *uuid.UUID
+	RepoSlug           *string
+	OwnerID            *uuid.UUID
+	OwnerName          *string
 	Title              string
 	Summary            string
 	Kind               string
@@ -383,6 +369,8 @@ func (q *Queries) Artifacts(ctx context.Context, ids []uuid.UUID) ([]ArtifactsRo
 			&i.OrgSlug,
 			&i.RepoID,
 			&i.RepoSlug,
+			&i.OwnerID,
+			&i.OwnerName,
 			&i.Title,
 			&i.Summary,
 			&i.Kind,
@@ -414,26 +402,28 @@ func (q *Queries) Artifacts(ctx context.Context, ids []uuid.UUID) ([]ArtifactsRo
 }
 
 const artifactsWith = `-- name: ArtifactsWith :many
-SELECT a.id FROM artifacts a WHERE a.repo_id = $1 AND (
-    EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-            WHERE g.principal_id = $2 AND $3::text = ANY (r.permissions)
-              AND ((g.scope = 'artifact' AND g.scope_id = a.id) OR (g.scope = 'repository' AND g.scope_id = a.repo_id)
-                OR (g.scope = 'organization' AND g.scope_id = a.org_id)))
-    OR ((a.repository_access = 'edit' OR (a.repository_access = 'view' AND $3::text = 'artifacts.read'))
-        AND EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-                    WHERE g.principal_id = $2 AND 'repo.read' = ANY (r.permissions)
-                      AND ((g.scope = 'repository' AND g.scope_id = a.repo_id) OR (g.scope = 'organization' AND g.scope_id = a.org_id))))
-    OR ((a.organization_access = 'edit' OR (a.organization_access = 'view' AND $3::text = 'artifacts.read'))
-        AND EXISTS (SELECT 1 FROM grants g JOIN roles r ON r.id = g.role_id
-                    WHERE g.principal_id = $2 AND 'org.read' = ANY (r.permissions)
-                      AND g.scope = 'organization' AND g.scope_id = a.org_id)))
+SELECT a.id FROM artifacts a
+WHERE a.org_id = $1::uuid AND ($2::uuid IS NULL OR a.repo_id = $2::uuid)
+  AND EXISTS (SELECT 1 FROM artifact_permissions($3::uuid, a.id) ap WHERE ap.permission = $4::text)
 ORDER BY a.id
 `
 
-// ArtifactsWith lists the IDs of the repository's artifacts where the principal holds the permission, as
-// ArtifactPermissions answers it, artifacts.read or artifacts.write.
-func (q *Queries) ArtifactsWith(ctx context.Context, repoID uuid.UUID, principalID uuid.UUID, permission string) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, artifactsWith, repoID, principalID, permission)
+type ArtifactsWithParams struct {
+	OrgID       uuid.UUID
+	RepoID      *uuid.UUID
+	PrincipalID uuid.UUID
+	Permission  string
+}
+
+// ArtifactsWith lists the IDs of the organization's artifacts, or those attached to the repository when repo_id names
+// one, where the principal holds the permission, as ArtifactPermissions answers it.
+func (q *Queries) ArtifactsWith(ctx context.Context, arg ArtifactsWithParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, artifactsWith,
+		arg.OrgID,
+		arg.RepoID,
+		arg.PrincipalID,
+		arg.Permission,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -450,6 +440,29 @@ func (q *Queries) ArtifactsWith(ctx context.Context, repoID uuid.UUID, principal
 		return nil, err
 	}
 	return items, nil
+}
+
+const colleague = `-- name: Colleague :one
+SELECT p.id, p.kind, p.display_name FROM principals p
+WHERE p.id = $1 AND p.id <> $2::uuid AND (
+    (p.kind = 'user' AND EXISTS (SELECT 1 FROM memberships m JOIN memberships theirs ON theirs.org_id = m.org_id
+                                 WHERE m.user_id = $2::uuid AND theirs.user_id = p.id))
+    OR (p.kind = 'agent' AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = $2::uuid AND m.org_id = p.org_id)))
+`
+
+type ColleagueRow struct {
+	ID          uuid.UUID
+	Kind        string
+	DisplayName string
+}
+
+// Colleague finds a user who is a member of an organization the person is, or an agent of one: those the person may
+// grant a role on themselves.
+func (q *Queries) Colleague(ctx context.Context, principalID uuid.UUID, userID uuid.UUID) (ColleagueRow, error) {
+	row := q.db.QueryRow(ctx, colleague, principalID, userID)
+	var i ColleagueRow
+	err := row.Scan(&i.ID, &i.Kind, &i.DisplayName)
+	return i, err
 }
 
 const deleteArtifact = `-- name: DeleteArtifact :exec
@@ -490,20 +503,35 @@ func (q *Queries) DeleteArtifactGrantsAt(ctx context.Context, principalID uuid.U
 	return result.RowsAffected(), nil
 }
 
+const deletePersonGrants = `-- name: DeletePersonGrants :execrows
+DELETE FROM grants WHERE principal_id = $1 AND scope = 'user' AND scope_id = $2::uuid
+`
+
+// DeletePersonGrants takes every role the principal holds on the person.
+func (q *Queries) DeletePersonGrants(ctx context.Context, principalID uuid.UUID, userID uuid.UUID) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePersonGrants, principalID, userID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const insertArtifact = `-- name: InsertArtifact :execrows
-INSERT INTO artifacts (id, org_id, repo_id, title, summary, kind, repository_access, organization_access, agent_id, task_id, branch, created_by, updated_by)
-SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9::uuid,
-       $10::uuid,
-       coalesce(nullif($11::text, ''), (SELECT b.name FROM agent_tasks t JOIN branches b ON b.id = t.branch_id
-                                            WHERE t.id = $10::uuid), ''),
-       $12::uuid, $12::uuid
-WHERE EXISTS (SELECT 1 FROM repositories WHERE id = $3 AND org_id = $2)
+INSERT INTO artifacts (id, org_id, repo_id, owner_id, title, summary, kind, repository_access, organization_access, agent_id, task_id, branch,
+                       created_by, updated_by)
+SELECT $1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, $9,
+       $10::uuid, $11::uuid,
+       coalesce(nullif($12::text, ''), (SELECT b.name FROM agent_tasks t JOIN branches b ON b.id = t.branch_id
+                                            WHERE t.id = $11::uuid), ''),
+       $13::uuid, $13::uuid
+WHERE $3::uuid IS NULL OR EXISTS (SELECT 1 FROM repositories WHERE id = $3::uuid AND org_id = $2)
 `
 
 type InsertArtifactParams struct {
 	ID                 uuid.UUID
 	OrgID              uuid.UUID
-	RepoID             uuid.UUID
+	RepoID             *uuid.UUID
+	OwnerID            *uuid.UUID
 	Title              string
 	Summary            string
 	Kind               string
@@ -515,13 +543,14 @@ type InsertArtifactParams struct {
 	Actor              uuid.UUID
 }
 
-// InsertArtifact writes an artifact in a repository of its organization, with its branch, or the branch of its task
-// when it names none: no row when the repository is another organization's.
+// InsertArtifact writes an artifact of its organization, attached to one of its repositories or to none, with its
+// branch, or the branch of its task when it names none: no row when the repository is another organization's.
 func (q *Queries) InsertArtifact(ctx context.Context, arg InsertArtifactParams) (int64, error) {
 	result, err := q.db.Exec(ctx, insertArtifact,
 		arg.ID,
 		arg.OrgID,
 		arg.RepoID,
+		arg.OwnerID,
 		arg.Title,
 		arg.Summary,
 		arg.Kind,
@@ -566,6 +595,45 @@ func (q *Queries) InsertArtifactVersion(ctx context.Context, arg InsertArtifactV
 		arg.Note,
 	)
 	return err
+}
+
+const personGrantees = `-- name: PersonGrantees :many
+SELECT p.id, p.kind, p.display_name, g.role_id FROM grants g JOIN principals p ON p.id = g.principal_id
+WHERE g.scope = 'user' AND g.scope_id = $1::uuid ORDER BY p.display_name, p.id, g.role_id
+`
+
+type PersonGranteesRow struct {
+	ID          uuid.UUID
+	Kind        string
+	DisplayName string
+	RoleID      uuid.UUID
+}
+
+// PersonGrantees lists the roles principals hold on the person, by display name: those that reach the artifacts the
+// person owns.
+func (q *Queries) PersonGrantees(ctx context.Context, userID uuid.UUID) ([]PersonGranteesRow, error) {
+	rows, err := q.db.Query(ctx, personGrantees, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PersonGranteesRow
+	for rows.Next() {
+		var i PersonGranteesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Kind,
+			&i.DisplayName,
+			&i.RoleID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const updateArtifact = `-- name: UpdateArtifact :exec

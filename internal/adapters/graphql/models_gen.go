@@ -172,49 +172,51 @@ type APIKeySecret struct {
 	RevokedAt  *time.Time `json:"revokedAt,omitempty"`
 }
 
-// A document, a diagram, a report or a page that a repository owns, as its readers see it.
+// A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null.
 type Artifact struct {
 	ID             string `json:"id"`
 	OrganizationID string `json:"organizationId"`
-	// The repository that owns it.
-	Repository *ArtifactRepository `json:"repository"`
+	// The repository it is attached to; null for none.
+	Repository *ArtifactRepository `json:"repository,omitempty"`
+	// Whose it is: the person who asked for it, or the agent of a task Cobranch started; null once they are gone.
+	Owner *ArtifactPrincipal `json:"owner,omitempty"`
 	// 1 to 200 characters.
 	Title string `json:"title"`
 	// At most 500 characters.
-	Summary string       `json:"summary"`
+	Summary *string      `json:"summary,omitempty"`
 	Kind    ArtifactKind `json:"kind"`
 	// How far the principals reading its repository reach it.
-	RepositoryAccess ArtifactReach `json:"repositoryAccess"`
+	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
 	// How far the principals reading its organization reach it.
-	OrganizationAccess ArtifactReach `json:"organizationAccess"`
+	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
 	// Its widest audience, as the list's badge names it.
-	Audience ArtifactAudience `json:"audience"`
+	Audience *ArtifactAudience `json:"audience,omitempty"`
 	// The agent that wrote it; null when a person or a script wrote it, or once the agent is gone.
 	Agent *ArtifactPrincipal `json:"agent,omitempty"`
 	// The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone.
 	TaskNumber *int64 `json:"taskNumber,omitempty"`
 	// The branch it came from; empty for none.
-	Branch string `json:"branch"`
+	Branch *string `json:"branch,omitempty"`
 	// Its newest version's number, the one it shows.
-	Head int `json:"head"`
+	Head *int `json:"head,omitempty"`
 	// The format of its newest version: text/markdown, image/svg+xml or text/html.
-	MediaType string `json:"mediaType"`
+	MediaType *string `json:"mediaType,omitempty"`
 	// Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile.
-	Version int `json:"version"`
+	Version *int `json:"version,omitempty"`
 	// Who made it; null once they are gone.
 	CreatedBy *ArtifactPrincipal `json:"createdBy,omitempty"`
-	CreatedAt time.Time          `json:"createdAt"`
+	CreatedAt *time.Time         `json:"createdAt,omitempty"`
 	// Who last changed it or added a version; null once they are gone.
 	UpdatedBy *ArtifactPrincipal `json:"updatedBy,omitempty"`
-	UpdatedAt time.Time          `json:"updatedAt"`
-	// What the viewer holds on it, sorted; Organization.artifact answers it, a list doesn't.
+	UpdatedAt *time.Time         `json:"updatedAt,omitempty"`
+	// What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read.
 	Permissions []string `json:"permissions,omitempty"`
-	// Its versions, newest first, without their bodies.
-	Versions []*ArtifactVersion `json:"versions"`
+	// Its versions, newest first, without their bodies; null for a viewer who may only list it.
+	Versions []*ArtifactVersion `json:"versions,omitempty"`
 	// One of its versions with its body, 0 for its newest; null unless it is there.
 	VersionByNumber *ArtifactVersion `json:"versionByNumber,omitempty"`
-	// Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too.
-	Access *ArtifactAccess `json:"access"`
+	// Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it.
+	Access *ArtifactAccess `json:"access,omitempty"`
 }
 
 // Who reaches an artifact; grants on its repository and at its organization reach it too.
@@ -224,7 +226,7 @@ type ArtifactAccess struct {
 	Grants             []*ArtifactGrant `json:"grants"`
 }
 
-// A role a principal holds on an artifact itself.
+// A role a principal holds on an artifact itself, or on a person.
 type ArtifactGrant struct {
 	PrincipalID string `json:"principalId"`
 	// user, api_key or agent.
@@ -247,7 +249,7 @@ type ArtifactPrincipal struct {
 	DisplayName string `json:"displayName"`
 }
 
-// The repository that owns an artifact.
+// The repository an artifact is attached to.
 type ArtifactRepository struct {
 	ID   string `json:"id"`
 	Slug string `json:"slug"`
@@ -1019,7 +1021,7 @@ type NewArtifact struct {
 	// At most 500 characters.
 	Summary *string      `json:"summary,omitempty"`
 	Kind    ArtifactKind `json:"kind"`
-	// NONE when absent.
+	// NONE when absent; an artifact attached to no repository has none.
 	RepositoryAccess *ArtifactReach `json:"repositoryAccess,omitempty"`
 	// NONE when absent.
 	OrganizationAccess *ArtifactReach `json:"organizationAccess,omitempty"`
@@ -1091,8 +1093,10 @@ type Organization struct {
 	AvailableModelProviders []string `json:"availableModelProviders"`
 	// The organization's models, by provider and name, each with what it costs and the agents on it; each agent caps its own tasks. Takes org.read.
 	Models []*Model `json:"models"`
-	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read.
+	// One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read.
 	Artifact *Artifact `json:"artifact,omitempty"`
+	// The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
+	Artifacts []*Artifact `json:"artifacts"`
 	// A page of the viewer's own conversation about the organization, which only they read: its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; takes org.read. first is 1 to 100.
 	Conversation *ChatPage `json:"conversation"`
 	// The key its issues' identifiers start with, such as ACME in ACME-42.
@@ -1222,7 +1226,7 @@ type Repository struct {
 	Access []*RepositoryAccess `json:"access"`
 	// The roles the repository grants, each with the permissions it gives there; takes repo.read.
 	Roles []*Role `json:"roles"`
-	// The repository's artifacts the viewer reads, of kind when it is given, newest change first; takes repo.read, and leaves out the artifacts the viewer may not read.
+	// The artifacts attached to the repository that the viewer may list or read, of kind when it is given, newest change first; takes repo.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it.
 	Artifacts []*Artifact `json:"artifacts"`
 	// A page of the chat of one of the repository's branches, by name without refs/heads/: the live one, or else the one of that name deleted last, whose chat stays as it was; its threads newest first, from the newest or from after, where the previous page's nextCursor says the next one starts, each with its messages in the order they were posted; null unless such a branch is or was there; takes repo.read. first is 1 to 100.
 	Chat *ChatPage `json:"chat,omitempty"`
@@ -1633,6 +1637,8 @@ type User struct {
 	SSHKeys []*SSHKey `json:"sshKeys"`
 	// How Cobranch looks to the user, wherever they sign in: the defaults, at version 0, until they first change one.
 	Preferences *Preferences `json:"preferences"`
+	// Who lists or reads every artifact the user owns, in each organization both belong to: the roles they hold on the user, by name.
+	ArtifactAccess []*ArtifactGrant `json:"artifactAccess"`
 	// The permissions the viewer holds at the installation, such as orgs.create.
 	Permissions []string `json:"permissions"`
 	// The organizations the viewer belongs to.
@@ -2046,24 +2052,26 @@ func (e ArtifactReach) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it.
+// A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it. A person grants lister or viewer on themselves, which lists or reads every artifact they own.
 type ArtifactRole string
 
 const (
 	ArtifactRoleViewer ArtifactRole = "VIEWER"
 	ArtifactRoleEditor ArtifactRole = "EDITOR"
 	ArtifactRoleOwner  ArtifactRole = "OWNER"
+	ArtifactRoleLister ArtifactRole = "LISTER"
 )
 
 var AllArtifactRole = []ArtifactRole{
 	ArtifactRoleViewer,
 	ArtifactRoleEditor,
 	ArtifactRoleOwner,
+	ArtifactRoleLister,
 }
 
 func (e ArtifactRole) IsValid() bool {
 	switch e {
-	case ArtifactRoleViewer, ArtifactRoleEditor, ArtifactRoleOwner:
+	case ArtifactRoleViewer, ArtifactRoleEditor, ArtifactRoleOwner, ArtifactRoleLister:
 		return true
 	}
 	return false

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -21,8 +22,8 @@ import (
 
 var tracer = otel.Tracer("cobranch.dev/internal/services/artifacts")
 
-// Service runs artifacts: every operation checks its viewer's permissions on the artifact, or on its repository,
-// through the authorizer first, and answers ErrNotFound for an artifact the viewer may not read.
+// Service runs artifacts: every operation checks its viewer's permissions on the artifact, on its repository or at its
+// organization, through the authorizer first, and answers ErrNotFound for an artifact the viewer may not read.
 type Service struct {
 	store    Store
 	authz    *auth.Authorizer
@@ -47,13 +48,17 @@ func newID() uuid.UUID {
 // Viewer is who an operation runs for: a signed-in user, an API key, or an agent on a task.
 type Viewer = auth.User
 
-// reads checks that v reads the repository: ErrNotFound otherwise.
-func (s *Service) reads(ctx context.Context, v Viewer, repoID uuid.UUID) error {
-	if err := s.authz.Can(ctx, v.ID, repos.PermRead, auth.ScopeRepository, repoID); err != nil {
+// reads checks that v reads the repository, or the organization for uuid.Nil: ErrNotFound otherwise.
+func (s *Service) reads(ctx context.Context, v Viewer, orgID, repoID uuid.UUID) error {
+	permission, scope, scopeID := repos.PermRead, auth.ScopeRepository, repoID
+	if repoID == uuid.Nil {
+		permission, scope, scopeID = orgs.PermRead, auth.ScopeOrganization, orgID
+	}
+	if err := s.authz.Can(ctx, v.ID, permission, scope, scopeID); err != nil {
 		if errors.Is(err, auth.ErrForbidden) {
 			return ErrNotFound
 		}
-		return fmt.Errorf("checking the viewer's permissions on the repository: %w", err)
+		return fmt.Errorf("checking the viewer's permissions on the %s: %w", scope, err)
 	}
 	return nil
 }
@@ -91,8 +96,8 @@ func (s *Service) holding(ctx context.Context, v Viewer, orgID, id uuid.UUID, pe
 	return a, held, nil
 }
 
-// List lists the repository's artifacts that v reads, of kind (all of them for ""), newest change first; it takes
-// repo.read on the repository, and leaves out every artifact v may not read.
+// List lists the artifacts attached to the repository that v may list or read, of kind (all of them for ""), newest
+// change first; it takes repo.read on the repository.
 func (s *Service) List(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, kind Kind) (_ []Artifact, err error) {
 	ctx, span := tracer.Start(ctx, "artifacts.Service.List", trace.WithAttributes(orgAttr(orgID), repoAttr(repoID)))
 	defer span.End()
@@ -100,23 +105,59 @@ func (s *Service) List(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, k
 	if kind != "" && !validKind(kind) {
 		return nil, invalid("kind", "artifact.kind_invalid", "an artifact is a document, a diagram, a report or a page")
 	}
-	if err := s.reads(ctx, v, repoID); err != nil {
+	if err := s.reads(ctx, v, orgID, repoID); err != nil {
 		return nil, err
 	}
-	ids, err := s.authz.Among(ctx, v.ID, PermRead, func(ctx context.Context, principalID uuid.UUID) ([]uuid.UUID, error) {
-		return s.store.With(ctx, principalID, repoID, PermRead)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("listing the artifacts the viewer reads: %w", err)
+	return s.listed(ctx, v, orgID, Filter{RepoID: repoID, Kind: kind})
+}
+
+// ListOrganization lists the organization's artifacts that v may list or read and f keeps, newest change first: those
+// attached to its repositories, v's own, and those shared with v. It takes org.read.
+func (s *Service) ListOrganization(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter) (_ []Artifact, err error) {
+	ctx, span := tracer.Start(ctx, "artifacts.Service.ListOrganization", trace.WithAttributes(orgAttr(orgID)))
+	defer span.End()
+	defer func() { record(span, err) }()
+	if f.Kind != "" && !validKind(f.Kind) {
+		return nil, invalid("kind", "artifact.kind_invalid", "an artifact is a document, a diagram, a report or a page")
 	}
-	if len(ids) == 0 {
+	if err := s.reads(ctx, v, orgID, uuid.Nil); err != nil {
+		return nil, err
+	}
+	return s.listed(ctx, v, orgID, f)
+}
+
+// listed lists the organization's artifacts that f keeps and v may list or read, each with which of artifacts.list and
+// artifacts.read v holds on it; one v may only list holds only what Listed keeps.
+func (s *Service) listed(ctx context.Context, v Viewer, orgID uuid.UUID, f Filter) ([]Artifact, error) {
+	held := map[uuid.UUID][]string{}
+	for _, permission := range []string{PermList, PermRead} {
+		ids, err := s.authz.Among(ctx, v.ID, permission, func(ctx context.Context, principalID uuid.UUID) ([]uuid.UUID, error) {
+			return s.store.With(ctx, principalID, orgID, f.RepoID, permission)
+		})
+		if err != nil {
+			return nil, fmt.Errorf("listing the artifacts where the viewer holds %s: %w", permission, err)
+		}
+		for _, id := range ids {
+			held[id] = append(held[id], permission)
+		}
+	}
+	if len(held) == 0 {
 		return []Artifact{}, nil
 	}
-	list, err := s.store.List(ctx, ids)
+	list, err := s.store.List(ctx, slices.Collect(maps.Keys(held)))
 	if err != nil {
 		return nil, fmt.Errorf("reading the artifacts: %w", err)
 	}
-	return slices.DeleteFunc(list, func(a Artifact) bool { return a.OrgID != orgID || (kind != "" && a.Kind != kind) }), nil
+	list = slices.DeleteFunc(list, func(a Artifact) bool {
+		return a.OrgID != orgID || (f.Kind != "" && a.Kind != f.Kind) || (f.Mine && a.Owner.ID != v.ID)
+	})
+	for i := range list {
+		list[i].Permissions = held[list[i].ID]
+		if list[i].Withheld() {
+			list[i] = list[i].Listed()
+		}
+	}
+	return list, nil
 }
 
 // Get answers one of the organization's artifacts with what v holds on it; it takes artifacts.read on it.
@@ -132,19 +173,26 @@ func (s *Service) Get(ctx context.Context, v Viewer, orgID, id uuid.UUID) (_ Art
 	return a, nil
 }
 
-// Create makes an artifact in one of the organization's repositories with its first version, and answers whether it
-// made it: an ID that v made in the repository already answers that artifact, as it is, so a call run again makes
-// nothing more. It takes artifacts.create on the repository. Its maker owns it; an agent's task makes its assigner the
-// owner and the agent an editor.
+// Create makes an artifact of the organization with its first version, attached to one of its repositories or, for
+// uuid.Nil, to none, and answers whether it made it: an ID that v made there already answers that artifact, as it is,
+// so a call run again makes nothing more. Attaching it to a repository takes artifacts.create there, and one attached
+// to none takes org.read, since it reaches nobody else until shared; a job or a target makes none. Its maker owns it;
+// an agent's task makes its assigner the owner and the agent an editor.
 func (s *Service) Create(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, in Input) (_ Artifact, created bool, err error) {
 	ctx, span := tracer.Start(ctx, "artifacts.Service.Create", trace.WithAttributes(orgAttr(orgID), repoAttr(repoID)))
 	defer span.End()
 	defer func() { record(span, err) }()
-	if err := s.reads(ctx, v, repoID); err != nil {
+	if err := s.reads(ctx, v, orgID, repoID); err != nil {
 		return Artifact{}, false, err
+	}
+	if !holdsArtifacts(v.Kind) {
+		return Artifact{}, false, fmt.Errorf("%w: a job or a target makes no artifact", auth.ErrForbidden)
 	}
 	if in, err = Validate(in); err != nil {
 		return Artifact{}, false, err
+	}
+	if repoID == uuid.Nil && in.RepositoryAccess != ReachNone {
+		return Artifact{}, false, unattachedAudience()
 	}
 	if in.ID != uuid.Nil {
 		if a, err := s.replay(ctx, v, orgID, repoID, in.ID); !errors.Is(err, ErrNotFound) {
@@ -153,12 +201,31 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID, repoID uuid.UUID,
 	} else {
 		in.ID = s.newID()
 	}
-	if err := s.authz.Can(ctx, v.ID, PermCreate, auth.ScopeRepository, repoID); err != nil {
-		return Artifact{}, false, fmt.Errorf("checking the viewer's permissions on the repository: %w", err)
+	if repoID != uuid.Nil {
+		if err := s.authz.Can(ctx, v.ID, PermCreate, auth.ScopeRepository, repoID); err != nil {
+			return Artifact{}, false, fmt.Errorf("checking the viewer's permissions on the repository: %w", err)
+		}
 	}
 	span.SetAttributes(artifactAttr(in.ID))
+	a, err := s.store.Create(ctx, v.ID, made(ctx, v, orgID, repoID, in))
+	if err != nil {
+		return Artifact{}, false, wrap("creating the artifact", err)
+	}
+	return a, true, nil
+}
+
+// holdsArtifacts reports whether a principal of kind may hold a role on an artifact, and so make one: a person, an API
+// key or an agent. A job or a target holds none; its run's or delivery's token reads the organization while it runs, but
+// makes no artifact, which it would own and reach from every later run.
+func holdsArtifacts(kind auth.Kind) bool {
+	return kind == auth.KindUser || kind == auth.KindAPIKey || kind == auth.KindAgent
+}
+
+// made is the artifact in makes, with its owner and its makers' roles: v owns it, unless v is an agent on a task, whose
+// assigner owns it, the agent holding Artifact editor.
+func made(ctx context.Context, v Viewer, orgID, repoID uuid.UUID, in Input) New {
 	n := New{
-		Artifact: Artifact{ID: in.ID, OrgID: orgID, RepoID: repoID, Title: in.Title, Summary: in.Summary, Kind: in.Kind,
+		Artifact: Artifact{ID: in.ID, OrgID: orgID, RepoID: repoID, Owner: Principal{ID: v.ID}, Title: in.Title, Summary: in.Summary, Kind: in.Kind,
 			RepositoryAccess: in.RepositoryAccess, OrganizationAccess: in.OrganizationAccess, Branch: in.Branch},
 		First:  VersionInput{ID: in.ID, MediaType: in.MediaType, Body: in.Body, Note: in.Note},
 		Owners: []NewGrant{{PrincipalID: v.ID, RoleID: auth.RoleArtifactOwner}},
@@ -166,14 +233,16 @@ func (s *Service) Create(ctx context.Context, v Viewer, orgID, repoID uuid.UUID,
 	if task, ok := auth.TaskOf(ctx, v.ID); ok {
 		n.Artifact.Agent, n.Artifact.TaskID = Principal{ID: v.ID}, task.ID
 		if task.AssignerID != v.ID {
+			n.Artifact.Owner = Principal{ID: task.AssignerID}
 			n.Owners = []NewGrant{{PrincipalID: task.AssignerID, RoleID: auth.RoleArtifactOwner}, {PrincipalID: v.ID, RoleID: auth.RoleArtifactEditor}}
 		}
 	}
-	a, err := s.store.Create(ctx, v.ID, n)
-	if err != nil {
-		return Artifact{}, false, wrap("creating the artifact", err)
-	}
-	return a, true, nil
+	return n
+}
+
+// unattachedAudience refuses a repository audience for an artifact attached to no repository.
+func unattachedAudience() error {
+	return invalid("repositoryAccess", "artifact.access_invalid", "an artifact attached to no repository has no repository audience")
 }
 
 // replay answers the artifact id names when v made it in the repository and still reads it, ErrExists when another
@@ -223,6 +292,9 @@ func (s *Service) Update(ctx context.Context, v Viewer, orgID, id uuid.UUID, ver
 	}
 	if err := validateRow(c); err != nil {
 		return Artifact{}, err
+	}
+	if a.RepoID == uuid.Nil && c.RepositoryAccess != ReachNone {
+		return Artifact{}, unattachedAudience()
 	}
 	updated, err := s.store.Update(ctx, v.ID, id, version, c)
 	return updated, wrap("changing the artifact", err)
@@ -351,7 +423,7 @@ func (s *Service) Share(ctx context.Context, v Viewer, orgID, id, principalID uu
 	defer span.End()
 	defer func() { record(span, err) }()
 	roleID, ok := RoleID(role)
-	if !ok {
+	if !ok || role == RoleLister {
 		return invalid("role", "artifact.role_invalid", "an artifact grants viewer, editor or owner")
 	}
 	a, held, err := s.holding(ctx, v, orgID, id, PermManage)
@@ -365,7 +437,7 @@ func (s *Service) Share(ctx context.Context, v Viewer, orgID, id, principalID uu
 	if err != nil {
 		return wrap("finding the principal", err)
 	}
-	if p.Kind != auth.KindUser && p.Kind != auth.KindAPIKey && p.Kind != auth.KindAgent {
+	if !holdsArtifacts(p.Kind) {
 		return invalid("principalId", "artifact.grantee_invalid", "an artifact is shared with the organization's members, API keys and agents")
 	}
 	return wrap("sharing the artifact", s.store.Share(ctx, v.ID, a, principalID, roleID))

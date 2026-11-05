@@ -118,6 +118,7 @@ var RolePermissionLabels = []PermissionLabel{
 	{ID: "secrets.read", Group: "Secrets", Label: "Read secrets"},
 	{ID: "secrets.manage", Group: "Secrets", Label: "Manage secrets"},
 	{ID: "artifacts.create", Group: "Artifacts", Label: "Create artifacts"},
+	{ID: "artifacts.list", Group: "Artifacts", Label: "List artifacts"},
 	{ID: "artifacts.read", Group: "Artifacts", Label: "Read artifacts"},
 	{ID: "artifacts.write", Group: "Artifacts", Label: "Edit artifacts"},
 	{ID: "artifacts.manage", Group: "Artifacts", Label: "Share and delete artifacts"},

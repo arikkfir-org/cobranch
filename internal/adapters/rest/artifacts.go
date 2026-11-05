@@ -19,6 +19,7 @@ import (
 // Artifacts is what the API needs of the artifacts' service.
 type Artifacts interface {
 	List(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, kind artifacts.Kind) ([]artifacts.Artifact, error)
+	ListOrganization(ctx context.Context, v artifacts.Viewer, orgID uuid.UUID, f artifacts.Filter) ([]artifacts.Artifact, error)
 	Get(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Artifact, error)
 	Create(ctx context.Context, v artifacts.Viewer, orgID, repoID uuid.UUID, in artifacts.Input) (artifacts.Artifact, bool, error)
 	Update(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID, version int64, p artifacts.Patch) (artifacts.Artifact, error)
@@ -29,6 +30,9 @@ type Artifacts interface {
 	Access(ctx context.Context, v artifacts.Viewer, orgID, id uuid.UUID) (artifacts.Access, error)
 	Share(ctx context.Context, v artifacts.Viewer, orgID, id, principalID uuid.UUID, role artifacts.Role) error
 	Unshare(ctx context.Context, v artifacts.Viewer, orgID, id, principalID uuid.UUID) error
+	MyAccess(ctx context.Context, v artifacts.Viewer) ([]artifacts.Grant, error)
+	ShareMine(ctx context.Context, v artifacts.Viewer, principalID uuid.UUID, role artifacts.Role) error
+	UnshareMine(ctx context.Context, v artifacts.Viewer, principalID uuid.UUID) error
 }
 
 // artifactPolicy is an artifact's body's Content Security Policy: it runs nothing, loads data URLs and its own inline
@@ -58,15 +62,24 @@ func taskNumber(n int64) *int64 {
 	return &n
 }
 
-// artifact is a as the API shows it.
+// artifact is a as the API shows it: to a caller who may only list it, its ID, organization, title, kind and owner.
 func artifact(a artifacts.Artifact) Artifact {
-	out := Artifact{Id: a.ID, OrgId: a.OrgID, Repository: ArtifactRepository{Id: a.RepoID, Slug: a.RepoSlug}, Title: a.Title, Summary: a.Summary,
-		Kind: ArtifactKind(a.Kind), RepositoryAccess: ArtifactReach(a.RepositoryAccess), OrganizationAccess: ArtifactReach(a.OrganizationAccess),
-		Audience: ArtifactAudience(a.Audience()), Agent: artifactPrincipal(a.Agent), TaskNumber: taskNumber(a.TaskNumber), Branch: a.Branch,
-		Head: a.Head, MediaType: ArtifactMediaType(a.MediaType), Version: a.Version, CreatedBy: artifactPrincipal(a.CreatedBy),
-		CreatedAt: a.CreatedAt.UTC(), UpdatedBy: artifactPrincipal(a.UpdatedBy), UpdatedAt: a.UpdatedAt.UTC()}
+	out := Artifact{Id: a.ID, OrgId: a.OrgID, Owner: artifactPrincipal(a.Owner), Title: a.Title, Kind: ArtifactKind(a.Kind)}
 	if a.Permissions != nil {
 		out.Permissions = &a.Permissions
+	}
+	if a.Withheld() {
+		return out
+	}
+	repoAccess, orgAccess, audience, media := ArtifactReach(a.RepositoryAccess), ArtifactReach(a.OrganizationAccess), ArtifactAudience(a.Audience()),
+		ArtifactMediaType(a.MediaType)
+	created, updated := a.CreatedAt.UTC(), a.UpdatedAt.UTC()
+	out.Summary, out.RepositoryAccess, out.OrganizationAccess, out.Audience = &a.Summary, &repoAccess, &orgAccess, &audience
+	out.Agent, out.TaskNumber, out.Branch, out.Head, out.MediaType = artifactPrincipal(a.Agent), taskNumber(a.TaskNumber), &a.Branch, &a.Head, &media
+	out.Version, out.CreatedBy, out.CreatedAt, out.UpdatedBy, out.UpdatedAt = &a.Version, artifactPrincipal(a.CreatedBy), &created,
+		artifactPrincipal(a.UpdatedBy), &updated
+	if a.RepoID != uuid.Nil {
+		out.Repository = &ArtifactRepository{Id: a.RepoID, Slug: a.RepoSlug}
 	}
 	return out
 }
@@ -162,7 +175,62 @@ func (a api) ListArtifacts(ctx context.Context, req ListArtifactsRequestObject) 
 	return ListArtifacts200JSONResponse{Artifacts: nonNil(mapAll(list, artifact))}, nil
 }
 
-// CreateArtifact makes an artifact in the repository with its first version, or answers the one the body's ID made.
+// ListOrganizationArtifacts lists the organization's artifacts that the caller may list or read.
+func (a api) ListOrganizationArtifacts(ctx context.Context, req ListOrganizationArtifactsRequestObject) (ListOrganizationArtifactsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	f := artifacts.Filter{Kind: artifacts.Kind(orNone(req.Params.Kind)), Mine: req.Params.Mine != nil && *req.Params.Mine}
+	if req.Params.RepositoryId != nil {
+		f.RepoID = *req.Params.RepositoryId
+	}
+	list, err := a.artifacts.ListOrganization(ctx, v, org.ID, f)
+	if err != nil {
+		return nil, artifactFail(err, "organization")
+	}
+	return ListOrganizationArtifacts200JSONResponse{Artifacts: nonNil(mapAll(list, artifact))}, nil
+}
+
+// artifactInput is what b makes.
+func artifactInput(b NewArtifact) artifacts.Input {
+	in := artifacts.Input{Title: b.Title, Summary: orNone(b.Summary), Kind: artifacts.Kind(b.Kind),
+		RepositoryAccess: artifacts.Reach(orNone(b.RepositoryAccess)), OrganizationAccess: artifacts.Reach(orNone(b.OrganizationAccess)),
+		Branch: orNone(b.Branch), MediaType: string(b.MediaType), Body: b.Body, Note: orNone(b.Note)}
+	if b.Id != nil {
+		in.ID = *b.Id
+	}
+	return in
+}
+
+// CreateOrganizationArtifact makes an artifact attached to no repository with its first version, or answers the one
+// the body's ID made.
+func (a api) CreateOrganizationArtifact(ctx context.Context, req CreateOrganizationArtifactRequestObject) (CreateOrganizationArtifactResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	org, err := a.org(ctx, v, req.Org)
+	if err != nil {
+		return nil, err
+	}
+	made, created, err := a.artifacts.Create(ctx, v, org.ID, uuid.Nil, artifactInput(*req.Body))
+	if err != nil {
+		return nil, artifactFail(err, "organization")
+	}
+	tag, location := artifactTag(made), artifactLocation(req.Org, made.ID)
+	if !created {
+		return CreateOrganizationArtifact200JSONResponse{Body: artifact(made), Headers: CreateOrganizationArtifact200ResponseHeaders{ETag: tag, Location: location}}, nil
+	}
+	return CreateOrganizationArtifact201JSONResponse{Body: artifact(made), Headers: CreateOrganizationArtifact201ResponseHeaders{ETag: tag, Location: location}}, nil
+}
+
+// CreateArtifact makes an artifact attached to the repository with its first version, or answers the one the body's
+// ID made.
 func (a api) CreateArtifact(ctx context.Context, req CreateArtifactRequestObject) (CreateArtifactResponseObject, error) {
 	v, err := viewer(ctx)
 	if err != nil {
@@ -172,14 +240,7 @@ func (a api) CreateArtifact(ctx context.Context, req CreateArtifactRequestObject
 	if err != nil {
 		return nil, err
 	}
-	b := req.Body
-	in := artifacts.Input{Title: b.Title, Summary: orNone(b.Summary), Kind: artifacts.Kind(b.Kind),
-		RepositoryAccess: artifacts.Reach(orNone(b.RepositoryAccess)), OrganizationAccess: artifacts.Reach(orNone(b.OrganizationAccess)),
-		Branch: orNone(b.Branch), MediaType: string(b.MediaType), Body: b.Body, Note: orNone(b.Note)}
-	if b.Id != nil {
-		in.ID = *b.Id
-	}
-	made, created, err := a.artifacts.Create(ctx, v, repo.OrgID, repo.ID, in)
+	made, created, err := a.artifacts.Create(ctx, v, repo.OrgID, repo.ID, artifactInput(*req.Body))
 	if err != nil {
 		return nil, artifactFail(err, "repository")
 	}
@@ -422,4 +483,41 @@ func (a api) UnshareArtifact(ctx context.Context, req UnshareArtifactRequestObje
 		return nil, artifactFail(err, "grant")
 	}
 	return UnshareArtifact204Response{}, nil
+}
+
+// ListMyArtifactAccess lists who lists or reads every artifact the caller owns.
+func (a api) ListMyArtifactAccess(ctx context.Context, _ ListMyArtifactAccessRequestObject) (ListMyArtifactAccessResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	grants, err := a.artifacts.MyAccess(ctx, v)
+	if err != nil {
+		return nil, artifactFail(err, "grant")
+	}
+	return ListMyArtifactAccess200JSONResponse{Grants: nonNil(mapAll(grants, artifactGrant))}, nil
+}
+
+// ShareMyArtifacts gives a principal lister or viewer on the caller.
+func (a api) ShareMyArtifacts(ctx context.Context, req ShareMyArtifactsRequestObject) (ShareMyArtifactsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.artifacts.ShareMine(ctx, v, req.Body.PrincipalId, artifacts.Role(req.Body.Role)); err != nil {
+		return nil, artifactFail(err, "principal")
+	}
+	return ShareMyArtifacts204Response{}, nil
+}
+
+// UnshareMyArtifacts takes every role a principal holds on the caller.
+func (a api) UnshareMyArtifacts(ctx context.Context, req UnshareMyArtifactsRequestObject) (UnshareMyArtifactsResponseObject, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := a.artifacts.UnshareMine(ctx, v, req.PrincipalID); err != nil {
+		return nil, artifactFail(err, "grant")
+	}
+	return UnshareMyArtifacts204Response{}, nil
 }

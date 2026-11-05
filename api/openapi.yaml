@@ -453,6 +453,71 @@ paths:
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
+  /me/artifact-access:
+    get:
+      operationId: listMyArtifactAccess
+      summary: Who lists or reads every artifact the user owns, in each organization both belong to; the roles they hold on the user, by name.
+      responses:
+        "200":
+          description: The grants.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [grants]
+                properties:
+                  grants:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ArtifactGrant"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: shareMyArtifacts
+      summary: >-
+        Gives a member of one of the user's organizations, or an agent of one, lister or viewer on the user, in place of
+        any role it held there: it then lists, or reads, every artifact the user owns in each organization both belong
+        to. Only from a session, never from a token or an API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ArtifactShare"
+      responses:
+        "204":
+          description: Shared.
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /me/artifact-access/{principal}:
+    delete:
+      operationId: unshareMyArtifacts
+      summary: Takes every role a principal holds on the user; only from a session, never from a token or an API key.
+      parameters:
+        - $ref: "#/components/parameters/principal"
+      responses:
+        "204":
+          description: Unshared.
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
   /me/join-requests:
     get:
       operationId: listMyJoinRequests
@@ -1228,6 +1293,98 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
         "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+  /orgs/{org}/artifacts:
+    get:
+      operationId: listOrganizationArtifacts
+      summary: >-
+        The organization's artifacts the caller may list or read, newest change first, without their bodies: those
+        attached to its repositories, the caller's own and those shared with the caller; takes org.read. Each says
+        which of artifacts.list and artifacts.read the caller holds on it, so one listed without artifacts.read shows as
+        one that doesn't open.
+      parameters:
+        - $ref: "#/components/parameters/org"
+        - name: kind
+          in: query
+          description: Only the artifacts of this kind.
+          schema:
+            $ref: "#/components/schemas/ArtifactKind"
+        - name: repositoryId
+          in: query
+          description: Only the artifacts attached to this repository.
+          schema:
+            type: string
+            format: uuid
+        - name: mine
+          in: query
+          description: Only the caller's own artifacts.
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: The artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactList"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        default:
+          $ref: "#/components/responses/Problem"
+    post:
+      operationId: createOrganizationArtifact
+      summary: >-
+        Makes an artifact of the organization attached to no repository, with its first version, and no repository
+        audience; takes org.read, since it reaches nobody but its owner until it is shared. Its maker owns it; an
+        agent's task makes its assigner the owner and the agent an editor. An id the caller made attached to no
+        repository already answers that artifact as it is, with 200, so a call sent again makes nothing more; one
+        another principal took, or that is attached to a repository, is refused with 409.
+      parameters:
+        - $ref: "#/components/parameters/org"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewArtifact"
+      responses:
+        "200":
+          description: The artifact the id names, which the caller made before.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "201":
+          description: The artifact.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "400":
+          $ref: "#/components/responses/Problem"
+        "401":
+          $ref: "#/components/responses/Problem"
+        "403":
+          $ref: "#/components/responses/Problem"
+        "404":
+          $ref: "#/components/responses/Problem"
+        "409":
           $ref: "#/components/responses/Problem"
         default:
           $ref: "#/components/responses/Problem"
@@ -4353,7 +4510,7 @@ paths:
   /orgs/{org}/repos/{repo}/artifacts:
     get:
       operationId: listArtifacts
-      summary: The repository's artifacts the caller reads, newest change first, without their bodies; takes repo.read, and leaves out every artifact the caller holds no artifacts.read on.
+      summary: The artifacts attached to the repository that the caller may list or read, newest change first, without their bodies; takes repo.read. Each says which of artifacts.list and artifacts.read the caller holds on it.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -4380,10 +4537,11 @@ paths:
     post:
       operationId: createArtifact
       summary: >-
-        Makes an artifact in the repository with its first version; takes artifacts.create on the repository. Its maker
-        holds Artifact owner on it; an agent's task gives its assigner Artifact owner and the agent Artifact editor. An
-        id the caller made in this repository already answers that artifact as it is, with 200, so a call sent again
-        makes nothing more; one another principal or repository took is refused with 409.
+        Makes an artifact attached to the repository with its first version; takes artifacts.create on the repository.
+        Its maker owns it and holds Artifact owner on it; an agent's task makes its assigner the owner, with Artifact
+        owner, and gives the agent Artifact editor. An id the caller made attached to this repository already answers
+        that artifact as it is, with 200, so a call sent again makes nothing more; one another principal or repository
+        took is refused with 409.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/repo"
@@ -8908,14 +9066,15 @@ components:
       enum: [text/markdown, image/svg+xml, text/html]
     ArtifactRole:
       type: string
-      description: A role an artifact grants, from viewing to managing.
-      enum: [viewer, editor, owner]
+      description: A role an artifact grants, from viewing to managing, or one a person grants on themselves, lister or viewer, which lists or reads every artifact they own.
+      enum: [viewer, editor, owner, lister]
     Artifact:
       type: object
       description: >-
-        A document, a diagram, a report or a page that a repository owns, as its readers see it: its versions' bodies
-        come from getArtifactVersion.
-      required: [id, orgId, repository, title, summary, kind, repositoryAccess, organizationAccess, audience, branch, head, mediaType, version, createdAt, updatedAt]
+        A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none,
+        as its readers see it: its versions' bodies come from getArtifactVersion. One a list shows to a caller who may
+        list it but not read it has only its id, orgId, title, kind, owner and permissions.
+      required: [id, orgId, title, kind]
       properties:
         id:
           type: string
@@ -8925,6 +9084,8 @@ components:
           format: uuid
         repository:
           $ref: "#/components/schemas/ArtifactRepository"
+        owner:
+          $ref: "#/components/schemas/Principal"
         title:
           type: string
         summary:
@@ -8970,12 +9131,12 @@ components:
           format: date-time
         permissions:
           type: array
-          description: What the caller holds on it, sorted; getArtifact alone answers it.
+          description: What the caller holds on it, sorted; getArtifact answers it all, a list which of artifacts.list and artifacts.read.
           items:
             type: string
     ArtifactRepository:
       type: object
-      description: The repository that owns an artifact.
+      description: The repository an artifact is attached to; absent for none.
       required: [id, slug]
       properties:
         id:
@@ -9009,7 +9170,9 @@ components:
         kind:
           $ref: "#/components/schemas/ArtifactKind"
         repositoryAccess:
-          $ref: "#/components/schemas/ArtifactReach"
+          description: How far the repository's readers reach it, none when absent; an artifact attached to no repository has none.
+          allOf:
+            - $ref: "#/components/schemas/ArtifactReach"
         organizationAccess:
           $ref: "#/components/schemas/ArtifactReach"
         branch:

@@ -17,6 +17,9 @@ import (
 
 // Versions is the resolver for the versions field.
 func (r *artifactResolver) Versions(ctx context.Context, obj *Artifact) ([]*ArtifactVersion, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err
@@ -30,6 +33,9 @@ func (r *artifactResolver) Versions(ctx context.Context, obj *Artifact) ([]*Arti
 
 // VersionByNumber is the resolver for the versionByNumber field.
 func (r *artifactResolver) VersionByNumber(ctx context.Context, obj *Artifact, number int) (*ArtifactVersion, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err
@@ -49,6 +55,9 @@ func (r *artifactResolver) VersionByNumber(ctx context.Context, obj *Artifact, n
 
 // Access is the resolver for the access field.
 func (r *artifactResolver) Access(ctx context.Context, obj *Artifact) (*ArtifactAccess, error) {
+	if listedOnly(obj) {
+		return nil, nil
+	}
 	v, orgID, id, err := artifactTarget(ctx, obj.OrganizationID, obj.ID)
 	if err != nil {
 		return nil, err
@@ -62,7 +71,7 @@ func (r *artifactResolver) Access(ctx context.Context, obj *Artifact) (*Artifact
 }
 
 // CreateArtifact is the resolver for the createArtifact field.
-func (r *mutationResolver) CreateArtifact(ctx context.Context, organizationID string, repositoryID string, input NewArtifact) (*Artifact, error) {
+func (r *mutationResolver) CreateArtifact(ctx context.Context, organizationID string, repositoryID *string, input NewArtifact) (*Artifact, error) {
 	v, err := viewer(ctx)
 	if err != nil {
 		return nil, err
@@ -71,9 +80,11 @@ func (r *mutationResolver) CreateArtifact(ctx context.Context, organizationID st
 	if err != nil {
 		return nil, err
 	}
-	repoID, err := parseID(ctx, repositoryID, "repository")
-	if err != nil {
-		return nil, err
+	var repoID uuid.UUID
+	if repositoryID != nil {
+		if repoID, err = parseID(ctx, *repositoryID, "repository"); err != nil {
+			return nil, err
+		}
 	}
 	id, err := callID(ctx, input.ID)
 	if err != nil {
@@ -178,6 +189,38 @@ func (r *mutationResolver) UnshareArtifact(ctx context.Context, organizationID s
 	return true, nil
 }
 
+// ShareMyArtifacts is the resolver for the shareMyArtifacts field.
+func (r *mutationResolver) ShareMyArtifacts(ctx context.Context, principalID string, role ArtifactRole) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	principal, err := parseID(ctx, principalID, "principal")
+	if err != nil {
+		return false, err
+	}
+	if err := r.Artifacts.ShareMine(ctx, v.User, principal, artifacts.Role(strings.ToLower(string(role)))); err != nil {
+		return false, artifactFail(ctx, err, "principal", "sharing the viewer's artifacts")
+	}
+	return true, nil
+}
+
+// UnshareMyArtifacts is the resolver for the unshareMyArtifacts field.
+func (r *mutationResolver) UnshareMyArtifacts(ctx context.Context, principalID string) (bool, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return false, err
+	}
+	principal, err := parseID(ctx, principalID, "principal")
+	if err != nil {
+		return false, err
+	}
+	if err := r.Artifacts.UnshareMine(ctx, v.User, principal); err != nil {
+		return false, artifactFail(ctx, err, "grant", "unsharing the viewer's artifacts")
+	}
+	return true, nil
+}
+
 // Artifact is the resolver for the artifact field.
 func (r *organizationResolver) Artifact(ctx context.Context, obj *Organization, id string) (*Artifact, error) {
 	v, err := viewer(ctx)
@@ -192,7 +235,7 @@ func (r *organizationResolver) Artifact(ctx context.Context, obj *Organization, 
 	if err != nil {
 		return nil, nil // no artifact has such an ID
 	}
-	found, err := r.Artifacts.Get(ctx, v.User, orgID, artifactID)
+	found, err := r.Resolver.Artifacts.Get(ctx, v.User, orgID, artifactID)
 	switch {
 	case errors.Is(err, artifacts.ErrNotFound):
 		return nil, nil
@@ -200,6 +243,32 @@ func (r *organizationResolver) Artifact(ctx context.Context, obj *Organization, 
 		return nil, artifactFail(ctx, err, "organization", "reading the artifact")
 	}
 	return artifact(found), nil
+}
+
+// Artifacts is the resolver for the artifacts field.
+func (r *organizationResolver) Artifacts(ctx context.Context, obj *Organization, kind *ArtifactKind, repositoryID *string, mine *bool) ([]*Artifact, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	orgID, err := parseID(ctx, obj.ID, "organization")
+	if err != nil {
+		return nil, err
+	}
+	f := artifacts.Filter{Mine: mine != nil && *mine}
+	if kind != nil {
+		f.Kind = artifacts.Kind(strings.ToLower(string(*kind)))
+	}
+	if repositoryID != nil {
+		if f.RepoID, err = uuid.Parse(*repositoryID); err != nil {
+			return []*Artifact{}, nil // no repository has such an ID
+		}
+	}
+	list, err := r.Resolver.Artifacts.ListOrganization(ctx, v.User, orgID, f)
+	if err != nil {
+		return nil, artifactFail(ctx, err, "organization", "listing the artifacts")
+	}
+	return nonNil(mapAll(list, artifact)), nil
 }
 
 // Artifacts is the resolver for the artifacts field.
@@ -221,6 +290,19 @@ func (r *repositoryResolver) Artifacts(ctx context.Context, obj *Repository, kin
 		return nil, artifactFail(ctx, err, "repository", "listing the artifacts")
 	}
 	return nonNil(mapAll(list, artifact)), nil
+}
+
+// ArtifactAccess is the resolver for the artifactAccess field.
+func (r *userResolver) ArtifactAccess(ctx context.Context, obj *User) ([]*ArtifactGrant, error) {
+	v, err := viewer(ctx)
+	if err != nil {
+		return nil, err
+	}
+	grants, err := r.Artifacts.MyAccess(ctx, v.User)
+	if err != nil {
+		return nil, artifactFail(ctx, err, "grant", "listing who reaches the viewer's artifacts")
+	}
+	return nonNil(mapAll(grants, artifactGrant)), nil
 }
 
 // Artifact returns ArtifactResolver implementation.

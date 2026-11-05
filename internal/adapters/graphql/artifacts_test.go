@@ -34,7 +34,7 @@ func (f *orgFixture) withArtifacts() {
 	} {
 		if _, err := f.artifactStore.Create(context.Background(), f.olivia.User.ID, artifacts.New{
 			Artifact: artifacts.Artifact{ID: a.id, OrgID: f.acme.ID, RepoID: f.website.ID, Title: a.title, Kind: a.kind, RepositoryAccess: a.reach,
-				OrganizationAccess: artifacts.ReachNone},
+				OrganizationAccess: artifacts.ReachNone, Owner: artifacts.Principal{ID: f.olivia.User.ID, Kind: auth.KindUser, DisplayName: "Olivia"}},
 			First:  artifacts.VersionInput{ID: a.id, MediaType: a.media, Body: a.body},
 			Owners: []artifacts.NewGrant{{PrincipalID: f.olivia.User.ID, RoleID: auth.RoleArtifactOwner}},
 		}); err != nil {
@@ -64,12 +64,19 @@ func TestArtifacts(t *testing.T) {
 		return func(f *orgFixture) string {
 			f.withArtifacts()
 			return `mutation { createArtifact(organizationId: "` + f.acme.ID.String() + `", repositoryId: "` + f.website.ID.String() + `", input: {` + input +
-				`}) { title kind audience repository { slug } head version createdBy { displayName } agent { id } permissions } }`
+				`}) { title kind audience repository { slug } head version createdBy { displayName } owner { displayName } agent { id } permissions } }`
 		}
 	}
 	runOrgCases(t, []orgCase{
 		{name: "make one", viewer: maxim, document: create(`title: "Notes", kind: REPORT, repositoryAccess: VIEW, mediaType: "text/markdown", body: "# Notes"`),
-			want: []string{`"title":"Notes","kind":"REPORT","audience":"REPOSITORY","repository":{"slug":"website"},"head":1,"version":1,"createdBy":{"displayName":"Max"},"agent":null,"permissions":null`}},
+			want: []string{`"title":"Notes","kind":"REPORT","audience":"REPOSITORY","repository":{"slug":"website"},"head":1,"version":1,"createdBy":{"displayName":"Max"},"owner":{"displayName":"Max"},"agent":null,"permissions":null`}},
+		{name: "make one attached to no repository", viewer: maxim, document: func(f *orgFixture) string {
+			return `mutation { createArtifact(organizationId: "` + f.acme.ID.String() + `", input: {title: "Notes", kind: REPORT, mediaType: "text/markdown", body: "# Notes"}) { title audience repository { slug } owner { displayName } } }`
+		}, want: []string{`"title":"Notes","audience":"PRIVATE","repository":null,"owner":{"displayName":"Max"}`}},
+		{name: "make one attached to no repository that its readers view", viewer: maxim, wantCode: badUserInput, wantReason: "artifact.access_invalid",
+			document: func(f *orgFixture) string {
+				return `mutation { createArtifact(organizationId: "` + f.acme.ID.String() + `", input: {title: "Notes", kind: REPORT, repositoryAccess: VIEW, mediaType: "text/markdown", body: "# Notes"}) { title } }`
+			}},
 		{name: "make one under an ID another took", viewer: maxim, wantCode: conflict, wantReason: "artifact.exists",
 			document: create(`id: "` + planID.String() + `", title: "Notes", kind: REPORT, mediaType: "text/markdown", body: "# Notes"`)},
 		{name: "make one under an ID that isn't one", viewer: maxim, wantCode: badUserInput, wantReason: "artifact.id_invalid",
@@ -87,9 +94,9 @@ func TestArtifacts(t *testing.T) {
 			return `{ organization(slug: "acme") { repository(slug: "website") { artifacts { title } } } }`
 		}, want: []string{`"artifacts":[{"title":"Chart"}]`}},
 		{name: "one, its versions and who reaches it", viewer: olivia,
-			document: artifactQuery(planID, `{ title audience mediaType permissions versions { number body } versionByNumber(number: 0) { number body html } access { repositoryAccess grants { displayName kind role } } }`),
-			want: []string{`"title":"Plan","audience":"PRIVATE","mediaType":"text/markdown","permissions":["artifacts.manage","artifacts.read","artifacts.write"]`,
-				`"versions":[{"number":1,"body":null}]`, `"versionByNumber":{"number":1,"body":"# Plan\n","html":"`, `Plan\u003c/h1\u003e`,
+			document: artifactQuery(planID, `{ title audience mediaType permissions versions { number body } versionByNumber(number: 0) { number body html } owner { displayName } access { repositoryAccess grants { displayName kind role } } }`),
+			want: []string{`"title":"Plan","audience":"PRIVATE","mediaType":"text/markdown","permissions":["artifacts.list","artifacts.manage","artifacts.read","artifacts.write"]`,
+				`"versions":[{"number":1,"body":null}]`, `"versionByNumber":{"number":1,"body":"# Plan\n","html":"`, `Plan\u003c/h1\u003e`, `"owner":{"displayName":"Olivia"}`,
 				`"access":{"repositoryAccess":"NONE","grants":[{"displayName":"Olivia","kind":"user","role":"OWNER"}]}`}},
 		{name: "a version that isn't there", viewer: olivia, document: artifactQuery(planID, `{ versionByNumber(number: 4) { number } }`),
 			want: []string{`"versionByNumber":null`}},
@@ -129,5 +136,74 @@ func TestArtifactChanges(t *testing.T) {
 				}
 			}},
 		{name: "delete one as a viewer", viewer: maxim, document: onArtifact(chartID, "deleteArtifact", ``, ``), wantCode: forbidden},
+	})
+}
+
+func TestOrganizationArtifacts(t *testing.T) {
+	list := func(args, selection string) func(f *orgFixture) string {
+		return func(f *orgFixture) string {
+			f.withArtifacts()
+			return `{ organization(slug: "acme") { artifacts` + args + ` ` + selection + ` } }`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "an Owner lists those attached to its repositories", viewer: olivia, document: list(``, `{ title permissions }`),
+			want: []string{`{"title":"Plan","permissions":["artifacts.list","artifacts.read"]}`, `{"title":"Chart","permissions":["artifacts.list","artifacts.read"]}`}},
+		{name: "a Developer lists those it views", viewer: maxim, document: list(``, `{ title permissions }`),
+			want: []string{`"artifacts":[{"title":"Chart","permissions":["artifacts.read"]}]`}},
+		{name: "mine", viewer: maxim, document: list(`(mine: true)`, `{ title }`), want: []string{`"artifacts":[]`}},
+		{name: "of a kind, attached to a repository", viewer: olivia, document: func(f *orgFixture) string {
+			return list(`(kind: DIAGRAM, repositoryId: "`+f.website.ID.String()+`")`, `{ title }`)(f)
+		}, want: []string{`"artifacts":[{"title":"Chart"}]`}},
+		{name: "attached to an ID that isn't one", viewer: olivia, document: list(`(repositoryId: "x")`, `{ title }`), want: []string{`"artifacts":[]`}},
+		{name: "one the viewer may only list, through its owner", viewer: maxim, document: func(f *orgFixture) string {
+			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeUser, f.olivia.User.ID)
+			return list(``, listedFields)(f)
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"],"versions":null,"versionByNumber":null,"access":null}`}},
+		{name: "one the viewer may only list, in its repository", viewer: maxim, document: func(f *orgFixture) string {
+			f.withArtifacts()
+			f.store.Grant(f.max.User.ID, auth.RoleArtifactLister, auth.ScopeRepository, f.website.ID)
+			return `{ organization(slug: "acme") { repository(slug: "website") { artifacts ` + listedFields + ` } } }`
+		}, want: []string{`{"title":"Plan","kind":"DOCUMENT","owner":{"displayName":"Olivia"},` + listedNulls + `,"permissions":["artifacts.list"],"versions":null,"versionByNumber":null,"access":null}`}},
+	})
+}
+
+// listedFields selects every field of an artifact a list may show, and listedNulls is what a viewer who may only list
+// it gets of those its readers alone see.
+const (
+	listedFields = `{ title kind owner { displayName } summary repository { slug } repositoryAccess organizationAccess audience agent { id } taskNumber branch head mediaType version createdBy { id } createdAt updatedBy { id } updatedAt permissions versions { number } versionByNumber(number: 0) { number } access { repositoryAccess } }`
+	listedNulls  = `"summary":null,"repository":null,"repositoryAccess":null,"organizationAccess":null,"audience":null,"agent":null,"taskNumber":null,"branch":null,"head":null,"mediaType":null,"version":null,"createdBy":null,"createdAt":null,"updatedBy":null,"updatedAt":null`
+)
+
+// signedInAs is viewer signed in with a session, which sharing one's own artifacts takes.
+func signedInAs(viewer func(f *orgFixture) *auth.Authenticated) func(f *orgFixture) *auth.Authenticated {
+	return func(f *orgFixture) *auth.Authenticated {
+		v := *viewer(f)
+		v.Session = auth.Session{ID: uuid.New()}
+		return &v
+	}
+}
+
+func TestMyArtifactAccess(t *testing.T) {
+	share := func(role string) func(f *orgFixture) string {
+		return func(f *orgFixture) string {
+			return `mutation { shareMyArtifacts(principalId: "` + f.max.User.ID.String() + `", role: ` + role + `) }`
+		}
+	}
+	runOrgCases(t, []orgCase{
+		{name: "let a member list one's artifacts", viewer: signedInAs(olivia), document: share("LISTER"), want: []string{`"shareMyArtifacts":true`},
+			check: func(t *testing.T, f *orgFixture, _ string) {
+				oliviaSigned := signedInAs(olivia)(f)
+				if body := f.query(oliviaSigned, `{ viewer { artifactAccess { displayName kind role } } }`); body != `{"data":{"viewer":{"artifactAccess":[{"displayName":"Max","kind":"user","role":"LISTER"}]}}}` {
+					t.Errorf("artifactAccess = %s", body)
+				}
+			}},
+		{name: "let a member edit one's artifacts", viewer: signedInAs(olivia), document: share("EDITOR"), wantCode: badUserInput, wantReason: "artifact.role_invalid"},
+		{name: "without a session", viewer: olivia, document: share("VIEWER"), wantCode: forbidden},
+		{name: "take back what nobody holds", viewer: signedInAs(olivia), wantCode: notFound, wantReason: "grant.not_found", document: func(f *orgFixture) string {
+			return `mutation { unshareMyArtifacts(principalId: "` + f.max.User.ID.String() + `") }`
+		}},
+		{name: "who reads one's artifacts, when nobody does", viewer: maxim, document: fixed(`{ viewer { artifactAccess { displayName } } }`),
+			want: []string{`"artifactAccess":[]`}},
 	})
 }

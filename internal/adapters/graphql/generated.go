@@ -135,6 +135,7 @@ type ComplexityRoot struct {
 		MediaType          func(childComplexity int) int
 		OrganizationAccess func(childComplexity int) int
 		OrganizationID     func(childComplexity int) int
+		Owner              func(childComplexity int) int
 		Permissions        func(childComplexity int) int
 		Repository         func(childComplexity int) int
 		RepositoryAccess   func(childComplexity int) int
@@ -603,7 +604,7 @@ type ComplexityRoot struct {
 		CancelTask                func(childComplexity int, organizationID string, number int, expectedVersion *int) int
 		CreateAPIKey              func(childComplexity int, organizationID string, input APIKeyInput) int
 		CreateAgent               func(childComplexity int, organizationID string, input AgentInput) int
-		CreateArtifact            func(childComplexity int, organizationID string, repositoryID string, input NewArtifact) int
+		CreateArtifact            func(childComplexity int, organizationID string, repositoryID *string, input NewArtifact) int
 		CreateIssue               func(childComplexity int, organizationID string, input IssueInput) int
 		CreateLabel               func(childComplexity int, organizationID string, input LabelInput) int
 		CreateOrganization        func(childComplexity int, slug string, name string) int
@@ -667,6 +668,7 @@ type ComplexityRoot struct {
 		SetModel                  func(childComplexity int, organizationID string, provider string, model string, input ModelInput, expectedVersion *int) int
 		SetModelProvider          func(childComplexity int, organizationID string, provider string, secretID string, expectedVersion *int) int
 		ShareArtifact             func(childComplexity int, organizationID string, id string, principalID string, role ArtifactRole) int
+		ShareMyArtifacts          func(childComplexity int, principalID string, role ArtifactRole) int
 		StartChatThread           func(childComplexity int, repositoryID string, branch string, input ChatThreadInput) int
 		StartConversationThread   func(childComplexity int, subject ConversationSubject, input ChatThreadInput) int
 		StartDelivery             func(childComplexity int, repositoryID string, number int) int
@@ -675,6 +677,7 @@ type ComplexityRoot struct {
 		SubmitReview              func(childComplexity int, repositoryID string, sha string, input ReviewInput) int
 		UnlinkBranch              func(childComplexity int, organizationID string, repositoryID string, branch string) int
 		UnshareArtifact           func(childComplexity int, organizationID string, id string, principalID string) int
+		UnshareMyArtifacts        func(childComplexity int, principalID string) int
 		UpdateAgent               func(childComplexity int, organizationID string, id string, input AgentPatch, expectedVersion *int) int
 		UpdateArtifact            func(childComplexity int, organizationID string, id string, input ArtifactPatch, expectedVersion *int) int
 		UpdateIssue               func(childComplexity int, organizationID string, number int, input IssuePatch, expectedVersion *int) int
@@ -707,6 +710,7 @@ type ComplexityRoot struct {
 		Agent                   func(childComplexity int, id string) int
 		Agents                  func(childComplexity int) int
 		Artifact                func(childComplexity int, id string) int
+		Artifacts               func(childComplexity int, kind *ArtifactKind, repositoryID *string, mine *bool) int
 		AvailableModelProviders func(childComplexity int) int
 		Conversation            func(childComplexity int, first int, after *string) int
 		CreatedAt               func(childComplexity int) int
@@ -1018,6 +1022,7 @@ type ComplexityRoot struct {
 	}
 
 	User struct {
+		ArtifactAccess func(childComplexity int) int
 		DisplayName    func(childComplexity int) int
 		Emails         func(childComplexity int) int
 		ID             func(childComplexity int) int
@@ -1081,12 +1086,14 @@ type MutationResolver interface {
 	AssignTask(ctx context.Context, organizationID string, input TaskInput) (*Task, error)
 	CancelTask(ctx context.Context, organizationID string, number int, expectedVersion *int) (*Task, error)
 	AppendTranscriptEntry(ctx context.Context, organizationID string, number int, input TranscriptEntryInput) (*TranscriptEntry, error)
-	CreateArtifact(ctx context.Context, organizationID string, repositoryID string, input NewArtifact) (*Artifact, error)
+	CreateArtifact(ctx context.Context, organizationID string, repositoryID *string, input NewArtifact) (*Artifact, error)
 	UpdateArtifact(ctx context.Context, organizationID string, id string, input ArtifactPatch, expectedVersion *int) (*Artifact, error)
 	AddArtifactVersion(ctx context.Context, organizationID string, id string, input NewArtifactVersion, expectedVersion *int) (*ArtifactVersion, error)
 	DeleteArtifact(ctx context.Context, organizationID string, id string, expectedVersion *int) (bool, error)
 	ShareArtifact(ctx context.Context, organizationID string, id string, principalID string, role ArtifactRole) (bool, error)
 	UnshareArtifact(ctx context.Context, organizationID string, id string, principalID string) (bool, error)
+	ShareMyArtifacts(ctx context.Context, principalID string, role ArtifactRole) (bool, error)
+	UnshareMyArtifacts(ctx context.Context, principalID string) (bool, error)
 	StartChatThread(ctx context.Context, repositoryID string, branch string, input ChatThreadInput) (*ChatThread, error)
 	PostChatMessage(ctx context.Context, repositoryID string, branch string, thread string, input ChatMessageInput) (*ChatMessage, error)
 	EditChatMessage(ctx context.Context, repositoryID string, branch string, thread string, message string, body string, expectedVersion *int) (*ChatMessage, error)
@@ -1170,6 +1177,7 @@ type OrganizationResolver interface {
 	AvailableModelProviders(ctx context.Context, obj *Organization) ([]string, error)
 	Models(ctx context.Context, obj *Organization) ([]*Model, error)
 	Artifact(ctx context.Context, obj *Organization, id string) (*Artifact, error)
+	Artifacts(ctx context.Context, obj *Organization, kind *ArtifactKind, repositoryID *string, mine *bool) ([]*Artifact, error)
 	Conversation(ctx context.Context, obj *Organization, first int, after *string) (*ChatPage, error)
 
 	Issues(ctx context.Context, obj *Organization, filter *IssueFilter, first int, after *string) (*IssuePage, error)
@@ -1233,6 +1241,7 @@ type UserResolver interface {
 	PersonalTokens(ctx context.Context, obj *User) ([]*PersonalToken, error)
 	SSHKeys(ctx context.Context, obj *User) ([]*SSHKey, error)
 	Preferences(ctx context.Context, obj *User) (*Preferences, error)
+	ArtifactAccess(ctx context.Context, obj *User) ([]*ArtifactGrant, error)
 	Permissions(ctx context.Context, obj *User) ([]string, error)
 	Organizations(ctx context.Context, obj *User) ([]*Organization, error)
 	Invitations(ctx context.Context, obj *User) ([]*Invitation, error)
@@ -1643,6 +1652,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Artifact.OrganizationID(childComplexity), true
+	case "Artifact.owner":
+		if e.ComplexityRoot.Artifact.Owner == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Artifact.Owner(childComplexity), true
 	case "Artifact.permissions":
 		if e.ComplexityRoot.Artifact.Permissions == nil {
 			break
@@ -3715,7 +3730,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Mutation.CreateArtifact(childComplexity, args["organizationId"].(string), args["repositoryId"].(string), args["input"].(NewArtifact)), true
+		return e.ComplexityRoot.Mutation.CreateArtifact(childComplexity, args["organizationId"].(string), args["repositoryId"].(*string), args["input"].(NewArtifact)), true
 	case "Mutation.createIssue":
 		if e.ComplexityRoot.Mutation.CreateIssue == nil {
 			break
@@ -4409,6 +4424,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.ShareArtifact(childComplexity, args["organizationId"].(string), args["id"].(string), args["principalId"].(string), args["role"].(ArtifactRole)), true
+	case "Mutation.shareMyArtifacts":
+		if e.ComplexityRoot.Mutation.ShareMyArtifacts == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_shareMyArtifacts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.ShareMyArtifacts(childComplexity, args["principalId"].(string), args["role"].(ArtifactRole)), true
 	case "Mutation.startChatThread":
 		if e.ComplexityRoot.Mutation.StartChatThread == nil {
 			break
@@ -4497,6 +4523,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Mutation.UnshareArtifact(childComplexity, args["organizationId"].(string), args["id"].(string), args["principalId"].(string)), true
+	case "Mutation.unshareMyArtifacts":
+		if e.ComplexityRoot.Mutation.UnshareMyArtifacts == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_unshareMyArtifacts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Mutation.UnshareMyArtifacts(childComplexity, args["principalId"].(string)), true
 	case "Mutation.updateAgent":
 		if e.ComplexityRoot.Mutation.UpdateAgent == nil {
 			break
@@ -4693,6 +4730,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Organization.Artifact(childComplexity, args["id"].(string)), true
+	case "Organization.artifacts":
+		if e.ComplexityRoot.Organization.Artifacts == nil {
+			break
+		}
+
+		args, err := ec.field_Organization_artifacts_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Organization.Artifacts(childComplexity, args["kind"].(*ArtifactKind), args["repositoryId"].(*string), args["mine"].(*bool)), true
 	case "Organization.availableModelProviders":
 		if e.ComplexityRoot.Organization.AvailableModelProviders == nil {
 			break
@@ -6194,6 +6242,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Usage.Used(childComplexity), true
 
+	case "User.artifactAccess":
+		if e.ComplexityRoot.User.ArtifactAccess == nil {
+			break
+		}
+
+		return e.ComplexityRoot.User.ArtifactAccess(childComplexity), true
 	case "User.displayName":
 		if e.ComplexityRoot.User.DisplayName == nil {
 			break
@@ -6743,23 +6797,31 @@ extend type Mutation {
   appendTranscriptEntry(organizationId: ID!, number: Int!, input: TranscriptEntryInput!): TranscriptEntry!
 }
 `, BuiltIn: false},
-	{Name: "../../../api/graphql/artifacts.graphqls", Input: `# The documents, diagrams, reports and pages that agents write when asked: each a repository's, kept in versions that
-# never change, and reached through grants on it, on its repository and at its organization, and through its two
-# audiences (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
+	{Name: "../../../api/graphql/artifacts.graphqls", Input: `# The documents, diagrams, reports and pages that agents write when asked: each the person's who asked for it, attached
+# to a repository or to none, kept in versions that never change, and reached through grants on it, on its owner, on
+# its repository and at its organization, and through its two audiences
+# (https://github.com/arikkfir-org/cobranch/blob/main/docs/cobranch/designs/artifacts.md).
 
 extend type Organization {
-  "One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact gives without its repository's repo.read."
+  "One of the organization's artifacts by ID: null unless it is there and the viewer holds artifacts.read on it, which a grant on the artifact or on its owner gives without its repository's repo.read."
   artifact(id: ID!): Artifact
+  "The organization's artifacts the viewer may list or read, newest change first: those attached to its repositories, the viewer's own and those shared with the viewer; only those of kind, attached to repositoryId, or the viewer's own when mine, when they are given. Takes org.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it."
+  artifacts(kind: ArtifactKind, repositoryId: ID, mine: Boolean): [Artifact!]!
 }
 
 extend type Repository {
-  "The repository's artifacts the viewer reads, of kind when it is given, newest change first; takes repo.read, and leaves out the artifacts the viewer may not read."
+  "The artifacts attached to the repository that the viewer may list or read, of kind when it is given, newest change first; takes repo.read. Each one's permissions say which of artifacts.list and artifacts.read the viewer holds on it."
   artifacts(kind: ArtifactKind): [Artifact!]!
 }
 
+extend type User {
+  "Who lists or reads every artifact the user owns, in each organization both belong to: the roles they hold on the user, by name."
+  artifactAccess: [ArtifactGrant!]!
+}
+
 extend type Mutation {
-  "Makes an artifact in one of the organization's repositories with its first version; takes artifacts.create on the repository. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An input whose id the viewer made in the repository answers that artifact as it is; one another principal or another repository took is refused (CONFLICT, artifact.exists)."
-  createArtifact(organizationId: ID!, repositoryId: ID!, input: NewArtifact!): Artifact!
+  "Makes an artifact of the organization with its first version, attached to one of its repositories, or to none without repositoryId; attaching it takes artifacts.create on the repository, and one attached to none takes org.read and has no repository audience. Its maker owns it; an agent's task makes its assigner the owner and the agent an editor. An input whose id the viewer made attached to the same repository, or to none, answers that artifact as it is; one another principal or another repository took is refused (CONFLICT, artifact.exists)."
+  createArtifact(organizationId: ID!, repositoryId: ID, input: NewArtifact!): Artifact!
   "Changes the fields the input gives of one of the organization's artifacts; its title and summary take artifacts.write on it, its audiences artifacts.manage. With expectedVersion, an artifact at another version is refused (CONFLICT, precondition.failed)."
   updateArtifact(organizationId: ID!, id: ID!, input: ArtifactPatch!, expectedVersion: Int): Artifact!
   "Adds an artifact's next version, which becomes the one it shows, and answers it without its body; takes artifacts.write on it. Earlier versions stay as they are. An input whose id the viewer added to the artifact answers that version; one another principal or artifact took is refused (CONFLICT, artifact.exists). With expectedVersion, an artifact at another version is refused (CONFLICT, precondition.failed)."
@@ -6770,6 +6832,10 @@ extend type Mutation {
   shareArtifact(organizationId: ID!, id: ID!, principalId: ID!, role: ArtifactRole!): Boolean!
   "Takes every role a principal holds on an artifact itself; takes artifacts.manage on it and every permission those roles give. Grants on its repository and at its organization, and its audiences, still reach it."
   unshareArtifact(organizationId: ID!, id: ID!, principalId: ID!): Boolean!
+  "Gives a member of one of the viewer's organizations, or an agent of one, LISTER or VIEWER on the viewer, in place of any role it held there: it then lists, or reads, every artifact the viewer owns in each organization both belong to. Only from a session, never from a token or an API key."
+  shareMyArtifacts(principalId: ID!, role: ArtifactRole!): Boolean!
+  "Takes every role a principal holds on the viewer; only from a session, never from a token or an API key."
+  unshareMyArtifacts(principalId: ID!): Boolean!
 }
 
 "What an artifact is for, which picks its icon and its filter, never its format."
@@ -6794,59 +6860,62 @@ enum ArtifactReach {
   EDIT
 }
 
-"A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it."
+"A role an artifact grants: viewer reads it, editor adds its versions and changes its title and summary, owner also changes its audiences, shares it and deletes it. A person grants lister or viewer on themselves, which lists or reads every artifact they own."
 enum ArtifactRole {
   VIEWER
   EDITOR
   OWNER
+  LISTER
 }
 
-"A document, a diagram, a report or a page that a repository owns, as its readers see it."
+"A document, a diagram, a report or a page, the person's who asked for it, attached to a repository or to none, as its readers see it. One a list shows to a viewer who may list it but not read it has only its id, organizationId, title, kind, owner and permissions, the rest null."
 type Artifact {
   id: ID!
   organizationId: ID!
-  "The repository that owns it."
-  repository: ArtifactRepository!
+  "The repository it is attached to; null for none."
+  repository: ArtifactRepository
+  "Whose it is: the person who asked for it, or the agent of a task Cobranch started; null once they are gone."
+  owner: ArtifactPrincipal
   "1 to 200 characters."
   title: String!
   "At most 500 characters."
-  summary: String!
+  summary: String
   kind: ArtifactKind!
   "How far the principals reading its repository reach it."
-  repositoryAccess: ArtifactReach!
+  repositoryAccess: ArtifactReach
   "How far the principals reading its organization reach it."
-  organizationAccess: ArtifactReach!
+  organizationAccess: ArtifactReach
   "Its widest audience, as the list's badge names it."
-  audience: ArtifactAudience!
+  audience: ArtifactAudience
   "The agent that wrote it; null when a person or a script wrote it, or once the agent is gone."
   agent: ArtifactPrincipal
   "The number of the agent's task it was written in; null when a person or a script wrote it, or once the task is gone."
   taskNumber: Int64
   "The branch it came from; empty for none."
-  branch: String!
+  branch: String
   "Its newest version's number, the one it shows."
-  head: Int!
+  head: Int
   "The format of its newest version: text/markdown, image/svg+xml or text/html."
-  mediaType: String!
+  mediaType: String
   "Counts its changes and its versions from 1: a change names it in expectedVersion to refuse one made meanwhile."
-  version: Int!
+  version: Int
   "Who made it; null once they are gone."
   createdBy: ArtifactPrincipal
-  createdAt: Time!
+  createdAt: Time
   "Who last changed it or added a version; null once they are gone."
   updatedBy: ArtifactPrincipal
-  updatedAt: Time!
-  "What the viewer holds on it, sorted; Organization.artifact answers it, a list doesn't."
+  updatedAt: Time
+  "What the viewer holds on it, sorted: Organization.artifact answers it all, a list which of artifacts.list and artifacts.read."
   permissions: [String!]
-  "Its versions, newest first, without their bodies."
-  versions: [ArtifactVersion!]!
+  "Its versions, newest first, without their bodies; null for a viewer who may only list it."
+  versions: [ArtifactVersion!]
   "One of its versions with its body, 0 for its newest; null unless it is there."
   versionByNumber(number: Int!): ArtifactVersion
-  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too."
-  access: ArtifactAccess!
+  "Who reaches it: its audiences and the roles principals hold on it itself, by name. Grants on its repository and at its organization reach it too. Null for a viewer who may only list it."
+  access: ArtifactAccess
 }
 
-"The repository that owns an artifact."
+"The repository an artifact is attached to."
 type ArtifactRepository {
   id: ID!
   slug: String!
@@ -6888,7 +6957,7 @@ type ArtifactAccess {
   grants: [ArtifactGrant!]!
 }
 
-"A role a principal holds on an artifact itself."
+"A role a principal holds on an artifact itself, or on a person."
 type ArtifactGrant {
   principalId: ID!
   "user, api_key or agent."
@@ -6906,7 +6975,7 @@ input NewArtifact {
   "At most 500 characters."
   summary: String
   kind: ArtifactKind!
-  "NONE when absent."
+  "NONE when absent; an artifact attached to no repository has none."
   repositoryAccess: ArtifactReach
   "NONE when absent."
   organizationAccess: ArtifactReach
@@ -8980,6 +9049,8 @@ func (ec *executionContext) childFields_Artifact(ctx context.Context, field grap
 		return ec.fieldContext_Artifact_organizationId(ctx, field)
 	case "repository":
 		return ec.fieldContext_Artifact_repository(ctx, field)
+	case "owner":
+		return ec.fieldContext_Artifact_owner(ctx, field)
 	case "title":
 		return ec.fieldContext_Artifact_title(ctx, field)
 	case "summary":
@@ -9984,6 +10055,8 @@ func (ec *executionContext) childFields_Organization(ctx context.Context, field 
 		return ec.fieldContext_Organization_models(ctx, field)
 	case "artifact":
 		return ec.fieldContext_Organization_artifact(ctx, field)
+	case "artifacts":
+		return ec.fieldContext_Organization_artifacts(ctx, field)
 	case "conversation":
 		return ec.fieldContext_Organization_conversation(ctx, field)
 	case "issueKey":
@@ -10558,6 +10631,8 @@ func (ec *executionContext) childFields_User(ctx context.Context, field graphql.
 		return ec.fieldContext_User_sshKeys(ctx, field)
 	case "preferences":
 		return ec.fieldContext_User_preferences(ctx, field)
+	case "artifactAccess":
+		return ec.fieldContext_User_artifactAccess(ctx, field)
 	case "permissions":
 		return ec.fieldContext_User_permissions(ctx, field)
 	case "organizations":
@@ -11054,8 +11129,8 @@ func (ec *executionContext) field_Mutation_createArtifact_args(ctx context.Conte
 	}
 	args["organizationId"] = arg0
 	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNID2string(ctx, v)
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
@@ -12994,6 +13069,28 @@ func (ec *executionContext) field_Mutation_shareArtifact_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_shareMyArtifacts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "role",
+		func(ctx context.Context, v any) (ArtifactRole, error) {
+			return ec.unmarshalNArtifactRole2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRole(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["role"] = arg1
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_startChatThread_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -13207,6 +13304,20 @@ func (ec *executionContext) field_Mutation_unshareArtifact_args(ctx context.Cont
 		return nil, err
 	}
 	args["principalId"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Mutation_unshareMyArtifacts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "principalId",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNID2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["principalId"] = arg0
 	return args, nil
 }
 
@@ -13521,6 +13632,36 @@ func (ec *executionContext) field_Organization_artifact_args(ctx context.Context
 		return nil, err
 	}
 	args["id"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Organization_artifacts_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "kind",
+		func(ctx context.Context, v any) (*ArtifactKind, error) {
+			return ec.unmarshalOArtifactKind2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactKind(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["kind"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "repositoryId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["repositoryId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "mine",
+		func(ctx context.Context, v any) (*bool, error) {
+			return ec.unmarshalOBoolean2ᚖbool(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["mine"] = arg2
 	return args, nil
 }
 
@@ -15503,10 +15644,10 @@ func (ec *executionContext) _Artifact_repository(ctx context.Context, field grap
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactRepository) graphql.Marshaler {
-			return ec.marshalNArtifactRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRepository(ctx, selections, v)
+			return ec.marshalOArtifactRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRepository(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_repository(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15517,6 +15658,38 @@ func (ec *executionContext) fieldContext_Artifact_repository(_ context.Context, 
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_ArtifactRepository(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Artifact_owner(ctx context.Context, field graphql.CollectedField, obj *Artifact) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Artifact_owner(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Owner, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactPrincipal) graphql.Marshaler {
+			return ec.marshalOArtifactPrincipal2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactPrincipal(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Artifact_owner(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Artifact",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ArtifactPrincipal(ctx, field)
 		},
 	}
 	return fc, nil
@@ -15557,11 +15730,11 @@ func (ec *executionContext) _Artifact_summary(ctx context.Context, field graphql
 			return obj.Summary, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_summary(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15603,11 +15776,11 @@ func (ec *executionContext) _Artifact_repositoryAccess(ctx context.Context, fiel
 			return obj.RepositoryAccess, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactReach) graphql.Marshaler {
-			return ec.marshalNArtifactReach2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactReach) graphql.Marshaler {
+			return ec.marshalOArtifactReach2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_repositoryAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15626,11 +15799,11 @@ func (ec *executionContext) _Artifact_organizationAccess(ctx context.Context, fi
 			return obj.OrganizationAccess, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactReach) graphql.Marshaler {
-			return ec.marshalNArtifactReach2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactReach) graphql.Marshaler {
+			return ec.marshalOArtifactReach2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactReach(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_organizationAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15649,11 +15822,11 @@ func (ec *executionContext) _Artifact_audience(ctx context.Context, field graphq
 			return obj.Audience, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v ArtifactAudience) graphql.Marshaler {
-			return ec.marshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactAudience) graphql.Marshaler {
+			return ec.marshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_audience(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15727,11 +15900,11 @@ func (ec *executionContext) _Artifact_branch(ctx context.Context, field graphql.
 			return obj.Branch, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_branch(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15750,11 +15923,11 @@ func (ec *executionContext) _Artifact_head(ctx context.Context, field graphql.Co
 			return obj.Head, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_head(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15773,11 +15946,11 @@ func (ec *executionContext) _Artifact_mediaType(ctx context.Context, field graph
 			return obj.MediaType, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
-			return ec.marshalNString2string(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_mediaType(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15796,11 +15969,11 @@ func (ec *executionContext) _Artifact_version(ctx context.Context, field graphql
 			return obj.Version, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *int) graphql.Marshaler {
+			return ec.marshalOInt2ᚖint(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_version(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15851,11 +16024,11 @@ func (ec *executionContext) _Artifact_createdAt(ctx context.Context, field graph
 			return obj.CreatedAt, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
-			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_createdAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15906,11 +16079,11 @@ func (ec *executionContext) _Artifact_updatedAt(ctx context.Context, field graph
 			return obj.UpdatedAt, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v time.Time) graphql.Marshaler {
-			return ec.marshalNTime2timeᚐTime(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v *time.Time) graphql.Marshaler {
+			return ec.marshalOTime2ᚖtimeᚐTime(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_updatedAt(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -15953,10 +16126,10 @@ func (ec *executionContext) _Artifact_versions(ctx context.Context, field graphq
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
-			return ec.marshalNArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx, selections, v)
+			return ec.marshalOArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_versions(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -16029,10 +16202,10 @@ func (ec *executionContext) _Artifact_access(ctx context.Context, field graphql.
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
-			return ec.marshalNArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx, selections, v)
+			return ec.marshalOArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx, selections, v)
 		},
 		true,
-		true,
+		false,
 	)
 }
 func (ec *executionContext) fieldContext_Artifact_access(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
@@ -24368,7 +24541,7 @@ func (ec *executionContext) _Mutation_createArtifact(ctx context.Context, field 
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Mutation().CreateArtifact(ctx, fc.Args["organizationId"].(string), fc.Args["repositoryId"].(string), fc.Args["input"].(NewArtifact))
+			return ec.Resolvers.Mutation().CreateArtifact(ctx, fc.Args["organizationId"].(string), fc.Args["repositoryId"].(*string), fc.Args["input"].(NewArtifact))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *Artifact) graphql.Marshaler {
@@ -24616,6 +24789,94 @@ func (ec *executionContext) fieldContext_Mutation_unshareArtifact(ctx context.Co
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Mutation_unshareArtifact_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_shareMyArtifacts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_shareMyArtifacts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().ShareMyArtifacts(ctx, fc.Args["principalId"].(string), fc.Args["role"].(ArtifactRole))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_shareMyArtifacts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_shareMyArtifacts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Mutation_unshareMyArtifacts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Mutation_unshareMyArtifacts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Mutation().UnshareMyArtifacts(ctx, fc.Args["principalId"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v bool) graphql.Marshaler {
+			return ec.marshalNBoolean2bool(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Mutation_unshareMyArtifacts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Mutation",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return nil, errors.New("field of type Boolean does not have child fields")
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Mutation_unshareMyArtifacts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -28434,6 +28695,50 @@ func (ec *executionContext) fieldContext_Organization_artifact(ctx context.Conte
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Organization_artifact_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Organization_artifacts(ctx context.Context, field graphql.CollectedField, obj *Organization) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Organization_artifacts(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Organization().Artifacts(ctx, obj, fc.Args["kind"].(*ArtifactKind), fc.Args["repositoryId"].(*string), fc.Args["mine"].(*bool))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*Artifact) graphql.Marshaler {
+			return ec.marshalNArtifact2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_Organization_artifacts(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Organization",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Artifact(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Organization_artifacts_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -34319,6 +34624,38 @@ func (ec *executionContext) fieldContext_User_preferences(_ context.Context, fie
 	return fc, nil
 }
 
+func (ec *executionContext) _User_artifactAccess(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_User_artifactAccess(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return ec.Resolvers.User().ArtifactAccess(ctx, obj)
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*ArtifactGrant) graphql.Marshaler {
+			return ec.marshalNArtifactGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactGrantᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_User_artifactAccess(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "User",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_ArtifactGrant(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
 func (ec *executionContext) _User_permissions(ctx context.Context, field graphql.CollectedField, obj *User) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -38160,7 +38497,12 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "repository":
 			out.Values[i] = ec._Artifact_repository(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
+				atomic.AddUint32(&out.Invalids, 1)
+			}
+		case "owner":
+			out.Values[i] = ec._Artifact_owner(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "title":
@@ -38170,7 +38512,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "summary":
 			out.Values[i] = ec._Artifact_summary(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "kind":
@@ -38180,17 +38522,17 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "repositoryAccess":
 			out.Values[i] = ec._Artifact_repositoryAccess(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "organizationAccess":
 			out.Values[i] = ec._Artifact_organizationAccess(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "audience":
 			out.Values[i] = ec._Artifact_audience(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "agent":
@@ -38205,22 +38547,22 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "branch":
 			out.Values[i] = ec._Artifact_branch(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "head":
 			out.Values[i] = ec._Artifact_head(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "mediaType":
 			out.Values[i] = ec._Artifact_mediaType(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "version":
 			out.Values[i] = ec._Artifact_version(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "createdBy":
@@ -38230,7 +38572,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "createdAt":
 			out.Values[i] = ec._Artifact_createdAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "updatedBy":
@@ -38240,7 +38582,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "updatedAt":
 			out.Values[i] = ec._Artifact_updatedAt(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
+			if out.Values[i] == graphql.RequiredNull {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
 		case "permissions":
@@ -38250,7 +38592,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 			}
 		case "versions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
-				true, true,
+				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Artifact_versions(ctx, field, obj)
 				})
@@ -38262,7 +38604,7 @@ func (ec *executionContext) _Artifact(ctx context.Context, sel ast.SelectionSet,
 				})
 		case "access":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
-				true, true,
+				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Artifact_access(ctx, field, obj)
 				})
@@ -41309,6 +41651,20 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
+		case "shareMyArtifacts":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_shareMyArtifacts(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "unshareMyArtifacts":
+			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
+				return ec._Mutation_unshareMyArtifacts(ctx, field)
+			})
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
 		case "startChatThread":
 			out.Values[i] = ec.OperationContext.RootResolverMiddleware(innerCtx, func(ctx context.Context) (res graphql.Marshaler) {
 				return ec._Mutation_startChatThread(ctx, field)
@@ -42025,6 +42381,12 @@ func (ec *executionContext) _Organization(ctx context.Context, sel ast.Selection
 				true, false,
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Organization_artifact(ctx, field, obj)
+				})
+		case "artifacts":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Organization_artifacts(ctx, field, obj)
 				})
 		case "conversation":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
@@ -43974,6 +44336,12 @@ func (ec *executionContext) _User(ctx context.Context, sel ast.SelectionSet, obj
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._User_preferences(ctx, field, obj)
 				})
+		case "artifactAccess":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, true,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._User_artifactAccess(ctx, field, obj)
+				})
 		case "permissions":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, true,
@@ -44664,24 +45032,6 @@ func (ec *executionContext) marshalNArtifact2ᚖcobranchᚗdevᚋinternalᚋadap
 	return ec._Artifact(ctx, sel, v)
 }
 
-func (ec *executionContext) marshalNArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx context.Context, sel ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
-	if v == nil {
-		graphql.AddInvalidNullError(ctx, "ArtifactAccess!")
-		return graphql.Null
-	}
-	return ec._ArtifactAccess(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, v any) (ArtifactAudience, error) {
-	var res ArtifactAudience
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNArtifactAudience2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, sel ast.SelectionSet, v ArtifactAudience) graphql.Marshaler {
-	return v
-}
-
 func (ec *executionContext) marshalNArtifactGrant2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactGrantᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactGrant) graphql.Marshaler {
 	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
 		fc := graphql.GetFieldContext(ctx)
@@ -44731,14 +45081,6 @@ func (ec *executionContext) marshalNArtifactReach2cobranchᚗdevᚋinternalᚋad
 	return v
 }
 
-func (ec *executionContext) marshalNArtifactRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRepository(ctx context.Context, sel ast.SelectionSet, v *ArtifactRepository) graphql.Marshaler {
-	if v == nil {
-		graphql.AddInvalidNullError(ctx, "ArtifactRepository!")
-		return graphql.Null
-	}
-	return ec._ArtifactRepository(ctx, sel, v)
-}
-
 func (ec *executionContext) unmarshalNArtifactRole2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRole(ctx context.Context, v any) (ArtifactRole, error) {
 	var res ArtifactRole
 	err := res.UnmarshalGQL(v)
@@ -44747,22 +45089,6 @@ func (ec *executionContext) unmarshalNArtifactRole2cobranchᚗdevᚋinternalᚋa
 
 func (ec *executionContext) marshalNArtifactRole2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRole(ctx context.Context, sel ast.SelectionSet, v ArtifactRole) graphql.Marshaler {
 	return v
-}
-
-func (ec *executionContext) marshalNArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
-	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
-		fc := graphql.GetFieldContext(ctx)
-		fc.Result = &v[i]
-		return ec.marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx, sel, v[i])
-	})
-
-	for _, e := range ret {
-		if e == graphql.Null {
-			return graphql.Null
-		}
-	}
-
-	return ret
 }
 
 func (ec *executionContext) marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx context.Context, sel ast.SelectionSet, v *ArtifactVersion) graphql.Marshaler {
@@ -46621,6 +46947,29 @@ func (ec *executionContext) marshalOArtifact2ᚖcobranchᚗdevᚋinternalᚋadap
 	return ec._Artifact(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalOArtifactAccess2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAccess(ctx context.Context, sel ast.SelectionSet, v *ArtifactAccess) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ArtifactAccess(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, v any) (*ArtifactAudience, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(ArtifactAudience)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOArtifactAudience2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactAudience(ctx context.Context, sel ast.SelectionSet, v *ArtifactAudience) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOArtifactKind2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactKind(ctx context.Context, v any) (*ArtifactKind, error) {
 	if v == nil {
 		return nil, nil
@@ -46658,6 +47007,32 @@ func (ec *executionContext) marshalOArtifactReach2ᚖcobranchᚗdevᚋinternal�
 		return graphql.Null
 	}
 	return v
+}
+
+func (ec *executionContext) marshalOArtifactRepository2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactRepository(ctx context.Context, sel ast.SelectionSet, v *ArtifactRepository) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._ArtifactRepository(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOArtifactVersion2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersionᚄ(ctx context.Context, sel ast.SelectionSet, v []*ArtifactVersion) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
 }
 
 func (ec *executionContext) marshalOArtifactVersion2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐArtifactVersion(ctx context.Context, sel ast.SelectionSet, v *ArtifactVersion) graphql.Marshaler {
