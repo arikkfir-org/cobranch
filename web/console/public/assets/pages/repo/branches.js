@@ -1,10 +1,10 @@
 import { annotationStatuses, commitAnnotations } from "../../lib/annotations.js";
 import { api, apiPage } from "../../lib/api.js";
 import { branchBadge, branchStatuses } from "../../lib/branches.js";
-import { branchChat } from "../../lib/chat.js";
+import { branchSubject } from "../../lib/chat.js";
 import { h } from "../../lib/dom.js";
 import { environmentsPanel } from "../../lib/environments.js";
-import { plural, shortSha, subject, when, whenExactly, who } from "../../lib/format.js";
+import { plural, shortSha, subject as messageSubject, when, whenExactly, who } from "../../lib/format.js";
 import { commitRow } from "../../lib/history.js";
 import { icon } from "../../lib/icons.js";
 import { issueBadge } from "../../lib/issues.js";
@@ -15,6 +15,10 @@ import { base, setCarried } from "../../lib/state.js";
 
 export const nav = { label: "Branches", order: 10 };
 export const view = (rest) => rest.length ? "repository.branch" : "repository.branches";
+// A branch's page has a heading of its own, and the pane shows its conversation.
+export const heading = (rest) => !rest.length;
+export const crumbs = ({ root, rest }) => [{ label: "Branches", href: root + "/branches" }, ...(rest.length ? [{ label: rest.join("/") }] : [])];
+export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? branchSubject(org, repo, path, at, rest.join("/"), can) : null;
 export default ({ org, path, at, rest, can, orgCan, fail }) => rest.length ? repositoryBranch(org, path, at, rest.join("/"), can, orgCan, fail) : repositoryBranches(path, at);
 
 // repositoryBranches lists the repository's live branches, main first, each with its status as a request to merge
@@ -23,7 +27,7 @@ async function repositoryBranches(path, at) {
   const branches = (await api("GET", path + "/branches")).branches;
   const counts = (b) => b.ahead === undefined ? h("p", { class: "muted" }, "Not worked out yet") : h("p", {}, b.ahead + " ahead · " + b.behind + " behind");
   const row = (b) => h("tr", {}, h("td", {}, h("a", { href: at.branchPage(b.name), "data-nav": "" }, h("code", {}, b.name)), " ", b.status ? branchBadge(b.status) : h("span", { class: "chip" }, "default")),
-    h("td", {}, b.commit ? [h("a", { class: "subject", href: at.commit(b.head), "data-nav": "" }, subject(b.commit.message)), h("p", {}, who(b.commit.author), " · ", whenExactly(b.commit.author.at))]
+    h("td", {}, b.commit ? [h("a", { class: "subject", href: at.commit(b.head), "data-nav": "" }, messageSubject(b.commit.message)), h("p", {}, who(b.commit.author), " · ", whenExactly(b.commit.author.at))]
       : h("p", {}, "At ", h("code", {}, shortSha(b.head)), ", no commit a push recorded.")),
     h("td", { class: "counts" }, b.status ? counts(b) : null),
     h("td", {}, when(b.updatedAt)));
@@ -75,7 +79,7 @@ async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
     h("div", { class: "row" }, b.base ? h("a", { class: "button small", href: at.changes(b.name), "data-nav": "" }, "Changes") : null,
       h("a", { class: "button small", href: at.history(b.name), "data-nav": "" }, "History"), deleteControl(path, b, can, fail)));
   if (!b.status) return [h("section", { class: "panel" }, title, h("p", {}, "The default branch: every other branch is a request to merge into it.")), settingsError(b), manualJobs(path, at, b, can, fail), mergeRequirements([b]),
-    await environmentsPanel(path, at, b.name), await branchChat(path, at, b, can)].filter(Boolean);
+    await environmentsPanel(path, at, b.name)].filter(Boolean);
   const sections = [h("section", { class: "panel" }, title, h("p", {}, wantsToMerge(b)), mergeControl(path, b, can, fail), worksOn(org, path, b, orgCan, fail))];
   if (b.settingsError) sections.push(settingsError(b));
   if (b.manualJobs && b.manualJobs.length && can("jobs.run")) sections.push(manualJobs(path, at, b, can, fail));
@@ -84,7 +88,6 @@ async function repositoryBranch(org, path, at, name, can, orgCan, fail) {
   if (b.commit && b.status !== "merged") sections.push(await branchCommits(path, at, b));
   if (b.commit) sections.push(commitReviews(path, b.commit, can, fail, reviewDrafting(path, b, can)), commitAnnotations(path, b.commit, can, fail), await runsPanel(path, at, can, fail, b.head));
   sections.push(await environmentsPanel(path, at, b.name));
-  sections.push(await branchChat(path, at, b, can));
   return sections;
 }
 
@@ -193,7 +196,7 @@ async function branchCommits(path, at, b) {
 }
 
 // deletedBranchPage is the page of a branch of name that isn't live: who deleted it and when, the head it was at,
-// and its merge, as its latest deletion recorded them, with its chat as it was; or that there is none, for a name
+// and its merge, as its latest deletion recorded them, with its chat as it was in the pane; or that there is none, for a name
 // no branch had.
 async function deletedBranchPage(path, at, name) {
   let d;
@@ -210,8 +213,8 @@ async function deletedBranchPage(path, at, name) {
     : ["Never merged into ", h("code", {}, "main"), ": no branch holds its commits any more, though its head's page still shows them."];
   return [h("section", { class: "panel" }, h("div", { class: "row" }, h("div", { class: "title" }, icon("trash-2"), h("h2", {}, h("code", {}, d.name)), h("span", { class: "chip" }, "Deleted"))),
     h("p", {}, "Deleted by ", by, " · ", whenExactly(d.deletedAt)),
-    h("p", {}, "It was at ", head, d.commit ? [" · ", subject(d.commit.message)] : null, "."),
-    h("p", {}, merged)), await branchChat(path, at, d, () => false)];
+    h("p", {}, "It was at ", head, d.commit ? [" · ", messageSubject(d.commit.message)] : null, "."),
+    h("p", {}, merged))];
 }
 
 // mayDelete reports whether the viewer may delete b: with repo.push, and repo.bypass too for a branch main's

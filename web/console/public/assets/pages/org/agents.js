@@ -2,10 +2,25 @@ import { api } from "../../lib/api.js";
 import { h } from "../../lib/dom.js";
 import { when } from "../../lib/format.js";
 import { go } from "../../lib/router.js";
-import { base, me, roles } from "../../lib/state.js";
+import { base, me, roles, setAgents } from "../../lib/state.js";
 
-export const nav = { label: "Agents", order: 50 };
+// nav puts Agents in the sidebar, with the organization's agents under it, a dot on each that works on a task now.
+export const nav = { label: "Agents", order: 50, icon: "bot", tab: "Agents", items: agentItems };
+export const crumbs = [{ label: "Agents" }];
 export default ({ org, main, can }) => showAgents(org, main, can);
+
+// agentItems are the organization's agents as the sidebar lists them, each marked while one of its tasks runs; it
+// keeps their IDs too, for the conversation pane to tell an agent's message from a person's.
+async function agentItems({ org }) {
+  const [agents, running] = await Promise.all([api("GET", "/orgs/" + org.slug + "/agents").then((d) => d.agents),
+    api("GET", "/orgs/" + org.slug + "/tasks?state=running&limit=100").then((d) => new Set(d.tasks.map((t) => t.agent.id)), () => new Set())]);
+  setAgents(new Set(agents.map((a) => a.id)));
+  return { whole: true, count: agents.length, items: agents.map((a) => ({ ...agentItem(org, a),
+    dot: running.has(a.id) ? "ai" : null, dotLabel: running.has(a.id) ? "Working" : null })) };
+}
+
+// agentItem is agent a as a sub item of the sidebar's Agents: it opens the agent's tasks, which put it first there.
+export const agentItem = (org, a) => ({ key: a.id, label: a.name, href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), avatar: "agent" });
 
 // grantChips names an agent's grants: a role at the organization, or a role on one of its repositories.
 const grantChips = (grants) => grants.length ? grants.map((g) => h("span", { class: "chip" }, g.roleName, g.repositorySlug ? " on " + g.repositorySlug : ""))
@@ -57,7 +72,7 @@ async function showAgents(org, main, can, problem = null) {
           onclick: () => confirm("Delete " + a.name + " with its grants and tasks?") && api("DELETE", agentPath(a), undefined, { "If-Match": `"${a.version}"` }).then(refresh).catch(fail) }, "Delete")] : null));
     return row;
   };
-  const sections = [h("h1", {}, "Agents"), error, h("section", { class: "panel" },
+  const sections = [error, h("section", { class: "panel" },
     h("p", {}, "An agent is a principal of this organization that takes tasks, with roles of its own. A task does no more than both its agent and its assigner may, so assigning one never lends anyone more than they hold."),
     list.length ? h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Agent"), h("th", {}, "Roles"), h("th", {}, "Model"), h("th", {}, "Created by"), h("th", {}))), h("tbody", {}, list.map(agentRow)))
       : h("p", {}, "No agents yet."))];

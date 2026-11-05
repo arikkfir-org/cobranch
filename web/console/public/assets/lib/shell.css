@@ -1,0 +1,179 @@
+/* The app shell (lib/layout.js) as the design system draws it: App/Sidebar with its Nav items and Nav/Sub items, the
+   organization switcher, App/Top bar with the breadcrumbs, App/User menu, App/Conversation pane with its Chat
+   messages, and the heading a group of pages shares above its tabs. Tokens only (tokens.css); the general
+   components inside them (buttons, icon buttons, menus, avatars, tags, tabs, the segmented control) are
+   components.css's. */
+
+/* The frame: the sidebar, then the top bar over the content, which alone scrolls, and the pane beside it. */
+body.app-body-shell { height: 100vh; overflow: hidden; }
+.app { display: grid; grid-template-columns: var(--size-sidebar) minmax(0, 1fr); height: 100vh; }
+.app-sidebar-slot { min-height: 0; }
+.app-main { display: grid; grid-template-rows: var(--size-topbar) minmax(0, 1fr); min-width: 0; min-height: 0; }
+.app-body { display: flex; min-height: 0; }
+.app-content { flex: 1; min-width: 0; overflow-y: auto; padding: var(--space-32); display: grid; align-content: start; gap: var(--space-24); background: var(--color-bg-canvas); }
+.app-content > main.page { width: auto; margin: 0; padding: 0; }
+.app-scrim { display: none; }
+
+/* App/Sidebar. */
+.app-sidebar { height: 100%; display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-12) var(--space-8); overflow-y: auto;
+  background: var(--color-bg-sunken); border-right: 1px solid var(--color-border-default); }
+.app-sidebar-logo { display: flex; align-items: center; flex: none; padding: var(--space-6) 0 var(--space-6) var(--space-8); }
+.app-sidebar-divider { flex: none; height: 1px; margin: 0; border: 0; background: var(--color-border-default); }
+.app-sidebar-nav, .app-sidebar-section, .nav-sub-items { display: flex; flex-direction: column; gap: var(--space-4); }
+.nav-sub-items:empty { display: none; }
+.app-sidebar-flex { flex: 1; }
+.app-sidebar-credit { flex: none; padding: var(--space-8) 0 var(--space-4) var(--space-8); color: var(--color-fg-subtle); font: var(--text-caption); }
+
+/* Nav item: a place, with its icon, label and, for a section, its count. */
+.nav-item { display: flex; align-items: center; gap: var(--space-8); flex: none; height: var(--size-control-md); padding: 0 var(--space-8); border-radius: var(--radius-md);
+  color: var(--color-fg-muted); font: var(--text-body-small); text-decoration: none; }
+.nav-item:hover { background: var(--color-bg-hover); color: var(--color-fg-default); }
+.nav-item[aria-current="page"] { background: var(--color-bg-selected); color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.nav-item-label, .nav-sub-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-item-count { color: var(--color-fg-subtle); font: var(--text-caption); }
+
+/* Nav/Sub item: one of a section's five, indented past the section's icon. */
+.nav-sub-item { display: flex; align-items: center; gap: var(--space-8); flex: none; height: var(--size-control-sm);
+  padding: 0 var(--space-8) 0 var(--space-32); border-radius: var(--radius-md);
+  color: var(--color-fg-muted); font: var(--text-body-small); text-decoration: none; }
+.nav-sub-item:hover { background: var(--color-bg-hover); color: var(--color-fg-default); }
+.nav-sub-item[aria-current="page"] { background: var(--color-bg-selected); color: var(--color-fg-default); }
+.nav-sub-item code.nav-sub-item-label { font: var(--text-code-small); color: inherit; }
+.nav-sub-item .avatar { width: var(--size-icon-sm); height: var(--size-icon-sm); flex: none; }
+.nav-sub-item .avatar svg { width: var(--space-12); height: var(--space-12); }
+.nav-sub-item-dot { flex: none; width: var(--space-6); height: var(--space-6); border-radius: var(--radius-full); }
+.nav-sub-item-dot.tone-ai { background: var(--color-status-ai-solid); }
+.nav-sub-item-dot.tone-success { background: var(--color-status-success-solid); }
+.nav-sub-item-dot.tone-danger { background: var(--color-status-danger-solid); }
+.nav-sub-item-dot.tone-warning { background: var(--color-status-warning-solid); }
+.nav-sub-item-dot.tone-info { background: var(--color-status-info-solid); }
+
+/* The organization switcher, and the organization's mark it and its menu show. */
+.app-org-switcher { display: flex; align-items: center; gap: var(--space-8); flex: none; width: 100%; height: var(--size-control-lg); padding: 0 var(--space-8);
+  border: 0; border-radius: var(--radius-md); background: none; color: var(--color-fg-default); font: var(--text-body-small-strong); text-align: left; cursor: pointer; }
+.app-org-switcher:hover, .app-org-switcher[aria-expanded="true"] { background: var(--color-bg-hover); }
+.app-org-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The switcher's menu opens above it, as wide as its longest item, from the sidebar's width to the pane's, under its
+   caption. */
+.app-org-menu { min-width: var(--size-sidebar); max-width: var(--size-pane); }
+.app-org-menu-heading { padding: var(--space-6) var(--space-8); color: var(--color-fg-subtle); font: var(--text-caption); }
+.app-org-mark { display: inline-grid; place-items: center; flex: none; width: var(--space-24); height: var(--space-24); border-radius: var(--radius-md);
+  background: var(--color-bg-inverse); color: var(--color-fg-inverse); font: var(--text-label-small); font-weight: 600; }
+
+/* App/Top bar: the breadcrumbs, muted up to the page shown, then the conversation's toggle and the avatar. */
+.app-topbar { display: flex; align-items: center; gap: var(--space-8); padding: 0 var(--space-24); background: var(--color-bg-canvas); border-bottom: 1px solid var(--color-border-default); }
+.app-crumbs { flex: 1; min-width: 0; overflow: hidden; }
+.app-crumbs ol { display: flex; align-items: center; gap: var(--space-6); margin: 0; padding: 0; list-style: none; white-space: nowrap; color: var(--color-fg-muted); font: var(--text-body-small); }
+.app-crumbs li { display: flex; align-items: center; gap: var(--space-6); min-width: 0; }
+.app-crumbs li + li::before { content: "/"; color: var(--color-fg-subtle); }
+.app-crumbs a { color: inherit; text-decoration: none; }
+.app-crumbs a:hover { color: var(--color-fg-default); }
+.app-crumbs li[aria-current] code { overflow: hidden; text-overflow: ellipsis; color: var(--color-fg-default); font: var(--text-code-small); }
+.app-pane-toggle[aria-pressed="true"] { background: var(--color-bg-selected); }
+.app-avatar-button { display: inline-flex; flex: none; padding: 0; border: 0; border-radius: var(--radius-full); background: none; cursor: pointer; }
+.app-sidebar-toggle { display: none; }
+
+/* A menu the shell opens from a button (lib/menu.js), and App/User menu. */
+.app-popover { position: fixed; z-index: 20; }
+.app-user-menu { width: var(--size-sidebar); }
+.app-user-menu-who { display: grid; gap: var(--space-2); padding: var(--space-6) calc(var(--space-8) + var(--space-2)) var(--space-8); }
+.app-user-menu-who strong { color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.app-user-menu-who span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-fg-subtle); font: var(--text-caption); }
+.app-user-menu-theme { display: grid; gap: var(--space-6); padding: var(--space-4) calc(var(--space-8) + var(--space-2)) var(--space-8); }
+.app-user-menu-theme > span { color: var(--color-fg-subtle); font: var(--text-caption); }
+
+/* The heading a group of pages shares (a repository's, Settings'): B's Page header, a tag beside its title, and its
+   tabs under it. */
+.app-page-heading { display: grid; }
+.app-page-heading-title { display: flex; align-items: center; gap: var(--space-8); min-width: 0; }
+.app-page-heading-title .page-header-title { overflow-wrap: anywhere; }
+.app-page-heading .tab-bar { margin-top: var(--space-20); }
+
+/* App/Conversation pane: who and what it is about, the conversation, and the composer. */
+.app-pane { display: flex; flex-direction: column; flex: none; width: var(--size-pane); min-height: 0; background: var(--color-bg-surface); border-left: 1px solid var(--color-border-default); }
+.app-pane-header { display: grid; gap: var(--space-2); flex: none; padding: var(--space-12);
+  border-bottom: 1px solid var(--color-border-default); }
+.app-pane-title { display: flex; align-items: center; gap: var(--space-6); min-width: 0; }
+.app-pane-title strong { flex: none; color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.app-pane-subject { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-fg-muted); font: var(--text-caption); }
+code.app-pane-subject { font: var(--text-code-small); color: var(--color-fg-muted); }
+.app-pane-mode { display: inline-flex; align-items: center; gap: var(--space-2); flex: none; margin-left: auto; padding: var(--space-2) var(--space-4) var(--space-2) var(--space-6);
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--color-fg-subtle); font: var(--text-caption); cursor: pointer; }
+.app-pane-mode:hover, .app-pane-mode[aria-expanded="true"] { background: var(--color-bg-hover); color: var(--color-fg-default); }
+.app-pane-mode .icon svg { width: var(--space-12); height: var(--space-12); }
+.app-pane-scope { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-fg-subtle); font: var(--text-caption); }
+.app-pane-body, .app-pane-conversation { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.app-pane-conversation > :is(.alert, .banner) { margin: var(--space-12) var(--space-12) 0; }
+.app-pane-close { display: none; }
+.app-pane-none { padding: var(--space-16); color: var(--color-fg-subtle); font: var(--text-body-small); }
+.app-pane-messages { display: flex; flex-direction: column; gap: var(--space-12); flex: 1; min-height: 0; overflow-y: auto; padding: var(--space-12); }
+.app-pane-messages > .btn { align-self: center; }
+.app-pane-messages > .app-pane-none { padding: var(--space-4); }
+.app-pane-messages > .app-pane-empty { margin: auto 0; padding-inline: 0; }
+.app-pane-threads { display: flex; flex-direction: column; gap: var(--space-12); }
+
+/* A thread of the conversation: the lines it is on and its state, its messages, and what the viewer may do. Its
+   actions and forms line up with its messages' text, past their avatars. */
+.app-thread { display: flex; flex-direction: column; gap: var(--space-4); scroll-margin-top: var(--space-12); }
+.app-thread + .app-thread { padding-top: var(--space-12); border-top: 1px solid var(--color-border-subtle); }
+/* Its anchor, the lines it is on in the link colour with its state at the end, and a line on an outdated one; a
+   resolved thread folds into a row of who resolved it, until Show opens it. */
+.app-thread-head { display: grid; gap: var(--space-4); }
+.app-thread-anchor { display: flex; align-items: center; gap: var(--space-6); min-width: 0; padding: var(--space-4) var(--space-8); border-radius: var(--radius-sm); background: var(--color-bg-sunken); }
+.app-thread-lines { display: flex; align-items: center; gap: var(--space-6); flex: 1; min-width: 0; color: var(--color-fg-link); text-decoration: none; }
+span.app-thread-lines { color: var(--color-fg-muted); font: var(--text-caption); }
+.app-thread-lines code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; font: var(--text-code-small); }
+.app-thread-lines .icon svg, .app-thread-resolved .icon svg { width: calc(var(--space-12) + var(--space-2)); height: calc(var(--space-12) + var(--space-2)); }
+a.app-thread-lines:hover code { text-decoration: underline; }
+.app-thread-note { color: var(--color-fg-muted); font: var(--text-caption); }
+.app-thread-resolved { display: flex; align-items: center; gap: var(--space-6); min-width: 0; padding-left: var(--space-8); color: var(--color-fg-muted); font: var(--text-caption); }
+.app-thread-resolved .icon { color: var(--color-status-success-fg); }
+.app-thread-resolved > span:not(.icon) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-thread-foot, .app-pane-form { padding: 0 var(--space-16) 0 calc(var(--space-16) + var(--space-32) + var(--space-12)); }
+.app-thread-foot { display: flex; gap: var(--space-4); }
+.app-pane-form { display: grid; gap: var(--space-8); padding-top: var(--space-4); padding-bottom: var(--space-8); }
+.app-pane-form-actions { display: flex; justify-content: flex-end; gap: var(--space-4); }
+.app-pane-form textarea { font: var(--text-body-small); resize: vertical; }
+
+/* Chat message: its author's avatar, their name, the Agent tag of an agent's, when, and the message. */
+.chat-message { position: relative; display: flex; align-items: flex-start; gap: var(--space-12); padding: var(--space-8) var(--space-16); scroll-margin-top: var(--space-12); }
+.chat-message-text-column { display: flex; flex-direction: column; gap: var(--space-4); flex: 1; min-width: 0; }
+.chat-message-header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-6); color: var(--color-fg-subtle); font: var(--text-caption); }
+.chat-message-header strong { color: var(--color-fg-default); font: var(--text-body-small-strong); }
+.chat-message-header a.tag { text-decoration: none; }
+/* A message's actions float over its top corner while the viewer points at it or works in it. */
+.chat-message-actions { position: absolute; top: var(--space-2); right: var(--space-12); display: flex; gap: var(--space-2); padding: var(--space-2); visibility: hidden;
+  border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-surface); box-shadow: var(--shadow-elevation-1); }
+.chat-message:hover .chat-message-actions, .chat-message:focus-within .chat-message-actions { visibility: visible; }
+.chat-message:has(.chat-message-actions):is(:hover, :focus-within) { border-radius: var(--radius-md); background: var(--color-bg-sunken); }
+@media (hover: none) { .chat-message-actions { visibility: visible; } }
+.chat-message-body { color: var(--color-fg-default); font: var(--text-body-small); overflow-wrap: anywhere; }
+.chat-message-text { white-space: pre-wrap; }
+
+/* The composer, which starts a thread: Enter sends, Shift+Enter starts a new line. */
+.app-pane-composer { display: flex; align-items: flex-end; gap: var(--space-8); flex: none; margin: var(--space-8) var(--space-12) var(--space-12);
+  padding: var(--space-8) var(--space-12); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-bg-canvas); }
+.app-pane-composer:focus-within { box-shadow: var(--shadow-focus-ring); }
+.app-pane-composer textarea { flex: 1; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; color: var(--color-fg-default); font: var(--text-body-small); resize: none; }
+.app-pane-composer textarea:focus-visible { box-shadow: none; }
+.app-pane-composer[aria-disabled="true"] { border-color: var(--color-border-subtle); }
+.app-pane-composer textarea:disabled::placeholder { color: var(--color-fg-disabled); }
+
+/* Narrower windows: below 1100px the pane lies over the content, at the body's right edge, with its close button; on
+   a phone the sidebar slides in over a scrim from the menu button, and a page's header stacks its actions under its
+   title. */
+@media (max-width: 1100px) {
+  .app-pane { position: fixed; z-index: 10; top: var(--size-topbar); right: 0; bottom: 0; box-shadow: var(--shadow-elevation-3); }
+  .app-pane-close { display: inline-flex; }
+}
+@media (max-width: 768px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .app-sidebar-slot { position: fixed; z-index: 30; top: 0; bottom: 0; left: 0; width: var(--size-sidebar); transform: translateX(-100%); }
+  .app.app-sidebar-open .app-sidebar-slot { transform: none; box-shadow: var(--shadow-elevation-3); }
+  .app.app-sidebar-open .app-scrim { display: block; position: fixed; z-index: 25; inset: 0; background: var(--color-bg-overlay); }
+  .app-sidebar-toggle { display: inline-flex; }
+  .app-topbar { padding: 0 var(--space-12) 0 var(--space-8); }
+  .app-content .page-header { flex-direction: column; align-items: stretch; }
+  .app-content { padding: var(--space-16); }
+  .app-pane { left: 0; width: auto; }
+}

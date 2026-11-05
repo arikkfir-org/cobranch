@@ -4,7 +4,8 @@ import { when } from "../../lib/format.js";
 import { roleSelect } from "../../lib/organization.js";
 import { base, me, roles } from "../../lib/state.js";
 
-export const nav = { label: "Members", order: 20 };
+export const nav = { label: "Members", order: 20, under: "settings" };
+export const crumbs = ({ root }) => [{ label: "Settings", href: root + "/settings" }, { label: "Members" }];
 export default ({ org, main, can }) => showMembers(org, main, can);
 
 async function showMembers(org, main, can) {
@@ -32,7 +33,7 @@ async function showMembers(org, main, can) {
     h("td", { class: "actions" }, m.userId === me.id
       ? h("button", { class: "button small danger", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/leave").then(() => location.replace(base)).catch(fail) }, "Leave")
       : manage ? h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId).then(refresh).catch(fail) }, "Remove") : null));
-  const sections = [h("h1", {}, "Members"), error,
+  const sections = [error,
     h("section", { class: "panel" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Member"), h("th", {}, "Roles"), h("th", {}, "Joined"), h("th", {}))), h("tbody", {}, members.map(memberRow))))];
   if (manage) {
     const email = h("input", { name: "email", type: "email", required: true, placeholder: "pat@example.com" });

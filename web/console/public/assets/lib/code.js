@@ -43,6 +43,14 @@ export async function repositoryFiles(org, repo, path, at, isFile, rest, can) {
   return [toolbar, ...shown];
 }
 
+// filesBranch is the branch whose files the parts of a directory's or a file's URL show, or null for a tag's or a
+// commit's: the conversation pane shows its chat (lib/pane.js).
+export async function filesBranch(path, parts) {
+  const [branches, tags] = await Promise.all([api("GET", path + "/branches").then((d) => d.branches), api("GET", path + "/tags").then((d) => d.tags)]);
+  const [ref] = splitRef(parts, [...branches.map((b) => b.name), ...tags.map((t) => t.name)]);
+  return branches.some((b) => b.name === ref) ? ref : null;
+}
+
 // splitRef splits the parts of a directory's or a file's URL into its ref and its path: by the longest branch or
 // tag name of names that its first parts make, or else its first part, main when there is none.
 function splitRef(parts, names) {
