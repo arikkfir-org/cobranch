@@ -1,3 +1,4 @@
+import { agentPage } from "../../lib/agent.js";
 import { api } from "../../lib/api.js";
 import { branchBadge } from "../../lib/branches.js";
 import { h } from "../../lib/dom.js";
@@ -128,7 +129,7 @@ function repositoriesCard(org, list, can) {
 // The states an agent at work shows, as its Tag says them, in the order the card lists them.
 const agentStates = [{ word: "Working", tone: "info" }, { word: "Watching", tone: "ai" }, { word: "Idle", tone: "neutral" }];
 
-// agentsCard is Agents at work: each agent as an Agent row, its name linked to its tasks over what it does now, and
+// agentsCard is Agents at work: each agent as an Agent row, its name linked to its page over what it does now, and
 // whether it works on a task, watches every push (a built-in agent with a model), or waits for a task.
 function agentsCard(org, agents, running, can) {
   const tasks = new Map();
@@ -140,7 +141,7 @@ function agentsCard(org, agents, running, can) {
   };
   const rows = agents.map((a) => ({ a, ...at(a) })).sort((x, y) => agentStates.indexOf(x.state) - agentStates.indexOf(y.state) || x.a.name.localeCompare(y.a.name));
   const row = ({ a, state, does }) => h("li", { class: "agent-row" }, avatar(a.name, true, 24), h("div", { class: "row-text" },
-    h("a", { class: "row-title", href: base + org.slug + "/tasks?" + new URLSearchParams({ agent: a.id }), "data-nav": "" }, a.name), h("span", { class: "row-meta" }, does)),
+    h("a", { class: "row-title", href: agentPage(org, a.id), "data-nav": "" }, a.name), h("span", { class: "row-meta" }, does)),
   h("span", { class: "tag tone-" + state.tone }, state.word));
   return card("Agents at work", null, rows.length ? h("ul", { class: "list" }, rows.map(row)) : h("div", { class: "card-body card-note activity-none" }, "No agent yet.",
     can("agents.create") ? h("a", { class: "btn btn-sm", href: base + org.slug + "/agents", "data-nav": "" }, "Make an agent") : null));
