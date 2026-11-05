@@ -250,7 +250,7 @@ may take.
   history: first-parent, from PostgreSQL, a page at a time, until [code browsing](code-browsing.md#history) follows
   every parent. Its **Access** page lists and changes its grants; its **Settings** page renames it.
 - **A commit's page** shows its message, author and committer with the principals behind them, its parents, and the push
-  that first brought it, with its pusher.
+  that first brought it, with its pusher and the branches it moved.
 - **As soon as the push returns.** The push's transaction committed before Git returned, so the next page load shows it;
   its commits' principals follow once the push worker has processed it. Live updates of an open page come with the web
   app's build-out, over the NOTIFY the architecture describes.
