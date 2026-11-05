@@ -43,7 +43,7 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
   const shown = repoPages.get(sub);
   const allowed = (m) => !m.allowed || m.allowed(can);
   const tabs = [...repoPages].filter(([, m]) => m.nav && allowed(m)).sort(([, a], [, b]) => a.nav.order - b.nav.order);
-  // A page shown under another's tab lights that tab, as a branch lights Branches and a file, a history and a commit
+  // A page shown under another's tab lights that tab, as a branch, a history and a commit light Branches and a file
   // Files.
   const tabOf = shown && shown.under !== undefined ? shown.under : sub;
   if (!tabs.some(([t]) => t === tabOf) || (shown.accepts && !shown.accepts(rest))) return go("/" + org.slug + "/" + repo.slug, true);
@@ -77,7 +77,7 @@ export async function showRepository(org, orgCan, orgCrumb, orgSubject, slug, su
 }
 
 // repoLinks makes the links of a repository's code: to the history of a ref, through every parent or along first
-// parents, or of a path in it, to a branch's page and to one of its tabs (lib/branches.js branchTabs), to a commit, to a run, to an
+// parents, or of a path in it, to a branch's page and to one of its tabs (lib/branches.js branchTabs), to a commit, to the runs at a commit, to a run, to an
 // environment, to a directory or a file at a ref, and to a file's bytes, which the REST API serves.
 export function repoLinks(org, repo) {
   const root = base + org.slug + "/" + repo.slug;
@@ -87,6 +87,7 @@ export function repoLinks(org, repo) {
     branchPage: (name, tab) => root + "/branches/" + parts(name) + (tab ? "?tab=" + tab : ""),
     changes: (name) => root + "/branches/" + parts(name) + "?tab=changes",
     commit: (sha) => root + "/commit/" + sha,
+    runs: (sha) => root + "/runs" + (sha ? "?" + new URLSearchParams({ sha }) : ""),
     run: (number) => root + "/runs/" + number,
     environment: (id) => root + "/environments/" + id,
     tree: (ref, path) => root + "/tree/" + parts(ref, path),

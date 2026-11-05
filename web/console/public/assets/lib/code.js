@@ -238,7 +238,7 @@ export function copyIcon(text, label) {
 }
 
 // empty is B's Empty state: an icon, a title, what it means, and an action, if any.
-const empty = (glyph, title, description, action) => h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon(glyph)),
+export const empty = (glyph, title, description, action) => h("div", { class: "empty" }, h("span", { class: "empty-icon" }, icon(glyph)),
   h("h2", { class: "empty-title" }, title), h("p", { class: "empty-description" }, description), action);
 
 // unreadable is the Empty state a page shows when the API couldn't read a directory or a file: what a ref or a path

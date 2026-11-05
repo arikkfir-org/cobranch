@@ -13,7 +13,7 @@ export const crumbs = ({ root, rest }) => [{ label: "Jobs", href: root + "/runs"
 // subject is a run's branch's conversation, on the run's page; a tag's run has none.
 export const subject = ({ org, repo, path, at, rest, can }) => rest.length ? api("GET", path + "/runs/" + encodeURIComponent(rest[0]))
   .then((r) => (r.ref.startsWith("refs/heads/") ? branchSubject(org, repo, path, at, r.ref.slice("refs/heads/".length), can) : null)) : null;
-export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryRun(path, at, rest[0], can, fail) : [await runsPanel(path, at, can, fail, "")];
+export default async ({ path, at, rest, can, fail }) => rest.length ? repositoryRun(path, at, rest[0], can, fail) : [await runsPanel(path, at, can, fail, new URLSearchParams(location.search).get("sha") || "")];
 
 // repositoryRun is a run's page: its state and why, its job, ref and commit, what queued it, who started it, when it
 // was queued, started and ended, its actions, and its job's definition as the run keeps it.
