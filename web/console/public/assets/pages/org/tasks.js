@@ -135,7 +135,7 @@ async function showTask(org, main, can, number) {
 
 // showTasks renders a page at a time of the organization's tasks, newest first, of the agent the URL's query names,
 // and in the states the viewer picks: each with its state, its agent, where it works, its assigner, and Cancel for
-// its assigner and for a viewer holding org.principals.manage.
+// its assigner and for a viewer holding org.principals.manage, unless it was asked in another's private conversation.
 async function showTasks(org, main, can) {
   const error = h("p", { class: "alert", hidden: true });
   const fail = (err) => { error.textContent = err.message; error.hidden = false; };
@@ -163,7 +163,7 @@ async function showTasks(org, main, can) {
     h("td", {}, hidden(t) ? h("span", { class: "muted" }, "Asked in private") : h("a", { href: base + org.slug + "/tasks/" + t.number, "data-nav": "" }, t.title),
       " ", h("span", { class: "muted" }, "#" + t.number),
       t.reason ? h("p", {}, capitalized(t.reason)) : null, t.summary ? h("p", {}, t.summary) : null, taskByline(org, t)),
-    h("td", { class: "actions" }, activeTask(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"))
+    h("td", { class: "actions" }, activeTask(t) && !hidden(t) && ((t.assignedBy && t.assignedBy.id === me.id) || can("org.principals.manage"))
       ? h("button", { class: "button small danger", type: "button", title: "Cancel #" + t.number, onclick: (e) => confirm("Cancel #" + t.number + ", " + t.title + "?") && cancel(t, e.currentTarget) }, "Cancel") : null));
   async function load(from) {
     older.disabled = true;
