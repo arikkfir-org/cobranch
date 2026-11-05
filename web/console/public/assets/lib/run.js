@@ -167,15 +167,19 @@ function stepRow(s, selected, open) {
   glyph, h("span", { class: "step-row-name" }, s.name), s.startedAt ? h("span", { class: "step-row-time" }, duration(s)) : null);
 }
 
-// notStarted is the Empty state of a run with no steps yet: it waits for a member, for the cluster or for its pod,
-// or it ended before it started.
+// notStarted is the Empty state of a run with no steps yet: it waits for a member, for the cluster or for its pod, it
+// ended after it started and its steps aren't kept yet, as a run cancelled while it ran until its pod is swept, or it
+// ended before it started.
 function notStarted(r) {
   const says = {
     waiting: "The run starts when a member starts it; its steps and logs appear here.",
     queued: "The run starts when the cluster takes it; its steps and logs appear here.",
     running: "The run's pod is starting; its steps and logs appear here.",
   }[r.state];
-  return says ? noRuns("clock", "No steps yet", says) : noRuns("ban", "No steps", "The run ended before it started" + (r.reason ? ": " + r.reason : "") + ".");
+  const why = r.reason ? ": " + r.reason : "";
+  if (says) return noRuns("clock", "No steps yet", says);
+  if (r.startedAt) return noRuns("clock", "No steps yet", "The run ended after it started" + why + ". Its steps and logs appear here once they're kept from its pod, which can take a few minutes.");
+  return noRuns("ban", "No steps", "The run ended before it started" + why + ".");
 }
 
 // stepLog is the card of a step's log (Log/Line): its name, how long it ran and how it exited, Live while it's read
