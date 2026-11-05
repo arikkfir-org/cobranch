@@ -2898,6 +2898,51 @@ type Organization struct {
 	ViewerPermissions []string `json:"viewerPermissions"`
 }
 
+// OrganizationOverview How an organization's work stands, and what it did over a period of days in a time zone. Amounts are US dollars, as decimals with at most six digits after the point, such as 42.18.
+type OrganizationOverview struct {
+	// Agents The organization's agents.
+	Agents int64 `json:"agents"`
+
+	// BlockedBranches Those that are Blocked.
+	BlockedBranches int64 `json:"blockedBranches"`
+
+	// ByRepository The repositories the viewer reads that saw anything in the period, costliest first.
+	ByRepository []OverviewRepository `json:"byRepository"`
+
+	// Days Every day of the period, first to last.
+	Days []OverviewDay `json:"days"`
+
+	// From The period's first day, such as 2026-11-01.
+	From string `json:"from"`
+
+	// Issues The organization's open issues, and those opened in the period; absent for a viewer who may not read its issues.
+	Issues *OverviewIssues `json:"issues,omitempty"`
+
+	// Members The organization's members.
+	Members int64 `json:"members"`
+
+	// QueuedTasks The tasks waiting for their agent.
+	QueuedTasks int64 `json:"queuedTasks"`
+
+	// ReadyBranches The live branches, but main, of the repositories the viewer reads that are Ready.
+	ReadyBranches int64 `json:"readyBranches"`
+
+	// Repositories The repositories the viewer reads.
+	Repositories int64 `json:"repositories"`
+
+	// To The period's last day.
+	To string `json:"to"`
+
+	// Totals What an organization, or one of its repositories, did over a span: the tasks queued, what its tasks' calls of their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute.
+	Totals OverviewFigures `json:"totals"`
+
+	// WorkingAgents The agents with a task running.
+	WorkingAgents int64 `json:"workingAgents"`
+
+	// Zone The time zone its days begin and end in.
+	Zone string `json:"zone"`
+}
+
 // OrganizationSettings What a manager changes; a field left out keeps its value.
 type OrganizationSettings struct {
 	AcceptsJoinRequests *bool `json:"acceptsJoinRequests,omitempty"`
@@ -2939,6 +2984,49 @@ type OrganizationUsage struct {
 
 	// Repositories Its repositories, every one of them.
 	Repositories Usage `json:"repositories"`
+}
+
+// OverviewDay One day of the period and its figures.
+type OverviewDay struct {
+	// Date The day, such as 2026-11-05.
+	Date       string `json:"date"`
+	JobMinutes int64  `json:"jobMinutes"`
+	Jobs       int64  `json:"jobs"`
+
+	// Spent In US dollars, such as 1.92.
+	Spent string `json:"spent"`
+	Tasks int64  `json:"tasks"`
+}
+
+// OverviewFigures What an organization, or one of its repositories, did over a span: the tasks queued, what its tasks' calls of their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute.
+type OverviewFigures struct {
+	JobMinutes int64 `json:"jobMinutes"`
+	Jobs       int64 `json:"jobs"`
+
+	// Spent In US dollars, such as 1.92.
+	Spent string `json:"spent"`
+	Tasks int64  `json:"tasks"`
+}
+
+// OverviewIssues The organization's open issues, and those opened in the period; absent for a viewer who may not read its issues.
+type OverviewIssues struct {
+	Open   int64 `json:"open"`
+	Opened int64 `json:"opened"`
+}
+
+// OverviewRepository One repository's share of the period's figures, with the commits first pushed to it and the branches merged into its main.
+type OverviewRepository struct {
+	Commits    int64 `json:"commits"`
+	JobMinutes int64 `json:"jobMinutes"`
+	Jobs       int64 `json:"jobs"`
+	Merged     int64 `json:"merged"`
+
+	// Repository The repository's slug.
+	Repository string `json:"repository"`
+
+	// Spent In US dollars, such as 1.92.
+	Spent string `json:"spent"`
+	Tasks int64  `json:"tasks"`
 }
 
 // PageView One view of a Console page, from the wait's start to the page drawn.
@@ -4236,6 +4324,21 @@ type SetModelParams struct {
 	IfNoneMatch *IfNoneMatchModel `json:"If-None-Match,omitempty"`
 }
 
+// GetOrganizationOverviewParams defines parameters for GetOrganizationOverview.
+type GetOrganizationOverviewParams struct {
+	// From The period's first day, such as 2026-11-01; the first day of to's month when absent.
+	From *string `form:"from,omitempty" json:"from,omitempty"`
+
+	// To The period's last day, such as 2026-11-30, at most 92 days from from; today in the zone when absent.
+	To *string `form:"to,omitempty" json:"to,omitempty"`
+
+	// Zone The IANA time zone the days begin and end in, such as Asia/Jerusalem; UTC when absent.
+	Zone *string `form:"zone,omitempty" json:"zone,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
 // GrantRepositoryRoleJSONBody defines parameters for GrantRepositoryRole.
 type GrantRepositoryRoleJSONBody struct {
 	RoleId openapi_types.UUID `json:"roleId"`
@@ -5170,6 +5273,9 @@ type ServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(w http.ResponseWriter, r *http.Request, org Org, provider Provider, model ModelName, params SetModelParams)
+	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+	// (GET /orgs/{org}/overview)
+	GetOrganizationOverview(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationOverviewParams)
 	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(w http.ResponseWriter, r *http.Request, org Org)
@@ -10329,6 +10435,95 @@ func (siw *ServerInterfaceWrapper) SetModel(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetModel(w, r, org, provider, model, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganizationOverview operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganizationOverview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOrganizationOverviewParams
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "from", r.URL.Query(), &params.From, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "from"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "to" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "to", r.URL.Query(), &params.To, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "to"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "to", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "zone" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "zone", r.URL.Query(), &params.Zone, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "zone"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "zone", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganizationOverview(w, r, org, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15894,6 +16089,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrganization)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrganization)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/usage", wrapper.GetOrganizationUsage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/overview", wrapper.GetOrganizationOverview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/attention", wrapper.ListOrganizationAttention)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/activity", wrapper.ListOrganizationActivity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/leave", wrapper.LeaveOrganization)
@@ -27173,6 +27369,112 @@ func (response SetModeldefaultApplicationProblemPlusJSONResponse) VisitSetModelR
 	return err
 }
 
+type GetOrganizationOverviewRequestObject struct {
+	Org    Org `json:"org"`
+	Params GetOrganizationOverviewParams
+}
+
+type GetOrganizationOverviewResponseObject interface {
+	VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error
+}
+
+type GetOrganizationOverview200ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationOverview200JSONResponse struct {
+	Body    OrganizationOverview
+	Headers GetOrganizationOverview200ResponseHeaders
+}
+
+func (response GetOrganizationOverview200JSONResponse) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationOverview304ResponseHeaders struct {
+	ETag string
+}
+
+type GetOrganizationOverview304Response struct {
+	Headers GetOrganizationOverview304ResponseHeaders
+}
+
+func (response GetOrganizationOverview304Response) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetOrganizationOverview400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetOrganizationOverview400ApplicationProblemPlusJSONResponse) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationOverview401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationOverview401ApplicationProblemPlusJSONResponse) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationOverview404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetOrganizationOverview404ApplicationProblemPlusJSONResponse) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetOrganizationOverviewdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetOrganizationOverviewdefaultApplicationProblemPlusJSONResponse) VisitGetOrganizationOverviewResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRepositoriesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -37818,6 +38120,9 @@ type StrictServerInterface interface {
 	// SetModel Adds a model of a provider the organization added to its models, with what it costs, under If-None-Match: *; or changes one of them, under If-Match. Takes org.manage. Making it the default, which a new agent starts on, makes the one before it no longer so. A provider the organization hasn't added answers 400 model.provider_invalid, a price past $10000 per million tokens 400 model.price_invalid, and a request with neither header 428.
 	// (PUT /orgs/{org}/models/{provider}/{model})
 	SetModel(ctx context.Context, request SetModelRequestObject) (SetModelResponseObject, error)
+	// GetOrganizationOverview How the organization's work stands, and what it did over a period of days in a time zone: its members, repositories and agents, its open issues and those opened in the period, its Ready and Blocked branches, its agents at work and tasks queued, the period's totals and each of its days, and each repository's share. Takes org.read. Branches and repositories are those the viewer reads, and issues show only to a viewer holding issues.read; the days count every task and job run of the organization, as its usage counts every repository.
+	// (GET /orgs/{org}/overview)
+	GetOrganizationOverview(ctx context.Context, request GetOrganizationOverviewRequestObject) (GetOrganizationOverviewResponseObject, error)
 	// ListRepositories The organization's repositories the viewer reads, by slug, each with its summary; takes org.read.
 	// (GET /orgs/{org}/repos)
 	ListRepositories(ctx context.Context, request ListRepositoriesRequestObject) (ListRepositoriesResponseObject, error)
@@ -41400,6 +41705,33 @@ func (sh *strictHandler) SetModel(w http.ResponseWriter, r *http.Request, org Or
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(SetModelResponseObject); ok {
 		if err := validResponse.VisitSetModelResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetOrganizationOverview operation middleware
+func (sh *strictHandler) GetOrganizationOverview(w http.ResponseWriter, r *http.Request, org Org, params GetOrganizationOverviewParams) {
+	var request GetOrganizationOverviewRequestObject
+
+	request.Org = org
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetOrganizationOverview(ctx, request.(GetOrganizationOverviewRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetOrganizationOverview")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetOrganizationOverviewResponseObject); ok {
+		if err := validResponse.VisitGetOrganizationOverviewResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

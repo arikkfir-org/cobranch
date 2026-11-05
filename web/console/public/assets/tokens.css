@@ -179,6 +179,7 @@
   --radius-lg: 8px; /* Cards, menus, popovers */
   --radius-xl: 12px; /* Dialogs, large panels */
   --radius-full: 999px; /* Pills and person avatars */
+  --radius-xs: 2px; /* Chart bars and other hairline rounding. */
 
   /* Text styles */
   --text-display: 600 30px/36px var(--font-sans);

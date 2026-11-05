@@ -1281,6 +1281,40 @@ type Organization struct {
 	Secrets []*Secret `json:"secrets"`
 	// What the organization takes of what its limits cap, with the Git data of each of its repositories the viewer reads; takes org.read. The totals count every repository, those the viewer doesn't read too.
 	Usage *OrganizationUsage `json:"usage"`
+	// How the organization's work stands, and what it did over the days from from to to, both included, written as 2026-11-01, in the IANA time zone zone: to is today there when absent, from the first day of to's month, and zone UTC. At most 92 days; takes org.read. Branches and repositories are those the viewer reads, issues show only to a viewer holding issues.read, and the days count every task and job run of the organization, as its usage counts every repository.
+	Overview *OrganizationOverview `json:"overview"`
+}
+
+// How an organization's work stands, and what it did over a period of days in a time zone. Amounts are US dollars, as decimals such as 42.18.
+type OrganizationOverview struct {
+	// The period's first day, such as 2026-11-01.
+	From string `json:"from"`
+	// The period's last day.
+	To string `json:"to"`
+	// The time zone its days begin and end in.
+	Zone string `json:"zone"`
+	// The organization's members.
+	Members int64 `json:"members"`
+	// The repositories the viewer reads.
+	Repositories int64 `json:"repositories"`
+	// The organization's agents.
+	Agents int64 `json:"agents"`
+	// Its open issues, and those opened in the period; null for a viewer who may not read its issues.
+	Issues *OverviewIssues `json:"issues,omitempty"`
+	// The live branches, but main, of the repositories the viewer reads that are Ready.
+	ReadyBranches int64 `json:"readyBranches"`
+	// Those that are Blocked.
+	BlockedBranches int64 `json:"blockedBranches"`
+	// The agents with a task running.
+	WorkingAgents int64 `json:"workingAgents"`
+	// The tasks waiting for their agent.
+	QueuedTasks int64 `json:"queuedTasks"`
+	// The period's totals.
+	Totals *OverviewFigures `json:"totals"`
+	// Every day of the period, first to last.
+	Days []*OverviewDay `json:"days"`
+	// The repositories the viewer reads that saw anything in the period, costliest first.
+	ByRepository []*OverviewRepository `json:"byRepository"`
 }
 
 type OrganizationSettings struct {
@@ -1316,6 +1350,45 @@ type OrganizationUsage struct {
 	GitData *Usage `json:"gitData"`
 	// The repositories the viewer reads, by slug, each with its Git data.
 	ByRepository []*RepositoryUsage `json:"byRepository"`
+}
+
+// One day of a period and what the organization did then.
+type OverviewDay struct {
+	// The day, such as 2026-11-05.
+	Date  string `json:"date"`
+	Tasks int64  `json:"tasks"`
+	// In US dollars, such as 1.92.
+	Spent      string `json:"spent"`
+	JobMinutes int64  `json:"jobMinutes"`
+	Jobs       int64  `json:"jobs"`
+}
+
+// What an organization did over a span: the tasks queued, what its tasks' calls of their models cost, and its job runs that ended, with the minutes they ran, each rounded up to a minute.
+type OverviewFigures struct {
+	Tasks int64 `json:"tasks"`
+	// In US dollars, such as 1.92.
+	Spent      string `json:"spent"`
+	JobMinutes int64  `json:"jobMinutes"`
+	Jobs       int64  `json:"jobs"`
+}
+
+// An organization's open issues, and those opened in a period.
+type OverviewIssues struct {
+	Open   int64 `json:"open"`
+	Opened int64 `json:"opened"`
+}
+
+// One repository's share of a period's figures, with the commits first pushed to it and the branches merged into its main.
+type OverviewRepository struct {
+	// The repository's slug.
+	Repository string `json:"repository"`
+	Commits    int64  `json:"commits"`
+	Merged     int64  `json:"merged"`
+	Tasks      int64  `json:"tasks"`
+	// In US dollars, such as 1.92.
+	Spent      string `json:"spent"`
+	JobMinutes int64  `json:"jobMinutes"`
+	Jobs       int64  `json:"jobs"`
 }
 
 // The path of every file and symlink in a commit's tree, without its submodules'.

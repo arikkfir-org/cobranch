@@ -7,6 +7,10 @@ package graphql
 
 import (
 	"context"
+	"time"
+
+	"cobranch.dev/internal/services/overview"
+	"github.com/google/uuid"
 )
 
 // Usage is the resolver for the usage field.
@@ -16,6 +20,21 @@ func (r *organizationResolver) Usage(ctx context.Context, obj *Organization) (*O
 		return nil, err
 	}
 	return organizationUsage(usage), nil
+}
+
+// Overview is the resolver for the overview field.
+func (r *organizationResolver) Overview(ctx context.Context, obj *Organization, from *string, to *string, zone *string) (*OrganizationOverview, error) {
+	p, err := overview.PeriodIn(orEmpty(from), orEmpty(to), orEmpty(zone), time.Now())
+	if err != nil {
+		return nil, fail(ctx, err, "organization", "reading the period")
+	}
+	o, err := resolveOrg(ctx, obj, func(ctx context.Context, v overview.Viewer, orgID uuid.UUID) (overview.Overview, error) {
+		return r.Resolver.Overview.Overview(ctx, v, orgID, p)
+	}, "reading the organization's overview")
+	if err != nil {
+		return nil, err
+	}
+	return organizationOverview(o), nil
 }
 
 // Usage is the resolver for the usage field.
