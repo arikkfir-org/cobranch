@@ -12,9 +12,9 @@
 .card-header a.card-meta { color: var(--color-fg-link); font: var(--text-body-small); text-decoration: none; }
 
 .fact-rows { margin: 0; padding: var(--space-4) 0; }
-.fact-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-16); }
-.fact-row dt { color: var(--color-fg-muted); font: var(--text-body-small); }
-.fact-row dd { min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-body-small); }
+.fact-rows .fact-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: var(--space-12); padding: var(--space-8) var(--space-16); }
+.fact-rows .fact-row dt { color: var(--color-fg-muted); font: var(--text-body-small); }
+.fact-rows .fact-row dd { min-width: 0; margin: 0; color: var(--color-fg-default); font: var(--text-body-small); }
 .fact-row-tags { display: flex; flex-wrap: wrap; gap: var(--space-4); }
 .fact-row-mono { display: block; overflow: hidden; color: var(--color-fg-muted); font: var(--text-code-small); text-overflow: ellipsis; white-space: nowrap; }
 
