@@ -1,0 +1,13 @@
+/* The patterns the organization's lists share on their Figma screens (Repositories, Issues, Settings · Members): the
+   Filters row over a list, its 320px search Input on the left and its controls and count on the right, and table cells
+   that hold a number or a row's trailing actions. Tokens only; the components inside are components.css's. */
+.filters { display: flex; align-items: center; gap: var(--space-12); min-width: 0; }
+.filters > .input { flex: 0 1 320px; }
+.filters-space { flex: 1; }
+.filters-count { flex: none; color: var(--color-fg-muted); font: var(--text-caption); white-space: nowrap; }
+.table :is(th, td).cell-number { text-align: right; white-space: nowrap; }
+.table td.cell-actions { width: 1%; text-align: right; white-space: nowrap; }
+@media (max-width: 768px) {
+  .filters { flex-wrap: wrap; }
+  .filters > .input { flex-basis: 100%; }
+}

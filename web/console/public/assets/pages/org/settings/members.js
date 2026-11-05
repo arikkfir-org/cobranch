@@ -1,57 +1,119 @@
-import { api } from "../../lib/api.js";
-import { h } from "../../lib/dom.js";
-import { when } from "../../lib/format.js";
-import { roleSelect } from "../../lib/organization.js";
-import { base, me, roles } from "../../lib/state.js";
+import { api } from "../../../lib/api.js";
+import { openDialog } from "../../../lib/dialog.js";
+import { h } from "../../../lib/dom.js";
+import { failure, field, input, selectBox } from "../../../lib/forms.js";
+import { ago, when } from "../../../lib/format.js";
+import { avatar, icon } from "../../../lib/icons.js";
+import { popover } from "../../../lib/menu.js";
+import { roleSelect } from "../../../lib/organization.js";
+import { base, me, roles } from "../../../lib/state.js";
 
-export const nav = { label: "Members", order: 20, under: "settings" };
-export const crumbs = ({ root }) => [{ label: "Settings", href: root + "/settings" }, { label: "Members" }];
-export default ({ org, main, can }) => showMembers(org, main, can);
+export const tab = { label: "Members", order: 10 };
+export const count = ({ org }) => api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members.length);
+export const view = "organization.members";
+export default ({ org, main, can, actions }) => showMembers(org, main, can, actions);
 
-async function showMembers(org, main, can) {
+// joined is the month a member joined, as their row says it.
+const joined = (at) => "Joined " + new Date(at).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+
+// showMembers lists the organization's members, and, for a viewer with org.members.manage, the people it invited, who
+// show among them until they accept, and the requests to join above them; with org.grants.manage each member's roles
+// change from their row.
+async function showMembers(org, main, can, actions) {
   const manage = can("org.members.manage");
   const grants = can("org.grants.manage");
-  const error = h("p", { class: "alert", hidden: true });
-  const fail = (err) => { error.textContent = err.message; error.hidden = false; };
-  const refresh = () => showMembers(org, main, can);
-  // A member's roles: with org.grants.manage, each revocable, and the roles they lack grantable.
-  const rolesOf = (m) => {
-    const held = m.roles.map((r) => h("span", { class: "chip" }, r.name, grants
-      ? h("button", { type: "button", title: "Revoke " + r.name, onclick: () => api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId + "/roles/" + r.id).then(refresh).catch(fail) }, "×") : null));
-    const missing = roles.filter((r) => !m.roles.some((held) => held.id === r.id));
-    if (!grants || !missing.length) return held;
-    const pick = h("select", {}, missing.map((r) => h("option", { value: r.id }, r.name)));
-    return [held, h("span", { class: "grant" }, pick, h("button", { class: "button small", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/members/" + m.userId + "/roles", { roleId: pick.value }).then(refresh).catch(fail) }, "Grant"))];
-  };
+  const error = failure();
+  const refresh = () => showMembers(org, main, can, actions);
+  const act = (call) => call.then(refresh).catch(error.fail);
   const [members, invitations, requests] = await Promise.all([
     api("GET", "/orgs/" + org.slug + "/members").then((d) => d.members),
     manage ? api("GET", "/orgs/" + org.slug + "/invitations").then((d) => d.invitations) : [],
     manage ? api("GET", "/orgs/" + org.slug + "/join-requests").then((d) => d.joinRequests) : [],
   ]);
-  const memberRow = (m) => h("tr", {}, h("td", {}, m.displayName, m.userId === me.id ? h("span", { class: "chip" }, "you") : null),
-    h("td", {}, rolesOf(m)), h("td", {}, when(m.joinedAt)),
-    h("td", { class: "actions" }, m.userId === me.id
-      ? h("button", { class: "button small danger", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/leave").then(() => location.replace(base)).catch(fail) }, "Leave")
-      : manage ? h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId).then(refresh).catch(fail) }, "Remove") : null));
-  const sections = [error,
-    h("section", { class: "panel" }, h("table", {}, h("thead", {}, h("tr", {}, h("th", {}, "Member"), h("th", {}, "Roles"), h("th", {}, "Joined"), h("th", {}))), h("tbody", {}, members.map(memberRow))))];
-  if (manage) {
-    const email = h("input", { name: "email", type: "email", required: true, placeholder: "pat@example.com" });
-    const role = roleSelect(org.membershipRoleId);
-    const inviteLink = (inv) => location.origin + base + "invitations#" + inv.id;
-    sections.push(h("section", { class: "panel" }, h("h3", {}, "Invitations"),
-      h("form", { class: "inline with-role", onsubmit: (e) => { e.preventDefault(); api("POST", "/orgs/" + org.slug + "/invitations", { email: email.value, roleId: role.value }).then(refresh).catch(fail); } },
-        h("label", {}, "Email", email), h("label", {}, "Role", role), h("button", { class: "button primary", type: "submit" }, "Invite")),
-      invitations.length ? h("table", {}, h("tbody", {}, invitations.map((inv) => h("tr", {}, h("td", {}, inv.email), h("td", {}, h("span", { class: "chip" }, inv.roleName || "?")), h("td", {}, "until " + when(inv.expiresAt)),
-        h("td", { class: "actions" }, h("button", { class: "button small", type: "button", onclick: (e) => navigator.clipboard.writeText(inviteLink(inv)).then(() => { e.target.textContent = "Copied"; }).catch(() => {}) }, "Copy link"), " ",
-          h("button", { class: "button small danger", type: "button", onclick: () => api("DELETE", "/orgs/" + org.slug + "/invitations/" + inv.id).then(refresh).catch(fail) }, "Cancel")))))) : h("p", {}, "No pending invitations. An invitee signs in with the email you invite, and accepts it on their welcome page.")));
-    sections.push(h("section", { class: "panel" }, h("h3", {}, "Join requests"),
-      requests.length ? h("table", {}, h("tbody", {}, requests.map((r) => {
-        const role = roleSelect(org.membershipRoleId);
-        return h("tr", {}, h("td", {}, r.userName, r.note ? h("p", {}, r.note) : null), h("td", {}, role), h("td", {}, "until " + when(r.expiresAt)),
-          h("td", { class: "actions" }, h("button", { class: "button small primary", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/approve", { roleId: role.value }).then(refresh).catch(fail) }, "Approve"), " ",
-            h("button", { class: "button small", type: "button", onclick: () => api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/decline").then(refresh).catch(fail) }, "Decline")));
-      }))) : h("p", {}, org.acceptsJoinRequests ? "Nobody is asking to join." : "This organization doesn't accept join requests; its settings turn them on.")));
-  }
-  main.replaceChildren(...sections);
+  actions.replaceChildren(manage ? h("button", { class: "btn btn-primary", type: "button", onclick: () => invite(org, refresh) }, icon("plus"), "Invite people") : "");
+  const membership = roles.find((r) => r.id === org.membershipRoleId);
+
+  // rolesButton is a member's roles, a ghost button that opens them as a menu to grant and revoke for a viewer with
+  // org.grants.manage, and their names otherwise.
+  const rolesButton = (m) => {
+    const names = m.roles.map((r) => r.name).join(", ") || "No role";
+    if (!grants) return h("span", { class: "row-aside" }, names);
+    const button = h("button", { class: "btn btn-ghost btn-sm", type: "button", "aria-haspopup": "menu", title: "The roles " + m.displayName + " holds" }, names, icon("chevron-down"));
+    button.addEventListener("click", () => popover(button, "end", (close) => roles.map((r) => {
+      const held = m.roles.some((x) => x.id === r.id);
+      return h("button", { class: "menu-item", type: "button", role: "menuitemcheckbox", "aria-checked": String(held), title: r.description || null, onclick: () => {
+        close();
+        act(held ? api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId + "/roles/" + r.id)
+          : api("POST", "/orgs/" + org.slug + "/members/" + m.userId + "/roles", { roleId: r.id }));
+      } }, h("span", {}, r.name));
+    })));
+    return button;
+  };
+  // more is a row's menu of what else the viewer may do with it, or nothing when there is none.
+  const more = (label, items) => {
+    if (!items.length) return null;
+    const button = h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-haspopup": "menu", "aria-label": label, title: label }, icon("ellipsis"));
+    button.addEventListener("click", () => popover(button, "end", (close) => items.map(([word, glyph, run, danger]) =>
+      h("button", { class: "menu-item" + (danger ? " menu-item-danger" : ""), type: "button", role: "menuitem", onclick: (e) => { close(); run(e); } }, icon(glyph), h("span", {}, word)))));
+    return button;
+  };
+  const text = (title, meta) => h("div", { class: "row-text" }, h("span", { class: "row-title" }, title), meta ? h("span", { class: "row-meta" }, meta) : null);
+  const memberRow = (m) => h("li", { class: "member-row", "data-filter": m.displayName.toLowerCase() },
+    avatar(m.displayName, false, 32), text(m.displayName, m.userId === me.id ? "You" : null), h("span", { class: "row-aside" }, joined(m.joinedAt)), rolesButton(m),
+    more("More for " + m.displayName, m.userId === me.id
+      ? [["Leave " + org.name, "log-out", () => leave(org), true]]
+      : manage ? [["Remove from " + org.name, "trash-2", () => remove(org, m, refresh), true]] : []));
+  const inviteLink = (inv) => location.origin + base + "invitations#" + inv.id;
+  const invitationRow = (inv) => h("li", { class: "member-row", "data-filter": inv.email.toLowerCase() },
+    avatar(inv.email, false, 32), text(inv.email, "Invited " + ago(inv.createdAt) + " · until " + when(inv.expiresAt)), h("span", { class: "row-aside" }, "Invited · pending"),
+    h("span", { class: "row-aside" }, inv.roleName || "A role since gone"),
+    more("More for the invitation of " + inv.email, [
+      ["Copy the invitation's link", "link", () => navigator.clipboard.writeText(inviteLink(inv)).catch(error.fail)],
+      ["Cancel the invitation", "x", () => act(api("DELETE", "/orgs/" + org.slug + "/invitations/" + inv.id)), true]]));
+  const requestBanner = (r) => h("div", { class: "banner banner-info" }, avatar(r.userName, false, 32),
+    h("div", { class: "banner-text" }, h("span", { class: "banner-title" }, r.userName + " asked to join " + org.name),
+      h("p", {}, [r.note, ago(r.createdAt), "until " + when(r.expiresAt)].filter(Boolean).join(" · "))),
+    h("button", { class: "btn btn-ghost btn-sm", type: "button", onclick: () => act(api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/decline")) }, "Decline"),
+    h("button", { class: "btn btn-sm", type: "button", onclick: () => act(api("POST", "/orgs/" + org.slug + "/join-requests/" + r.id + "/approve", { roleId: org.membershipRoleId })) },
+      "Approve as " + (membership ? membership.name : "a member")));
+
+  const rows = [...members.map(memberRow), ...invitations.map(invitationRow)];
+  const counted = h("span", { class: "filters-count" });
+  const list = h("ul", { class: "list" }, rows);
+  const none = h("p", { class: "filters-count", hidden: true }, "Nobody matches.");
+  const filter = h("input", { type: "search", "aria-label": "Filter by name or email", placeholder: "Filter by name or email", oninput: () => {
+    const q = filter.value.trim().toLowerCase();
+    const shown = rows.filter((r) => { r.hidden = !!q && !r.dataset.filter.includes(q); return !r.hidden; }).length;
+    list.hidden = !shown;
+    none.hidden = !!shown;
+  } });
+  counted.textContent = members.length + (members.length === 1 ? " member" : " members") + (invitations.length ? " · " + invitations.length + " invited" : "");
+  main.replaceChildren(error.el, ...requests.map(requestBanner),
+    h("div", { class: "filters" }, h("div", { class: "input" }, icon("search"), filter), h("span", { class: "filters-space" }), counted),
+    list, none);
+}
+
+// invite asks for an email and a role, and invites them: the invitee accepts it once they sign in with that email,
+// verified, or through the link its row copies.
+function invite(org, refresh) {
+  const email = input({ name: "email", type: "email", required: true, placeholder: "pat@example.com", autocomplete: "off" });
+  const role = roleSelect(org.membershipRoleId);
+  openDialog({ title: "Invite people", action: "Invite",
+    body: [field("Email", email, "They accept on their welcome page once they sign in with it, or through the invitation's link."), field("Role", selectBox(role))],
+    submit: () => api("POST", "/orgs/" + org.slug + "/invitations", { email: email.value, roleId: role.value }).then(refresh) });
+  email.focus();
+}
+
+// remove asks before it removes a member, and what they held here, from the organization.
+function remove(org, m, refresh) {
+  openDialog({ title: "Remove " + m.displayName + "?", action: "Remove", danger: true,
+    body: h("p", {}, m.displayName + " loses every role they hold in " + org.name + " and its repositories. They can be invited again."),
+    submit: () => api("DELETE", "/orgs/" + org.slug + "/members/" + m.userId).then(refresh) });
+}
+
+// leave asks before the viewer leaves the organization, then opens the Console's home.
+function leave(org) {
+  openDialog({ title: "Leave " + org.name + "?", action: "Leave", danger: true,
+    body: h("p", {}, "You lose every role you hold in " + org.name + " and its repositories. Someone who manages its members can invite you again."),
+    submit: () => api("POST", "/orgs/" + org.slug + "/leave").then(() => location.replace(base)) });
 }
