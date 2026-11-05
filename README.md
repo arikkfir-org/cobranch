@@ -135,7 +135,7 @@ repositories and tag `dev`:
 ```bash
 docker build --build-arg VERSION=dev -t registry.example.com/cobranch:dev .
 docker build -t registry.example.com/cobranch-console:dev web/console
-docker build -t registry.example.com/cobranch-back-office:dev web/back-office
+docker build -t registry.example.com/cobranch-back-office:dev -f web/back-office/Dockerfile web
 docker push registry.example.com/cobranch:dev && docker push registry.example.com/cobranch-console:dev
 docker push registry.example.com/cobranch-back-office:dev
 ```

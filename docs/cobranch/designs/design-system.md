@@ -448,7 +448,8 @@ The Figma file is the source of truth, and the Console follows it, never leads.
    [`tokens.css`](https://github.com/arikkfir-org/cobranch/blob/main/web/console/public/assets/tokens.css) from it;
    nobody edits `tokens.css` by hand, and CI fails when it differs from the export. A pull request that changes it names
    the Figma change it carries. The steps are in the tools'
-   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md).
+   [README](https://github.com/arikkfir-org/cobranch/blob/main/web/console/tools/README.md). The Back-office's image
+   takes the Console's `tokens.css`, typefaces and marks when it is built, so one export reaches both.
 3. **Components map one to one.** Each Figma component is one class of the Console's component stylesheet, named after
    it. A page composes those classes and writes no component CSS of its own, so a component fix reaches every page.
 4. **Screens are the acceptance test.** A page group is done when the Console matches its Figma screen at 1440 wide,
