@@ -131,6 +131,12 @@ func newOrgFixture() *orgFixture {
 	f.addChats()
 	f.addAgents()
 	f.commitObjects()
+	f.addIssues(store)
+	return f
+}
+
+// addIssues gives the fixture the issues service, over Acme's website and its agent Scout.
+func (f *orgFixture) addIssues(store *orgstest.Store) {
 	f.issueStore = issuestest.NewStore(store)
 	f.issueStore.Repos[f.website.ID] = f.website
 	f.issueStore.Agents[f.scout.ID] = f.acme.ID
@@ -138,7 +144,6 @@ func newOrgFixture() *orgFixture {
 	store.AddUser(f.scout.ID, f.scout.Name)
 	f.issues = issues.NewService(f.issueStore, markdown.New(nil, nil), auth.NewAuthorizer(store)).WithAgents(f.agents, f.agentStore)
 	f.issues.SetClock(func() time.Time { return now })
-	return f
 }
 
 // logged is a log's entry for the commit letter names, with the parents its other letters name.
