@@ -3381,6 +3381,27 @@ type Tree struct {
 	Sha string `json:"sha"`
 }
 
+// TreeCommits What last changed a directory at a commit. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest.
+type TreeCommits struct {
+	// Commit The commit the ref resolved to.
+	Commit string `json:"commit"`
+
+	// Commits Every commit latest and entries name, once, the most recently committed first.
+	Commits []Commit `json:"commits"`
+
+	// Count How many commits reachable from the commit changed the directory, every commit for the root.
+	Count int `json:"count"`
+
+	// Entries The latest commit that changed each of the directory's entries, by the entry's name, each one of commits.
+	Entries map[string]string `json:"entries"`
+
+	// Latest The latest commit that changed the directory, one of commits.
+	Latest *string `json:"latest,omitempty"`
+
+	// Path The directory's path from the repository's root; empty for the root.
+	Path string `json:"path"`
+}
+
 // TreeEntry One of a directory's entries.
 type TreeEntry struct {
 	// Kind A directory, a file, a symlink, or a submodule, which pins a commit of another repository.
@@ -4033,7 +4054,10 @@ type ListCommitsParams struct {
 	// Ref Where the history starts instead of branch: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
 	Ref *string `form:"ref,omitempty" json:"ref,omitempty"`
 
-	// Parents Which parents of each commit the history follows, the first alone or every one.
+	// Path A file's or a directory's path from the repository's root, as names separated by /, whose history the page lists: the commits that changed what is there, every parent followed. A path's history takes parents=all or none, and parents=first is 400 parents.path.
+	Path *string `form:"path,omitempty" json:"path,omitempty"`
+
+	// Parents Which parents of each commit the history follows, the first alone or every one; every one for a path's.
 	Parents *ListCommitsParamsParents `form:"parents,omitempty" json:"parents,omitempty"`
 
 	// Cursor Where the page starts, as the previous page's Link names it, in place of branch and ref; the start's commit when left out. Opaque: every parent's cursor holds the commit the first page started from, so later pages hold still while the branch moves on.
@@ -4198,6 +4222,18 @@ type GetRunParams struct {
 
 // GetTreeParams defines parameters for GetTree.
 type GetTreeParams struct {
+	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
+	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
+
+	// Path The directory's path from the repository's root, as names separated by /; empty for the root.
+	Path *Path `form:"path,omitempty" json:"path,omitempty"`
+
+	// IfNoneMatch The ETag of the answer the caller holds; while it is still theirs, the answer is 304.
+	IfNoneMatch *IfNoneMatch `json:"If-None-Match,omitempty"`
+}
+
+// GetTreeCommitsParams defines parameters for GetTreeCommits.
+type GetTreeCommitsParams struct {
 	// Ref The commit to read: a branch's or a tag's name, without refs/heads/ or refs/tags/, or a commit's full name. A full name is tried first, then a branch, then a tag.
 	Ref *Ref `form:"ref,omitempty" json:"ref,omitempty"`
 
@@ -4915,7 +4951,7 @@ type ServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(w http.ResponseWriter, r *http.Request, org Org, repo Repo, branchName BranchName)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params ListCommitsParams)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -5044,6 +5080,9 @@ type ServerInterface interface {
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeParams)
+	// GetTreeCommits What last changed the directory at a path of the commit a ref names, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/tree/commits)
+	GetTreeCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeCommitsParams)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(w http.ResponseWriter, r *http.Request, org Org)
@@ -11486,6 +11525,19 @@ func (siw *ServerInterfaceWrapper) ListCommits(w http.ResponseWriter, r *http.Re
 		return
 	}
 
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
 	// ------------- Optional query parameter "parents" -------------
 
 	err = runtime.BindQueryParameterWithOptions("form", true, false, "parents", r.URL.Query(), &params.Parents, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
@@ -13957,6 +14009,91 @@ func (siw *ServerInterfaceWrapper) GetTree(w http.ResponseWriter, r *http.Reques
 	handler.ServeHTTP(w, r)
 }
 
+// GetTreeCommits operation middleware
+func (siw *ServerInterfaceWrapper) GetTreeCommits(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "repo" -------------
+	var repo Repo
+
+	err = runtime.BindStyledParameterWithOptions("simple", "repo", r.PathValue("repo"), &repo, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "repo", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetTreeCommitsParams
+
+	// ------------- Optional query parameter "ref" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "ref", r.URL.Query(), &params.Ref, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "ref"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		}
+		return
+	}
+
+	// ------------- Optional query parameter "path" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "path", r.URL.Query(), &params.Path, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		var requiredError *runtime.RequiredParameterError
+		if errors.As(err, &requiredError) {
+			siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "path"})
+		} else {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "path", Err: err})
+		}
+		return
+	}
+
+	headers := r.Header
+
+	// ------------- Optional header parameter "If-None-Match" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("If-None-Match")]; found {
+		var IfNoneMatch IfNoneMatch
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "If-None-Match", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "If-None-Match", valueList[0], &IfNoneMatch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "If-None-Match", Err: err})
+			return
+		}
+
+		params.IfNoneMatch = &IfNoneMatch
+
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTreeCommits(w, r, org, repo, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRoles operation middleware
 func (siw *ServerInterfaceWrapper) ListRoles(w http.ResponseWriter, r *http.Request) {
 
@@ -15369,6 +15506,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/events", wrapper.PostEvent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tags", wrapper.ListTags)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree", wrapper.GetTree)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/tree/commits", wrapper.GetTreeCommits)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/blob", wrapper.GetBlob)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/repos/{repo}/raw", wrapper.GetRaw)
 
@@ -33823,6 +33961,127 @@ func (response GetTreedefaultApplicationProblemPlusJSONResponse) VisitGetTreeRes
 	return err
 }
 
+type GetTreeCommitsRequestObject struct {
+	Org    Org  `json:"org"`
+	Repo   Repo `json:"repo"`
+	Params GetTreeCommitsParams
+}
+
+type GetTreeCommitsResponseObject interface {
+	VisitGetTreeCommitsResponse(w http.ResponseWriter) error
+}
+
+type GetTreeCommits200ResponseHeaders struct {
+	ETag string
+}
+
+type GetTreeCommits200JSONResponse struct {
+	Body    TreeCommits
+	Headers GetTreeCommits200ResponseHeaders
+}
+
+func (response GetTreeCommits200JSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(200)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits304ResponseHeaders struct {
+	ETag string
+}
+
+type GetTreeCommits304Response struct {
+	Headers GetTreeCommits304ResponseHeaders
+}
+
+func (response GetTreeCommits304Response) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+	w.Header().Set("ETag", fmt.Sprint(response.Headers.ETag))
+	w.WriteHeader(304)
+	return nil
+}
+
+type GetTreeCommits400ApplicationProblemPlusJSONResponse struct {
+	ProblemApplicationProblemPlusJSONResponse
+}
+
+func (response GetTreeCommits400ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(400)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits401ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits401ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(401)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits404ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits404ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(404)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommits503ApplicationProblemPlusJSONResponse Problem
+
+func (response GetTreeCommits503ApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(503)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
+type GetTreeCommitsdefaultApplicationProblemPlusJSONResponse struct {
+	Body       Problem
+	StatusCode int
+}
+
+func (response GetTreeCommitsdefaultApplicationProblemPlusJSONResponse) VisitGetTreeCommitsResponse(w http.ResponseWriter) error {
+
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(response.Body); err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(response.StatusCode)
+	_, err := buf.WriteTo(w)
+	return err
+}
+
 type ListRolesRequestObject struct {
 	Org Org `json:"org"`
 }
@@ -36659,7 +36918,7 @@ type StrictServerInterface interface {
 	// RequestReview Asks the organization's AI reviewer for another review of the branch's head; takes repo.push. It cancels the branch's open review task and queues a new one, which starts even for a head pushed from outside the organization. Main's pushes are never reviewed, and a branch that main's /cobranch-review.yaml leaves out answers 409 review.off; a reviewer without a model answers 409 reviewer.no_model, and a suspended one 409 reviewer.suspended.
 	// (POST /orgs/{org}/repos/{repo}/branches/{branch}/review)
 	RequestReview(ctx context.Context, request RequestReviewRequestObject) (RequestReviewResponseObject, error)
-	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded.
+	// ListCommits A page of history, nearest first; takes repo.read. Along first parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along every parent, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), it reads the Git server (an installation without one answers 503) and leaves out any commit no push recorded. A path's history follows every parent and holds the commits that changed what is there, as git log -- path lists them.
 	// (GET /orgs/{org}/repos/{repo}/commits)
 	ListCommits(ctx context.Context, request ListCommitsRequestObject) (ListCommitsResponseObject, error)
 	// GetCommit One of the repository's commits by its full name, with the push that first brought it; takes repo.read.
@@ -36788,6 +37047,9 @@ type StrictServerInterface interface {
 	// GetTree The directory at a path of the commit a ref names, its directories first and then its files, each by name, with its README; takes repo.read. It reads the Git server: an installation without one answers 503.
 	// (GET /orgs/{org}/repos/{repo}/tree)
 	GetTree(ctx context.Context, request GetTreeRequestObject) (GetTreeResponseObject, error)
+	// GetTreeCommits What last changed the directory at a path of the commit a ref names, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. It reads the Git server: an installation without one answers 503.
+	// (GET /orgs/{org}/repos/{repo}/tree/commits)
+	GetTreeCommits(ctx context.Context, request GetTreeCommitsRequestObject) (GetTreeCommitsResponseObject, error)
 	// ListRoles The roles the organization grants, the built-in ones first, then its own; takes org.read.
 	// (GET /orgs/{org}/roles)
 	ListRoles(ctx context.Context, request ListRolesRequestObject) (ListRolesResponseObject, error)
@@ -42238,6 +42500,34 @@ func (sh *strictHandler) GetTree(w http.ResponseWriter, r *http.Request, org Org
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetTreeResponseObject); ok {
 		if err := validResponse.VisitGetTreeResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetTreeCommits operation middleware
+func (sh *strictHandler) GetTreeCommits(w http.ResponseWriter, r *http.Request, org Org, repo Repo, params GetTreeCommitsParams) {
+	var request GetTreeCommitsRequestObject
+
+	request.Org = org
+	request.Repo = repo
+	request.Params = params
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetTreeCommits(ctx, request.(GetTreeCommitsRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetTreeCommits")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetTreeCommitsResponseObject); ok {
+		if err := validResponse.VisitGetTreeCommitsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -73,14 +73,23 @@ func (c *Client) Raw(ctx context.Context, repoID uuid.UUID, ref, path string) (c
 }
 
 // Log lists at most limit of the commits reachable from the commit ref names, every parent followed, after the first
-// skip (code.Objects).
-func (c *Client) Log(ctx context.Context, repoID uuid.UUID, ref string, skip, limit int) (code.Log, error) {
+// skip; with a path, only those that changed what is there (code.Objects).
+func (c *Client) Log(ctx context.Context, repoID uuid.UUID, ref, path string, skip, limit int) (code.Log, error) {
 	var log Log
-	query := url.Values{"ref": {ref}, "skip": {strconv.Itoa(skip)}, "limit": {strconv.Itoa(limit)}}
+	query := url.Values{"ref": {ref}, "path": {path}, "skip": {strconv.Itoa(skip)}, "limit": {strconv.Itoa(limit)}}
 	if err := c.getJSON(ctx, repoID, "log", query, &log); err != nil {
 		return code.Log{}, err
 	}
 	return log.Domain(), nil
+}
+
+// LastCommits reads what last changed the directory at path in the commit ref names (code.Objects).
+func (c *Client) LastCommits(ctx context.Context, repoID uuid.UUID, ref, path string) (code.LastCommits, error) {
+	var last LastCommits
+	if err := c.getJSON(ctx, repoID, "last-commits", url.Values{"ref": {ref}, "path": {path}}, &last); err != nil {
+		return code.LastCommits{}, err
+	}
+	return last.Domain(), nil
 }
 
 // Diff reads the change req asks for, up to the limits of a diff (code.Objects).

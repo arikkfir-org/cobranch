@@ -120,6 +120,27 @@ func TestCommitsAPI(t *testing.T) {
 	})
 }
 
+// TestPathHistoryAPI checks the history of a path, which follows every parent.
+func TestPathHistoryAPI(t *testing.T) {
+	const commits = "/v1/orgs/acme/repos/website/commits"
+	runOrgCases(t, []orgCase{
+		{name: "a path's, every parent, its next page keeping the path", viewer: olivia, method: "GET", path: fixed(commits + "?path=docs&limit=1"),
+			before: func(f *orgFixture) {
+				f.objects.PathHistory(shaOf("c"), "docs", []code.LogEntry{logged("c", "a"), logged("a")})
+			}, wantStatus: 200, check: func(t *testing.T, f *orgFixture, body []byte) {
+				history("c")(t, f, body)
+				link := f.call(&f.olivia, "GET", commits+"?path=docs&limit=1", "").Header().Get("Link")
+				next, _, _ := strings.Cut(strings.TrimPrefix(link, "<?"), ">")
+				if !strings.Contains(next, "path=docs") {
+					t.Fatalf("Link = %q, want the path's next page", link)
+				}
+				history("a")(t, f, f.call(&f.olivia, "GET", commits+"?"+next, "").Body.Bytes())
+			}},
+		{name: "a path's along first parents", viewer: olivia, method: "GET", path: fixed(commits + "?path=docs&parents=first"), wantStatus: 400,
+			wantCode: "parents.path"},
+	})
+}
+
 func TestEveryParentAPI(t *testing.T) {
 	const commits = "/v1/orgs/acme/repos/website/commits"
 	runOrgCases(t, []orgCase{

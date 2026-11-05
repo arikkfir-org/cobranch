@@ -169,7 +169,7 @@ function surfaces() {
       tone === "warning" ? h("button", { class: "btn btn-ghost btn-sm", type: "button" }, "Action") : null, close()));
   return section("Surfaces", "Containers and overlays: the card every list and table sits in, the dialog, banners for inline messages, the empty state, the tooltip and the page header. Spacing, radius and colour are tokens; a page composes these and writes no surface CSS of its own.",
     [["Card", ".card .card-header .card-title .card-meta .card-body"], ["Dialog", ".dialog .dialog-header .dialog-title .dialog-body .dialog-footer"], ["Banner", ".banner .banner-info .banner-success .banner-warning .banner-danger"],
-      ["Empty state", ".empty .empty-icon .empty-title .empty-description"], ["Tooltip", ".tooltip [data-tooltip]"], ["Page header", ".page-header .page-header-title .page-header-description .page-header-actions"]],
+      ["Empty state", ".empty .empty-icon .empty-title .empty-description .empty-centred"], ["Tooltip", ".tooltip [data-tooltip]"], ["Page header", ".page-header .page-header-title .page-header-description .page-header-actions"]],
     h("div", { class: "specimens-row" },
       h("div", { class: "card specimens-card" }, h("div", { class: "card-header" }, h("h2", { class: "card-title" }, "Card title"), h("span", { class: "card-meta" }, "12 items"),
         h("button", { class: "btn btn-sm", type: "button" }, "Action")),

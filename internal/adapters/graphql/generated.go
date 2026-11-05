@@ -378,6 +378,11 @@ type ComplexityRoot struct {
 		Verified func(childComplexity int) int
 	}
 
+	EntryCommit struct {
+		Commit func(childComplexity int) int
+		Name   func(childComplexity int) int
+	}
+
 	Environment struct {
 		Branch     func(childComplexity int) int
 		Cluster    func(childComplexity int) int
@@ -844,7 +849,7 @@ type ComplexityRoot struct {
 		Description       func(childComplexity int) int
 		Environment       func(childComplexity int, id string) int
 		Environments      func(childComplexity int) int
-		History           func(childComplexity int, branch string, ref *string, parents HistoryParents, first int, after *string) int
+		History           func(childComplexity int, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) int
 		ID                func(childComplexity int) int
 		JobPrincipals     func(childComplexity int) int
 		Name              func(childComplexity int) int
@@ -858,6 +863,7 @@ type ComplexityRoot struct {
 		Slug              func(childComplexity int) int
 		Tags              func(childComplexity int) int
 		Tree              func(childComplexity int, ref string, path string) int
+		TreeCommits       func(childComplexity int, ref string, path string) int
 		ViewerPermissions func(childComplexity int) int
 		Visibility        func(childComplexity int) int
 	}
@@ -1049,6 +1055,14 @@ type ComplexityRoot struct {
 		Path    func(childComplexity int) int
 		Readme  func(childComplexity int) int
 		Sha     func(childComplexity int) int
+	}
+
+	TreeCommits struct {
+		Commit  func(childComplexity int) int
+		Count   func(childComplexity int) int
+		Entries func(childComplexity int) int
+		Latest  func(childComplexity int) int
+		Path    func(childComplexity int) int
 	}
 
 	TreeEntry struct {
@@ -1250,11 +1264,12 @@ type RepositoryResolver interface {
 	Branches(ctx context.Context, obj *Repository) ([]*Branch, error)
 	Branch(ctx context.Context, obj *Repository, name string) (*Branch, error)
 	DeletedBranch(ctx context.Context, obj *Repository, name string) (*DeletedBranch, error)
-	History(ctx context.Context, obj *Repository, branch string, ref *string, parents HistoryParents, first int, after *string) (*CommitPage, error)
+	History(ctx context.Context, obj *Repository, branch string, ref *string, path *string, parents *HistoryParents, first int, after *string) (*CommitPage, error)
 	Commit(ctx context.Context, obj *Repository, sha string) (*Commit, error)
 	Review(ctx context.Context, obj *Repository, id string) (*Review, error)
 	Tags(ctx context.Context, obj *Repository) ([]*Tag, error)
 	Tree(ctx context.Context, obj *Repository, ref string, path string) (*Tree, error)
+	TreeCommits(ctx context.Context, obj *Repository, ref string, path string) (*TreeCommits, error)
 	Blob(ctx context.Context, obj *Repository, ref string, path string) (*File, error)
 	BranchDiff(ctx context.Context, obj *Repository, name string) (*Diff, error)
 	CommitDiff(ctx context.Context, obj *Repository, sha string) (*Diff, error)
@@ -2723,6 +2738,19 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Email.Verified(childComplexity), true
+
+	case "EntryCommit.commit":
+		if e.ComplexityRoot.EntryCommit.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EntryCommit.Commit(childComplexity), true
+	case "EntryCommit.name":
+		if e.ComplexityRoot.EntryCommit.Name == nil {
+			break
+		}
+
+		return e.ComplexityRoot.EntryCommit.Name(childComplexity), true
 
 	case "Environment.branch":
 		if e.ComplexityRoot.Environment.Branch == nil {
@@ -5495,7 +5523,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["ref"].(*string), args["parents"].(HistoryParents), args["first"].(int), args["after"].(*string)), true
+		return e.ComplexityRoot.Repository.History(childComplexity, args["branch"].(string), args["ref"].(*string), args["path"].(*string), args["parents"].(*HistoryParents), args["first"].(int), args["after"].(*string)), true
 	case "Repository.id":
 		if e.ComplexityRoot.Repository.ID == nil {
 			break
@@ -5594,6 +5622,17 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Repository.Tree(childComplexity, args["ref"].(string), args["path"].(string)), true
+	case "Repository.treeCommits":
+		if e.ComplexityRoot.Repository.TreeCommits == nil {
+			break
+		}
+
+		args, err := ec.field_Repository_treeCommits_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.ComplexityRoot.Repository.TreeCommits(childComplexity, args["ref"].(string), args["path"].(string)), true
 	case "Repository.viewerPermissions":
 		if e.ComplexityRoot.Repository.ViewerPermissions == nil {
 			break
@@ -6420,6 +6459,37 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Tree.Sha(childComplexity), true
+
+	case "TreeCommits.commit":
+		if e.ComplexityRoot.TreeCommits.Commit == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeCommits.Commit(childComplexity), true
+	case "TreeCommits.count":
+		if e.ComplexityRoot.TreeCommits.Count == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeCommits.Count(childComplexity), true
+	case "TreeCommits.entries":
+		if e.ComplexityRoot.TreeCommits.Entries == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeCommits.Entries(childComplexity), true
+	case "TreeCommits.latest":
+		if e.ComplexityRoot.TreeCommits.Latest == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeCommits.Latest(childComplexity), true
+	case "TreeCommits.path":
+		if e.ComplexityRoot.TreeCommits.Path == nil {
+			break
+		}
+
+		return e.ComplexityRoot.TreeCommits.Path(childComplexity), true
 
 	case "TreeEntry.kind":
 		if e.ComplexityRoot.TreeEntry.Kind == nil {
@@ -7503,8 +7573,8 @@ extend type Repository {
   branch(name: String!): Branch
   "The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read."
   deletedBranch(name: String!): DeletedBranch
-  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100."
-  history(branch: String! = "main", ref: String, parents: HistoryParents! = FIRST, first: Int! = 30, after: String): CommitPage!
+  "A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100."
+  history(branch: String! = "main", ref: String, path: String, parents: HistoryParents, first: Int! = 30, after: String): CommitPage!
   "One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read."
   commit(sha: String!): Commit
   "One of the repository's reviews by its ID: null unless the repository holds it; takes repo.read."
@@ -7513,6 +7583,8 @@ extend type Repository {
   tags: [Tag!]!
   "The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE."
   tree(ref: String! = "main", path: String! = ""): Tree
+  "What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree."
+  treeCommits(ref: String! = "main", path: String! = ""): TreeCommits
   "The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory."
   blob(ref: String! = "main", path: String!): File
   "A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE."
@@ -7541,6 +7613,27 @@ type Tree {
   entries: [TreeEntry!]!
   "Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered."
   readme: File
+}
+
+"What last changed a directory at a commit."
+type TreeCommits {
+  "The commit the ref resolved to."
+  commit: String!
+  "The directory's path from the repository's root; empty for the root."
+  path: String!
+  "How many commits reachable from the commit changed the directory, every commit for the root."
+  count: Int!
+  "The latest commit that changed the directory."
+  latest: Commit
+  "The latest commit that changed each of the directory's entries, by the entry's name."
+  entries: [EntryCommit!]!
+}
+
+"The latest commit that changed one of a directory's entries."
+type EntryCommit {
+  "The entry's name."
+  name: String!
+  commit: Commit!
 }
 
 "Which parents of each commit a history follows."
@@ -9849,6 +9942,16 @@ func (ec *executionContext) childFields_Email(ctx context.Context, field graphql
 	return nil, fmt.Errorf("no field named %q was found under type Email", field.Name)
 }
 
+func (ec *executionContext) childFields_EntryCommit(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "name":
+		return ec.fieldContext_EntryCommit_name(ctx, field)
+	case "commit":
+		return ec.fieldContext_EntryCommit_commit(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type EntryCommit", field.Name)
+}
+
 func (ec *executionContext) childFields_Environment(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
 	case "id":
@@ -10579,6 +10682,8 @@ func (ec *executionContext) childFields_Repository(ctx context.Context, field gr
 		return ec.fieldContext_Repository_tags(ctx, field)
 	case "tree":
 		return ec.fieldContext_Repository_tree(ctx, field)
+	case "treeCommits":
+		return ec.fieldContext_Repository_treeCommits(ctx, field)
 	case "blob":
 		return ec.fieldContext_Repository_blob(ctx, field)
 	case "branchDiff":
@@ -10969,6 +11074,22 @@ func (ec *executionContext) childFields_Tree(ctx context.Context, field graphql.
 		return ec.fieldContext_Tree_readme(ctx, field)
 	}
 	return nil, fmt.Errorf("no field named %q was found under type Tree", field.Name)
+}
+
+func (ec *executionContext) childFields_TreeCommits(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+	switch field.Name {
+	case "commit":
+		return ec.fieldContext_TreeCommits_commit(ctx, field)
+	case "path":
+		return ec.fieldContext_TreeCommits_path(ctx, field)
+	case "count":
+		return ec.fieldContext_TreeCommits_count(ctx, field)
+	case "latest":
+		return ec.fieldContext_TreeCommits_latest(ctx, field)
+	case "entries":
+		return ec.fieldContext_TreeCommits_entries(ctx, field)
+	}
+	return nil, fmt.Errorf("no field named %q was found under type TreeCommits", field.Name)
 }
 
 func (ec *executionContext) childFields_TreeEntry(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
@@ -14472,30 +14593,38 @@ func (ec *executionContext) field_Repository_history_args(ctx context.Context, r
 		return nil, err
 	}
 	args["ref"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "parents",
-		func(ctx context.Context, v any) (HistoryParents, error) {
-			return ec.unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["parents"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "first",
-		func(ctx context.Context, v any) (int, error) {
-			return ec.unmarshalNInt2int(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["first"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "path",
 		func(ctx context.Context, v any) (*string, error) {
 			return ec.unmarshalOString2ᚖstring(ctx, v)
 		})
 	if err != nil {
 		return nil, err
 	}
-	args["after"] = arg4
+	args["path"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "parents",
+		func(ctx context.Context, v any) (*HistoryParents, error) {
+			return ec.unmarshalOHistoryParents2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["parents"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "first",
+		func(ctx context.Context, v any) (int, error) {
+			return ec.unmarshalNInt2int(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["first"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "after",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOString2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["after"] = arg5
 	return args, nil
 }
 
@@ -14554,6 +14683,28 @@ func (ec *executionContext) field_Repository_runs_args(ctx context.Context, rawA
 		return nil, err
 	}
 	args["after"] = arg2
+	return args, nil
+}
+
+func (ec *executionContext) field_Repository_treeCommits_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "ref",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["ref"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "path",
+		func(ctx context.Context, v any) (string, error) {
+			return ec.unmarshalNString2string(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["path"] = arg1
 	return args, nil
 }
 
@@ -20491,6 +20642,61 @@ func (ec *executionContext) _Email_verified(ctx context.Context, field graphql.C
 }
 func (ec *executionContext) fieldContext_Email_verified(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	return graphql.NewScalarFieldContext("Email", field, false, false, "Boolean")
+}
+
+func (ec *executionContext) _EntryCommit_name(ctx context.Context, field graphql.CollectedField, obj *EntryCommit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EntryCommit_name(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Name, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EntryCommit_name(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("EntryCommit", field, false, false, "String")
+}
+
+func (ec *executionContext) _EntryCommit_commit(ctx context.Context, field graphql.CollectedField, obj *EntryCommit) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_EntryCommit_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalNCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_EntryCommit_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "EntryCommit",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
 }
 
 func (ec *executionContext) _Environment_id(ctx context.Context, field graphql.CollectedField, obj *Environment) (ret graphql.Marshaler) {
@@ -31532,7 +31738,7 @@ func (ec *executionContext) _Repository_history(ctx context.Context, field graph
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["ref"].(*string), fc.Args["parents"].(HistoryParents), fc.Args["first"].(int), fc.Args["after"].(*string))
+			return ec.Resolvers.Repository().History(ctx, obj, fc.Args["branch"].(string), fc.Args["ref"].(*string), fc.Args["path"].(*string), fc.Args["parents"].(*HistoryParents), fc.Args["first"].(int), fc.Args["after"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *CommitPage) graphql.Marshaler {
@@ -31724,6 +31930,50 @@ func (ec *executionContext) fieldContext_Repository_tree(ctx context.Context, fi
 	}()
 	ctx = graphql.WithFieldContext(ctx, fc)
 	if fc.Args, err = ec.field_Repository_tree_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _Repository_treeCommits(ctx context.Context, field graphql.CollectedField, obj *Repository) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Repository_treeCommits(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			fc := graphql.GetFieldContext(ctx)
+			return ec.Resolvers.Repository().TreeCommits(ctx, obj, fc.Args["ref"].(string), fc.Args["path"].(string))
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *TreeCommits) graphql.Marshaler {
+			return ec.marshalOTreeCommits2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeCommits(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Repository_treeCommits(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "Repository",
+		Field:      field,
+		IsMethod:   true,
+		IsResolver: true,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_TreeCommits(ctx, field)
+		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Repository_treeCommits_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
 		ec.Error(ctx, err)
 		return fc, err
 	}
@@ -35368,6 +35618,139 @@ func (ec *executionContext) fieldContext_Tree_readme(_ context.Context, field gr
 		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			return ec.childFields_File(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TreeCommits_commit(ctx context.Context, field graphql.CollectedField, obj *TreeCommits) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeCommits_commit(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Commit, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeCommits_commit(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeCommits", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeCommits_path(ctx context.Context, field graphql.CollectedField, obj *TreeCommits) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeCommits_path(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Path, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v string) graphql.Marshaler {
+			return ec.marshalNString2string(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeCommits_path(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeCommits", field, false, false, "String")
+}
+
+func (ec *executionContext) _TreeCommits_count(ctx context.Context, field graphql.CollectedField, obj *TreeCommits) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeCommits_count(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Count, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
+			return ec.marshalNInt2int(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeCommits_count(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("TreeCommits", field, false, false, "Int")
+}
+
+func (ec *executionContext) _TreeCommits_latest(ctx context.Context, field graphql.CollectedField, obj *TreeCommits) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeCommits_latest(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Latest, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *Commit) graphql.Marshaler {
+			return ec.marshalOCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐCommit(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_TreeCommits_latest(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TreeCommits",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_Commit(ctx, field)
+		},
+	}
+	return fc, nil
+}
+
+func (ec *executionContext) _TreeCommits_entries(ctx context.Context, field graphql.CollectedField, obj *TreeCommits) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_TreeCommits_entries(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Entries, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v []*EntryCommit) graphql.Marshaler {
+			return ec.marshalNEntryCommit2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryCommitᚄ(ctx, selections, v)
+		},
+		true,
+		true,
+	)
+}
+func (ec *executionContext) fieldContext_TreeCommits_entries(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	fc = &graphql.FieldContext{
+		Object:     "TreeCommits",
+		Field:      field,
+		IsMethod:   false,
+		IsResolver: false,
+		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.childFields_EntryCommit(ctx, field)
 		},
 	}
 	return fc, nil
@@ -41250,6 +41633,44 @@ func (ec *executionContext) _Email(ctx context.Context, sel ast.SelectionSet, ob
 	return out
 }
 
+var entryCommitImplementors = []string{"EntryCommit"}
+
+func (ec *executionContext) _EntryCommit(ctx context.Context, sel ast.SelectionSet, obj *EntryCommit) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, entryCommitImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("EntryCommit")
+		case "name":
+			out.Values[i] = ec._EntryCommit_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "commit":
+			out.Values[i] = ec._EntryCommit_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
 var environmentImplementors = []string{"Environment"}
 
 func (ec *executionContext) _Environment(ctx context.Context, sel ast.SelectionSet, obj *Environment) graphql.Marshaler {
@@ -44357,6 +44778,12 @@ func (ec *executionContext) _Repository(ctx context.Context, sel ast.SelectionSe
 				func(ctx context.Context) graphql.Marshaler {
 					return ec._Repository_tree(ctx, field, obj)
 				})
+		case "treeCommits":
+			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
+				true, false,
+				func(ctx context.Context) graphql.Marshaler {
+					return ec._Repository_treeCommits(ctx, field, obj)
+				})
 		case "blob":
 			out.ResolveConcurrently(ec.OperationContext, &deferred, i,
 				true, false,
@@ -45610,6 +46037,59 @@ func (ec *executionContext) _Tree(ctx context.Context, sel ast.SelectionSet, obj
 		case "readme":
 			out.Values[i] = ec._Tree_readme(ctx, field, obj)
 			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch(ctx)
+	if out.Invalids > 0 {
+		return graphql.Null
+	}
+
+	if n := len(deferred.Defers); n > 0 {
+		atomic.AddInt32(&ec.Deferred, int32(min(n, math.MaxInt32)))
+		ec.ProcessDeferredGroup(deferred)
+	}
+
+	return out
+}
+
+var treeCommitsImplementors = []string{"TreeCommits"}
+
+func (ec *executionContext) _TreeCommits(ctx context.Context, sel ast.SelectionSet, obj *TreeCommits) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, treeCommitsImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	deferred := graphql.NewDeferredGroup(ctx)
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("TreeCommits")
+		case "commit":
+			out.Values[i] = ec._TreeCommits_commit(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "path":
+			out.Values[i] = ec._TreeCommits_path(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "count":
+			out.Values[i] = ec._TreeCommits_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
+			}
+		case "latest":
+			out.Values[i] = ec._TreeCommits_latest(ctx, field, obj)
+			if out.Values[i] == graphql.RequiredNull {
+				out.Invalids++
+			}
+		case "entries":
+			out.Values[i] = ec._TreeCommits_entries(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
 				out.Invalids++
 			}
 		default:
@@ -46886,6 +47366,30 @@ func (ec *executionContext) marshalNEmail2ᚖcobranchᚗdevᚋinternalᚋadapter
 	return ec._Email(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNEntryCommit2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryCommitᚄ(ctx context.Context, sel ast.SelectionSet, v []*EntryCommit) graphql.Marshaler {
+	ret := graphql.MarshalSliceConcurrently(ctx, len(v), 0, false, func(ctx context.Context, i int) graphql.Marshaler {
+		fc := graphql.GetFieldContext(ctx)
+		fc.Result = &v[i]
+		return ec.marshalNEntryCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryCommit(ctx, sel, v[i])
+	})
+
+	for _, e := range ret {
+		if e == graphql.Null {
+			return graphql.Null
+		}
+	}
+
+	return ret
+}
+
+func (ec *executionContext) marshalNEntryCommit2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryCommit(ctx context.Context, sel ast.SelectionSet, v *EntryCommit) graphql.Marshaler {
+	if v == nil {
+		graphql.AddInvalidNullError(ctx, "EntryCommit!")
+		return graphql.Null
+	}
+	return ec._EntryCommit(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNEntryKind2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐEntryKind(ctx context.Context, v any) (EntryKind, error) {
 	var res EntryKind
 	err := res.UnmarshalGQL(v)
@@ -46996,16 +47500,6 @@ func (ec *executionContext) marshalNGrantee2ᚖcobranchᚗdevᚋinternalᚋadapt
 		return graphql.Null
 	}
 	return ec._Grantee(ctx, sel, v)
-}
-
-func (ec *executionContext) unmarshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, v any) (HistoryParents, error) {
-	var res HistoryParents
-	err := res.UnmarshalGQL(v)
-	return res, graphql.ErrorOnPath(ctx, err)
-}
-
-func (ec *executionContext) marshalNHistoryParents2cobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, sel ast.SelectionSet, v HistoryParents) graphql.Marshaler {
-	return v
 }
 
 func (ec *executionContext) marshalNHunk2ᚕᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHunkᚄ(ctx context.Context, sel ast.SelectionSet, v []*Hunk) graphql.Marshaler {
@@ -48708,6 +49202,22 @@ func (ec *executionContext) marshalOFile2ᚖcobranchᚗdevᚋinternalᚋadapters
 	return ec._File(ctx, sel, v)
 }
 
+func (ec *executionContext) unmarshalOHistoryParents2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, v any) (*HistoryParents, error) {
+	if v == nil {
+		return nil, nil
+	}
+	var res = new(HistoryParents)
+	err := res.UnmarshalGQL(v)
+	return res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOHistoryParents2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐHistoryParents(ctx context.Context, sel ast.SelectionSet, v *HistoryParents) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return v
+}
+
 func (ec *executionContext) unmarshalOID2ᚕstringᚄ(ctx context.Context, v any) ([]string, error) {
 	if v == nil {
 		return nil, nil
@@ -49172,6 +49682,13 @@ func (ec *executionContext) marshalOTree2ᚖcobranchᚗdevᚋinternalᚋadapters
 		return graphql.Null
 	}
 	return ec._Tree(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalOTreeCommits2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐTreeCommits(ctx context.Context, sel ast.SelectionSet, v *TreeCommits) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._TreeCommits(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalOUser2ᚖcobranchᚗdevᚋinternalᚋadaptersᚋgraphqlᚐUser(ctx context.Context, sel ast.SelectionSet, v *User) graphql.Marshaler {

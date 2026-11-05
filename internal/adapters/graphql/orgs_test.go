@@ -139,19 +139,21 @@ func newOrgFixture() *orgFixture {
 	return f
 }
 
+// logged is a log's entry for the commit letter names, with the parents its other letters name.
+func logged(letter string, parents ...string) code.LogEntry {
+	e := code.LogEntry{SHA: shaOf(letter), Parents: []string{}}
+	for _, p := range parents {
+		e.Parents = append(e.Parents, shaOf(p))
+	}
+	return e
+}
+
 // commitObjects gives the Git server's objects the files of the website's commits, its main and v1.0.0, and their
 // history.
 func (f *orgFixture) commitObjects() {
 	f.objects.Commit(shaOf("c"), map[string]string{"README.md": "# Website\n", "docs/guide.md": "Read me.\n", "docs/deep/notes.txt": "Notes\n",
 		"logo.png": "\x89PNG\x00\x01", "latest" + codetest.Symlink: "docs/guide.md", "vendor/lib" + codetest.Submodule: shaOf("e")}, "main")
 	f.objects.Commit(shaOf("b"), map[string]string{"README.md": "# Old\n"}, "v1.0.0")
-	logged := func(letter string, parents ...string) code.LogEntry {
-		e := code.LogEntry{SHA: shaOf(letter), Parents: []string{}}
-		for _, p := range parents {
-			e.Parents = append(e.Parents, shaOf(p))
-		}
-		return e
-	}
 	f.objects.History(shaOf("c"), []code.LogEntry{logged("c", "b"), logged("b", "a"), logged("a")})
 	f.objects.History(shaOf("b"), []code.LogEntry{logged("b", "a"), logged("a")})
 	f.objects.Commit(shaOf("a"), map[string]string{"README.md": "# First\n"})

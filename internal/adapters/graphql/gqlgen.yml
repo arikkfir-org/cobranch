@@ -95,6 +95,7 @@ models:
       review: { resolver: true }
       tags: { resolver: true }
       tree: { resolver: true }
+      treeCommits: { resolver: true }
       blob: { resolver: true }
       runs: { resolver: true }
       run: { resolver: true }

@@ -260,7 +260,7 @@ plan.
 | Card, Page header | Card: Tone Default, Success, Danger | Title, meta, action, body; description, actions | `.card` (`.card-success`, `.card-danger`), `.page-header` |
 | Dialog | None | Title, body, secondary action | `.dialog` on a `dialog` |
 | Banner | Tone: Info, Success, Warning, Danger | Title, message, action, dismiss | `.banner` with `.banner-info`, `.banner-success`, `.banner-warning` or `.banner-danger` |
-| Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`; `.tooltip`, or `data-tooltip` on what it labels |
+| Empty state, Tooltip | None | Icon, title, description, action; label | `.empty`, and `.empty-centred` on a card, a card's body or a screen that shows nothing else, which holds it at 480px with 48px above and below; `.tooltip`, or `data-tooltip` on what it labels |
 | App/Sidebar, App/Top bar | None | Organization, user; breadcrumb context and current page | `.app-sidebar`, `.app-topbar` (`lib/shell.css`) |
 | App/Conversation pane, App/User menu | None | Subject and scope; the user menu holds the theme | `.app-pane`, `.app-user-menu` (`lib/shell.css`) |
 | Commit row | None | Message, meta, SHA; author avatar and annotation icons nested | `.commit-row` in a `.list` |

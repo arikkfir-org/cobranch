@@ -93,6 +93,21 @@ type Log struct {
 	Entries []LogEntry
 }
 
+// LastCommits is what last changed a directory at a commit, as the Git server reads it: the commit its ref resolved
+// to, the directory's path, how many commits changed it, the latest of them, and the latest that changed each of its
+// entries, by name. The walk for the entries stops at MaxLastWalk commits, so an entry nobody changed in that long has
+// none.
+type LastCommits struct {
+	Commit  string
+	Path    string
+	Count   int
+	Latest  string
+	Entries map[string]string
+}
+
+// MaxLastWalk is the most commits a walk for a directory's entries' last commits reads.
+const MaxLastWalk = 10000
+
 // Tag is one of a repository's tags and the object its ref names: a commit, or an annotated tag that names one.
 type Tag struct {
 	Name   string

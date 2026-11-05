@@ -593,6 +593,13 @@ type Email struct {
 	Verified bool   `json:"verified"`
 }
 
+// The latest commit that changed one of a directory's entries.
+type EntryCommit struct {
+	// The entry's name.
+	Name   string  `json:"name"`
+	Commit *Commit `json:"commit"`
+}
+
 // A target of the repository and one of its live branches, delivered to the target's cluster in a namespace of its own. Its sync and health are as the controller last read them.
 type Environment struct {
 	ID string `json:"id"`
@@ -1296,7 +1303,7 @@ type Repository struct {
 	Branch *Branch `json:"branch,omitempty"`
 	// The latest deletion of the repository's branch of name, which no live branch has, with who deleted it and when, the head it was at and its last merge: null unless there is one; takes repo.read.
 	DeletedBranch *DeletedBranch `json:"deletedBranch,omitempty"`
-	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. first is 1 to 100.
+	// A page of history, nearest first: from the branch's head, or from the commit ref names (a full name, a branch or a tag, tried in that order), or from after, where the previous page's nextCursor says the next one starts; takes repo.read. Along FIRST parents, as git log --first-parent lists it, it walks the commits pushes recorded, and a branch at no commit a push recorded has none. Along ALL parents, as git log --date-order lists it (no commit before its children, the newest first among those the graph leaves free), the Git server walks it, leaving out any commit no push recorded; a ref that finds nothing is a NOT_FOUND error whose reason is ref.not_found, and an installation without a Git server answers UNAVAILABLE. parents is FIRST when left out. With a path (a file's or a directory's, from the root, as names separated by /), the page holds the commits that changed what is there, ALL parents followed, as git log -- path lists them, and FIRST is a BAD_USER_INPUT error whose reason is parents.path. first is 1 to 100.
 	History *CommitPage `json:"history"`
 	// One of the repository's commits by its full name, in lowercase hexadecimal, with the push that first brought it: null unless the repository holds it; takes repo.read.
 	Commit *Commit `json:"commit,omitempty"`
@@ -1306,6 +1313,8 @@ type Repository struct {
 	Tags []*Tag `json:"tags"`
 	// The directory at path of the commit ref names, its directories and submodules first and then its files and symlinks, each by name, with its README; takes repo.read. ref is a branch's or a tag's name, or a commit's full name, tried in the order full name, branch, tag; path is relative to the root, as names separated by /, and empty for the root. A ref or a path that finds nothing is a NOT_FOUND error, whose reason is ref.not_found, path.not_found, path.file or path.submodule; an installation without a Git server answers UNAVAILABLE.
 	Tree *Tree `json:"tree,omitempty"`
+	// What last changed the directory at path of the commit ref names, as tree takes them, for a listing of its entries to show beside each: how many commits changed it, the latest of them, and the latest that changed each of its entries, as git log -- path lists them; takes repo.read. A commit no push recorded is left out, and so is an entry nobody changed in the 10,000 commits the walk reads from the newest. A ref or a path that finds nothing is an error, as for tree.
+	TreeCommits *TreeCommits `json:"treeCommits,omitempty"`
 	// The file or symlink at path of the commit ref names, as tree takes them: whether it is binary and, when it isn't, its text up to 1 MiB; takes repo.read. Its bytes are at the REST API's raw. A directory's path is a NOT_FOUND error whose reason is path.directory.
 	Blob *File `json:"blob,omitempty"`
 	// A branch's change as a request to merge into its base: from the merge base of its base's tip and its head to its head, so what its base gained since doesn't show; null unless the branch is there; takes repo.read. Main merges into nothing: a BAD_USER_INPUT error whose reason is branch.default. It reads the Git server: an installation without one answers UNAVAILABLE.
@@ -1666,6 +1675,20 @@ type Tree struct {
 	Entries []*TreeEntry `json:"entries"`
 	// Its README, when it holds one: the first, whatever its case, of README.md, README.markdown, README.mdown, README.mkd, README.mkdn, README.txt and README, unless it is binary; Markdown comes rendered.
 	Readme *File `json:"readme,omitempty"`
+}
+
+// What last changed a directory at a commit.
+type TreeCommits struct {
+	// The commit the ref resolved to.
+	Commit string `json:"commit"`
+	// The directory's path from the repository's root; empty for the root.
+	Path string `json:"path"`
+	// How many commits reachable from the commit changed the directory, every commit for the root.
+	Count int `json:"count"`
+	// The latest commit that changed the directory.
+	Latest *Commit `json:"latest,omitempty"`
+	// The latest commit that changed each of the directory's entries, by the entry's name.
+	Entries []*EntryCommit `json:"entries"`
 }
 
 // One of a directory's entries.
