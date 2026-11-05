@@ -43,12 +43,12 @@ function showPreferences(main) {
     h("div", { class: "banner-text" }, h("span", { class: "banner-title" }, "Your theme wasn't saved"),
       h("p", {}, "Cobranch could not keep the theme with your account. It stays as you set it here; choose it again to retry.")),
     h("button", { class: "icon-btn icon-btn-ghost icon-btn-sm", type: "button", "aria-label": "Dismiss", title: "Dismiss", onclick: () => { error.hidden = true; } }, icon("x")));
-  const fail = () => { error.hidden = false; };
+  const saved = (err) => { error.hidden = !err; };
   main.replaceChildren(pageHeader({ title: "Preferences", description: "How Cobranch looks for you, in every browser you sign in from." }), error,
     card("Appearance", null, null, h("div", { class: "preference" },
       h("div", { class: "row-text" }, h("span", { class: "row-title" }, "Theme"),
         h("span", { class: "row-meta" }, "System follows your device; Light and Dark override it. The same switch is in the avatar menu.")),
-      themeSwitch(fail))));
+      themeSwitch(saved))));
 }
 
 // showAccount draws the viewer's account: who they are, their personal tokens, which act as them wherever a password
