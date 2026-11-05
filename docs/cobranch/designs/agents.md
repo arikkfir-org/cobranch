@@ -364,7 +364,9 @@ The harness holds no key, so every turn passes the proxy and is metered; a task 
   report repeats. Amounts travel as decimal strings in US dollars (`"8.00"`).
 - **The cap is the agent's** (**Agreed**, 2026-11-05): each agent's settings carry the most one of its tasks may spend,
   since two agents on one model may deserve different limits; models carry prices only, and an unset or zero cap is
-  none. A task's cap is its agent's as it now stands, so raising it lets a task that ran out go further next time. The
+  none. Setting it takes a person holding `org.principals.manage`, as picking the agent's model does: its creator alone
+  may not, nor may the agent, which a task's token acts as, so no task lifts its own budget. A task's cap is its agent's
+  as it now stands, so raising it lets a task that ran out go further next time. The
   call that brings a task's spend to its cap fails the task, Failed with “It spent $1.01, reaching its cap of $1.00 a task.”,
   in its transcript and an event in its agent's name, and the proxy refuses every turn after.
 - **At most one turn over.** A turn's price is known only once it is answered, so the turn that crosses the cap still
@@ -449,9 +451,9 @@ threads on the file.
 
 ## Data model
 
-**This slice’s tables: chats, agents, providers, tasks and transcripts**
+**This slice’s tables: chats, agents, providers, models, tasks, transcripts and spend**
 
-![This slice’s tables: chats, agents, providers, tasks and transcripts](agents/er.svg)
+![This slice’s tables: chats, agents, providers, models, tasks, transcripts and spend](agents/er.svg)
 
 `chat_threads`, `chat_messages`, `agents`, `model_providers` and `agent_tasks` carry trigger `audit()`; transcripts are
 the task’s own record and don’t, and task tokens, which Cobranch alone makes and sweeps, don’t either. Every new row

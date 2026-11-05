@@ -1464,9 +1464,9 @@ type Task struct {
 	// What it spent so far, at its organization's prices, in US dollars such as 0.42.
 	Spent string `json:"spent"`
 	// The tokens its model read so far.
-	InputTokens int `json:"inputTokens"`
+	InputTokens int64 `json:"inputTokens"`
 	// The tokens its model wrote so far.
-	OutputTokens int `json:"outputTokens"`
+	OutputTokens int64 `json:"outputTokens"`
 	// The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it.
 	Cap *string `json:"cap,omitempty"`
 	// Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN).
@@ -1498,8 +1498,8 @@ type TaskPage struct {
 type TaskSpend struct {
 	// In US dollars, at its organization's prices, such as 0.42.
 	Spent        string `json:"spent"`
-	InputTokens  int    `json:"inputTokens"`
-	OutputTokens int    `json:"outputTokens"`
+	InputTokens  int64  `json:"inputTokens"`
+	OutputTokens int64  `json:"outputTokens"`
 	// The most it may spend, in US dollars; null for none.
 	Cap *string `json:"cap,omitempty"`
 	// Whether it has ended; its token then acts no more.

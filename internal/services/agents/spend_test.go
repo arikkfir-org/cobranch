@@ -215,29 +215,39 @@ func TestAgentCap(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	f.store.AddModel(agents.Model{OrgID: f.org, Provider: "anthropic", Name: "a-model", InputPrice: 1, Default: true})
-	scout := f.agent(t, f.olive, "Scout")
+	scout, mine := f.agent(t, f.olive, "Scout"), f.agent(t, f.mel, "Mine")
+	working := agentViewer(f.assign(t, f.olive, scout, "Tidy up", uuid.Nil))
+	two := new(agents.USD(2_000_000))
 	tests := []struct {
 		name    string
+		viewer  agents.Viewer
+		agent   agents.Agent
 		cap     *agents.USD
 		want    error
 		wantCap agents.USD
 	}{
-		{name: "none to start", cap: nil},
-		{name: "set", cap: new(agents.USD(2_000_000)), wantCap: 2_000_000},
-		{name: "left", cap: nil, wantCap: 2_000_000},
-		{name: "changed", cap: new(agents.USD(9_000_000)), wantCap: 9_000_000},
-		{name: "cleared", cap: new(agents.USD(0))},
-		{name: "below 0", cap: new(agents.USD(-1)), want: invalid("agent.cap_invalid")},
-		{name: "past the most", cap: new(agents.USD(agents.MaxCap + 1)), want: invalid("agent.cap_invalid")},
+		{name: "none to start", viewer: f.olive, agent: scout},
+		{name: "set", viewer: f.olive, agent: scout, cap: two, wantCap: 2_000_000},
+		{name: "left", viewer: f.olive, agent: scout, wantCap: 2_000_000},
+		{name: "changed", viewer: f.stu, agent: scout, cap: new(agents.USD(9_000_000)), wantCap: 9_000_000},
+		{name: "cleared", viewer: f.olive, agent: scout, cap: new(agents.USD(0))},
+		{name: "below 0", viewer: f.olive, agent: scout, cap: new(agents.USD(-1)), want: invalid("agent.cap_invalid")},
+		{name: "past the most", viewer: f.olive, agent: scout, cap: new(agents.USD(agents.MaxCap + 1)), want: invalid("agent.cap_invalid")},
+		{name: "by its creator, without org.principals.manage", viewer: f.mel, agent: mine, cap: two, want: auth.ErrForbidden},
+		{name: "by an agent, as a task's token", viewer: working, agent: scout, cap: two, want: auth.ErrForbidden},
 	}
 	for _, tt := range tests {
-		a, err := f.service.UpdateAgent(ctx, f.olive, f.org, scout.ID, agents.AnyVersion, agents.Change{Cap: tt.cap})
+		a, err := f.service.UpdateAgent(ctx, tt.viewer, f.org, tt.agent.ID, agents.AnyVersion, agents.Change{Cap: tt.cap})
 		if !is(err, tt.want) {
 			t.Fatalf("%s: UpdateAgent() = %v, want %v", tt.name, err, tt.want)
 		}
 		if err == nil && a.Cap != tt.wantCap {
 			t.Errorf("%s: UpdateAgent() = cap %d, want %d", tt.name, a.Cap, tt.wantCap)
 		}
+	}
+	name := "Mine, renamed"
+	if _, err := f.service.UpdateAgent(ctx, f.mel, f.org, mine.ID, agents.AnyVersion, agents.Change{Name: &name}); err != nil {
+		t.Errorf("UpdateAgent() of its own agent's name by its creator = %v", err)
 	}
 }
 

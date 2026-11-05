@@ -126,7 +126,7 @@ func task(t agents.Task) *Task {
 		Title: t.Title, Instructions: t.Instructions, RepositoryID: idOf(t.RepoID), RepositorySlug: text(t.RepoSlug), BranchID: idOf(t.BranchID),
 		Branch: text(t.Branch), ThreadID: idOf(t.ThreadID), Sha: text(t.SHA), State: TaskState(strings.ToUpper(string(t.State))), Reason: t.Reason, Summary: t.Summary,
 		CancelledBy: agentPrincipal(t.CancelledBy), CreatedAt: t.CreatedAt.UTC(), Version: int(t.Version), Spent: t.Spent.String(),
-		InputTokens: int(t.InputTokens), OutputTokens: int(t.OutputTokens), Cap: optionalUSD(t.Cap)}
+		InputTokens: t.InputTokens, OutputTokens: t.OutputTokens, Cap: optionalUSD(t.Cap)}
 	if !t.StartedAt.IsZero() {
 		at := t.StartedAt.UTC()
 		out.StartedAt = &at

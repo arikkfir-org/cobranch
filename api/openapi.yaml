@@ -2043,8 +2043,9 @@ paths:
     patch:
       operationId: updateAgent
       summary: >-
-        Changes an agent's name, description or standing instructions; takes being its creator, or
-        org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+        Changes an agent's name, description, standing instructions or cap; takes being its creator, or
+        org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The
+        change names the agent's ETag in If-Match; without it, the answer is 428.
       parameters:
         - $ref: "#/components/parameters/org"
         - $ref: "#/components/parameters/agent"

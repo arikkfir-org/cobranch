@@ -4161,7 +4161,7 @@ type ServerInterface interface {
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params GetAgentParams)
-	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(w http.ResponseWriter, r *http.Request, org Org, agentID AgentID, params UpdateAgentParams)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.
@@ -29806,7 +29806,7 @@ type StrictServerInterface interface {
 	// GetAgent One of the organization's agents, with its grants; takes org.read.
 	// (GET /orgs/{org}/agents/{agent})
 	GetAgent(ctx context.Context, request GetAgentRequestObject) (GetAgentResponseObject, error)
-	// UpdateAgent Changes an agent's name, description or standing instructions; takes being its creator, or org.principals.manage. The change names the agent's ETag in If-Match; without it, the answer is 428.
+	// UpdateAgent Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (403 otherwise). The change names the agent's ETag in If-Match; without it, the answer is 428.
 	// (PATCH /orgs/{org}/agents/{agent})
 	UpdateAgent(ctx context.Context, request UpdateAgentRequestObject) (UpdateAgentResponseObject, error)
 	// SetAgentModel Puts an agent on a model of a provider the organization added, or on none with neither named; takes org.principals.manage, and a person. A provider the organization hasn't added answers 400 agent.provider_invalid. The change names the agent's ETag in If-Match; without it, the answer is 428.

@@ -229,7 +229,7 @@ func (r *mutationResolver) RecordTaskSpend(ctx context.Context, input TaskUsageI
 	if err != nil {
 		return nil, fail(ctx, err, "task", "recording the task's spend")
 	}
-	return &TaskSpend{Spent: spend.Spent.String(), InputTokens: int(spend.Input), OutputTokens: int(spend.Output), Cap: optionalUSD(spend.Cap),
+	return &TaskSpend{Spent: spend.Spent.String(), InputTokens: spend.Input, OutputTokens: spend.Output, Cap: optionalUSD(spend.Cap),
 		Ended: spend.Ended}, nil
 }
 

@@ -339,10 +339,17 @@ func (s *Service) CreateAgent(ctx context.Context, v Viewer, orgID uuid.UUID, in
 }
 
 // UpdateAgent changes one of the organization's agents from version, or from any version for AnyVersion; it takes
-// being its creator, or org.principals.manage.
+// being its creator, or org.principals.manage. Its cap is a budget, so changing it takes a person holding
+// org.principals.manage, as picking its model does: neither its creator alone nor an agent, which a task's token acts as,
+// lifts it.
 func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID, version int64, c Change) (Agent, error) {
 	ctx, span := tracer.Start(ctx, "agents.Service.UpdateAgent", onOrg(orgID, attribute.String("cobranch.agent.id", id.String())))
 	defer span.End()
+	if c.Cap != nil {
+		if err := person(v, "sets no cap"); err != nil {
+			return Agent{}, failed(span, "changing the agent", err)
+		}
+	}
 	held, err := s.held(ctx, v, orgID)
 	if err != nil {
 		return Agent{}, failed(span, "changing the agent", err)
@@ -351,8 +358,12 @@ func (s *Service) UpdateAgent(ctx context.Context, v Viewer, orgID, id uuid.UUID
 	if err != nil {
 		return Agent{}, failed(span, "finding the agent", err)
 	}
-	if !slices.Contains(held, orgs.PermPrincipalsManage) && (a.CreatedBy == nil || a.CreatedBy.ID != v.ID) {
+	manages := slices.Contains(held, orgs.PermPrincipalsManage)
+	switch {
+	case !manages && (a.CreatedBy == nil || a.CreatedBy.ID != v.ID):
 		return Agent{}, failed(span, "changing the agent", fmt.Errorf("%w: changing another's agent takes %s", auth.ErrForbidden, orgs.PermPrincipalsManage))
+	case !manages && c.Cap != nil:
+		return Agent{}, failed(span, "changing the agent", fmt.Errorf("%w: setting an agent's cap takes %s", auth.ErrForbidden, orgs.PermPrincipalsManage))
 	}
 	if c, err = ValidateChange(c); err != nil {
 		return Agent{}, failed(span, "changing the agent", err)

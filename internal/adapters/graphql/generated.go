@@ -6357,9 +6357,9 @@ type Task {
   "What it spent so far, at its organization's prices, in US dollars such as 0.42."
   spent: String!
   "The tokens its model read so far."
-  inputTokens: Int!
+  inputTokens: Int64!
   "The tokens its model wrote so far."
-  outputTokens: Int!
+  outputTokens: Int64!
   "The most it may spend, its agent's cap, in US dollars; null for none. It fails once it reaches it."
   cap: String
   "Its transcript's entries numbered above after, in order: at most first of them, 1 to 500, 100 unless given. The task's own token reads them, and so do its assigner, a principal holding org.principals.manage, and whoever reads the repository it names; others are refused (FORBIDDEN)."
@@ -6462,8 +6462,8 @@ input TaskUsageInput {
 type TaskSpend {
   "In US dollars, at its organization's prices, such as 0.42."
   spent: String!
-  inputTokens: Int!
-  outputTokens: Int!
+  inputTokens: Int64!
+  outputTokens: Int64!
   "The most it may spend, in US dollars; null for none."
   cap: String
   "Whether it has ended; its token then acts no more."
@@ -6493,7 +6493,7 @@ input TaskInput {
 extend type Mutation {
   "Makes an agent of the organization, a principal it owns, with its first grants; takes agents.create, and every permission of each grant where it applies. An agent makes no agents. A name another agent has, in any case, is refused (CONFLICT, agent.name_taken)."
   createAgent(organizationId: ID!, input: AgentInput!): Agent!
-  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage. With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
+  "Changes an agent's name, description, standing instructions or cap; takes being its creator, or org.principals.manage, and changing its cap takes a person holding org.principals.manage (FORBIDDEN otherwise). With expectedVersion, one at another version is refused (CONFLICT, precondition.failed)."
   updateAgent(organizationId: ID!, id: ID!, input: AgentPatch!, expectedVersion: Int): Agent!
   "Deletes an agent with its grants and tasks, and answers true; takes org.principals.manage and every permission of the roles it holds where they apply. A built-in agent is refused (CONFLICT, agent.built_in); with expectedVersion, so is one at another version (CONFLICT, precondition.failed)."
   deleteAgent(organizationId: ID!, id: ID!, expectedVersion: Int): Boolean!
@@ -32143,15 +32143,15 @@ func (ec *executionContext) _Task_inputTokens(ctx context.Context, field graphql
 			return obj.InputTokens, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
 func (ec *executionContext) fieldContext_Task_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Int64")
 }
 
 func (ec *executionContext) _Task_outputTokens(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
@@ -32166,15 +32166,15 @@ func (ec *executionContext) _Task_outputTokens(ctx context.Context, field graphq
 			return obj.OutputTokens, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
 func (ec *executionContext) fieldContext_Task_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Task", field, false, false, "Int")
+	return graphql.NewScalarFieldContext("Task", field, false, false, "Int64")
 }
 
 func (ec *executionContext) _Task_cap(ctx context.Context, field graphql.CollectedField, obj *Task) (ret graphql.Marshaler) {
@@ -32334,15 +32334,15 @@ func (ec *executionContext) _TaskSpend_inputTokens(ctx context.Context, field gr
 			return obj.InputTokens, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
 func (ec *executionContext) fieldContext_TaskSpend_inputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int")
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int64")
 }
 
 func (ec *executionContext) _TaskSpend_outputTokens(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
@@ -32357,15 +32357,15 @@ func (ec *executionContext) _TaskSpend_outputTokens(ctx context.Context, field g
 			return obj.OutputTokens, nil
 		},
 		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int) graphql.Marshaler {
-			return ec.marshalNInt2int(ctx, selections, v)
+		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
+			return ec.marshalNInt642int64(ctx, selections, v)
 		},
 		true,
 		true,
 	)
 }
 func (ec *executionContext) fieldContext_TaskSpend_outputTokens(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int")
+	return graphql.NewScalarFieldContext("TaskSpend", field, false, false, "Int64")
 }
 
 func (ec *executionContext) _TaskSpend_cap(ctx context.Context, field graphql.CollectedField, obj *TaskSpend) (ret graphql.Marshaler) {
