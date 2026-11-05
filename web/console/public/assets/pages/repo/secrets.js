@@ -1,8 +1,9 @@
-import { secretsSections } from "../../lib/secrets.js";
+import { go } from "../../lib/router.js";
 
-export const nav = { label: "Secrets", order: 50 };
-export const crumbs = [{ label: "Secrets" }];
-export const allowed = (can) => can("secrets.manage");
-
-// The repository's own secrets, which its jobs receive.
-export default ({ org, repo, path, orgCan, fail }) => secretsSections(org, path + "/secrets", orgCan("org.grants.manage"), fail, [repo]);
+export const under = "settings";
+export const heading = false;
+// Secrets is a tab of Settings now (pages/repo/settings/secrets.js): its old address opens it.
+export default ({ org, repo }) => {
+  go("/" + org.slug + "/" + repo.slug + "/settings/secrets", true);
+  return [];
+};

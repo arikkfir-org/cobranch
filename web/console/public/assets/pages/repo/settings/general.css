@@ -1,0 +1,4 @@
+/* A repository's Settings · General: its card at the width the screen draws it, its fields one below the other.
+   Layout only; the card and fields are components.css's. */
+.repo-general { max-width: 720px; }
+.repo-general > .card-body { display: grid; gap: var(--space-16); }

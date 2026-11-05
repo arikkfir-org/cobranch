@@ -93,8 +93,8 @@ const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((w) => w[0])
 export const avatar = (name, agent, size = 20) => h("span", { class: "avatar" + (agent ? " avatar-agent" : "") + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: name },
   agent ? icon("sparkles") : initials(name));
 // machineAvatar is a machine's avatar, the ink square with a cog: a principal Cobranch can't tell for a person or an
-// agent, such as the CI system an annotation came from.
-export const machineAvatar = (name, size = 20) => h("span", { class: "avatar avatar-machine" + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: name }, icon("cog"));
+// agent, such as the CI system an annotation came from, or a job; glyph swaps the cog, as key-round does for an API key.
+export const machineAvatar = (name, size = 20, glyph = "cog") => h("span", { class: "avatar avatar-machine" + (size !== 20 ? " avatar-" + size : ""), "aria-hidden": "true", title: name }, icon(glyph));
 // principalAvatar is a principal's avatar, an agent's when the organization's agents (state.js) count it among them,
 // a person's otherwise, or machine's when it is neither, as a key's.
 export const principalAvatar = (p, size = 20, machine = false) => agents.has(p.id) ? avatar(p.displayName, true, size)

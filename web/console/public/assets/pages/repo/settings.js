@@ -1,33 +1,29 @@
-import { api } from "../../lib/api.js";
-import { h } from "../../lib/dom.js";
-import { repoSlugInput } from "../../lib/repository.js";
+import { tabPages } from "../../lib/assets.js";
 import { go } from "../../lib/router.js";
+import { tabBar, tabsOf } from "../../lib/tabs.js";
 
+// Settings: one of the repository's tabs, whose views are tabs too, each a module of pages/repo/settings/ (lib/tabs.js)
+// at <repository>/settings/<tab>, General (its index.js) at <repository>/settings.
 export const nav = { label: "Settings", order: 90 };
 export const crumbs = [{ label: "Settings" }];
-export const allowed = (can) => can("repo.manage");
-export default ({ org, repo, path, fail }) => repositorySettings(org, repo, path, fail);
 
-// repositorySettings changes repo's slug, name and description.
-function repositorySettings(org, repo, path, fail) {
-  const saved = h("p", { class: "notice", hidden: true }, "Saved.");
-  const slug = repoSlugInput(repo.slug);
-  const name = h("input", { name: "name", required: true, maxlength: 100, value: repo.name });
-  const description = h("input", { name: "description", maxlength: 500, value: repo.description });
-  const form = h("form", { onsubmit: async (e) => {
-    e.preventDefault();
-    saved.hidden = true;
-    try {
-      const updated = await api("PATCH", path, { slug: slug.value, name: name.value, description: description.value });
-      if (updated.slug !== repo.slug) return go("/" + org.slug + "/" + updated.slug + "/settings");
-      saved.hidden = false;
-    } catch (err) {
-      fail(err);
-    }
-  } },
-    h("label", {}, "Name", name),
-    h("label", {}, "Slug", h("span", {}, "Its URL. The old slug keeps pointing here until another repository of " + org.name + " takes it."), slug),
-    h("label", {}, "Description", description),
-    h("div", {}, h("button", { class: "button primary", type: "submit" }, "Save")));
-  return [saved, h("section", { class: "panel" }, form)];
-}
+// tabOf is the tab module at a part of the route after settings/, whether or not the viewer may open it.
+const tabOf = (part) => (tabPages.get("repo/settings") || new Map()).get(part || "");
+
+// view names the page the API records a tab's views under: the page each tab was before it became one.
+export const view = (rest) => ({ access: "repository.access", secrets: "repository.secrets" })[rest[0]] || "repository.settings";
+export const allowed = (can) => tabsOf("repo/settings", can).length > 0;
+export const accepts = (rest) => rest.length === 0 || (rest.length === 1 && !!tabOf(rest[0])?.tab);
+
+// The tab the route names draws under the bar of Settings' tabs; one the viewer may not open opens the first they may.
+export default async (ctx) => {
+  const { org, repo, root, rest, can } = ctx;
+  const tabs = tabsOf("repo/settings", can);
+  const part = rest[0] || "";
+  const shown = tabs.find(([p]) => p === part);
+  if (!shown) {
+    go("/" + org.slug + "/" + repo.slug + "/settings" + (tabs[0][0] ? "/" + tabs[0][0] : ""), true);
+    return [];
+  }
+  return [tabBar(tabs, part, (p) => root + "/settings" + (p ? "/" + p : ""), ctx, "Settings"), ...await shown[1].default(ctx)];
+};
